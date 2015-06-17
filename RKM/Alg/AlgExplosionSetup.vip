@@ -1,0 +1,384 @@
+#component "M_MnPlan"
+VipInterface AlgoritmSetup_5104 Implements oAlgoritmSetup;
+Interface AlgoritmSetup_5104 'Настройки расчета состава для РКМ' (,hcNoContext,) EscClose, Doaccept;
+show(,,54,16);
+var
+  _formplNrec: comp;
+  _groupmcMarker: longint;
+  _costitemMarker: longint;
+  _DeliverMarker: longint;
+  _TypemcMarker: longint;
+  iGetKau: getkau;
+  cFormPl: comp;
+
+create view
+as select *
+from Formpl, Wayaccou SrcWayaccou, Memvid SrcMemvid, Spformpl
+where ((
+  _formplNrec == formpl.nrec and
+  formpl.rescomp[1] == SrcWayaccou.nrec and
+  formpl.resword[2] == SrcMemvid.sysnum
+));
+
+parameters cFormPl;
+
+//Наименования фильтров с маркерами---------------------------------------------------------------------------
+
+function GetMarkerFilterName(lMarker: longint; kodgrkau: word): string;
+{
+  result := '';
+  var cnt: longint;
+  cnt := getMarkerCount(lMarker);
+  case cnt of
+    1:
+    {
+      var c: comp;
+      if GetMarker(lMarker, 0, c)
+        result := if(c = 0, '[Пустые]', if(getanykau(1,kodgrkau, c), givenanname(1), ''));
+    }
+    0: result := 'Фильтр не установлен';
+  else
+    result := 'Выбрано позиций: '+cnt;
+  end;
+}
+
+function GetCostitemFilterName: string;
+{
+  result := GetMarkerFilterName(_costitemMarker, 10016);
+}
+
+function GetGroupmcFilterName: string;
+{
+  result := GetMarkerFilterName(_groupmcMarker, 8);
+}
+
+function GetDeliverFilterName: string;
+{
+  result := GetMarkerFilterName(_deliverMarker, 1);
+}
+
+function GetTypemcFilterName: string;
+{
+  result := GetMarkerFilterName(_typemcMarker, 5008);
+}
+
+function GetSrcWayaccouName: string;
+{
+  if getfirst SrcWayaccou = tsOk
+    result := SrcWayaccou.Name
+  else
+    result := '';
+}
+
+function GetSrcVidName: string;
+{
+  if getfirst SrcMemvid = tsOk
+    result := SrcMemvid.NameRaz
+  else
+    result := '';
+}
+
+//Загрузка маркеров из базы-----------------------------------------------------------------------------------
+
+procedure AddCompToMarker(lmarker: longint; c: comp);
+{
+  //т.к. мы вынуждены сохранять пустые ссылки в базе как -1 - преобразуем их к 0 в маркере
+  if c = -1
+    insertmarker(lmarker, 0)
+  else
+    insertmarker(lmarker, c);
+}
+
+procedure LoadMarkerFromSpformpl(lmarker: longint; aTyperec: word);
+{
+  if (_formplNrec = 0) exit;
+  var i: integer;
+  var c: comp;
+  _loop spformpl where (( _formplNrec == spformpl.cformpl and aTyperec == spformpl.typerec ))
+  {
+    for (i:=1;i<=10;i++)
+    {
+      if (spformpl.rescomp1[i] <> 0) AddCompToMarker(lmarker, spformpl.rescomp1[i]);
+      if (spformpl.rescomp2[i] <> 0) AddCompToMarker(lmarker, spformpl.rescomp2[i]);
+    }
+    for (i:=11;i<=20;i++)
+    {
+      if (spformpl.rescomp1[i] <> 0) AddCompToMarker(lmarker, spformpl.rescomp1[i]);
+    }
+  }
+}
+
+procedure LoadGroupmcMarkerFromSpformpl;
+{
+  LoadMarkerFromSpformpl(_groupmcMarker, 1);
+}
+
+procedure LoadCostitemMarkerFromSpformpl;
+{
+  LoadMarkerFromSpformpl(_costitemMarker, 2);
+}
+
+procedure LoadDeliverMarkerFromSpformpl;
+{
+  LoadMarkerFromSpformpl(_deliverMarker, 3);
+}
+
+procedure LoadTypemcMarkerFromSpformpl;
+{
+  LoadMarkerFromSpformpl(_typemcMarker, 4);
+}
+
+//Pick маркеров-----------------------------------------------------------------------------------------------
+
+function PickMarker(var lmarker: longint; kodgrkau: word): boolean;
+{
+  result := false;
+  var s: string;
+  s := iGetKau.GetMarkerName(kodgrkau);
+  var l: longint;
+  l := initmarker('', 8, 10, 10, false);
+  copymarker(l, lmarker);
+  donemarker(l, s);
+  if iGetKau.GetCodeKau(2, kodgrkau, 0) > 0
+  {
+    donemarker(lmarker,'');
+    lmarker := initmarker(s, 8, 10, 10);
+    result := true;
+  }
+}
+
+procedure PickGroupmcMarker;
+{
+  PickMarker(_groupmcMarker, 8);
+  rescanpanel(#formpl);
+}
+
+procedure PickCostitemMarker;
+{
+  PickMarker(_costitemMarker, 10016);
+  rescanpanel(#formpl);
+}
+
+procedure PickDeliverMarker;
+{
+  PickMarker(_deliverMarker, 1);
+  rescanpanel(#formpl);
+}
+
+procedure PickTypemcMarker;
+{
+  PickMarker(_typemcMarker, 5008);
+  rescanpanel(#formpl);
+}
+
+procedure PickSrcWayaccou;
+{
+  var c: comp;
+  c := formpl.rescomp[1];
+  if runinterface(M_MNPLAN::NastrPl, 4, c, 1) = cmDefault
+  {
+    formpl.rescomp[1] := c;
+    rescanpanel(#formpl);
+  }
+}
+
+procedure PickSrcVid;
+{
+  if getfirst SrcWayaccou != tsOk PickSrcWayaccou;
+  if getfirst SrcWayaccou != tsOk Exit;
+  var w: word;
+  w := formpl.resword[2];
+  if runinterface(iPickVidSetup_RB, SrcWayaccou.nrec, w) = cmDefault
+    formpl.resword[2] := w;
+  rescanpanel(#formpl);
+}
+
+//Сохранение маркеров в базе----------------------------------------------------------------------------------
+
+procedure SaveMarkerToSpformpl(lMarker: longint; aTyperec: word);
+{
+  if (_formplNrec = 0) exit;
+  delete all spformpl where (( _formplNrec == spformpl.cformpl and aTyperec == spformpl.typerec ));
+
+  var c: comp;
+  var i, j: longint;
+  i := 0;
+  j := 0;
+  clearbuffer(#spformpl);
+  while GetMarker(lmarker, i, c)
+  {
+    j++;
+
+    //сохраняем нулевые ссылки как -1, иначе при чтении из бд программа будет думать, что значение не установлено
+    if (c = 0) c := -1;
+
+    if (j <= 20)
+      spformpl.rescomp1[j] := c
+    else
+      spformpl.rescomp2[j-20] := c;
+
+    if (j=30)
+    {
+      spformpl.cformpl := _formplNrec;
+      spformpl.typerec := aTyperec;
+      insert current spformpl;
+      clearbuffer(#spformpl);
+      j := 0;
+    }
+    i++;
+  }
+  if j > 0
+  {
+    spformpl.cformpl := _formplNrec;
+    spformpl.typerec := aTyperec;
+    insert current spformpl;
+  }
+}
+
+procedure SaveGroupmcMarkerToSpformpl;
+{
+  SaveMarkerToSpformpl(_groupmcMarker, 1);
+}
+
+procedure SaveCostitemMarkerToSpformpl;
+{
+  SaveMarkerToSpformpl(_costitemMarker, 2);
+}
+
+procedure SaveDeliverMarkerToSpformpl;
+{
+  SaveMarkerToSpformpl(_deliverMarker, 3);
+}
+
+procedure SaveTypemcMarkerToSpformpl;
+{
+  SaveMarkerToSpformpl(_typemcMarker, 4);
+}
+
+//Визуальные элементы-----------------------------------------------------------------------------------------
+
+screen sc1;
+fields
+  [SrcWayaccouName]    GetSrcWayaccouName   : protect, pickbutton;
+  [SrcVidName]         GetSrcVidName        : protect, pickbutton;
+  [GroupmcFilterName]  GetGroupmcFilterName : protect, pickbutton;
+  [CostitemFilterName] GetCostitemFilterName: protect, pickbutton;
+  [DeliverFilterName]  GetDeliverFilterName : protect, pickbutton;
+  [TypemcFilterName]   GetTypemcFilterName  : protect, pickbutton;
+  formpl.resword[1]: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+ Источник:
+`Шаблон`       .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Представление`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ Фильтры:
+`Группы МЦ`    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Статьи затрат`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Поставщики`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Типы МЦ`      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ По виду:      [.] Матценности`
+               [.] Услуги`
+
+                        <. Сохранить .> <. Отмена .>
+>>
+end;
+
+handleevent
+
+cmPick:
+{
+  case curfield of
+    #GroupmcFilterName : PickGroupmcMarker;
+    #CostitemFilterName: PickCostitemMarker;
+    #DeliverFilterName : PickDeliverMarker;
+    #TypemcFilterName  : PickTypemcMarker;
+    #SrcWayaccouName   : PickSrcWayaccou;
+    #SrcVidName        : PickSrcVid;
+  end;
+}
+
+cmDelOnProtect:
+{
+  case curfield of
+    #GroupmcFilterName : clearmarker(_groupmcMarker);
+    #CostitemFilterName: clearmarker(_costitemMarker);
+    #DeliverFilterName : clearmarker(_deliverMarker);
+    #TypemcFilterName  : clearmarker(_typemcMarker);
+  end;
+  rescanpanel(#formpl);
+}
+
+cmDefault:
+{
+  startnewvisual(vtRotateVisual, vfTimer, 'Сохранение', 0);
+  if (_formplNrec != 0)
+  {
+    update current formpl;
+    SaveGroupmcMarkerToSpformpl;
+    SaveCostitemMarkerToSpformpl;
+    SaveDeliverMarkerToSpformpl;
+    SaveTypemcMarkerToSpformpl;
+  }
+  stopvisual('',0);
+}
+
+cmDoOk:
+{
+  putcommand(cmDefault);
+}
+
+cmInit:
+{
+  _groupmcMarker  := initmarker('', 8, 10, 10, false);
+  _costitemMarker := initmarker('', 8, 10, 10, false);
+  _DeliverMarker  := initmarker('', 8, 10, 10, false);
+  _TypemcMarker   := initmarker('', 8, 10, 10, false);
+  _formplNrec := cFormPl;
+  startnewvisual(vtRotateVisual, vfTimer, 'Загрузка', 0);
+  if getfirst formpl = tsOk
+  {
+    LoadGroupmcMarkerFromSpformpl;
+    LoadCostitemMarkerFromSpformpl;
+    LoadDeliverMarkerFromSpformpl;
+    LoadTypemcMarkerFromSpformpl;
+  }
+  stopvisual('',0);
+}
+
+cmDone:
+{
+  donemarker(_groupmcMarker ,'');
+  donemarker(_costitemMarker,'');
+  donemarker(_DeliverMarker ,'');
+  donemarker(_TypemcMarker  ,'');
+}
+
+end;
+
+//Реализация функций объектного интерфейса--------------------------------------------------------------------
+
+Function asInitInter(p_cFormPl: comp): boolean;
+{
+  if p_cFormPl = 0 { }
+  result := true;
+}
+
+Function asDoneInter: boolean;
+{
+  result := true;
+}
+
+Procedure asOnCmSetDefault; {
+  if (_formplNrec != 0)
+    update current formpl set formpl.resword[1] := 11b;
+}
+
+Procedure asOnSetWayAccou(p_cWayAccou: comp); {
+ if p_cWayAccou > 0 { };
+}
+end.

@@ -1,0 +1,408 @@
+#include PriceFinder.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface iPriceFinder;
+
+sql query QMC =
+insert tObjMC ( PriceObjectNrec, Relevance, KatmcNrec)
+select tobj.Nrec,
+       case
+            when katmc.name like ('%'+tobj.name1+'%') then 100
+            when katmc.name like ('%'+tobj.name2+'%') then 70
+            when katmc.name like ('%'+tobj.name3+'%') then 40
+            else 0
+       end,
+       katmc.nrec
+from tobj
+join katmc on katmc.name like ('%'+tobj.name1+'%') or katmc.name like ('%'+tobj.name2+'%') or katmc.name like ('%'+tobj.name3+'%')
+union
+select tobj.Nrec,
+       case
+            when katmc.obozn like ('%'+tobj.name1+'%') then 100
+            when katmc.obozn like ('%'+tobj.name2+'%') then 70
+            when katmc.obozn like ('%'+tobj.name3+'%') then 40
+            else 0
+       end,
+       katmc.nrec
+from tobj
+join katmc on katmc.obozn <> '' and (katmc.obozn like ('%'+tobj.name1+'%') or katmc.obozn like ('%'+tobj.name2+'%') or katmc.obozn like ('%'+tobj.name3+'%') )
+;
+
+sql query QMC1 =
+insert tObjMC ( PriceObjectNrec, Relevance, KatmcNrec)
+select :PriceObjectNrec, 0, katmc.nrec
+from katmc
+where katmc.name like ('%'+:Name+'%') or katmc.obozn like ('%'+:Name+'%');
+
+sql query  Q1 =
+select distinct #IDENTITY        as Nrec,
+                tobj.nrec        as PriceObjectNrec,
+                katsopr.dsopr    as KatsoprDate,
+                katmc.name       as Name,
+                katmc.obozn      as Obozn,
+                tObjMC.relevance as Relevance,
+                spsopr.nrec      as SpsoprNrec,
+                katsopr.nrec     as KatsoprNrec,
+                katsopr.corg     as KatorgNrec,
+                spsopr.price     as Price,
+                (spsopr.price * coalesce(mcoe1.koef,1) / coalesce(mcoe2.koef,1)) as NormalPrice  // * coalesce(cursval.sumrubl,1)
+from tobj
+join tObjMC on tobj.nrec = tObjMC.PriceObjectNrec
+join katmc on tObjMC.KatmcNrec = katmc.nrec
+join sporder on 0 = sporder.sp and 0 = sporder.vidorder and katmc.nrec = sporder.cmc and 1 = sporder.tipord
+join spsopr on sporder.cspsopr = spsopr.nrec
+join katsopr on spsopr.csopr = katsopr.nrec and katsopr.vidsopr = 101
+left join katotped objoe on tobj.otped = objoe.nrec
+left join katotped mcoe1 on 1 = mcoe1.prmc and katmc.nrec = mcoe1.cmcusl and coalesce(objoe.ckated, katmc.ced) = mcoe1.ckated
+left join katotped mcoe2 on spsopr.cotped = mcoe2.nrec
+//left join cursval on spsopr.cval = cursval.kodvalut and katsopr.dprice = cursval.datval
+where tobj.kind = 1;
+
+table struct tPriceObject (
+  Nrec       : comp,
+  Kind       : word,
+  Crec       : comp,
+  OtpedNrec  : comp,
+  Name       : string,
+  Obozn      : string,
+  SpsoprNrec : comp,
+  Price      : double
+) with index (
+  i01 = Nrec (unique, surrogate),
+  i02 = Kind + Crec
+);
+
+table struct tPriceObjectMC (
+  PriceObjectNrec: comp,
+  Relevance: byte,
+  KatmcNrec: comp
+) with index (
+  i01 = PriceObjectNrec + Relevance
+);
+
+table struct tPriceObjectIncome (
+  Nrec            : comp,
+  PriceObjectNrec : comp,
+  Relevance       : byte,
+  KatsoprDate     : date,
+  Name            : string,
+  Obozn           : string,
+  SpsoprNrec      : comp,
+  KatsoprNrec     : comp,
+  KatorgNrec      : comp,
+  Price           : double,
+  NormalPrice     : double
+) with index (
+  i01 = Nrec (unique, surrogate),
+  i02 = PriceObjectNrec + Relevance + KatsoprDate
+);
+
+var
+  KatmcNameFilter: string;
+  igetkau: getkau;
+
+create view
+as select *
+from tPriceObject, tPriceObjectIncome, tPriceObjectMC, katotped,
+     tPriceObject brObj, katotped brObjOtpEd, tPriceObjectMC brObjMC, tPriceObjectIncome brObjIncome
+where ((
+  brObj.OtpedNrec == brObjOtpEd.nrec and
+  brObj.Nrec      == brObjMC.PriceObjectNrec and
+  brObj.Nrec      == brObjIncome.PriceObjectNrec
+))
+;
+
+create view v1
+var
+  ObjectNrec: comp;
+as select *
+from katmc, katusl
+where ((
+  ObjectNrec == katmc.nrec and
+  ObjectNrec == katusl.nrec
+));
+
+procedure CalcNameAndObozn( aKind: word; acRec: comp; var aName: string; var aObozn: string);
+{
+  case aKind of
+    1:
+    {
+      v1.ObjectNrec := acRec;
+      if v1.getfirst katmc = tsOk
+      {
+        aName  := v1.katmc.name;
+        aObozn := v1.katmc.obozn;
+      }
+    }
+    2:
+    {
+      v1.ObjectNrec := acRec;
+      if v1.getfirst katusl = tsOk
+      {
+        aName  := v1.katusl.name;
+        aObozn := v1.katusl.obozn;
+      }
+    }
+  end;
+}
+
+procedure AddObject(aObjectKind: word; aObjectNrec: comp; aOtpedNrec: comp; aSpsoprNrec: comp = 0; aPrice: double = 0);
+{
+  if getfirst tPriceObject where ((aObjectKind == tPriceObject.Kind and aObjectNrec == tPriceObject.Crec)) != tsOk
+  {
+    clearbuffer(#tPriceObject);
+    tPriceObject.Kind := aObjectKind;
+    tPriceObject.Crec := aObjectNrec;
+    if (aOtpedNrec != 0)
+    {
+      tPriceObject.OtpedNrec := aOtpedNrec;
+    }
+    else
+    {
+      if getfirst katotped where ((tPriceObject.Kind == katotped.prmc and tPriceObject.Crec == katotped.cmcusl and 1 == katotped.akt)) = tsOk
+        tPriceObject.OtpedNrec := katotped.nrec;
+    }
+    CalcNameAndObozn(aObjectKind, aObjectNrec, tPriceObject.Name, tPriceObject.Obozn);
+    tPriceObject.SpsoprNrec := aSpsoprNrec;
+    tPriceObject.Price := aPrice;
+    insert current tPriceObject;
+  }
+}
+
+procedure ClearObjects;
+{
+  delete all tPriceObject;
+  delete all tPriceObjectIncome;
+}
+
+function DelWordsFromEnd(s: string; cnt: byte): string;
+{
+  s := trim(s);
+  var l: byte;
+  l := length(s);
+  while l > 0 and cnt > 0
+  {
+    if (s[l]=' ')
+    {
+      cnt--;
+      while ( l > 0 and s[l] = ' ') { l--; }
+    }
+    else
+      l--;
+  }
+  if (l > 0)
+    result := substr(s, 1, l)
+  else
+    result := s;
+}
+
+procedure Find;
+{
+  //создаем временную таблицу с объектами для определения цен
+  sqlDropTmpTable('tobj');
+  sqlCreateTmpTable('table tobj (nrec: comp, kind: word, crec: comp, otped: comp, name1: string, name2: string, name3: string);', ctmNormal);
+  //заполняем таблицу объектами
+  var q: IQuery;
+  var rs: IResultSet;
+  var s: string;
+  q := queryManager.createQuery('insert tobj (nrec, kind, crec, otped, name1, name2, name3) values (:nrec, :kind, :crec, :otped, :name1, :name2, :name3)');
+  _loop tPriceObject
+  {
+    q.setParam('nrec' , tPriceObject.nrec);
+    q.setParam('kind' , tPriceObject.kind);
+    q.setParam('crec' , tPriceObject.crec);
+    q.setParam('otped', tPriceObject.OtpedNrec);
+    s := trim(if(trim(tPriceObject.obozn)='', tPriceObject.name, tPriceObject.obozn));
+    q.setParam('name1', s);
+    q.setParam('name2', DelWordsFromEnd(s,1));
+    q.setParam('name3', DelWordsFromEnd(s,2));
+    q.Execute;
+  }
+  //Заполняем таблицу с подходящими мц
+  sqlDropTmpTable('tObjMC');
+  sqlCreateTmpTable('table tObjMC (PriceObjectNrec: comp, Relevance: byte, KatmcNrec: comp) with index (i01 = PriceObjectNrec);', ctmNormal);
+  q := queryManager.createQuery(QMC);
+  q.execute;
+
+  delete all tPriceObjectMC;
+  q := queryManager.createQuery('select PriceObjectNrec, Relevance, KatmcNrec from tObjMC');
+  rs := q.getResultSet;
+  if (rs != NullRef)
+    sqlCopyInto(rs, #tPriceObjectMC, false);
+  //Заполняем приходы
+  delete all tPriceObjectIncome;
+  q := queryManager.createQuery(q1);
+  rs := q.GetResultSet;
+  if (rs != nullRef)
+  {
+    sqlCopyInto(rs, #tPriceObjectIncome, true);
+  }
+  //заполняем объекты
+  _loop tPriceObject
+  {
+    if (tPriceObject.Price = 0 and tPriceObject.SpsoprNrec = 0)
+    {
+      if getlast tPriceObjectIncome where (( tPriceObject.Nrec == tPriceObjectIncome.PriceObjectNrec )) = tsOk
+      {
+        tPriceObject.SpsoprNrec := tPriceObjectIncome.SpsoprNrec;
+        tPriceObject.Price := tPriceObjectIncome.NormalPrice;
+        update current tPriceObject;
+      }
+    }
+  }
+}
+
+procedure RefreshIncomes;
+{
+  delete all brObjIncome;
+  delete all brObjMC;
+  var q: IQuery;
+  var rs: IResultSet;
+
+  //Заполняем таблицу с подходящими мц
+  sqlDropTmpTable('tObjMC');
+  sqlCreateTmpTable('table tObjMC (PriceObjectNrec: comp, Relevance: byte, KatmcNrec: comp) with index (i01 = PriceObjectNrec);', ctmNormal);
+
+  q := queryManager.createQuery(QMC1);
+  q.setParam('PriceObjectNrec', brObj.Nrec);
+  q.setParam('Name', KatmcNameFilter);
+  q.execute;
+
+  q := queryManager.createQuery('select PriceObjectNrec, Relevance, KatmcNrec from tObjMC');
+  rs := q.getResultSet;
+  if (rs != NullRef)
+    sqlCopyInto(rs, #tPriceObjectMC, false);
+
+  //заполняем новые приходы
+  q := queryManager.createQuery(q1);
+  rs := q.GetResultSet;
+  if (rs != nullRef)
+    sqlCopyInto(rs, #tPriceObjectIncome, true);
+
+  rereadrecord(#brObjMC);
+  rereadrecord(#brObjIncome);
+}
+
+window wPickIncome 'Выбор цен' escclose doaccept;
+
+  screen scIncome;
+  show (,,,5) fixed_y;
+  fields
+    brObj.Name+if(getfirst brObjOtpEd = tsOk, '. Ед.изм.: '+brObjOtpEd.Name+' ('+brObjOtpEd.koef+')', ''): skip;
+    brObj.Obozn: skip;
+    KatmcNameFilter: noprotect;
+<<
+
+ Наименование: .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ Обозначение:  .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ Фильтр:       .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+  end;
+
+  browse brMC (,,sci14Esc);
+  show(,6,,11) fixed_y;
+  table brObjMC;
+  fields
+    if(getanykau(1,4,brObjMC.KatmcNrec),givenanname(1),'') 'Найденные МЦ': [50], protect;
+  end;
+
+  browse brIncome (,,sci14Esc);
+  show (,12,,);
+  table brObjIncome;
+  fields
+    brObjIncome.Relevance 'Релевантность': [6], protect;
+    brObjIncome.KatsoprDate 'Дата': [10], protect;
+    brObjIncome.Name 'Наименование': [30], protect;
+    brObjIncome.Obozn 'Обозначение': [30], protect;
+    brObjIncome.Price 'Цена': [8,2], protect;
+    brObjIncome.NormalPrice 'Нормализованная цена': [8,2], protect;
+    if(getanykau(1,1,brObjIncome.KatorgNrec),givenanname(1),'') 'Поставщик': [20], protect;
+    if(getanykau(1,80,brObjIncome.KatsoprNrec),givenanname(1),'') 'Накладная/акт': [50], protect;
+  end;
+
+  handleevent
+    cmEdit:
+    {
+      case curtable of
+        #brObjMC:
+        {
+          var c: comp;
+          c := brObjMC.KatmcNrec;
+          putcommand(cmEdit);
+          igetkau.getcodekau(1, 4, c);
+        }
+        #brObjIncome:
+        {
+          var c: comp;
+          c := brObjIncome.SpsoprNrec;
+          putcommand(cmEdit);
+          igetkau.getcodekau(1, 5038, c);
+        }
+      end;
+    }
+    cmDefault:
+    {
+      if (curfield = #KatmcNameFilter)
+      {
+        RefreshIncomes;
+        Stop;
+      }
+
+      if (curtable != #brObjIncome)
+        Stop;
+    }
+    cmInit:
+    {
+      KatmcNameFilter := brObj.Name;
+    }
+  end;
+
+end; //window wPickIncome
+
+window wUserInterface 'Установка цен', escclose, doaccept;
+  browse br1;
+  table brObj;
+  fields
+    brObj.Name 'Наименование': [30], protect;
+    brObj.Obozn 'Обозначение': [30], protect;
+    brObj.Price 'Цена'       : [8,2], protect, pickbutton;
+    [brObjSpsopr] if(getanykau(1,5038,brObj.SpsoprNrec),givenanname(1),'') 'Приходная накладная / акт': [50], protect, pickbutton;
+  end;
+  handleevent
+    cmPick:
+    {
+      case curfield of
+        #brObj.Price, #brObjSpsopr:
+        {
+          if getlast brObjIncome = tsOk { }
+          if runwindowmodal(wPickIncome) = cmDefault
+          {
+            brObj.Price := brObjIncome.NormalPrice;
+            brObj.SpsoprNrec := brObjIncome.SpsoprNrec;
+            update current brObj;
+          }
+        }
+      end;
+    }
+  end;
+end; //window wUserIterface
+
+function ShowUserInterface: longint;
+{
+  result := runwindowmodal(wUserInterface);
+}
+
+function GetPrice(aObjectKind: word; aObjectNrec: comp; var aSpsoprNrec: comp; var aPrice: double): boolean;
+{
+  result := false;
+  if getfirst tPriceObject where ((aObjectKind == tPriceObject.Kind and aObjectNrec == tPriceObject.Crec)) = tsOk
+  {
+    aSpsoprNrec := tPriceObject.SpsoprNrec;
+    aPrice := tPriceObject.Price;
+    result := true;
+  }
+}
+
+end.

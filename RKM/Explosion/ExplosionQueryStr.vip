@@ -1,0 +1,74 @@
+#include QueryStr.vih
+#include ExplosionQueryStr.vih
+
+#component "UTILS"
+
+interface iExplosionQueryStr;
+
+sql query queryStart =
+  insert tExplosion (ParentNrec, Type, cRec, KatedNrec, HdrpsNrec, PslinesNrec, UsageFactor, Qty,
+                     KauCode1, KauNrec1, KauCode2, KauNrec2, KauCode3, KauNrec3, Level)
+  select texp.nrec,
+         psl.wdet,
+         psl.cdet,
+         coalesce(oe.ckated, #comp(0)),
+         coalesce(NormHdrPs.Nrec, #comp(0)),
+         psl.nrec,
+         1,
+         psl.kol / case when coalesce(oe.koef, 1) > 0 then coalesce(oe.koef, 1) else 1 end * texp.Qty,
+         psl.wkodgr1, psl.canval1,
+         psl.wkodgr2, psl.canval2,
+         psl.wkodgr3, psl.canval3,
+         texp.level + 1
+
+  from tExplosion texp
+
+  join Hdr_ps hps on texp.HdrpsNrec = hps.nrec
+
+  join Ps_lines psl on hps.nrec = psl.chdr  and 0 = psl.active
+
+  left join katotped oe on psl.ced = oe.nrec
+
+  left join katmc on psl.cdet = katmc.nrec
+
+  left join (select cizd, ctypeizd, max(hdr_ps.nrec) as nrec
+             from hdr_ps
+             where active = 1
+             group by ctypeizd, cizd
+            ) NormHdrPs on psl.wdet = NormHdrPs.ctypeizd and psl.cdet = NormHdrPs.cizd
+
+  where texp.Level = :Level;
+
+var
+  _filters: array[0..1] of oQueryStr;
+  _filtersCount: longint;
+
+procedure AddFilter(aFilter: oQueryStr);
+{
+  _filters[_filtersCount] := aFilter;
+  _filtersCount++;
+}
+
+procedure Create(var l: longint);
+{
+  sqlAddStr(l, queryStart);
+
+  var i: longint;
+
+  sqlAddStr(l, 'and ( coalesce(NormHdrPs.Nrec, #comp(0)) <> #comp(0) or ( 1 = 1');
+
+  for(i := 0; i < _filtersCount; i++)
+  {
+    _filters[i].Create(l);
+  }
+
+  sqlAddStr(l, ') )');
+
+}
+
+constructor Init;
+{
+  _filtersCount := 0;
+  result := true;
+}
+end.

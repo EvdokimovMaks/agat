@@ -1,0 +1,179 @@
+#include Explosion.vih
+#include QueryStr.vih
+#include IModify.vih
+
+#component "AGAT"
+
+interface iExplosion;
+
+var
+  _itemsForExplosion: oItemsForExplosion;             //коллекция объектов разузлования
+  _explosionQueryStr: UTILS::oQueryStr;               //запрос для разузлования
+  _resultQueryStr   : UTILS::oQueryStr;               //запрос для выборки результата
+
+create view
+as select *
+from _itemsForExplosion, tExplosion, tExplosion brExp;
+
+//Подготовка временных таблиц
+procedure PrepareTmpTables;
+{
+  var s: longint;
+  sqlAddStr(s, 'table tExplosion (');
+  sqlAddStr(s, '  Nrec       : longint,');
+  sqlAddStr(s, '  ParentNrec : longint,');
+  sqlAddStr(s, '  Type       : word,');
+  sqlAddStr(s, '  cRec       : comp,');
+  sqlAddStr(s, '  KatedNrec  : comp,');
+  sqlAddStr(s, '  HdrpsNrec  : comp,');
+  sqlAddStr(s, '  PslinesNrec: comp,');
+  sqlAddStr(s, '  UsageFactor: double,');
+  sqlAddStr(s, '  Qty        : double,');
+  sqlAddStr(s, '  KauCode1   : word,');
+  sqlAddStr(s, '  KauNrec1   : comp,');
+  sqlAddStr(s, '  KauCode2   : word,');
+  sqlAddStr(s, '  KauNrec2   : comp,');
+  sqlAddStr(s, '  KauCode3   : word,');
+  sqlAddStr(s, '  KauNrec3   : comp,');
+  sqlAddStr(s, '  Level      : word');
+  sqlAddStr(s, ') with index (');
+  sqlAddStr(s, '  i01 = nrec (autoinc),');
+  sqlAddStr(s, '  i02 = level');
+  sqlAddStr(s, ');');
+  sqlCreateTmpTable(s, ctmNormal);
+}
+
+//Удаление временных таблиц
+procedure DropTmpTables;
+{
+  sqlDropTmpTable('tExplosion');
+}
+
+//Разузлование
+function Explosion: boolean;
+{
+  result := false;
+  //на всякий случай удаляем временные таблицы
+  DropTmpTables;
+  //создаем временные таблицы
+  PrepareTmpTables;
+  //вводим объекты для разузлования во временную таблицу
+  var q: IQuery;
+  q := queryManager.createQuery('insert tExplosion (ParentNrec, Type, cRec, HdrpsNrec, UsageFactor, Qty, Level) Values (0, 4, :cRec, :HdrpsNrec, 1, :Qty, 0)');
+  _loop _itemsForExplosion
+  {
+    q.SetParam('cRec'     , _itemsForExplosion.KatmcNrec);
+    q.SetParam('HdrpsNrec', _itemsForExplosion.HdrpsNrec);
+    q.SetParam('Qty'      , _itemsForExplosion.Qty);
+    q.Execute;
+  }
+  //инициализируем sql строку запроса разузлования
+  var s: longint;
+  sqlFreeStr(s);
+  sqlAddStr(s, '');
+  //заполняем sql строку запросом
+  _explosionQueryStr.Create(s);
+  //формируем запрос
+  q := queryManager.createQuery(s);
+  //разузловываем уровни
+  var curLevel: word;
+  curLevel := 0;
+  do
+  {
+    q.SetParam('Level', curLevel);
+    q.Execute;
+    curLevel++;
+  } while curLevel < 100 and q.RowCount > 0
+
+  //инициализируем sql строку запроса получения результата разузлования
+  sqlFreeStr(s);
+  //заполняем sql строку запросом
+  _resultQueryStr.Create(s);
+  //получаем запрос выборки результата разузлования
+  q := queryManager.createQuery(s);
+  //заполняем таблицу
+  var rs: IResultSet;
+  rs := q.getResultSet;
+  if (rs != nullref)
+    sqlCopyInto(rs, #tExplosion, false);
+
+  //удаляем временные таблицы
+  DropTmpTables;
+
+  result := true;
+}
+
+window wdata;
+browse br1;
+table brExp;
+fields
+ brExp.Nrec        'Nrec      ': [10], protect;
+ brExp.ParentNrec  'ParentNrec': [10], protect;
+ brExp.Type        'Type      ': [10], protect;
+ brExp.cRec        'cRec      ': [10], protect;
+ brExp.OtpedNrec   'OtpedNrec ': [10], protect;
+ brExp.HdrpsNrec   'HdrpsNrec ': [10], protect;
+ brExp.Qty         'Qty       ': [10], protect;
+ brExp.KauCode1    'KauCode1  ': [10], protect;
+ brExp.KauNrec1    'KauNrec1  ': [10], protect;
+ brExp.KauCode2    'KauCode2  ': [10], protect;
+ brExp.KauNrec2    'KauNrec2  ': [10], protect;
+ brExp.KauCode3    'KauCode3  ': [10], protect;
+ brExp.KauNrec3    'KauNrec3  ': [10], protect;
+end;
+end;
+
+procedure ShowResultTable;
+{
+  runwindowmodal(wData);
+}
+
+//oExplosion - добавить объект для разузлования
+function AddItemForExplosion(aKatmcNrec: comp; aHdrpsNrec: comp; aQty: double): boolean;
+{
+  clearbuffer(#_itemsForExplosion);
+  _itemsForExplosion.KatmcNrec := aKatmcNrec;
+  _itemsForExplosion.HdrpsNrec := aHdrpsNrec;
+  _itemsForExplosion.Qty := aQty;
+  result := (insert current _itemsForExplosion) = tsOk;
+}
+
+//oExplosion - очистить коллекцию объектов разузлования
+function ClearItemsForExplosion: boolean;
+{
+  result := (delete all _itemsForExplosion) = tsOk;
+}
+
+//основной конструктор
+constructor Init;
+{
+  result := false;
+  //инициализация коллекции объектов разузлования
+  if not LoadVipRef(_itemsForExplosion, 'AGAT::iItemsForExplosion')
+  {
+    message('Ошибка инициализации коллекции объектов разузлования', error);
+    exit;
+  }
+  //инициализация запроса разузлования по умолчанию
+  if not GetVipRef(_explosionQueryStr, 'UTILS::iExplosionQueryStr')
+  {
+    message('Ошибка инициализации запроса разузлования', error);
+    exit;
+  }
+  //инициализация запроса выборки результата по умолчанию
+  if not GetVipRef(_resultQueryStr, 'UTILS::iExplosionResultQueryStr')
+  {
+    message('Ошибка инициализации запроса выборки результата', error);
+    exit;
+  }
+  //инициализация коллекции модификаторов запроса выборки результата
+  result := true;
+}
+
+//Запрос разузлования
+property ExplosionQueryStr: UTILS::oQueryStr absolute _explosionQueryStr;
+
+//Запрос выборки результата
+property ResultQueryStr: UTILS::oQueryStr absolute _resultQueryStr;
+
+end.

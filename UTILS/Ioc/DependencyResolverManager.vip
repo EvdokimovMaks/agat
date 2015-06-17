@@ -1,0 +1,76 @@
+#include ioc.vih
+
+#component "UTILS"
+
+interface iDependencyResolverManager;
+table struct tCheckedIfc (
+  vipIfcName: string
+) with index (
+  i01 = vipIfcName
+);
+
+table struct tCheckedResolvers (
+  vipIfcName: string,
+  resolverIndex: longint
+) with index (
+  i01 = vipIfcName
+);
+
+var
+  _resolvers: array[0..1] of oDependencyResolver;
+  _resolversCount: longint;
+
+create view
+as select *
+from tCheckedIfc, tCheckedResolvers;
+
+constructor Init;
+{
+  _resolversCount := 0;
+  if LoadImplementationList('UTILS::oDependencyResolver', 'UTILS::DEPENDENCYRESOLVER_')
+  {
+    var r: oDependencyResolver;
+    var i, cnt: integer;
+    cnt := GetImplementationCount;
+    for( i := 0; i < cnt; i := i + 1 )
+    {
+      if (getvipref(r, GetImplementationName(i)))
+      {
+        _resolvers[_resolversCount] := r;
+        _resolversCount++;
+      }
+    }
+    UnLoadImplementationList;
+  }
+  result := true;
+}
+
+procedure ResolveDependencies(objToResolve: objRef; container: oIocContainer);
+{
+  var objVipIfcName: string;
+  objVipIfcName := VipName(objToResolve);
+  if getfirst fastfirstrow tCheckedIfc where (( objVipIfcName == tCheckedIfc.vipIfcName )) != tsOk
+  {
+    insert tCheckedIfc set tCheckedIfc.vipIfcName := objVipIfcName;
+    var i: longint;
+    for(i := 0; i < _resolversCount; i++)
+    {
+      if _resolvers[i].Resolve(objToResolve, container)
+      {
+        insert tCheckedResolvers set tCheckedResolvers.vipIfcName    := objVipIfcName,
+                                     tCheckedResolvers.resolverIndex := i;
+      }
+    }
+  }
+  else
+  {
+    _loop tCheckedResolvers where (( objVipIfcName == tCheckedResolvers.vipIfcName ))
+    {
+      pushpos(#tCheckedResolvers);
+      _resolvers[tCheckedResolvers.resolverIndex].Resolve(objToResolve, container);
+      poppos(#tCheckedResolvers);
+    }
+  }
+}
+
+end.

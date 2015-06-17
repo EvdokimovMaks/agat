@@ -1,0 +1,247 @@
+#include PriceFinder.vih
+
+#component "M_MnPlan"
+VipInterface Algoritm_5105 Implements oAlgoritm_Sys;
+Interface Algoritm_5105 '' (,hcNoContext,) EscClose, Cyan;
+
+const
+  SpsoprRole = 0001000000000026h;    //Роль "Приход"
+  SpsoprKodgroup = 5038;             //Код КАУ "Позиция сопроводительного документа"
+  PPVid = 24;                        //Код представления "План производства"
+  PPKodgroup = 28;                   //Код КАУ "План производства"
+end;
+
+var
+  _formplNrec: comp;       //Нрек настроек интерфейса
+  _mnplanNrec: comp;       //Нрек документа, для которого выполняется алгоритм
+  _pf: AGAT::oPriceFinder; //Объект, выполняющий поиск цен
+
+create view
+as select *
+from formpl, mnplan, pick, spmnplan, spmnplan spmChild, spmnplan spmnplan1, mnanal, spmnpl, valspmnp
+where ((
+  _formplNrec == formpl.nrec and
+  _mnplanNrec == mnplan.nrec and
+  20000       == pick.wlist and
+  pick.crec   == spmnplan.nrec and (spmnplan.cmnplan = _mnplanNrec) and
+  pick.crec   == spmChild.cspmnplan and
+  _mnplanNrec == spmnplan1.cmnplan
+));
+
+//Процедура заполнения плана результатами разузлования. Запись происходит в представление Период с нреком PeriodNrec
+procedure FillDocument;
+{
+  var aPrice: double;
+  var aSpsoprNrec: comp;
+  //Идем в цикле по помеченным листовым строкам плана
+  _loop pick
+  {
+    if getfirst spmnplan = tsOk
+    {
+      //если есть строки на подчиненном уровне - пропускаем строку
+      if (getfirst spmChild = tsOk) continue;
+      //определяем ссылку на приход и цену. Если цена не найдена - пропускаем строку
+      if _pf.GetPrice(spmnplan.typeizd, spmnplan.cizd, aSpsoprNrec, aPrice)
+      {
+        //Если найденная ссылка пустая (PriceFinder автоматически не нашел и пользователь вручную не поставил) - пропускаем строку
+        if aSpsoprNrec <> 0
+        {
+          //устанавливаем в строку плана ссылку на позицию найденного прихода
+          spmnplan.crolean4 := SpsoprRole;
+          spmnplan.wkodgr4  := SpsoprKodgroup;
+          spmnplan.canval4  := aSpsoprNrec;
+          update current spmnplan;
+          //записываем цену в представление "План производства":
+
+          //определяем набор аналитик представления "План производства" (понадобится при формировании spmnpl)
+          if getfirst mnanal where ((mnplan.csloj == mnanal.csloj and
+                                     0            == mnanal.cblock and
+                                     0            == mnanal.FldAn1 and
+                                     _mnplanNrec  == mnanal.FldAn2 and
+                                     0            == mnanal.FldAn3 )) != tsOk
+          {
+            clearbuffer(#MnAnal);
+            MnAnal.cSloj  := MnPlan.cSloj;
+            MnAnal.cBlock := 0;
+            MnAnal.FldAn2 := _mnplanNrec;
+            insert current MnAnal;
+          }
+
+          //определяем ячейку представления по строке, номеру представления и периоду
+          if getfirst spmnpl where ((spmnplan.nrec == spmnpl.cspmnplan and
+                                     PPVid         == spmnpl.wkolan and
+                                     PPKodgroup    == spmnpl.wkodgr4 and
+                                     _mnplanNrec   == spmnpl.cAnVal4 and
+                                     0             == spmnpl.wkodgr5 and
+                                     0             == spmnpl.cAnVal5)) != tsOk
+          {
+            clearbuffer(#spmnpl);
+            spmnpl.cspmnplan := spmnplan.nrec;
+            spmnpl.wkolan    := PPVid;
+            spmnpl.cRoleAn4  := coGetTune('SYSTEMANALIT.ROLEPRODUCTPLAN'); //Системная роль аналитик "Производственный план"
+            spmnpl.wKodGr4   := PPKodgroup;
+            spmnpl.cAnVal4   := _mnplanNrec;
+            spmnpl.cRoleAn1  := spmnplan.cRoleAn1;
+            spmnpl.wKodGr1   := spmnplan.wKodGr1;
+            spmnpl.cAnVal1   := spmnplan.cAnVal1;
+            spmnpl.cRoleAn2  := spmnplan.cRoleAn2;
+            spmnpl.wKodGr2   := spmnplan.wKodGr2;
+            spmnpl.cAnVal2   := spmnplan.cAnVal2;
+            spmnpl.cRoleAn3  := spmnplan.cRoleAn3;
+            spmnpl.wKodGr3   := spmnplan.wKodGr3;
+            spmnpl.cAnVal3   := spmnplan.cAnVal3;
+            spmnpl.wKodGr8   := spmnplan.wKodGr4;
+            spmnpl.cAnVal8   := spmnplan.cAnVal4;
+            spmnpl.typeizd   := spmnplan.TypeIzd;
+            spmnpl.cRoleIzd  := spmnplan.cRoleIzd;
+            spmnpl.cIzd      := spmnplan.cIzd;
+            spmnpl.cOtpEd    := spmnplan.cOtpEd;
+            spmnpl.NumSort   := spmnplan.NumSort;
+            spmnpl.Number    := spmnplan.Number;
+            spmnpl.cSloj     := spmnplan.cSloj;
+            spmnpl.cMnPlan   := spmnplan.cmnplan;
+            spmnpl.cMnAnal   := mnanal.nrec;
+            insert current spmnpl;
+          }
+
+          //Устанавливаем цену
+          if getfirst valspmnp where ((spmnpl.nrec == valspmnp.cspmnpl)) != tsOk
+          {
+            clearbuffer(#valspmnp);
+            ValSpMnP.cSpMnPl := SpMnPl.nRec;
+            ValSpMnP.Num     := 1;
+            ValSpMnP.cOtpEd  := SpMnPl.cOtpEd;
+            ValSpMnP.EdTime  := SpMnPl.EdTime;
+            ValSpMnP.vprice  := aPrice;
+            insert current ValSpMnP;
+          }
+          else
+          {
+            update current ValSpMnP set ValSpMnP.vprice := aPrice;
+          }
+
+        } //if aSpsoprNrec <> 0
+      } //if pf.GetPrice
+    } //if getfirst spmnplan
+  } //_loop pick
+}
+
+//Добавление помеченных записей в объекты для расчета
+function AddObjects: longint;
+{
+  var cnt: longint;
+  var p: double;
+
+  cnt := 0;
+  _loop pick
+  {
+    if getfirst spmnplan = tsOk
+    {
+      //если есть строки на подчиненном уровне - пропускаем строку
+      if (getfirst spmChild = tsOk) continue;
+      //определяем цену из плана
+      p := 0
+      if getfirst spmnpl where ((spmnplan.nrec == spmnpl.cspmnplan and
+                                     PPVid         == spmnpl.wkolan and
+                                     PPKodgroup    == spmnpl.wkodgr4 and
+                                     _mnplanNrec   == spmnpl.cAnVal4 and
+                                     0             == spmnpl.wkodgr5 and
+                                     0             == spmnpl.cAnVal5)) = tsOk
+      {
+        if getfirst valspmnp where ((spmnpl.nrec == valspmnp.cspmnpl)) = tsOk
+          p := valspmnp.vprice;
+      }
+      //добавляем объект
+      _pf.AddObject(spmnplan.typeizd, spmnplan.cizd, spmnplan.cotped, spmnplan.canval4, p);
+      cnt++;
+    }
+  }
+
+  result := cnt;
+}
+
+//Реализация функций объектного интерфейса--------------------------------------------------------------------
+Function RunInter(wflag: word; var pt: TRecAcc): boolean;
+{
+  RunInter := false;
+  wflag := wflag; pt.Position := pt.Position;
+  var cnt: longint;
+  //заполняем PriceFinder объектами для поиска цен
+  _pf.ClearObjects;
+  cnt := AddObjects;
+  //Если ни одного объекта не добавлено - добавляем все записи спецификации
+  if (cnt = 0)
+  {
+    insert pick (wlist, crec)
+    select 20000, spmnplan.nrec
+    from spmnplan
+    where (( _mnplanNrec == spmnplan.cmnplan ));
+    cnt := AddObjects;
+  }
+  //Выполняем поиск цен
+  _pf.Find;
+  //Показываем пользовательский интерфейс для корректировок пользователем
+  if _pf.ShowUserInterface = cmDefault
+  {
+    //если пользователь не нажал отмена - заполняем документ ценами
+    FillDocument;
+  }
+  RunInter := true;
+}
+
+function InitInter(var pt: TRecAcc): boolean;
+{
+  result := true;
+
+  //Находим в БД настройки алгоритма
+  _formplNrec := pt.cFormPl;
+  if (getfirst formpl != tsOk)
+  {
+    message('Не найдены настройки алгоритма (pt.cFormPl='+pt.cFormPl+')', error);
+    result := false;
+  }
+
+  //Находим в БД текущий документ
+  _mnplanNrec := pt.cMnPlan;
+  if (getfirst mnplan != tsOk)
+  {
+    message('Не найден текущий документ (pt.cMnPlan='+pt.cMnPlan+')', error);
+    result := false;
+  }
+
+  //Инициализируем объект разузлования
+  if not LoadVipRef(_pf, 'AGAT::iPriceFinder')
+  {
+    message('Ошибка инициализации объекта поиска цен', error);
+    result := false;
+  }
+}
+
+Function DoneInter(var pt: TRecAcc): boolean;
+{
+  pt.Position := pt.Position;
+  DoneInter := true;
+}
+
+function GetNum: word;
+{
+  GetNum := 5105;
+}
+
+function GetName: string; {
+  GetName := 'АГАТ. Подбор цен по помеченным строкам плана в представление "Производственный план"';
+}
+
+function GetMemo (st:oSteckCommonString): boolean; {
+  GetMemo := true;
+  st.push(string(''));
+}
+
+function GetNameInter: string; {
+  GetNameInter := 'Algoritm_5105' ;
+}
+
+function GetNameInterPr: string; {
+  GetNameInterPr := 'AlgoritmSetup_5105' ;
+}
+end.

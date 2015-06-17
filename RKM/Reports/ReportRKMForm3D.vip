@@ -1,0 +1,336 @@
+#include Query.vih
+
+#component "AGAT"
+
+interface ReportRKMForm3D;
+
+//выбор заполненных периодов из плана
+sql query QueryPeriods =
+select distinct per.nrec as Nrec,
+                per.name as Name,
+                per.dbeg as Dbeg,
+                per.dend as Dend
+from spmnplan spm
+join spmnpl spl on spm.nrec = spl.cspmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4
+join fpperiod per on spl.canval4 = per.nrec
+where spm.cmnplan = :MnplanNrec
+;
+
+//выбор спецификации плана и ее аналитик
+sql query QueryDetails =
+select spm.nrec as Nrec,
+       spm.cspmnplan as ParentNrec,
+       case when spm.typeizd = 1 then coalesce(katmc.name,'') else coalesce(katusl.name, '') end as Name,
+       case when spm.typeizd = 1 then coalesce(katmc.obozn,'') else coalesce(katusl.obozn, '') end as Obozn,
+       case when spm.typeizd = 1 then coalesce(groupmc.name,'') else coalesce(groupusl.name, '') end as GroupName,
+       case when spm.typeizd = 1 then coalesce(groupmc.kod,'') else coalesce(groupusl.kod, '') end as GroupCode,
+       coalesce(oe1.name, coalesce(oe2.name, '')) as UnitName,
+       coalesce(oe1.abbr, coalesce(oe2.abbr,'')) as UnitAbbr,
+       coalesce(costitem.name, '') as CostitemName,
+       coalesce(costitem.code, '') as CostitemCode,
+       coalesce(deliver.name, '') as DeliverName,
+       coalesce(deliver.addr, '') as DeliverAddr,
+       coalesce(deliver.unn, '') as DeliverINN,
+       coalesce(deliver.kodplatnds, '') as DeliverKPP,
+       coalesce(katsopr.nsopr, '') as IncomeNumber,
+       coalesce(katsopr.dsopr, '') as IncomeDate,
+       coalesce(katorg.name, '') as IncomeOrgName,
+       coalesce(katorg.addr, '') as IncomeOrgAddr,
+       coalesce(katorg.unn, '') as IncomeOrgINN,
+       coalesce(katorg.kodplatnds, '') as IncomeOrgKPP,
+       coalesce(vsp.vprice, 0) as IncomePrice
+from mnplan mp
+join spmnplan spm on mp.nrec = spm.cmnplan
+left join katmc on spm.cizd = katmc.nrec
+left join groupmc on coalesce(katmc.cgroupmc, #comp(0)) = groupmc.nrec
+left join katusl on spm.cizd = katusl.nrec
+left join groupusl on coalesce(katusl.cgroupusl, #comp(0)) = groupusl.nrec
+left join katotped oe1 on spm.cotped = oe1.nrec
+left join katotped oe2 on spm.typeizd = oe2.prmc and spm.cizd = oe2.cmcusl and 1 = oe2.akt
+left join spkau costitem on spm.canval1 = costitem.nrec
+left join katorg deliver on spm.canval2 = deliver.nrec
+left join typemc on spm.canval3 = typemc.nrec
+left join spsopr on spm.canval4 = spsopr.nrec
+left join katsopr on coalesce(spsopr.csopr, #comp(0)) = katsopr.nrec
+left join katorg on coalesce(katsopr.corg, #comp(0)) = katorg.nrec
+left join spmnpl spl on spm.nrec = spl.cspmnplan and 24 = spl.wkolan and 28 = spl.wkodgr4 and mp.nrec = spl.canval4
+left join valspmnp vsp on coalesce(spl.nrec, #comp(0)) = vsp.cspmnpl and coalesce(spl.nrec, #comp(0)) <> #comp(0)
+where mp.nrec = :MnplanNrec
+;
+
+//значения в количественных колонках плана
+sql query QueryValues =
+select spm.nrec as SpmnplanNrec,
+       per.nrec as FpperiodNrec,
+       vsp.kol as Norm,
+       vsp.price as Coeff,
+       vsp.vprice as Price,
+       vsp.summa as Total
+from spmnplan spm
+join spmnpl spl on spm.nrec = spl.cspmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4
+join fpperiod per on spl.canval4 = per.nrec
+join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where spm.cmnplan = :MnplanNrec
+;
+
+//таблица с периодами (заполняется QueryPeriods)
+table struct tPeriods (
+  nrec: comp,
+  name: string,
+  dbeg: date,
+  dend: date
+) with index (
+  i01 = dbeg
+);
+
+//таблица значений из плана (заполняется QueryValues)
+table struct tValues (
+  SpmnplanNrec: comp,
+  FpperiodNrec: comp,
+  Norm: double,
+  Coeff: double,
+  Price: double,
+  Total: double
+) with index (
+  i01 = SpmnplanNrec + FpperiodNrec
+);
+
+//таблица спецификации плана (заполняется QueryDetails)
+table struct tDetails (
+  Nrec         : comp,
+  ParentNrec   : comp,
+  Name         : string,
+  Obozn        : string[150],
+  GroupName    : string[220],
+  GroupCode    : string[20],
+  UnitName     : string[80],
+  UnitAbbr     : string[20],
+  CostitemName : string[120],
+  CostitemCode : string[20],
+  DeliverName  : string,
+  DeliverAddr  : string[250],
+  DeliverINN   : string[20],
+  DeliverKPP   : string[20],
+  IncomeNumber : string[100],
+  IncomeDate   : date,
+  IncomeOrgName: string,
+  IncomeOrgAddr: string[250],
+  IncomeOrgINN : string[20],
+  IncomeOrgKPP : string[20],
+  IncomePrice  : double
+) with index (
+  i01 = Name,
+  i02 = Nrec,
+  i03 = ParentNrec + Name
+);
+
+var
+  _mnplanNrec: comp;
+
+create view
+as select *
+from mnplan, tPeriods, tValues, tDetails
+where ((
+  _mnplanNrec == mnplan.nrec
+));
+
+create view vrep
+var
+  tDetailsParentNrec   : comp;
+  tDetailsNrec         : comp;
+  Level                : longInt;
+  isFirst              : boolean;
+  isLeaf               : boolean;
+as select *
+from mnplan, tDetails, tDetails tDetChild, tPeriods, tValues
+where ((
+  _mnplanNrec        == mnplan.nrec and
+  tDetailsParentNrec == tDetails.ParentNrec and
+  tDetails.Nrec      == tDetChild.ParentNrec and
+  tDetails.Nrec      == tValues.SpmnplanNrec and
+  tPeriods.nrec      == tValues.FpperiodNrec
+));
+
+parameters _mnplanNrec;
+
+datastream dsRep auto (vrep);
+
+datastream dsRep1
+(
+  [MnplanNumber]    vrep.mnplan.number;
+  [MnplanName]      vrep.mnplan.name;
+  [MnplanDate]      vrep.mnplan.statemdate;
+  [MnplanStartDate] vrep.mnplan.startdate;
+  [MnplanEndDate]   vrep.mnplan.enddate;
+  dataset Details
+  (
+    [Name]            vrep.tDetails.Name;
+    [Obozn]           vrep.tDetails.Obozn;
+    [GroupName]       vrep.tDetails.GroupName;
+    [GroupCode]       vrep.tDetails.GroupCode;
+    [UnitName]        vrep.tDetails.UnitName;
+    [UnitAbbr]        vrep.tDetails.UnitAbbr;
+    [CostitemName]    vrep.tDetails.CostitemName;
+    [CostitemCode]    vrep.tDetails.CostitemCode;
+    [DeliverName]     vrep.tDetails.DeliverName;
+    [DeliverAddr]     vrep.tDetails.DeliverAddr;
+    [DeliverINN]      vrep.tDetails.DeliverINN;
+    [DeliverKPP]      vrep.tDetails.DeliverKPP;
+    [IncomeNumber]    vrep.tDetails.IncomeNumber;
+    [IncomeDate]      vrep.tDetails.IncomeDate;
+    [IncomeOrgName]   vrep.tDetails.IncomeOrgName;
+    [IncomeOrgAddr]   vrep.tDetails.IncomeOrgAddr;
+    [IncomeOrgINN]    vrep.tDetails.IncomeOrgINN;
+    [IncomeOrgKPP]    vrep.tDetails.IncomeOrgKPP;
+    [IncomePrice]     vrep.tDetails.IncomePrice;
+    [Level]           vrep.Level;
+    [IsLeaf]          vrep.getfirst tDetChild != tsOk;
+    table vrep.tPeriods
+    (
+      [PeriodName]    vrep.tPeriods.Name;
+      [PeriodDbeg]    vrep.tPeriods.Dbeg;
+      [PeriodDend]    vrep.tPeriods.Dend;
+    );
+    table vrep.tValues
+    (
+      [ValueNorm]     vrep.tValues.Norm;
+      [ValueCoeff]    vrep.tValues.Coeff;
+      [ValuePrice]    vrep.tValues.Price;
+      [ValueTotal]    vrep.tValues.Total;
+    );
+  );
+)
+
+handleevent dataset Details
+  cmPreProcess:
+  {
+    vrep.tDetailsParentNrec := 0;
+    if vrep.getFirst tDetails = tsOk
+    {
+      vrep.tDetailsNrec := vrep.tDetails.Nrec;
+      vrep.Level := 1;
+      vrep.isFirst := true;
+    };
+  }
+  cmOnProcess:
+  {
+    vrep.tDetailsNrec := vrep.tDetails.Nrec;
+    vrep.isLeaf := vrep.getfirst tDetChild != tsOk;
+
+    if (vrep.isFirst)
+    {
+      ContinueDataset;
+      vrep.isFirst := false;
+      exit;
+    }
+
+    if vrep.getfirst tDetChild = tsOk
+    {
+      vrep.tDetailsParentNrec := vrep.tDetails.Nrec;
+      if (vrep.getfirst tDetails = tsOk)
+      {
+        vrep.Level++;
+        ContinueDataset;
+      }
+    }
+    else
+    {
+      while vrep.getnext tDetails != tsOk
+      {
+        vrep.tDetailsNrec := vrep.tDetails.ParentNrec;
+        if vrep.getfirst tDetails where ((tDetailsNrec == tDetails.Nrec)) = tsOk
+        {
+          vrep.tDetailsParentNrec := vrep.tDetails.ParentNrec;
+          vrep.Level--;
+        }
+        else
+        {
+          exit;
+        }
+      }
+      ContinueDataset;
+    }
+  }
+end; //handleevent dataset dsRep1;
+
+end; //datastream dRep1
+
+function FillTables: boolean;
+{
+  result := false;
+
+  var q: IQuery;
+  var rs: IResultSet;
+
+  //заполняем таблицу периодов
+  q := queryManager.createQuery(QueryPeriods);
+
+  q.setParam('MnplanNrec', _mnplanNrec);
+
+  rs := q.GetResultSet;
+
+  if rs = nullref or q.errorCode != tsOk
+  {
+    message('Ошибка выполнения выборки периодов планирования', error);
+    exit;
+  }
+
+  delete all tPeriods;
+  sqlCopyInto(rs, #tPeriods, true);
+
+  //заполняем таблицу строк
+  q := queryManager.createQuery(QueryDetails);
+
+  q.setParam('MnplanNrec', _mnplanNrec);
+
+  rs := q.GetResultSet;
+
+  if rs = nullref or q.errorCode != tsOk
+  {
+    message('Ошибка выполнения выборки спецификации плана', error);
+    exit;
+  }
+
+  delete all tDetails;
+  sqlCopyInto(rs, #tDetails, true);
+
+  //заполняем таблицу значений
+  q := queryManager.createQuery(QueryValues);
+
+  q.setParam('MnplanNrec', _mnplanNrec);
+
+  rs := q.GetResultSet;
+
+  if rs = nullref or q.errorCode != tsOk
+  {
+    message('Ошибка выполнения выборки значений колонок плана', error);
+    exit;
+  }
+
+  delete all tValues;
+  sqlCopyInto(rs, #tValues, true);
+
+  result := true;
+}
+
+procedure PrintReport;
+{
+  runfreport(dsRep1, '', true);
+}
+
+handleevent
+cmInit:
+{
+  if (getfirst mnplan != tsOk)
+  {
+    message('В параметрах не указан nrec плана, по которому выполняется формирование отчета (_mnplanNrec)', error);
+    closeinterface(cmCancel);
+  }
+  if FillTables
+  {
+    PrintReport;
+  }
+}
+end;
+
+end.

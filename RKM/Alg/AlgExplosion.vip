@@ -1,0 +1,386 @@
+#include Explosion.vih                             //TODO: Удалять узловые позиции, если под ними ничего нет
+#include ExplosionQueryStr.vih
+#include Query.vih
+
+#component "M_MnPlan"
+VipInterface Algoritm_5104 Implements oAlgoritm_Sys;
+Interface Algoritm_5104 '' (,hcNoContext,) EscClose, Cyan;
+
+//Запрос для заполнения tObj матценностями для разузлования из входящих планов к текущему с разбивкой по периодам
+sql query qObj =
+select spl.canval4 as PeriodNrec,
+       spm.cIzd as KatmcNrec,
+       spm.cAnval1 as HdrpsNrec,
+       sum(vsp.kol) as Qty
+from objacct oa
+join mnplan mp on oa.cobject = mp.nrec and :SrcWayaccouNrec = mp.cwayaccou
+join spmnplan spm on mp.nrec = spm.cmnplan
+join spmnpl spl on spm.nrec = spl.cspmnplan and :SrcVid = spl.wkolan and 21 = spl.wkodgr4 and 0 = spl.wkodgr5 and #comp(0) = spl.canval5
+join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where oa.typeown = 4 and oa.cowner = :MnplanNrec and oa.typeobj = 4
+group by spl.canval4, spm.cizd, spm.canval1
+;
+
+table struct tObj ( //таблица с объектами для разузлования с разбивкой по периодам
+  PeriodNrec  : comp,       //Период
+  KatmcNrec   : comp,       //Матценность
+  HdrpsNrec   : comp,       //Производственная спецификация
+  Qty         : double      //Количество
+) with index (
+  i01 = PeriodNrec
+);
+
+table struct tPer ( //таблица с периодами из объектов разузлования
+  PeriodNrec: comp,
+  PeriodName: string
+) with index (
+  i01 = PeriodNrec (unique)
+);
+
+table struct tier (
+  ExplNrec: comp,
+  SpmnplanNrec: comp,
+  ExplParentNrec: comp
+) with index (
+  i01 = ExplNrec,
+  i02 = SpmnplanNrec
+);
+
+var
+  _formplNrec: comp;       //Нрек настроек интерфейса
+  _srcWayaccouNrec: comp;  //Нрек шаблона документа - источника
+  _srcVid: word;           //Системный номер представления документа-источника, из которого берутся количества
+  _typeObjFlags: word;     //Флаги включения видов объектов в результат: 1 бит - МЦ, 2 бит - услуги
+  _mnplanNrec: comp;       //Нрек документа, для которого выполняется алгоритм
+  _wkodgr1: word;          //Код 1 аналитики строки плана (по шаблону)
+  _wkodgr2: word;          //Код 2 аналитики строки плана (по шаблону)
+  _wkodgr3: word;          //Код 3 аналитики строки плана (по шаблону)
+  _crolean1: comp;         //Роль 1 аналитики строки плана (по шаблону)
+  _crolean2: comp;         //Роль 2 аналитики строки плана (по шаблону)
+  _crolean3: comp;         //Роль 3 аналитики строки плана (по шаблону)
+  _e: AGAT::oExplosion;    //Объект, выполняющий разузлование
+
+  _explosionQuery           : UTILS::iExplosionQueryStr new;               //Базовый запрос разузлования
+  _resultQuery              : UTILS::iExplosionResultQueryStr new;         //Базовый запрос выборки результата
+  _resultQueryCostitemFilter: UTILS::iExplosionQueryStr_KauFilter new;     //Фильтр на результат по статье
+  _resultQueryDeliverFilter : UTILS::iExplosionQueryStr_KauFilter new;     //Фильтр на результат по поставщику
+  _resultQueryTypemcFilter  : UTILS::iExplosionQueryStr_KauFilter new;     //Фильтр на результат по типу мц
+  _resultQueryGroupmcFilter : UTILS::iExplosionQueryStr_GroupmcFilter new; //Фильтр на результат по группе мц
+  _resultQueryObjtypeFilter : UTILS::iExplosionQueryStr_ObjtypeFilter new; //Фильтр на результат по виду объекта - МЦ/Услуга
+
+create view
+as select *
+from formpl, mnplan, tobj, tPer, tExplosion, tier, tier tier1, Spwayac, Mnanal, Spmnplan, Spmnpl, Valspmnp
+where ((
+  _formplNrec == formpl.nrec and
+  _mnplanNrec == mnplan.nrec
+));
+
+//Процедура заполнения таблицы tObj объектами для разузлования с разбивкой по периодам планирования
+procedure FillObjects;
+{
+  var q: IQuery;
+  q := queryManager.CreateQuery(qObj);
+  q.setParam('SrcWayaccouNrec', _srcWayaccouNrec);
+  q.setParam('SrcVid', _srcVid);
+  q.setParam('MnplanNrec', _mnplanNrec);
+  sqlCopyInto(q.getResultSet, #tObj, false);
+}
+
+//Процедура заполнения таблицы tPer периодами из объектов для разузлования
+procedure FillPeriods;
+{
+  insert tPer (PeriodNrec, PeriodName)
+  select fpperiod.Nrec, fpperiod.Name
+  from tObj, fpperiod
+  where (( tObj.PeriodNrec /== fpperiod.nrec ))
+  ignore_errors(tsDuplicateKey);
+}
+
+//вспомогательная функция. возвращает нрек кау по коду из текущей записи tExplosion. Если кау с таким кодом нет - возвращает 0
+function GetExplKauByCode(aKauCode: word): comp;
+{
+  result := if(aKauCode = tExplosion.KauCode1, tExplosion.KauNrec1,
+               if(aKauCode = tExplosion.KauCode2, tExplosion.KauNrec2,
+                  if(aKauCode = tExplosion.KauCode3, tExplosion.KauNrec3, 0)));
+}
+
+procedure FillChildRecords(aExplNrec: longint; aSpmnplanNrec: comp; aPeriodNrec: comp);
+{
+  _loop tExplosion where ((aExplNrec == tExplosion.ParentNrec))
+  {
+    // определяем тип позиции (услуга / мц)
+    var curTypeIzd: word;
+    case tExplosion.Type of
+      4: curTypeIzd := 1;
+      5: curTypeIzd := 2;
+    else
+      curTypeIzd := 0;
+    end;
+
+    //находим ссылки в аналитиках 1,2,3 строк плана, соответствующие аналитикам в результатах разузлования
+    var can1, can2, can3: comp;
+    can1 := GetExplKauByCode(_wkodgr1);
+    can2 := GetExplKauByCode(_wkodgr2);
+    can3 := GetExplKauByCode(_wkodgr3);
+
+    //определяем строку плана по ссылке на заголовок плана, тип позиции и ссылки на позицию
+    if getfirst spmnplan where ((curTypeIzd      == spmnplan.typeizd and
+                                 tExplosion.cRec == spmnplan.cIzd and
+                                 mnplan.nrec     == spmnplan.cmnplan and
+                                 _wkodgr1        == spmnplan.wkodgr1 and
+                                 can1            == spmnplan.canval1 and
+                                 _wkodgr2        == spmnplan.wkodgr2 and
+                                 can2            == spmnplan.canval2 and
+                                 _wkodgr3        == spmnplan.wkodgr3 and
+                                 can3            == spmnplan.canval3 and (spmnplan.cspmnplan = aSpmnplanNrec) )) != tsOk
+    {
+      clearbuffer(#spmnplan);
+      spmnplan.cmnplan  := mnplan.nrec;
+      spmnplan.croleizd := coGetTune('SYSTEMANALIT.ROLEIZD'); //Системная роль аналитик "Изделия <Матценность, Услуга>"
+      spmnplan.typeizd  := curTypeIzd;
+      spmnplan.cIzd     := tExplosion.cRec;
+      spmnplan.wkodgr1  := _wkodgr1;
+      spmnplan.crolean1 := _crolean1;
+      spmnplan.canval1  := can1;
+      spmnplan.wkodgr2  := _wkodgr2;
+      spmnplan.crolean2 := _crolean2;
+      spmnplan.canval2  := can2;
+      spmnplan.wkodgr3  := _wkodgr3;
+      spmnplan.crolean3 := _crolean3;
+      spmnplan.canval3  := can3;
+      spmnplan.csloj    := mnplan.csloj;
+      spmnplan.cspmnplan:= aSpmnplanNrec;
+      insert current spmnplan;
+
+      //insert tier set tier.ExplNrec := tExplosion.Nrec, tier.ExplParentNrec := tExplosion.ParentNrec, tier.SpmnplanNrec := spmnplan.nrec;
+    }
+    //определяем ячейку представления по строке, номеру представления и периоду
+    if getfirst spmnpl where ((spmnplan.nrec == spmnpl.cspmnplan and
+                               _srcVid       == spmnpl.wkolan and
+                               21            == spmnpl.wkodgr4 and
+                               aPeriodNrec   == spmnpl.cAnVal4 and
+                               0             == spmnpl.wkodgr5 and
+                               0             == spmnpl.cAnVal5)) != tsOk
+    {
+      clearbuffer(#spmnpl);
+      spmnpl.cspmnplan := spmnplan.nrec;
+      spmnpl.wkolan    := _srcVid;
+      spmnpl.cRoleAn4  := coGetTune('SYSTEMANALIT.ROLEPERIOD'); //Системная роль аналитик "Период планирования"
+      spmnpl.wKodGr4   := 21;
+      spmnpl.cAnVal4   := aPeriodNrec;
+      spmnpl.cRoleAn1  := spmnplan.cRoleAn1;
+      spmnpl.wKodGr1   := spmnplan.wKodGr1;
+      spmnpl.cAnVal1   := spmnplan.cAnVal1;
+      spmnpl.cRoleAn2  := spmnplan.cRoleAn2;
+      spmnpl.wKodGr2   := spmnplan.wKodGr2;
+      spmnpl.cAnVal2   := spmnplan.cAnVal2;
+      spmnpl.cRoleAn3  := spmnplan.cRoleAn3;
+      spmnpl.wKodGr3   := spmnplan.wKodGr3;
+      spmnpl.cAnVal3   := spmnplan.cAnVal3;
+      spmnpl.wKodGr8   := spmnplan.wKodGr4;
+      spmnpl.cAnVal8   := spmnplan.cAnVal4;
+      spmnpl.typeizd   := spmnplan.TypeIzd;
+      spmnpl.cRoleIzd  := spmnplan.cRoleIzd;
+      spmnpl.cIzd      := spmnplan.cIzd;
+      spmnpl.cOtpEd    := spmnplan.cOtpEd;
+      spmnpl.NumSort   := spmnplan.NumSort;
+      spmnpl.Number    := spmnplan.Number;
+      spmnpl.cSloj     := spmnplan.cSloj;
+      spmnpl.cMnPlan   := spmnplan.cmnplan;
+      spmnpl.cMnAnal   := mnanal.nrec;
+      insert current spmnpl;
+    }
+    if getfirst valspmnp where ((spmnpl.nrec == valspmnp.cspmnpl)) != tsOk
+    {
+      clearbuffer(#valspmnp);
+      ValSpMnP.cSpMnPl := SpMnPl.nRec;
+      ValSpMnP.Num     := 1;
+      ValSpMnP.cOtpEd  := SpMnPl.cOtpEd;
+      ValSpMnP.EdTime  := SpMnPl.EdTime;
+      ValSpMnP.kol     := tExplosion.Qty;
+      ValSpMnP.price   := 1;
+      insert current valspmnp;
+    }
+    else
+    {
+      update current valspmnp set ValSpMnP.kol   := tExplosion.Qty,
+                                  ValSpMnP.price := if(ValSpMnP.price = 0, 1, ValSpMnP.price);
+    }
+    pushpos(#tExplosion);
+    FillChildRecords(tExplosion.Nrec, Spmnplan.Nrec, aPeriodNrec);
+    poppos(#tExplosion);
+  }
+}
+
+//Процедура заполнения плана результатами разузлования. Запись происходит в представление Период с нреком PeriodNrec
+procedure FillDocument(PeriodNrec: comp);
+{
+  //определяем набор аналитик представления по периоду (понадобится при формировании spmnpl)
+  if getfirst mnanal where ((mnplan.csloj == mnanal.csloj and
+                             0            == mnanal.cblock and
+                             PeriodNrec   == mnanal.FldAn1 and
+                             0            == mnanal.FldAn2 and
+                             0            == mnanal.FldAn3 )) != tsOk
+  {
+    clearbuffer(#MnAnal);
+    MnAnal.cSloj  := MnPlan.cSloj;
+    MnAnal.cBlock := 0;
+    MnAnal.FldAn1 := PeriodNrec;
+    insert current MnAnal;
+  }
+  //проходим в цикле по результатам разузлования и добавляем строки и количества
+
+  FillChildRecords(0,0,PeriodNrec);
+  //Строим иерархию
+  //_loop tier
+  //{
+  //  if getfirst tier1 where (( tier.ExplParentNrec == tier1.ExplNrec )) = tsOk
+  //    update spmnplan where ((tier.SpmnplanNrec == spmnplan.nrec )) set spmnplan.cspmnplan := tier1.SpmnplanNrec;
+  //}
+}
+
+//Реализация функций объектного интерфейса--------------------------------------------------------------------
+Function RunInter(wflag: word; var pt: TRecAcc): boolean;
+{
+  RunInter := false;
+  wflag := wflag; pt.Position := pt.Position;
+  //заполняем таблицу объектами для разузлования
+  delete all tObj;
+  FillObjects;
+  //заполняем таблицу периодов
+  delete all tPer;
+  FillPeriods;
+  //цикл по периодам
+  _loop tper
+  {
+    //очищаем таблицу с результатами разузлования
+    delete all tExplosion;
+    //в объекте разузлования очищаем коллекцию объектов для разузлования
+    _e.ClearItemsForExplosion;
+    //в объект разузлования передаем срез мц для разузлования по периоду из tper
+    _loop tObj where (( tper.PeriodNrec == tObj.PeriodNrec ))
+    {
+      _e.AddItemForExplosion(tObj.KatmcNrec, tObj.HdrpsNrec, tObj.Qty);
+    }
+    //запускаем разузлование. при этом происходит заполнение таблицы tExplosion
+    _e.Explosion;
+    //_e.ShowResultTable;
+    //заполняем документ результатами разузлования
+    FillDocument(tper.PeriodNrec);
+  }
+  RunInter := true;
+}
+
+function InitInter(var pt: TRecAcc): boolean;
+{
+  result := true;
+
+  //Находим в БД настройки алгоритма
+  _formplNrec := pt.cFormPl;
+  if (getfirst formpl != tsOk)
+  {
+    message('Не найдены настройки алгоритма (pt.cFormPl='+pt.cFormPl+')', error);
+    result := false;
+  }
+  else
+  {
+    _srcWayaccouNrec := formpl.rescomp[1];
+    _srcVid := formpl.resword[2];
+    _typeObjFlags := formpl.resword[1];
+  }
+
+  //Находим в БД текущий документ
+  _mnplanNrec := pt.cMnPlan;
+  if (getfirst mnplan != tsOk)
+  {
+    message('Не найден текущий документ (pt.cpNrec='+pt.cpNrec+')', error);
+    result := false;
+  }
+  else
+  {
+    //определяем коды и роли аналитик строк плана по шаблону
+    if getfirst spwayac where ((mnplan.cwayaccou == spwayac.cwayacmain and 16 == spwayac.code)) = tsOk
+    {
+      _wkodgr1  := spwayac.wvalres[7];
+      _wkodgr2  := spwayac.wvalres[8];
+      _wkodgr3  := spwayac.wvalres[9];
+      _crolean1 := spwayac.cvalres[7];
+      _crolean2 := spwayac.cvalres[8];
+      _crolean3 := spwayac.cvalres[9];
+    }
+    else
+    {
+      message('Ошибка определения кодов и ролей аналитик строк плана по шаблону', error);
+      result := false;
+    }
+  }
+
+  //Инициализируем объект разузлования
+  if not LoadVipRef(_e, 'AGAT::iExplosion')
+  {
+    message('Ошибка инициализации объекта разузлования', error);
+    result := false;
+  }
+  else
+  {
+    //Инициализируем запросы
+
+    _e.ExplosionQueryStr                  := UTILS::oQueryStr(_explosionQuery);
+
+    _explosionQuery.AddFilter(oQueryStr(_resultQueryCostitemFilter));
+    _explosionQuery.AddFilter(oQueryStr(_resultQueryDeliverFilter));
+    _explosionQuery.AddFilter(oQueryStr(_resultQueryTypemcFilter));
+    _explosionQuery.AddFilter(oQueryStr(_resultQueryGroupmcFilter));
+    _explosionQuery.AddFilter(oQueryStr(_resultQueryObjtypeFilter));
+
+    _resultQueryCostitemFilter.FormplNrec := _formplNrec;
+    _resultQueryCostitemFilter.Typerec    := 2;
+    _resultQueryCostitemFilter.KodgrKAU   := 10016;
+
+    _resultQueryDeliverFilter.FormplNrec  := _formplNrec;
+    _resultQueryDeliverFilter.Typerec     := 3;
+    _resultQueryDeliverFilter.KodgrKAU    := 1;
+
+    _resultQueryTypemcFilter.FormplNrec   := _formplNrec;
+    _resultQueryTypemcFilter.Typerec      := 4;
+    _resultQueryTypemcFilter.KodgrKAU     := 5008;
+
+    _resultQueryGroupmcFilter.FormplNrec  := _formplNrec;
+    _resultQueryGroupmcFilter.Typerec     := 1;
+
+    _resultQueryObjtypeFilter.Flag        := _typeObjFlags;
+
+    _e.ResultQueryStr                     := UTILS::oQueryStr(_resultQuery);
+
+  }
+}
+
+Function DoneInter(var pt: TRecAcc): boolean;
+{
+  pt.Position := pt.Position;
+  DoneInter := true;
+}
+
+function GetNum: word;
+{
+  GetNum := 5104;
+}
+
+function GetName: string; {
+  GetName := 'АГАТ. Расчет состава изделия для РКМ';
+}
+
+function GetMemo (st:oSteckCommonString): boolean; {
+  GetMemo := true;
+  st.push(string(''));
+}
+
+function GetNameInter: string; {
+  GetNameInter := 'Algoritm_5104' ;
+}
+
+function GetNameInterPr: string; {
+  GetNameInterPr := 'AlgoritmSetup_5104' ;
+}
+end.

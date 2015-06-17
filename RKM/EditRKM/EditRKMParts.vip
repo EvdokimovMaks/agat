@@ -1,0 +1,835 @@
+#include Query.vih
+#include Marker.vih
+#include EditRKMParts.vih
+
+#component "AGAT"
+
+interface iEditRKMParts;
+
+sql query QueryDetails =
+select spm.nrec as Nrec,
+       spm.cspmnplan as ParentNrec,
+       spm.nrec as SpmnplanNrec,
+       spm.typeizd as ObjType,
+       spm.cizd as ObjNrec,
+       spm.cotped as ObjOtpedNrec,
+       case when spm.typeizd = 1 then coalesce(katmc.cgroupmc,#comp(0))
+            when spm.typeizd = 2 then coalesce(katusl.cgroupusl,#comp(0))
+            else #comp(0)
+       end as ObjGroupNrec,
+       spm.canval1 as CostItemNrec,
+       spm.canval2 as DeliverNrec,
+       spm.canval3 as TypeNrec,
+       spm.canval4 as SpsoprNrec,
+       coalesce(vsp.vprice, 0) as SpsoprPrice
+from mnplan mp
+join spmnplan spm on mp.nrec = spm.cmnplan
+left join katmc on spm.cizd = katmc.nrec
+left join katusl on spm.cizd = katusl.nrec
+left join spmnpl spl on spm.nrec = spl.cspmnplan and 24 = spl.wkolan and 28 = spl.wkodgr4 and mp.nrec = spl.canval4
+left join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where mp.nrec = :MnplanNrec
+;
+
+sql query QueryValues =
+select spm.nrec as Nrec,
+       year(datetime(per.dend, 0)) as Year,
+       sum(vsp.kol) as Norm,
+       max(case when vsp.price > 0 then vsp.price else 1 end) as Coeff
+       //max(vsp.vprice) as Price,
+       //sum(vsp.kol * vsp.vprice * case when vsp.price > 0 then vsp.price else 1 end) as Total
+from spmnplan spm
+join spmnpl spl on spm.nrec = spl.cspmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4
+join fpperiod per on spl.canval4 = per.nrec and year(datetime(per.dend, 0)) between :YearStart and :YearEnd
+join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where spm.cmnplan = :MnplanNrec
+group by spm.nrec, year(datetime(per.dend, 0))
+;
+
+var
+  _parentNrec: comp;
+  _marks     : longint;
+  _yearcount : byte;
+  _yearStart : word;
+  _yearEnd   : word;
+  _getkau    : GetKau;
+  _extAttr   : iExtAttr;
+  _savedSpmnplanNrec: comp;
+
+create view
+as select *
+from tRKMParts t, katmc tmc, katusl tusl, groupmc tgroupmc, groupusl tgroupusl, katotped totped, katotped totped1,
+     katmc, katusl, spsopr, tRKMParts, tRKMParts tRKMParts1, spwayac, fpperiod, spmnplan, spmnpl, valspmnp, pick
+where ((
+  _parentNrec    == t.ParentNrec and
+  t.ObjNrec      == tmc.nrec and
+  t.ObjNrec      == tusl.nrec and
+  t.ObjGroupNrec == tgroupmc.nrec and
+  t.ObjGroupNrec == tgroupusl.nrec and
+  t.ObjOtpEdNrec == totped.nrec and
+  t.ObjType      == totped1.prmc and
+  t.ObjNrec      == totped1.cmcusl and
+  1              == totped1.akt
+));
+
+create view v
+var
+  _mnplanNrec: comp;
+as select *
+from mnplan mp, spmnplan spm, spmnpl spl, valspmnp vsp
+where ((
+  _mnplanNrec     == mp.nrec and
+  mp.nrec         == spm.cmnplan and
+  spm.nrec        == spl.cspmnplan and
+  VID_PERIOD      == spl.wkolan and
+  KODGRKAU_PERIOD == spl.wkodgr4 and
+  spl.nrec        == vsp.cspmnpl
+));
+
+//#region Функции для отображения значений в колонках дерева--------------------------------------------------
+
+function GetObjGroupName: string;
+{
+  result := '';
+  case t.ObjType of
+    1: result := if(getfirst fastfirstrow tgroupmc  = tsok, tgroupmc.name, '');
+    2: result := if(getfirst fastfirstrow tgroupusl = tsok, tgroupusl.name, '');
+  end;
+}
+
+function GetObjName: string;
+{
+  result := '';
+  case t.ObjType of
+    1: result := if(getfirst fastfirstrow tmc  = tsok, tmc.name, '');
+    2: result := if(getfirst fastfirstrow tusl = tsok, tusl.name, '');
+  end;
+}
+
+function GetObjObozn: string;
+{
+  result := '';
+  case t.ObjType of
+    1: result := if(getfirst fastfirstrow tmc  = tsok, tmc.obozn, '');
+    2: result := if(getfirst fastfirstrow tusl = tsok, tusl.obozn, '');
+  end;
+}
+
+function GetObjOtpEdName: string;
+{
+  result := '';
+  if getfirst fastfirstrow totped = tsok
+    result := totped.name
+  else if getfirst fastfirstrow totped1 = tsOk
+    result := totped1.name;
+}
+
+function GetCostItemName: string;
+{
+  result := if (getanykau(1, KODGRKAU_COSTITEM, t.CostItemNrec), GivenAnName(1), '');
+}
+
+function GetDeliverName: string;
+{
+  result := if (getanykau(1, KODGRKAU_KATORG, t.DeliverNrec), GivenAnName(1), '');
+}
+
+function GetTypeName: string;
+{
+  result := if (getanykau(1, KODGRKAU_TYPEMC, t.TypeNrec), GivenAnName(1), '');
+}
+
+function GetSpsoprName: string;
+{
+  result := if (getanykau(1, KODGRKAU_SPSOPR, t.SpsoprNrec), GivenAnName(1), '');
+}
+//#endregion -------------------------------------------------------------------------------------------------
+
+//#region Процедуры Pick--------------------------------------------------------------------------------------
+
+procedure PickObj;
+var
+  c: comp;
+  k: word;
+{
+  c := t.ObjNrec;
+
+  case t.ObjType of
+    1: k := 4;
+    2: k := 5;
+  else
+  {
+    message('Текущий тип позиции не обрабатывается (код типа = '+t.ObjType+')', error);
+    exit;
+  }
+  end;
+
+  if _getkau.GetCodeKau(1, k, c) > 0
+  {
+    t.ObjNrec := c;
+    case t.ObjType of
+      1:
+      {
+        if getfirst fastfirstrow katmc where ((c == katmc.nrec)) = tsOk
+        {
+          t.ObjGroupNrec := katmc.cgroupmc;
+          t.TypeNrec     := katmc.ctype;
+          t.CostitemNrec := _extAttr.coGetAttr(10004, katmc.ctype, 'Статья затрат');
+        }
+      }
+      2:
+      {
+        if getfirst fastfirstrow katusl where ((c == katusl.nrec)) = tsOk
+        {
+          t.ObjGroupNrec := katusl.cgroupusl;
+          t.TypeNrec     := 0;
+        }
+      }
+    end;
+    setmodified(true);
+    rescanpanel(#t);
+  }
+}
+
+procedure PickObjOtpEd;
+{
+  var c: comp;
+  c := t.ObjOtpEdNrec;
+  if runinterface(L_MCU::GETOTPED, t.ObjNrec, c, t.ObjType) = cmDefault
+  {
+    t.ObjOtpEdNrec := c;
+    setmodified(true);
+    rescanpanel(#t);
+  }
+}
+
+procedure PickCostItem;
+{
+  var c: comp;
+  c := t.CostItemNrec;
+  if _getkau.GetCodeKau(1, KODGRKAU_COSTITEM, c) > 0
+  {
+    t.CostItemNrec := c;
+    setmodified(true);
+    rescanpanel(#t);
+  }
+}
+
+procedure PickDeliver;
+{
+  var c: comp;
+  c := t.DeliverNrec;
+  if _getkau.GetCodeKau(1, KODGRKAU_KATORG, c) > 0
+  {
+    t.DeliverNrec := c;
+    setmodified(true);
+    rescanpanel(#t);
+  }
+}
+
+procedure PickType;
+{
+  var c: comp;
+  c := t.TypeNrec;
+  if _getkau.GetCodeKau(1, KODGRKAU_TYPEMC, c) > 0
+  {
+    t.TypeNrec := c;
+    setmodified(true);
+    rescanpanel(#t);
+  }
+}
+
+procedure PickSpsopr;
+{
+  var c: comp;
+  c := t.SpsoprNrec;
+  if _getkau.GetCodeKau(1, KODGRKAU_SPSOPR, c) > 0
+  {
+    t.SpsoprNrec := c;
+    if getfirst fastfirstrow spsopr where (( c == spsopr.nrec )) = tsOk
+      t.SpsoprPrice := spsopr.Price;
+    setmodified(true);
+    rescanpanel(#t);
+  }
+}
+
+//#endregion -------------------------------------------------------------------------------------------------
+
+tree tr1 (,,sci1478EscExInsTree);// customsorting;     sci178EscExTree
+table t;
+//fixedleft(t.ObjType, ObjName, ObjObozn,ObjGroupName,ObjOtpEdName);
+fields
+  {font={color=if(foundmarker(_marks, t.nrec), 5, 0); }};
+  [ObjName]      GetObjName      ''#13'Наименование'  : [20], protect, pickbutton;
+  [ObjObozn]     GetObjObozn     ''#13'Обозначение'   : [20], protect, pickbutton;
+  if(foundmarker(_marks, t.nrec), 'V', '')            : [3] , skip, noautosize;
+                 t.ObjType       ''#13'Тип'           : [5] , [list 1 'МЦ', 2 'Усл'], noautosize;
+  [ObjGroupName] GetObjGroupName ''#13'Группа'        : [10], protect;
+  [ObjOtpEdName] GetObjOtpEdName ''#13'Ед.изм.'       : [ 5], protect, pickbutton;
+  [CostItemName] GetCostItemName ''#13'Сататья затрат': [10], protect, pickbutton;
+  [DeliverName]  GetDeliverName  ''#13'Поставщик'     : [10], protect, pickbutton;
+  [TypeName]     GetTypeName     ''#13'Тип МЦ'        : [10], protect, pickbutton;
+  [SpsoprName]   GetSpsoprName   ''#13'Поступление'   : [10], protect, pickbutton;
+                 t.SpsoprPrice   ''#13'Цена'          : [8,2], noprotect;
+end;
+
+//#region Процедуры для модификации таблицы в дереве----------------------------------------------------------
+
+procedure DeleteChildEditRKMParts(aNrec: comp);
+{
+  while getfirst fastfirstrow tRKMParts where (( aNrec == tRKMParts.ParentNrec )) = tsOk
+  {
+    pushpos(#tRKMParts);
+    DeleteChildEditRKMParts(tRKMParts.Nrec);
+    poppos(#tRKMParts);
+    delete current tRKMParts;
+  }
+}
+
+procedure MarkUnmarkChildEditRKMParts(aNrec: comp; setMark: boolean);
+{
+  _loop tRKMParts where (( aNrec == tRKMParts.ParentNrec ))
+  {
+    pushpos(#tRKMParts);
+    MarkUnmarkChildEditRKMParts(tRKMParts.Nrec, setMark);
+    poppos(#tRKMParts);
+    if ( setMark and (not foundmarker(_marks, tRKMParts.Nrec)) )
+      insertmarker(_marks, tRKMParts.Nrec)
+    else if ( (not setMark) and foundmarker(_marks, tRKMParts.Nrec) )
+      deletemarker(_marks, tRKMParts.Nrec);
+  }
+}
+
+procedure SetDefaultCurrentRecord;
+{
+  t.ObjType := 1;
+  t.ParentNrec := _parentNrec;
+}
+
+procedure InsertCurrentRecord;
+{
+  var buf: ttrkmparts;
+
+  t.nrec := GetNextNRec(#t, 0);
+  buf := ttrkmparts(t.buffer);
+  insert current t;
+
+  t.buffer := buf;
+  update current t;
+  rereadrecord(#t);
+  TreeJumpToRecord(tr1, t.Nrec);
+}
+
+procedure UpdateCurrentRecord;
+{
+  update current t;
+}
+
+procedure DeleteCurrentRecord;
+{
+  DeleteChildEditRKMParts(t.Nrec);
+  delete current t;
+}
+
+procedure ProcessCurrentRecord;
+{
+  var i: byte;
+  for(i:=1;i<=_yearcount;i++)
+  {
+    if t.Coeff[i] <= 0 t.Coeff[i] := 1;
+    t.Price[i] := t.SpsoprPrice * t.Coeff[i];
+    t.Total[i] := t.Price[i] * t.Norm[i];
+  }
+  setModified(true);
+}
+
+//#endregion--------------------------------------------------------------------------------------------------
+
+tableevent table t;
+  cmTreeTop           : _parentNrec := 0;
+  cmTreeDown          : _parentNrec := t.nrec;
+  cmTreeUp            : _parentNrec := t.ParentNrec;
+  cmTreeNodeType      : if (TreeIsTerminal(tr1)) TreeSetNodeType(tr1, ntfText);
+  cmTreeNeedOwner     : TreeJumpToRecord(tr1, t.ParentNrec);
+  cmPick:
+  {
+    case curfield of
+      #ObjName     : PickObj;
+      #ObjObozn    : PickObj;
+      #ObjOtpEdName: PickObjOtpEd;
+      #CostItemName: PickCostItem;
+      #DeliverName : PickDeliver;
+      #TypeName    : PickType;
+      #SpsoprName  : PickSpsopr;
+    end;
+    ProcessCurrentRecord;
+  }
+  cmInsertRecord: InsertCurrentRecord;
+  cmDeleteRecord: DeleteCurrentRecord;
+  cmUpdateRecord: UpdateCurrentRecord;
+  cmSetDefault  : SetDefaultCurrentRecord;
+  cmCheckField  : ProcessCurrentRecord;
+end;
+
+handleevent
+  cmAddNewRec:
+  {
+    if isNew
+      InsertCurrentRecord
+    else if isModified
+      UpdateCurrentRecord;
+
+    clearbuffer(#t);
+    SetDefaultCurrentRecord;
+    InsertCurrentRecord;
+    stop;
+  }
+  cmInsLevel:
+  {
+    if isNew
+      InsertCurrentRecord
+    else if isModified
+      UpdateCurrentRecord;
+
+    _parentNrec := t.Nrec;
+    clearbuffer(#t);
+    SetDefaultCurrentRecord;
+    InsertCurrentRecord;
+    stop;
+  }
+  cmDelete:
+  {
+    if isNew or (not isvalid(#t)) exit;
+    var cnt: longint;
+    cnt := getmarkercount(_marks);
+    if cnt = 0
+    {
+      if getfirst fastfirstrow tRKMParts where (( t.nrec == tRKMParts.ParentNrec )) = tsOk
+      {
+        if message('Удалить текущую запись?', YesNo) = cmYes
+        {
+          DeleteCurrentRecord;
+          //redrawcurrentandgo(tr1, true);
+          rereadrecord(#t);
+        }
+      }
+      else
+      {
+        DeleteCurrentRecord;
+        //redrawcurrentandgo(tr1, true);
+        rereadrecord(#t);
+      }
+    }
+    else
+    {
+      if message('Удалить помеченные записи ('+cnt+')?', YesNo) = cmYes
+      {
+        delete all tRKMParts where (foundmarker(_marks, tRKMParts.Nrec));
+        clearmarker(_marks);
+        //redrawcurrentandgo(tr1, true);
+        rereadrecord(#t);
+      }
+    }
+    stop;
+  }
+  cmDoMarkUnmark:
+  {
+    if (foundmarker(_marks, t.nrec))
+    {
+      MarkUnmarkChildEditRKMParts(t.Nrec, false);
+      deletemarker(_marks, t.nrec);
+    }
+    else
+    {
+      MarkUnmarkChildEditRKMParts(t.Nrec, true);
+      insertmarker(_marks, t.nrec);
+    }
+    redrawcurrentandgo(tr1, true);
+    rereadrecord(#t);
+  }
+  cmSelAll:
+  {
+    pushpos(#t);
+    clearmarker(_marks);
+    StartNewVisual(vtRotateVisual, vfBreak+vfTimer, '', 0);
+    _loop tRkmParts
+    {
+      insertmarker(_marks, tRkmParts.Nrec);
+      if (not NextVisual) break;
+    }
+    StopVisual('',0);
+    poppos(#t);
+    rescanpanel(#t);
+  }
+  cmUnSelAll:
+  {
+    clearmarker(_marks);
+    rescanpanel(#t);
+  }
+end;
+
+//#region Вспомогательные функции для динамического формирования столбцов в дереве----------------------------
+procedure AddTreeColumn(aName: string; aTitle: string);
+{
+  var l: longint;
+  cfsCreateObject('TreeColumn', 'tr1', aName, false, l);
+  cfsSetProp(l, 'Title', aTitle);
+  cfsSetProp(l, 'FieldName', aName);
+  cfsSetProp(l, 'DefaultWidth', word(12));
+  cfsSetProp(l, 'Size_X', 70);
+  cfsSetProp(l, 'Points', 2);
+}
+
+procedure AddTreeYearColumns(aYear: word; aNum: byte);
+{
+  AddTreeColumn('t.Norm['+aNum+']' , aYear+''#13'Норма');
+  AddTreeColumn('t.Coeff['+aNum+']', aYear+''#13'Коэффициент');
+  AddTreeColumn('t.Price['+aNum+']', aYear+''#13'Цена');
+  AddTreeColumn('t.Total['+aNum+']', aYear+''#13'Затраты');
+}
+
+procedure deleteTreeYearColumns(aNum: byte);
+{
+  cfsDestroyObject('t.Norm['+aNum+']');
+  cfsDestroyObject('t.Coeff['+aNum+']');
+  cfsDestroyObject('t.Price['+aNum+']');
+  cfsDestroyObject('t.Total['+aNum+']');
+}
+
+//#endregion -------------------------------------------------------------------------------------------------
+
+//#region Реализация oEditRKMParts----------------------------------------------------------------------------
+
+procedure InitInterface(aYearStart: word; aYearEnd: word);
+{
+  var i: byte;
+
+  if (_yearstart != aYearStart or _yearend != aYearEnd)
+  {
+    cfsSetCurrentContainer('iEditRKMParts');
+
+    for (i := 1; i <= _yearcount; i++)
+    {
+      deleteTreeYearColumns(i);
+    }
+
+    _yearcount := aYearEnd - aYearStart + 1;
+    if (_yearcount > RKM_MAX_YEARS) _yearcount := RKM_MAX_YEARS;
+    _yearstart := aYearStart;
+    _yearend   := _yearstart + _yearcount - 1;
+
+    for(i := 1; i <= _yearcount; i++)
+    {
+      AddTreeYearColumns(_yearstart+i-1, i);
+    }
+  }
+
+  if _marks = 0 _marks := initmarker('', 8, 100, 10, false);
+
+  _savedSpmnplanNrec := 0;
+}
+
+procedure Load(aMnplanNrec: comp);
+{
+  delete all tRKMParts;
+
+  var q: IQuery;
+  var rs: IResultSet;
+
+  q := queryManager.createQuery(QueryDetails);
+  q.setParam('MnplanNrec', aMnplanNrec);
+  rs := q.getResultSet;
+  if (q.errorCode != tsOk or rs = nullRef)
+  {
+    message('Ошибка выполнения запроса QueryDetails. Код '+q.errorCode, error);
+    exit;
+  }
+  sqlCopyInto(rs, #tRKMParts, true);
+
+  q := queryManager.createQuery(QueryValues);
+  q.setParam('MnplanNrec', aMnplanNrec);
+  q.setParam('YearStart' , _yearStart);
+  q.setParam('YearEnd'   , _yearEnd);
+  rs := q.getResultSet;
+  if (q.errorCode != tsOk or rs = nullRef)
+  {
+    message('Интерфейс редактирования РКМ. Ошибка выполнения запроса QueryValues. Код '+q.errorCode, error);
+    exit;
+  }
+  if rs.getFirst = tsOk
+  {
+    var currentNrec, c: comp;
+    var i: word;
+    currentNrec := 0;
+    do
+    {
+      c := rs.row.val('Nrec');
+      if c != currentNrec
+        if (currentNrec != 0) update current tRKMParts;
+        if getfirst tRKMParts where (( c == tRKMParts.Nrec )) = tsOk
+        {
+          currentNrec := c;
+        }
+        else
+        {
+          continue;
+        }
+      i := rs.row.val('Year') - _yearStart + 1;
+      tRKMParts.Norm [i] := rs.row.val('Norm');
+      tRKMParts.Coeff[i] := rs.row.val('Coeff');
+      tRKMParts.Price[i] := tRKMParts.SpsoprPrice * tRKMParts.Coeff[i];
+      tRKMParts.Total[i] := tRKMParts.Norm[i] * tRKMParts.Price[i];
+    }
+    while rs.getNext = tsOk;
+  }
+  clearmarker(_marks);
+  _loop pick where (( 20000 == pick.wlist ))
+  {
+    if getfirst tRkmParts where ((pick.cRec == tRkmParts.SpmnplanNrec)) = tsOk
+      insertmarker(_marks, tRkmParts.Nrec);
+  }
+
+  if _savedSpmnplanNrec != 0
+    if getfirst tRKMParts where (( _savedSpmnplanNrec == tRKMParts.SpmnplanNrec )) = TsOk
+      TreeJumpToRecord(tr1, tRKMParts.Nrec);
+  rereadrecord(#t);
+}
+
+procedure Save(aMnplanNrec: comp; aFptperNrec: comp);
+{
+  var i: byte;
+
+  v._mnplanNrec := aMnplanNrec;
+  if v.getfirst mp != tsOk
+  {
+    message('Не найден план nrec='+string(aMnplanNrec,0,0), error);
+    exit;
+  }
+  //Удаляем в бд удаленное в tRKMParts
+  v._loop spm
+  {
+    if getfirst tRKMParts where (( v.spm.nrec == tRKMParts.SpmnplanNrec )) != tsOk
+    {
+      v._loop spl
+      {
+        v.delete all vsp;
+        v.delete current spl;
+      }
+      v.delete current spm;
+    }
+  }
+
+  //определяем коды и роли аналитик строк плана
+  var rolean: array[1..4] of comp;
+  var codean: array[1..4] of word;
+  //инициализируем коды аналитик значениями по умолчанию
+  codean[1] := KODGRKAU_COSTITEM;
+  codean[2] := KODGRKAU_KATORG;
+  codean[3] := KODGRKAU_TYPEMC;
+  codean[4] := KODGRKAU_SPSOPR;
+  //пытаемся получить коды и роли аналитик из шаблона плана
+  if getfirst spwayac where (( v.mp.cwayaccou == spwayac.cwayacmain and 16 == spwayac.code )) = tsOk
+  {
+    rolean[1] := spwayac.CVALRES[7];
+    rolean[2] := spwayac.CVALRES[8];
+    rolean[3] := spwayac.CVALRES[9];
+    codean[1] := spwayac.WVALRES[7];
+    codean[2] := spwayac.WVALRES[8];
+    codean[3] := spwayac.WVALRES[9];
+  }
+
+  //определяем нреки периодов планирования для столбцов
+  var y: word;
+  var periodnrec: array[1..1] of comp;
+  for(i := 1; i <= _yearcount; i++)
+  {
+    y := _yearStart + i - 1;
+    if getfirst fpperiod where (( aFptperNrec == fpperiod.ctper and date(1,1,y) == fpperiod.dbeg and date(31,12,y) == fpperiod.dend )) = tsok
+    {
+      periodnrec[i] := fpperiod.nrec;
+    }
+  }
+
+  var newRecord: boolean;
+  //проходим по строкам tRKMParts и вносим изменения в бд
+  _loop tRKMParts
+  {
+    //----------------------------------------------------------SpMnPlan
+    newRecord := false;
+    if (tRKMParts.SpmnplanNrec = 0) or (getfirst spmnplan where ((tRKMParts.SpmnplanNrec == spmnplan.nrec)) != tsOk)
+    {
+      newRecord := true;
+      clearbuffer(#spmnplan);
+    }
+    spmnplan.cmnplan       := aMnplanNrec;
+    spmnplan.cizd          := tRKMParts.ObjNrec;
+    spmnplan.typeizd       := tRKMParts.ObjType;
+    spmnplan.COtpEd        := tRKMParts.ObjOtpedNrec;
+    spmnplan.startdate     := v.mp.startdate;
+    spmnplan.enddate       := v.mp.enddate;
+    spmnplan.crolean1      := rolean[1];
+    spmnplan.wkodgr1       := codean[1];
+    spmnplan.canval1       := tRKMParts.CostItemNrec;
+    spmnplan.crolean2      := rolean[2];
+    spmnplan.wkodgr2       := codean[2];
+    spmnplan.canval2       := tRKMParts.DeliverNrec;
+    spmnplan.crolean3      := rolean[3];
+    spmnplan.wkodgr3       := codean[3];
+    spmnplan.canval3       := tRKMParts.TypeNrec;
+    spmnplan.crolean4      := rolean[4];
+    spmnplan.wkodgr4       := codean[4];
+    spmnplan.canval4       := tRKMParts.SpsoprNrec;
+    spmnplan.csloj         := v.mp.csloj;
+    if (newRecord)
+    {
+      insert current spmnplan;
+      update current tRKMParts set tRKMParts.SpmnplanNrec := spmnplan.nrec;
+    }
+    else
+      update current spmnplan;
+
+    //----------------------------------------------------------Spmnpl
+    for(i := 1; i <= _yearCount; i++)
+    {
+      newRecord := false;
+      if getfirst spmnpl where (( spmnplan.nrec   == spmnpl.cspmnplan and
+                                  VID_PERIOD      == spmnpl.wkolan    and
+                                  KODGRKAU_PERIOD == spmnpl.wkodgr4   and
+                                  periodnrec[i]   == spmnpl.canval4 )) != tsOk
+      {
+        newRecord := true;
+        clearbuffer(#spmnpl);
+      }
+      spmnpl.cspmnplan := spmnplan.nrec;
+      spmnpl.wkolan    := VID_PERIOD;
+      spmnpl.cRoleAn4  := coGetTune('SYSTEMANALIT.ROLEPERIOD');
+      spmnpl.wKodGr4   := KODGRKAU_PERIOD;
+      spmnpl.cAnVal4   := periodnrec[i];
+      spmnpl.cRoleAn1  := spmnplan.cRoleAn1;
+      spmnpl.wKodGr1   := spmnplan.wKodGr1;
+      spmnpl.cAnVal1   := spmnplan.cAnVal1;
+      spmnpl.cRoleAn2  := spmnplan.cRoleAn2;
+      spmnpl.wKodGr2   := spmnplan.wKodGr2;
+      spmnpl.cAnVal2   := spmnplan.cAnVal2;
+      spmnpl.cRoleAn3  := spmnplan.cRoleAn3;
+      spmnpl.wKodGr3   := spmnplan.wKodGr3;
+      spmnpl.cAnVal3   := spmnplan.cAnVal3;
+      spmnpl.wKodGr8   := spmnplan.wKodGr4;
+      spmnpl.cAnVal8   := spmnplan.cAnVal4;
+      spmnpl.typeizd   := spmnplan.TypeIzd;
+      spmnpl.cRoleIzd  := spmnplan.cRoleIzd;
+      spmnpl.cIzd      := spmnplan.cIzd;
+      spmnpl.cOtpEd    := spmnplan.cOtpEd;
+      spmnpl.NumSort   := spmnplan.NumSort;
+      spmnpl.Number    := spmnplan.Number;
+      spmnpl.cSloj     := spmnplan.cSloj;
+      spmnpl.cMnPlan   := spmnplan.cmnplan;
+      //spmnpl.cMnAnal   := mna.nrec;
+      if (newRecord)
+        insert current spmnpl;
+      else
+        update current spmnpl;
+      //----------------------------------------------------------Valspmnp
+      newRecord := false;
+      if getfirst valspmnp where ((spmnpl.nrec == valspmnp.cspmnpl)) != tsOk
+      {
+        newRecord := true;
+        clearbuffer(#valspmnp);
+      }
+      valspmnp.cspmnpl   := spmnpl.nrec;
+      valspmnp.cspmnplan := spmnpl.cSpmnplan;
+      valspmnp.cmnanal   := spmnpl.cmnanal;
+      valspmnp.Num       := 1;
+      valspmnp.cOtpEd    := spmnpl.cOtpEd;
+      valspmnp.EdTime    := spmnpl.EdTime;
+      valspmnp.kol       := tRKMParts.Norm[i];
+      valspmnp.price     := tRKMParts.Coeff[i];
+      valspmnp.vprice    := tRKMParts.Price[i];
+      valspmnp.summa     := tRKMParts.Total[i];
+      if (newRecord)
+        insert current valspmnp;
+      else
+        update current valspmnp;
+    } //for i.._yearcount
+
+    //-----------------------------------------Сохраняем цены и итоги
+    if getfirst spmnpl where (( spmnplan.nrec   == spmnpl.cspmnplan and
+                                VID_PP          == spmnpl.wkolan    and
+                                KODGRKAU_PP     == spmnpl.wkodgr4   and
+                                aMnplanNrec     == spmnpl.canval4 )) != tsOk
+    {
+      newRecord := true;
+      clearbuffer(#spmnpl);
+    }
+    spmnpl.cspmnplan := spmnplan.nrec;
+    spmnpl.wkolan    := VID_PP;
+    spmnpl.cRoleAn4  := coGetTune('SYSTEMANALIT.ROLEPRODUCTPLAN');
+    spmnpl.wKodGr4   := KODGRKAU_PP;
+    spmnpl.cAnVal4   := aMnplanNrec;
+    spmnpl.cRoleAn1  := spmnplan.cRoleAn1;
+    spmnpl.wKodGr1   := spmnplan.wKodGr1;
+    spmnpl.cAnVal1   := spmnplan.cAnVal1;
+    spmnpl.cRoleAn2  := spmnplan.cRoleAn2;
+    spmnpl.wKodGr2   := spmnplan.wKodGr2;
+    spmnpl.cAnVal2   := spmnplan.cAnVal2;
+    spmnpl.cRoleAn3  := spmnplan.cRoleAn3;
+    spmnpl.wKodGr3   := spmnplan.wKodGr3;
+    spmnpl.cAnVal3   := spmnplan.cAnVal3;
+    spmnpl.wKodGr8   := spmnplan.wKodGr4;
+    spmnpl.cAnVal8   := spmnplan.cAnVal4;
+    spmnpl.typeizd   := spmnplan.TypeIzd;
+    spmnpl.cRoleIzd  := spmnplan.cRoleIzd;
+    spmnpl.cIzd      := spmnplan.cIzd;
+    spmnpl.cOtpEd    := spmnplan.cOtpEd;
+    spmnpl.NumSort   := spmnplan.NumSort;
+    spmnpl.Number    := spmnplan.Number;
+    spmnpl.cSloj     := spmnplan.cSloj;
+    spmnpl.cMnPlan   := spmnplan.cmnplan;
+    //spmnpl.cMnAnal   := mna.nrec;
+    if (newRecord)
+      insert current spmnpl;
+    else
+      update current spmnpl;
+    //----------------------------------------------------------Valspmnp
+    newRecord := false;
+    if getfirst valspmnp where ((spmnpl.nrec == valspmnp.cspmnpl)) != tsOk
+    {
+      newRecord := true;
+      clearbuffer(#valspmnp);
+    }
+    valspmnp.cspmnpl   := spmnpl.nrec;
+    valspmnp.cspmnplan := spmnpl.cSpmnplan;
+    valspmnp.cmnanal   := spmnpl.cmnanal;
+    valspmnp.Num       := 1;
+    valspmnp.cOtpEd    := spmnpl.cOtpEd;
+    valspmnp.EdTime    := spmnpl.EdTime;
+//    valspmnp.kol       := tRKMParts.Norm[i];
+//    valspmnp.price     := tRKMParts.Coeff[i];
+    valspmnp.vprice    := tRKMParts.SpsoprPrice;
+//    valspmnp.summa     := tRKMParts.Total[i];
+    if (newRecord)
+      insert current valspmnp;
+    else
+      update current valspmnp;
+
+  } //_loop tRKMParts
+
+  //сохраняем иерархию
+  _loop tRKMParts where (tRKMParts.ParentNrec != 0)
+  {
+    if getfirst tRKMParts1 where ((tRKMParts.ParentNrec == tRKMParts1.Nrec)) = tsOk
+      update spmnplan where ((tRKMParts.SpmnplanNrec == spmnplan.nrec)) set spmnplan.cspmnplan := tRKMParts1.SpmnplanNrec;
+  }
+  //сохраняем пометки
+  delete all pick where (( 20000 == pick.wlist ));
+  _loop tRKMParts where (foundmarker(_marks, tRKMParts.Nrec))
+  {
+    insert pick set pick.wlist := 20000, pick.crec := tRKMParts.SpmnplanNrec;
+  }
+  //сохраняем позицию
+  rereadrecord(#t);
+  _savedSpmnplanNrec := t.SpmnplanNrec;
+}
+//#endregion
+
+end.
