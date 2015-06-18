@@ -12,7 +12,7 @@ select spm.nrec as Nrec,
        spm.nrec as SpmnplanNrec,
        spm.typeizd as ObjType,
        spm.cizd as ObjNrec,
-       spm.cotped as ObjOtpedNrec,
+       case when spm.cotped = #comp(0) then coalesce(oe.nrec, #comp(0)) else spm.cotped end as ObjOtpedNrec,
        case when spm.typeizd = 1 then coalesce(katmc.cgroupmc,#comp(0))
             when spm.typeizd = 2 then coalesce(katusl.cgroupusl,#comp(0))
             else #comp(0)
@@ -21,11 +21,16 @@ select spm.nrec as Nrec,
        spm.canval2 as DeliverNrec,
        spm.canval3 as TypeNrec,
        spm.canval4 as SpsoprNrec,
-       coalesce(vsp.vprice, 0) as SpsoprPrice
+       (coalesce(vsp.kolfield5, 0)) as SpsoprPrice,//coalesce(vsp.kolfield5, 0) as SpsoprPrice,
+       (coalesce(vsp.kol      , 0)) as Norm,       //coalesce(vsp.kol      , 0) as Norm,
+       (coalesce(vsp.price    , 0)) as ParentQty,  //coalesce(vsp.price    , 0) as ParentQty,
+       (coalesce(vsp.vprice   , 0)) as TotalQty,   //coalesce(vsp.vprice   , 0) as TotalQty,
+       (coalesce(vsp.kolfact  , 0)) as TotalSum    //coalesce(vsp.kolfact  , 0) as TotalSum
 from mnplan mp
 join spmnplan spm on mp.nrec = spm.cmnplan
 left join katmc on spm.cizd = katmc.nrec
 left join katusl on spm.cizd = katusl.nrec
+left join katotped oe on spm.typeizd = oe.prmc and spm.cizd = oe.cmcusl and 1 = oe.akt
 left join spmnpl spl on spm.nrec = spl.cspmnplan and 24 = spl.wkolan and 28 = spl.wkodgr4 and mp.nrec = spl.canval4
 left join valspmnp vsp on spl.nrec = vsp.cspmnpl
 where mp.nrec = :MnplanNrec
@@ -34,10 +39,10 @@ where mp.nrec = :MnplanNrec
 sql query QueryValues =
 select spm.nrec as Nrec,
        year(datetime(per.dend, 0)) as Year,
-       sum(vsp.kol) as Norm,
-       max(case when vsp.price > 0 then vsp.price else 1 end) as Coeff
-       //max(vsp.vprice) as Price,
-       //sum(vsp.kol * vsp.vprice * case when vsp.price > 0 then vsp.price else 1 end) as Total
+       sum(vsp.kol) as Qty,
+       max(case when vsp.price > 0 then vsp.price else 1 end) as Coeff,
+       max(vsp.vprice) as Price,
+       sum(vsp.summa) as Summa
 from spmnplan spm
 join spmnpl spl on spm.nrec = spl.cspmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4
 join fpperiod per on spl.canval4 = per.nrec and year(datetime(per.dend, 0)) between :YearStart and :YearEnd
@@ -58,10 +63,11 @@ var
 
 create view
 as select *
-from tRKMParts t, katmc tmc, katusl tusl, groupmc tgroupmc, groupusl tgroupusl, katotped totped, katotped totped1,
-     katmc, katusl, spsopr, tRKMParts, tRKMParts tRKMParts1, spwayac, fpperiod, spmnplan, spmnpl, valspmnp, pick
+from tRKMParts t, tRKMParts tParent, katmc tmc, katusl tusl, groupmc tgroupmc, groupusl tgroupusl, katotped totped, katotped totped1,
+     katmc, katusl, spsopr, tRKMParts, tRKMParts tRKMParts1, spwayac, fpperiod, spmnplan, spmnpl, valspmnp, pick, katotped
 where ((
   _parentNrec    == t.ParentNrec and
+  t.ParentNrec   == tParent.Nrec and
   t.ObjNrec      == tmc.nrec and
   t.ObjNrec      == tusl.nrec and
   t.ObjGroupNrec == tgroupmc.nrec and
@@ -143,6 +149,33 @@ function GetSpsoprName: string;
 {
   result := if (getanykau(1, KODGRKAU_SPSOPR, t.SpsoprNrec), GivenAnName(1), '');
 }
+
+function GetSumQty: double;
+{
+  var d: double; d := 0;
+  var i: byte;
+  for(i:=1;i<=_yearcount;i++) { d += t.Qty[i]; }
+  result := d;
+}
+
+function GetTotalQtyName: string;
+{
+  var sumQty: double;
+  sumQty := GetSumQty;
+  if t.TotalQty = sumQty result := doubletostr(round(t.TotalQty,3), '[|-]3666666666666.888')
+  else result := doubletostr(round(t.TotalQty,3), '[|-]3666666666666.888') + ' / ' +
+                 doubletostr(round(sumQty,3), '[|-]3666666666666.888') + ' (' +
+                 doubletostr(round(t.TotalQty - sumQty,3), '[|-]3666666666666.888') + ')';
+}
+function GetTotalQtyColor: longint;
+{
+  var sumQty: double;
+  sumQty := GetSumQty;
+  if t.TotalQty < sumQty result := 69
+  else if t.TotalQty > sumQty result := 17
+  else result := 0;
+}
+
 //#endregion -------------------------------------------------------------------------------------------------
 
 //#region Процедуры Pick--------------------------------------------------------------------------------------
@@ -186,6 +219,8 @@ var
         }
       }
     end;
+    if getfirst katotped where (( t.ObjType == katotped.prmc and t.ObjNrec == katotped.cmcusl and 1 == katotped.akt )) = tsOk
+      t.ObjOtpEdNrec := katotped.nrec;
     setmodified(true);
     rescanpanel(#t);
   }
@@ -260,20 +295,91 @@ table t;
 //fixedleft(t.ObjType, ObjName, ObjObozn,ObjGroupName,ObjOtpEdName);
 fields
   {font={color=if(foundmarker(_marks, t.nrec), 5, 0); }};
-  [ObjName]      GetObjName      ''#13'Наименование'  : [20], protect, pickbutton;
-  [ObjObozn]     GetObjObozn     ''#13'Обозначение'   : [20], protect, pickbutton;
-  if(foundmarker(_marks, t.nrec), 'V', '')            : [3] , skip, noautosize;
-                 t.ObjType       ''#13'Тип'           : [5] , [list 1 'МЦ', 2 'Усл'], noautosize;
-  [ObjGroupName] GetObjGroupName ''#13'Группа'        : [10], protect;
-  [ObjOtpEdName] GetObjOtpEdName ''#13'Ед.изм.'       : [ 5], protect, pickbutton;
-  [CostItemName] GetCostItemName ''#13'Сататья затрат': [10], protect, pickbutton;
-  [DeliverName]  GetDeliverName  ''#13'Поставщик'     : [10], protect, pickbutton;
-  [TypeName]     GetTypeName     ''#13'Тип МЦ'        : [10], protect, pickbutton;
-  [SpsoprName]   GetSpsoprName   ''#13'Поступление'   : [10], protect, pickbutton;
-                 t.SpsoprPrice   ''#13'Цена'          : [8,2], noprotect;
+  [ObjName]      GetObjName      ''#13'Наименование'    : [20], protect, pickbutton;
+  [ObjObozn]     GetObjObozn     ''#13'Обозначение'     : [20], protect, pickbutton;
+  if(foundmarker(_marks, t.nrec), 'V', '')              : [3] , skip, noautosize;
+                 t.ObjType       ''#13'Тип'             : [5] , [list 1 'МЦ', 2 'Усл'], noautosize;
+  [ObjGroupName] GetObjGroupName ''#13'Группа'          : [10], protect;
+  [ObjOtpEdName] GetObjOtpEdName ''#13'Ед.изм.'         : [ 5], protect, pickbutton;
+  [CostItemName] GetCostItemName ''#13'Сататья затрат'  : [10], protect, pickbutton;
+  [DeliverName]  GetDeliverName  ''#13'Поставщик'       : [10], protect, pickbutton;
+  [TypeName]     GetTypeName     ''#13'Тип МЦ'          : [10], protect, pickbutton;
+  [SpsoprName]   GetSpsoprName   ''#13'Поступление'     : [10], protect, pickbutton;
+                 t.SpsoprPrice   ''#13'Цена'            : [8,2], noprotect;
+                 t.Norm          'Норма'#13'на единицу' : [8,3], noprotect;
+                 t.ParentQty     'Кол-во'#13'единиц'    : [8,3], noprotect;
+  [TotalQtyName] GetTotalQtyName 'Норма'#13'всего'      : [14], noprotect, {font={backcolor=GetTotalQtyColor;}};
 end;
 
 //#region Процедуры для модификации таблицы в дереве----------------------------------------------------------
+
+
+procedure ProcessRKMPartsRecord(var buf: ttrkmparts);
+{
+  buf.TotalQty := buf.Norm * buf.ParentQty;
+  buf.TotalSum := 0;
+  var i: byte;
+  for(i:=1;i<=_yearcount;i++)
+  {
+    if buf.Coeff[i] <= 0 buf.Coeff[i] := 1;
+    buf.Price[i] := buf.SpsoprPrice * buf.Coeff[i];
+    buf.Sum[i] := buf.Price[i] * buf.Qty[i];
+    buf.TotalSum += buf.Sum[i];
+  }
+}
+
+function isOtpEdDiskret(oeNrec: comp): boolean;
+{
+  result := false;
+  if (getfirst fastfirstrow katotped where (( oeNrec == katotped.nrec)) = tsOk)
+    result := (katotped.diskret = 1) or (locase(katotped.name)='шт') or (locase(katotped.name)='штука');
+}
+
+procedure ProcessChildNodes(parentBuf: ttrkmparts);
+{
+  var i: byte;
+  var buf: ttrkmparts;
+  var oeDiskred: boolean;
+  var restQty: double;
+  _loop tRKMParts where ((parentBuf.Nrec == tRKMParts.ParentNrec))
+  {
+    buf := ttrkmparts(tRKMParts.buffer);
+    buf.ParentQty := parentBuf.TotalQty;
+    buf.TotalQty := buf.Norm * buf.ParentQty;
+    buf.TotalSum := 0;
+    oeDiskred := isOtpEdDiskret(buf.ObjOtpedNrec);
+    restQty := 0;
+    for(i:=1;i<=_yearcount;i++)
+    {
+      buf.Qty[i] := (parentBuf.Qty[i] / parentBuf.TotalQty) * buf.TotalQty + restQty;
+      if (oeDiskred)
+      {
+        restQty := buf.Qty[i];
+        buf.Qty[i] := trunc(buf.Qty[i]);
+        restQty := restQty - buf.Qty[i];
+      }
+      if buf.Coeff[i] <= 0 buf.Coeff[i] := 1;
+      buf.Price[i] := buf.SpsoprPrice * buf.Coeff[i];
+      buf.Sum[i] := buf.Price[i] * buf.Qty[i];
+      buf.TotalSum += buf.Sum[i];
+    }
+    pushpos(#tRKMParts);
+    ProcessChildNodes(buf);
+    poppos(#tRKMParts);
+    tRKMParts.buffer := buf;
+    update current tRKMParts;
+  }
+}
+
+procedure ProcessCurrentRecord;
+{
+  var buf: ttrkmparts;
+  buf := ttrkmparts(t.buffer);
+  ProcessRKMPartsRecord(buf);
+  t.buffer := buf;
+  if (not isNew) ProcessChildNodes(buf);
+  setModified(true);
+}
 
 procedure DeleteChildEditRKMParts(aNrec: comp);
 {
@@ -303,6 +409,10 @@ procedure MarkUnmarkChildEditRKMParts(aNrec: comp; setMark: boolean);
 procedure SetDefaultCurrentRecord;
 {
   t.ObjType := 1;
+  if getfirst tRKMParts where (( _parentNrec == tRKMParts.Nrec )) = tsOk
+    t.ParentQty := tRKMParts.TotalQty
+  else
+    t.ParentQty := 1;
   t.ParentNrec := _parentNrec;
 }
 
@@ -313,7 +423,7 @@ procedure InsertCurrentRecord;
   t.nrec := GetNextNRec(#t, 0);
   buf := ttrkmparts(t.buffer);
   insert current t;
-
+  ProcessRKMPartsRecord(buf);
   t.buffer := buf;
   update current t;
   rereadrecord(#t);
@@ -322,6 +432,7 @@ procedure InsertCurrentRecord;
 
 procedure UpdateCurrentRecord;
 {
+  ProcessCurrentRecord;
   update current t;
 }
 
@@ -331,17 +442,13 @@ procedure DeleteCurrentRecord;
   delete current t;
 }
 
-procedure ProcessCurrentRecord;
+procedure ProcessTotalQtyChange;
 {
-  var i: byte;
-  for(i:=1;i<=_yearcount;i++)
-  {
-    if t.Coeff[i] <= 0 t.Coeff[i] := 1;
-    t.Price[i] := t.SpsoprPrice * t.Coeff[i];
-    t.Total[i] := t.Price[i] * t.Norm[i];
-  }
-  setModified(true);
+  if (t.ParentQty = 0) t.ParentQty := 1;
+  t.Norm := t.TotalQty / t.ParentQty;
+  ProcessCurrentRecord;
 }
+
 
 //#endregion--------------------------------------------------------------------------------------------------
 
@@ -369,6 +476,18 @@ tableevent table t;
   cmUpdateRecord: UpdateCurrentRecord;
   cmSetDefault  : SetDefaultCurrentRecord;
   cmCheckField  : ProcessCurrentRecord;
+  cmExprFieldChanged:
+  {
+    case curfield of
+      #TotalQtyName:
+      {
+        t.TotalQty := double(ExprFieldValue);
+        ProcessTotalQtyChange;
+        ProcessCurrentRecord;
+        rescanpanel(#t);
+      }
+    end;
+  }
 end;
 
 handleevent
@@ -482,18 +601,18 @@ procedure AddTreeColumn(aName: string; aTitle: string);
 
 procedure AddTreeYearColumns(aYear: word; aNum: byte);
 {
-  AddTreeColumn('t.Norm['+aNum+']' , aYear+''#13'Норма');
+  AddTreeColumn('t.Qty['+aNum+']'  , aYear+''#13'Норма');
   AddTreeColumn('t.Coeff['+aNum+']', aYear+''#13'Коэффициент');
   AddTreeColumn('t.Price['+aNum+']', aYear+''#13'Цена');
-  AddTreeColumn('t.Total['+aNum+']', aYear+''#13'Затраты');
+  AddTreeColumn('t.Sum['+aNum+']', aYear+''#13'Затраты');
 }
 
 procedure deleteTreeYearColumns(aNum: byte);
 {
-  cfsDestroyObject('t.Norm['+aNum+']');
+  cfsDestroyObject('t.Qty['+aNum+']');
   cfsDestroyObject('t.Coeff['+aNum+']');
   cfsDestroyObject('t.Price['+aNum+']');
-  cfsDestroyObject('t.Total['+aNum+']');
+  cfsDestroyObject('t.Sum['+aNum+']');
 }
 
 //#endregion -------------------------------------------------------------------------------------------------
@@ -575,10 +694,10 @@ procedure Load(aMnplanNrec: comp);
           continue;
         }
       i := rs.row.val('Year') - _yearStart + 1;
-      tRKMParts.Norm [i] := rs.row.val('Norm');
+      tRKMParts.Qty  [i] := rs.row.val('Qty');
       tRKMParts.Coeff[i] := rs.row.val('Coeff');
-      tRKMParts.Price[i] := tRKMParts.SpsoprPrice * tRKMParts.Coeff[i];
-      tRKMParts.Total[i] := tRKMParts.Norm[i] * tRKMParts.Price[i];
+      tRKMParts.Price[i] := rs.row.val('Price');
+      tRKMParts.Sum[i] := rs.row.val('Summa');
     }
     while rs.getNext = tsOk;
   }
@@ -742,10 +861,10 @@ procedure Save(aMnplanNrec: comp; aFptperNrec: comp);
       valspmnp.Num       := 1;
       valspmnp.cOtpEd    := spmnpl.cOtpEd;
       valspmnp.EdTime    := spmnpl.EdTime;
-      valspmnp.kol       := tRKMParts.Norm[i];
+      valspmnp.kol       := tRKMParts.Qty[i];
       valspmnp.price     := tRKMParts.Coeff[i];
       valspmnp.vprice    := tRKMParts.Price[i];
-      valspmnp.summa     := tRKMParts.Total[i];
+      valspmnp.summa     := tRKMParts.Sum[i];
       if (newRecord)
         insert current valspmnp;
       else
@@ -803,10 +922,11 @@ procedure Save(aMnplanNrec: comp; aFptperNrec: comp);
     valspmnp.Num       := 1;
     valspmnp.cOtpEd    := spmnpl.cOtpEd;
     valspmnp.EdTime    := spmnpl.EdTime;
-//    valspmnp.kol       := tRKMParts.Norm[i];
-//    valspmnp.price     := tRKMParts.Coeff[i];
-    valspmnp.vprice    := tRKMParts.SpsoprPrice;
-//    valspmnp.summa     := tRKMParts.Total[i];
+    valspmnp.kolfield5 := tRKMParts.SpsoprPrice;
+    valspmnp.kol       := tRKMParts.Norm;
+    valspmnp.price     := tRKMParts.ParentQty;
+    valspmnp.vprice    := tRKMParts.TotalQty;
+    valspmnp.kolfact   := tRKMParts.TotalSum;
     if (newRecord)
       insert current valspmnp;
     else
