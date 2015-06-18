@@ -8,33 +8,22 @@ Interface Algoritm_5104 '' (,hcNoContext,) EscClose, Cyan;
 
 //Запрос для заполнения tObj матценностями для разузлования из входящих планов к текущему с разбивкой по периодам
 sql query qObj =
-select spl.canval4 as PeriodNrec,
-       spm.cIzd as KatmcNrec,
+select spm.cIzd as KatmcNrec,
        spm.cAnval1 as HdrpsNrec,
        sum(vsp.kol) as Qty
 from objacct oa
 join mnplan mp on oa.cobject = mp.nrec and :SrcWayaccouNrec = mp.cwayaccou
 join spmnplan spm on mp.nrec = spm.cmnplan
-join spmnpl spl on spm.nrec = spl.cspmnplan and :SrcVid = spl.wkolan and 21 = spl.wkodgr4 and 0 = spl.wkodgr5 and #comp(0) = spl.canval5
+join spmnpl spl on spm.nrec = spl.cspmnplan and :SrcVid = spl.wkolan and 28 = spl.wkodgr4 and mp.nrec = spl.canval4 and 0 = spl.wkodgr5 and #comp(0) = spl.canval5
 join valspmnp vsp on spl.nrec = vsp.cspmnpl
 where oa.typeown = 4 and oa.cowner = :MnplanNrec and oa.typeobj = 4
-group by spl.canval4, spm.cizd, spm.canval1
+group by spm.cizd, spm.canval1
 ;
 
-table struct tObj ( //таблица с объектами для разузлования с разбивкой по периодам
-  PeriodNrec  : comp,       //Период
+table struct tObj ( //таблица с объектами для разузлования
   KatmcNrec   : comp,       //Матценность
   HdrpsNrec   : comp,       //Производственная спецификация
   Qty         : double      //Количество
-) with index (
-  i01 = PeriodNrec
-);
-
-table struct tPer ( //таблица с периодами из объектов разузлования
-  PeriodNrec: comp,
-  PeriodName: string
-) with index (
-  i01 = PeriodNrec (unique)
 );
 
 var
@@ -61,13 +50,13 @@ var
 
 create view
 as select *
-from formpl, mnplan, tobj, tPer, tExplosion, Spwayac, Mnanal, Spmnplan, Spmnpl, Valspmnp
+from formpl, mnplan, tobj, tExplosion, Spwayac, Mnanal, Spmnplan, Spmnpl, Valspmnp
 where ((
   _formplNrec == formpl.nrec and
   _mnplanNrec == mnplan.nrec
 ));
 
-//Процедура заполнения таблицы tObj объектами для разузлования с разбивкой по периодам планирования
+//Процедура заполнения таблицы tObj объектами для разузлования
 procedure FillObjects;
 {
   var q: IQuery;
@@ -78,16 +67,6 @@ procedure FillObjects;
   sqlCopyInto(q.getResultSet, #tObj, false);
 }
 
-//Процедура заполнения таблицы tPer периодами из объектов для разузлования
-procedure FillPeriods;
-{
-  insert tPer (PeriodNrec, PeriodName)
-  select fpperiod.Nrec, fpperiod.Name
-  from tObj, fpperiod
-  where (( tObj.PeriodNrec /== fpperiod.nrec ))
-  ignore_errors(tsDuplicateKey);
-}
-
 //вспомогательная функция. возвращает нрек кау по коду из текущей записи tExplosion. Если кау с таким кодом нет - возвращает 0
 function GetExplKauByCode(aKauCode: word): comp;
 {
@@ -96,8 +75,10 @@ function GetExplKauByCode(aKauCode: word): comp;
                   if(aKauCode = tExplosion.KauCode3, tExplosion.KauNrec3, 0)));
 }
 
-procedure FillChildRecords(aExplNrec: longint; aSpmnplanNrec: comp; aPeriodNrec: comp);
+procedure FillChildRecords(aExplNrec: longint; aSpmnplanNrec: comp; aParentQty: double);
 {
+  if (aParentQty = 0) aParentQty := 1;
+
   _loop tExplosion where ((aExplNrec == tExplosion.ParentNrec))
   {
     // определяем тип позиции (услуга / мц)
@@ -149,17 +130,17 @@ procedure FillChildRecords(aExplNrec: longint; aSpmnplanNrec: comp; aPeriodNrec:
     //определяем ячейку представления по строке, номеру представления и периоду
     if getfirst spmnpl where ((spmnplan.nrec == spmnpl.cspmnplan and
                                _srcVid       == spmnpl.wkolan and
-                               21            == spmnpl.wkodgr4 and
-                               aPeriodNrec   == spmnpl.cAnVal4 and
+                               28            == spmnpl.wkodgr4 and
+                               mnplan.nrec   == spmnpl.cAnVal4 and
                                0             == spmnpl.wkodgr5 and
                                0             == spmnpl.cAnVal5)) != tsOk
     {
       clearbuffer(#spmnpl);
       spmnpl.cspmnplan := spmnplan.nrec;
       spmnpl.wkolan    := _srcVid;
-      spmnpl.cRoleAn4  := coGetTune('SYSTEMANALIT.ROLEPERIOD'); //Системная роль аналитик "Период планирования"
-      spmnpl.wKodGr4   := 21;
-      spmnpl.cAnVal4   := aPeriodNrec;
+      spmnpl.cRoleAn4  := coGetTune('SYSTEMANALIT.ROLEPRODUCTPLAN'); //Системная роль аналитик "Период планирования"
+      spmnpl.wKodGr4   := 28;
+      spmnpl.cAnVal4   := mnplan.nrec;
       spmnpl.cRoleAn1  := spmnplan.cRoleAn1;
       spmnpl.wKodGr1   := spmnplan.wKodGr1;
       spmnpl.cAnVal1   := spmnplan.cAnVal1;
@@ -189,46 +170,46 @@ procedure FillChildRecords(aExplNrec: longint; aSpmnplanNrec: comp; aPeriodNrec:
       ValSpMnP.Num     := 1;
       ValSpMnP.cOtpEd  := SpMnPl.cOtpEd;
       ValSpMnP.EdTime  := SpMnPl.EdTime;
-      ValSpMnP.kol     := tExplosion.Qty;
-      ValSpMnP.price   := 1;
+      ValSpMnP.kol     := tExplosion.Qty / aParentQty;
+      ValSpMnP.price   := aParentQty;
+      ValSpMnP.vprice  := tExplosion.Qty;
+      ValSpMnP.summa   := 1;
       insert current valspmnp;
     }
     else
     {
-      update current valspmnp set ValSpMnP.kol   := tExplosion.Qty,
-                                  ValSpMnP.price := if(ValSpMnP.price = 0, 1, ValSpMnP.price);
+      ValSpMnP.kol     := tExplosion.Qty / aParentQty;
+      ValSpMnP.price   := aParentQty;
+      ValSpMnP.vprice  := tExplosion.Qty;
+      ValSpMnP.summa   := if(ValSpMnP.summa = 0, 1, ValSpMnP.summa);
+      update current ValSpMnP;
     }
     pushpos(#tExplosion);
-    FillChildRecords(tExplosion.Nrec, Spmnplan.Nrec, aPeriodNrec);
+    FillChildRecords(tExplosion.Nrec, Spmnplan.Nrec, tExplosion.Qty);
     poppos(#tExplosion);
   }
 }
 
 //Процедура заполнения плана результатами разузлования. Запись происходит в представление Период с нреком PeriodNrec
-procedure FillDocument(PeriodNrec: comp);
+procedure FillDocument;
 {
   //определяем набор аналитик представления по периоду (понадобится при формировании spmnpl)
   if getfirst mnanal where ((mnplan.csloj == mnanal.csloj and
                              0            == mnanal.cblock and
-                             PeriodNrec   == mnanal.FldAn1 and
-                             0            == mnanal.FldAn2 and
+                             0            == mnanal.FldAn1 and
+                             mnplan.nrec  == mnanal.FldAn2 and
                              0            == mnanal.FldAn3 )) != tsOk
   {
     clearbuffer(#MnAnal);
     MnAnal.cSloj  := MnPlan.cSloj;
     MnAnal.cBlock := 0;
-    MnAnal.FldAn1 := PeriodNrec;
+    MnAnal.FldAn2 := mnplan.nrec;
     insert current MnAnal;
   }
   //проходим в цикле по результатам разузлования и добавляем строки и количества
 
-  FillChildRecords(0,0,PeriodNrec);
-  //Строим иерархию
-  //_loop tier
-  //{
-  //  if getfirst tier1 where (( tier.ExplParentNrec == tier1.ExplNrec )) = tsOk
-  //    update spmnplan where ((tier.SpmnplanNrec == spmnplan.nrec )) set spmnplan.cspmnplan := tier1.SpmnplanNrec;
-  //}
+  FillChildRecords(0,0,1);
+
 }
 
 //Реализация функций объектного интерфейса--------------------------------------------------------------------
@@ -239,27 +220,20 @@ Function RunInter(wflag: word; var pt: TRecAcc): boolean;
   //заполняем таблицу объектами для разузлования
   delete all tObj;
   FillObjects;
-  //заполняем таблицу периодов
-  delete all tPer;
-  FillPeriods;
-  //цикл по периодам
-  _loop tper
+  //очищаем таблицу с результатами разузлования
+  delete all tExplosion;
+  //в объекте разузлования очищаем коллекцию объектов для разузлования
+  _e.ClearItemsForExplosion;
+  //в объект разузлования передаем срез мц для разузлования по периоду из tper
+  _loop tObj
   {
-    //очищаем таблицу с результатами разузлования
-    delete all tExplosion;
-    //в объекте разузлования очищаем коллекцию объектов для разузлования
-    _e.ClearItemsForExplosion;
-    //в объект разузлования передаем срез мц для разузлования по периоду из tper
-    _loop tObj where (( tper.PeriodNrec == tObj.PeriodNrec ))
-    {
-      _e.AddItemForExplosion(tObj.KatmcNrec, tObj.HdrpsNrec, tObj.Qty);
-    }
-    //запускаем разузлование. при этом происходит заполнение таблицы tExplosion
-    _e.Explosion;
-    //_e.ShowResultTable;
-    //заполняем документ результатами разузлования
-    FillDocument(tper.PeriodNrec);
+    _e.AddItemForExplosion(tObj.KatmcNrec, tObj.HdrpsNrec, tObj.Qty);
   }
+  //запускаем разузлование. при этом происходит заполнение таблицы tExplosion
+  _e.Explosion;
+  //_e.ShowResultTable;
+  //заполняем документ результатами разузлования
+  FillDocument;
   RunInter := true;
 }
 
