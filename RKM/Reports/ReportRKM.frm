@@ -13,7 +13,7 @@ where ((
   if v.getfirst mnplan = tsok
   {
     case v.mnplan.cwayaccou of
-      0001000000000123h: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC));
+      0001000000000125h: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC));
     else
     {
       var s: string;
@@ -46,4 +46,3 @@ end.
 .}
 .}
 .endform
-
