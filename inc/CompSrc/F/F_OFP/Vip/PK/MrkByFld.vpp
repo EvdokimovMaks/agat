@@ -1,0 +1,276 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 5.80 - модуль "Платежный календарь"
+// Настройка отчетов - Обработка фильтроов
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Получить имя маркера по полю
+Function GetMrkByFld(Var _lAdr: LongInt
+                   ;Var _sName: String
+                       ; _wFld: word
+                             ): Boolean;
+{
+  If _lAdr != 0 {}
+
+  case _wFld of
+    cFld_KatNotes: _sName := 'MKatNotes';
+    cFld_AktSum  : _sName := 'mrk_SvFOb';
+    wFld_KatDoc  : _sName := 'mrk_KatDoc'; // mrk_KatDoc
+    wFld_Prior   : _sName := 'mrk_Priority';
+  else
+    _sName := '';
+  end;  // case _wFld
+
+  Result := True;
+
+} // End'GetMrkByFld
+
+// -----------------------------------------------------------------------------
+// Инициализировать маркер
+Function InitMrkByFld(Var _lAdr: LongInt
+                    ;Var _sName: String
+                        ; _wFld: word
+                              ): Boolean;
+{
+  If _lAdr = LongInt(0)
+    case _wFld of
+      wFld_Prior
+      , wFld_KatDoc: _lAdr := InitMarker(_sName, 2, 100, 5); // for word
+    else
+      _lAdr := InitMarker(_sName, 8, 100, 10);
+    end;  // case _wFld
+
+    Result := (_lAdr != LongInt(0));
+}
+
+//------------------------------------------------------------------------------
+// Очистить Маркер поля
+Function Filter_Clear_Mrk( _FltPos: word
+                                 ): boolean;
+{
+  Var _wFld: word;
+
+  _wFld  := wKau_By_FltPos( _FltPos);
+  Filter_Clear_Mrk := GetMrkByFld( ak_Mrk[_FltPos].lAdr, ak_Mrk[_FltPos].sName, _wFld);
+  ClearMarker(ak_Mrk[_FltPos].lAdr);
+  StoreMarker( ak_Mrk[_FltPos].lAdr, ak_Mrk[_FltPos].sName);
+
+} // End Filter_Clear_Mrk
+
+//------------------------------------------------------------------------------
+// Выбрать типы документов/ результат - кол-во выбранных
+// Аналог REP\ofpakts.vpp [Pick_KatDoc]
+Function Pick_KatDoc(Var _wRec: word
+             ; Var _mrkFObType: LongInt
+                             ): LongInt;
+{
+  #mGetVipRef(piPickDoc,'VipPickDoc');
+  piPickDoc.Clear;
+
+  piPickDoc.AddDocToFolder(0, cgDoc_0821);
+  piPickDoc.AddDocToFolder(0, cgDoc_0822);
+
+  piPickDoc.PickMulti('Выберите типы финобязательств', _mrkFObType);
+
+  FlagOn( UserDeskRep.ResWord[1], cgFlViewPos_KatDoc + 1);
+
+  Result := GetMarkerCount(_mrkFObType);
+
+  If Result < 2
+    If GetMarker(_mrkFObType, 0, _wRec)
+    {}
+} // End Pick_KatDoc
+
+// -----------------------------------------------------------------------------
+// получить значения выбора
+Function PickMulti_wFld( _wFld: word
+                     ; _FltPos: word
+                    ;Var _lAdr: LongInt
+                             ): LongInt;
+{
+  If _FltPos != cgNrec0 {} // Заглушка для чистки лога
+
+  case _wFld of
+    wFld_KatDoc:
+      Result := Pick_KatDoc( _wTiDk, _lAdr);
+    cFld_AktSum:
+    {
+      Var _cAktSum: TnRec;
+
+      If piAktSum.AktSum_PickRecord(cgiMulti, _cAktSum, _lAdr, 0, 0)
+        Result := GetMarkerCount(_lAdr);
+    }
+    wFld_Prior:
+    {
+      var wPrior : word;  wPrior := 0;
+      if RunInterface('OfpPrior', cgiMulti, cgPrior_OFP, _lAdr, wPrior) != cmCancel
+      {
+        Result := GetMarkerCount(_lAdr);
+      }
+    }
+  end;  // case _wFld
+
+} // End PickMulti_wFld
+//------------------------------------------------------------------------------
+var MarkerIsNotInit: boolean; // в случае вызова из On_wPick функции где происходит работа с маркером _lAdr
+                              // возможна ошибка, ибо значения проиниченного var _lAdr ещё не вернётся, а вот
+                              // DoneMarker уже был.
+//------------------------------------------------------------------------------
+//
+Function On_wPick(_lFld: LongInt; var _lAdr: LongInt): boolean;
+{
+  Result := False;
+
+  Var _wFld
+  , _FltPos : word;
+  _FltPos   := FltPos_By_Fld( _lFld);
+  _wFld     := wKau_By_FltPos( _FltPos);
+
+  If GetMrkByFld( _lAdr, ak_Mrk[_FltPos].sName, _wFld)
+    If InitMrkByFld( _lAdr, ak_Mrk[_FltPos].sName, _wFld)
+    {}
+
+  StoreMarker( _lAdr, ak_Mrk[_FltPos].sName);
+  ak_Mrk[_FltPos].wCount := PickMulti_wFld( _wFld, _FltPos, _lAdr);
+!  #mListMarker( _lAdr,word)
+
+  Filter_SetWord(_FltPos, ak_Mrk[_FltPos].wCount);
+
+  DoneMarker( _lAdr, ak_Mrk[_FltPos].sName);
+  MarkerIsNotInit := true;
+
+  Mark2PicksFuncs.DelPickRep(_FltPos, UserDeskRep.nRec);
+  Mark2PicksFuncs.Marker2PickRep_Eval_01( If(_wFld = cFld_AktSum, cgBitNo, cgBit10)
+                                        , ak_Mrk[_FltPos].sName
+                                        , _FltPos
+                                        , cgNrec0
+                                        , ak_Mrk[_FltPos].wCount
+                                        , UserDeskRep.nRec);
+
+  If GetMrkByFld(_lAdr, ak_Mrk[_FltPos].sName, _wFld)
+    If InitMrkByFld(_lAdr, ak_Mrk[_FltPos].sName, _wFld)
+    {}
+
+  If ak_Mrk[_FltPos].wCount > 1
+    Filter_SetComp(_FltPos, 0);
+  Else // ak_Mrk[_FltPos].wCount = 1
+  {
+    case _wFld of
+      wFld_KatDoc
+      , wFld_Prior :
+      {
+        GetMarker(_lAdr, 0, _wRec);
+        Filter_SetComp(_FltPos, _wRec);
+      }
+    Else
+    {
+      GetMarker(_lAdr, 0, _cRec);
+      Filter_SetComp(_FltPos, _cRec);
+    }
+    end;  // case _wFld
+  }
+
+  SetViewFields;
+
+  MarkerIsNotInit := false;
+  Result := True;
+} // End On_wPick
+
+//------------------------------------------------------------------------------
+Create view vGetVidDoc
+Var   cFixNoteNRec : comp;
+From  KatNotes
+Where
+(( cFixNoteNRec == KatNotes.NRec));
+
+// -----------------------------------------------------------------------------
+// формирует маркер статусов переданного типа, из общего маркера
+// записи переданного типа из общего маркера удаляются
+Procedure GetKatNotesMarkerByType(_allNotesMarker : LongInt;
+                                  _curVidDocMarker: LongInt;
+                                  _notesVidDoc    : word
+                                                          );
+{
+  ClearMarker(_curVidDocMarker);
+
+  var noteIndex  : LongInt; noteIndex   := 0;
+  var katNoteNRec: comp;    katNoteNRec := 0;
+
+  while (noteIndex < GetMarkerCount(_allNotesMarker))
+  {
+    if (GetMarker(_allNotesMarker, noteIndex, katNoteNRec))
+    {
+      vGetVidDoc.cFixNoteNRec := katNoteNRec;
+
+      if (vGetVidDoc.GetFirst KatNotes = tsOk)
+      {
+        // если вид документа маркера = переданному виду документа, то запись
+        // удаляется из общего маркера и добавляется в формируемый маркер
+        if (vGetVidDoc.KatNotes.VidDoc = _notesVidDoc)
+        {
+          InsertMarker(_curVidDocMarker, katNoteNRec);
+          AtDeleteMarker(_allNotesMarker, noteIndex);
+
+          noteIndex--;
+        }
+      }
+    }
+
+    noteIndex++
+  }
+}
+
+// -----------------------------------------------------------------------------
+// получить значения выбора
+Function PickMulti_cFld( _wFld: word
+                     ; _FltPos: word
+                    ;Var _lAdr: LongInt
+                             ): LongInt;
+{
+  Result := 0;
+
+  case _wFld of
+    cFld_KatNotes:
+    {
+      // Если типы документов не заполнены - предложим
+      If ((GetMarkerCount(ak_Mrk[FltPos_By_Fld(#Filter_sKatDoc)].lAdr) = 0
+           and isBit(UserDeskRep.ResWord[1], cgFlViewPos_KatDoc)         )
+           or Not isBit(UserDeskRep.ResWord[1], cgFlViewPos_KatDoc)      )
+      {
+        If On_wPick(#Filter_sKatDoc, ak_Mrk[FltPos_By_Fld(#Filter_sKatDoc)].lAdr)
+        {}
+      }
+
+      Var i              : byte;    i               := 0;
+      Var wDoc_Type      : word;    wDoc_Type       := 0;
+      Var curVidDocMarker: LongInt; curVidDocMarker := InitMarker('', 8, 100, 10);
+
+      While GetMarker(ak_Mrk[FltPos_By_Fld(#Filter_sKatDoc)].lAdr, i, wDoc_Type)
+      {
+        GetKatNotesMarkerByType(_lAdr, curVidDocMarker, wDoc_Type);
+        DoneMarker(curVidDocMarker, ak_Mrk[_FltPos].sName);
+
+        #mTest('wDoc_Type = '+String(wDoc_Type)+if(Boolean(True),' -Есть',' -Нет'));
+        If (RunInterface('GetSomKatNotes', wDoc_Type, word(cgiNotClear), word(0), True, UserDeskRep.ResComp[20 + _FltPos]) != cmCancel)
+        {}
+
+        curVidDocMarker := InitMarker(ak_Mrk[_FltPos].sName, 8, 100, 10);
+        AddMarker(_lAdr, curVidDocMarker);
+        Inc(i);
+      }
+
+      StoreMarker(_lAdr, ak_Mrk[_FltPos].sName);
+
+      DoneMarker(curVidDocMarker, '');
+      #mListMarker( _lAdr,Comp)
+    }
+    cFld_AktSum:
+    {
+      Var _cAktSum: Tnrec;
+      piAktSum.AktSum_PickRecord(cgiMulti, _cAktSum, _lAdr, 0, 0);
+    }
+  end;  // case _wFld
+
+  Result := GetMarkerCount(_lAdr);
+} // End PickMulti_cFld

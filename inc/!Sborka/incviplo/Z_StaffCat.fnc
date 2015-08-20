@@ -1,0 +1,2 @@
+const fcSPRAVEXTCYCLE = 64814;
+const fcSTAFF_CT_CYCLE1 = 1056;

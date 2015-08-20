@@ -1,0 +1,715 @@
+// =============================================================================
+//                                                     (c)  корпорация Галактика
+// Галактика 7.11 - Производственный контур
+// Описание интерфейса "Модель производства"
+// =============================================================================
+
+#include MES_CF.vih           //
+#include MESModelOwner_CF.vih //
+#include PrmTreeOwner_CF.vih  //
+#include Messages_BF.vih      //
+
+#ifdef Gal9_1
+  #component "M_MES"
+#else
+  #component "M_MnPlan"
+#end
+
+//******************************************************************************
+// Таблицы в памяти
+
+//------------------------------------------------------------------------------
+// Группа производственных событий
+#ifndef __Def_gvtMESGrp__
+#define __Def_gvtMESGrp__
+Table STRUCT gvtMESGrp
+(
+  Nrec     : comp,      // Идентификатор строки
+  cMESModel: comp,      // Ссылка на модель производства
+  dttTime  : _DateTime, // Дата-время
+  InLevel  : word       // Уровень входимости
+)
+With Index
+(
+  gvtMESGrp01 = Nrec(Unique, Surrogate, Journal),
+  gvtMESGrp02 = cMESModel + dttTime,
+  gvtMESGrp03 = cMESModel + InLevel + dttTime
+);
+#endif
+
+//------------------------------------------------------------------------------
+// Документ-норма
+#ifndef __Def_gvtMESNDoc__
+#define __Def_gvtMESNDoc__
+Table STRUCT gvtMESNDoc
+(
+  Nrec      : comp,  // Идентификатор строки
+  cMESModel : comp,  // Ссылка на модель производства
+  cMESGrp   : comp,  // Ссылка на группу производственных событий
+  KAUDoc    : word,  // КАУ документа-нормы
+  cDoc      : comp,  // Ссылка на документ
+  dCountNorm: double // Количество единиц нормирования
+)
+With Index
+(
+  gvtMESNDoc01 = Nrec(Unique, Surrogate, Journal),
+  gvtMESNDoc02 = cMESModel + cMESGrp + KAUDoc + cDoc,
+  gvtMESNDoc03 = cMESModel + cMESGrp + Nrec
+);
+#endif
+
+//------------------------------------------------------------------------------
+// Производственное событие
+#ifndef __Def_gvtMESEvent__
+#define __Def_gvtMESEvent__
+Table STRUCT gvtMESEvent
+(
+  Nrec           : Comp,      // Номер записи
+  cMESModel      : Comp,      // Ссылка на модель производства
+  dttTime        : _DateTime, // Дата-время
+  EventType      : Longint,   // Тип производственного события
+  cMESEvent_Src  : Comp,      // Ссылка на запись-источник
+  cMESEvent_Own  : Comp,      // Ссылка на запись-владелец
+  InLevel        : Word,      // Уровень входимости
+  cMESGrp        : Comp,      // Ссылка на группу ПрС
+  cMESGrp_Parent : Comp,      // Ссылка на родительскую группу ПрС
+  cMESNDoc       : Comp,      // Ссылка на документ-норму
+  cMESNDoc_Parent: Comp,      // Ссылка на родительский документ-норму
+  KAUDoc         : Word,      // КАУ документа-нормы
+  cDoc           : Comp,      // Ссылка на документ-норму
+  KAURes         : Word,      // КАУ ресурса
+  cRes           : Comp,      // Ссылка на ресурс
+  SisOpl         : Word,      // Код системы оплаты (для труд. ресурсов)
+  Razr           : Word,      // Разряд (для труд. ресурсов)
+  CodTar         : Word,      // Код тарифа (для труд. ресурсов)
+  wTypeMsrUnit   : Word,      // Тип единицы измерения
+  cMsrUnit       : Comp,      // Ссылка/значение единицы измерения
+  dCount         : tSumma,    // Количество ресурса
+  dCountUse      : tSumma,    // Количество ресурса использованное
+  dCountRest     : tSumma,    // Количество-остаток ресурса
+  dCost          : tSumma,    // Цена
+  State          : Word,      // Состояние записи
+  dShareFactor   : tSumma     // Долевой коэф. при распределении ресурсов
+)
+With Index
+(
+  gvtMESEvent01 = Nrec(Unique, Surrogate, Journal),
+  gvtMESEvent02 = cMESModel + EventType + cMESGrp + InLevel + dttTime,
+  gvtMESEvent03 = cMESModel + EventType + cMESGrp + InLevel(Desc) + dttTime,
+  gvtMESEvent04 = cMESModel + EventType + cMESGrp + dttTime,
+  gvtMESEvent05 = cMESModel + cMESGrp + EventType + dttTime,
+  gvtMESEvent06 = cMESModel + cMESNDoc + EventType + dttTime,
+  gvtMESEvent07 = cMESModel + dttTime + cMESEvent_Src + EventType,
+  gvtMESEvent08 = cMESModel + dttTime + cMESGrp + cMESEvent_Src + EventType,
+  gvtMESEvent09 = cMESModel + State + EventType + cMESGrp + KAURes + cRes + dttTime
+);
+#endif
+
+//******************************************************************************
+// Типы данных
+
+//------------------------------------------------------------------------------
+// Параметры для расчета
+#doc
+ Параметры для расчета</brief> <br>
+ Поля: <br>
+   bVisualizationEnable - Признак визуализации процесса расчета <br>
+   sVisualizationTitle  - Заголовок визуализации  процесса расчета <br>
+#end
+#ifndef __Def_TMESRunCalcParams__
+#define __Def_TMESRunCalcParams__
+Type TMESRunCalcParams = record
+  bVisualizationEnable: boolean;         // Признак визуализации процесса расчета
+  sVisualizationTitle: string;           // Заголовок визуализации  процесса расчета
+End; // Type TMESRunCalcParams
+#endif
+
+//------------------------------------------------------------------------------
+// Параметры установки сортировки для таблицы MESEvent
+#doc
+ Параметры установки сортировки для таблицы MESEvent</brief> <br>
+ Поля: <br>
+   bVisualizationEnable            - Признак визуализации процесса установки сортировки <br>
+   sVisualizationTitle             - Заголовок визуализации  процесса установки сортировки <br>
+   wTPer_ByRoleFpPeriod            - Тип периода (xDay, ...) -> "Период планирования" <br>
+   cFpTPer_ByRoleFpPeriod          - Ссылка на тип периода планирования -> "Период планирования" <br>
+   wFlMaxHLevelPodr_ByRoleProducer - Флаг максимального уровня иерархии для подразделений -> "Изготовитель" <br>
+   wMaxHLevelPodr_ByRoleProducer   - Максимальный уровень иерархии для подразделений -> "Изготовитель" <br>
+   wFlMaxHLevelPodr_ByRoleConsumer - Флаг максимального уровня иерархии для подразделений -> "Потребитель" <br>
+   wMaxHLevelPodr_ByRoleConsumer   - Максимальный уровень иерархии для подразделений -> "Потребитель" <br>
+#end
+#ifndef __Def_TMESSetOrderAnParamsForEvent__
+#define __Def_TMESSetOrderAnParamsForEvent__
+Type TMESSetOrderAnParamsForEvent = record
+  bVisualizationEnable: boolean;         // Признак визуализации процесса установки сортировки
+  sVisualizationTitle: string;           // Заголовок визуализации  процесса установки сортировки
+  wTPer_ByRoleFpPeriod: word;            // Тип периода (xDay, ...) -> "Период планирования"
+  cFpTPer_ByRoleFpPeriod: comp;          // Ссылка на тип периода планирования -> "Период планирования"
+  wFlMaxHLevelPodr_ByRoleProducer: word; // Флаг максимального уровня иерархии для подразделений -> "Изготовитель"
+  wMaxHLevelPodr_ByRoleProducer: word;   // Максимальный уровень иерархии для подразделений -> "Изготовитель"
+  wFlMaxHLevelPodr_ByRoleConsumer: word; // Флаг максимального уровня иерархии для подразделений -> "Потребитель"
+  wMaxHLevelPodr_ByRoleConsumer: word;   // Максимальный уровень иерархии для подразделений -> "Потребитель"
+End; // Type TMESSetOrderAnParamsForEvent
+#endif
+
+//******************************************************************************
+// ObjInterface oMESModel_CF
+#ifndef __Def_oMESModel_CF__
+#define __Def_oMESModel_CF__
+#doc
+ Описание интерфейса-алгоритма "Модель производства"</brief>
+#end
+ObjInterface oMESModel_CF;
+
+//------------------------------------------------------------------------------
+#doc
+ Просмотр буфера</brief> <br>
+ Параметры: <br>
+   asWindowTitle - Заголовок окна <br>
+#end
+Procedure ViewData(asWindowTitle: string);
+
+//------------------------------------------------------------------------------
+#doc
+ Установка ссылки на текущую модель производства</brief> <br>
+ Параметры: <br>
+   acMESModel - Ссылка на модель производства <br>
+ Результат: <br>
+   tsOk - если все нормально, иначе - код ишибки <br>
+#end
+Function SetCurModel(acMESModel: comp): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение ссылки на текущую модель производства</brief> <br>
+ Результат: <br>
+   Ссылка на текущую модель производства <br>
+#end
+Function GetCurModel: comp;
+
+//------------------------------------------------------------------------------
+#doc
+ Добавление связанной модели производства</brief> <br>
+ Параметры: <br>
+   acMESModel  - Ссылка на модель производства <br>
+   awNpp       - Номер по порядку <br>
+   aliPriority - Приоритет (чем больше число, тем меньше приоритет) <br>
+ Результат: <br>
+   tsOk - если все нормально, иначе - код ишибки <br>
+#end
+Function AddRltModel(acMESModel: comp; awNpp: word; aliPriority: longint): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Удаление связанной модели производства</brief> <br>
+ Параметры: <br>
+   acMESModel - Ссылка на модель производства <br>
+ Результат: <br>
+   tsOk - если все нормально, иначе - код ишибки <br>
+#end
+Function DelRltModel(acMESModel: comp): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение значения параметра расчета</brief> <br>
+ Параметры: <br>
+   asPrmName - Имя параметра <br>
+ Результат: <br>
+   Значение параметра, если не найден - пустая строка <br>
+#end
+Function GetPrmVal(asPrmName: string): string;
+
+//------------------------------------------------------------------------------
+#doc
+ Установка значения параметра расчета</brief> <br>
+ Параметры: <br>
+   asPrmName - Имя параметра <br>
+   asValue   - Значение <br>
+   asDT_Rlt  - Обозначение класса объекта (для параметра-ссылки) <br>
+ Результат: <br>
+   tsOk - если все нормально, иначе - код ишибки <br>
+#end
+Function SetPrmVal(asPrmName: string; asValue: string; asDT_Rlt: string): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Текущая запись MESEvent</brief> <br>
+ Результат: <br>
+   Запись MESEvent <br>
+#end
+Function RecMESEvent: type$MESEvent;
+
+//------------------------------------------------------------------------------
+#doc
+ Текущая запись-источник вида "Резервирование поступлений по плановым заказам"
+ для MESEvent</brief> <br>
+ Результат: <br>
+   Запись MESEvent <br>
+#end
+Function RecMESEvent_SrcRPORcp: type$MESEvent;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение количества записей для MESEvent</brief> <br>
+ Результат: <br>
+   Кол-во записей в списке <br>
+#end
+Function MESEvent_Count: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение первой записи для MESEvent</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_GetFirst: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение последней записи для MESEvent</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_GetLast: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение следующей записи относительно текущей позиции для MESEvent</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_GetNext: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение предыдующей записи относительно текущей позиции для MESEvent</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_GetPrev: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Установка фильтра на записи-источники вида "Резервирование поступлений по плановым заказам"
+ для MESEvent</brief> <br>
+ Параметры: <br>
+   asFldName  - Имя поля, по которому устанавливается фильтр <br>
+   asValuesIN - Список допустимых значений <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_SrcRPORcp_SetFilter(asFldName: string; asValuesIN: string): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Сброс фильтра на записи-источники вида "Резервирование поступлений по плановым заказам"
+ для MESEvent</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_SrcRPORcp_ClearFilter: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение первой записи-источника вида "Резервирование поступлений по плановым заказам"
+ для MESEvent</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_SrcRPORcp_GetFirst: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение последней записи-источника вида "Резервирование поступлений по плановым заказам"
+ для MESEvent</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_SrcRPORcp_GetLast: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение следующей записи-источника вида "Резервирование поступлений по плановым заказам"
+ относительно текущей позиции для MESEvent</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_SrcRPORcp_GetNext: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение предыдующей записи-источника вида "Резервирование поступлений по плановым заказам"
+ относительно текущей позиции для MESEvent</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_SrcRPORcp_GetPrev: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Текущая запись-источник из множества</brief> <br>
+ Результат: <br>
+   Запись MESEvent <br>
+#end
+Function MESEvent_GrossRq_TopLevel_CurRec: type$MESEvent;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение первой записи-источника из множества</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_GrossRq_TopLevel_GetFirst: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение последней записи-источника из множества</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_GrossRq_TopLevel_GetLast: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение следующей записи-источника из множества</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_GrossRq_TopLevel_GetNext: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение предыдующей записи-источника из множества</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent_GrossRq_TopLevel_GetPrev: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Предподготовка данных для считывания множества ПрС-источников</brief> <br>
+ Параметры: <br>
+   ar_MESEvent - Запись MESEvent <br>
+#end
+Procedure MESEvent_GrossRq_TopLevel_Prepare(ar_MESEvent: type$MESEvent);
+
+//------------------------------------------------------------------------------
+#doc
+ Установка дополнительных параметров для расчета</brief> <br>
+ Параметры: <br>
+   ardRunCalcParams - Структура параметров для расчета <br>
+#end
+Procedure SetRunCalcParams(ardRunCalcParams: TMESRunCalcParams);
+
+//------------------------------------------------------------------------------
+#doc
+ Загрузка аналитики в хэш аналитик</brief> <br>
+ Параметры: <br>
+   acRoleAn  - Ссылка на роль аналитик <br>
+   awKAU     - КАУ <br>
+   acAn      - Ссылка на ОАУ <br>
+   asHashAn  - Строка-хэш аналитик <br>
+   asHashAn2 - Строка-хэш дополнительных аналитик <br>
+ Результат: <br>
+   True, если успешно, иначе - False <br>
+#end
+Function SetAnToHash(acRoleAn: comp; awKAU: word; acAn: comp;
+  var asHashAn: string; var asHashAn2: string): boolean;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение аналитики из хэша аналитик по роли аналитик</brief> <br>
+ Параметры: <br>
+   asHashAn  - Строка-хэш аналитик <br>
+   asHashAn2 - Строка-хэш дополнительных аналитик <br>
+   acRoleAn  - Ссылка на роль аналитик <br>
+   awKAU     - КАУ <br>
+   acAn      - Ссылка на ОАУ <br>
+ Результат: <br>
+   True, если успешно, иначе - False <br>
+#end
+Function GetAnFromHash(asHashAn: string; asHashAn2: string; acRoleAn: comp;
+  var awKAU: word; var acAn: comp): boolean;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение наименования аналитики из хэша аналитик по роли аналитик</brief> <br>
+ Параметры: <br>
+   asHashAn  - Строка-хэш аналитик <br>
+   asHashAn2 - Строка-хэш дополнительных аналитик <br>
+   acRoleAn  - Ссылка на роль аналитик <br>
+ Результат: <br>
+   Наименование аналитики либо пустая строка, если в хэше нет аналитики, соответствующей заданной роли <br>
+#end
+Function GetAnNameFromHash(asHashAn: string; asHashAn2: string; acRoleAn: comp): string;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение аналитики для заданного производственного события по роли аналитик</brief> <br>
+ Параметры: <br>
+   acMESEvent - Ссылка на производственное событие <br>
+   acRoleAn   - Ссылка на роль аналитик <br>
+   awKAU      - КАУ <br>
+   acAn       - Ссылка на ОАУ <br>
+ Результат: <br>
+   True, если успешно, иначе - False <br>
+#end
+Function GetAnForMESEvent(acMESEvent: comp; acRoleAn: comp; var awKAU: word; var acAn: comp): boolean;
+
+//------------------------------------------------------------------------------
+#doc
+ Получение наименования аналитики заданного производственного события по роли аналитик</brief> <br>
+ Параметры: <br>
+   acMESEvent - Ссылка на производственное событие <br>
+   acRoleAn   - Ссылка на роль аналитик <br>
+ Результат: <br>
+   Наименование аналитики либо пустая строка, если для ПрС нет аналитики, соответствующей заданной роли <br>
+#end
+Function GetAnNameForMESEvent(acMESEvent: comp; acRoleAn: comp): string;
+
+//------------------------------------------------------------------------------
+#doc
+ Предподготовка данных перед выполнением расчета</brief> <br>
+#end
+Procedure PrepareForCalc;
+
+//------------------------------------------------------------------------------
+#doc
+ Предподготовка данных перед выгрузкой объекта</brief> <br>
+#end
+Procedure PrepareForUnload;
+
+//------------------------------------------------------------------------------
+#doc
+ Запуск расчета</brief> <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function RunCalc: longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Установка поля OrderAn в записях таблицы MESEvent</brief> <br>
+ Параметры: <br>
+   asOrderRoleAn               - Строка, содержащая роли аналитик в необходимом порядке следования ч/з запятую <br>
+   ardSetOrderAnParamsForEvent - Дополнительные параметры установки сортировки <br>
+ Результат: <br>
+   True, если успешно, иначе - False <br>
+#end
+Function SetOrderAnForEvent(asOrderRoleAn: string;
+  ardSetOrderAnParamsForEvent: TMESSetOrderAnParamsForEvent): boolean;
+
+//------------------------------------------------------------------------------
+#doc
+ Установка интерфейса-владельца</brief> <br>
+ Параметры: <br>
+   aoMESModelOwner_CF - Объект типа oMESModelOwner_CF <br>
+ Результат: <br>
+   True - если успешно, иначе - False <br>
+#end
+Function SetOwner(aoMESModelOwner_CF: oMESModelOwner_CF): boolean;
+
+//------------------------------------------------------------------------------
+#doc
+ Расщиренная юстировка записи MESEvent</brief> <br>
+ Параметры: <br>
+   acMESEvent - Ссылка на запись MESEvent <br>
+#end
+Procedure MESEvent__AdjEx(acMESEvent: comp);
+
+//------------------------------------------------------------------------------
+#doc
+ Контроль данных перед удалением записи MESEvent</brief> <br>
+ Параметры: <br>
+   acRec - Ссылка на запись MESEvent <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent__ChkBDel(acRec: comp): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Контроль данных перед созданием новой записи MESEvent</brief> <br>
+ Параметры: <br>
+   ar_MESEvent - Запись MESEvent <br>
+ Результат: <br>
+   tsOk - если все нормально, иначе код ошибки <br>
+#end
+Function MESEvent__ChkBIns(ar_MESEvent: type$MESEvent): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Контроль данных перед модификацией записи MESEvent</brief> <br>
+ Параметры: <br>
+   ar_MESEvent - Запись MESEvent <br>
+   asFldName   - Наименование поля, в котором ошибка <br>
+ Результат: <br>
+   tsOk, если все нормально, иначе - код ошибки <br>
+#end
+Function MESEvent__ChkBUpd(ar_MESEvent: type$MESEvent; var asFldName: string): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Удаление записи MESEvent</brief> <br>
+ Параметры: <br>
+   acRec - Ссылка на запись MESEvent <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent__Del(acRec: comp): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Удаление связанных производственных событий для заданного производственного события</brief> <br>
+ Параметры: <br>
+   acRec - Ссылка на запись MESEvent <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEvent__DeleteRltEvents(acRec: comp): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Создание новой записи MESEvent</brief> <br>
+ Параметры: <br>
+   ar_MESEvent - Запись MESEvent <br>
+ Результат: <br>
+   tsOk, если все нормально, иначе - код ошибки <br>
+#end
+Function MESEvent__Ins(var ar_MESEvent: type$MESEvent): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Модификация существующей записи MESEvent</brief> <br>
+ Параметры: <br>
+   ar_MESEvent - Запись MESEvent <br>
+ Результат: <br>
+   tsOk, если все нормально, иначе - код ошибки <br>
+#end
+Function MESEvent__Upd(ar_MESEvent: type$MESEvent): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Юстировка записи MESEventAn</brief> <br>
+ Параметры: <br>
+   ar_MESEventAn - Запись MESEventAn (передается/возвращается) <br>
+#end
+Procedure MESEventAn__Adj(var ar_MESEventAn: type$MDAObjRlt);
+
+//------------------------------------------------------------------------------
+#doc
+ Контроль записи MESEventAn перед удалением</brief> <br>
+ Параметры: <br>
+   acMESEventAn - Ссылка на запись MESEventAn <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEventAn__ChkBDel(acMESEventAn: comp): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Контроль записи MESEventAn перед вставкой</brief> <br>
+ Параметры: <br>
+   ar_MESEventAn - Запись MESEventAn <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEventAn__ChkBIns(ar_MESEventAn: type$MDAObjRlt): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Контроль записи MESEventAn перед записью</brief> <br>
+ Параметры: <br>
+   ar_MESEventAn - Запись MESEventAn <br>
+   asFldName     - Наименование поля, в котором ошибка <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEventAn__ChkBUpd(ar_MESEventAn: type$MDAObjRlt; var asFldName: string): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Вставка копии записи MESEventAn</brief> <br>
+ Параметры: <br>
+   acMESEventAn_Src - Ссылка на запись-источник MESEventAn <br>
+   ar_MESEventAn    - Запись MESEventAn <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEventAn__Cpy(acMESEventAn_Src: comp; var ar_MESEventAn: type$MDAObjRlt): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Удаление записи MESEventAn</brief> <br>
+ Параметры: <br>
+   acMESEventAn - Ссылка на запись MESEventAn <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEventAn__Del(acMESEventAn: comp): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Вставка записи MESEventAn</brief> <br>
+ Параметры: <br>
+   ar_MESEventAn - Запись MESEventAn <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEventAn__Ins(var ar_MESEventAn: type$MDAObjRlt): longint;
+
+//------------------------------------------------------------------------------
+#doc
+ Обновление записи MESEventAn</brief> <br>
+ Параметры: <br>
+   ar_MESEventAn - Запись MESEventAn <br>
+ Результат: <br>
+   tsOk, если успешно, иначе - код ошибки <br>
+#end
+Function MESEventAn__Upd(ar_MESEventAn: type$MDAObjRlt): longint;
+
+End; // ObjInterface oMESModel_CF
+
+VipInterface iMESModel_CF implements oMESModel_CF, oPrmTreeOwner_CF Licensed(Free);
+
+#endif
+
+
+//******************************************************************************
+// ObjInterface oMESModel_DG_ViewData
+#ifndef __Def_oMESModel_DG_ViewData__
+#define __Def_oMESModel_DG_ViewData__
+#doc
+ Описание интерфейса-алгоритма "Просмотр данных модели производства"</brief> <br>
+#end
+ObjInterface oMESModel_DG_ViewData;
+
+//------------------------------------------------------------------------------
+#doc
+ Установка интерфейса-владельца</brief> <br>
+ Параметры: <br>
+   aoMESModel_CF - Объект типа oMESModel_CF <br>
+ Результат: <br>
+   True - если успешно, иначе - False <br>
+#end
+Function SetOwner(aoMESModel_CF: oMESModel_CF): boolean;
+
+//------------------------------------------------------------------------------
+#doc
+ Предподготовка данных перед выгрузкой объекта</brief> <br>
+#end
+Procedure PrepareForUnload;
+
+//------------------------------------------------------------------------------
+#doc
+ Просмотр буфера</brief> <br>
+ Параметры: <br>
+   asWindowTitle - Заголовок окна <br>
+#end
+Procedure ViewData(asWindowTitle: string);
+
+End; // ObjInterface oMESModel_DG_ViewData
+
+VipInterface iMESModel_DG_ViewData implements oMESModel_DG_ViewData Licensed(Free);
+
+#endif

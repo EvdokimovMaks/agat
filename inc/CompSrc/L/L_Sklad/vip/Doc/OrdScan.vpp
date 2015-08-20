@@ -1,0 +1,148 @@
+!//********************************************************************************
+//                                                        (c) корпорация Галактика
+// Галактика 5.85_02 - логистика - склад - ордера
+// подсчет сумм по ордеру
+//********************************************************************************
+//
+// Расчет суммы по складскому ордеру в нескольких валютах.
+// Производится по принципу:
+// 1. Если валюты позиций разные, то расчет производится в базовой валюте.
+// 2. Если базовая валюта не задана, то валютная сумма ордера = 0.
+// 3. Если валюта позиций одна, то в этой валюте.
+
+//********************************************************************************
+// Проверка, является ли ордер дооценочным
+Function isDoocen : boolean;
+{
+  isDoocen := ( (SklOrder.VidOrder = 0) and
+                (SklOrder.tipOrd >= 4) and (SklOrder.tipOrd <= 7) );
+}
+
+//********************************************************************************
+
+function AddValSums(const vSumOrd : double;  //сумма валют
+                    var   cValOrd : comp;    // код валюты первой записи (или общий)
+                    const curVSum : double;  // валютная сумма по текущей позиции
+                    const cValCur : comp;    // код валюты текущей записи
+                    const dOrd    : date): double;
+begin
+  if ( cValOrd = 0 )   // если общая валюта не указана, сумму не считать
+    vSumOrd := 0;
+
+  if ( cValCur = 0 )   // в текущей позиции валюта не проставлена - валютную сумму не учитываем
+    curVSum := 0;
+
+  if ( cValOrd <> cValCur )  // валюта изменилась
+    if ( cValOrd = 0 )
+      cValOrd := cValCur      // если ранее валюты не было - делаем текущую валюту общей
+    else
+      {
+        vSumOrd := oValFunc.GetBaseCurrency(cValOrd, vSumOrd, dOrd);
+        curVSum := oValFunc.GetBaseCurrency(cValCur, curVSum, dOrd);
+        cValOrd := oValFunc.ValBase;
+      }
+
+  AddValSums := vSumOrd + curVSum;
+end;
+
+//********************************************************************************
+
+Procedure OrdScanClear;
+{
+  counts      := 0;
+  sumOrd      := 0;
+  vSumOrd     := 0;
+  cValOrd     := 0;
+  simValutOrd := ' ';
+}
+
+//********************************************************************************
+
+Procedure OrdScan;
+var curSum, curVSum: double;
+var fValEr: boolean;
+{
+ //message('ordscan')
+  fValEr := false;
+
+  OrdScanClear;
+
+  PushPos(#SpOrder);
+  if ( GetFirst SpOrder <> tsOk )
+    {
+      PopPos(#SpOrder);
+      Exit;
+    }
+
+  cValOrd := SpOrder.cVal;
+
+  _LOOP SpOrder where ((SklOrder.nRec == Sporder.cSklOrder))
+    {
+      inc(counts);
+
+      curSum  := SpOrder.srPrice * if(isDoocen, 1,SpOrder.kol);
+      curVSum := SpOrder.vPrice  * if(isDoocen, 1,SpOrder.kol);
+
+      sumOrd  := sumOrd + curSum;
+      vSumOrd := AddValSums(vSumOrd, cValOrd,  curVSum, SpOrder.cVal, SklOrder.dOrd);
+
+
+      if (SpOrder.SP     = SklOrder.SP)    and
+         (SpOrder.dOrd   = SklOrder.dOrd)  and
+         (SpOrder.ccMol  = SklOrder.cMol)  and
+         (SpOrder.ccPodr = SklOrder.cPodr) and
+         (SpOrder.descr  = SklOrder.descr) and
+         (SpOrder.desGr  = SklOrder.desGr)
+        Continue;
+
+      ProtectRecord(#SpOrder,false);
+
+      SpOrder.SP    := SklOrder.SP;
+      SpOrder.dOrd  := SklOrder.dOrd;
+      SpOrder.ccMol := SklOrder.cMol;   SpOrder.ccPodr := SklOrder.cPodr;
+      SpOrder.descr := SklOrder.descr;  SpOrder.desGr  := SklOrder.desGr;
+
+      oModifOrds.AnySpOrder_Update(TypeSpOrder(SpOrder.buffer));
+    }
+
+  if ( cValOrd <> 0 )
+    simValutOrd := oValFunc.GetValSymbol(cValOrd);
+
+  if ( fValEr )
+    {
+      message('Сумма в валюте по данному ордеру не может '
+               + 'быть рассчитана.'#13'Возможно, нет курса на дату ордера '
+               + 'для некоторых валют, используемых в спецификации',Information);
+      vSumOrd := 0;
+      cValOrd := 0;
+      simValutOrd := '';
+    }
+
+  set sumOrd  := sumOrd;
+  set vSumORd := vSumOrd;
+
+  PopPos(#SpOrder);
+
+  oOrdHoz.UpdateSoprHoz (SklOrder.nRec, SklOrder.cSopr, cValOrd, sumOrd, vSumOrd, SklOrder.dOrd);
+
+  RedrawPanel(#SklOrder);
+
+}
+
+//********************************************************************************
+
+function CheckSpKol : boolean;
+{
+  if ( wGetTune('Oper.L_F') = 0 )
+  or ( SklOrder.TipOrd = 3 )
+  or ( SklORder.TipOrd = 4 )
+  or ( SklORder.TipOrd = 5 )
+  or ( SklORder.TipOrd = 6 )
+  or ( SklOrder.TipOrd = 7 )
+  or ( SklOrder.SP = 1 )
+    CheckSpKol := TRUE;
+  else // LIFO FIFO
+    CheckSpKol := ( SpOrder.Empty = 1 ) and f_KolIsZero(SpOrder.Kol - SpOrder.Ostatok) ;
+}
+
+//********************************************************************************

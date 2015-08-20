@@ -1,0 +1,698 @@
+//********************************************************************************
+//                                                        (c) корпорация Галактика
+// Галактика 7.12 - Управление производственной логистикой
+// ОИ обработки ДО и накладных
+//********************************************************************************
+
+#ifdef ComponentVersion
+#component "M_UP"
+#end
+
+#include tRecUP.rec
+#include oMnInDocList.vih
+#include oMnPickList.vih
+
+//------------------------------------------------------------------------------
+
+#ifndef OBJINT_MODIFNAKL
+#define OBJINT_MODIFNAKL
+#doc
+ Обработка модификации накладных\актов</brief>
+#end
+ ObjInterface OBJMODIFNAKL;
+  Procedure DelPosNaklS( var tn:tRecUP );   // Удаление позиций вне разреза
+  Procedure DelPosZero( var tn:tRecUP );    // Удаление позиций с нулевым количеством
+  Procedure DelPosGr( var tn:tRecUP );      // Удаление позиций по группе
+!  Procedure EquvSum         // Соответствие сумм
+  Procedure UstCenPrL( var tn:tRecUP );     // Установка цен из прайс-листа
+  Procedure SortedMC( var tn:tRecUP );      // Сортировка МЦ
+ end;//ObjInterface OBJMODIFNAKL
+ VipInterface iModNakl implements OBJMODIFNAKL
+#ifdef ATL51
+  Licensed (FREE)
+#endif//ATL51
+ ;
+#endif//OBJINT_MODIFNAKL
+
+//------------------------------------------------------------------------------
+
+#ifndef OBJINT_MODIFBD
+#define OBJINT_MODIFBD
+#doc
+ Обработка модификации оснований</brief>
+#end
+ ObjInterface OBJMODIFBD;
+  Procedure DelPosBDS( var tn:tRecUP );   // Удаление позиций вне разреза
+  Procedure DelPosZero( var tn:tRecUP );    // Удаление позиций с нулевым количеством
+  Procedure DelPosGr( var tn:tRecUP );      // Удаление позиций по группе
+  Procedure UstCenPrL( var tn:tRecUP );     // Установка цен из прайс-листа
+  Procedure SortedMC( var tn:tRecUP );      // Сортировка МЦ
+ end;//ObjInterface OBJMODIFBD
+ VipInterface iModBD implements OBJMODIFBD
+#ifdef ATL51
+  Licensed (FREE)
+#endif//ATL51
+ ;
+#endif//OBJINT_MODIFBD
+
+//------------------------------------------------------------------------------
+
+#ifndef OBJINT_ZAPDONAKL
+#define OBJINT_ZAPDONAKL
+#doc
+ Обработка заполнения накладных\актов по основаниям</brief>
+#end
+ ObjInterface OBJZAPDONAKL;
+  Function InitInter( _wPosDoc           // обработка существующих позиций документа: 0-оставлять;1-удалать по запросу;2-удалять без запроса
+                      , _wGroup          // разрез формируемых документов: 0-нет; 1-да
+                      : word
+                    ; _DatDoc            // дата формирования
+                      : date
+                    ; _tn                // стр.с nRec-ми: накл.(ДО), ПЗ(Изд,Усл), поз.ПЗ(Изд,Усл)
+                      : tRecUP
+                    ; _cFormPlAlgS       // алгоритм расчета потребности
+                      : comp
+                    ; _sfr204
+#IFDEF ATL51
+                      : #TFormPl
+#ELSE
+                      : Type$FormPl
+#ENDIF//ATL51
+                    ) : boolean;
+  Procedure DoneInter;
+  Procedure SozdSpec( wNumEtp
+                      : word
+                    ; sNameEtp
+                      : string
+                    );
+  Function ErrorProc : boolean ;
+  Function GetDocZakaz( wInterf:word; tn:tRecUP ): boolean;     // Выбор заказа
+  Function GetDocSpZak( wInterf:word; tn:tRecUP ): boolean;     // Выбор позиций заказа
+
+  Function SozdSpecDO( wPotrOstMat                   // способ заполнения спецификации документа
+                       , wInterfPosDO                // использование интерфейса выбора позиций входящих документов по ДО
+                       , wFormSyr                    // использование распределения позиций входящих документов по ДО
+                       , wZero                       // формирование нулевых строк ( 0 -нет ; 1 - да )
+                       : word
+                     ) : boolean;
+  Function LnkOA_Set( var strObAcSp                                             // стр.с nRec-ми: накл., ПЗ(Изд), поз.ПЗ(Изд)
+                        : TObAcSpRec
+                    ; var strObjAcct                                            //ПРОВЕРКА СУЩЕСТВОВАНИЯ И СОЗДАНИЕ НАБОРА : Владелец (Накладная,ДО) <-->> Член (Производственный заказ,Изделие)
+                      : TObjAcct
+                    ) : boolean;                                                // связь накладной,ДО с ПЗ,Изд
+  Function LnkNkl_Set( var stObAcSp                                             // стр.с nRec-ми: накл., ПЗ(Изд), поз.ПЗ(Изд)
+                         : TObAcSpRec
+                     ; var stPosMcUsl                                           // структура даннных поз.ПЗ,Изд -  МЦ(Усл)
+                         : TMcUslRec
+                     ; var stObjAcct
+                         : TObjAcct                                             // ПРОВЕРКА СУЩЕСТВОВАНИЯ И СОЗДАНИЕ НАБОРА : Владелец (Накладная,ДО) <-->> Член (Производственный заказ,Изделие)
+                     ; var stSpObjAccMain                                       // ПРОВЕРКА СУЩЕСТВОВАНИЯ ГЛАВНОГО ДОКУМЕНТА И СОЗДАНИЕ НАБОРА : Владелец (Поз.ПЗ,Изд) <-->>Член (Поз.накладной,ДО)  через вышестоящий набор : Вл(Накл,ДО)<-->>Чл(ПЗ,Изд)
+                         , stSpObjAcc                                           // ПРОВЕРКА СУЩЕСТВОВАНИЯ И СОЗДАНИЕ ВЛАДЕЛЬЦА НАБОРА: Владелец (Позиция ПЗ,Изделие) <-->> Член (Поз.специиф.накл.,ДО)
+                         : TSpObjAcc
+                     ) : boolean;
+
+  Function LnkNklBD_DO( stObAcSp
+                        : TObAcSpRec
+                      ; stObjAcct
+                        : TObjAcct
+                      ; stSpObjAcc
+                        : TSpObjAcc
+                      ; wFormSyr  : word
+                      ; var wSetDoc   : word
+                      ; var stMcUsl   : TMcUslRec
+                      ; var strSpStep : TSpStep
+                      ; var strSpSopr : TSpSopr
+                      ; var strSpObjAccMem : TSpObjAcc
+                      ) : boolean;
+
+  Function NormPotrMatDO( tm : tRecUP
+                        ; wInterfPosDO
+                          , wPotrOstMat
+                          , wFormSyr
+                          : word
+                        ) : boolean;
+
+ end;//
+ VipInterface iZpDONkl implements OBJZAPDONAKL
+#ifdef ATL51
+  Licensed (FREE)
+#endif//ObjInterface OBJZAPDONAKL
+ ;
+#endif//OBJINT_ZAPDONAKL
+
+//------------------------------------------------------------------------------
+
+#ifndef OBJINT_SZDSPPZNKL
+#define OBJINT_SZDSPPZNKL
+#doc
+ Создание спецификации накладных\актов по производственному заказу</brief>
+#end
+ ObjInterface OBJSZDSPPZNKL;
+  Function InitInter( _wPosDoc           // обработка существующих позиций документа: 0-оставлять;1-удалать по запросу;2-удалять без запроса
+                      , _wGroup          // 0-без аналитик; 1 - Склад-Подразделение; 2 - Подразделение; 3 - Склад
+                      : word
+                    ; _stObAcSp          // стр.с nRec-ми: накл.(ДО), ПЗ(Изд,Усл), поз.ПЗ(Изд,Усл)
+                      : TObAcSpRec
+                    ; _cFormPlAlgS       // алгоритм расчета потребности
+                      : comp
+                    ; _sfr203
+#IFDEF ATL51
+                      : #TFormPl
+#ELSE
+                      : Type$FormPl
+#ENDIF
+                    ) : boolean;
+  Procedure DoneInter;
+  Procedure SozdSpec( wNumEtp
+                      : word
+                    ; sNameEtp
+                      : string
+                    );
+  Function ErrorProc : boolean ;
+
+  Function GetObjDoc( wFAll                                                     // флаг расчета позиций: 0-все;1-текущая
+                      , wFObj                                                   // обработка панелей входящих док-тов: 0-все;1-ObjAcct;2-SpObjAcc
+                      : word
+                    ; stObAcSp                                                  // стр.с nRec-ми: накл.(ДО), ПЗ(Изд), поз.ПЗ(Изд)
+                      : TObAcSpRec
+                    ) : boolean;     // Опреление объектов расчета
+  Function GetDocZakaz( wInterf:word; tn:tRecUP ): boolean;     // Выбор заказа
+  Function GetDocSpZak( wInterf:word; tn:tRecUP ): boolean;     // Выбор позиций заказа
+  Function SozdSpecDoc( wPotrOstMat       // способ заполнения спецификации документа
+                        , wFormSyr        // метод формирования распределения позиций документа
+                        : word
+                      ) : boolean;
+  Function MaterNorm( wGroup : word                                             // флаг разреза
+                    ) : boolean;
+  Function NormNeedMt( wFObj : word                                             // флаг объектов расчета
+                     ) : boolean;
+  Function LnkOA_Set( var strObAcSp                                             // стр.с nRec-ми: накл., ПЗ(Изд), поз.ПЗ(Изд)
+                        : TObAcSpRec
+                    ; var strObjAcct
+                        : TObjAcct                                              // ПРОВЕРКА СУЩЕСТВОВАНИЯ И СОЗДАНИЕ НАБОРА : Владелец (Накладная,ДО) <-->> Член (Производственный заказ,Изделие)
+                    ) : boolean;                                                // связь накладной,ДО с ПЗ,Изд
+  Function LnkNkl_Set( var stObAcSp                                             // стр.с nRec-ми: накл., ПЗ(Изд), поз.ПЗ(Изд)
+                         : TObAcSpRec
+                     ; var stPosMcUsl                                           // структура даннных поз.ПЗ,Изд -  МЦ(Усл)
+                         : TMcUslRec
+                     ; var stObjAcct
+                         : TObjAcct                                             // ПРОВЕРКА СУЩЕСТВОВАНИЯ И СОЗДАНИЕ НАБОРА : Владелец (Накладная,ДО) <-->> Член (Производственный заказ,Изделие)
+                     ; var stSpObjAccMain                                       // ПРОВЕРКА СУЩЕСТВОВАНИЯ ГЛАВНОГО ДОКУМЕНТА И СОЗДАНИЕ НАБОРА : Владелец (Поз.ПЗ,Изд) <-->>Член (Поз.накладной,ДО)  через вышестоящий набор : Вл(Накл,ДО)<-->>Чл(ПЗ,Изд)
+                         , stSpObjAcc                                           // ПРОВЕРКА СУЩЕСТВОВАНИЯ И СОЗДАНИЕ ВЛАДЕЛЬЦА НАБОРА: Владелец (Позиция ПЗ,Изделие) <-->> Член (Поз.специиф.накл.,ДО)
+                         : TSpObjAcc
+                     ) : boolean;                                               // связь накладной,ДО с ПЗ,Изд,Усл
+  Function LnkNklBD_DO( stObAcSp  : TObAcSpRec
+                      ; stObjAcct : TObjAcct
+                      ; stSpObjAcc: TSpObjAcc
+                      ; wFormSyr  : word
+                      ; var wSetDoc   : word
+                      ; var stMcUsl   : TMcUslRec
+                      ; var strSpStep : TSpStep
+                      ; var strSpSopr : TSpSopr
+                      ; var strSpObjAccMem : TSpObjAcc
+                      ) : boolean;
+
+end;//ObjInterface OBJSZDSPPZNKL
+
+ObjInterface OBJSZDSPPZNKL1(OBJSZDSPPZNKL);
+
+  Function CheckDates( var _sfr203
+                           : Type$FormPl
+                     ) : boolean;
+
+end;//ObjInterface OBJSZDSPPZNKL1
+
+ VipInterface iSzdPZNk implements OBJSZDSPPZNKL1
+#ifdef ATL51
+  Licensed (FREE)
+#endif//ATL51
+ ;
+#endif//OBJINT_SZDSPPZNKL
+
+//------------------------------------------------------------------------------
+
+#ifndef OBJINT_PEREFNAKL
+#define OBJINT_PEREFNAKL
+#doc
+ Переформирование спецификации документов</brief>
+#end
+ ObjInterface OBJPEREFNAKL;
+  Function FormSpNakl( cIsxKS                                                   // NRec накладной для которой формируем спецификацию
+                       : comp
+                     ; wVxVidKS                                                 // вид накладной
+                       , wRspr                                                  // флаг обработки распределения
+                       , wFlag                                                  // флаг обработки позиций
+                       : word
+                     ; cFpl                                                     // алг.расч.
+                       : comp
+                     ) : boolean;
+ end;
+ VipInterface iFormNakl implements OBJPEREFNAKL
+#ifdef ATL51
+  Licensed (FREE)
+#endif
+ ;
+ VipInterface iFormNak1 implements OBJPEREFNAKL
+#ifdef ATL51
+  Licensed (FREE)
+#endif//ATL51
+ ;
+#endif//OBJINT_PEREFNAKL
+
+//------------------------------------------------------------------------------
+
+#ifndef OBJINT_PROCSETDOC
+#define OBJINT_PROCSETDOC
+
+#doc
+ Создание связей входящих документов</brief>
+#end
+
+ObjInterface OBJPROCSETDOC;
+
+ Function Set_ObjAc( stObAcSp                                                   // стр.с nRec-ми: накл.(ДО), ПЗ(Изд), поз.ПЗ(Изд)
+                     : TObAcSpRec
+                   ; var strObjAcct                                            // создание структуры ObjAcct
+                     : TObjAcct
+                   ) : boolean;       // СОЗДАНИЕ НАБОРА: Владелец (Накладная,ДО) <-->> Член (Производственный заказ,Изделие)  {1:N}
+
+ Function SetInObjAcct( stObAcSp                                                // стр.с nRec-ми: накл., ПЗ(Изд), поз.ПЗ(Изд)
+                        : TObAcSpRec
+                      ; var strObjAcct                                          // создание структуры ObjAcct если существует набор  ...
+                          : TObjAcct
+                      ) : boolean;    // ПРОВЕРКА СУЩЕСТВОВАНИЯ НАБОРА: Владелец (Накладная,ДО) <-->> Член (Производственный заказ,Изделие)  {1:N}
+
+ Function Set_SpObjAcOwn( stObjAcct                                             // вышестоящая структура ObjAcct (для связи с вышестоящим набором: Накл.(ДО)<-->>ПЗ,Изд)
+                          : TObjAcct
+                        ; stObAcSp                                              // стр.с nRec-ми: накл., ПЗ(Изд), поз.ПЗ(Изд)
+                          : TObAcSpRec
+                        ; var stMcUsl                                               // стр.МЦ(Усл)
+                            : TMcUslRec
+                        ; var strSpObjAcc                                       // создание структуры влядельца SpObjAcc - позиции заказа, изделия
+                            : TSpObjAcc
+                        ) : boolean;  // СОЗДАНИЕ ВЛАДЕЛЬЦА НАБОРА: Владелец (Позиция ПЗ,Изделие) <-->> Член (Позиция специиф.накладной, ДО)  {1:N}
+
+ Function SetInSpObjAcOwn( stObjAcct                                            // вышестоящая структура ObjAcct (для связи с вышестоящим набором:Накл.(ДО)<-->>ПЗ)
+                           : TObjAcct
+                         ; stObAcSp                                             // стр.с nRec-ми: накл.(ДО), ПЗ(Изд), поз.ПЗ(Изд)
+                           : tObAcSpRec
+                         ; var strSpObjAcc                                       // создание структуры SpObjAcc если существует набор   ...
+                           : TSpObjAcc
+                         ) : boolean ;  // ПРОВЕРКА СУЩЕСТВОВАНИЯ ВЛАДЕЛЬЦА НАБОРА: Владелец (Позиция ПЗ,Изделие) <-->> Член (Поз.специф.накл.,ДО)  {1:N} ( через вышестоящий набор: Вл(Накл.(ДО))<-->>Чл(ПЗ,Изд.) )
+
+ Function SetInSpObjAcMain( stObAcSp                                            // стр.с nRec-ми: накл.(ДО), ПЗ(Изд), поз.ПЗ(Изд)
+                            : tObAcSpRec
+                          ; var strSpObjAcc                                     // создание структуры SpObjAcc если существует  ...
+                            : TSpObjAcc
+                          ) : boolean ; // ПРОВЕРКА СУЩЕСТВОВАНИЯ ГЛАВНОГО ДОКУМЕНТА (ДО,накладная) ДЛЯ НАБОРОВ : Владелец (Поз.ПЗ,Изд) <-->>Член (Поз.накладной)  {1:N} ( через вышестоящий набор : Вл(Накл.(ДО))<-->>Чл(ПЗ,Изд.) )
+
+ Function Set_SpObjAcMemDoc( stObjAcct                                          // вышестоящая структура ObjAcct (для связи с вышестоящим набором:Накл.(ДО)<-->>ПЗ,Изделие
+                             : TObjAcct
+                           ; stSpObjAcOwn                                       // SpObjAcc - структура владельца набора: Вл(Поз.ПЗ,Изд)<-->>Чл(Поз.сп.Накл.(ДО))
+                             : TSpObjAcc
+                           ; stMcUsl                                            // структура даннных МЦ(Усл)
+                             : TMcUslRec
+                           ; stSpStep                                           // позиция ДО
+                             : TSpStep
+                           ; stSpSopr                                           // позиция накладной
+                             : TSpSopr
+                           ; var strSpObAcMem                                  // создание SpObjAcc - структуры члена набора: Вл.(Поз.ПЗ) <-->> Чл.(Поз.специиф.накладной(ДО))
+                             : TSpObjAcc
+                           ) : boolean ;  //СОЗДАНИЕ НАБОРА: Владелец (Позиция ПЗ, Изделие) <-->> Член (Позиция специиф.накладной, ДО)  {1:N}
+
+ Function SetInSpObjAcMem( stObjAcct                                            // вышестоящая структура ObjAcct (для связи с вышестоящим набором:Накл.(ДО)<-->>ПЗ,Изделие
+                           : TObjAcct
+                         ; stSpObjAcOwn                                         // SpObjAcc - структура владельца набора: Вл(Поз.ПЗ,Изд)<-->>Чл(Поз.сп.Накл.(ДО))
+                           : TSpObjAcc
+                         ; cSpStSop                                             // nRec поз.ДО(накл.)
+                           : comp
+                         ; var strSpObAcMem                                     // создание структуры SpObjAcc если существует набор   ...
+                           : TSpObjAcc
+                         ) : boolean;     //ПРОВЕРКА СУЩЕСТВОВАНИЯ НАБОРА: Владелец (Позиция ПЗ, Изделие) <-->> Член (Позиция специиф.накладной, ДО)  {1:N}
+
+ Procedure KolEdMcUsl( cnRecMcUsl      : comp                                   // nRec МЦ(Услуги)
+                     ; wPrMc           : word                                   // признак МЦ(Услуги)
+                     ; var dKolMcUsl   : double                                 // кол-во МЦ(Услуги)
+                     ; var cOtpEdMcUsl : comp                                   // nRec отп.ед.изм. МЦ(Услуги)
+                     ; var dKoef       : double                                 // коэф.ед.изм.по отн. к уч.ед.изм.
+                     );                   // Кол-во ед.изм. МЦ(Услуги)
+
+ Function CheckMnPlanRole ( wRole
+                            : word
+                          ; var iSetPl
+                              : SetupMnf
+                          ) : word;       //... проверка есть ли роль по плану
+
+ Function GetAnValMnPlan( stTmp
+#IFDEF ATL51
+                          : #TMnPlan
+#ELSE
+                          : Type$MnPlan
+#ENDIF
+                        ; wAnField
+                          : word
+                        ; var wKAUCode
+                            : word
+                        ; var cKAUVal
+                            : comp
+                        ) : integer;      // .. чтение аналитики по номеру
+
+
+ Function GetAnValcRoleMnPlan( stTmp
+#IFDEF ATL51
+                               : #TMnPlan
+#ELSE
+                               : Type$MnPlan
+#ENDIF
+                             ; cKAURole
+                               : comp
+                             ; var wKAUCode
+                                 : word
+                             ; var cKAUVal
+                                 : comp
+                             ) : integer; // .. чтение аналитики по роли
+
+ Function CheckSpMnPlRole( wRole
+                           : word
+                         ; var  iSetPl
+                             : SetupMnf
+                         ) : word;        //... проверка есть ли роль по спецификации плана
+
+ Function GetAnValSpMnPl( stTmp
+#IFDEF ATL51
+                          : #TSpMnPl
+#ELSE
+                          : Type$SpMnPl
+#ENDIF
+                        ; wAnField
+                          : word
+                        ; var wKAUCode
+                            : word
+                        ; var cKAUVal
+                            : comp
+                        ) : integer;      // .. чтение аналитики позиции спецификации по номеру
+
+ Function GetAnValcRoleSpMnPl( stTmp
+#IFDEF ATL51
+                               : #TSpMnPl
+#ELSE
+                               : Type$SpMnPl
+#ENDIF
+                             ; cKAURole
+                               : comp
+                             ; var wKAUCode
+                                 : word
+                             ; var cKAUVal
+                                 : comp
+                             ) : integer; // .. чтение аналитики позиции спецификации по роли
+
+
+ Function GetValKAURole( stMnPlan
+#IFDEF ATL51
+                         : #TMnPlan
+#ELSE
+                         : Type$MnPlan
+#ENDIF
+                       ; stSpMnPl
+#IFDEF ATL51
+                         : #TSpMnPl
+#ELSE
+                         : Type$SpMnPl
+#ENDIF
+                       ; iSetPl
+                         : SetupMnf
+                       ;   wRoleAn
+                         , wKAURole
+                         : word
+                       ) : comp;          // .. чтение значения аналитики по роли
+
+ Function GetNumValNastr( iSetPl
+                          : SetupMnf
+                        ; TypeFunFld
+                          : LongInt
+                        ; cSpMnPl
+                          : comp
+                        ; Var wNum
+                          : LongInt
+                        ; Var dKol
+                          : double
+                        ) : boolean;       //... чтение номера и значения поля по настройке
+
+end;//ObjInterface OBJPROCSETDOC
+
+ObjInterface OBJPROCSETDOC1(OBJPROCSETDOC);
+
+  Function InitInter( var wFlag : word ) : boolean;
+
+  Function DoneInter( var wFlag : word ) : boolean;
+
+end;//ObjInterface OBJPROCSETDOC1
+
+VipInterface iProcSetDoc implements objProcSetDoc1
+#ifdef ATL51
+  Licensed (FREE)
+#endif//ATL51
+;
+#endif//OBJINT_PROCSETDOC
+
+//------------------------------------------------------------------------------
+
+#ifndef OBJINT_GETPOTRMATNORM
+#define OBJINT_GETPOTRMATNORM
+
+#doc
+ Формирование норм</brief>
+#end
+
+ObjInterface OBJGETPOTRMATNORM;
+
+ Function GetPosNorm( stPosIzd : TSpObjAcc
+                    ) : boolean;
+
+ Function GetIzdNorm( pTypeDoc : Word;
+                      cDoc : Comp;
+                      cOtpEd : comp;
+                      Kol    : double;
+                      dataP  : date;
+                      wTypeNorm   : Word;    // Тип нормы
+                      cNorm       : Comp     // ссылка на нормы
+                    ) : boolean;
+
+ Function GetSoprNorm( stPosSpSopr : TSpSopr
+                     ) : boolean;
+
+ Procedure SetRefstFormPl( pstFormPl : tFormPl);
+
+ Function GetListIzdNorm( cPosList : oMnInDocList
+                          ;cPickList : oMnPickList
+                          ;pcFormPl : comp
+                          ;pwFlag : word
+                        ) : boolean;
+
+end;//ObjInterface OBJGETPOTRMATNORM
+VipInterface iGetPotrMatNorm implements OBJGETPOTRMATNORM
+#ifdef ATL51
+  Licensed (FREE)
+#endif//ATL51
+;
+#endif//OBJINT_GETPOTRMATNORM
+
+//------------------------------------------------------------------------------
+
+#ifndef OBJINT_GETSOMEMNFZAKAZ
+#define OBJINT_GETSOMEMNFZAKAZ
+
+#doc
+ Выбор позиций по заказам</brief>
+#end
+
+ObjInterface OBJGETSOMEMNFZAKAZ;
+
+ Function InitInter( cNZakaz    : comp
+                   ; wMCorParty : word
+                   ; dBegDate   : date
+                   ; dEndDate   : date
+                   ; wTypeDoc   : word
+                   ) : boolean;
+end;//ObjInterface OBJGETSOMEMNFZAKAZ
+VipInterface iGetSomeMnfZakaz implements OBJGETSOMEMNFZAKAZ
+#ifdef ATL51
+  Licensed (FREE)
+  Parameters( NZakaz : comp; MCorParty : word )
+#endif//ATL51
+;
+#endif//OBJINT_GETSOMEMNFZAKAZ
+
+//------------------------------------------------------------------------------
+
+#ifndef OBJINT_OBJOTCHZAKAZ
+#define OBJINT_OBJOTCHZAKAZ
+
+#doc
+ Выбор позиций для отчетов по заказу</brief>
+#end
+
+ObjInterface OBJOTCHZAKAZ;
+
+ Function RunRepS( _cOtchet    // 0-по предприятию в целом; 1-по подразделениям; +128 - учитывать на ПЗ в целом
+                   , _cOtchet2 // вид отчета: 0-по выбраным ПЗ, 1-по поз.выбраных ПЗ, 2-по партиям поз.выбраных ПЗ;
+                   , _Filter   // фильтр по сырью: 0-нет, 1-есть;
+                   , _Vid      // 0-мат.отчет, 1-движение, 2-отпуск, 3-переработка, 4-выпуск изделий
+                   : word
+                 ; _cFormPl    // расчет потребности
+                   : comp
+                 ) : boolean ;
+end;//ObjInterface OBJOTCHZAKAZ
+VipInterface iOtchZakaz implements OBJOTCHZAKAZ
+#ifdef ATL51
+  Licensed (FREE)
+  Parameters( cOtchet, cOtchet2, Filter, Vid : word )
+#endif//ATL51
+;
+#endif//OBJINT_OBJOTCHZAKAZ
+
+//------------------------------------------------------------------------------
+#ifndef OBJINT_PROCSOPRDOC
+#define OBJINT_PROCSOPRDOC
+
+#doc
+ Создание спецификации документов</brief></brief>
+#end
+
+ObjInterface OBJPROCSOPRDOC;
+
+  Function SetDefSpStep( cnRecDoc  : comp                                       // nRec для существ.док.
+                       ; stBaseDoc : TBaseDoc                                   // структура вышестоящей BaseDoc
+                       ; stStepDoc : TStepDoc                                   // структура вышестоящей StepDoc
+                       ) : TSpStep;                //создание структуры SpStep
+  Function Ins_SpStep( stBaseDoc : TBaseDoc                                     // структура вышестоящей BaseDoc
+                     ; stStepDoc : TStepDoc                                     // структура вышестоящей StepDoc
+                     ; stMcUsl   : TMcUslRec                                    // структура даннных МЦ(Усл)
+                     ; var stSpStep : TSpStep      // структура вставленной SpStep
+                     ; wFlag        : word                                      // пересчет данных МЦ(Усл)
+                     ) : longint;                  //вставка SpStep
+  Function UpD_SpStep( var stSpStep : TSpStep                                   // структура обновляемой SpStep
+                     ; stMcUsl      : TMcUslRec                                 // структура даннных МЦ(Усл)
+                     ; wFlag        : word                                   // пересчет  даннных МЦ(Усл)
+                     ) : longint;                  //обновление SpStep
+  Function Del_SpStep( cnRecSpDoc:comp ) : longint;  //удаление SpStep
+  Function SetDefBaseDoc( cnRecDoc : comp                                       // nRec для существ.док.
+                        ; TypeDoc  : word                                       // вид документа
+                        ; var stStepDoc : TStepDoc
+                        ) : TBaseDoc;              //создание структуры записи BaseDoc(StepDoc)
+  Function Ins_BaseDoc( var stBaseDoc : TBaseDoc                                // структура BaseDoc
+                      ; var stStepDoc : TStepDoc                                // структура StepDoc
+                      ) : longint;                 //вставка BaseDoc(StepDoc)
+  Function UpD_BaseDoc( var stBaseDoc : TBaseDoc                                // структура BaseDoc
+                      ; var stStepDoc : TStepDoc                                // структура StepDoc
+                      ) : longint;                 //обновление BaseDoc(StepDoc)
+  Function Del_BaseDoc( cnRecDoc:comp ) : longint; //удаление BaseDoc(StepDoc)
+  Function SetDefSpSopr( cnRecDoc   : comp                                      // nRec для существ.док.
+                       ; stKatSopr  : TKatSopr                                  // структура вышестоящего документа
+                       ) : TSpSopr;                //создание структуры SpSopr
+  Function Ins_SpSopr( stKatSopr : TKatSopr                                     // структура вышестоящей КatSopr
+                     ; stMcUsl   : TMcUslRec                                    // структура даннных МЦ(Усл)
+                     ; var stSpSopr : TSpSopr                                   // структура вставленной SpSopr
+                     ; wFlag        : word                                      // пересчет данных МЦ(Усл)
+                     ) : longint;                  //вставка  SpSopr
+  Function UpD_SpSopr( var stSpSopr : TSpSopr                                   // структура обновляемой SpSopr
+                     ; stMcUsl      : TMcUslRec                                 // структура даннных МЦ(Усл)
+                     ; wFlag        : word                                      // пересчет  даннных МЦ(Усл)
+                     ) : longint;                  //обновление SpSopr
+  Function Del_SpSopr( cnRecSpDoc:comp ) : longint;  //удаление SpSopr
+  Function SetDefKatSopr( cnRecDoc : comp                                       // nRec для существ.док.
+                        ; TypeSopr : word                                       // вид документа
+                        ) : TKatSopr;                                           //создание структуры KatSopr
+  Function Ins_KatSopr( var stKatSopr : TKatSopr ) : longint;      //вставка  KatSopr
+  Function UpD_KatSopr( var stKatSopr : TKatSopr ) : longint;      //обновление KatSopr
+  Function Del_KatSopr( cnRecDoc:comp ) : longint;                 //удаление KatSopr
+
+  Function Form_KatSopr504( var stKatSopr
+                                , stKS504
+                              : TKatSopr
+                          ) : boolean;
+  Function Form_KatSopr508( var stKatSopr
+                                , stKS508
+                              : TKatSopr
+                          ) : boolean;
+  Function SklOtgAv( var cSklad
+                       , cSklMol
+                       : comp
+                   ; wFlObr
+                     , wMes
+                     : word
+                   ) : boolean;
+  Function PdrIzgAv( var cPodr
+                       , cPdrMol
+                       : comp
+                   ; wFlObr
+                     , wMes
+                     : word
+                   ) : boolean;
+  Function SetInNaklDO( cNRecKatSopr : comp                                     //KatSopr.nRec
+                      ; cNRecBaseDoc : comp                                     //BaseDoc.nRec
+                      ; cNRecStepDoc : comp                                     //StepDoc.nRec
+                      ) : boolean;                                 // Проверка существования накладной по ДО
+  Function InitInter( Dat_Cen:Date
+                    ;  bVal  : boolean
+                    ;  wSkPr
+                       , wFlag
+                       : Word
+                    ) : boolean;
+  Function DoneInter( wFlag : Word
+                    ) : boolean;
+
+end;//ObjInterface OBJPROCSOPRDOC
+
+
+ObjInterface OBJPROCSOPRDOC1(OBJPROCSOPRDOC);
+
+  Function UpD_KatSoprWithDescr( var stKatSopr : TKatSopr ) : longint;      //обновление KatSopr
+
+end;//ObjInterface OBJPROCSOPRDOC
+
+
+ObjInterface OBJPROCSOPRDOC2(OBJPROCSOPRDOC1);
+
+  Procedure SetAllSpSoprFromKatSopr(prKatSopr : type$KatSopr);
+
+end; // ObjInterface OBJPROCSOPRDOC2
+
+
+ObjInterface OBJPROCSOPRDOC3(OBJPROCSOPRDOC2);
+
+  Function CopyAllKatSoprAttr( cNRecKatSoprFrom : comp
+                             ; cNRecKatSoprTo : comp
+                             ) : boolean;
+
+end; // ObjInterface OBJPROCSOPRDOC3
+
+ObjInterface OBJPROCSOPRDOC4(OBJPROCSOPRDOC3);
+
+  Function CopyAllKatSoprAttrNew( cNRecKatSoprFrom : comp
+                                ; cNRecKatSoprTo : comp
+                                ; wFlag : word // 1 - переносить из шапки, 2 - переносить из спецификации
+                                ) : boolean;
+
+end; // ObjInterface OBJPROCSOPRDOC4
+
+ObjInterface OBJPROCSOPRDOC5(OBJPROCSOPRDOC4);
+
+Function Clc_KatSopr( cnRecDoc:comp ) : boolean;
+
+Function Clc_BaseDoc( cnRecDoc:comp ) : boolean;
+
+end; // ObjInterface OBJPROCSOPRDOC5
+
+ObjInterface OBJPROCSOPRDOC6(OBJPROCSOPRDOC5);
+
+Function CanDelKatSopr( cnRecDoc:comp; fNeedMessage: boolean ) : boolean;               //проверка на возможность удаления KatSopr
+
+end; // ObjInterface OBJPROCSOPRDOC6
+
+VipInterface iProcSoprDoc implements objProcSoprDoc6
+#ifdef ATL51
+ licensed (FREE)
+#endif //ATL51
+;
+#endif //OBJINT_PROCSOPRDOC

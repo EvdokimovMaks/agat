@@ -1,0 +1,152 @@
+//********************************************************************************
+//                                                        (c) корпорация Галактика
+// Галактика 8.1 - Управление производственной логистикой
+// (расчет календарного плана выполнения программы)
+//********************************************************************************
+
+#doc
+ Расчет календарного плана </brief>
+#end
+
+#ifdef ComponentVersion
+#Component "M_MnPlan"
+#endif
+
+#ifndef __Def_ShedPlanManuf__
+#define __Def_ShedPlanManuf__
+
+// Таблица операций
+Table STRUCT ShedManuf
+(
+  nRec    : tNRec,
+  strName : string,
+  Number  : s20,
+  dbTime  : double,
+  dbES    : double,
+  dbEC    : double,
+  dbLS    : double,
+  dbLC    : double,
+  dbTF    : double,
+  dbFF    : double,
+  cSpMnPl : tNRec,
+  cSpMnPlan : tNRec,
+  StartDateTime : _DateTime,
+  EndDateTime : _DateTime
+)
+With Index
+(
+  ShedManuf01  =  nRec (Unique, Surrogate),
+  ShedManuf02  =  cSpMnPlan,
+  ShedManuf03  =  dbEC,
+  ShedManuf04  =  dbLC,
+  ShedManuf05  =  Number,
+  ShedManuf06  =  dbES,
+  ShedManuf07  =  dbLS
+);
+
+// Таблица связей
+Table STRUCT SpShedManuf
+(
+  nRec    : tNRec,
+  cShedManuf : comp,
+  cPrev  : comp,
+  bIsTop : boolean
+)
+With Index
+(
+  SpShedManuf01  =  nRec (Unique, Surrogate),
+  SpShedManuf02  =  cShedManuf,
+  SpShedManuf03  =  cPrev,
+  SpShedManuf04  =  cPrev + cShedManuf,
+  SpShedManuf05  =  bIsTop
+);
+
+//Объектный интерфейс построения расписаний
+
+ObjInterface oShedPlanManuf;
+//   Добавляет операцию для расчета.
+//   cRecOper - nRec операции;
+//   dTime    - время операции;
+Procedure AddOperation(cRecOper : comp; dTime : double);
+
+// полностью заполнит все данные таблицы ShedManuf по значению  SpMnPl.Nrec
+// (ShedManuf.cSpMnPlan, ShedManuf.cSpMnPl, наименование и номер операции)
+// Если далее в функциях CalculateDates или CalculateDatesWithGrafik указать
+// Параметр  bWriteTodocument = true, то заполняться датами SpMnPlan.StartDate
+// SpMnPlan.EndDate и SpMnPl.StartDate SpMnPl.EndDate и SpMnPl.StartDateTime,
+// SpMnPl.EndDateTime(если указан записи даты/времени)
+Procedure AddOperationWithSpMnPl(cRecOper : comp; dTime : double; cSpMnPl : comp);
+
+// Добавляет связь между операциями.
+// cRecPrevOper - nRec операции предшествующей операции с nRec ' ом =  cRecOper
+Procedure AddPrevOperation(cRecPrevOper, cRecOper : comp);
+
+// Расчитывает время начала окончания без учета дат и единиц измерения
+Procedure Calculate;
+
+//    Возвращает для операции с nRec = cRecOper рассчитанное время
+Function  GetValues(cRecOper : comp; lnType : longint) : double;
+/*   - EarlyStart    (lnType = 0)
+     - EarlyComplete (lnType = 1)
+     - LateStart     (lnType = 2)
+     - LateComplete  (lnType = 3)
+     - FreeFloat     (lnType = 4)
+     - TotalFloat    (lnType = 5)
+ */
+
+// проверка на наличие круговых связей
+// sErrorMsg - текст сообщения, если найдены круговые связи(CheckRelations=false)
+Function CheckRelations(sErrorMsg : string) : boolean;
+
+// Наполняет операциями и связями временные таблицы
+// Бегает по всем SPMNPl и выпоняет функции  AddOperationWithSpMnPl и
+// AddPrevOperation (по связям из OBJPARAM или по номеру операции)
+
+Procedure FillTables(acFiltr  : comp;  // ссылка на фильтр, если 0 - фильтр не учитывается
+                     acMnPlan : comp;  // Ссылка на MnPlan
+                     awKolAn  : word;  // Системное представление
+                     awFieldNum : word; // Номер поля из котогоро брать количество
+                     awFlag : word); // 1-й бит  0 - брать связи из ObjParam
+                                              // 1 - по порядковому номеру
+                                     // 2-й бит !!!! не учитывается, если acFiltr = 0
+                                              // 0 - отбрасывать записи не попадающие в фильтр (обрабатывать)
+                                              // 1 - оставлять записи не попадающие в фильтр   (не обрабатывать)
+
+// Расчет Дат
+Procedure CalculateDates(ag_cSysGraf : comp; // 0 - не учитывать график,
+                                            //  > 0 учитывается график с Nrec = ag_cSysGraf
+                         adtStartDateTime : _DateTime; // Дата-время привязки
+                         awFlag : word; // 1 бит 0 - начинать как можно раньше        0
+                                        //       1 - начинать как можно позже         1
+                                        // 2 бит 0 - начинать с даты привязки         0
+                                        //       1 - закончить к дате привязки        2
+                                        // 3 бит 0 - не записывать в SpMnPl.DateTime  0
+                                        //       1 - записывать в SpMnPl.DateTime     4
+                         awDlitEdIzm : word;   // Единица измерения длительности(xHour, xDay)
+                         awHoursIndDay : word; // количество рабочих часов в дне
+                                               // ( игнорируется при ag_cSysGraf > 0)
+                         abWriteToDocument : boolean;// true - записывать расчитанные даты в документ
+                                                     // Сработает, если заполнены таблицы SchedPplanManuf (CSpMnPl и CSpMnPlan)
+                                                     // При вызове FillTAbles поля заполняются автоматически
+                         var adStartDate : date; // Дата начала работ
+                         var adEndDate : date); // Дата окончания работ
+
+
+// Запуск окна отладки
+Function RunTestWindow(sWindowTitle : string) : LongInt;
+
+// "Очищает" таблицы ShedManuf и SpShedManuf
+Procedure Clear;
+
+End; // ObjInterface
+
+ObjInterface oShedPlanManuf1(oShedPlanManuf);
+
+//Удаление некоректных записей
+Procedure CorrectRelations(pr_cMnPlan : comp);
+
+End; // ObjInterface oShedPlanManuf1
+
+
+
+#endif

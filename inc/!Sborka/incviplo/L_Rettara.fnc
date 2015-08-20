@@ -1,0 +1,6 @@
+const fcKARTDOCOSN = 58280;
+const fcKARTKONTRAG = 46038;
+const fcKARTMC = 309;
+const fcVOZVDOCOSN = 14590;
+const fcVOZVKONTRAG = 45004;
+const fcVOZVMC = 21136;

@@ -1,0 +1,3 @@
+const fcSTSALL_CYCLE1 = 46961;
+const fcSTSALL_CYCLE2 = 59083;
+const fcSTSRD23_CYCLE1 = 11025;

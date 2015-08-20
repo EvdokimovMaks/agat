@@ -1,0 +1,489 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 8.1 - Производственный контур
+// Объект для расчета запуска, выпуска, нзп... по журналу резервирования
+//------------------------------------------------------------------------------
+
+// ВНИМАНИЕ!!! Если добавляются поля в таблицы LinkOstRsv и GetOper_Razrez_Kol,
+// то обязательно надо добавлять новые поля в аналогичные таблицы для ORACLE
+
+#ifdef ComponentVersion
+#component "M_MnPlan"
+#end
+
+Type stOst_RSV = Record
+  KolActState: Word;
+  wState1    : Word;
+  wState2    : Word;
+  wState3    : Word;
+  wState4    : Word;
+  wState5    : Word;
+  wState6    : Word;
+  wState7    : Word;
+  wState8    : Word;
+  wState9    : Word;
+  KolActWrk  : Word;
+  wWrk1      : Word;
+  wWrk2      : Word;
+  cVaria     : Comp;
+End;
+
+// Таблица для хранения записей журнала, по которым рассчитан запуска-выпуск
+Table Struct LinkOstRsv
+(
+  NRec     : Comp,
+  cRsvOper : Comp,
+  wState   : Word,
+  wPrEd    : Word,
+  NumPar   : Word,   // номер рассчитываемого параметра
+  Kol      : Double,
+  Dlit     : Double,
+  wFlag    : Word,
+  doReserv : Double, // резерв
+  doRest   : Double, // остаток
+  cRazrez  : Comp,   // ссылка на разрез GetOper_Razrez_Kol.NRec (общая)
+  cRazrezVX: Comp,   // ссылка на разрез GetOper_Razrez_Kol.NRec (детальная информация по разрезам входимости)
+  cVaria   : Comp,
+  wRec4PlanMove : word
+)
+With Index
+(
+  LinkOstRsv01 = NRec(Unique, Surrogate),
+  LinkOstRsv02 = wState + wPrEd + cVaria,
+  LinkOstRsv03 = NumPar + wFlag,
+  LinkOstRsv04 = wFlag,
+  LinkOstRsv05 = cRsvOper + NumPar + wFlag,
+  LinkOstRsv06 = cRazrez + NumPar + wRec4PlanMove,
+  LinkOstRsv07 = cRazrez + wFlag,
+  LinkOstRsv08 = cRazrezVX + wFlag,
+  LinkOstRsv09 = cRazrezVX + wFlag + NumPar,
+  LinkOstRsv10 = cRazrezVX,
+  LinkOstRsv11 = cRazrezVX + NumPar + wRec4PlanMove
+);
+
+Table Struct ReservLinks
+(
+  NRec        : Comp,
+  cLinkOstRsv : Comp,
+  cPos        : Comp,
+  Kol         : double
+)
+With Index
+(
+  ReservLinks01 = NRec(Unique, Surrogate),
+  ReservLinks02 = cLinkOstRsv + cPos
+);
+
+// фильтр на позиции/документы (может использоваться как общий для всех разрезов GetOper_Razrez_Kol cGroup = 0,
+// либо для группы записей таблицы GetOper_Razrez_Kol своя группа PickOst)
+Table Struct PickOst
+(
+  NRec     : Comp,
+  wList    : Word,
+  cRec     : Comp,
+  cSpAnVal1: Comp,
+  cSpAnVal2: Comp,
+  cSpAnVal3: Comp,
+  cSpAnVal4: Comp,
+  cSpAnVal5: Comp,
+  cGroup   : Comp  // ссылка на группу (для идентификации в случае, если ряд
+                   // PickOst-ов для каждой записи разреза)
+)
+With Index
+(
+  PickOst01 = NRec(Unique, Surrogate),
+  PickOst02 = wList + cRec,
+  PickOst03 = wList + cGroup + cSpAnVal1 + cSpAnVal2 + cSpAnVal3 + cSpAnVal4 + cSpAnVal5,
+  PickOst04 = wList + cRec + cGroup + cSpAnVal1 + cSpAnVal2 + cSpAnVal3 + cSpAnVal4 + cSpAnVal5
+)
+;
+
+//------------------------------------------------------------------------------
+// Таблица для расчета запуска, выпуска... по разрезам
+Table Struct GetOper_Razrez_Kol
+(
+  NRec       : Comp,
+  NRecInc    : LongInt, // для генерации нрека на Oracle
+  wType      : Word,    // тип записи 0 - родитель, 1 - подчиненная
+  wWork      : Word,    // 0 - обрабатываем, 1 - нет
+  cOwner     : Comp,
+  wKauIzd    : Word,    // cgKau_KatMc, cgKau_KatUsl
+  cMc        : Comp,
+  wPodr      : Word,    // cgKau_KatPodr, cgKau_KatOrg
+  cPodr      : Comp,    // KatPodr.NRec, KatOrg.NRec
+  cOper      : Comp,
+  cParty     : Comp,
+  DBegT      : Comp,
+  DEndT      : Comp,
+  cMarsh     : Comp,
+  cVaria     : Comp,
+  cAnValPos1 : Comp,
+  cAnValPos2 : Comp,
+  cAnValPos3 : Comp,
+  cAnValPos4 : Comp,
+  cAnValPos5 : Comp,
+  wKauHigherMC: Word,  // тип вышестоящего объекта
+  cHigherMC  : Comp,   // вышестоящее мц/услуга
+  wKauTopMC  : Word,   // тип верхнего объекта
+  cTopMC     : Comp,   // верхнее мц/услуга
+  cHigherRsv : Comp,   // вышестоящий RsvOper
+  cParent    : Comp,   // ссылка на родителя (если расчет по вышестоящим и верхним)
+  cPos       : Comp,   // ссылка на позицию документа (SpMnPl.NRec)
+  cGroupPick : Comp,   // ссылка на группу PickOst (в случае, если PickOst свой для каждой записи разреза)
+                       // если фильтр по позициям/документам общий, то cGroupPick = 0
+  cOtpEd     : Comp,
+
+  PlanZap    : Double,
+  PlanZapDl  : Double,
+  PlanVip    : Double,
+  PlanVipDl  : Double,
+  FactZap    : Double,
+  FactZapDl  : Double,
+  FactVip    : Double,
+  FactVipDl  : Double,
+  NZP        : Double,
+  NZPDl      : Double,
+  TekNal     : Double,
+  TekNalDl   : Double,
+  Brak       : Double,
+  BrakDl     : Double,
+  Accept     : Double,
+  AcceptDl   : Double,
+  UtvZap     : Double,
+  UtvZapDl   : Double,
+  UtvVip     : Double,
+  UtvVipDl   : Double,
+  PlanBrak   : Double,
+  PlanBrakDl : Double,
+  PrepZap    : Double,
+  PrepZapDl  : Double,
+  AllPlan    : Double,
+  AllPlanDl  : Double,
+  Matur      : Double,
+  MaturDl    : Double,
+  Transfer   : Double,
+  TransferDl : Double,
+  PlanZapEx  : Double,
+  PlanZapExDl: Double,
+  PlanVipEx  : Double,
+  PlanVipExDl: Double,
+  FactZapEx  : Double,
+  FactZapExDl: Double,
+  FactVipEx  : Double,
+  FactVipExDl: Double,
+  Prepare    : Double,
+  PrepareDl  : Double,
+  Work       : Double,
+  WorkDl     : Double,
+  wSmena     : Word,
+  NZPEx      : Double
+)
+With Index
+(
+  GetOper_Razrez_Kol01 = NRec(Unique, Surrogate),
+  GetOper_Razrez_Kol02 = wType + wWork + cAnValPos1 + cGroupPick + cAnValPos2 + cAnValPos3 + cAnValPos4 + cAnValPos5,
+  GetOper_Razrez_Kol03 = cOwner + wKauIzd + cMc,
+  GetOper_Razrez_Kol04 = cParent + cHigherRsv + cPos,
+  GetOper_Razrez_Kol05 = wKauIzd + cMc + cPodr + cParty,
+  GetOper_Razrez_Kol06 = wKauIzd + cMc + cParty,
+  GetOper_Razrez_Kol07 = cOwner + wType,
+  GetOper_Razrez_Kol08 = wWork,
+  GetOper_Razrez_Kol09 = wKauIzd + cMc + cOper,
+  GetOper_Razrez_Kol10 = wKauIzd + cMc + cOper + cVaria + cGroupPick + cAnValPos1 + cAnValPos2 + cAnValPos3 + cAnValPos4 + cAnValPos5,
+  GetOper_Razrez_Kol11 = wPodr,
+  GetOper_Razrez_Kol12 = NRecInc
+)
+;
+
+#doc
+ Описание интерфейса "Объект для работы с остатками для операции"</brief>
+#end
+ObjInterface oGetOstOper;
+
+//------------------------------------------------------------------------------
+// Функция возвращает количество для МЦ + операция в определенном состоянии за определенный интервал времени
+// через структуру задаем состояния в которых будем искать кол-во, т.е.
+// поле KolActState - кол-во активных состояний
+// например, KolActState = 2, значит должно быть заполнено поле wState1 и wState2
+Function GetOstMcForState(cMc: Comp; cMarsh_Sp: Comp; stm: stOst_RSV): Double;
+
+//------------------------------------------------------------------------------
+// Функция сохраняет записи журнала для расчета остатков во временную таблицу
+// wMode - and 1 - учитывать нулевую партию (если не учитывать и партия = 0, то по всем партиям)
+Procedure FillOstLinkRsv(cMc: Comp; cMarsh_Sp: Comp; cParty: Comp; wMode: Word);
+
+//------------------------------------------------------------------------------
+// Функция возвращает количество для МЦ в определенном состоянии
+// анализируется временная таблица, заполненная процедурой FillOstLinkRsv
+Function GetOstFromOstLink(stm: stOst_RSV): Double;
+
+//------------------------------------------------------------------------------
+// Расчет запуска-выпуска
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Поиск запуска, выпуска и т.д. для МЦ
+// LookPar - возвращаемый результат функции
+//         = 1  - планируемый запуск и обработка
+//         = 2  - планируемый выпуск
+//         = 3  - фактический запуск и обработка
+//         = 4  - фактический выпуск
+//         = 5  - НЗП
+//         = 6  - текущее наличие
+//         = 7  - брак
+//         = 8  - готовая продукция
+//         = 9  - утвержденный плановый запуск
+//         = 10 - утвержденный плановый выпуск
+//         = 11 - планируемый брак
+//         = 12 - готово к запуску
+//         = 13 - все операции без состояния за пересечение
+//         = 14 - все планируемые операции за пересечение
+//         = 15 - завершение
+//         = 16 - передача
+//         = 17 - планируемый запуск
+//         = 18 - планируемый выпуск ГП
+//         = 19 - фактический запуск
+//         = 20 - фактический выпуск ГП
+//         = 21 - подготовка
+//         = 22 - обработка
+//         = 23 - НЗП (новый режим расчета с использованием связей м/у записями журнала)
+// wTypeIzd - 1 - МЦ
+//          - 2 - услуга
+// cMc      - ссылка на МЦ или услугу
+// cParty   - ссылка на партию
+// DateBegT, DateEndT - дата и время начала/дата и время окончания (фильтр)
+// wNumPickPar - фильтр на документы/позиции
+//               документы/позиции передаются через PickOst
+//               документы - PickOst.wList = cPickMnPlan
+//               PickOst.cRec  = MnPlan.NRec
+//               позиции   - PickOst.wList = cPickSpMnPl
+//               PickOst.cRec  = SpMnPl.NRec
+// wMode       - 1 - сохранять RsvOper во временную таблицу LinkOstRsv
+//             - 2 - не учитывать подчиненные цеха
+//             - 4 - в LinkOstRsv сохраняются все записи по параметру (не только те, по которым считается сам параметр)
+//             - 8 - если флаг установлен, то при расчете используется активная маршрутная карта
+//             - 32 - расчет по всем партиям
+// cMarsh      - ссылка на маршрут, еслт = 0, то расчет по всем маршрутным картам изделия
+// Dlit        - возвращается длительность
+// cVaria      - ссылка на вариант планирования
+// cAnValPos1..5  - ссылка на аналитику SpMnPl (в случае если расчет идет по документам или позициям)
+//               можно отфильтровать по ссылке PickOst.cSpAnVal1..5
+// cRazrez     - 0
+// cHigherRsv  - вышестоящий RsvOper
+// cTopMC      - верхнее изделие
+// cGroup      - ссылка на группу PickOst (всегда = 0)
+Function GetLookParForMc(LookPar: Word; wTypeIzd: Word; cMc: Comp; cParty: Comp;
+                         DateBegT, DateEndT: _DateTime; wNumPickPar: Word; wMode: Word;
+                         cMarsh: Comp; Var Dlit: Double; cVaria: Comp;
+                         cRazrez: Comp; cHigherRsv: Comp; cTopMC: Comp; cGroup: Comp): Double;
+
+//------------------------------------------------------------------------------
+// Поиск запуска, выпуска и т.д. для МЦ + Подразделение
+Function GetLookParForMcPodr(LookPar: Word; wTypeIzd: Word; cMc: Comp; cParty: Comp; cPodr: Comp;
+                             DateBegT, DateEndT: _DateTime; wNumPickPar: Word; wMode: Word;
+                             cMarsh: Comp; Var Dlit: Double; cVaria: Comp;
+                             cRazrez: Comp; cHigherRsv: Comp; cTopMC: Comp; cGroup: Comp): Double;
+
+//------------------------------------------------------------------------------
+// Поиск запуска, выпуска и т.д. для МЦ + Контрольная операция
+Function GetLookParForMcOperKontr(LookPar: Word; wTypeIzd: Word; cMc: Comp; cParty: Comp; cOperK: Comp;
+                                  DateBegT, DateEndT: _DateTime; wNumPickPar: Word; wMode: Word;
+                                  cMarsh: Comp; Var Dlit: Double; cVaria: Comp;
+                                  cRazrez: Comp; cHigherRsv: Comp; cTopMC: Comp; cGroup: Comp): Double;
+
+//------------------------------------------------------------------------------
+// Поиск запуска, выпуска и т.д. для МЦ + Операция
+Function GetLookParForMcOper(LookPar: Word; wTypeIzd: Word; cMc: Comp; cParty: Comp; cOper: Comp;
+                             DateBegT, DateEndT: _DateTime; wNumPickPar: Word; wMode: Word;
+                             cMarsh: Comp; Var Dlit: Double; cVaria: Comp;
+                             cRazrez: Comp; cHigherRsv: Comp; cTopMC: Comp; cGroup: Comp): Double;
+
+//------------------------------------------------------------------------------
+// Удаление всех записей LinkOstRsv
+Procedure DeleteAllLinkOstRsv;
+
+//------------------------------------------------------------------------------
+// При расчете сохранять разерв и остатки в таблице LinkOstRsv
+// bSave = true - сохранять
+// bSave = false - не сохранять
+
+// если bSave = true, сохранять при расчете ссылки на позиции документа, под которые произведен резерв
+// bSaveReservInfo = true - сохраннять
+// bSaveReservInfo = false - не сохраннять
+
+// Вызывать (если необходимо) перед функциями GetLookParForMc...
+// по умолчанию эта информация не сохраняется
+
+//------------------------------------------------------------------------------
+Procedure FillRestAndReserv(bSave : boolean; bSaveReservInfo : boolean);
+
+//------------------------------------------------------------------------------
+// wTypeOp - 0 - тип операции из общесистемной настроки (Журнал резервирования ПЦ/В расчетах по журналу резервирования использовать по умолчанию)
+//           1 - по всем операциям
+//           2 - по контрольным операциям
+Procedure SetTypeOp(wTypeOp: Word);
+
+//------------------------------------------------------------------------------
+// wNumPar   - битовая маска для рассчитываемого параметра
+//             1     - планируемый запуск и обработка
+//             2     - планируемый выпуск
+//             4     - фактический запуск и обработка
+//             8     - фактический выпуск
+//             16    - нзп
+//             32    - текущее наличие
+//             64    - брак
+//             128   - готовая продукция
+//             256   - утвержденный запуск
+//             512   - утвержденный выпуск
+//             1024  - планируемый брак
+//             2048  - готово к запуску
+//             8192  - все планируемые операции за пересечение
+//             16384 - завершение
+//             32768 - передача
+// wNumParExt   - битовая маска для рассчитываемого параметра
+//             1     - планируемый запуск
+//             2     - планируемый выпуск ГП
+//             4     - фактический запуск
+//             8     - фактический выпуск ГП
+//             16    - подготовка
+//             32    - обработка
+//             64    - НЗП (новый режим расчета с использованием связей м/у записями журнала)
+// wNumRazrez - номер разреза
+//             1 - МЦ
+//             2 - МЦ + Операция
+//             3 - МЦ + Контрольная операция
+//             4 - МЦ + Подразделение
+// wNumPickPar - фильтр на документы/позиции
+//               документы/позиции передаются через PickOst
+//               документы - PickOst.wList = cPickMnPlan
+//               PickOst.cRec  = MnPlan.NRec
+//               позиции   - PickOst.wList = cPickSpMnPl
+//               PickOst.cRec  = SpMnPl.NRec
+// wMode        2  - не учитывать подчиненные цеха
+//              4  - в LinkOstRsv сохраняются все записи по параметру (не только те, по которым считается сам параметр)
+//              8  - если флаг установлен, то при расчете используется активная маршрутная карта
+//              16 - декомпозиция по вышестоящим и верхним изделиям
+//              32 - по всем партиям
+//              256 - таблица GetOper_Razrez_Kol уже заполнена (только на Oracle)
+Procedure CalcForAllRazrezOra(wNumPar: Word; wNumParExt: Word; wNumRazrez: Word; wNumPickPar: Word; wMode: Word);
+
+//------------------------------------------------------------------------------
+// wNumPar   - битовая маска для рассчитываемого параметра
+//             1     - планируемый запуск и обработка
+//             2     - планируемый выпуск
+//             4     - фактический запуск и обработка
+//             8     - фактический выпуск
+//             16    - нзп
+//             32    - текущее наличие
+//             64    - брак
+//             128   - готовая продукция
+//             256   - утвержденный запуск
+//             512   - утвержденный выпуск
+//             1024  - планируемый брак
+//             2048  - готово к запуску
+//             8192  - все планируемые операции за пересечение
+//             16384 - завершение
+//             32768 - передача
+// wNumParExt   - битовая маска для рассчитываемого параметра
+//             1     - планируемый запуск
+//             2     - планируемый выпуск ГП
+//             4     - фактический запуск
+//             8     - фактический выпуск ГП
+//             16    - подготовка
+//             32    - обработка
+//             64    - НЗП (новый режим расчета с использованием связей м/у записями журнала)
+// wNumRazrez - номер разреза
+//             1 - МЦ
+//             2 - МЦ + Операция
+//             4 - МЦ + Контрольная операция
+//             8 - МЦ + Подразделение
+// wNumPickPar - фильтр на документы/позиции
+//               документы/позиции передаются через Pick
+//               документы - Pick.wList = cPickMnPlan
+//               Pick.cRec  = MnPlan.NRec
+//               позиции   - Pick.wList = cPickSpMnPl
+//               Pick.cRec  = SpMnPl.NRec
+// wMode        1  - сохранять RsvOper во временную таблицу LinkOstRsv
+//              2  - не учитывать подчиненные цеха
+//              4  - в LinkOstRsv сохраняются все записи по параметру (не только те, по которым считается сам параметр)
+//              8  - если флаг установлен, то при расчете используется активная маршрутная карта
+//              16 - декомпозиция по вышестоящим и верхним изделиям
+//              32 - расчет по всем партиям
+//              64 - на каждый GetOper_Razrez_Kol свой фильтр по позициям плана
+//              128 - не удалять записи GetOper_Razrez_Kol и LinkOstRsv
+Procedure CalcForAllRazrezBTR(wNumPar: Word; wNumParExt: Word; wNumRazrez: Word; wNumPickPar: Word; wMode: Word);
+
+//------------------------------------------------------------------------------
+// wNumPar   - битовая маска для рассчитываемого параметра
+//             1     - планируемый запуск и обработка
+//             2     - планируемый выпуск
+//             4     - фактический запуск и обработка
+//             8     - фактический выпуск
+//             16    - нзп
+//             32    - текущее наличие
+//             64    - брак
+//             128   - готовая продукция
+//             256   - утвержденный запуск
+//             512   - утвержденный выпуск
+//             1024  - планируемый брак
+//             2048  - готово к запуску
+//             8192  - все планируемые операции за пересечение
+//             16384 - завершение
+//             32768 - передача
+// wNumParExt   - битовая маска для рассчитываемого параметра
+//             1     - планируемый запуск
+//             2     - планируемый выпуск ГП
+//             4     - фактический запуск
+//             8     - фактический выпуск ГП
+//             16    - подготовка
+//             32    - обработка
+//             64    - НЗП (новый режим расчета с использованием связей м/у записями журнала)
+// wNumRazrez - номер разреза
+//             1 - МЦ
+//             2 - МЦ + Операция
+//             3 - МЦ + Контрольная операция
+//             4 - МЦ + Подразделение
+// wNumPickPar - фильтр на документы/позиции
+//               документы/позиции передаются через PickOst
+//               документы - PickOst.wList = cPickMnPlan
+//               PickOst.cRec  = MnPlan.NRec
+//               позиции   - PickOst.wList = cPickSpMnPl
+//               PickOst.cRec  = SpMnPl.NRec
+// wMode        1  - сохранять RsvOper во временную таблицу LinkOstRsv
+//              2  - не учитывать подчиненные цеха
+//              4  - в LinkOstRsv сохраняются все записи по параметру (не только те, по которым считается сам параметр)
+//              8  - если флаг установлен, то при расчете используется активная маршрутная карта
+//              16 - декомпозиция по вышестоящим и верхним изделиям
+//              32 - расчет по всем партиям
+//              64 - на каждый GetOper_Razrez_Kol свой фильтр по позициям плана
+//              128 - не удалять записи GetOper_Razrez_Kol и LinkOstRsv (только на Btrieve)
+//              256 - таблица GetOper_Razrez_Kol уже заполнена (только на Oracle)
+//              512 - анализируются записи журнала привязанные к другим документам/позициям
+Procedure CalcForAllRazrez(wNumPar: Word; wNumParExt: Word; wNumRazrez: Word; wNumPickPar: Word; wMode: Word);
+
+procedure CalcForMCOper;
+// Создание временных таблиц на Oracle
+Procedure InitOraTable;
+
+end;
+
+ObjInterface oGetOstOperExtV1(oGetOstOper);
+
+//------------------------------------------------------------------------------
+// wTypeEd - 0 - активные единицы измерения
+//           1 - производственные
+Procedure SetTypeEd(wTypeEd: Word);
+
+End;
+
+ObjInterface oGetOstOperExtV2(oGetOstOperExtV1);
+
+//------------------------------------------------------------------------------
+// wDopPar1 and 1 - ctmDynamicIndex, else ctmNormal
+// wDopPar1 and 2 - с учетом смен
+// wDopPar1 and 4 - отладочная информация
+Procedure SetDopParam(wDopPar1, wDopPar2, wDopPar3, wDopPar4, wDopPar5: Word);
+
+End;
+
+VipInterface GetOstOper implements oGetOstOperExtV2 #Licensed_Free;

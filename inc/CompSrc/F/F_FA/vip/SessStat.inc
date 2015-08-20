@@ -1,0 +1,7 @@
+ if (isValid(tnSession),
+   if (Session.SessStat = 1 ,'Заполняется',
+   if (Session.SessStat = 2 ,'Заполнена',
+   if (Session.SessStat = 3 ,'Проконтролирована без ошибок',
+   if (Session.SessStat = 4 ,'Проконтролирована с ошибками',
+   if (Session.SessStat = 5 ,'Разобрана',
+   if (Session.SessStat = 6 ,'В архиве','')))))),''),
