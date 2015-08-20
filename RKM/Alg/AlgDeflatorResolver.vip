@@ -7,7 +7,7 @@ VipInterface Algoritm_5106 Implements oAlgoritm_Sys;
 Interface Algoritm_5106 '' (,hcNoContext,) EscClose, Cyan;
 
 sql query qSpmnplan =
-select vsp.nrec as ValspmnpNrec, av.vComp as DeflatorGroupNrec, year(datetime(ks.dsopr, 0)) as IndexYear, year(datetime(per.dbeg,0)) as ForecastYear //, coalesce(vsp1.kolfield5,0) as IncomePrice
+select vsp.nrec as ValspmnpNrec, av.vComp as DeflatorGroupNrec, year(datetime(ks.dsopr, 0)) as IncomeYear, year(datetime(per.dbeg,0)) as ForecastYear, vsp1.Nrec as ValspmnpTotalNrec
 from tPick
 join spmnplan spm on tPick.cRec = spm.nrec
 join spsopr sps on spm.cAnval4 = sps.nrec and 1 = sps.prmc
@@ -18,8 +18,8 @@ join katsopr ks on sps.csopr = ks.nrec
 join spmnpl spl on spm.nrec = spl.cSpmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4
 join fpperiod per on spl.canval4 = per.nrec
 join valspmnp vsp on spl.nrec = vsp.cspmnpl
-//left join spmnpl spl1 on spm.nrec = spl1.cSpmnplan and 24 = spl1.wkolan and 28 = spl1.wkodgr4 and spm.cmnplan = spl1.canval4 and 0 = spl1.wkodgr5 and 0 = spl1.canval5
-//left join valspmnp vsp1 on coalesce(spl1.nrec,#comp(0)) = vsp1.cspmnpl and coalesce(spl1.nrec,#comp(0)) <> #comp(0)
+join spmnpl spl1 on spm.nrec = spl1.cSpmnplan and 24 = spl1.wkolan and 28 = spl1.wkodgr4 and spm.cmnplan = spl1.canval4 and 0 = spl1.wkodgr5 and 0 = spl1.canval5
+join valspmnp vsp1 on spl1.nrec = vsp1.cspmnpl
 ;
 
 var
@@ -27,13 +27,16 @@ var
   _mnplanNrec: comp;
   _deflatorWayaccouNrec: comp;
   _deflatorResolver: AGAT::oDeflatorResolver;
+  _baseyear: word;
 
 create view
 as select *
-from formpl, mnplan, objacct deflatorOA, mnplan deflatorMnplan, pick, spmnplan spmChild, valspmnp
+from formpl, mnplan, fpperiod, objacct deflatorOA, mnplan deflatorMnplan, pick, spmnplan spmChild, valspmnp
 where ((
   _formplNrec            == formpl.nrec and
   _mnplanNrec            == mnplan.nrec and
+
+  mnplan.canval3         == fpperiod.nrec and
 
   20000                  == pick.wlist  and
   pick.cRec              == spmChild.cSpmnplan and
@@ -92,14 +95,24 @@ Function RunInter(wflag: word; var pt: TRecAcc): boolean;
     if rs.getFirst = tsOk
     {
       var ValspmnpNrec: comp;
+      var ValspmnpTotalNrec: comp;
       do
       {
+
+        ValspmnpTotalNrec := rs.row.val('ValspmnpTotalNrec');
+        if getfirst valspmnp where ((ValspmnpTotalNrec == valspmnp.nrec)) = tsOk
+        {
+          valspmnp.pricefact := _deflatorResolver.GetDeflator(rs.row.val('DeflatorGroupNrec'), rs.row.val('IncomeYear'), _baseYear);
+          update current valspmnp;
+        }
+
         ValspmnpNrec := rs.row.val('ValspmnpNrec');
         if getfirst valspmnp where ((ValspmnpNrec == valspmnp.nrec)) = tsOk
         {
-          valspmnp.price := _deflatorResolver.GetDeflator(rs.row.val('DeflatorGroupNrec'), rs.row.val('IndexYear'), rs.row.val('ForecastYear'));
+          valspmnp.price := _deflatorResolver.GetDeflator(rs.row.val('DeflatorGroupNrec'), _baseYear, rs.row.val('ForecastYear'));
           update current valspmnp;
         }
+
       }
       while rs.getNext = tsOk;
     }
@@ -113,6 +126,7 @@ function InitInter(var pt: TRecAcc): boolean;
   result := true;
 
   //Находим в БД настройки алгоритма
+  _mnplanNrec := pt.cMnPlan;
   _formplNrec := pt.cFormPl;
   if (getfirst formpl = tsOk)
   {
@@ -152,11 +166,22 @@ function InitInter(var pt: TRecAcc): boolean;
   }
 
   //Находим в БД текущий документ
-  _mnplanNrec := pt.cMnPlan;
   if (getfirst mnplan != tsOk)
   {
     message('Не найден текущий документ (pt.cMnPlan='+pt.cMnPlan+')', error);
     result := false;
+  }
+  else
+  {
+    if getfirst fpperiod = tsOk
+    {
+      _baseYear := year(fpperiod.dbeg);
+    }
+    else
+    {
+      message('В плане не указан базовый период планирования', error);
+      result := false;
+    }
   }
 }
 

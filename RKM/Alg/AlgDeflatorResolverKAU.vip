@@ -1,0 +1,272 @@
+#include DeflatorResolver.vih
+
+#component "M_MnPlan"
+
+VipInterface Algoritm_5107 Implements oAlgoritm_Sys;
+Interface Algoritm_5107 '' (,hcNoContext,) EscClose, Cyan;
+
+var
+  _formplNrec: comp;
+  _mnplanNrec: comp;
+  _deflatorWayaccouNrec: comp;
+  _deflatorResolver: AGAT::oDeflatorResolver;
+  _baseyear: word;
+  _fptperNrec: comp;
+
+create view
+as select *
+from formpl, mnplan, fpperiod, objacct deflatorOA, mnplan deflatorMnplan, pick, fpperiod fpperiod1, mnanal, spmnplan, spmnpl, valspmnp
+where ((
+  _formplNrec            == formpl.nrec and
+  _mnplanNrec            == mnplan.nrec and
+
+  mnplan.canval3         == fpperiod.nrec and
+
+  20000                  == pick.wlist  and
+
+  4                      == deflatorOA.typeown  and
+  _mnplanNrec            == deflatorOA.cowner   and
+  4                      == deflatorOA.typeobj  and
+  deflatorOA.cobject     == deflatorMnplan.nrec and (deflatorMnplan.cwayaccou = _deflatorWayaccouNrec)
+));
+
+create view vDeflGr
+var
+  _crec: comp
+as select *
+from kaureff
+where ((
+  8512                    == kaureff.cotable and
+  _crec                   == kaureff.crec and
+  KODGRKAU_DEFLATOR_GROUP == kaureff.wkau
+));
+
+function SaveDeflatorCoeff(coeff: double; spm: type$spmnplan; y: word): boolean;
+{
+  result := false;
+  var _fpperiodNrec: comp;
+  if getfirst fpperiod1 where (( _fptperNrec == fpperiod1.ctper and date(1,1,y) == fpperiod1.dbeg and date(31,12,y) == fpperiod1.dend )) != tsOk
+  {
+    message('Ошибка записи коэффициента в ячейку '+ y +' год. Период планирования не найден', error);
+    exit;
+  }
+  _fpperiodNrec := fpperiod1.nrec;
+
+  if getfirst mnanal where ((mnplan.csloj  == mnanal.csloj and
+                             0             == mnanal.cblock and
+                             _fpperiodNrec == mnanal.FldAn1 and
+                             0             == mnanal.FldAn2 and
+                             0             == mnanal.FldAn3 )) != tsOk
+  {
+    clearbuffer(#MnAnal);
+    MnAnal.cSloj  := mnplan.cSloj;
+    MnAnal.cBlock := 0;
+    MnAnal.FldAn1 := _fpperiodNrec;
+    insert current MnAnal;
+  }
+
+  if getfirst spmnpl where ((  spm.nrec      == spmnpl.cspmnplan and
+                               1             == spmnpl.wkolan and
+                               21            == spmnpl.wkodgr4 and
+                               _fpperiodNrec == spmnpl.cAnVal4 and
+                               0             == spmnpl.wkodgr5 and
+                               0             == spmnpl.cAnVal5)) != tsOk
+  {
+    clearbuffer(#spmnpl);
+    spmnpl.cspmnplan := spm.nrec;
+    spmnpl.wkolan    := 1;
+    spmnpl.cRoleAn4  := coGetTune('SYSTEMANALIT.ROLEPERIOD'); //Системная роль аналитик "Период планирования"
+    spmnpl.wKodGr4   := 21;
+    spmnpl.cAnVal4   := _fpperiodNrec;
+    spmnpl.cRoleAn1  := spm.cRoleAn1;
+    spmnpl.wKodGr1   := spm.wKodGr1;
+    spmnpl.cAnVal1   := spm.cAnVal1;
+    spmnpl.cRoleAn2  := spm.cRoleAn2;
+    spmnpl.wKodGr2   := spm.wKodGr2;
+    spmnpl.cAnVal2   := spm.cAnVal2;
+    spmnpl.cRoleAn3  := spm.cRoleAn3;
+    spmnpl.wKodGr3   := spm.wKodGr3;
+    spmnpl.cAnVal3   := spm.cAnVal3;
+    spmnpl.wKodGr8   := spm.wKodGr4;
+    spmnpl.cAnVal8   := spm.cAnVal4;
+    spmnpl.typeizd   := spm.TypeIzd;
+    spmnpl.cRoleIzd  := spm.cRoleIzd;
+    spmnpl.cIzd      := spm.cIzd;
+    spmnpl.cOtpEd    := spm.cOtpEd;
+    spmnpl.NumSort   := spm.NumSort;
+    spmnpl.Number    := spm.Number;
+    spmnpl.cSloj     := spm.cSloj;
+    spmnpl.cMnPlan   := spm.cmnplan;
+    spmnpl.cMnAnal   := mnanal.nrec;
+    insert current spmnpl;
+  }
+
+  if getfirst valspmnp where ((spmnpl.nrec == valspmnp.cspmnpl)) != tsOk
+  {
+    clearbuffer(#valspmnp);
+    ValSpMnP.cSpMnPl := SpMnPl.nRec;
+    ValSpMnP.Num     := 1;
+    ValSpMnP.cOtpEd  := SpMnPl.cOtpEd;
+    ValSpMnP.EdTime  := SpMnPl.EdTime;
+    insert current valspmnp;
+  }
+
+  case formpl.resword[2] of
+    0 : ValSpMnP.kol       := coeff;
+    1 : ValSpMnP.price     := coeff;
+    2 : ValSpMnP.vprice    := coeff;
+    3 : ValSpMnP.summa     := coeff;
+    4 : ValSpMnP.kolfield5 := coeff;
+    5 : ValSpMnP.kolfact   := coeff;
+    6 : ValSpMnP.pricefact := coeff;
+    7 : ValSpMnP.kolfield6 := coeff;
+    8 : ValSpMnP.summafact := coeff;
+    9 : ValSpMnP.kolfield7 := coeff;
+    10: ValSpMnP.kolfield1 := coeff;
+    11: ValSpMnP.kolfield2 := coeff;
+    12: ValSpMnP.kolfield3 := coeff;
+    13: ValSpMnP.kolfield4 := coeff;
+    else exit;
+  end;
+  update current ValSpMnP;
+  result := true;
+}
+
+//Реализация функций объектного интерфейса--------------------------------------------------------------------
+Function RunInter(wflag: word; var pt: TRecAcc): boolean;
+{
+  startnewvisual(vtRotateVisual, vfTimer, 'Расчет коэффициентов', 0);
+  RunInter := false;
+  wflag := wflag; pt.Position := pt.Position;
+
+  if getfirst pick != tsOk
+  {
+    insert pick (wlist, crec)
+    select 20000, spmnplan.nrec
+    from spmnplan
+    where (( _mnplanNrec == spmnplan.cmnplan ));
+  }
+
+  var y1, y2, y: word;
+  y1 := year(mnplan.startdate);
+  y2 := year(mnplan.enddate);
+  _loop pick
+  {
+    if getfirst spmnplan where ((pick.crec == spmnplan.nrec and (spmnplan.cmnplan = _mnplanNrec) )) != tsOk continue;
+    case formpl.resword[1] of
+      0: vDeflGr._crec := spmnplan.canval1;
+      1: vDeflGr._crec := spmnplan.canval2;
+      2: vDeflGr._crec := spmnplan.canval3;
+      3: vDeflGr._crec := spmnplan.canval4;
+      4: vDeflGr._crec := spmnplan.canval5;
+      else { StopVisual('',0); exit; }
+    end;
+    if vDeflGr.getfirst kaureff != tsOk continue;
+    if vDeflGr.kaureff.ckau = 0 continue;
+    for(y := y1; y <= y2; y++)
+    {
+      var coeff: double;
+      coeff := _deflatorResolver.GetDeflator(vDeflGr.kaureff.ckau, _baseYear, y);
+      if (coeff = 0) coeff := 1;
+      if not SaveDeflatorCoeff(coeff, type$spmnplan(spmnplan.buffer), y) { StopVisual('',0); exit; }
+    }
+  }
+
+  RunInter := true;
+  StopVisual('',0);
+}
+
+function InitInter(var pt: TRecAcc): boolean;
+{
+  result := true;
+
+  //Находим в БД настройки алгоритма
+  _formplNrec := pt.cFormPl;
+  _mnplanNrec := pt.cMnPlan;
+  if (getfirst formpl = tsOk)
+  {
+    //Ищем план с коэффициентами во входящих к текущему документу.
+    var deflatorMnplanNrec: comp;
+    deflatorMnplanNrec := 0;
+
+    _deflatorWayaccouNrec := formpl.rescomp[3];
+    _loop deflatorOA
+    {
+      if getfirst deflatorMnplan = tsOk
+      {
+        deflatorMnplanNrec := deflatorMnplan.nrec;
+        break;
+      }
+    }
+
+    //Если не находим во входящих - используем план из настроек к алгоритму
+    if (deflatorMnplanNrec = 0)
+      deflatorMnplanNrec := formpl.rescomp[1];
+
+    //Инициализируем интерфейс расчета коэффициентов
+    if getVipRef(_deflatorResolver, 'AGAT::IDeflatorResolver')
+    {
+      _deflatorResolver.InitDeflators(deflatorMnplanNrec, formpl.rescomp[2]);
+    }
+    else
+    {
+      message('Ошибка инициализации интерфейса расчета коэффициентов-дефляторов (AGAT::IDeflatorResolver)', error);
+      result := false;
+    }
+  }
+  else
+  {
+    message('Не найдены настройки алгоритма (pt.cFormPl='+pt.cFormPl+')', error);
+    result := false;
+  }
+
+  //Находим в БД текущий документ
+  if (getfirst mnplan != tsOk)
+  {
+    message('Не найден текущий документ (pt.cMnPlan='+pt.cMnPlan+')', error);
+    result := false;
+  }
+  else
+  {
+    if getfirst fpperiod = tsOk
+    {
+      _baseYear := year(fpperiod.dbeg);
+      _fptperNrec := fpperiod.ctper;
+    }
+    else
+    {
+      message('В плане не указан базовый период планирования', error);
+      result := false;
+    }
+  }
+}
+
+Function DoneInter(var pt: TRecAcc): boolean;
+{
+  pt.Position := pt.Position;
+  DoneInter := true;
+}
+
+function GetNum: word;
+{
+  GetNum := 5107;
+}
+
+function GetName: string; {
+  GetName := 'АГАТ. Установка коэф-дефляторов в представление "Период" для РКМ со статьями из польз. КАУ (10Д и пр)';
+}
+
+function GetMemo (st:oSteckCommonString): boolean; {
+  GetMemo := true;
+  st.push(string(''));
+}
+
+function GetNameInter: string; {
+  GetNameInter := 'Algoritm_5107' ;
+}
+
+function GetNameInterPr: string; {
+  GetNameInterPr := 'AlgoritmSetup_5107' ;
+}
+
+end.

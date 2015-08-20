@@ -1,0 +1,343 @@
+#include Query.vih
+
+#component "AGAT"
+
+interface ReportRKMForm10D;
+
+//выбор заполненных периодов из плана
+sql query QueryPeriods =
+select distinct per.nrec as Nrec,
+                per.name as Name,
+                per.dbeg as Dbeg,
+                per.dend as Dend,
+                year(datetime(per.dbeg,0)) as Year
+from spmnplan spm
+join spmnpl spl on spm.nrec = spl.cspmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4
+join fpperiod per on spl.canval4 = per.nrec and per.dend between :StartDate and :EndDate
+where spm.cmnplan = :MnplanNrec
+;
+
+//выбор спецификации плана и ее аналитик
+sql query QueryDetails =
+select spkau.nrec                as Nrec,
+       spkau.cNode               as ParentNrec,
+       spm.nrec                  as SpmnplanNrec,
+       spkau.Name                as Name,
+       spkau.Code                as Code,
+       spkau.LevelCode           as LevelCode,
+       coalesce(ch.cnt,0)        as ChildCount,
+       coalesce(vsp.kol,0)       as BaseField1,
+       coalesce(vsp.price,0)     as BaseField2,
+       coalesce(vsp.vprice,0)    as BaseField3,
+       coalesce(vsp.summa,0)     as BaseField4,
+       coalesce(vsp.kolfield5,0) as BaseField5,
+       coalesce(vsp.kolfact,0)   as BaseField6,
+       coalesce(vsp.pricefact,0) as BaseField7
+from mnplan mp
+join spkau on spkau.kodgrkau = :Kodgrkau
+left join (select cnode, count(*) as cnt from spkau where kodgrkau = :Kodgrkau group by cnode) ch on spkau.nrec = ch.cnode
+join spmnplan spm on mp.nrec = spm.cmnplan and spm.canval2 = spkau.nrec
+left join spmnpl spl on spm.nrec = spl.cspmnplan and 24 = spl.wkolan and 28 = spl.wkodgr4 and :MnplanNrec = spl.canval4 and 0 = spl.wkodgr5 and #comp(0) = spl.canval5
+left join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where mp.nrec = :MnplanNrec
+;
+
+//значения в количественных колонках плана
+sql query QueryValues =
+select spm.nrec      as SpmnplanNrec,
+       per.nrec      as FpperiodNrec,
+       vsp.kol       as Field1,
+       vsp.price     as Field2,
+       vsp.vprice    as Field3,
+       vsp.summa     as Field4,
+       vsp.kolfield5 as Field5,
+       vsp.kolfact   as Field6,
+       vsp.pricefact as Field7
+from spmnplan spm
+join spmnpl spl on spm.nrec = spl.cspmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4 and 0 = spl.wkodgr5 and #comp(0) = spl.canval5
+join fpperiod per on spl.canval4 = per.nrec
+join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where spm.cmnplan = :MnplanNrec
+;
+
+//таблица с периодами (заполняется QueryPeriods)
+table struct tPeriods (
+  nrec: comp,
+  name: string,
+  dbeg: date,
+  dend: date,
+  year: word
+) with index (
+  i01 = year
+);
+
+//таблица значений из плана (заполняется QueryValues)
+table struct tValues (
+  SpmnplanNrec: comp,
+  FpperiodNrec: comp,
+  Field1      : double,
+  Field2      : double,
+  Field3      : double,
+  Field4      : double,
+  Field5      : double,
+  Field6      : double,
+  Field7      : double
+) with index (
+  i01 = SpmnplanNrec + FpperiodNrec
+);
+
+//таблица спецификации плана (заполняется QueryDetails)
+table struct tDetails (
+  Nrec         : comp,
+  ParentNrec   : comp,
+  SpmnplanNrec : comp,
+  Name         : string[120],
+  Code         : string[20],
+  LevelCode    : string[20],
+  ChildCount   : word,
+  BaseField1   : double,
+  BaseField2   : double,
+  BaseField3   : double,
+  BaseField4   : double,
+  BaseField5   : double,
+  BaseField6   : double,
+  BaseField7   : double
+) with index (
+  i01 = Name,
+  i02 = Nrec,
+  i03 = ParentNrec + Code
+);
+
+var
+  _mnplanNrec: comp;
+  _kodgrkau: word;
+  _reportName: string;
+
+
+create view
+as select *
+from mnplan, tPeriods, tValues, tDetails
+where ((
+  _mnplanNrec == mnplan.nrec
+));
+
+create view vrep
+var
+  tDetailsParentNrec   : comp;
+  tDetailsNrec         : comp;
+  Level                : longInt;
+  isFirst              : boolean;
+  isLeaf               : boolean;
+  BaseYear             : word;
+as select *
+from mnplan, fpperiod, tDetails, tDetails tDetChild, tPeriods, tValues, tValues tValuesBase
+where ((
+  _mnplanNrec           == mnplan.nrec and
+  mnplan.cAnVal3        == fpperiod.nrec and
+
+  tDetailsParentNrec    == tDetails.ParentNrec and
+  tDetails.Nrec         == tDetChild.ParentNrec and
+
+  tDetails.SpmnplanNrec == tValues.SpmnplanNrec and
+  tPeriods.nrec         == tValues.FpperiodNrec
+));
+
+parameters _mnplanNrec, _kodgrkau, _reportName;
+
+datastream dsRep auto (vrep);
+
+datastream dsRep1
+(
+  [MnplanNumber]    vrep.mnplan.number;
+  [MnplanName]      vrep.mnplan.name;
+  [MnplanDate]      vrep.mnplan.statemdate;
+  [MnplanStartDate] vrep.mnplan.startdate;
+  [MnplanEndDate]   vrep.mnplan.enddate;
+  [MnplanBaseYear]  vrep.BaseYear;
+  dataset Details
+  (
+    [Nrec]           vrep.tDetails.Nrec;
+    [ParentNrec]     vrep.tDetails.ParentNrec;
+    [SpmnplanNrec]   vrep.tDetails.SpmnplanNrec;
+    [Name]           vrep.tDetails.Name;
+    [Code]           vrep.tDetails.Code;
+    [LevelCode]      vrep.tDetails.LevelCode;
+    [ChildCount]     vrep.tDetails.ChildCount;
+    [BaseField1]     vrep.tDetails.BaseField1;
+    [BaseField2]     vrep.tDetails.BaseField2;
+    [BaseField3]     vrep.tDetails.BaseField3;
+    [BaseField4]     vrep.tDetails.BaseField4;
+    [BaseField5]     vrep.tDetails.BaseField5;
+    [BaseField6]     vrep.tDetails.BaseField6;
+    [BaseField7]     vrep.tDetails.BaseField7;
+    [Level]          vrep.Level;
+    [IsLeaf]         vrep.getfirst tDetChild != tsOk;
+
+    table vrep.tPeriods
+    (
+      [PeriodName]   vrep.tPeriods.Name;
+      [PeriodDbeg]   vrep.tPeriods.Dbeg;
+      [PeriodDend]   vrep.tPeriods.Dend;
+      [PeriodYear]   vrep.tPeriods.Year;
+    );
+
+    table vrep.tValues
+    (
+      [Field1]       vrep.tValues.Field1;
+      [Field2]       vrep.tValues.Field2;
+      [Field3]       vrep.tValues.Field3;
+      [Field4]       vrep.tValues.Field4;
+      [Field5]       vrep.tValues.Field5;
+      [Field6]       vrep.tValues.Field6;
+      [Field7]       vrep.tValues.Field7;
+    );
+  );
+)
+
+handleevent dataset Details
+  cmPreProcess:
+  {
+    vrep.tDetailsParentNrec := 0;
+    if vrep.getFirst tDetails = tsOk
+    {
+      vrep.tDetailsNrec := vrep.tDetails.Nrec;
+      vrep.Level := 1;
+      vrep.isFirst := true;
+    };
+  }
+  cmOnProcess:
+  {
+    vrep.tDetailsNrec := vrep.tDetails.Nrec;
+    vrep.isLeaf := vrep.getfirst tDetChild != tsOk;
+
+    if (vrep.isFirst)
+    {
+      ContinueDataset;
+      vrep.isFirst := false;
+      exit;
+    }
+
+    if vrep.getfirst tDetChild = tsOk
+    {
+      vrep.tDetailsParentNrec := vrep.tDetails.Nrec;
+      if (vrep.getfirst tDetails = tsOk)
+      {
+        vrep.Level++;
+        ContinueDataset;
+      }
+    }
+    else
+    {
+      while vrep.getnext tDetails != tsOk
+      {
+        vrep.tDetailsNrec := vrep.tDetails.ParentNrec;
+        if vrep.getfirst tDetails where ((tDetailsNrec == tDetails.Nrec)) = tsOk
+        {
+          vrep.tDetailsParentNrec := vrep.tDetails.ParentNrec;
+          vrep.Level--;
+        }
+        else
+        {
+          exit;
+        }
+      }
+      ContinueDataset;
+    }
+  }
+end; //handleevent dataset dsRep1;
+
+end; //datastream dRep1
+
+function FillTables: boolean;
+{
+  result := false;
+
+  var q: IQuery;
+  var rs: IResultSet;
+
+  //заполняем таблицу периодов
+  q := queryManager.createQuery(QueryPeriods);
+
+  q.setParam('MnplanNrec', _mnplanNrec);
+  q.setParam('StartDate', date(1,1,year(mnplan.startdate)));
+  q.setParam('EndDate', date(31,12,year(mnplan.enddate)));
+
+  rs := q.GetResultSet;
+
+  if rs = nullref or q.errorCode != tsOk
+  {
+    message('Ошибка выполнения выборки периодов планирования', error);
+    exit;
+  }
+
+  delete all tPeriods;
+  sqlCopyInto(rs, #tPeriods, true);
+
+  //заполняем таблицу строк
+  q := queryManager.createQuery(QueryDetails);
+
+  q.setParam('MnplanNrec', _mnplanNrec);
+  q.setParam('Kodgrkau'  , _kodgrkau);
+
+  rs := q.GetResultSet;
+
+  if rs = nullref or q.errorCode != tsOk
+  {
+    message('Ошибка выполнения выборки спецификации плана', error);
+    exit;
+  }
+
+  delete all tDetails;
+  sqlCopyInto(rs, #tDetails, true);
+
+  //заполняем таблицу значений
+  q := queryManager.createQuery(QueryValues);
+
+  q.setParam('MnplanNrec', _mnplanNrec);
+
+  rs := q.GetResultSet;
+
+  if rs = nullref or q.errorCode != tsOk
+  {
+    message('Ошибка выполнения выборки значений колонок плана', error);
+    exit;
+  }
+
+  delete all tValues;
+  sqlCopyInto(rs, #tValues, true);
+
+  result := true;
+}
+
+procedure PrintReport;
+{
+  if vrep.getfirst mnplan = tsOk
+  {
+    if (vrep.getfirst fpperiod = tsOk)
+    {
+      vrep.BaseYear := year(vrep.fpperiod.dbeg);
+    }
+    else
+    {
+      vrep.BaseYear := year(vrep.mnplan.startdate);
+    }
+    runfreport(dsRep1, _reportName, true);
+  }
+}
+
+handleevent
+cmInit:
+{
+  if (getfirst mnplan != tsOk)
+  {
+    message('В параметрах не указан nrec плана, по которому выполняется формирование отчета (_mnplanNrec)', error);
+    closeinterface(cmCancel);
+  }
+  if FillTables
+  {
+    PrintReport;
+  }
+}
+end;
+
+end.

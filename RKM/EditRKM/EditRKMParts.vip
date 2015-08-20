@@ -17,20 +17,30 @@ select spm.nrec as Nrec,
             when spm.typeizd = 2 then coalesce(katusl.cgroupusl,#comp(0))
             else #comp(0)
        end as ObjGroupNrec,
+       case when spm.typeizd = 1 then coalesce(avDefl.vcomp,#comp(0))
+            else #comp(0)
+       end as ObjDeflGrNrec,
        spm.canval1 as CostItemNrec,
        spm.canval2 as DeliverNrec,
        spm.canval3 as TypeNrec,
-       spm.canval4 as SpsoprNrec,
+       coalesce(spsopr.nrec, #comp(0)) as SpsoprNrec,
+       year(datetime(spsopr.dsopr,0)) as SpsoprYear,
        (coalesce(vsp.kolfield5, 0)) as SpsoprPrice,//coalesce(vsp.kolfield5, 0) as SpsoprPrice,
        (coalesce(vsp.kol      , 0)) as Norm,       //coalesce(vsp.kol      , 0) as Norm,
        (coalesce(vsp.price    , 0)) as ParentQty,  //coalesce(vsp.price    , 0) as ParentQty,
        (coalesce(vsp.vprice   , 0)) as TotalQty,   //coalesce(vsp.vprice   , 0) as TotalQty,
-       (coalesce(vsp.kolfact  , 0)) as TotalSum    //coalesce(vsp.kolfact  , 0) as TotalSum
+       (coalesce(vsp.kolfact  , 0)) as TotalSum,    //coalesce(vsp.kolfact  , 0) as TotalSum
+       (coalesce(vsp.pricefact, 0)) as BaseCoeff,
+       (coalesce(vsp.kolfield6, 0)) as BasePrice,
+       (coalesce(vsp.summafact, 0)) as BaseSum
 from mnplan mp
 join spmnplan spm on mp.nrec = spm.cmnplan
 left join katmc on spm.cizd = katmc.nrec
 left join katusl on spm.cizd = katusl.nrec
+left join attrnam anDefl on 1432 = anDefl.wtable and 'Группа индексов дефляторов' = anDefl.name
+left join attrval avDefl on 1432 = avDefl.wtable and katmc.cgroupmc = avDefl.crec and anDefl.nrec = avDefl.cattrnam
 left join katotped oe on spm.typeizd = oe.prmc and spm.cizd = oe.cmcusl and 1 = oe.akt
+left join spsopr on spm.canval4 = spsopr.nrec
 left join spmnpl spl on spm.nrec = spl.cspmnplan and 24 = spl.wkolan and 28 = spl.wkodgr4 and mp.nrec = spl.canval4
 left join valspmnp vsp on spl.nrec = vsp.cspmnpl
 where mp.nrec = :MnplanNrec
@@ -60,6 +70,7 @@ var
   _getkau    : GetKau;
   _extAttr   : iExtAttr;
   _savedSpmnplanNrec: comp;
+  _baseYear  : word;
 
 create view
 as select *
@@ -180,6 +191,8 @@ function GetTotalQtyColor: longint;
 
 //#region Процедуры Pick--------------------------------------------------------------------------------------
 
+procedure ProcessCurrentRecord; forward;
+
 procedure PickObj;
 var
   c: comp;
@@ -205,23 +218,25 @@ var
       {
         if getfirst fastfirstrow katmc where ((c == katmc.nrec)) = tsOk
         {
-          t.ObjGroupNrec := katmc.cgroupmc;
-          t.TypeNrec     := katmc.ctype;
-          t.CostitemNrec := _extAttr.coGetAttr(10004, katmc.ctype, 'Статья затрат');
+          t.ObjGroupNrec  := katmc.cgroupmc;
+          t.TypeNrec      := katmc.ctype;
+          t.CostitemNrec  := _extAttr.coGetAttr(10004, katmc.ctype, 'Статья затрат');
+          t.ObjDeflGrNrec := _extAttr.coGetAttr(1432, katmc.cgroupmc, 'Группа индексов дефляторов');
         }
       }
       2:
       {
         if getfirst fastfirstrow katusl where ((c == katusl.nrec)) = tsOk
         {
-          t.ObjGroupNrec := katusl.cgroupusl;
-          t.TypeNrec     := 0;
+          t.ObjGroupNrec  := katusl.cgroupusl;
+          t.TypeNrec      := 0;
+          t.ObjDeflGrNrec := 0;
         }
       }
     end;
     if getfirst katotped where (( t.ObjType == katotped.prmc and t.ObjNrec == katotped.cmcusl and 1 == katotped.akt )) = tsOk
       t.ObjOtpEdNrec := katotped.nrec;
-    setmodified(true);
+    ProcessCurrentRecord;
     rescanpanel(#t);
   }
 }
@@ -282,8 +297,11 @@ procedure PickSpsopr;
   {
     t.SpsoprNrec := c;
     if getfirst fastfirstrow spsopr where (( c == spsopr.nrec )) = tsOk
+    {
       t.SpsoprPrice := spsopr.Price;
-    setmodified(true);
+      t.SpsoprYear := year(spsopr.dsopr);
+    }
+    ProcessCurrentRecord;
     rescanpanel(#t);
   }
 }
@@ -309,6 +327,9 @@ fields
                  t.Norm          'Норма'#13'на единицу' : [8,3], noprotect;
                  t.ParentQty     'Кол-во'#13'единиц'    : [8,3], noprotect;
   [TotalQtyName] GetTotalQtyName 'Норма'#13'всего'      : [14], noprotect, {font={backcolor=GetTotalQtyColor;}};
+                 t.BaseCoeff     'Базовый'#13'индекс'   : [8,3], noprotect;
+                 t.BasePrice     'Базовый'#13'цена'     : [8,2], noprotect;
+                 t.BaseSum       'Базовый'#13'затраты'  : [8,2], noprotect;
 end;
 
 //#region Процедуры для модификации таблицы в дереве----------------------------------------------------------
@@ -316,13 +337,17 @@ end;
 
 procedure ProcessRKMPartsRecord(var buf: ttrkmparts);
 {
-  buf.TotalQty := buf.Norm * buf.ParentQty;
+  buf.TotalQty  := buf.Norm * buf.ParentQty;
+  if (buf.BaseCoeff) <= 0 buf.BaseCoeff := 1;
+  buf.BasePrice := buf.SpsoprPrice * buf.BaseCoeff;
+  buf.BaseSum   := buf.BasePrice * buf.TotalQty;
+
   buf.TotalSum := 0;
   var i: byte;
   for(i:=1;i<=_yearcount;i++)
   {
     if buf.Coeff[i] <= 0 buf.Coeff[i] := 1;
-    buf.Price[i] := buf.SpsoprPrice * buf.Coeff[i];
+    buf.Price[i] := buf.BasePrice * buf.Coeff[i];
     buf.Sum[i] := buf.Price[i] * buf.Qty[i];
     buf.TotalSum += buf.Sum[i];
   }
@@ -585,6 +610,35 @@ handleevent
     clearmarker(_marks);
     rescanpanel(#t);
   }
+  cmHotkeys:
+  {
+    var m: longint;
+    m := LoadMenu('mnuAGAT_EditRKMParts');
+    PutHotCommand(RunLoadMenu(m));
+  }
+  cmValue1: //раскрыть все папки
+  {
+    TreePushPos(tr1);
+    TreeGetFirst(tr1);
+    do {
+      TreeOpenNode(tr1);
+    } while TreeGetNext(tr1);
+    TreePopPos(tr1);
+    rescanpanel(#t);
+  }
+  cmValue2: //свернуть все папки
+  {
+    TreeCloseAllOpenedNode(tr1);
+    rescanpanel(#t);
+  }
+  cmPrintDoc:
+  {
+    OnPrint(0);
+  }
+  cmValue3:
+  {
+    OnPrint(1);
+  }
 end;
 
 //#region Вспомогательные функции для динамического формирования столбцов в дереве----------------------------
@@ -619,7 +673,7 @@ procedure deleteTreeYearColumns(aNum: byte);
 
 //#region Реализация oEditRKMParts----------------------------------------------------------------------------
 
-procedure InitInterface(aYearStart: word; aYearEnd: word);
+procedure InitInterface(aYearStart: word; aYearEnd: word; aBaseYear: word);
 {
   var i: byte;
 
@@ -636,7 +690,7 @@ procedure InitInterface(aYearStart: word; aYearEnd: word);
     if (_yearcount > RKM_MAX_YEARS) _yearcount := RKM_MAX_YEARS;
     _yearstart := aYearStart;
     _yearend   := _yearstart + _yearcount - 1;
-
+    _baseYear  := if(aBaseYear = 0, _yearstart, aBaseYear);
     for(i := 1; i <= _yearcount; i++)
     {
       AddTreeYearColumns(_yearstart+i-1, i);
@@ -684,6 +738,7 @@ procedure Load(aMnplanNrec: comp);
     {
       c := rs.row.val('Nrec');
       if c != currentNrec
+      {
         if (currentNrec != 0) update current tRKMParts;
         if getfirst tRKMParts where (( c == tRKMParts.Nrec )) = tsOk
         {
@@ -693,13 +748,15 @@ procedure Load(aMnplanNrec: comp);
         {
           continue;
         }
+      }
       i := rs.row.val('Year') - _yearStart + 1;
       tRKMParts.Qty  [i] := rs.row.val('Qty');
       tRKMParts.Coeff[i] := rs.row.val('Coeff');
       tRKMParts.Price[i] := rs.row.val('Price');
-      tRKMParts.Sum[i] := rs.row.val('Summa');
+      tRKMParts.Sum[i]   := rs.row.val('Summa');
     }
     while rs.getNext = tsOk;
+    if isvalid(#tRKMParts) update current tRKMParts;
   }
   clearmarker(_marks);
   _loop pick where (( 20000 == pick.wlist ))
@@ -964,6 +1021,9 @@ procedure Save(aMnplanNrec: comp; aFptperNrec: comp);
     valspmnp.price     := tRKMParts.ParentQty;
     valspmnp.vprice    := tRKMParts.TotalQty;
     valspmnp.kolfact   := tRKMParts.TotalSum;
+    valspmnp.pricefact := tRKMParts.BaseCoeff;
+    valspmnp.kolfield6 := tRKMParts.BasePrice;
+    valspmnp.summafact := tRKMParts.BaseSum;
     if (newRecord)
       insert current valspmnp;
     else
@@ -990,3 +1050,11 @@ procedure Save(aMnplanNrec: comp; aFptperNrec: comp);
 //#endregion
 
 end.
+
+mnuAGAT_EditRKMParts Menu
+{
+- 'Раскрыть все папки', cmValue1, , , , , sci1Esc;
+- 'Свернуть все папки', cmValue2, , , , , sci1Esc;
+- 'Печать краткой формы РКМ', cmValue3, , , , , sci1Esc;
+- 'Печать формы РКМ', cmPrintDoc, , , , , sci1Esc;
+}
