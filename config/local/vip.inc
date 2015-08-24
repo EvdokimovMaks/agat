@@ -3,6 +3,7 @@
 
 [Database]
   DataBaseName=c:\gal\GAL910\DATA
+  CheckRepository=Off
 
 [licparam]
   LicFileName='%ConfigDir%%ConfigSubDir%\vip.lic'
