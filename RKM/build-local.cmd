@@ -1,2 +1,1 @@
-call ../config/build.cmd RKM.prj local
-if exist leakage.log del /F leakage.log
+call ../config/build.cmd local RKM.prj
