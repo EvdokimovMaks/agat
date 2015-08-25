@@ -1,32 +1,45 @@
 @echo off
 set ConfigDir=%~dp0
 set ConfigSubDir=%1
+set Mode=%3
 call %ConfigDir%%ConfigSubDir%\sets.cmd
 
 set tmp=%TmpDir%tmp
-
 set log=%TmpDir%Build.%2.log
-rem if exist %log% del /F %log%
 
 for /f "delims=" %%x in (version) do set Build=%%x
 
-echo ###############################################################################
+echo ───────────────────────────────────────────────────────────────────────────────
 echo Компиляция %2 в ресурс %OutputResourceDir%\%~n2%Build%.res
-rem %CompilerPath% %2 /c:"%ConfigDir%vip.cfg" /r:"%OutputResourceDir%\%~n2%Build%.res" > %log%
+
+if "%mode%"=="quiet" (
+  %CompilerPath% %2 /c:"%ConfigDir%vip.cfg" /r:"%OutputResourceDir%\%~n2%Build%.res" > %log%
+) else (
+  %CompilerPath% %2 /c:"%ConfigDir%vip.cfg" /r:"%OutputResourceDir%\%~n2%Build%.res" | %ConfigDir%wtee %log%
+  echo.
+  echo.
+  echo ───────────────────────────────────────────────────────────────────────────────
+)
 
 findstr Ошибка %log% > %tmp%
 
-for /f "delims=" %%x in (%tmp%) do set call "findresult=%%x"
+for /f "delims=" %%x in (%tmp%) do if not %%x == "" goto :error
+goto :success
 
-echo %findresult%
-if not ["%findresult%"]=="" (
-  echo Компиляция завершена с ошибками:
-  echo %tmp%
+:error
+  echo.
+  echo Компиляция %2 завершена с ошибками:
+  echo.
+  findstr Ошибка %log%
+  echo.
   echo Полный лог: %log%
-) else (
-  echo Компиляция завершена успешно
-)
+  echo.
+  goto :end
 
-if exist leakage.log del /F leakage.log
+:success
+  echo.
+  echo Компиляция %2 завершена успешно
+  echo.
 
-
+:end
+  call %ConfigDir%clear.cmd

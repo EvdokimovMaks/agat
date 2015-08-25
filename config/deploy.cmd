@@ -11,15 +11,16 @@ if [%5] == [] (set System=galnet) else (set System=%5)
 
 set tmp=%TmpDir%tmp.prj
 set res=%TmpDir%tmp.res
+set lot=%TmpDir%tmp.lot
 
-if exist %tmp% del /F %tmp%
-echo #remove component="%Name%"; >> %tmp%
+echo #addcomponent name="%Name%", resource="%Resource%", priority=%Priority%, system="%System%", version="%Build%"; > %tmp%
 %CompilerPath% %tmp% /c:"%ConfigDir%vip.cfg" /r:"%res%"
 
-if exist %tmp% del /F %tmp%
-echo #addcomponent name="%Name%", resource="%Resource%", priority=%Priority%, system="%System%", version="%Build%"; >> %tmp%
-%CompilerPath% %tmp% /c:"%ConfigDir%vip.cfg" /r:"%res%"
+echo update components where (('%Name%' == name)) set version:='%Build%', resource:='%Resource%'; > %lot%
+%CompilerPath% %lot% /c:"%ConfigDir%vip.cfg" /r:"%res%"
 
-if exist leakage.log del /F leakage.log
 if exist %tmp% del /F %tmp%
 if exist %res% del /F %res%
+if exist %lot% del /F %lot%
+
+call %ConfigDir%clear.cmd
