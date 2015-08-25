@@ -1,0 +1,127 @@
+#ifndef __webDefault__vih__
+#define __webDefault__vih__
+
+#include ISetData.vih
+//component 'webDefault'
+
+#doc
+  Родитель для web объектных интерфейсов
+#end
+web objInterface IWebDefault( ISetData );
+#doc
+  Уникальный код записи
+#end
+  property Id      : comp; // Это на самом деле NRec
+#doc
+  Дата последнего изменения
+#end
+  property al_date : date; // atl_lastDate, atl_lastTime и atl_lastUser
+#doc
+  Время последнего изменения
+#end
+  property al_time : time; // нужны для того, что бы отслеживать
+#doc
+  Пользователь последнего изменения
+#end
+  property al_user : comp; // пассивные блокировки в doSetData
+
+#doc
+  Атрибут primary у индекса заставит web-сервисы
+  позиционироваться по Id перед вызовом doSetData
+#end
+  index byId = Id(unique, primary);
+end;
+
+#doc
+  Родитель для web вип интерфейсов
+#end
+ //мы не реализуем IWebDefault тут потому, что свойства не могут быть виртуальными
+vipInterface webDefault Implements ISetData, IGetHandle
+  licensed(free);
+public:
+#doc
+  Метод надо перекрывать, когда через свою doSetData
+  необходимо модифицировать данные подобъектов
+#end
+  procedure setModification( iModif : boolean );
+end;
+
+// здесь используется макрос, потому, что нужно реализовать
+// Id через absolute, что бы работал индекс byId
+#declare IWEBDEFAULT_IMPL(ifcName, tblName)
+  var prev_date : date;  // в этих переменных сохраняем
+  var prev_time : time;  // значения для последующего сравнения
+  var prev_user : comp;  // в doSetData
+
+  // реализуем свойства и индекс, описанные в IWebDefault
+  property #ifcname.Id      : comp absolute #tblName.NRec;
+  property #ifcname.al_date : date read #tblName.atl_lastDate
+                                   write prev_date := result;
+  property #ifcname.al_time : time read #tblName.atl_lastTime
+                                   write prev_time := result;
+  property #ifcname.al_user : comp read #tblName.atl_lastUser
+                                   write prev_user := result;
+
+  index #ifcname.byId auto;
+#end
+
+#declare DEF_SETDATA(tblName)
+   // переменная l_modification выставляется в true в openTransaction для головного
+   // объекта, или того подобъекта, который мы модифицируем.
+   // Такая реализация позволяет использовать один и тот же объект как головной,
+   // модифицируя его, так и как подобъект (ссылка) другого объекта
+   if( l_modification )
+     {
+      // Это наша внутренняя договореннсть, если Id = 0, то insert, иначе update
+      if( Id = 0 ) result := doInsert; // вызываем стандарный insert
+        else if( prev_date = #tblName.atl_lastDate and // так проверяем
+                 prev_time = #tblName.atl_lastTime and // пассивные блокировки
+                 prev_user = #tblName.atl_lastUser )
+               if(( sdFlags and sdNoPosition ) <> 0 ) result := doUpdate; // вызываем стандарный update
+                 else result := tsInvalidPositioning; // уже удалили
+             else result := tsConflict; // уже изменили
+      // Это нужно, если был использован конструктор экземпляра,
+      // или в нашем примере для работы createHandle
+      if( result = tsOk ) l_id := Id;
+     }
+   // Если есть Primary key - запись найдется автоматически, иначе можно искать
+   // по какому-либо полю. Либо по договоренности (например наименование)
+   // либо по тому, которое <> '' или 0, тогда можно будет указывать любой
+   // уникальный атрибут, не зная Id
+   else
+     {
+      result := 0;
+      if(( sdFlags and sdNoPosition ) = 0 ) Id := 0; // лучше пусть будет нулевая ссылка, чем кривая
+      if(( sdFlags and sdEmptyData ) <> 0 ) Id := 0; // пустая ссылка
+     }
+#end
+
+// Это дефолтная реализация методов "влоб". Но в нашем примере этого достаточно
+#declare DEF_IMODIFY(tblName)
+  function IModify.doInsert : Word; { result := insert current #tblName; }
+  function IModify.doUpdate : Word; { result := update current #tblName; }
+  function IModify.doDelete : Word; { result := delete current #tblName; }
+  Implementation IModify.doFlush abstract;
+#end
+
+// конструкторы в нашем примере все одинаковые - практически пустые
+#declare DEF_CONSTRUCTORS
+  constructor InitId( iId : comp );
+  {
+   l_idRes := comp(0);
+   l_betatestetinit := false;
+   l_id := iId;
+   pushBounds( tbbyId );
+   result := true;
+  }
+
+  constructor Init;
+  {
+   l_idRes := comp(0);
+   l_betatestetinit := false;
+   Id := 0;
+   result := true;
+  }
+#end
+
+#endif

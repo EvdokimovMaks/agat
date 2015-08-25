@@ -1,0 +1,1852 @@
+/*
+ ╔═══════════════════════════════════════════════════════════════════════════╗
+ ║                     (c) 1994,2001 корпорация ГАЛАКТИКА                    ║
+ ║ Проект        : ГАЛАКТИКА                                                 ║
+ ║ Система       : Контроллинг                                               ║
+ ║ Версия        : 7.1                                                       ║
+ ║ Назначение    : Места хранения и отгрузки продукции предприятия           ║
+ ║ Ответственный : Украинко (Ukrv)                                           ║
+ ╚═══════════════════════════════════════════════════════════════════════════╝
+*/
+ObjInterface oKatProiz;
+
+Procedure Run_KatProiz(pcKatPr : comp; pwRun : word);
+end;
+
+VipInterface iKatProiz implements oKatProiz;
+
+
+//*************************************************************************************
+//#####################################################################################
+//*************************************************************************************
+
+/*
+ ╔═══════════════════════════════════════════════════════════════════════════╗
+ ║                     (c) 1994,2002 корпорация ГАЛАКТИКА                    ║
+ ║ Проект        : ГАЛАКТИКА                                                 ║
+ ║ Система       : Контроллинг                                               ║
+ ║ Версия        : 7.1                                                       ║
+ ║ Назначение    : Места хранения и отгрузки продукции предприятия           ║
+ ║ Ответственный : Гиль Кирилл Евгеньевич (Kirill)                           ║
+ ║ Параметры     : есть                                                      ║
+ ║          pcKatProiz - ссылка на запись KatProiz (передается/возвращается) ║
+ ║          pwFlRun    - битовый флаг запуска (по битам):                    ║
+ ║                       для выбора: 0 - одиночный, 1 - множественный        ║
+ ║                       2 -  одиночный всех KatProiz                        ║
+ ║                       3 -  множест. всех KatProiz                         ║
+ ║                       4 -  одиноч. SpKatPr                                ║
+ ║                         номер Pick-листа  = 11531 (номер таблицы KatProiz)║
+ ╚═══════════════════════════════════════════════════════════════════════════╝
+*/
+
+
+#include KatProiz.vih
+
+!#include ObjTCont.vin
+Interface iKatProiz 'Места хранения и отгрузки продукции предприятия' (,hcCtrl_M3NastrDopClassMXT) Cyan, EscClose;
+  Show at (1, 1, 90, 20);
+
+  const
+    cwPickList  = 11531;
+  end;
+
+  var vwPickList: word
+
+Table struct tmpKatProizAll
+(
+  cRec      : tNREc,
+  wStore    : word,
+  Name      : string[80],
+  Kod       : string[20],
+  sCode     : string[10]
+)
+With Index
+(
+  tmpKatProizAll01 = cRec,
+  tmpKatProizAll02 = Name,
+  tmpKatProizAll03 = Kod,
+  tmpKatProizAll04 = wStore + Name,
+  tmpKatProizAll05 = wStore + Kod
+)
+;
+
+function IsCodeUnic(sKod: string; cRec: comp; bSklad: boolean):boolean;forward;
+procedure SelectMXT(cRec: comp);forward;
+Procedure DeleteKatProizPr;forward;
+Procedure DeleteKatProizMXT;forward;
+Procedure SetNeedFormat(bEdit: boolean);forward;
+function IsPodrSet(cPodr: comp):boolean;forward;
+function IsSkladSetForPodr(cProiz: comp; cPodr: comp):boolean;forward;
+
+Procedure FromSecondToFirstSheet;forward;
+Procedure FromFirstToSecondSheet;forward;
+
+create view
+var
+  pwFlRun, wActivBr, wPar1 : word;
+  pcKatProiz, ctemp        : comp;
+
+as select
+ KatProiz.*,
+ if (IsValid(tnPick2), 'V', '')
+   (FieldName = Picked),
+ if (IsValid(tnPick3), 'V', '')
+   (FieldName = Picked2),
+ SpKatPr.*
+from
+ SpKatPr   (SpKatPr04),
+ KatProiz  (KatProiz03),
+ KatPodr,
+ tmpKatProizAll,
+ Pick,
+
+Synonym
+ KatProiz KatProizPr  (KatProiz03),
+ KatProiz KatProizMXT (KatProiz03),
+ KatProiz KatProizAll (KatProiz03),
+
+ Pick Pick2,
+ Pick Pick3,
+
+ tmpKatProizAll tmpKatProizPr,
+ tmpKatProizAll tmpKatProizMXT,
+
+ tmpKatProizAll tmpKatProizSyn,
+
+ KatPodr KatPodrPr,
+ KatPodr KatPodrMXT,
+
+ KatPodr KatPodrAll,
+ KatPodr KatPodrSkl,
+
+ KatPodr KatPodrSklPr,
+ KatPodr KatPodrSklMXT,
+
+ KatPodr KatPodrForName,
+ KatProiz KatProizSec,
+ SpKatPr  SpKatPrSec,
+
+ SpKatPr  SpKatPrPr,
+ SpKatPr  SpKatPrMXT,
+
+ KatProiz KatProizThr,
+ SpKatPr SpKatPrThr
+where ((
+
+
+      word(0)             == tmpKatProizPr.wStore         // предприятие
+  and tmpKatProizPr.cRec  == KatProizPr.nRec
+
+  and word(1)             == KatProizMXT.wStore (NoIndex) // МХТ
+  and KatProizPr.nRec     == KatProizMXT.cStore (NoIndex)
+
+  and tmpKatProizAll.cRec == KatProizAll.NRec
+  and KatProizAll.NRec    == SpKatPr.cKatProiz
+  and KatProizPr.nRec     == SpKatPrPr.cKatProiz
+  and KatProizMXT.nRec    == SpKatPrMXT.cKatProiz
+
+  and KatProizPr.cPodr    == KatPodrPr.nRec
+  and KatProizMXT.cPodr   == KatPodrMXT.nRec
+
+  and KatProizAll.cPodr   == KatPodrAll.NRec
+  and SpKatPr.cPodr       == KatPodrSkl.NRec
+
+  and SpKatPrPr.cPodr     == KatPodrSklPr.nRec
+  and SpKatPrMXT.cPodr    == KatPodrSklMXT.nRec
+
+  and cwPickList          == Pick2.wList
+  and KatProizPr.nRec     == Pick2.cRec
+  and cwPickList          == Pick3.wList
+  and KatProizAll.nRec    == Pick3.cRec
+
+))
+
+  Order ByNameAll by tmpKatProizAll.Name
+  Order ByKodAll  by tmpKatProizAll.Kod
+
+  Order ByNamePr  by tmpKatProizPr.wStore, tmpKatProizPr.Name
+  Order ByKodPr   by tmpKatProizPr.wStore, tmpKatProizPr.Kod
+;
+Parameters
+  pcKatProiz,
+  pwFlRun;
+
+//метод
+
+// установка сортировки по DSK
+Procedure SetDSKOrder;
+ var tmp_i : word;
+{
+  ReadMyDsk(tmp_i,'Sort_KatProizPr',false);
+  case tmp_i of
+    1:{
+        SetColumnSorting(-1, #tmpKatProizPr.Kod, -1);
+        SetTableBackOrderIn(tntmpKatProizPr, True);
+        SetOrder(tiByKodPr);
+      }
+
+    2:{
+        SetColumnSorting(-1, #tmpKatProizPr.Name, -1);
+        SetTableBackOrderIn(tntmpKatProizPr, True) ;
+        SetOrder(tiByNamePr);
+      }
+
+    3:{
+        SetColumnSorting(-1, #tmpKatProizPr.Kod, 1);
+        SetTableBackOrderIn(tntmpKatProizPr, false) ;
+        SetOrder(tiByKodPr);
+      }
+
+    4:{
+        SetColumnSorting(-1, #tmpKatProizPr.Name, 1);
+        SetTableBackOrderIn(tntmpKatProizPr, false) ;
+        SetOrder(tiByNamePr);
+      }
+
+    else
+      {
+        SetColumnSorting(-1, #tmpKatProizPr.Kod, 1);
+        SetTableBackOrderIn(tntmpKatProizPr, false) ;
+        SetOrder(tiByKodPr);
+      }
+
+  end; // case
+
+  ReadMyDsk(tmp_i,'Sort_KatProizAll',false);
+
+  case tmp_i of
+
+    1:{
+        SetColumnSorting(-1, #tmpKatProizAll.Kod, -1);
+        SetTableBackOrderIn(tntmpKatProizAll, True);
+        SetOrder(tiByKodAll);
+      }
+
+    2:{
+        SetColumnSorting(-1, #tmpKatProizAll.Name, -1);
+        SetTableBackOrderIn(tntmpKatProizAll, True) ;
+        SetOrder(tiByNameAll);
+      }
+
+    3:{
+        SetColumnSorting(-1, #tmpKatProizAll.Kod, 1);
+        SetTableBackOrderIn(tntmpKatProizAll, false) ;
+        SetOrder(tiByKodAll);
+      }
+
+    4:{
+        SetColumnSorting(-1, #tmpKatProizAll.Name, 1);
+        SetTableBackOrderIn(tntmpKatProizAll, false) ;
+        SetOrder(tiByNameAll);
+      }
+
+    else
+      {
+        SetColumnSorting(-1, #tmpKatProizAll.Kod, 1);
+        SetTableBackOrderIn(tntmpKatProizAll, false) ;
+        SetOrder(tiByKodAll);
+      }
+
+  end; // case
+} // procedure SetDSKOrder
+
+
+Procedure pSetSortFormat(MyFormat: LongInt);
+{
+  Var
+    NewField : Integer ;
+
+  NewField := Target;
+
+  case GetColumnSorting(MyFormat,NewField) of
+
+    1:
+      {
+         case NewField of
+
+           #tmpKatProizPr.Kod:
+             {
+               SetColumnSorting(-1,NewField, -1);
+               SetTableBackOrderIn(tntmpKatProizPr, True);
+               SetOrder(tiByKodPr);
+               ReReadRecord() ;
+               SaveMyDsk(word(1),'Sort_KatProizPr');
+             }
+
+           #tmpKatProizPr.Name:
+             {
+               SetColumnSorting(-1,NewField, -1);
+               SetTableBackOrderIn(tntmpKatProizPr, True);
+               SetOrder(tiByNamePr);
+               ReReadRecord() ;
+               SaveMyDsk(word(2),'Sort_KatProizPr');
+             }
+
+           #tmpKatProizAll.Kod:
+             {
+               SetColumnSorting(-1,NewField, -1);
+               SetTableBackOrderIn(tntmpKatProizAll, True);
+               SetOrder(tiByKodAll);
+               ReReadRecord() ;
+               SaveMyDsk(word(1),'Sort_KatProizAll');
+             }
+
+           #tmpKatProizAll.Name:
+             {
+               SetColumnSorting(-1,NewField, -1);
+               SetTableBackOrderIn(tntmpKatProizAll, True);
+               SetOrder(tiByNameAll);
+               ReReadRecord() ;
+               SaveMyDsk(word(2),'Sort_KatProizAll');
+             }
+
+         end ; //Case
+      }
+
+    0, -1:
+      {
+        case NewField of
+
+          #tmpKatProizPr.Kod:
+            {
+              SetColumnSorting(-1,NewField, 1);
+              SetTableBackOrderIn(tntmpKatProizPr, False);
+              SetOrder(tiByKodPr);
+              ReReadRecord() ;
+              SaveMyDsk(word(3),'Sort_KatProizPr');
+            }
+
+          #tmpKatProizPr.Name:
+            {
+              SetColumnSorting(-1,NewField, 1);
+              SetTableBackOrderIn(tntmpKatProizPr, False);
+              SetOrder(tiByNamePr);
+              ReReadRecord() ;
+              SaveMyDsk(word(4),'Sort_KatProizPr');
+            }
+
+          #tmpKatProizAll.Kod:
+            {
+              SetColumnSorting(-1,NewField, 1);
+              SetTableBackOrderIn(tntmpKatProizAll, False);
+              SetOrder(tiByKodAll);
+              ReReadRecord() ;
+              SaveMyDsk(word(3),'Sort_KatProizAll');
+            }
+
+          #tmpKatProizAll.Name:
+            {
+              SetColumnSorting(-1,NewField, 1);
+              SetTableBackOrderIn(tntmpKatProizAll, False);
+              SetOrder(tiByNameAll);
+              ReReadRecord() ;
+              SaveMyDsk(word(4),'Sort_KatProizAll');
+            }
+
+        end ; //Case
+      }
+
+  end; //Case
+} // Procedure pSetSortFormat(MyFormat: LongInt)
+
+Procedure LoadTmpStuct;
+{
+  Delete All tmpKatProizAll;
+
+  _loop KatProizThr
+    {
+      ClearBuffer(#tmpKatProizAll);
+      set tmpKatProizAll.cRec := KatProizThr.nRec;
+      tmpKatProizAll.wStore   := KatProizThr.wStore;
+      tmpKatProizAll.sCode    := KatProizThr.sCode;
+
+      if (GetFirst KatPodrAll = tsOK)
+        {
+          tmpKatProizAll.Name := KatPodrAll.Name;
+          tmpKatProizAll.Kod  := KatPodrAll.Kod;
+        }
+
+      insert current tmpKatProizAll;
+  }
+}
+
+Window winEdit 'Редактирование мест хранения и отгрузки продукции предприятия' (,hcCtrl_WNastrDopClassMXTEdit) Blue, EscClose;
+  Show at (1, 1, 90, 20);
+
+Browse brKatProiz_Edit1 (,hcCtrl_WNastrDopClassMXTEdit,sci1378Esc);
+  Show at (1, 1, 45, 10);
+Table tmpKatProizPr;
+fields
+
+   tmpKatProizPr.Kod    'Код',
+                        'предприятия',
+                       ('Код предприятия',,):[10],Skip;
+
+   tmpKatProizPr.Name   'Наименование',
+                        'предприятия',
+                       ('Наименование предприятия',,):[16], Protect, PickButton;
+
+   tmpKatProizPr.sCode  'Код в',
+                        'Excel-документах',
+                       ('Код в Excel-документах',,):[16], noPickButton;
+
+end; // browse
+
+///////////////////////
+// ВРОДЕ И НЕНАДО
+
+Browse brKatProiz_Edit3 (,hcCtrl_WNastrDopClassMXTEdit,sci1378Esc);
+  Show at (1, 1, 45, 10);
+
+Table tmpKatProizAll;
+fields
+   tmpKatProizAll.Kod    'Код',
+                         'МХТ',
+                        ('Код МХТ',,):[10],Skip;
+
+   tmpKatProizAll.Name   'Наименование',
+                         'МХТ',
+                        ('Наименование МХТ',,):[16], Protect, PickButton;
+
+   tmpKatProizAll.sCode  'Код в',
+                         'Excel-документах',
+                        ('Код в Excel-документах',,):[16], noPickButton;
+
+
+end; // browse
+
+//////////////////////////////////////////////////////////////////////
+
+Browse brKatProiz_Edit2 'МХТ продукции предприятий'(,hcCtrl_WNastrDopClassMXTEdit,sci1378Esc);
+  Show at (1, 11, 45, );
+Table KatProizMXT;
+fields
+   KatPodrMXT.Kod    'Код',
+                     'МХТ',
+                    ('Код МХТ',,):[10],Skip;
+
+   KatPodrMXT.Name   'Наименование',
+                     'МХТ',
+                    ('Наименование МХТ',,):[16], Protect, PickButton;
+
+   KatProizMXT.sCode 'Код в',
+                     'Excel-документах',
+                    ('Код в Excel-документах',,):[16], noPickButton;
+
+end; // browse
+
+Browse brKatProiz_Edit4 'Склады предприятий'(,hcCtrl_WNastrDopClassMXTEdit,sci1378Esc);
+  Show at (46, 1, , 10);
+Table SpKatPrPr;
+fields
+   KatPodrSklPr.Kod  'Код склада',
+                     'предприятия',
+                    ('Код склада предприятия',,):[11],Skip;
+
+   KatPodrSklPr.Name 'Наименование',
+                     'склада предприятия',
+                    ('Наименование склада предприятия',,):[17], Protect, PickButton;
+
+   SpKatPrPr.sCode   'Код в',
+                     'Excel-документах',
+                    ('Код в Excel-документах',,):[16], noPickButton;
+
+end; // browse
+
+Browse brKatProiz_Edit5 'Склады МХТ'(,hcCtrl_WNastrDopClassMXTEdit,sci1378Esc);
+  Show at (46, 11, , );
+Table SpKatPrMXT;
+fields
+   KatPodrSklMXT.Kod  'Код склада',
+                      'МХТ',
+                     ('Код склада МХТ',,):[11],Skip;
+
+   KatPodrSklMXT.Name 'Наименование',
+                      'склада МХТ',
+                     ('Наименование склада МХТ',,):[17], Protect, PickButton;
+
+   SpKatPrMXT.sCode   'Код в',
+                      'Excel-документах',
+                     ('Код в Excel-документах',,):[16], noPickButton;
+
+end; // browse
+
+HandleEvent
+
+cmInsert:
+{
+  if (CurTable = #tmpKatProizAll)
+  {
+    SetFormat(brKatProiz_Edit2);
+    SetFormat(brKatProiz_Edit1);
+    SelectField(#tmpKatProizPr.Name);
+  }
+  PutCommand(cmPick);
+}
+
+
+cmPick:
+{
+  var cPodr: comp;
+
+  case CurField of
+
+    #tmpKatProizAll.Name:
+      {
+        SetNeedFormat(true);
+        PutCommand(cmPick);
+      }
+
+    #tmpKatProizPr.Name:
+      {
+        cPodr := KatProizPr.cPodr;
+        delete Pick where ((word(11) == Pick.wList));
+        if (RunInterface('GetAnyPodr', cPodr, Word(10)) != cmCancel)
+          {
+            _loop Pick where ((word(11) == Pick.wList))
+              {
+                if (IsPodrSet(Pick.cRec) = true)
+                  {
+                    Message(''#3'Предприятие "' + KatPodrForName.Name + '" уже выбрано.'#13'');
+                  }
+                else
+                  {
+                    if (tmpKatProizPr.cRec = comp(0))
+                      {
+                        ClearBuffer(#KatProizPr);
+
+                        if (tmpKatProizPr.sCode <> '')
+                          KatProizPr.sCode := tmpKatProizPr.sCode;
+
+                        set KatProizPr.cPodr  := Pick.cRec;
+                        set KatProizPr.wPodr  := cgKau_KatPodr;
+                        set KatProizPr.wStore := word(0);
+
+                        KatProizPr.wFut       := word(7);  // для исключения трансформации его же
+                        KatProizPr.NRec       := GetNextNRec(#KatProizPr, 0);
+
+              // ----  Вставляем во временную таблицу ---------
+                        set tmpKatProizPr.cRec := KatProizPr.NRec;
+                        tmpKatProizPr.wStore   := word(0);
+
+                        if (GetFirst KatPodrPr = tsOK)
+                          {
+                            tmpKatProizPr.Name := KatPodrPr.Name;
+                            tmpKatProizPr.Kod  := KatPodrPr.Kod;
+                          }
+
+                        if (KatProizMXT.sCode <> '')
+                          if (IsCodeUnic(KatProizMXT.sCode, Pick.cRec, false) = false)
+                            exit;
+
+                        insert current KatProizPr;
+                        insert current tmpKatProizPr;
+
+                        ClearBuffer(#tmpKatProizPr);
+                      }
+                    else
+                      {
+                        set KatProizPr.cPodr := Pick.cRec;
+                        set KatProizPr.wPodr := cgKau_KatPodr;
+
+                        if (GetFirst KatPodrPr = tsOK)
+                          {
+                            set tmpKatProizPr.Name := KatPodrPr.Name;
+                            set tmpKatProizPr.Kod  := KatPodrPr.Kod;
+                          }
+
+                        if (Not updatetable)
+                          exit;
+
+                        ClearBuffer(#tmpKatProizPr);
+                      }
+                  }
+              }
+            RereadRecord(#tmpKatProizPr);
+            RereadRecord(#tmpKatProizAll);
+          }
+      }
+
+    #KatPodrMXT.Name:
+    {
+      cPodr := KatProizMXT.cPodr;
+      delete Pick where ((word(11) == Pick.wList));
+      if (RunInterface('GetAnyPodr', cPodr, Word(10)) != cmCancel)
+      {
+        _LOOP Pick where ((word(11) == Pick.wList))
+        {
+          if (IsPodrSet(Pick.cRec) = true)
+          {
+              Message(''#3'Подразделение "' + KatPodrForName.Name + '" уже выбрано.'#13'');
+          }
+          else
+          {
+            if (KatProizMXT.NRec = 0)
+            {
+              ClearBuffer(#tmpKatProizAll);
+              if (KatProizMXT.sCode <> '')
+                tmpKatProizAll.sCode := KatProizMXT.sCode;
+
+              Set KatProizMXT.cPodr  := Pick.cRec;
+              set KatProizMXT.wPodr  := cgKau_KatPodr;
+              Set KatProizMXT.cStore := KatProizPr.NRec;
+              set KatProizMXT.wStore := word(1);
+              KatProizMXT.NRec       := GetNextNRec(#KatProizMXT, 0);
+              KatProizMXT.wFut       := word(7);  // для исключения трансформации его же
+
+              // ----  Вставляем во временную таблицу ---------
+              set tmpKatProizAll.cRec = KatProizMXT.NRec;
+              tmpKatProizAll.wStore  := word(1);
+              if (GetFirst KatPodrMXT = tsOK)
+              {
+                tmpKatProizAll.Name := KatPodrMXT.Name;
+                tmpKatProizAll.Kod  := KatPodrMXT.Kod;
+              }
+              // ----------------------------------------------
+
+              if (KatProizMXT.sCode <> '')
+                if (IsCodeUnic(KatProizMXT.sCode, Pick.cRec, false) = false)
+                  exit;
+
+              insert current KatProizMXT;
+              insert current tmpKatProizAll;
+
+              ClearBuffer(#KatProizMXT);
+            }
+            else
+            {
+              Set KatProizMXT.cPodr := Pick.cRec;
+              set KatProizMXT.wPodr := cgKau_KatPodr;
+              if  (Not updatetable)
+                exit;
+              ClearBuffer(#KatProizMXT);
+            }
+          }
+        }
+        RereadRecord(#KatProizMXT);
+        RereadRecord(#tmpKatProizAll);
+      }
+    }
+
+    #KatPodrSklPr.Name:
+      {
+        cPodr := SpKatPrPr.cPodr;
+        delete Pick where ((word(11) == Pick.wList));
+        if (RunInterface('GetAnyPodr', cPodr, Word(10)) <> cmCancel)
+          {
+            _loop Pick where ((word(11) == Pick.wList))
+              {
+                if ((Pick.cRec = KatProizPr.cPodr
+                 and IsSkladSetForPodr(KatProizPr.nRec, Pick.cRec) = false)
+                  or IsPodrSet(Pick.cRec) = false)
+                  {
+                    if (SpKatPrPr.nRec = 0)
+                      {
+                        if (SpKatPrPr.sCode <> '')
+                          if (IsCodeUnic(SpKatPrPr.sCode, Pick.cRec, true) = false)
+                            exit;
+
+                        set SpKatPrPr.cPodr     := Pick.cRec;
+                        set SpKatPrPr.wPodr     := cgKau_KatPodr;
+                        set SpKatPrPr.cKatProiz := KatProizPr.nrec;
+                        insert current SpKatPrPr;
+                        ClearBuffer(#SpKatPrPr);
+                      }
+                     else
+                      {
+                        set SpKatPrPr.cPodr := Pick.cRec;
+                        set SpKatPrPr.wPodr := cgKau_KatPodr;
+                        updatetable;
+                      }
+                  }
+                else
+                  {
+                    Message(''#3'Подразделение "' + KatPodrForName.Name +
+                            '" уже выбрано.'#13'');
+                  }
+              }
+            RereadRecord(#SpKatPrPr);
+          }
+      }
+
+    #KatPodrSklMXT.Name:
+      {
+        cPodr := SpKatPrMXT.cPodr;
+        delete Pick where ((word(11) == Pick.wList));
+        if (RunInterface('GetAnyPodr', cPodr, Word(10)) <> cmCancel)
+          {
+            _loop Pick where ((word(11) == Pick.wList))
+              {
+                if ((Pick.cRec = KatProizMXT.cPodr
+                 and IsSkladSetForPodr(KatProizMXT.nRec, Pick.cRec) = false)
+                  or IsPodrSet(Pick.cRec) = false)
+                  {
+                    if (SpKatPrMXT.nRec = 0)
+                      {
+                        if (SpKatPrMXT.sCode <> '')
+                          if (IsCodeUnic(SpKatPrMXT.sCode, Pick.cRec, true) = false)
+                            exit;
+
+                        set SpKatPrMXT.cPodr     := Pick.cRec;
+                        set SpKatPrMXT.wPodr     := cgKau_KatPodr;
+                        set SpKatPrMXT.cKatProiz := KatProizMXT.nrec;
+                        insert current SpKatPrMXT;
+                        ClearBuffer(#SpKatPrMXT);
+                      }
+                     else
+                      {
+                        set SpKatPrMXT.cPodr := Pick.cRec;
+                        set SpKatPrMXT.wPodr := cgKau_KatPodr;
+                        updatetable;
+                      }
+                  }
+                else
+                  {
+                    Message(''#3'Подразделение "' + KatPodrForName.Name +
+                            '" уже выбрано.'#13'');
+                  }
+              }
+            RereadRecord(#SpKatPrMXT);
+          }
+      }
+
+  end;
+}
+
+cmColumnClicked:
+{
+//  if (CurTable = #tmpKatProizAll)
+//    pSetSortFormat(brKatProiz_Edit3);
+//  else
+    if (CurTable = #tmpKatProizPr)
+      pSetSortFormat(brKatProiz_Edit1);
+}
+
+cmDelOnProtect:
+  stop;
+
+cmClose:
+  if (not UpdateTable)
+    {
+      Abort;
+      Exit;
+    }
+
+cmCancel:
+  if (not UpdateTable)
+    {
+      Abort;
+      Exit;
+    }
+
+end; //HE
+end; //Window
+
+window winViewVib 'Места хранения и отгрузки продукции предприятия' (,hcCtrl_M3NastrDopClassMXT) Cyan, EscClose;
+  Show at (1, 1, 90, 20);
+
+// для множественного выбора ТОЛЬКО предприятий
+browse brPredpr (,hcCtrl_WNastrDopClassMXTEdit, sci1378Esc);
+  table tmpKatProizPr;
+fields
+   Picked              'V' ('', , sci1EnIns): [1], Skip, NoAutoSize,
+                       {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+   tmpKatProizPr.Kod   'Код',
+                       'предприятия',
+                      ('Код предприятия',,sci1478EnIns):[10], Protect, nopickbutton,
+                       {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+   tmpKatProizPr.Name  'Наименование',
+                       'предприятия',
+                      ('Наименование предприятия',,sci1478EnIns):[16], Protect, nopickbutton,
+                       {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+   tmpKatProizPr.sCode 'Код в',
+                       'Excel-документах',
+                      ('Код в Excel-документах',,):[16], Protect, noPickButton,
+                       {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+end; // browse
+
+// для множественного выбора ТОЛЬКО МХТ
+browse brMXT (,hcCtrl_WNastrDopClassMXTEdit,sci1378Esc);
+  table tmpKatProizMXT;
+fields
+   Picked               'V' ('', , sci1EnIns): [1], Skip, NoAutoSize,
+                        {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+   tmpKatProizMXT.Kod   'Код',
+                        'МХТ',
+                       ('Код МХТ',,sci1478EnIns):[10], Protect, nopickbutton,
+                        {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+   tmpKatProizMXT.Name  'Наименование',
+                        'МХТ',
+                       ('Наименование МХТ',,sci1478EnIns):[16], Protect, nopickbutton,
+                        {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+   tmpKatProizMXT.sCode 'Код в',
+                        'Excel-документах',
+                       ('Код в Excel-документах',,):[16], Protect, noPickButton,
+                        {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+end; // browse
+
+// предприятие + МХТ множественный выбор
+browse brPredprMXTmno (,hcCtrl_WNastrDopClassMXTEdit,sci1378Esc);
+  table tmpKatProizAll;
+fields
+   Picked2              'V' ('', , sci1EnIns): [1], Skip, NoAutoSize,
+                        {Font = {Color = if (Picked2 <> '', ColorMark, 0)}};
+
+   tmpKatProizAll.Kod   'Код',
+                        'предприятия (МХТ)',
+                       ('Код предприятия (МХТ)',,sci1478EnIns):[10], Protect, nopickbutton,
+                        {Font = {Color = if (Picked2 <> '', ColorMark, 0)}};
+
+   tmpKatProizAll.Name  'Наименование',
+                        'предприятия (МХТ)',
+                       ('Наименование предприятия (МХТ)',,sci1478EnIns):[16], Protect, nopickbutton,
+                        {Font = {Color = if (Picked2 <> '', ColorMark, 0)}};
+
+   tmpKatProizAll.sCode 'Код в',
+                        'Excel-документах',
+                       ('Код в Excel-документах',,):[16], Protect, noPickButton,
+                        {Font = {Color = if (Picked2 <> '', ColorMark, 0)}};
+end; // browse
+
+// предприятие + МХТ одиночный выбор
+browse brPredprMXT (,hcCtrl_WNastrDopClassMXTEdit,sci1378Esc);
+  table tmpKatProizAll;
+fields
+   tmpKatProizAll.Kod   'Код',
+                        'предприятия (МХТ)',
+                       ('Код предприятия (МХТ)',,sci1378Esc):[10], Protect, nopickbutton;
+
+   tmpKatProizAll.Name  'Наименование',
+                        'предприятия (МХТ)',
+                       ('Наименование предприятия (МХТ)',,sci1378Esc):[16], Protect, nopickbutton;
+
+   tmpKatProizAll.sCode 'Код в',
+                        'Excel-документах',
+                       ('Код в Excel-документах',,):[16], Protect, noPickButton;
+end; // browse
+
+HandleEvent
+
+cmColumnClicked:
+{
+  if (CurTable = #tmpKatProizAll)
+    {
+      if (wActivBr = word(0)) // одиночный
+        pSetSortFormat(brPredprMXT);
+      else
+        if (wActivBr = word(1))// множественный
+          pSetSortFormat(brPredprMXTmno);
+    }
+  else
+    if (CurTable = #tmpKatProizPr)
+      pSetSortFormat(brPredpr);
+    else
+      if (CurTable = #tmpKatProizMXT)
+        pSetSortFormat(brMXT);
+}
+
+cmMarkUnMark:
+{
+  if (pwFlRun = 1) // множественный выбор
+    {
+      if (IsValid(#Pick2))
+        delete current Pick2;
+      else
+       {
+         Pick2.wList := cwPickList;
+         Pick2.cRec  := KatProizPr.nRec;
+         insert current Pick2;
+       }
+     if (GetNext tmpKatProizPr = tsOK)
+       CallToNeighBours(cmPosDown, #tmpKatProizPr);
+     RereadRecord(#tmpKatProizPr);
+    }
+  if (pwFlRun = 3) // множественный выбор всех
+    {
+      if (IsValid(#Pick3))
+        delete current Pick3;
+      else
+        {
+          Pick3.wList := cwPickList;
+          Pick3.cRec  := KatProizAll.nRec;
+          insert current Pick3;
+        }
+      if (GetNext tmpKatProizAll = tsOK)
+        CallToNeighBours(cmPosDown, #tmpKatProizAll);
+      RereadRecord(#tmpKatProizAll);
+    }
+}
+
+cmSelectAll:
+{
+  if (pwFlRun = 1) // множественный выбор
+    {
+      StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, ''#3'Помечаю записи...'#13#3, 0);
+      PushPos(#tmpKatProizPr);
+      if (GetFirst tmpKatProizPr = tsOK)
+        do
+          if (not IsValid(#Pick2))
+            {
+              Pick2.wList := cwPickList;
+              Pick2.cRec  := KatProizPr.nRec;
+              insert current Pick2;
+            }
+        while (GetNext tmpKatProizPr = tsOK);
+
+        PopPos(#tmpKatProizPr);
+        RereadRecord(#tmpKatProizPr);
+        RescanPanel(#tmpKatProizPr);
+        StopVisual('', 0);
+    }
+  if (pwFlRun = 3) // множественный выбор всех
+    {
+      StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, ''#3'Помечаю записи...'#13#3, 0);
+      PushPos(#tmpKatProizAll);
+      if (GetFirst tmpKatProizAll = tsOK)
+        do
+          if (not IsValid(#Pick3))
+            {
+              Pick3.wList := cwPickList;
+              Pick3.cRec  := KatProizAll.nRec;
+              insert current Pick3;
+            }
+        while (GetNext tmpKatProizAll = tsOK);
+        PopPos(#tmpKatProizAll);
+        RereadRecord(#tmpKatProizAll);
+        RescanPanel(#tmpKatProizAll);
+        StopVisual('', 0);
+    }
+}
+
+cmUnSelectAll:
+{
+  if (pwFlRun = 1) // множественный выбор
+    {
+      StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, ''#3'Снимаю пометки...'#13#3, 0);
+      PushPos(#tmpKatProizPr);
+      if (GetFirst tmpKatProizPr = tsOK)
+        do
+          if (IsValid(#Pick2))
+            delete current Pick2;
+        while (GetNext tmpKatProizPr = tsOK);
+
+      PopPos(#tmpKatProizPr);
+      RereadRecord(#tmpKatProizPr);
+      RescanPanel(#tmpKatProizPr);
+      StopVisual('', 0);
+    }
+
+  if (pwFlRun = 3) // множественный выбор всех
+    {
+      StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, ''#3'Снимаю пометки...'#13#3, 0);
+      PushPos(#tmpKatProizAll);
+      if (GetFirst tmpKatProizAll = tsOK)
+        do
+          if (IsValid(#Pick3))
+            delete current Pick3;
+        while (GetNext tmpKatProizAll = tsOK);
+
+      PopPos(#tmpKatProizAll);
+      RereadRecord(#tmpKatProizAll);
+      RescanPanel(#tmpKatProizAll);
+      StopVisual('', 0);
+    }
+}
+
+cmDefault:
+{
+  if (IsValid(tntmpKatProizPr)) // если есть запись
+    {
+      pcKatProiz := KatProizPr.nRec;
+
+      if (pwFlRun = 2)
+        {
+          if (CurTable = #KatProizMXT and IsValid(tnKatProizMXT))
+            pcKatProiz := KatProizMXT.nRec;
+          else
+            if (CurTable = #tmpKatProizAll or CurTable = #SpKatPr)
+              if (IsValid(tntmpKatProizAll))
+                pcKatProiz := KatProizAll.nRec;
+        }
+
+      if (pwFlRun = 1) // если множественный выбор
+        {
+          ResetBounds(#Pick2);
+
+          if (GetFirst Pick2 where ((cwPickList == Pick2.wList)) <> tsOk)
+            {
+              Pick2.wList := cwPickList;
+              Pick2.cRec  := KatProizPr.nRec;
+              insert current Pick2;
+            }
+
+          SetBounds(#Pick2);
+        }
+
+      if (pwFlRun = 3) // если множественный выбор всех
+        {
+          ResetBounds(#Pick3);
+
+          if (GetFirst Pick3 where ((cwPickList == Pick3.wList)) <> tsOk)
+            {
+              Pick3.wList := cwPickList;
+              Pick3.cRec  := KatProizAll.nRec;
+              insert current Pick3;
+            }
+
+          SetBounds(#Pick3);
+        }
+
+      if (pwFlRun = 4)
+        {
+          pcKatProiz := SpKatPr.nRec;
+        }
+    } // конец "если есть запись"
+
+  CloseWindow(winViewVib);
+}
+
+
+cmDelOnProtect:
+  stop;
+
+
+cmEdit:
+{
+  SetNeedFormat(true);
+  RunWindow(winEdit);
+}
+
+cmAddNewRec :
+{
+  SetNeedFormat(false);
+  PutCommand(cmInsert);
+  RunWindow(winEdit);
+}
+end; // HandleEvent
+end; // window
+
+Browse brKatProiz_View1 (,hcCtrl_M3NastrDopClassMXT,sci1478Esc);
+  Show at (1, 1, 60, 10);
+Table tmpKatProizPr;
+fields
+   tmpKatProizPr.Kod    'Код',
+                        'предприятия',
+                       ('Код предприятия',,):[10], Protect, nopickbutton;
+
+   tmpKatProizPr.Name   'Наименование',
+                        'предприятия',
+                       ('Наименование предприятия',,):[16], Protect, noPickButton;
+
+   tmpKatProizPr.sCode  'Код в',
+                        'Excel-документах',
+                       ('Код в Excel-документах',,):[16], Protect, noPickButton;
+
+end; // browse
+
+Browse brKatProizView1_Pick (,hcCtrl_M3NastrDopClassMXT,sci1478EnEsc);
+  Show at (1, 1, 60, 10);
+Table tmpKatProizPr;
+fields
+   Picked              'V' ('', , sci1EnIns): [1], Skip, NoAutoSize,
+                       {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+   tmpKatProizPr.Kod   'Код',
+                       'предприятия',
+                      ('Код предприятия',,sci1478EnIns):[10], Protect, nopickbutton,
+                       {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+   tmpKatProizPr.Name  'Наименование',
+                       'предприятия',
+                      ('Наименование предприятия',,sci1478EnIns):[16], Protect, nopickbutton,
+                       {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+   tmpKatProizPr.sCode 'Код в',
+                       'Excel-документах',
+                      ('Код в Excel-документах',,):[16], Protect, noPickButton,
+                       {Font = {Color = if (Picked <> '', ColorMark, 0)}};
+
+End; // Browse brKatProizView_Pick
+
+////////////// ??????????????????????????????????????????
+// ПОМОЕМУ УЖЕ НЕ НАДО
+
+Browse brKatProiz_View3 (,hcCtrl_M3NastrDopClassMXT,sci1478Esc);
+  Show at (1, 1, 60, 10);
+Table tmpKatProizAll;
+fields
+   tmpKatProizAll.Kod   'Код',
+                        'предприятия (МХТ)',
+                       ('Код предприятия (МХТ)',,):[10], Protect, nopickbutton;
+
+   tmpKatProizAll.Name  'Наименование',
+                        'предприятия (МХТ)',
+                       ('Наименование предприятия (МХТ)',,):[16], Protect, noPickButton;
+
+   tmpKatProizAll.sCode 'Код в',
+                        'Excel-документах',
+                       ('Код в Excel-документах',,):[16], Protect, noPickButton;
+
+end; // browse
+
+Browse brKatProizView3_Pick (,hcCtrl_M3NastrDopClassMXT,sci1478EnEsc);
+  Show at (1, 1, 60, 10);
+Table tmpKatProizAll;
+fields
+   Picked2              'V' ('', , sci1EnIns): [1], Skip, NoAutoSize, {Font = {Color = if (Picked2 <> '', ColorMark, 0)}};
+   tmpKatProizAll.Kod   'Код',
+                        'предприятия (МХТ)',
+                       ('Код предприятия (МХТ)',,sci1478EnIns):[10], Protect, nopickbutton,
+                        {Font = {Color = if (Picked2 <> '', ColorMark, 0)}};
+
+   tmpKatProizAll.Name  'Наименование',
+                        'предприятия (МХТ)',
+                       ('Наименование предприятия (МХТ)',,sci1478EnIns):[16], Protect, nopickbutton,
+                        {Font = {Color = if (Picked2 <> '', ColorMark, 0)}};
+
+   tmpKatProizAll.sCode 'Код в',
+                        'Excel-документах',
+                       ('Код в Excel-документах',,):[16], Protect, noPickButton,
+                        {Font = {Color = if (Picked2 <> '', ColorMark, 0)}};
+
+end; // browse
+
+//////////////////////////?????????????????????????????????
+
+Browse brKatProiz_View2 'МХТ продукции предприятий'(,hcCtrl_M3NastrDopClassMXT,sci1478Esc);
+  Show at (1, 11, 45, );
+Table KatProizMXT;
+fields
+   KatPodrMXT.Kod    'Код',
+                     'МХТ',
+                    ('Код МХТ',,):[10],Skip;
+
+   KatPodrMXT.Name   'Наименование',
+                     'МХТ',
+                    ('Наименование МХТ',,):[16], Protect, noPickButton;
+
+   KatProizMXT.sCode 'Код в',
+                     'Excel-документах',
+                    ('Код в Excel-документах',,):[16], Protect, noPickButton;
+
+end; // browse
+
+Browse brKatProiz_View4 'Склады предприятий'(,hcCtrl_M3NastrDopClassMXT,sci1478Esc);
+  Show at (61, 1, ,10 );
+Table SpKatPrPr;
+fields
+   KatPodrSklPr.Kod  'Код склада',
+                     'предприятия',
+                    ('Код склада предприятия',,):[11],Skip;
+
+   KatPodrSklPr.Name 'Наименование',
+                     'склада предприятия',
+                    ('Наименование склада предприятия',,):[17], Protect, noPickButton;
+
+   SpKatPrPr.sCode   'Код в',
+                     'Excel-документах',
+                    ('Код в Excel-документах',,):[16], Protect, noPickButton;
+
+end; // browse
+
+Browse brKatProiz_View5 'Склады МХТ'(,hcCtrl_M3NastrDopClassMXT,sci1478Esc);
+  Show at (46, 11, , );
+Table SpKatPrMXT;
+fields
+   KatPodrSklMXT.Kod   'Код склада',
+                       'МХТ',
+                      ('Код склада МХТ',,):[11],Skip;
+
+   KatPodrSklMXT.Name  'Наименование',
+                       'склада МХТ',
+                      ('Наименование склада МХТ',,):[17], Protect, noPickButton;
+
+   SpKatPrMXT.sCode    'Код в',
+                       'Excel-документах',
+                      ('Код в Excel-документах',,):[16], Protect, noPickButton;
+
+end; // browse
+
+Browse brKatProiz_View6 'Склады предприятий(МХТ)'(,hcCtrl_M3NastrDopClassMXT,sci1478Esc);
+  Show at (61, 1, ,10 );
+Table SpKatPr;
+fields
+   KatPodrSkl.Kod  'Код склада',
+                   'предприятия (МХТ)',
+                  ('Код склада предприятия (МХТ)',,):[11],Skip;
+
+   KatPodrSkl.Name 'Наименование',
+                   'склада предприятия (МХТ)',
+                  ('Наименование склада предприятия (МХТ)',,):[17], Protect, PickButton;
+
+   SpKatPr.sCode   'Код в',
+                   'Excel-документах',
+                  ('Код в Excel-документах',,):[16], noPickButton;
+
+end; // browse
+
+panel pnKatProizPr;
+  table tmpKatProizPr;
+
+HandleEvent
+
+cmDeleteRecord :
+{
+  DeleteKatProizPr;
+}
+
+cmInsertRecord:
+{
+  if (IsCodeUnic(tmpKatProizPr.sCode, tmpKatProizPr.cRec, false))
+    {
+     Insert Current tmpKatProizPr;
+    }
+  else
+    abort;
+}
+
+cmUpdateRecord:
+{
+  if (IsCodeUnic(tmpKatProizPr.sCode, tmpKatProizPr.cRec, false))
+  {
+    KatProizPr.sCode := tmpKatProizPr.sCode;
+    Update Current KatProizPr;
+
+    Update Current tmpKatProizPr;
+
+    RereadRecord(#tmpKatProizPr);
+    RereadRecord(#tmpKatProizAll);
+  }
+  else
+    abort;
+}
+
+cmColumnClicked:
+  if (pwFlRun = 1)
+    pSetSortFormat(brKatProizView1_Pick);
+  else
+    pSetSortFormat(brKatProiz_View1);
+
+end; //HE
+end; //panel
+
+panel pnKatProizMXT;
+  table KatProizMXT;
+
+HandleEvent
+
+cmDeleteRecord :
+{
+  DeleteKatProizMXT;
+}
+
+cmInsertRecord:
+{
+  if (IsCodeUnic(KatProizMXT.sCode, KatProizMXT.NRec, false))
+  {
+    Insert Current KatProizMXT;
+    tmpKatProizAll.sCode := KatProizMXT.sCode;
+    Insert Current tmpKatProizAll;
+  }
+  else
+    abort;
+}
+
+cmUpdateRecord:
+{
+  if (IsCodeUnic(KatProizMXT.sCode, KatProizMXT.NRec, false))
+  {
+    Update Current KatProizMXT;
+    if (GetFirst tmpKatProizSyn where ((KatProizMXT.NRec    ==    tmpKatProizSyn.cRec)) = tsOK)
+    {
+      if (GetFirst KatPodrMXT = tsOK)
+      {
+        set tmpKatProizSyn.Name = KatPodrMXT.Name;
+        set tmpKatProizSyn.Kod  = KatPodrMXT.Kod;
+      }
+      tmpKatProizSyn.sCode := KatProizMXT.sCode;
+      Update Current tmpKatProizSyn;
+    }
+    RereadRecord(#tmpKatProizAll);
+  }
+  else
+    abort;
+}
+
+end; //HE
+end; //panel
+
+panel pnKatProizAll;
+  table tmpKatProizAll;
+
+HandleEvent
+
+cmDeleteRecord :
+{
+  if (tmpKatProizAll.wStore = 0)
+  {
+    if (GetCurrentFormat = brKatProiz_Edit3)
+    {
+      SetFormat(brKatProiz_Edit2);
+      SetFormat(brKatProiz_Edit1);
+    }
+    else
+    {
+      SetFormat(brKatProiz_View2);
+      if (pwFlRun = 1)
+        SetFormat(brKatProizView1_Pick);
+      else
+        SetFormat(brKatProiz_View1);
+    }
+    if (GetFirst tmpKatProizPr where ((tmpKatProizAll.cRec == tmpKatProizPr.cRec)) <> tsOk) {}
+    SelectField(#tmpKatProizPr.Name);
+    DeleteKatProizPr;
+  }
+  else
+  {
+    if (GetCurrentFormat = brKatProiz_Edit3)
+    {
+      SetFormat(brKatProiz_Edit1);
+      SetFormat(brKatProiz_Edit2);
+    }
+    else
+    {
+      if (pwFlRun = 1)
+        SetFormat(brKatProizView1_Pick);
+      else
+        SetFormat(brKatProiz_View1);
+      SetFormat(brKatProiz_View2);
+    }
+    if (GetFirst KatProizMXT where ((tmpKatProizAll.cRec == KatProizMXT.NRec)) <> tsOk) {}
+    ctemp := KatProizMXT.cStore;
+    if (GetFirst tmpKatProizPr where ((ctemp == tmpKatProizPr.cRec)) <> tsOk) {}
+    if (GetFirst KatProizMXT where ((tmpKatProizAll.cRec == KatProizMXT.NRec)) <> tsOk) {}
+    SelectField(#KatPodrMXT.Name);
+    DeleteKatProizMXT;
+  }
+}
+
+cmInsertRecord:
+  {
+    Insert Current tmpKatProizAll;
+  }
+
+cmUpdateRecord:
+{
+  if (IsCodeUnic(tmpKatProizAll.sCode, tmpKatProizAll.cRec, false) = false) abort;
+  Update Current tmpKatProizAll;
+  KatProizAll.sCode := tmpKatProizAll.sCode;
+  update Current KatProizAll;
+}
+
+cmColumnClicked:
+  if (pwFlRun = 3)
+    pSetSortFormat(brKatProizView3_Pick);
+  else
+    pSetSortFormat(brKatProiz_View3);
+
+end; //HE
+end; //panel
+
+
+panel pnSpKatPrPr;
+  table SpKatPrPr;
+
+HandleEvent
+
+cmDeleteRecord :
+  {
+    if (Message('Удалить текущую запись?',   YesNo) <> cmYes)
+      abort;
+    else
+      delete current SpKatPrPr;
+  }
+
+cmInsertRecord:
+  {
+    if (IsCodeUnic(SpKatPrPr.sCode, SpKatPrPr.NRec, true))
+      insert current SpKatPrPr;
+    else
+      abort;
+  }
+
+cmUpdateRecord:
+  {
+    if (IsCodeUnic(SpKatPrPr.sCode, SpKatPrPr.NRec, true))
+      update current SpKatPrPr;
+    else
+      abort;
+  }
+
+end; //HandleEvent
+end; //panel
+
+panel pnSpKatPrMXT;
+  table SpKatPrMXT;
+
+HandleEvent
+
+cmDeleteRecord :
+  {
+    if (Message('Удалить текущую запись?',   YesNo) <> cmYes)
+      abort;
+    else
+      delete current SpKatPrMXT;
+  }
+
+cmInsertRecord:
+  {
+    if (IsCodeUnic(SpKatPrMXT.sCode, SpKatPrMXT.NRec, true))
+      insert current SpKatPrMXT;
+    else
+      abort;
+  }
+
+cmUpdateRecord:
+  {
+    if (IsCodeUnic(SpKatPrMXT.sCode, SpKatPrMXT.NRec, true))
+      update current SpKatPrMXT;
+    else
+      abort;
+  }
+
+end; //HandleEvent
+end; //panel
+
+
+HandleEvent
+
+cmDelOnProtect:
+  stop;
+
+cmEdit:
+{
+  SetNeedFormat(true);
+  RunWindow(winEdit);
+}
+
+cmInsert:
+{
+  SetNeedFormat(false);
+  RunWindow(winEdit);
+}
+
+cmDone:
+  Delete All tmpKatProizAll;
+
+cmInit:
+{
+  LoadTmpStuct;
+  SetDSKOrder;
+
+// удаление невалидных Pick`ов
+  _loop Pick where((cwPickList == Pick.wList))
+    If (GetFirst tmpKatProizAll where ((Pick.cRec == tmpKatProizAll.cRec)) <> tsOK)
+      Delete Current Pick;
+
+  if (pwFlRun = 1)
+    {
+      if (GetFirst Pick2 where((cwPickList == Pick2.wList))  = tsOK)
+        pcKatProiz := Pick2.cRec;
+
+      SetFormat(brPredpr);
+      RunWindowModal(winViewVib);
+      abort;
+    }
+  else
+    {
+      SetFormat(brKatProiz_View1);
+    }
+  if (pwFlRun = 2 or pwFlRun = 3)
+    {
+      if (pwFlRun = 2)
+        {
+          SetFormat(brPredprMXT);
+          wActivBr := word(0);
+          RunWindowModal(winViewVib);
+          abort;
+        }
+      else
+        {
+          if (GetFirst Pick3 where((cwPickList == Pick3.wList)) = tsOK)
+            pcKatProiz := Pick3.cRec;
+
+          SetFormat(brPredprMXTmno);
+          wActivBr := word(1);
+          RunWindowModal(winViewVib);
+          abort;
+        }
+
+      if (GetFirst tmpKatProizAll where ((pcKatProiz == tmpKatProizAll.cRec)) <> tsOK) {}
+
+      SelectPanel(#tmpKatProizAll);
+
+      if (tmpKatProizAll.wStore = 0)
+        if (GetFirst tmpKatProizPr where ((pcKatProiz == tmpKatProizPr.cRec)) <> tsOK) {}
+
+      if (tmpKatProizAll.wStore = 1)
+        SelectMXT(pcKatProiz);
+    }
+  else
+    if (pwFlRun = 4)
+      {
+        if (GetFirst SpKatPr where ((pcKatProiz == SpKatPr.NRec)) <> tsOK)
+          {
+          }
+
+        ctemp := SpKatPr.cKatProiz;
+
+        if (GetFirst tmpKatProizAll where ((ctemp == tmpKatProizAll.cRec)) <> tsOK)
+          {
+          }
+
+        if (GetFirst SpKatPr where ((pcKatProiz == SpKatPr.NRec)) <> tsOK)
+          {
+          }
+
+        if (tmpKatProizAll.wStore = 0)
+          if (GetFirst tmpKatProizPr where ((tmpKatProizAll.cRec == tmpKatProizPr.cRec)) <> tsOK)
+            {
+            }
+
+        if (tmpKatProizAll.wStore = 1)
+          SelectMXT(tmpKatProizAll.cRec);
+
+        SetFormat(brPredprMXTmno);
+        wActivBr := word(1);
+        RunWindowModal(winViewVib);
+        abort;
+      }
+    else
+      if (GetFirst tmpKatProizPr where ((pcKatProiz == tmpKatProizPr.cRec)) <> tsOK)
+        {
+        }
+}
+end;  //HE
+
+function IsCodeUnic(sKod: string; cRec: comp; bSklad: boolean):boolean;
+{
+  IsCodeUnic := true;
+  if (cRec = comp(0))
+  {
+    Message(''#3'Не указано предприятие.'#13''+
+                                ''#3'Отредактируйте или удалите запись.');
+
+    IsCodeUnic := false;
+    exit;
+  }
+  if (sKod = '') exit;
+
+  if (bSklad = false)
+  {
+    _loop KatProizSec
+    {
+      if (KatProizSec.NRec <> cRec)
+        if (KatProizSec.sCode = sKod)
+          IsCodeUnic := false;
+    }
+
+    if (GetFirst SpKatPrSec where  ((
+                                     sKod    ==   SpKatPrSec.sCode
+                                    )) = tsOK )
+      IsCodeUnic := false;
+  }
+  else
+  {
+    _loop SpKatPrSec
+    {
+      if (SpKatPrSec.NRec <> cRec)
+        if (SpKatPrSec.sCode = sKod)
+          IsCodeUnic := false;
+    }
+
+    if (GetFirst KatProizSec where  ((
+                                     sKod    ==   KatProizSec.sCode
+                                    )) = tsOK )
+      IsCodeUnic := false;
+  }
+
+  if (IsCodeUnic = false)
+    Message(''#3'Код для Excel-документов не уникален.'#13''+
+                                ''#3'Отредактируйте или удалите запись.');
+
+}
+
+procedure SelectMXT(cRec: comp);
+  {
+    if (GetFirst KatProizMXT where ((cRec == KatProizMXT.NRec)) <> tsOK)
+      {
+      }
+
+    ctemp := KatProizMXT.cStore;
+
+    if (GetFirst tmpKatProizPr where ((ctemp == tmpKatProizPr.cRec)) <> tsOk)
+      {
+      }
+
+    if (GetFirst KatProizMXT where ((cRec == KatProizMXT.NRec)) <> tsOk)
+      {
+      }
+  }
+
+function IsPodrSet(cPodr: comp):boolean;
+{
+  IsPodrSet := false;
+  getfirst KatPodrForName where ((cPodr         ==   KatPodrForName.NRec));
+  if (GetFirst KatProizSec where ((cPodr    ==   KatProizSec.cPodr )) = tsOK)
+    IsPodrSet := true;
+  else
+    if (GetFirst KatProizSec where ((cPodr    ==   KatProizSec.cStore (NoIndex) )) = tsOK)
+      IsPodrSet := true;
+    else
+      if (GetFirst SpKatPrSec where  ((cPodr    ==   SpKatPrSec.cPodr (NoIndex) )) = tsOK )
+        IsPodrSet := true;
+}
+
+function IsSkladSetForPodr(cProiz: comp; cPodr: comp):boolean;
+{
+  IsSkladSetForPodr := false;
+  getfirst KatPodrForName where ((cPodr          ==   KatPodrForName.NRec));
+  if (GetFirst SpKatPrSec where  ((cProiz        ==   SpKatPrSec.cKatProiz and
+                                   cgKau_KatPodr ==   SpKatPrSec.wPodr     and
+                                        cPodr    ==   SpKatPrSec.cPodr  )) = tsOK )
+    IsSkladSetForPodr := true;
+}
+
+Procedure SetNeedFormat(bEdit: boolean);
+{
+  case CurTable of
+    #tmpKatProizAll:
+    {
+      if (bEdit = True)
+      {
+        if (tmpKatProizAll.wStore = 0)
+        {
+          SelectFormat(brKatProiz_Edit2);
+          SelectFormat(brKatProiz_Edit1);
+          if (GetFirst tmpKatProizPr where ((tmpKatProizAll.cRec == tmpKatProizPr.crec)) <> tsOk) {}
+          SelectField(#tmpKatProizPr.Name);
+        }
+        else
+        {
+          SelectPanel(#SpKatPr);
+          SelectFormat(brKatProiz_Edit1);
+          SelectFormat(brKatProiz_Edit2);
+
+          if (GetFirst KatProizMXT where ((tmpKatProizAll.cRec == KatProizMXT.Nrec)) <> tsOk) {}
+          ctemp := KatProizMXT.cStore;
+          if (GetFirst tmpKatProizPr where ((ctemp == tmpKatProizPr.cRec)) <> tsOk) {}
+          if (GetFirst KatProizMXT where ((tmpKatProizAll.cRec == KatProizMXT.NRec)) <> tsOk) {}
+          SelectField(#KatPodrMXT.Name);
+        }
+      }
+      else
+      {
+        SelectFormat(brKatProiz_Edit2);
+        SelectFormat(brKatProiz_Edit1);
+      }
+    }
+    #tmpKatProizPr:
+    {
+      SelectFormat(brKatProiz_Edit1);
+    }
+    #KatProizMXT:
+    {
+      SelectFormat(brKatProiz_Edit1);
+      SelectFormat(brKatProiz_Edit2);
+    }
+    #SpKatPr:
+    {
+      SelectFormat(brKatProiz_Edit3);
+      SelectFormat(brKatProiz_Edit4);
+      SelectField(#KatPodrSkl.Name);
+    }
+  end;
+  RereadRecord();
+}
+
+Procedure DeleteKatProizPr;
+{
+  if (Message('При удалении предприятия "' + KatPodrPr.Name + '" будут удалены все его МХТ продукции и склады.'#13' '+
+                '                   Продолжить удаление?',   YesNo) <> cmYes)
+    Abort;
+  else
+  {
+//-- удаление из Pick`a ------------------
+    if (GetFirst Pick where ((
+                                cwPickList         == Pick.wList and
+                                tmpKatProizPr.crec == Pick.cRec
+                              )) = tsOk)
+      Delete current Pick;
+//----------------------------------------
+
+    Delete All SpKatPrSec Where (( KatProizPr.NRec     ==    SpKatPrSec.cKatProiz ));
+
+    _loop KatProizMXT
+    {
+      Delete All SpKatPrSec Where (( KatProizMXT.NRec     ==    SpKatPrSec.cKatProiz ));
+      Delete All tmpKatProizAll Where ((KatProizMXT.NRec   ==    tmpKatProizAll.cRec ));
+    }
+
+    Delete All KatProizMXT;
+
+    if (delete Current KatProizPr = tsOk)
+      delete Current tmpKatProizPr;
+
+    ReReadRecord(#KatProizMXT);
+    ReReadRecord(#tmpKatProizPr);
+    RereadRecord(#tmpKatProizAll);
+  }
+}
+
+Procedure DeleteKatProizMXT;
+{
+  if (Message('При удалении МХТ продукции "' + KatPodrMXT.Name + '" будут удалены все его склады.'#13' '+
+                '                 Продолжить удаление?',   YesNo) <> cmYes)
+    Abort;
+  else
+  {
+    Delete All SpKatPrSec Where (( KatProizMXT.NRec   ==    SpKatPrSec.cKatProiz ));
+    Delete tmpKatProizAll Where (( KatProizMXT.NRec   ==    tmpKatProizAll.cRec ));
+    Delete Current KatProizMXT;
+    ReReadRecord(#KatProizMXT);
+    RereadRecord(#tmpKatProizAll);
+  }
+}
+
+Procedure FromSecondToFirstSheet;
+{
+  if (tmpKatProizAll.wStore = word(1)) //MXT
+    {
+      if (GetFirst KatProizMXT where ((tmpKatProizAll.cRec == KatProizMXT.Nrec)) <> tsOk)
+        {
+        }
+      ctemp := KatProizMXT.cStore;
+
+      if (GetFirst tmpKatProizPr where ((ctemp == tmpKatProizPr.cRec)) <> tsOk)
+        {
+        }
+
+      if (GetFirst KatProizMXT where ((tmpKatProizAll.cRec == KatProizMXT.NRec)) <> tsOk)
+        {
+        }
+
+      SelectField(#KatPodrMXT.Name);
+    }
+  else
+    if (GetFirst tmpKatProizPr where ((tmpKatProizAll.cRec == tmpKatProizPr.cRec)) <> tsOk)
+      {
+      }
+}
+
+Procedure FromFirstToSecondSheet;
+{
+  if (CurTable = #tmpKatProizPr)
+  {
+    if (GetFirst tmpKatProizAll where ((tmpKatProizPr.cRec == tmpKatProizAll.cRec)) <> tsOK) {}
+  }
+  else
+  {
+    if (GetFirst tmpKatProizAll where ((KatProizMXT.NRec == tmpKatProizAll.cRec)) <> tsOK) {}
+  }
+}
+
+Procedure Run_KatProiz(pcKatPr : comp; pwRun : word);
+{
+  pwFlRun    := pwRun;
+  pcKatProiz := pcKatPr;
+
+  LoadTmpStuct;
+  SetDSKOrder;
+
+// удаление невалидных Pick`ов
+  _loop Pick where((cwPickList == Pick.wList))
+    If (GetFirst tmpKatProizAll where ((Pick.cRec == tmpKatProizAll.cRec)) <> tsOK)
+      Delete Current Pick;
+
+  if (pwFlRun = 1)
+    {
+      if (GetFirst Pick2 where((cwPickList == Pick2.wList))  = tsOK)
+        pcKatProiz := Pick2.cRec;
+
+      SetFormat(brPredpr);
+      RunWindowModal(winViewVib);
+      abort;
+    }
+  else
+    {
+      SetFormat(brKatProiz_View1);
+    }
+  if (pwFlRun = 2 or pwFlRun = 3)
+    {
+      if (pwFlRun = 2)
+        {
+          SetFormat(brPredprMXT);
+          wActivBr := word(0);
+          RunWindowModal(winViewVib);
+          abort;
+        }
+      else
+        {
+          if (GetFirst Pick3 where((cwPickList == Pick3.wList)) = tsOK)
+            pcKatProiz := Pick3.cRec;
+
+          SetFormat(brPredprMXTmno);
+          wActivBr := word(1);
+          RunWindowModal(winViewVib);
+          abort;
+        }
+
+      if (GetFirst tmpKatProizAll where ((pcKatProiz == tmpKatProizAll.cRec)) <> tsOK) {}
+
+      SelectPanel(#tmpKatProizAll);
+
+      if (tmpKatProizAll.wStore = 0)
+        if (GetFirst tmpKatProizPr where ((pcKatProiz == tmpKatProizPr.cRec)) <> tsOK) {}
+
+      if (tmpKatProizAll.wStore = 1)
+        SelectMXT(pcKatProiz);
+    }
+  else
+    if (pwFlRun = 4)
+      {
+        if (GetFirst SpKatPr where ((pcKatProiz == SpKatPr.NRec)) <> tsOK)
+          {
+          }
+
+        ctemp := SpKatPr.cKatProiz;
+
+        if (GetFirst tmpKatProizAll where ((ctemp == tmpKatProizAll.cRec)) <> tsOK)
+          {
+          }
+
+        if (GetFirst SpKatPr where ((pcKatProiz == SpKatPr.NRec)) <> tsOK)
+          {
+          }
+
+        if (tmpKatProizAll.wStore = 0)
+          if (GetFirst tmpKatProizPr where ((tmpKatProizAll.cRec == tmpKatProizPr.cRec)) <> tsOK)
+            {
+            }
+
+        if (tmpKatProizAll.wStore = 1)
+          SelectMXT(tmpKatProizAll.cRec);
+
+        SetFormat(brPredprMXTmno);
+        wActivBr := word(1);
+        RunWindowModal(winViewVib);
+        abort;
+      }
+    else
+      if (GetFirst tmpKatProizPr where ((pcKatProiz == tmpKatProizPr.cRec)) <> tsOK)
+        {
+        }
+  }
+End.
+

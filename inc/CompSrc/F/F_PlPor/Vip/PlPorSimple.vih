@@ -1,0 +1,258 @@
+//------------------------------------------------------------------------------
+//                                                      (c) Корпорация ГАЛАКТИКА
+//------------------------------------------------------------------------------
+// Галактика 8.1 - Бухгалтерский контур
+// Объект для работы с PlPor (облегченный)
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+/*
+ функции интерфейса, в отличие от ObjPlPor,
+ 1) работают вне зависимости от текущего положения записи в интефейсе
+    просмотра Платежных документов;
+ 2) не используют RescanPanel, PutCommand
+ 3) перед их использованием не нужна предварительная инициализация, т.к.
+    а) нет глобальных переменных, которые надо предварительно инитить
+    б) не вызываются команды:
+         RescanPanel(#PlPor);
+         ProcessCommand(cmInit);
+    в) каждая функция зависит только от своих параметров.
+
+ Функция PlPor_Fill - заполнит буфер PlPor по умолчанию и вернет его.
+ Т.е. если ты ее решишь использовать, то сможешь избавиться в своих
+ исходниках от много лишнего, + поля по умолчанию все правильно заполнятся.
+ Надо просто будет написать
+
+   #include PlPorSimple.vih
+   piPlPor : PlPorSimple;
+   // заполнение полей по умолчанию
+    piPlPor.PlPor_Fill(bufPlPor, TiDkGal, TiDk, DatVip);
+    // заполняешь дополнительно свои поля
+   bufPlPor.поле := значение;
+   ...
+    PlPor.buffer := type$PlPor(bufPlPor);
+    if (insert current PlPor <> tsOk) {...}
+*/
+//------------------------------------------------------------------------------
+
+#ifndef __PlPorSimple_vih__
+#define __PlPorSimple_vih__
+
+#include TPlPor.vih
+
+#include FinTypes.vpp   // для TInfoDocument
+#include ChkSoprHoz.inc // для cgMakeSH, cgMakeDoc или cgSilentMakeSH
+
+!#undef __PLPOR_NEWFUNCS__ // пока не работает - новые функции
+#define __PLPOR_NEWFUNCS__ // включил в 58502 - но не факт, что все корректно
+
+#ifdef ComponentVersion
+#component "F_PlPor"
+#end
+
+//------------------------------------------------------------------------------
+#doc
+Объект для работы с PlPor (облегченный)
+#end
+ObjInterface ObjPlPorSimple;
+
+  /////////////////////// РАЗЛИЧНЫЕ АТРИБУТЫ //////////////////////////
+  #doc
+  Возвращает очередной номер платежного документа
+  #end
+  function PlPor_GetNewNumber(_TiDkGal: word; _TiDk: word;
+                              _Descr: TDescr; _DatVip : date): tNoDok;
+
+  #doc
+  Удаление номера платежного документа (при удалении документа)
+  #end
+  function PlPor_DeleteNumber(_TiDkGal: word; _TiDk: word;
+                              _Descr: TDescr; _NoDok: tNoDok): boolean;
+
+  #doc
+  Проверка корректности заполнения номера
+  #end
+  function Number_CheckInput(_TiDkGal: word; var _NoDok: tNoDok; _OldNoDok: tNoDok): boolean;
+
+  #doc
+  Контроль уникальности номера документа
+  #end
+  function Number_CheckUnique(_TiDkGal: word; _TiDk: word;
+                              _Descr: TDescr; _DatVip: date;
+                              var _NoDok: tNoDok): boolean;
+
+  #doc
+  Контрагент для BaseFin, кроме спецификации АВЗ
+  #end
+  function PlPor_KontrForBaseFin(bufPlPor: TPlPor): comp;
+
+  #doc
+  Контрагент для BaseFin'ов спецификации АВЗ
+  #end
+  function PlPor_KontrForSpecAVZ(bufPlPor: TPlPor; _direct: word): comp;
+
+  #doc
+  Филиал банка - по типу документа и ссылке на банк
+  #end
+  function GetFilBank(_TiDkGal: word; _cKatBank: comp): string;
+
+  #doc
+  КПП = Код плательщика НДС организации
+  #end
+  function KatOrg_GetKodPlatNDS(_cKatOrg: comp): string;
+
+  ///////////////////// СОЗДАНИЕ И УДАЛЕНИЕ ///////////////////////////
+  #doc
+  Свои организация и банк заполняются по умолчанию
+  #end
+  function isBankAndOrgFillDefault(_TiDkGal: word): boolean;
+
+  #doc
+  Установка даты оплаты при (после) заполнении по умолчанию (без перерасчетов)
+  #end
+  function PlPor_FillDatOb(var bufPlPor: TPlPor; _date: date): boolean;
+
+  #doc
+  Заполнение буфера ++
+  #end
+  Function PlPor_Fill_Eval_01(var bufPlPor: TPlPor
+                                ; _TiDkGal: word
+                                   ; _TiDk: word
+                                  ; _dForm: date
+                               ; _isMaster: boolean
+                               ; setDskDef: word
+                                         ): boolean;
+
+  #doc
+  Заполнение буфера
+  #end
+  function PlPor_Fill(var bufPlPor: TPlPor;
+                      _TiDkGal: word; _TiDk: word; _dForm: date;  setDskDef: word): boolean;
+  //----------------------------------------------------------------------------
+  #ifdef __PLPOR_NEWFUNCS__ // пока не работает - новые функции
+  #doc
+  Проверка максимального количества записей
+  #end
+  function PlPor_CheckMaxRecords(_Message: word): boolean;
+
+  #doc
+  Проверка корректности заполнения буфера
+  #end
+  function PlPor_Check(bufPlPor: TPlPor; _Message: word): boolean;
+
+  #doc
+  Добавление PlPor, с проверкой корректности и формированием SoprHoz
+  #end
+  function PlPor_Insert(bufPlPor: TPlPor): comp;
+
+  #doc
+  Обновление записи по позиции
+  #end
+  function PlPor_UpdateP(_pPlPor: TPlPorX): boolean;
+
+  #doc
+  Удаление записи по позиции
+  #end
+  // isMsg = true выдавать предупреждения
+  // isCorPS = true корректировать сальдо в подотчетных лицах
+  //         = false в интерфейсе PlatVed_Kassa
+  function PlPor_DeleteP(_pPlPor: TPlPorX; isMsg: boolean; isCorPS: boolean): boolean;
+
+  #doc
+  Удаление записи по NRec без проверки на закрытый период
+  #end
+  // isMsg = true выдавать предупреждения
+  // isCorPS = true корректировать сальдо в подотчетных лицах
+  //         = false в интерфейсе PlatVed_Kassa
+  function PlPor_Delete(_cPlPor: comp; isMsg: boolean; isCorPS: boolean): boolean;
+
+  #doc
+  Удаление записи по NRec с проверкой на закрытый период
+  #end
+  // isOt  = true проверять на закрытый период
+  // isMsg = true выдавать предупреждения
+  // isCorPS = true корректировать сальдо в подотчетных лицах
+  //         = false в интерфейсе PlatVed_Kassa
+  function PlPor_DeleteZ(_cPlPor : comp; isOt : boolean;
+                         isMsg : boolean; isCorPS: boolean): boolean;
+
+  #end //__PLPOR_NEWFUNCS__
+  //----------------------------------------------------------------------------
+
+  #doc
+  Выбор назначения платежа, запись в строки, начиная с указанной (0 - запись во все строки без проверок)
+  #end
+  function PlPor_PickNazn(
+                 begStrN: word;
+                 var _s1: string; var _s2: string;
+                 var _s3: string; var _s4: string;
+                 var _s5: string; var _s6: string
+                ): word;
+
+  #doc
+  Назначение платежа - из иерархического справочника
+  #end
+  function PlPor_TakeNazn(var bufPlPor: TPlPor; _FieldName: string): boolean;
+
+  //----------------------------------------------------------------------------
+  #doc
+  Функция поиска платежки по полям из Экспорта-Импорта
+  #end
+  function Find_PlPor(
+                 _Tidk        : word;
+                 _NoDoc       : string[20];
+                 _DatVip      : Date;
+                 cPlat, cPol,
+                 cPlatFor     : comp) : comp;
+  //----------------------------------------------------------------------------
+  #doc
+  Дата оплаты (PlPor.DatOb) заполняется по умолчанию
+  #end
+  function HasDefaultDatOb(_TiDkGal: word): boolean;
+End;
+  //----------------------------------------------------------------------------
+ObjInterface ObjPlPorSimple_Ex2;
+  #doc
+  Проверка необходимости контроля номера документа
+  #end
+  // 0 - нет контроля
+  // 1 - выдавать предупреждение
+  // 2 - запрещать сохранение дублирующего номера
+  function Need_UniqueNumber(_TiDkGal: word): word;
+end;
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+#doc
+Расширение №1 объектного интерфейса ObjPlPorSimple
+#end
+ObjInterface ObjPlPorSimple_Ex1;
+
+  #doc
+  Буфер документа в структуре TInfoDocument
+  #end
+  Function GetDocBuff(bufPlPor: TPlPor): TInfoDocument;
+
+  #doc
+  Проверка корректности ХозОпераций документа
+  #end
+  // awMode = [cgMakeSH, cgMakeDoc или cgSilentMakeSH]
+  Procedure PlPor_CheckSH(bufPlPor: TPlPor; awMode: word);
+
+End;
+
+#doc
+Расширение №3 объектного интерфейса ObjPlPorSimple
+#end
+ObjInterface ObjPlPorSimple_Ex3 (ObjPlPorSimple_Ex2);
+  #doc
+  Получение кода ОКАТО/ОКТМО по ссылке на документ PlPor
+  #end
+  function GetOKTMO(cPlPor :comp): string;
+end;
+
+//------------------------------------------------------------------------------
+VipInterface PlPorSimple implements ObjPlPorSimple, ObjPlPorSimple_Ex1, ObjPlPorSimple_Ex2, ObjPlPorSimple_Ex3 #Licensed_Free;
+
+//------------------------------------------------------------------------------
+#end // __PlPorSimple_vih__

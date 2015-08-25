@@ -1,0 +1,37 @@
+.set name 'RepSmet_NIOKR'
+.hide
+.nameinlist 'Спецотчет по сметам НИОКР'
+.fields
+ DataTimeUser
+ Budjet
+ Period
+ VidSeb
+ KatPodr
+ StBudjetNumber
+ StBudjetName
+ cgKau_WorkTheme
+ cgKau_WorkStage
+ cgKau_FpCO
+ BegSum
+ PortSum
+ SpisSum
+ OutBalance
+ Currency
+ ItogString
+ ColumnBegSum
+ ColumnPortSum
+ ColumnSpisSum
+ ColumnOutBalance
+ ColumnCurrency
+.endfields
+^
+.{
+^^^^
+.{
+^^^^^^^^^^
+.}
+.{
+^^^^^^
+.}
+.}
+.endform

@@ -1,0 +1,1 @@
+dir /AD /B /S > dirs.txt

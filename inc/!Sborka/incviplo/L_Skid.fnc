@@ -1,0 +1,7 @@
+const fcCHFILTER = 29086;
+const fcCHVID0 = 56722;
+const fcCHVID1 = 60676;
+const fcCHVID2 = 48318;
+const fcLSTKLSK2_HEAD1 = 17693;
+const fcLSTKLSK2_ROW = 17075;
+const fcLSTKLSK2_STROKA = 16640;

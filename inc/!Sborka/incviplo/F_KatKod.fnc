@@ -1,0 +1,2 @@
+const fcKATKODMASTER = 54680;
+const fcKATKODSLAVE = 59867;

@@ -1,0 +1,2 @@
+const fcGOODSLOOP = 10884;
+const fcGOODSPODRLOOP = 35951;

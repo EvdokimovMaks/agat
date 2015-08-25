@@ -1,0 +1,156 @@
+//******************************************************************************
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Логистика
+// Файло самостоятельно не использовать!! (нужен только для добъекта vesfuns)
+//******************************************************************************
+
+#ifNdef __VesFuns_vip__
+#Warning Вместо использования функций из ml_func.vpp следует использовать методы объекта (vesfuns.vih)
+#end
+
+//******************************************************************************
+
+Create view SpMLView
+var
+  pVidLoad    : word;    //"0-погрузка, 1-разгрузка"
+  pcMetLoad   : comp;    //"метод погрузки"
+  pcTipTex    : comp;    //"тип транспортного средства"
+  pcMC        : comp;    //"МЦ"
+  pcGroupMC   : comp;    //"группа МЦ"
+  pGruzPod    : double;  //"грузоподъемность"
+  pMinut      : double;  //"норма минут на ед.веса МЦ"
+  pPrice      : double;  //"сдельная расцена"
+
+From
+  SpMetLoad
+//------------------------------------------------------------------------------
+Bounds byMc
+  SpMLView.pVidLoad  == SpMetLoad.VidLoad   AND
+  SpMLView.pcMC      == SpMetLoad.cMC       AND
+  SpMLView.pcMetLoad == SpMetLoad.cMetLoad  AND
+  pGruzPod          <<= SpMetLoad.GruzPod
+//------------------------------------------------------------------------------
+Bounds byGroupMc
+  SpMLView.pVidLoad  == SpMetLoad.VidLoad   AND
+  SpMLView.pcGroupMC == SpMetLoad.cGroupMC  AND
+  0                  == SpMetLoad.cMC       AND
+  SpMLView.pcMetLoad == SpMetLoad.cMetLoad  AND
+  pGruzPod  <<= SpMetLoad.GruzPod
+//------------------------------------------------------------------------------
+Bounds byTipTex
+  SpMLView.pcMetLoad == SpMetLoad.cMetLoad  AND
+  SpMLView.pVidLoad  == SpMetLoad.VidLoad   AND
+  SpMLView.pcTipTex  == SpMetLoad.cTipTex
+//------------------------------------------------------------------------------
+;
+
+//******************************************************************************
+// возвращает всю информацию из SpMetLoad по переданному NRec
+//******************************************************************************
+Function GetAllSpMLInfo( _cSpMetLoad    : comp;    //NRec
+                        var _VidLoad    : word;    //"0-погрузка, 1-разгрузка"
+                        var _cMetLoad   : comp;    //"метод погрузки"
+                        var _cTipTex    : comp;    //"тип транспортного средства"
+                        var _cMC        : comp;    //"МЦ"
+                        var _cGroupMC   : comp;    //"группа МЦ"
+                        var _GruzPod    : double;  //"грузоподъемность"
+                        var _Minut      : double;  //"норма минут на ед.веса МЦ"
+                        var _Price      : double   //"сдельная расцена"
+         ): boolean;
+{
+  if (SpMLView.GetFirst SpMetLoad where ((_cSpMetLoad == SpMetLoad.NRec)) <> tsOk)
+    {
+      GetAllSpMLInfo := FALSE;
+      _VidLoad  := 0;
+      _cMetLoad := 0;
+      _cTipTex  := 0;
+      _cMC      := 0;
+      _cGroupMC := 0;
+      _GruzPod  := 0;
+      _Minut    := 0;
+      _Price    := 0;
+      Exit
+    }
+  
+  GetAllSpMLInfo := TRUE;
+  _VidLoad  := SpMLView.SpMetLoad.VidLoad;
+  _cMetLoad := SpMLView.SpMetLoad.cMetLoad;
+  _cTipTex  := SpMLView.SpMetLoad.cTipTex;
+  _cMC      := SpMLView.SpMetLoad.cMC;
+  _cGroupMC := SpMLView.SpMetLoad.cGroupMC;
+  _GruzPod  := SpMLView.SpMetLoad.GruzPod;
+  _Minut    := SpMLView.SpMetLoad.Minut;
+  _Price    := SpMLView.SpMetLoad.Price;
+}
+
+//******************************************************************************
+//инициализация переменных
+//******************************************************************************
+
+Procedure SpMLInit(_VidLoad     : word;
+                   _cMetLoad    : comp;
+                   _cMC         : comp;
+                   _cGroupMC    : comp;
+                   _GruzPod     : double;
+                   _cTipTex     : comp;
+                   _Minut       : double;
+                   _Price       : double);
+{
+  SpMLView.pVidLoad    :=  _VidLoad;
+  SpMLView.pcMetLoad   :=  _cMetLoad;
+  SpMLView.pcTipTex    :=  _cTipTex;
+  SpMLView.pcMC        :=  _cMC;
+  SpMLView.pcGroupMC   :=  _cGroupMC;
+  SpMLView.pGruzPod    :=  _GruzPod;
+  SpMLView.pMinut      :=  _Minut;
+  SpMLView.pPrice      :=  _Price;
+}
+
+//******************************************************************************
+//определение нормы и расценки для метода погрузки
+//******************************************************************************
+
+Function GetSpMLData( _VidLoad      : word;    //"0-погрузка, 1-разгрузка"
+                      _cMetLoad     : comp;    //"метод погрузки"
+                      _cMC          : comp;    //"МЦ"
+                      _cGroupMC     : comp;    //"группа МЦ"
+                      _GruzPod      : double;  //"грузоподъемность"
+                      var _cTipTex  : comp;    //"тип транспортного средства"
+                      var _Minut    : double;  //"норма минут на ед.веса МЦ"
+                      var _Price    : double   //"сдельная расцена"
+         ): boolean;
+{
+  SpMLInit(_VidLoad, _cMetLoad, _cMC, _cGroupMC, _GruzPod, _cTipTex, _Minut, _Price);
+  
+  SpMLView.PushBounds(if (SpMLView.pcMC <> 0, SpMLView.tbbyMc, SpMLView.tbbyGroupMc));
+
+  if ( SpMLView.pcTipTex<> 0 )
+    SpMLView.AddBounds(SpMLView.tbbyTipTex);
+
+  //ищем где грузоподъемность с меньшей разностью
+  if ( SpMLView.GetFirst SpMetLoad <> tsOk )
+    { //не нашли
+        GetSpMLData := FALSE;
+        _cTipTex := 0;
+        _Minut   := 0;
+        _Price   := 0;
+        Exit;
+     }
+  
+  var dGruzPod: double;  dGruzPod    := SpMLView.SpMetLoad.GruzPod;
+  GetSpMLData := TRUE;
+  _cTipTex    := SpMLView.SpMetLoad.cTipTex;
+  _Minut      := SpMLView.SpMetLoad.Minut;
+  _Price      := SpMLView.SpMetLoad.Price;
+
+  SpMLView._LOOP  SpMetLoad
+    if ( dGruzPod > SpMLView.SpMetLoad.GruzPod )
+      {
+        dGruzPod := SpMLView.SpMetLoad.GruzPod;
+        _cTipTex := SpMLView.SpMetLoad.cTipTex;
+        _Minut   := SpMLView.SpMetLoad.Minut;
+        _Price   := SpMLView.SpMetLoad.Price;
+      }
+}
+
+//******************************************************************************

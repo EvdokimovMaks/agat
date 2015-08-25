@@ -1,0 +1,230 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 5.80 - Целевой учет запасов
+// Расчет сальдовых остатков по объектам целевого учета
+//------------------------------------------------------------------------------
+
+#ifndef __UksStore_vih__
+#define __UksStore_vih__
+
+#component "L_SaldoMtr"
+
+Type
+  TUksRunParam = record
+    wSaldTune : word;                   // 0 - по всем ОЦУ, иначе по заданному
+    cSaldTune : comp;                   // 0 - по всем ОЦУ, иначе по заданному
+    cKau      : array[0..9] of comp;    // Фильтр по КАУ1..КАУ10
+    bKau      : array[0..9] of boolean; // Группировка по КАУ1..КАУ10
+    cFilter   : array[0..9] of comp;    // Фильтр по складскому разрезу (по МЦ, подразделению, МОЛ или партии)
+    bFilter   : array[0..9] of boolean; // Группировка (не фильтр!) по складскому разрезу (по МЦ, подразделению, МОЛ или партии)
+    wParam    : word;                   // Битовая маска видов учета (см. константы cgVidUchRun_XXX)
+    lParam    : longint;                // Не используется
+    dParam    : date;                   // Не используется
+  end;
+
+Table struct TmpColumns "Таблица интервалов"
+(
+  nRec     : tNrec   "nRec"
+, Interval : integer "Interval"
+, bDate    : Date    "дата начала интервала"
+, eDate    : Date    "дата конца  интервала"
+, Name     : s20     "Наименование колонки"
+)
+With index
+(
+  TmpColumns01 = nRec (surrogate, unique)
+, TmpColumns02 = Interval
+);
+
+Table struct TmpDataSald "Таблица данных для интервалов"
+(
+  nRec        : tNrec   "nRec"
+, cTmpSaldo   : tNrec   "Сссылка на TmpSaldo1"
+, cTmpColumns : tNrec   "Сссылка на TmpColumns"
+, cTmpHier    : tNrec   "Сссылка на TmpHier"
+, Kol         : tSumma  "Количество"
+, Sum         : tSumma  "Сумма"
+)
+With index
+(
+  TmpDataSald01 = nRec (surrogate, unique)
+, TmpDataSald02 = cTmpSaldo + cTmpColumns
+, TmpDataSald03 = cTmpColumns
+, TmpDataSald04 = cTmpHier + cTmpColumns
+);
+
+#doc
+Содержит методы для расчета сальдовых остатков и движения по объектам целевого назначения.
+#end
+ObjInterface OUksStore;
+
+//-------------------------------------------------------------------------
+  #doc
+  Выгрузка сальдовых остатков по объектам целевого назначения в TmpSaldo1.</brief>
+  #end
+  Function UksStore_Run(
+
+    #doc
+    Отображение визуализации в процессе выполнения выгрузки.</brief>
+    true - отображать визуализацию.
+    #end
+    abVisual: boolean;
+
+    #doc
+    На какую дату рассчитываем остатки.
+    #end
+    adDate: date;
+
+    #doc
+    Ссылка на валюту.</brief>
+    Если = 0, то суммы выгружаются в НДЕ.
+    #end
+    acVal: comp;
+
+    #doc
+    Номер настройки целевого учета (соответствует значению поля SaldTune.wType).</brief>
+    Для настройки "Управление строительством" всегда равно <b>1</b>.
+    Если передан 0, то выгрузка производится по всем настройкам ЦУ.
+    #end
+    awSaldTune: word;
+
+    #doc
+    Фильтр по объекту целевого учета.</brief><br>
+    Допустимые значения:<br>
+    <i>comp(0)</i>  - фильтр не установлен.<br>
+    <i>comp(-2)</i> - множественный фильтр. Элементы множественного фильтра передаются через маркер с идентификатором,
+                      который вернет функция GetMarkerName интерфейса F_GetAn::GetKau, если ей в качестве параметра
+                      передать код КАУ соответствующей системной аналитики. Этот код, в свою очередь, можно узнать,
+                      если воспользоваться функцией GetGrKau интерфейса L_SaldoMtr::VipSaldTune, передав ей в качестве
+                      параметра значение 1.<br>
+                      Ниже приведен пример инициализации маркера через который передаются значения множественного фильтра
+                      по объектам ЦУ:<br>
+    <pre class="example">
+      ##include GetKau.vih    // Объектный интерфейс выбора КАУ
+      ##include SaldTune.vih  // Настройка объектов учета целевого назначения запасов МТР
+      ...
+        var oTune:   VipSaldTune; // Настройка объектов учета целевого назначения запасов МТР
+        var iGetKau: GetKau;      // Переменная типа интерфейс GetKau
+        var sMark:   string;
+        var lMark:   longint;
+        sMark := iGetKau.GetMarkerName(oTune.GetGrKau(1));
+        lMark := InitMarker(sMark, 8, 100, 10);
+    </pre><br>
+    <i>другое</i> - ссылка на объект ЦУ.
+    #end
+    acObj: comp;
+
+    #doc
+    Фильтр по аналитике целевого учета (acKau1-acKau9).</brief><br>
+    Допустимые значения:<br>
+    <i>comp(0)</i>  - фильтр не установлен.<br>
+    <i>comp(-1)</i> - свидетельствует о том, что должны быть выгружены сальдовые остатки только по тем разрезам,
+                      в которых соответствующая аналитики на задана (имеет значение 0).<br>
+    <i>comp(-2)</i> - множественный фильтр. Элементы множественного фильтра передаются через маркер с идентификатором,
+                      возвращаемым вызовом iGetKau.GetMarkerName(oTune.GetGrKau(x)), где x - номер аналитики
+                      (2 для acKau1, 3 для acKau2 и т.д.).<br>
+    <i>другое</i>   - ссылка на соответствующую аналитику.
+    #end
+    acKau1, acKau2, acKau3, acKau4, acKau5, acKau6, acKau7, acKau8, acKau9: comp;
+
+    #doc
+    Фильтр по МЦ.</brief><br>
+    Допустимые значения:<br>
+    <i>comp(0)</i>  - фильтр не установлен.<br>
+    <i>comp(-2)</i> - множественный фильтр. Элементы множественного фильтра передаются через таблицу Pick со
+                      значением <b>7</b> в поле wList, т.е. для перебора элементов фильтра можно использовать
+                      подцепку word(7) == Pick.wList.<br>
+    <i>другое</i>   - ссылка на МЦ (KatMC.NRec).
+    #end
+    acMC: comp;
+
+    #doc
+    Фильтр по подразделению.</brief><br>
+    Допустимые значения:<br>
+    <i>comp(0)</i>  - фильтр не установлен.<br>
+    <i>comp(-1)</i> - фильтр по разрезам с незаданным подразделением.<br>
+    <i>comp(-2)</i> - множественный фильтр. Элементы множественного фильтра передаются через таблицу Pick со значением
+                      <b>11</b> в поле wList.<br>
+    <i>другое</i>   - ссылка на подразделение (KatPodr.NRec).
+    #end
+    acPod: comp;
+
+    #doc
+    Фильтр по МОЛ.</brief><br>
+    Допустимые значения:<br>
+    <i>comp(0)</i>  - фильтр не установлен.<br>
+    <i>comp(-1)</i> - фильтр по разрезам с незаданным МОЛ.<br>
+    <i>comp(-2)</i> - множественный фильтр. Элементы множественного фильтра передаются через таблицу Pick со значением
+                      <b>8</b> в поле wList.<br>
+    <i>другое</i>   - ссылка на МОЛ (KatMOL.NRec).
+    #end
+    acMol: comp;
+
+    #doc
+    Фильтр по партии.</brief><br>
+    Допустимые значения:<br>
+    <i>comp(0)</i>  - фильтр не установлен.<br>
+    <i>comp(-1)</i> - фильтр по разрезам с незаданной партией.<br>
+    <i>comp(-2)</i> - множественный фильтр. Элементы множественного фильтра передаются через таблицу Pick со значением
+                      <b>10</b> в поле wList.<br>
+    <i>другое</i>   - ссылка на партию (KatParty.NRec).
+    #end
+    acPar: comp;
+
+    #doc
+    Группировка по объектам целевого учета.</brief><br>
+    <i>true</i> - необходима группировка по объектам ЦУ, т.е. в таблицу TmpSaldo1 будут выгружены записи о сальдовых
+    остатках по объектам ЦУ, удовлетворяющим заданным фильтрам. Ссылки на объекты ЦУ будут находиться в поле TmpSaldo1.cObj.
+    При значении false группировка по объектам ЦУ не производится и у всех записей в поле TmpSaldo1.cObj будет значение 0.
+    #end
+    abObj,
+
+    #doc
+    Группировка по соответствующим элементам разреза хранения сальдовых остатков (abKau1-abKau9, abMC, abPod, abMol, abPar).
+    #end
+    abKau1, abKau2, abKau3, abKau4, abKau5, abKau6, abKau7, abKau8, abKau9, abMC, abPod, abMol, abPar: boolean
+
+  #doc
+  <i>true</i> в случае успешного выполнения.</brief>
+  Если параметр awSaldTune не равен нулю и все параметры группировки равны false, то результатом работы функции будет одна запись таблицы
+  TmpSaldo1, содержащая значение сальдового остатка МЦ с учетом заданных фильтров.
+  #end
+  ): boolean;
+//-------------------------------------------------------------------------
+  #doc
+  Выгрузка движения МЦ по объектам целевого назначения в TmpSaldo1.
+  #end
+  Function UksMove_Run(abVisual: boolean; adStart, adStop: date; acVal: comp;
+                       awSaldTune: word;
+                       acObj, acKau1, acKau2, acKau3, acKau4, acKau5, acKau6, acKau7, acKau8, acKau9, acMC, acPod, acMol, acPar: comp;
+                       abObj, abKau1, abKau2, abKau3, abKau4, abKau5, abKau6, abKau7, abKau8, abKau9, abMC, abPod, abMol, abPar: boolean): boolean;
+#ifndef GAL9_1
+//-------------------------------------------------------------------------
+End;
+
+//******************************************************************************
+
+ObjInterface OUksStoreV2;
+#end
+  #doc
+  Выгрузка сальдовых остатков по объектам целевого назначения в TmpSaldo1.
+  #end
+  Function UksStore_RunEx(abVisual : boolean; adDate : date; acVal : comp; pParam : TUksRunParam): boolean;
+
+  #doc
+  Выгрузка движения МЦ по объектам целевого назначения в TmpSaldo1.
+  #end
+  Function UksMove_RunEx(abVisual: boolean; adStart, adStop: date; acVal: comp; pParam : TUksRunParam): boolean;
+
+end;
+
+//******************************************************************************
+
+VipInterface IUksStore
+  implements OUksStore
+#ifndef GAL9_1
+  , OUksStoreV2
+#end
+  licensed(FREE);
+
+#end // __UksStore_vih__

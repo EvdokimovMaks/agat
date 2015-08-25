@@ -1,0 +1,143 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 5.80 - модуль "Управление бюджетом"
+// Сервисные функции для работы с каталогами периодов
+//------------------------------------------------------------------------------
+// при использовании в 8_0 - подключать fptodo.vih
+//******************************************************************************
+
+//==============================================================================
+// VFPTODO_VIEW
+//------------------------------------------------------------------------------
+Create view vFpToDo_View
+As select *
+From
+  fpTPer
+, fpPeriod
+;
+
+//==============================================================================
+// FunctionS
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// основной тип периода для указанного периода
+Function fpPeriod_GetMainTPer(_cPeriod: comp): comp;
+{
+  if vFpToDo_View.getfirst fpPeriod where ((_cPeriod == fpPeriod.nRec)) = tsOk
+    fpPeriod_GetMainTPer := vFpToDo_View.fpPeriod.cMain;
+  else
+    fpPeriod_GetMainTPer := 0;
+}
+//------------------------------------------------------------------------------
+// самый верхний в ветке указанного типа периода
+Function fpTPer_GetUpper(_cFpPeriodT: comp): comp;
+var curNode: comp;
+{
+  curNode := _cFpPeriodT;
+  while vFpToDo_View.getfirst fpTPer where ((curNode == fpTPer.nRec)) = tsOk
+  {
+     // чтобы не зациклится
+     if (vFpToDo_View.fpTPer.cNode = curNode) Break;
+     // самый верх - выходим
+     if (vFpToDo_View.fpTPer.cNode = 0      ) Break;
+
+     curNode := vFpToDo_View.fpTPer.cNode;
+  }
+  fpTPer_GetUpper := curNode;
+}
+//------------------------------------------------------------------------------
+// число уровней ниже указанного, включая его
+Function fpTPer_NumDownLevels(_cFpPeriodT: comp): word;
+var
+  curNode: comp;
+  numLevels: word;
+{
+  numLevels := 1;
+  curNode := _cFpPeriodT;
+  // бежим вниз по ветке
+  while vFpToDo_View.getfirst fpTPer where ((curNode == fpTPer.cNode)) = tsOk
+  {
+     numLevels := numLevels + 1;
+     // чтобы не зациклится
+     if (curNode = vFpToDo_View.fpTPer.nRec) Break;
+     curNode := vFpToDo_View.fpTPer.nRec;
+  }
+  fpTPer_NumDownLevels := numLevels;
+}
+//------------------------------------------------------------------------------
+// уровень в ук.ветке с указанной ед.измерения
+Function fpTPer_LevelEdIzm(_cFpPeriodT: comp; _EdIzm: word): word;
+var
+  curNode: comp;
+  numLevels: word;
+  wasFound: boolean;
+{
+  numLevels := 0;
+  curNode := _cFpPeriodT;
+  wasFound := False;
+  // вначале проверяем указанный уровень
+  if vFpToDo_View.getfirst fpTPer where ((curNode == fpTPer.nRec)) = tsOk
+  {
+     numLevels := 1;
+     // не указанная единица измерения - бежим вниз по ветке
+     if (vFpToDo_View.fpTPer.EdIzm = _EdIzm)
+       wasFound := True;
+     else
+     while vFpToDo_View.getfirst fpTPer where ((curNode == fpTPer.cNode)) = tsOk
+      {
+        numLevels := numLevels + 1;
+        if (vFpToDo_View.fpTPer.EdIzm = _EdIzm)
+        { wasFound := True; Break; }
+        // чтобы не зациклится
+        if (curNode = vFpToDo_View.fpTPer.nRec) Break;
+        curNode := vFpToDo_View.fpTPer.nRec;
+      }
+  }
+  fpTPer_LevelEdIzm := if (wasFound, numLevels, 0);
+}
+
+//==============================================================================
+// RunInterface
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// выбор типа периода
+Function GetFpPeriodT(var _cFpPeriodT: comp; var _cFpPeriod: comp;
+                      _cDefFpPeriodT: comp): boolean;
+var newPeriodT: comp;
+{
+  GetFpPeriodT := False;
+  newPeriodT := _cFpPeriodT; // тек.тип периода
+  // значение по умолчанию
+  if (newPeriodT = 0) newPeriodT := _cDefFpPeriodT;
+
+  if RunInterface('GETTPER', word(cgiPick)/* or cgiPickNode)*/, comp(0)
+                           , newPeriodT) <> cmCancel
+   if (newPeriodT <> _cFpPeriodT)
+    {
+      GetFpPeriodT := True;
+      _cFpPeriodT := newPeriodT;
+      // выбрали другую ветку - надо обнулить период
+      if (fpPeriod_GetMainTPer(_cFpPeriod) <> fpTPer_GetUpper(newPeriodT))
+        _cFpPeriod := 0;
+    }
+}
+//------------------------------------------------------------------------------
+// выбор периода
+Function GetFpPeriod(var _cFpPeriodT: comp; var _cFpPeriod: comp;
+                     _tuneInt: word): boolean;
+var curRec, newRec: comp;
+{
+  GetFpPeriod := False;
+  // верхний уровень для текущего типа периода
+  curRec := fpTPer_GetUpper(_cFpPeriodT);
+  newRec := curRec;
+  // меняем тип периода и период
+  if RunInterface('getPeriod', word(cgiPick), newRec, comp(0)
+                             , _cFpPeriod, _tuneInt) <> cmCancel
+  {
+     GetFpPeriod := True;
+     // изменили внутри тип периода
+     if (newRec <> curRec)
+       _cFpPeriodT := newRec;
+  }
+}

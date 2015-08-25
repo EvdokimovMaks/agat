@@ -1,0 +1,5 @@
+const fcCOMMISSIONMEMBER_KASSA_KO15 = 20023;
+const fcDENIAL = 40889;
+const fcFINALPASS = 25822;
+const fcKO5ONE = 51849;
+const fcKO5TWO = 50718;

@@ -1,0 +1,420 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 7.1 - Производство
+// Регистрация и удаление операций планового движения МЦ
+//------------------------------------------------------------------------------
+
+// описание в конце файла
+
+#include PlanSkla.ifc
+
+#ifdef ComponentVersion
+ #component "M_SklPlan"
+#end
+
+#ifdef ComponentVersionInDict
+#include iPlanSlit.vih
+#include iPlanMove.vih
+#include iMoveTake.vih
+
+  public type TPlanSlit_p  = record as table PlanSlit  with x$position;
+  public type TPlanMove_p  = record as table PlanMove  with x$position;
+  public type TMoveTake_p  = record as table MoveTake  with x$position;
+#else
+  type TPlanSlit_p  = record as table PlanSlit  with x$position;
+  type TPlanMove_p  = record as table PlanMove  with x$position;
+  type TMoveTake_p  = record as table MoveTake  with x$position;
+#end
+
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+ObjInterface ObjPlanSklad;
+
+! Инициализация объекта расчета складских остатков
+! (вызывать перед неоднократным обращением к RegisterOperation, DeleteOperation,
+!   CalcOneRest и CalcSomeRests)
+  Procedure Init_McInfo;
+! Деинициализация объекта расчета складских остатков
+! (вызывать после неоднократного обращения к RegisterOperation, DeleteOperation,
+!   CalcOneRest и CalcSomeRests)
+  Procedure Done_McInfo;
+
+! Установка флага запрета редактирования другими пользователями
+  Function BeginEdit(
+    abVisual   : boolean) : word; // Выдавать окно подтверждения
+
+! Сброс флага запрета редактирования другими пользователями
+  Function EndEdit(
+    abDelTest  : boolean) : word; // Удалять/Включать в план тестовые операции
+
+! Регистрация движения МЦ в складском плане.
+  Function RegisterOperation(
+    var arOper  : TOperBuf    // Параметры регистрируемой операции
+                            ) : word; // Код ошибки выполнения функции (0-успешно)
+
+! Удаление операции планового движения МЦ
+  Function DeleteOperation(
+    var arOper  : TOperBuf;   // Параметры удаляемой операции
+    abFixed     : boolean // false - не удалять, если есть фиксированные разноски
+                          ) : word; // Код ошибки выполнения функции (0-успешно)
+
+! Получение зарегистрированной операции
+  Function GetOperation(
+    var arOper : TOperBuf    // Параметры операций для поиска / Найденная операция
+                        ) : word; // Код ошибки выполнения функции (0-успешно)
+
+! Получение операций по документу (arOper.wDoc, arOper.cDoc)
+  Function GetFirstDoc(
+    var arOper : TOperBuf;   // Тип и Nrec документа для поиска / Найденная операция
+    var alId   : longInt     // Идентификатор поиска (для GetNextDoc)
+                      ) : word; // Код ошибки выполнения функции (0-успешно)
+
+  Function GetNextDoc(
+    alId       : longInt;    // Идентификатор поиска
+    var arOper : TOperBuf    // Найденная операция
+                     ) : word; // Код ошибки выполнения функции (0-успешно)
+
+! Получение потомков зарегистрированных операций
+  Function GetFirstSlave(
+    var arOper : TOperBuf;   // Параметры операций-родителtq для поиска / Найденная операция-потомок
+        awDoc  : word;        // Тип документа для искомых операций
+    var alId   : longInt      // Идентификатор поиска (для GetNextSlave)
+                            ) : word; // Код ошибки выполнения функции (0-успешно)
+
+  Function GetNextSlave(
+    alId       : longInt;     // Идентификатор поиска
+    var arOper : TOperBuf    // Найденная операция-потомок
+                            ) : word; // Код ошибки выполнения функции (0-успешно)
+
+! Проверка приоритетов плановых операций
+  Procedure CheckPriority;
+
+! Пересчет плановых приходов и расходов с накоплением
+  Procedure CheckAccumulation(acSlit : comp; abThisPos : boolean);
+
+!Для функций CalcOneRest, CalcOneRestEx, CalcSomeRests и CalcSomeRestsEx:
+! Параметры acMC, acPodr, acMol и acParty могут принимать значения 0 и -2
+! Параметры acPodr, acMol и acParty могут принимать значение -1
+! Если параметр равен 0, то в расчете используются разрезы с любым значением
+!   соответствующего параметра
+! Если параметр равен -1, то в расчете используются разрезы с нулевым значением
+!   соответствующего параметра (напр. при acMol = -1  -  с незаданным МОЛ)
+! Если параметр равен -2, то в расчете используются разрезы со значениями
+!   соответствующего параметра, записанными в маркере. При этом используются маркеры:
+!   'Sklad.Plan.Pick.MC'    - для МЦ            (параметр acMC    = -2)
+!   'Sklad.Plan.Pick.Podr'  - для складов       (параметр acPodr  = -2)
+!   'Sklad.Plan.Pick.MOL'   - для МОЛ           (параметр acMOL   = -2)
+!   'Sklad.Plan.Pick.Party' - для партий        (параметр acParty = -2)
+
+! Расчет планового наличия одной МЦ для заданного разреза
+  Function CalcOneRest(
+    adRest     : date;              // Дата, на которую рассчитываем
+    acMC       : comp;              // МЦ
+    acPodr     : comp;              // Склад
+    acMol      : comp;              // МОЛ
+    acParty    : comp) : double;    // Партия
+                         // Результат - плановое наличие
+
+! Расчет планового наличия одной МЦ для заданного разреза (с/без учета ФН)
+  Function CalcOneRestEx(
+    adRest     : date;              // Дата, на которую рассчитываем
+    acMC       : comp;              // МЦ
+    acPodr     : comp;              // Склад
+    acMol      : comp;              // МОЛ
+    acParty    : comp;              // Партия
+    abFact     : boolean) : double; // false - не учитывать фактическое наличие
+                         // Результат - плановое наличие
+
+! Расчет плановых остатков по контрагенту
+ Function RestForAn(
+   cRole : comp;         //роль аналитики
+   wKod : word;          // код аналитики
+   cVal : comp;          // значение аналитики
+   cMC : comp;           // ссылка на матценность
+   dStart : date;        // дата начала периода
+   dStop : date;         // дата окончания периода
+   wKol : word;          // какое количество брать
+   wDirect : word        // какой результат возвращать
+                      ) : double; // дата до которой производится расчет
+
+! Количество приходов (awMode = IS_PRIH)/расходов (awMode = IS_RASH)
+!   по результатам расчёта CalcOneRest
+  Function GetMoveInfo(awMode : word) : double;
+
+! Расчет планового наличия МЦ для заданных разрезов (выгружается в PlanInfo)
+  Function CalcSomeRests(
+    adRest     : date;              // Дата, на которую рассчитываем наличие
+    acMC       : comp;              // МЦ
+    acPodr     : comp;              // Склад
+    acMol      : comp;              // МОЛ
+    acParty    : comp;              // Партия
+    abTakePodr : boolean;           // При false - группировка по складам
+    abTakeMol  : boolean;           // При false - группировка по МОЛ
+    abTakeParty: boolean) : word;   // При false - группировка по партиям
+
+  Procedure SetRestFilter(var af : TPlanSkladFilter; adRest : date;
+                        acMC, acPodr, acMol, acParty : comp;
+                        abTakePodr, abTakeMol, abTakeParty, abFact : boolean);
+
+! Установка ограничений по фильтру
+  Procedure PushFilterBounds(af : TPlanSkladFilter);
+
+! Для расчета ФН, при значении параметра comp(-2), используются значения из
+! таблицы Pick.
+  Procedure CheckPicks(acMC, acPodr, acMol, acParty : comp; af: TPlanSkladFilter);
+
+! Расчет ПД для текущего разреза PlanSlit
+  Procedure PR_Rest(adRest : date; var afPrih, afRash, afExcess : double);
+
+! Снятие всех ограничений
+Procedure PopFilterBounds(abEnd : boolean; af : TPlanSkladFilter);
+
+! Следующий набор параметров
+Function NextCase : boolean;
+
+
+
+! Расчет планового наличия МЦ для заданных разрезов  (с/без учета ФН) (выгружается в PlanInfo)
+  Function CalcSomeRestsEx(
+    adRest     : date;              // Дата, на которую рассчитываем наличие
+    acMC       : comp;              // МЦ
+    acPodr     : comp;              // Склад
+    acMol      : comp;              // МОЛ
+    acParty    : comp;              // Партия
+    abTakePodr : boolean;           // При false - группировка по складам
+    abTakeMol  : boolean;           // При false - группировка по МОЛ
+    abTakeParty: boolean;           // При false - группировка по партиям
+    abFact     : boolean) : word;   // При false - не учитывать фактическое наличие
+
+! Расчет минимального уровня запасов одной МЦ для заданного разреза
+  Function GetMinLevel(
+    adStart    : date;              // Дата, с которой рассчитываем
+    adStop     : date;              // Дата, до которой рассчитываем
+    acMC       : comp;              // МЦ
+    acPodr     : comp;              // Склад
+    acMol      : comp;              // МОЛ
+    acParty    : comp) : double;    // Партия
+
+! Вывод диагностического сообщения об ошибке
+  Procedure err(
+    awCode  : word;         // Код ошибки
+    asPlace : string   );   // Место
+
+! Проверка операций планового движения, пересчет планового наличия МЦ
+  Function CheckPlanMove(acPlanMove : comp) : boolean;
+
+! Проверка даты начала планирования и пересчет планового наличия МЦ на эту дату
+  Function CheckFactRest(acPlanSlit : comp) : boolean;
+
+! Проверка фактического подтверждения плановой операции для заданной позиции документа
+  Function CheckFactOpers(awDoc : word; acDoc : comp) : boolean;
+
+End;
+
+ObjInterface ObjPlanSklad01(ObjPlanSklad);
+
+! Регистрация движения МЦ в складском плане.
+  Function RegisterOperation_Ex(
+    var arOper  : TOperBuf    // Параметры регистрируемой операции
+                            ) : word; // Код ошибки выполнения функции (0-успешно)
+
+End;
+
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+! Функции для работы с таблицами планового движения МЦ
+ObjInterface ObjPlanMove;
+
+! Регистрация разноски операции
+  Function RegisterTake(
+    acPlanPrih : comp;           // Ссылка на плановую операцию поступления
+    acPlanRash : comp;           // Ссылка на плановую операцию отпуска
+    afKol      : double;         // Разносимое количество, если используется разноска на разные МЦ, то разносимое количество для прихода
+    afKolRash  : double) : word; // если используется разноска на разные МЦ, то разносимое количество для расхода
+
+! Удаление операции планового движения МЦ из интерфейса IfcPlanMove
+  Function DeleteCurrentOperation(
+    var apPlanSlit : TPlanSlit_p; // Ссылка на разрез
+    var apPlanMove : TPlanMove_p; // Ссылка на операцию планового движения
+    abGoToNewPos   : boolean) : word; // Выполнять ли позиционирование на текущую после удаления
+
+! Удаление выбранных операций планового движения МЦ
+  Function DeleteSelectedOperations(
+    alMark         : longInt;         // Идентификатор маркера
+    var awQnt      : word;            // Количество удаленных операций
+    var awOrd      : word) : word;    // из них - ордеров
+
+! Удаление разноски операции
+  Function DeleteTake(
+    apMoveTake : TMoveTake_p) : word; // Ссылка на удаляемую разноску
+
+! Автоматическая разноска операции отпуска для заданного разреза
+  Function TakeOperations(
+    alMark     : longInt;
+    awFixT     : word;
+    awSurplus  : word) : word;
+
+! Автоматическая разноска всех операций планового отпуска для заданного разреза
+  Function TakeSlits(
+    alMark     : longInt;
+    awMethod   : word;
+    awFixT     : word;
+    awSurplus  : word) : word;
+
+! Запрос фильтра (при abFltrReq = true) и выгрузка ПД или ПН в PlanInfo
+  Function PlanInfo_Upload(awOrd : word; var af : TPlanSkladFilter; abFltrReq : boolean) : word;
+
+! как этот весь механизм внутри устроен - тайна под семью замками
+! Функция ручного переноса разноски
+!  function MoveTakeMove(acMoveTake, acPlanMove : comp; afKol : double): word;
+
+End;
+
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+VipInterface IPlanSklad implements ObjPlanSklad01, ObjPlanMove
+#ifdef ATL51
+licensed(FREE)
+#end
+;
+
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+! Для встраиваемых интерфейсов
+ObjInterface ObjApplyFilter;
+  Function applyFilter(var af : TPlanSkladFilter) : word;
+End;
+
+VipInterface IFilterMove implements ObjApplyFilter
+#ifdef ATL51
+licensed(FREE)
+#end
+;
+VipInterface IFilterRest implements ObjApplyFilter
+#ifdef ATL51
+licensed(FREE)
+#end
+;
+VipInterface IViewRests  implements ObjApplyFilter
+#ifdef ATL51
+licensed(FREE)
+#end
+;
+
+ObjInterface ObjPlanOper;
+  Event Procedure doPos(apPlanMove : TPlanMove_p);
+  Event Procedure doSort(awOrd : word; abDesc : boolean);
+  Event Function  doMenu : string;
+  Event Procedure doDel;
+  Event Procedure doEdit;
+  Event Procedure doIns;
+  Event Procedure doTake;
+  Event Procedure doPrint;
+  Event Procedure doUpload(awMode, awOrd : word; abFltrReq : boolean);
+  Event Procedure doTitle;
+  Event Procedure doSetup;
+  Event Procedure doSlit;
+  Event Procedure doTest(aiMode : integer);
+  Procedure SetPos(apPlanMove : TPlanMove_p;
+                   awOrdMode  : word;
+                   af : TPlanSkladFilter);
+  Procedure ReDraw;
+  Procedure setMark(alMark : longInt);
+  Procedure setupFields;
+End;
+
+ObjInterface ObjPlanOper_1 (ObjPlanOper);
+  Function GetCurPlanMove : comp;
+End;
+
+
+VipInterface IPlanView implements ObjPlanOper_1
+#ifdef ATL51
+licensed(FREE)
+#end
+;
+VipInterface IPlanSort implements ObjPlanOper_1
+#ifdef ATL51
+licensed(FREE)
+#end
+;
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+
+ObjInterface ObjViewTake;
+  Event Procedure doPos(apPlanMove : TPlanMove_p);
+  Event Procedure doTake;
+  Event Procedure doReDraw;
+  Event Procedure doSetup;
+  Event Procedure doPrint;
+  Procedure SetOper(apPlanMove : TPlanMove_p);
+  Procedure ReDraw;
+  Procedure setupFields;
+End;
+
+VipInterface IViewTake implements ObjViewTake
+#ifdef ATL51
+licensed(FREE)
+#end
+;
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+
+ObjInterface ObjPlanPrint;
+  Procedure PM_Print(af : TPlanSkladFilter);
+End;
+
+VipInterface IPlanPrint implements ObjPlanPrint
+#ifdef ATL51
+licensed(FREE)
+#end
+;
+
+! Таблица, не содержащая записей для отображения в интерфейсах пустых полей.
+table struct EmptyTbl "EmptyTbl"
+(
+  wEmpty : word   "empty word",
+  cEmpty : comp   "empty comp",
+  fEmpty : double "empty double",
+  dEmpty : date   "empty date",
+  sEmpty : string "empty string"
+);
+
+
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+/*
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+! Получение зарегистрированной операции:
+    GetOperation
+      Если arOper.cPlanMove <> 0, вернёт информацию по операции с указанным Nrec
+           иначе будет искать операцию по arOper.wDoc, arOper.cDoc
+           у которой PlanMove.wAllow = 0
+
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+! Регистрация движения МЦ в складском плане.
+
+!    Чтобы зарегистрировать новую операцию:
+!                 arOper.cPlanMove = 0,
+!                 arOper.cOwner = 0 или Nrec родителя
+!    Чтобы указать ещё одного родителя операции:
+!                 arOper.cPlanMove = Nrec
+!                 arOper.cOwner = Nrec
+!    Чтобы изменить зарегистрированную ранее операцию:
+!                 arOper.cPlanMove = Nrec
+!                 arOper.cOwner = Nrec-у одной из зарегистрированных ранее
+!                                                           операций-родителей
+!▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+! Удаление, поиск:
+!    Чтобы удалить/найти документ:
+!                 arOper.cPlanMove = 0
+!                 arOper.wDoc и arOper.cDoc - тип и ссылка на документ
+!    Чтобы удалить/найти конкретную запись:
+!                 arOper.cPlanMove = Nrec
+!                                                           операций-родителей
+! Nrec операции возвращают функции
+!                RegisterOperation, GetOperation, GetFirstSlave и GetNextSlave
+!                через arOper.cPlanMove
+
+! Все функции возвращают 0 (константа SUCCESS) в случае успеха или
+!              код ошибки выполнения - константы ERR_xxxxxx из PlanSklad.inc
+
+*/
+

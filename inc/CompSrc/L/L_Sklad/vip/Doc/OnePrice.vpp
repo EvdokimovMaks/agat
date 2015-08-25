@@ -1,0 +1,303 @@
+!╔═══════════════════════════════════════════════════════════════════════════╗
+!║                     (c) 1994,99 корпорация ГАЛАКТИКА                      ║
+!║ Проект        : ГАЛАКТИКА                                                 ║
+!║ Система       : Оперативный контур                                        ║
+!║ Версия        : 5.50                                                      ║
+!║ Назначение    : Установка единой цены для партии при редактировании       ║
+!║                 складского ордера                                         ║
+!║ Ответственный : Славко Александр Анатольевич (SLAVKO)                     ║
+!║ Параметры     : нет                                                       ║
+!╚═══════════════════════════════════════════════════════════════════════════╝
+
+Create view lOnePrice
+Var
+  wSkPr
+    : word;
+
+  UpdcParty
+, UpdcMC
+    : comp;
+From
+  SklOrder
+, SpOrder
+, KatSopr
+, SoprHoz
+, Oborot
+, KatMOL
+, KatPodr
+, KatParty
+
+Where
+((
+  wSkPr     == SpOrder.SP  and
+  UpdcMC    == SpOrder.cMC and
+  UpdcParty == SpOrder.cParty
+))
+;
+
+Form OnePrice('OnePrice.OUT', 'OnePrice');
+
+Procedure ModifyAllPrice(FlgModfVal : boolean);
+Var
+  UpdNrec,
+  UpdccPodr,               // "код склада"
+  UpdcMol,
+  UpdcVal
+                : comp;    // "код МОЛ"
+  UpdSummaSp,
+  UpdSumValSp,             // "сумма списания для расчета проводок"
+  UpdSrPrice,
+  UpdVPrice,
+  tmpCurse
+                : double;
+  tmpTipDoc                // VidOrder 0 => 150 , 1 => 250
+                : word;
+  FlgOborot,
+  FlgCurse,
+  FlgYesTemp,
+  wasError
+                : boolean;
+{
+  if (wGetTune('Oper.OnePriceParty') = 0)
+    Exit;
+
+  // проверка условий прав доступа
+  if (not ((wGetTune('Doc.Visible') = 0) and (coGetTune('Pick.cGrPodr') = 0) and (coGetTune('User.cCurSklad') = 0)))
+    Exit;
+
+  lOnePrice.wSkPr     := SkPr;
+  lOnePrice.UpdcParty := SpOrder.cParty;
+  lOnePrice.UpdcMC    := SpOrder.cMC;
+
+  UpdccPodr  := SpOrder.ccPodr;
+  UpdcMol    := SpOrder.ccMol;
+  UpdSrPrice := SpOrder.SrPrice;
+  UpdVPrice  := SpOrder.VPrice;
+  UpdcVal    := SpOrder.cVal;
+  UpdNrec    := SpOrder.cSklOrder;
+
+  // курс валюты на дату
+  FlgCurse := False;
+  tmpCurse := 0;
+
+  if (lOnePrice.GetFirst SklOrder where (( UpdNrec == SklOrder.nRec )) <> tsOk)
+    {
+      message(''#3'Ордер не найден'#13#3+'Проведите проверку ордеров!');
+      Exit;
+    }
+
+  if (SpOrder.cVal <> 0)
+    if (oValFunc.GetCurse(SpOrder.cVal, lOnePrice.SklOrder.dOrd, tmpCurse))
+      if (tmpCurse <> 0)
+        FlgCurse := True;
+
+  if (FlgModfVal)
+    UpdSrPrice := 0
+  else
+    UpdVPrice  := 0;
+
+  if (FlgCurse)
+    if (FlgModfVal)
+      UpdSrPrice := UpdVPrice  * tmpCurse
+    else
+      UpdVPrice  := UpdSrPrice / tmpCurse;
+
+  if (FlgModfVal)
+    {
+      UpdSummaSp := (UpdSrPrice - SpOrder.SrPrice) * SpOrder.Kol; // величина изменения
+      set SumOrd := SumOrd + UpdSummaSp;
+    }
+  else
+    {
+      UpdSumValSp := (UpdVPrice - SpOrder.VPrice) * SpOrder.Kol; // величина изменения
+      set VSumOrd := VSumOrd + UpdSumValSp;
+    }
+
+  set SpOrder.SrPrice  := UpdSrPrice;
+  set SpOrder.VPrice   := UpdVPrice;
+  set SpOrder.rSrPrice := SpOrder.SrPrice;
+  set SpOrder.rVPrice  := SpOrder.VPrice;
+
+  // при SystDate.Temp87 = 1 => по запросу
+  FlgYesTemp := False;
+
+  lOnePrice._Loop SpOrder
+    {
+      if (UpdNrec = lOnePrice.SpOrder.cSklOrder)
+        Continue;
+
+      if (wGetTune('Oper.OnePriceParty') = 2)
+        FlgYesTemp := True;
+
+      if (not FlgYesTemp)
+        if (wGetTune('Oper.OnePriceParty') = 1)
+        {
+          if lOnePrice.GetFirst KatParty where (( SpOrder.cParty == KatParty.nRec )) <> tsOk
+           {}
+
+          if (Message(''#3' Установить единую цену по партии МЦ: "' + lOnePrice.KatParty.Name + '"?', Confirmation + YesNo) = cmYes)
+            FlgYesTemp := True
+          else
+            Exit;
+        }
+
+      if (FlgYesTemp)
+        Break;
+    }
+
+  if (not FlgYesTemp)
+    Exit;
+
+  // основное тело:
+
+  if BeginConcurrentTransaction(trNoLock) <> tsOk
+    {
+      message(''#3'Невозможно начать транзакцию');
+      Exit;
+    }
+
+  // Обработка всех спецификаций ордеров:
+  StartNewVisual(vtNumericVisual, vfTimer, ''#3'Установка единой цены по данной партии МЦ и'#13#3 + 'перерасчет сумм в сопутствующих документах',1);
+  var wasFindOborot: boolean;
+
+  FlgOborot     := False;
+  wasFindOborot := False;
+  wasError      := False;
+
+  lOnePrice._Loop SpOrder
+    {
+      NextVisual;
+
+      //----------проверка спецификации на корректность:------------
+      // есть отвязанная спецификация:
+      if lOnePrice.GetFirst SklOrder where ((SpOrder.cSklOrder == SklOrder.nRec)) <> tsOk
+        {
+          message(''#3'Ордер не найден'#13#3 + 'Проведите проверку ордеров!');
+          wasError := True;
+          Break;
+        }
+
+      // есть переоценка по данной партии
+      if ((lOnePrice.SklOrder.tipOrd = 4) or (lOnePrice.SklOrder.tipOrd = 5))
+        {
+          message(''#3'По данной партии проводилась дооценка - '#13#3+
+                  'установка единой цены по данной партии невозможна!');
+          wasError := True;
+          Break;
+        }
+      // валюта у изменяемых ордеров разная
+      if (UpdcVal <> lOnePrice.SpOrder.cVal)
+        {
+          message(''#3'В ордере '+string(lOnePrice.SklOrder.nOrder)+' имеется МЦ с другой валютой.'#13#3+
+                  'Установка единой цены по данной партии невозможна!');
+          wasError := True;
+          Break;
+        }
+
+      // запрос на обновление оборотов
+      tmpTipDoc := GetSoprHozTipDoc(lOnePrice.SpOrder.SP, lOnePrice.SpOrder.VidOrder);
+
+      if not wasFindOborot
+        if lOnePrice.GetFirst Oborot where (( tmpTipDoc         == Oborot.TiDk and
+                                              SpOrder.cSklOrder == Oborot.cSoprDoc )) = tsOk
+          {
+            wasFindOborot := True;
+
+            if message(''#3' По некоторым ордерам имеются бухгалтерские проводки.'#13#3+
+                        'Установить единую цену по данной партии МЦ?', Confirmation + YesNo) = cmYes
+              FlgOborot := True;
+          }
+      //----------конец проверок-------------------
+
+
+      // пропустить т.к. на эту запись уже есть обработчик по модификации
+      // но нужно при сф. обороте по ней if (UpdNrec = SpOrder.cSklOrder) continue;
+      // "Складской ордер"
+
+      var srPrice_save, vPrice_save: double;
+
+      srPrice_save := lOnePrice.SpOrder.SrPrice;
+      vPrice_save  := lOnePrice.SpOrder.VPrice;
+
+      lOnePrice.SpOrder.SrPrice := UpdSrPrice;
+      lOnePrice.SpOrder.VPrice  := UpdVPrice;
+
+      set lOnePrice.SpOrder.rSrPrice := lOnePrice.SpOrder.SrPrice;
+      set lOnePrice.SpOrder.rVPrice  := lOnePrice.SpOrder.VPrice;
+
+      lOnePrice.SpOrder.srPrice := FRoundRubOrd(lOnePrice.SpOrder.VidOrder, lOnePrice.SpOrder.rSrPrice * lOnePrice.SpOrder.kol) / lOnePrice.SpOrder.kol;
+      lOnePrice.SpOrder.vPrice  := FRoundValOrd(lOnePrice.SpOrder.VidOrder, lOnePrice.SpOrder.rVPrice  * lOnePrice.SpOrder.kol) / lOnePrice.SpOrder.kol;
+
+      lOnePrice.Update current SpOrder;
+
+      UpdSummaSp  := (lOnePrice.SpOrder.srPrice - srPrice_save) * lOnePrice.SpOrder.Kol;// величина изменения
+      UpdSumValSp := (lOnePrice.SpOrder.vPrice  - vPrice_save)  * lOnePrice.SpOrder.Kol;// величина изменения
+
+      // "Хоз разноска фин и тов сопр.док"
+      tmpTipDoc := GetSoprHozTipDoc(lOnePrice.SklOrder.SP, lOnePrice.SklOrder.VidOrder);
+
+      if lOnePrice.GetFirst SoprHoz where (( tmpTipDoc     == SoprHoz.TipDoc and
+                                             SklOrder.nRec == SoprHoz.cSoprDoc )) =tsOk
+        {
+          lOnePrice.SoprHoz.SummaSp  += UpdSummaSp;// "сумма списания для расчета проводок"
+          lOnePrice.SoprHoz.SumValSp += UpdSumValSp;
+
+          iSHoz.UpdByHan(lOnePrice.SoprHoz.BufferP);
+        }
+
+      // "Накладные и пр."
+      if lOnePrice.GetFirst KatSopr where ((SklOrder.cSopr == KatSopr.nRec)) = tsOk
+        // по накладной "Хоз разноска фин и тов сопр.док"
+        if lOnePrice.GetFirst SoprHoz where (( KatSopr.VidSopr == SoprHoz.TipDoc and
+                                               KatSopr.nRec    == SoprHoz.cSoprDoc )) = tsOk
+          {
+            lOnePrice.SoprHoz.SummaSp  += UpdSummaSp;// "сумма списания для расчета проводок"
+            lOnePrice.SoprHoz.SumValSp += UpdSumValSp;
+
+            iSHoz.UpdByHan(lOnePrice.SoprHoz.BufferP);
+          }
+
+      // "Обороты"
+      if (FlgOborot)
+        if lOnePrice.GetFirst Oborot where (( tmpTipDoc     == Oborot.TiDk and
+                                              SklOrder.nRec == Oborot.cSoprDoc  )) =tsOk
+          {
+            OnePrice.write(lOnePrice.SklOrder.nOrder);
+            OnePrice.write(lOnePrice.SklOrder.dOrd);
+
+            if lOnePrice.GetFirst KatPodr where ((SklOrder.cPodr == KatPodr.nRec)) = tsOk
+              OnePrice.write(lOnePrice.KatPodr.Name)
+            else
+              OnePrice.write('');
+
+            if lOnePrice.GetFirst KatMOL where ((SklOrder.cMOL == KatMOL.nRec)) = tsOk
+              OnePrice.write(lOnePrice.KatMOL.Name)
+            else
+              OnePrice.write('');
+          }
+    }
+
+  StopVisual('', 0);
+
+  if wasError
+   {
+     if AbortTransaction <> tsOk
+       message(''#3'Невозможно восстановить данные');
+   }
+  else
+   {
+     if EndTransaction <> tsOk
+       message(''#3'Невозможно обновить данные');
+   }
+
+  if (FlgOborot)
+    {
+      OnePrice.PutEvent(FeBreak);
+
+      if (not OnePrice.Error)
+        OnePrice.ShowFile('');
+    }
+
+  RedrawPanel(#SklOrder);
+  RescanPanel(#SpOrder);
+}

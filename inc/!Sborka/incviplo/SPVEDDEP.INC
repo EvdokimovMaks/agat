@@ -1,0 +1,22 @@
+{
+ ษอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออป
+ บ               ‘ซฎข เ์ : GALDICT " ซ ชโจช  9.1"                       บ
+ บ     โ  แฎงค ญจ๏ 03/02/15                                             บ
+ ศอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผ
+}
+
+{$ifdef __MTtabledef__}
+{อออออออออออออ ’ กซจๆ  : Z_ZAR::SPVEDDEP "SPVEDDEP" ออออออออออออออ}
+type
+  pSPVEDDEP = ^tSPVEDDEP;
+  tSPVEDDEP = record   { - SPVEDDEP }
+    CLSCH          : Comp;            { CLSCH                                 }
+    SUMUD          : Double;          { SUMUD                                 }
+    DFORM          : Date;            { DFORM                                 }
+  end;
+const
+  tiSPVEDDEP01           = 0;  { CLSCH(M)                                }
+
+const
+  mtSPVEDDEP = 'Z_ZAR::SPVEDDEP';
+{$endif __MTtabledef__}
