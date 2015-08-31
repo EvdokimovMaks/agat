@@ -1,0 +1,886 @@
+#component "AGAT"
+interface ZAR_RAZN 'Разноска начислений и соцналогов';
+
+table struct tt (
+  cNachisl  : comp,
+  fio       : string[60],
+  tabnmb    : longint,
+  vidopl    : word,
+  summa     : double,
+  handmade  : double,
+  changed   : byte,
+  //счет, кау из начисления
+  cschetd   : string[20],
+  csubschd  : string[20],
+  ckaud     : array[1..6] of comp,
+  tbld      : array[1..6] of word,
+  //счет, кау из лицевого счета
+  lscschetd : string[20],
+  lscsubschd: string[20],
+  lsckaud   : array[1..6] of comp,
+  lstbld    : array[1..6] of word
+) with index (
+  i01 = fio + vidopl,
+  i02 = cNachisl,
+  i03 = changed + fio + vidopl
+);
+
+table struct tp (
+  cPerevodTek: comp,
+  fio       : string[60],
+  tabnmb    : longint,
+  vidopl    : word,
+  vidper    : word,
+  summa     : double,
+  changed   : byte,
+  cschetd   : string[20],
+  csubschd  : string[20],
+  ckaud     : array[1..6] of comp,
+  tbld      : array[1..6] of word,
+
+  nachkaud2 : string[80]
+) with index (
+  i01 = fio + vidper + vidopl,
+  i02 = changed + fio + vidper + vidopl
+);
+
+sql query SelectNachisl =
+select n.nrec,
+       p.fio, p.tabnmb, n.vidopl, n.summa,
+       coalesce(uvr.summa34,0), 0,
+       //счет, кау из начисления
+       n.cschetd, n.csubschd,
+       n.ckaud[1],     n.ckaud[2],     n.ckaud[3],     n.ckaud[4],     n.ckaud[5],     n.ckaud[6],
+       bs.kodtable[1], bs.kodtable[2], bs.kodtable[3], bs.kodtable[4], bs.kodtable[5], bs.kodtable[6],
+       //счет, кау из лицевого счета
+       ls.cschetd, ls.csubschd,
+       ls.ckaud[1], ls.ckaud[2], ls.ckaud[3], ls.ckaud[4], ls.ckaud[5], ls.ckaud[6],
+       ls.tbld[1],  ls.tbld[2],  ls.tbld[3],  ls.tbld[4],  ls.tbld[5],  ls.tbld[6]
+from nachisl n
+join buhschet bs on bs.schet='8'+n.cschetd and bs.subsch=n.csubschd
+join lschet ls on n.clsch = ls.nrec
+join persons p on ls.tperson = p.nrec
+left join uchrabvr uvr on n.clsch     = uvr.clsch and
+                          n.vidopls   = uvr.vidopl and
+                          n.datan     = uvr.datan and
+                          n.datok     = uvr.datok and
+                          n.cschetd   = uvr.cschetd and
+                          n.csubschd  = uvr.csubschd and
+                          n.ckaud[1]  = uvr.ckaud[1] and
+                          n.ckaud[2]  = uvr.ckaud[2] and
+                          n.ckaud[3]  = uvr.ckaud[3] and
+                          n.ckaud[4]  = uvr.ckaud[4] and
+                          n.ckaud[5]  = uvr.ckaud[5] and
+                          n.ckaud[6]  = uvr.ckaud[6] and
+                          uvr.summa34 = 1
+;
+
+sql query SelectNenachNalog =
+select pvt.nrec, p.fio, p.tabnmb, pvt.vidopl, pvt.vidper, pvt.sumper, 0,
+         n.cschetd,n.csubschd,
+         n.ckaud[1],n.ckaud[2],n.ckaud[3],n.ckaud[4],n.ckaud[5],n.ckaud[6],
+         n.tbld[1], n.tbld[2], n.tbld[3], n.tbld[4], n.tbld[5], n.tbld[6],
+         coalesce(spkau.code,'')
+from perevodtek pvt
+join persons p on pvt.tperson = p.nrec
+join nenach n on pvt.cnach = n.nrec
+left join spkau on n.ckaud[2] = spkau.nrec
+where pvt.otkuda='1'
+;
+
+create view
+var
+  new_code: string;
+  tnum    : word;
+  iw      : word;
+  flag    : byte;
+as select *
+from tt, nachisl nach, lschet lsc, spkau nkau, tp, perevodtek pvt
+where ((
+  tt.cNachisl    == nach.nrec and
+  nach.clsch     == lsc.nrec and
+  tp.cPerevodTek == pvt.nrec and
+  tnum           == nkau.kodgrkau and
+  new_code       == nkau.code
+))
+bounds byCh1 as 1 == tt.changed
+bounds byCh2 as 1 == tp.changed
+;
+tabbedsheet tbMain;
+show (,,,19);
+browse brNachisl 'Начисления';
+table tt;
+fields
+  tt.fio ' '#13'ФИО': [30], protect;
+  tt.tabnmb 'Таб.'#13'номер': [10], protect;
+  tt.vidopl 'Вид'#13'оплаты': [4], protect;
+  tt.summa ' '#13'Сумма': [8,2], protect;
+  if(tt.handmade=1,'Не менять', '') ' '#13'Корректировка': [5], protect;
+  '|' '': [2], skip, centered, noautosize;
+  nach.cschetd+if(nach.csubschd<>'', '.'+nach.csubschd,'') 'Было'#13'Счет/субсчет': [5], protect;
+  if(getanykau(0, nach.tbld[1], nach.ckaud[1]),givenanname(1),'') 'Было'#13'КАУ1': [10], protect;
+  if(getanykau(0, nach.tbld[2], nach.ckaud[2]),givenanname(1),'') 'Было'#13'КАУ2': [10], protect;
+  if(getanykau(0, nach.tbld[3], nach.ckaud[3]),givenanname(1),'') 'Было'#13'КАУ3': [10], protect;
+  if(getanykau(0, nach.tbld[4], nach.ckaud[4]),givenanname(1),'') 'Было'#13'КАУ4': [10], protect;
+  if(getanykau(0, nach.tbld[5], nach.ckaud[5]),givenanname(1),'') 'Было'#13'КАУ5': [10], protect;
+  if(getanykau(0, nach.tbld[6], nach.ckaud[6]),givenanname(1),'') 'Было'#13'КАУ6': [10], protect;
+  '|' '': [2], skip, centered, noautosize;
+  tt.cschetd+if(tt.csubschd<>'', '.'+tt.csubschd,'') 'Будет'#13'Счет/субсчет': [5], protect, {font={backcolor=if(nach.cschetd <> tt.cschetd or nach.csubschd <> tt.csubschd, 17,0);}};
+  if(getanykau(0, tt.tbld[1], tt.ckaud[1]),givenanname(1),'') 'Будет'#13'КАУ1': [10], protect, {font={backcolor=if(nach.ckaud[1] <> tt.ckaud[1], 17,0);}};
+  if(getanykau(0, tt.tbld[2], tt.ckaud[2]),givenanname(1),'') 'Будет'#13'КАУ2': [10], protect, {font={backcolor=if(nach.ckaud[2] <> tt.ckaud[2], 17,0);}};
+  if(getanykau(0, tt.tbld[3], tt.ckaud[3]),givenanname(1),'') 'Будет'#13'КАУ3': [10], protect, {font={backcolor=if(nach.ckaud[3] <> tt.ckaud[3], 17,0);}};
+  if(getanykau(0, tt.tbld[4], tt.ckaud[4]),givenanname(1),'') 'Будет'#13'КАУ4': [10], protect, {font={backcolor=if(nach.ckaud[4] <> tt.ckaud[4], 17,0);}};
+  if(getanykau(0, tt.tbld[5], tt.ckaud[5]),givenanname(1),'') 'Будет'#13'КАУ5': [10], protect, {font={backcolor=if(nach.ckaud[5] <> tt.ckaud[5], 17,0);}};
+  if(getanykau(0, tt.tbld[6], tt.ckaud[6]),givenanname(1),'') 'Будет'#13'КАУ6': [10], protect, {font={backcolor=if(nach.ckaud[6] <> tt.ckaud[6], 17,0);}};
+end;
+
+browse brPerevodTek 'Налоги';
+table tp;
+fields
+  tp.fio ' '#13'ФИО': [30], protect;
+  tp.tabnmb 'Таб.'#13'номер': [10], protect;
+  tp.vidopl 'Вид'#13'оплаты': [4], protect;
+  tp.vidper 'Номер'#13'переч.': [4], protect;
+  tp.summa ' '#13'Сумма': [8,2], protect;
+  '|' '': [2], skip, centered, noautosize;
+  pvt.cschetd+if(pvt.csubschd<>'', '.'+pvt.csubschd,'') 'Было'#13'Счет/субсчет': [5], protect;
+  if(getanykau(0, pvt.tbld[1], pvt.ckaud[1]),givenanname(1),'') 'Было'#13'КАУ1': [10], protect;
+  if(getanykau(0, pvt.tbld[2], pvt.ckaud[2]),givenanname(1),'') 'Было'#13'КАУ2': [10], protect;
+  if(getanykau(0, pvt.tbld[3], pvt.ckaud[3]),givenanname(1),'') 'Было'#13'КАУ3': [10], protect;
+  if(getanykau(0, pvt.tbld[4], pvt.ckaud[4]),givenanname(1),'') 'Было'#13'КАУ4': [10], protect;
+  if(getanykau(0, pvt.tbld[5], pvt.ckaud[5]),givenanname(1),'') 'Было'#13'КАУ5': [10], protect;
+  if(getanykau(0, pvt.tbld[6], pvt.ckaud[6]),givenanname(1),'') 'Было'#13'КАУ6': [10], protect;
+  '|' '': [2], skip, centered, noautosize;
+  tp.cschetd+if(tp.csubschd<>'', '.'+tp.csubschd,'') 'Будет'#13'Счет/субсчет': [5], protect, {font={backcolor=if(pvt.cschetd <> tp.cschetd or pvt.csubschd <> tp.csubschd, 17,0);}};
+  if(getanykau(0, tp.tbld[1], tp.ckaud[1]),givenanname(1),'') 'Будет'#13'КАУ1': [10], protect, {font={backcolor=if(pvt.ckaud[1] <> tp.ckaud[1], 17,0);}};
+  if(getanykau(0, tp.tbld[2], tp.ckaud[2]),givenanname(1),'') 'Будет'#13'КАУ2': [10], protect, {font={backcolor=if(pvt.ckaud[2] <> tp.ckaud[2], 17,0);}};
+  if(getanykau(0, tp.tbld[3], tp.ckaud[3]),givenanname(1),'') 'Будет'#13'КАУ3': [10], protect, {font={backcolor=if(pvt.ckaud[3] <> tp.ckaud[3], 17,0);}};
+  if(getanykau(0, tp.tbld[4], tp.ckaud[4]),givenanname(1),'') 'Будет'#13'КАУ4': [10], protect, {font={backcolor=if(pvt.ckaud[4] <> tp.ckaud[4], 17,0);}};
+  if(getanykau(0, tp.tbld[5], tp.ckaud[5]),givenanname(1),'') 'Будет'#13'КАУ5': [10], protect, {font={backcolor=if(pvt.ckaud[5] <> tp.ckaud[5], 17,0);}};
+  if(getanykau(0, tp.tbld[6], tp.ckaud[6]),givenanname(1),'') 'Будет'#13'КАУ6': [10], protect, {font={backcolor=if(pvt.ckaud[6] <> tp.ckaud[6], 17,0);}};
+end;
+end; //tabbedsheet
+
+screen scbot;
+show(,20,,) fixed_y;
+fields
+  flag: noprotect;
+buttons
+  cmDoOk, default;
+<<
+ <. Продолжить .>    [.] Отображать только изменения`
+>>
+end;
+
+procedure FillTbl;
+var
+  i, kateg_annum, podgr_annum: integer;
+{
+  SetVisualHeader('Загрузка начислений');
+  delete all tt;
+  //заполняем временную таблицу с начислениями
+  sqlSelectInto(SelectNachisl, #tt);
+  _loop tt
+  {
+    //пропускаем записи, созданные вручную. считаем их априори правильными, а так же определенные виды оплат
+    //if (tt.handmade=1) continue;               !!! не пропускаем ))
+
+    //проставляем заказ Прочие нужды там где надо
+    if(tt.cschetd='23' or tt.cschetd='26' or tt.cschetd='29' or tt.cschetd='44')
+    {
+      tt.tbld[1]  := 40;
+      tt.ckaud[1] := 400101CD65EDBD15h;
+    }
+    //проставляем категорию и подгруппу из лицевого счета
+    kateg_annum := 0;
+    podgr_annum := 0;
+    for (i:=1;i<=6;i++)
+    {
+      if (tt.tbld[i]=10036) kateg_annum := i
+      else if (tt.tbld[i]=10057) podgr_annum := i;
+    }
+    for (i:=1;i<=6;i++)
+    {
+      if (kateg_annum>0 and tt.lstbld[i]=10036)
+      {
+        if (tt.ckaud[kateg_annum]=0) tt.ckaud[kateg_annum] := tt.lsckaud[i]
+      }
+      else
+      {
+        if (podgr_annum>0 and tt.lstbld[i]=10057)
+          if (tt.ckaud[podgr_annum]=0) tt.ckaud[podgr_annum] := tt.lsckaud[i];
+      }
+    }
+    //для определенных видов оплат поменяем кау, для этого определяем код нового кау в зависимости от вида оплаты и счета
+    new_code:='';
+    case tt.vidopl of
+      520, 521, 522:
+      // Пособие по вр. нетр.
+      {
+        case tt.cschetd of
+          '23': new_code:='23010201';      // Больничные за счет работодателя
+          '26': new_code:='26010201';      // Больничные за счет работодателя
+          '44': new_code:='44010201';      // Больничные за счет работодателя
+          '29': new_code:='29010201';      // Больничные за счет работодателя
+          '08': new_code:='08020201';      // Больничные за счет работодателя
+          '20':
+          {
+            new_code:='20020201';          // Больничные за счет работодателя
+            tt.csubschd:='18';
+          }
+        end;
+      }
+      44, 45, 100, 101, 102:
+      // Районный коэфициент, Северные надбавки, Сдельная оплата
+      // Повременная оплата по тарифным ставкам, Начис. по должностным (месячным) окладам
+      {
+        case tt.cschetd of
+          '23': new_code:='23010101';       // Должностной оклад
+          '26': new_code:='26010101';       // Должностной оклад
+          '44': new_code:='44010101';       // Должностной оклад
+          '29': new_code:='29010101';       // Должностной оклад
+          '08': new_code:='08020101';       // Должностной оклад
+          '20':
+          {
+            new_code:='20020101';           // Должностной оклад
+            tt.csubschd:='03';
+          }
+        end;
+      }
+      130, 133, 135, 241, 242:
+      // Доплата за  работу  в выходные  дни на объекте,
+      // Доплата  за работу  на объекте, Работа в выход. и празд. дни на объекте
+      // Доплата  за уч. в исп.  при нах. об-в в море на надв. кор.,
+      // Доплата  за уч. в исп.  при нах. об-в в море на подв. кор.
+      {
+        case tt.cschetd of
+          '20':
+          {
+            new_code:='20020105';           // Доплата за работу на объекте
+            tt.csubschd:='0301';
+          }
+          '26': new_code:='26010106';
+        end;
+      }
+      103, 149:
+      // Оплата договоров подряда, Оплата договоров подряда (с начислением СВ )
+      {
+        case tt.cschetd of
+          '23': new_code:='23010106';   // Заработная плата сторонних лиц
+          '26': new_code:='26010105';   // Заработная плата сторонних лиц
+          '44': new_code:='44010105';   // Заработная плата сторонних лиц
+          '29': new_code:='29010105';   // Заработная плата сторонних лиц
+          '08': new_code:='08020106';   // Заработная плата сторонних лиц
+          '20':
+          {
+            new_code:='20020107';       // Заработная плата сторонних лиц
+            tt.csubschd:='19';
+          }
+        end;
+      }
+      106:
+      // Оплата за время командировки
+      {
+        case tt.cschetd of
+          '23': new_code:='23010105';   // Оплата за время командировки
+          '26': new_code:='26010106';   // Оплата за время командировки
+          '44': new_code:='44010106';   // Оплата за время командировки
+          '29': new_code:='29010106';   // Оплата за время командировки
+          '08': new_code:='08020105';   // Оплата за время командировки
+          '20':
+          {
+            new_code:='20020106';       // Оплата за время командировки
+            tt.csubschd:='03';
+          }
+        end;
+      }
+      114:
+      // Вознаграждение по итогам работы за год
+      {
+        case tt.cschetd of
+          '23': new_code:='23010104';      //  Премия годовая
+          '26': new_code:='26010104';      //  Премия годовая
+          '44': new_code:='44010104';      //  Премия годовая
+          '29': new_code:='29010104';      //  Премия годовая
+          '08': new_code:='08020104';      //  Премия годовая
+          '20':
+          {
+            new_code:='20020104';          //  Премия годовая
+            tt.csubschd:='03';
+          }
+        end;
+      }
+      108:
+      // Ежемесячная премия
+      {
+        case tt.cschetd of
+          '23': new_code:='23010102';   //  Премия ежемесячная
+          '26': new_code:='26010102';   //  Премия ежемесячная
+          '44': new_code:='44010102';   //  Премия ежемесячная
+          '29': new_code:='29010102';   //  Премия ежемесячная
+          '08': new_code:='08020102';   //  Премия ежемесячная
+          '20':
+          {
+            new_code:='20020102';       //  Премия ежемесячная
+            tt.csubschd:='03';
+          }
+        end;
+      }
+      107:
+      // Вознагражд.  по итогам работы за квартал
+      {
+        tt.cschetd  := tt.lscschetd;
+        tt.csubschd := tt.lscsubschd;
+        tt.ckaud[1] := tt.lsckaud[1];
+        tt.ckaud[2] := tt.lsckaud[2];
+        tt.ckaud[3] := tt.lsckaud[3];
+        tt.ckaud[4] := tt.lsckaud[4];
+        tt.ckaud[5] := tt.lsckaud[5];
+        tt.ckaud[6] := tt.lsckaud[6];
+        case tt.cschetd of
+          '23': new_code:='23010103';   //  Премия квартальная
+          '26': new_code:='26010103';   //  Премия квартальная
+          '44': new_code:='44010103';   //  Премия квартальная
+          '29': new_code:='29010103';   //  Премия квартальная
+          '08': new_code:='08020103';   //  Премия квартальная
+          '20':
+          {
+            //if tt.ckaud[3] = 0001000000000B04h //для работников ПТП
+            //{
+            //  tt.cschetd  := '26';
+            //  tt.csubschd := '01';
+            //  tt.tbld[1]  := 40;
+            //  tt.ckaud[1] := 400101CD65EDBD15h;
+            //  new_code := '26010103'
+            //}
+            //else
+            //{
+              new_code:='20020103';       //  Премия квартальная
+              tt.csubschd:='03';
+            //}
+          }
+        end;
+      }
+      104, 200, 201, 202, 214, 228, 410, 411, 511:
+      // Оплата по среднему заработку
+      // Оплата льг. час подр, инвалиды 1,2 гр.
+      // Оплата Гос. обязанностей
+      // Оплата донорам за сдачу крови
+      // Денежная компенсация дополн. отпусков
+      // Компенсация при увольнении (по соглашению сторон)
+      // Выплаты увол. на пер труд (сокр. штата)
+      // Выходное пособие при  увольнении  (2-х недельное)
+      // Проездные билеты
+      {
+        case tt.cschetd of
+          '23': new_code:='23010203';  // Прочие выплаты по ДЗП
+          '26': new_code:='26010205';  // Прочие выплаты по ДЗП
+          '44': new_code:='44010205';  // Прочие выплаты по ДЗП
+          '29': new_code:='29010205';  // Прочие выплаты по ДЗП
+          '08': new_code:='08020203';  // Прочие выплаты по ДЗП
+          '20':
+          {
+            new_code:='20020203';      // Прочие выплаты по ДЗП
+            tt.csubschd:='04';
+          }
+        end;
+      }
+      115, 117, 118, 119, 120, 121, 122, 123, 126, 127, 128, 129, 131, 134, 137, 138, 139, 140, 148, 150:
+      // Единовременное премирование, Доплата за совмещ. проф и расширение зон,
+      // Доплата за межраз разницу, Доплата за время заместительства,
+      // Доплата за вредн. сдельщ., Доплата за вредность повременщикам,
+      // Доплата за вредность объекта (20-100), Доплата за работу в ночное время
+      // Доплата руководителям стажировки, Доплата за руководство практикой
+      // Доплата за работу в выход. и празд. дни, Доплата за работу сверхурочно (150%)
+      // Доплата ученикам, Надбавка рабочим за проф. мастерство,
+      // Персон. надбав. из ФЗП за высок. квалиф., Процентная надбавка-секретность,
+      // Надб. мол. спец. на период стажировки, Вознаграждение авторам за патент
+      {
+        case tt.cschetd of
+          '23': new_code:='23010107';    // Прочие выплаты по ОЗП
+          '26': new_code:='26010107';    // Прочие выплаты по ОЗП
+          '44': new_code:='44010107';    // Прочие выплаты по ОЗП
+          '29': new_code:='29010107';    // Прочие выплаты по ОЗП
+          '08': new_code:='08020107';    // Прочие выплаты по ОЗП
+          '20':
+          {
+            new_code:='20020108';        // Прочие выплаты по ОЗП
+            tt.csubschd:='03';
+          }
+        end;
+      }
+      206, 207, 210:
+      //Оплата очеред. отпуска тек. м-ца из ФЗП
+      //if (tt.ckaud[2] = 0)
+      {
+        case tt.lscschetd+'.'+tt.lscsubschd of
+          '29.01': new_code := '0100601'; //О/Л отпуск
+          '29.02': new_code := '0100501'; //Гостиница отпуск
+          '29.04': new_code := '0100401'; //Столовая отпуск
+          '26.05': new_code := '0100801'; //ВОХР отпуск
+          '23.01': new_code := '0100701'; //Трансп.цех отпуск
+        else
+        {
+          if (tt.lstbld[3] = 10057) i := 3 else i := 4;
+          case tt.lsckaud[i] of
+            0001000000000B04h: new_code:= '0100101';  //ПТП - ПТП Отпуск
+            0001000000000B05h: new_code:= '0100201';  //НВП - НВП Отпуск
+            0001000000000B06h: new_code:= '00100301'; //АУП - АУП отпуск
+          end;
+        }
+        end;
+      }
+      208,209:
+      // Оплата отпуска по учебе текущего месяца
+      // Оплата отпуска по учебе будущего месяца
+      {
+        case tt.cschetd of
+          '23': new_code:='23010203';   //  Прочие выплаты по ДЗП
+          '26': new_code:='26010204';   //  Учебный отпуск
+          '44': new_code:='44010204';   //  Учебный отпуск
+          '29': new_code:='29010204';   //  Учебный отпуск
+          '08': new_code:='08020203';   //  Прочие выплаты по ДЗП
+          '20': new_code:='26010204';   //  Учебный отпуск
+        end;
+      }
+      /*  Изменение 31.08.2015: 210 в/о преобразуется как 206
+      210:
+      // Компенсация за неиспользованный отпуск
+      {
+        case tt.cschetd of
+          '23': new_code:='23010203';  //  Прочие выплаты по ДЗП
+          '26': new_code:='26010203';  //  Компенсация за неиспользованный отпуск
+          '44': new_code:='44010203';  //  Компенсация за неиспользованный отпуск
+          '29': new_code:='29010203';  //  Компенсация за неиспользованный отпуск
+          '08': new_code:='08020203';  //  Прочие выплаты по ДЗП
+          '20':
+          {
+            new_code:='20020203';      //  Прочие выплаты по ДЗП
+            tt.csubschd:='04';
+          }
+        end;
+      }
+      */
+      110: // Премия по сдельной оплате труда
+      {
+        case tt.cschetd of
+          '20': new_code:='20020102'; // Премия ежемесячная
+          '23': new_code:='23010102'; // Премия ежемесячная
+          '26': new_code:='26010102'; // Премия ежемесячная
+          '44': new_code:='44010102'; // Премия ежемесячная
+          '29': new_code:='29010102'; // Премия ежемесячная
+          '08': new_code:='08020102'; // Премия ежемесячная
+        end;
+      }
+      515,212,141,401,605,215,400,402,304,602:
+      // этот блок начислений пойдет на 91 счет, сначала заполняем все общее
+      // Материальная выгода ( страхование  членов совета директоров)
+      // Вознаграждение членам совета директоров
+      // Компенсация до 3 лет
+      // Путевки в детские оздоровительные лагеря
+      // Материальная помощь к отпуску
+      // Материальная помощь на оплату  санаторных путевок
+      // Материальная помощь на лечение и медицинское обслуживание
+      // Подарки
+      // Списание просроч. задолжности (3года)
+      {
+        tt.cschetd  := '91';
+        tt.csubschd := '12';
+        tt.tbld[1]  := 161;
+        tt.tbld[2]  := 0;
+        tt.tbld[3]  := 0;
+        tt.tbld[4]  := 0;
+        tt.tbld[5]  := 0;
+        tt.tbld[6]  := 0;
+        tt.ckaud[2] := 0;
+        tt.ckaud[3] := 0;
+        tt.ckaud[4] := 0;
+        tt.ckaud[5] := 0;
+        tt.ckaud[6] := 0;
+        case tt.vidopl of
+          515:     new_code:='9101010801';   //  Возмещение причиненных убытков Обществу
+          212:     new_code:='9102021901';   //  Выплаты, вознаграждения членам СД и ревизионной комиссии
+          141:     new_code:='9102021501';   //  Доплата за ученую степень
+          401:     new_code:='9102021308';   //  Компенсация матерям, находящимся в отпуске по уходу за ребенком от 1,5 до 3 лет
+          605:     new_code:='9102021305';   //  Компенсация путевок в оздоровительный лагерь
+          215:     new_code:='9102021301';   //  Материальная помощь к отпуску
+          400,402: new_code:='9102021304';   //  Материальная помощь на лечение и медицинское обслуживание
+          304:     new_code:='9102021404';   //  Подарки, призы и прочие
+          602:     new_code:='9102011301';   //  Списание дебиторской задолженности
+        end;
+      }
+    end; //case tt.vidopl
+
+    //устанавливаем ссылку на определенное кау
+    case tt.cschetd of
+      '91':
+      {
+        tnum:=161;
+        if (new_code <> '' and getfirst nkau = tsOK)
+        {
+          tt.tbld[1] := tnum;
+          tt.ckaud[1]:= nkau.nrec;
+        }
+      }
+      '96':
+      {
+        if (tt.csubschd='01')
+        {
+          tnum := 151;
+          if (new_code <> '' and getfirst nkau = tsOK)
+          {
+            tt.tbld[2] := tnum;
+            tt.ckaud[2]:= nkau.nrec;
+          }
+        }
+      }
+    else
+    {
+      tnum:=10016;
+      if (new_code <> '' and getfirst nkau = tsOK)
+      {
+        tt.tbld[2] := tnum;
+        tt.ckaud[2]:= nkau.nrec;
+      }
+    }
+    end;
+
+    update current tt;
+
+  } //_loop tt
+
+  update tt where ((tt.cnachisl /== nach.nrec and (
+                    nach.cschetd  <> tt.cschetd or
+                    nach.csubschd <> tt.csubschd or
+                    nach.ckaud[1] <> tt.ckaud[1] or
+                    nach.ckaud[2] <> tt.ckaud[2] or
+                    nach.ckaud[3] <> tt.ckaud[3] or
+                    nach.ckaud[4] <> tt.ckaud[4] or
+                    nach.ckaud[5] <> tt.ckaud[5] or
+                    nach.ckaud[6] <> tt.ckaud[6] ) )) set tt.changed := 1;
+
+  SetVisualHeader('Загрузка налогов');
+  delete all tp;
+  insert tp (cPerevodTek,fio,tabnmb,vidopl,vidper,summa,
+             cschetd,csubschd,
+             ckaud[1],ckaud[2],ckaud[3],ckaud[4],ckaud[5],ckaud[6],
+             tbld[1], tbld[2], tbld[3], tbld[4], tbld[5], tbld[6],
+             nachkaud2)
+  select pvt.nrec, tt.fio, tt.tabnmb, pvt.vidopl, pvt.vidper, pvt.sumper,
+         tt.cschetd,tt.csubschd,
+         tt.ckaud[1],tt.ckaud[2],tt.ckaud[3],tt.ckaud[4],tt.ckaud[5],tt.ckaud[6],
+         tt.tbld[1], tt.tbld[2], tt.tbld[3], tt.tbld[4], tt.tbld[5], tt.tbld[6],
+         spkau.code
+  from perevodtek pvt, tt, spkau
+  where ((
+    pvt.cnach   == tt.cnachisl and
+    tt.ckaud[2] == spkau.nrec
+  )) and pvt.otkuda='0';
+
+  sqlSelectInto(SelectNenachNalog, #tp);
+
+  tnum:=10016;
+  _loop tp where (tp.cschetd <> '91' and tp.vidopl <> 517 and tp.vidopl <> 518 and tp.vidopl <> 519)
+  {
+    new_code:='';
+    case tp.nachkaud2 of
+       '20020101': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030101'; //  Страховые взносы (должностной оклад)
+       '20020102': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030102'; //  Страховые взносы (премия ежемесячная)
+       '20020103': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030103'; //  Страховые взносы (премия квартальная)
+       '20020104': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030104'; //  Страховые взносы (премия годовая)
+       '20020105': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030105'; //  Страховые взносы (доплата за работу на объекте)
+       '20020106': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030106'; //  Страховые взносы (оплата за время командировки)
+       '20020107': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030107'; //  Страховые взносы (заработная плата сторонних лиц)
+       '20020108': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030108'; //  Страховые взносы (прочие выплаты по ОЗП)
+       '20020201': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030109'; //  Страховые взносы (больничные за счет работодателя)
+       '20020202': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030110'; //  Страховые взносы (оценочное обязательство по оплате отпусков)
+       '20020203': if pvt.vidper=50 then new_code:='20030201'; //  Профриск
+                   else                  new_code:='20030111'; //  Страховые взносы (прочие выплаты по ДЗП)
+       '08020101': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030101'; //  Страховые взносы (должностной оклад)
+       '08020102': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030102'; //  Страховые взносы (премия ежемесячная)
+       '08020103': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030103'; //  Страховые взносы (должностной оклад)
+       '08020104': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030104'; //  Страховые взносы (премия годовая)
+       '08020105': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030105'; //  Страховые взносы (оплата за время командировки)
+       '08020106': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030106'; //  Страховые взносы (заработная плата сторонних лиц)
+       '08020107': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030107'; //  Страховые взносы (прочие выплаты по ОЗП)
+       '08020201': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030108'; //  Страховые взносы (больничные за счет работодателя)
+       '08020202': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030109'; //  Страховые взносы (Оценочное обязательство по оплате отпусков)
+       '08020203': if pvt.vidper=50 then new_code:='08031001'; //  Профриск
+                   else                  new_code:='08030110'; //  Страховые взносы (прочие выплаты по ДЗП)
+       '23010101': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020101'; //  Страховые взносы (должностной оклад)
+       '23010102': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020102'; //  Страховые взносы (премия ежемесячная)
+       '23010103': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020103'; //  Страховые взносы (премия квартальная)
+       '23010104': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020104'; //  Страховые взносы (премия годовая)
+       '23010105': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020105'; //  Страховые взносы (оплата за время командировки)
+       '23010106': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020106'; //  Страховые взносы (заработная плата сторонних лиц)
+       '23010107': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020107'; //  Страховые взносы (прочие выплаты по ОЗП)
+       '23010201': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020108'; //  Страховые взносы (больничные за счет работодателя)
+       '23010202': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020109'; //  Страховые взносы (оценочное обязательство по оплате отпусков)
+       '23010203': if pvt.vidper=50 then new_code:='23020201'; //  Профриск
+                   else                  new_code:='23020110'; //  Страховые взносы (прочие выплаты по ДЗП)
+       '26010101': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020101'; //  Страховые взносы (должностной оклад)
+       '26010102': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020102'; //  Страховые взносы (ежемесячная премия)
+       '26010103': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020103'; //  Страховые взносы (квартальная премия)
+       '26010104': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020104'; //  Страховые взносы (годовая премия)
+       '26010105': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020105'; //  Страховые взносы (заработная плата сторонних лиц)
+       '26010106': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020106'; //  Страховые взносы (оплата за время командировки)
+       '26010107': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020107'; //  Страховые взносы (прочие выплаты по ОЗП)
+       '26010201': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020108'; //  Страховые взносы (больничные за счет работодателя)
+       '26010202': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020109'; //  Страховые взносы (оценочные обязательства по оплате отпусков)
+       '26010203': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020110'; //  Страховые взносы (компенсация за неиспользованный отпуск)
+       '26010204': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020111'; //  Страховые взносы (учебный отпуск)
+       '26010205': if pvt.vidper=50 then new_code:='26020201'; //  Профриск
+                   else                  new_code:='26020112'; //  Страховые взносы (прочие выплаты по ДЗП)
+       '29010101': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020101'; //  Страховые взносы (должностной оклад)
+       '29010102': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020102'; //  Страховые взносы (ежемесячная премия)
+       '29010103': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020103'; //  Страховые взносы (квартальная премия)
+       '29010104': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020104'; //  Страховые взносы (годовая премия)
+       '29010105': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020105'; //  Страховые взносы (заработная плата сторонних лиц)
+       '29010106': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020106'; //  Страховые взносы (оплата за время командировки)
+       '29010107': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020107'; //  Страховые взносы (прочие выплаты по ОЗП)
+       '29010201': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020108'; //  Страховые взносы (больничные за счет работодателя)
+       '29010202': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020109'; //  Страховые взносы (оценочные обязательства по оплате отпусков)
+       '29010203': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020110'; //  Страховые взносы (компенсация за неиспользованный отпуск)
+       '29010204': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020111'; //  Страховые взносы (учебный отпуск)
+       '29010205': if pvt.vidper=50 then new_code:='29020201'; //  Профриск
+                   else                  new_code:='29020112'; //  Страховые взносы (прочие выплаты по ДЗП)
+       '44010101': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020101'; //  Страховые взносы (должностной оклад)
+       '44010102': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020102'; //  Страховые взносы (ежемесячная премия)
+       '44010103': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020103'; //  Страховые взносы (квартальная премия)
+       '44010104': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020104'; //  Страховые взносы (годовая премия)
+       '44010105': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020105'; //  Страховые взносы (заработная плата сторонних лиц)
+       '44010106': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020106'; //  Страховые взносы (оплата за время командировки)
+       '44010107': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020107'; //  Страховые взносы (прочие выплаты по ОЗП)
+       '44010201': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020108'; //  Страховые взносы (больничные за счет работодателя)
+       '44010202': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020109'; //  Страховые взносы (оценочные обязательства по оплате отпусков)
+       '44010203': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020110'; //  Страховые взносы (компенсация за неиспользованный отпуск)
+       '44010204': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020111'; //  Страховые взносы (учебный отпуск)
+       '44010205': if pvt.vidper=50 then new_code:='44020201'; //  Профриск
+                   else                  new_code:='44020112'; //  Страховые взносы (прочие выплаты по ДЗП)
+    end;
+
+    if tp.cschetd = '20'
+    {
+      if (pvt.vidper=50)
+      {
+        tp.csubschd := '06';
+      }
+      else
+      {
+        if tp.csubschd = '19'
+          tp.csubschd := '20'
+        else
+          tp.csubschd := '05';
+      }
+    }
+    else if tp.cschetd = '96'
+    {
+      case tp.ckaud[2] of
+        4001592F42BADF98h: tp.ckaud[2] := 4001823287598BCDh;
+        4001F4AC55762FACh: tp.ckaud[2] := 40013F49F96C8830h;
+        4001B786F44202C9h: tp.ckaud[2] := 40011C78DEE6EEF8h;
+        4001FDC9A8508ED1h: tp.ckaud[2] := 4001567F644BDECAh;
+        4001B7A4EF20050Ch: tp.ckaud[2] := 400103EEB1833061h;
+        4001EB8F47E5DA56h: tp.ckaud[2] := 400175BB9C0A0A88h;
+        4001D62FFE1B7D92h: tp.ckaud[2] := 4001C2B84D3E75C4h;
+        400142F679C8686Fh: tp.ckaud[2] := 40010FD39EA0F1F1h;
+        0001000000000091h: tp.ckaud[2] := 0001000000000092h;
+      end;
+    }
+
+    if (new_code <> '' and getfirst nkau = tsOK) then
+      tp.ckaud[2]:=nkau.nrec;
+
+    update current tp;
+
+  }
+
+  update tp where (tp.vidopl = 517 and tp.vidopl = 518 and tp.vidopl = 519) set tp.cschetd := '69', tp.csubschd := '10', tp.ckaud[1] := 0001000000000635h, tp.tbld[1] := 10017, tp.ckaud[2] := 0, tp.ckaud[3] := 0, tp.ckaud[4] := 0, tp.ckaud[5] := 0;
+
+  update tp where (( tp.cPerevodTek /== pvt.nrec and (
+                    pvt.cschetd  <> tp.cschetd  or
+                    pvt.csubschd <> tp.csubschd or
+                    pvt.ckaud[1] <> tp.ckaud[1] or
+                    pvt.ckaud[2] <> tp.ckaud[2] or
+                    pvt.ckaud[3] <> tp.ckaud[3] or
+                    pvt.ckaud[4] <> tp.ckaud[4] or
+                    pvt.ckaud[5] <> tp.ckaud[5] or
+                    pvt.ckaud[6] <> tp.ckaud[6] )  )) set tp.changed := 1;
+
+
+}
+
+handleevent
+cmCheckField:
+{
+  case curfield of
+    #flag:
+    {
+      if (flag and 1) > 0
+      {
+        if not BoundActive(tbByCh1) then addBounds(tbByCh1);
+        if not BoundActive(tbByCh2) then addBounds(tbByCh2);
+      }
+      else
+      {
+        if BoundActive(tbByCh1) then subBounds(tbByCh1);
+        if BoundActive(tbByCh2) then subBounds(tbByCh2);
+      }
+      rereadrecord;
+    }
+  end;
+}
+cmDoOk:
+{
+  if message('Провести изменения в начислениях и соц. налогах?', YesNo+Confirmation) = cmYes
+  {
+    StartNewVisual(vtRotateVisual, vfThread + vfTimer, 'Изменение данных начислений', 0);
+    _loop tt
+    {
+      if getfirst nach = tsOk
+      {
+        nach.cschetd := tt.cschetd;
+        nach.csubschd := tt.csubschd;
+        nach.tbld[1] := tt.tbld[1];
+        nach.tbld[2] := tt.tbld[2];
+        nach.tbld[3] := tt.tbld[3];
+        nach.tbld[4] := tt.tbld[4];
+        nach.tbld[5] := tt.tbld[5];
+        nach.tbld[6] := tt.tbld[6];
+        nach.ckaud[1] := tt.ckaud[1];
+        nach.ckaud[2] := tt.ckaud[2];
+        nach.ckaud[3] := tt.ckaud[3];
+        nach.ckaud[4] := tt.ckaud[4];
+        nach.ckaud[5] := tt.ckaud[5];
+        nach.ckaud[6] := tt.ckaud[6];
+        update current nach;
+      }
+    }
+    SetVisualHeader('Изменение данных соц. налогов');
+    _loop tp
+    {
+      if getfirst pvt = tsOk
+      {
+        pvt.cschetd := tp.cschetd;
+        pvt.csubschd := tp.csubschd;
+        pvt.tbld[1] := tp.tbld[1];
+        pvt.tbld[2] := tp.tbld[2];
+        pvt.tbld[3] := tp.tbld[3];
+        pvt.tbld[4] := tp.tbld[4];
+        pvt.tbld[5] := tp.tbld[5];
+        pvt.tbld[6] := tp.tbld[6];
+        pvt.ckaud[1] := tp.ckaud[1];
+        pvt.ckaud[2] := tp.ckaud[2];
+        pvt.ckaud[3] := tp.ckaud[3];
+        pvt.ckaud[4] := tp.ckaud[4];
+        pvt.ckaud[5] := tp.ckaud[5];
+        pvt.ckaud[6] := tp.ckaud[6];
+        update current pvt;
+      }
+    }
+    stopvisual('Обновление завершено',0);
+  }
+}
+
+cmInit:
+{
+  StartNewVisual(vtRotateVisual, vfThread + vfTimer, '', 0);
+  FillTbl;
+  StopVisual('', 0);
+}
+end;
+end.
+
+VipInterface UserReport_AGAT_ZAR_RAZN Implements IUserReport licensed(free);
+Interface UserReport_AGAT_ZAR_RAZN;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::ZAR_RAZN);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Разноска начислений и соцналогов';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    Level := Level;
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'MenuZarp';
+    end;
+  end;
+end.
