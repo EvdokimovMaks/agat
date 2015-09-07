@@ -1204,6 +1204,7 @@
 /i:"../RKM/Alter" 
 /i:"../RKM/DeflatorResolver" 
 /i:"../RKM/EditRKM" 
+/i:"../RKM/EditRKM8D"
 /i:"../RKM/Explosion" 
 /i:"../RKM/PriceFinder" 
 /i:"../RKM/Reports" 

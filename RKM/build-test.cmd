@@ -1,2 +1,2 @@
-@call ../config/build.cmd test RKM.prj
-@call ../config/frres.cmd test RKM reports
+@call ../config/build.cmd test ArgumentRKM.prj
+@call ../config/frres.cmd test ArgumentRKM reports

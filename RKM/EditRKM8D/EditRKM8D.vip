@@ -1,4 +1,5 @@
 #include EditRKM8D.vih
+#include DeflatorResolver.vih
 #include Query.vih
 #include Marker.vih
 
@@ -70,24 +71,31 @@ group by spm.nrec, year(datetime(per.dend, 0))
 const
   DopTblRKM = comp(-10);
   ATTRNAM_PROFCOEFF = 'Коэффициент сложности (для РКМ)';
+  DEFLATOR_GROUP_SALARY = 000100000000101Ch;
 end;
 
 var
   _parentNrec: comp;
   _marks     : longint;
   _yearcount : byte;
+  _curMnplanNrec: comp;
   _yearStart : word;
   _yearEnd   : word;
   _getkau    : GetKau;
   _extAttr   : iExtAttr;
+  _deflatorResolver: AGAT::oDeflatorResolver;
+
   _savedSpmnplanNrec: comp;
   _baseYear  : word;
+
+  _calcPercentTotalLabor: double;
+  _calcPercentPercent: double;
 
 create view
 as select *
 from tRKM8D t, tRKM8D tParent, trkm8dProfs tp, catalogs catProf,
      tRKM8D, tRKM8D tRKM8D1, trkm8dProfs,
-     fpperiod, spmnplan, spmnpl, valspmnp, mnanal, pick, dopinfo
+     fpperiod, spmnplan, spmnpl, valspmnp, mnanal, pick, dopinfo, mnplan
 where ((
   _parentNrec    == t.ParentNrec and
   t.ParentNrec   == tParent.Nrec and
@@ -124,6 +132,21 @@ where ((
   0            == paramvol.cmaster and
   11007        == paramvol.tobject and
   _mnfOperNrec == paramvol.cobject
+));
+
+create view vDefl
+var
+  _deflMnplanNrec: comp;
+  _deflGroupSalary: comp;
+as select *
+from objacct deflatorOA, mnplan deflMnplanOA, mnplan deflMnplan, spkau deflGroup, tRKM8D tPicked, tRKM8D tChild
+where ((
+  4                      == deflatorOA.typeown  and
+  _curMnplanNrec         == deflatorOA.cowner   and
+  4                      == deflatorOA.typeobj  and
+  deflatorOA.cobject     == deflMnplanOA.nrec and (deflMnplanOA.cwayaccou = WAYACCOU_DEFLATOR) and
+  _deflMnplanNrec        == deflMnplan.nrec and
+  _deflGroupSalary       == deflGroup.nrec
 ));
 
 create view vChild
@@ -238,6 +261,7 @@ procedure PickProf;
   if cnt = 1
   {
     tp.ProfNrec := c;
+    tp.Coeff := GetProfCoeff(c);
     setmodified(true);
     rescanpanel(#tp);
   }
@@ -269,6 +293,240 @@ procedure PickProf;
 }
 
 //#endregion -------------------------------------------------------------------------------------------------
+
+//#region CalcPercent
+window wCalcPercent 'Трудоемкость: сумма по помеченным статьям * %', escclose, doaccept;
+show (,,50,5);
+screen scCalcPercent;
+buttons
+  cmCalcPercentRecalc;
+  cmCalcPercentDoOk, default;
+  cmCalcPercentCancel;
+fields
+  round(_calcPercentTotalLabor,3): skip;
+  _calcPercentPercent: noprotect;
+  round(_calcPercentTotalLabor * _calcPercentPercent / 100, 3): skip, left;
+<<
+ Результат = Сумма по помеченным статьям * процент
+ .@@@@@@@@@@@@@ * .@@@@@ = .@@@@@@@@@@@@@@@
+
+ <. Пересчет .> <. Установить .> <. Отмена .>
+>>
+end;
+handleevent
+  cmCheckField:
+  {
+    rescanpanel(scCalcPercent);
+  }
+  cmCalcPercentRecalc:
+  {
+    rescanpanel(scCalcPercent);
+  }
+  cmCalcPercentDoOk:
+  {
+    CloseWindowEx(wCalcPercent, cmDefault);
+  }
+  cmCalcPercentCancel:
+  {
+    CloseWindowEx(wCalcPercent, cmCancel);
+  }
+end;
+end;
+
+procedure CalcPercent;
+{
+  _calcPercentTotalLabor := 0;
+  _loop trkm8d where foundmarker(_marks, trkm8d.nrec)
+  {
+    _calcPercentTotalLabor += trkm8d.TotalLabor;
+  }
+  if (runwindowmodal(wCalcPercent) = cmDefault)
+  {
+    t.TotalLabor :=  round(_calcPercentTotalLabor * _calcPercentPercent / 100, 3);
+    if (t.NoveltyCoeff = 0) t.NoveltyCoeff := 1;
+    if (t.DiffCoeff = 0) t.DiffCoeff := 1;
+    t.TotalLaborBase := t.TotalLabor / t.NoveltyCoeff / t.DiffCoeff;
+    ProcessCurrentRecord;
+  }
+}
+
+//#endregion
+
+//#region CalcDiffCoeff
+
+procedure CalcDiffCoeff;
+{
+  var persQty: double;
+  persQty := 0;
+  pushpos(#tp);
+  _loop tp
+    persQty += tp.Qty;
+  if persQty <= 0
+  {
+    message('Не указаны количества сотрудников по должностям. Расчет не выполнен.', warning);
+    exit;
+  }
+  t.DiffCoeff := 0;
+  _loop tp
+    t.DiffCoeff += tp.Qty / persQty * tp.Coeff;
+  poppos(#tp);
+  ProcessCurrentRecord;
+}
+
+//#endregion
+
+//#region CalcDeflCoeff
+
+window wCalcDeflCoeff 'Расчет индексов-дефляторов' escclose, doaccept;
+show (,,80, 6);
+function GetDeflMnplanName: string;
+{
+  result := if(vDefl.getfirst deflMnplan = tsOk, vDefl.deflMnplan.name, '');
+}
+
+function GetDeflGroupSalaryName: string;
+{
+  result := if(vDefl.getfirst deflGroup = tsOk, vDefl.deflGroup.Name, '');
+}
+
+screen scCalcDeflCoeff;
+fields
+  [DeflMnplanName] GetDeflMnplanName: protect, pickbutton;
+  [DeflGroupSalaryName] GetDeflGroupSalaryName: protect, pickbutton;
+buttons
+  cmCalcDeflCoeff, default;
+  cmCancel;
+<<
+
+`План с коэффициентами-дефляторами` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Группа коэффициентов`              .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                                                 <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+cmPick:
+{
+  case curfield of
+    #DeflMnplanName:
+    {
+      var c: comp;
+      c := vDefl._deflMnplanNrec;
+      if _getkau.GetCodeKau(1, 28, c) > 0
+      {
+        vDefl._deflMnplanNrec := c;
+        rereadrecord;
+      }
+    }
+    #DeflGroupSalaryName:
+    {
+      var c: comp;
+      c := vDefl._deflGroupSalary;
+      if _getkau.GetCodeKau(1, KODGRKAU_DEFLATOR_GROUPS, c) > 0
+      {
+        vDefl._deflGroupSalary := c;
+        rereadrecord;
+      }
+    }
+  end;
+}
+cmCalcDeflCoeff:
+{
+  closewindowex(wCalcDeflCoeff, cmDefault);
+}
+cmInit:
+{
+  //Ищем план с коэффициентами во входящих к текущему документу.
+  vDefl._deflMnplanNrec := 0;
+
+  vDefl._loop deflatorOA
+  {
+    if vDefl.getfirst deflMnplanOA = tsOk
+    {
+      vDefl._deflMnplanNrec := vDefl.deflMnplanOA.nrec;
+      break;
+    }
+  }
+
+  //Если не находим во входящих - используем план из настроек к алгоритму
+  if (vDefl._deflMnplanNrec = 0)
+    if getlast mnplan where ((WAYACCOU_DEFLATOR == mnplan.cwayaccou)) = tsOk
+      vDefl._deflMnplanNrec := mnplan.nrec;
+
+  vDefl._deflGroupSalary := DEFLATOR_GROUP_SALARY;
+}
+end;
+end; //window wCalcDeflCoeff
+
+procedure ProcessParentNode(buf: ttRKM8D); forward;
+procedure ProcessRKM8DRecord(var buf: ttRKM8D); forward;
+
+procedure CalcDeflCoeff;
+{
+  if not getVipRef(_deflatorResolver, 'AGAT::IDeflatorResolver')
+  {
+    message('Ошибка инициализации алгоритма расчета коэффициентов-дефляторов');
+    exit;
+  }
+
+  if getmarkercount(_marks) = 0
+    insertmarker(_marks, t.Nrec);
+
+  if runwindowmodal(wCalcDeflCoeff) != cmDefault exit;
+
+  if (_baseYear = 0)
+  {
+    message('Укажите базовый год');
+    exit;
+  }
+
+  if (_yearStart = 0) or (_yearEnd = 0)
+  {
+    message('Укажите даты начала и окончания планирования');
+    exit;
+  }
+
+  var _fptperNrec: comp;
+  if getfirst mnplan where ((_curMnplanNrec == mnplan.nrec)) = tsOk
+    if getfirst fpperiod where ((mnplan.canval3 == fpperiod.nrec)) = tsOk
+      _fptperNrec := fpperiod.ctper;
+
+  if (_fptperNrec = 0)
+  {
+    message('Не определен тип периода планирования. Укажите базовый год');
+    exit;
+  }
+
+  _deflatorResolver.InitDeflators(vDefl._deflMnplanNrec, _fptperNrec);
+
+  var i: integer;
+  var buf: ttrkm8d;
+  var dc: array[0..0] of double;
+  setlimit(dc, _yearcount);
+  for(i := 0; i < _yearcount; i++)
+  {
+    dc[i] := _deflatorResolver.GetDeflator(vDefl._deflGroupSalary, _baseYear, _yearStart + i);
+  }
+
+  vDefl._loop tPicked where foundmarker(_marks, vDefl.tPicked.Nrec)
+  {
+    if vDefl.getfirst tChild where ((vDefl.tPicked.Nrec == tChild.ParentNrec)) = tsOk continue;
+    for(i := 0; i < _yearcount; i++)
+    {
+      vDefl.tPicked.Coeff[i+1] := dc[i];
+    }
+    buf := ttrkm8d(vDefl.tPicked.buffer);
+    ProcessRKM8DRecord(buf);
+    vDefl.tPicked.buffer := buf;
+    vDefl.update current tPicked;
+    ProcessParentNode(buf);
+  }
+
+  rereadrecord(#t);
+}
+
+//#endregion
 
 tree tr1 (,,sci1478EscExInsTree);// customsorting;     sci178EscExTree
 show(,,,15);
@@ -665,14 +923,15 @@ handleevent
     TreeCloseAllOpenedNode(tr1);
     rescanpanel(#t);
   }
-  cmPrintDoc:
-  {
-    OnPrint(0);
-  }
-  cmValue3:
-  {
-    OnPrint(1);
-  }
+  cmPrintDoc: OnPrint(0);
+
+  cmValue3: OnPrint(1);
+
+  cmValue4: CalcPercent;
+
+  cmValue5: CalcDiffCoeff;
+
+  cmValue6: CalcDeflCoeff;
 end;
 
 //#region Вспомогательные функции для динамического формирования столбцов в дереве----------------------------
@@ -749,6 +1008,7 @@ procedure InitInterface(aYearStart: word; aYearEnd: word; aBaseYear: word);
 
 procedure Load(aMnplanNrec: comp);
 {
+  _curMnplanNrec := aMnplanNrec;
 
   delete all tRKM8D;
 
@@ -1161,10 +1421,12 @@ procedure Save(aMnplanNrec: comp; aFptperNrec: comp);
 
 
   //сохраняем иерархию
-  _loop tRKM8D where (tRKM8D.ParentNrec != 0)
+  _loop tRKM8D
   {
     if getfirst tRKM8D1 where ((tRKM8D.ParentNrec == tRKM8D1.Nrec)) = tsOk
+    {
       update spmnplan where ((tRKM8D.SpmnplanNrec == spmnplan.nrec)) set spmnplan.cspmnplan := tRKM8D1.SpmnplanNrec;
+    }
     _loop tRKM8DProfs where ((tRKM8D.Nrec == tRKM8DProfs.rkm8dNrec))
     {
       update spmnplan where ((tRKM8DProfs.SpmnplanNrec == spmnplan.nrec)) set spmnplan.cspmnplan := tRKM8D.SpmnplanNrec;
@@ -1191,6 +1453,9 @@ mnuAGAT_EditRKM8D Menu
 {
 - 'Раскрыть все папки', cmValue1, , , , , sci1Esc;
 - 'Свернуть все папки', cmValue2, , , , , sci1Esc;
+- 'Расчет трудоемкости: сумма помеченных * %', cmValue4, , , , , sci1Esc;
+- 'Расчет коэффициента сложности', cmValue5, , , , , sci1Esc;
+- 'Расчет коэффициентов дефляторов', cmValue6, , , , , ,sci1Esc;
 - 'Печать краткой формы РКМ', cmValue3, , , , , sci1Esc;
 - 'Печать формы РКМ', cmPrintDoc, , , , , sci1Esc;
 }
