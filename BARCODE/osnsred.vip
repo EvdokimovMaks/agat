@@ -96,8 +96,27 @@ select spkau.nrec, spkau.name
 from spkau
 where spkau.code = :kod;
 
+// Запрос для обновления состава документов инвентаризации ОС
 sql query updquery=
 update spinvtab set spinvtab.kol = :currentcount where spinvtab.cmc= :productid and spinvtab.cinvtab=:documid;
+
+// Запрос для получения списка документов спецоснастки
+sql query qmbpout=
+select mbpmove.nrec, mbpmove.nom, coalesce(mbpmove.nom,'')+' '+coalesce(katpodr.name,'')+' '+coalesce(katmol.name,''), mbpmove.dmove
+from mbpmove
+left join katmol on katmol.nrec = mbpmove.cmolf
+left join katpodr on katpodr.nrec = mbpmove.cpodrf
+where datetime(mbpmove.atl_lastdate, mbpmove.atl_lasttime) >= datetime(:dato, :timo) and mbpmove.cpodrt = 0 and mbpmove.cmolt = 0;
+
+// Запрос для получения внутренностей документов "Акт спецоснастки"
+sql query qmbpin=
+select mbpmove.nrec, mbpinv.nrec, katmbp.name, coalesce(mbpmove.nom,'')+' '+coalesce(katpodr.name,'')+' '+coalesce(katmol.name,''), mbpinv.cntkol, mbpinv.fctkol
+from mbpinv
+join mbpmove on mbpmove.nrec = mbpinv.cmove
+join katmol on katmol.nrec = mbpmove.cmolf
+join katpodr on katpodr.nrec = mbpmove.cpodrf
+join katmbp on katmbp.nrec = mbpinv.ckatmbp
+where datetime(mbpmove.atl_lastdate, mbpmove.atl_lasttime) >= datetime(:dato, :timo) and mbpmove.cvalold = 0;
 
 // Описание таблицы номенклатуры
 table struct tblts(
@@ -115,7 +134,7 @@ table struct tblts(
 ) with index (
   ind = nameos+dato+timo
 );
-// Описание таблицы документов
+// Описание таблицы документов (ОС)
 table struct tabz1(
   id:       comp,
   dato:     date,
@@ -125,7 +144,7 @@ table struct tabz1(
 ) with index (
   ind = name+dato+timo
 );
-// Описание таблицы спецификаций документов
+// Описание таблицы спецификаций документов (ОС)
 table struct tabz2(
   id:       comp,
   dato:     date,
@@ -171,12 +190,38 @@ table struct spplace(
 ) with index (
   ind = sprec
 );
-
+// Таблица документов (акты инвентаризации спецоснастки)
+table struct tabout(
+  id:         comp,
+  dato:       date,
+  timo:       time,
+  name:       string[200],
+  createdate: date
+) with index (
+  ind = name+dato+timo
+);
+// Описание таблицы спецификаций документов (акты инвентаризации спецоснастки)
+table struct tabin(
+  id:       comp,
+  dato:     date,
+  timo:     time,
+  kol:      double,
+  innum:    string[20],
+  prid:     comp,
+  spinvrec: comp,
+  sprec:    comp,
+  spname:   string[100],
+  kod:      string[20]
+) with index (
+  ind = innum+dato+timo,
+  ind1 = id
+);
 create view
 as select *
-from tblts, tabz1, tabz2, tabcell, tabdoc, spplace, spinvtab
+from tblts, tabz1, tabz2, tabcell, tabdoc, spplace, spinvtab, tabout, tabin
 where ((
-  tabz1.id == tabz2.id
+  tabz1.id == tabz2.id and
+  (tabout.id = tabin.id)
 ));
 
 // Функция "склеивания" nrec и числа-типа продукта (типы: 1 - ОС, 2 - спецоснастка)
@@ -373,7 +418,7 @@ cmgoods:
    }
 
   }
-// Обработка кнопки добавления документов
+// Обработка кнопки добавления документов (основные средствА)
 cmdocs:
 {
     gettabdoc(date1, time1, 0, '', #tabz1, qtest3, true);  // процедура заполнения таблицы документов
@@ -508,59 +553,59 @@ cmInit:
 cmloading:
 {
   var alldocs: CLEVERENCE::oCollection;
-  alldocs := _connector.GetDocuments('Инвентаризация', false);             // TRUE вернуть!
+  alldocs := _connector.GetDocuments('Инвентаризация', true);
   upddocs(alldocs);
   message('ТЕПЕРЬ ПИТАНИЕ КОМПЬЮТЕРА МОЖНО ОТКЛЮЧИТЬ');
 }
-
+// Обработка кнопки добавления документов (спецоснастка, вот это всё)
 cmdocsmbp:
 {
-  gettabdoc(date1, time1, 0, '', 1, '', true);
+  gettabdoc(date1, time1, 0, '', #tabout, qmbpout, true);
+  gettabdoc(date1, time1, 0, '', #tabin, qmbpin, true);
 
-/*    var environment: CLEVERENCE::oEnvironment;
-    environment := _connector.GetEnvironment;
-    if environment = nullref exit;
-    if environment.warehouses = nullref exit;
-    if environment.warehouses.count = 0 exit;
+  var environment: CLEVERENCE::oEnvironment;
+  environment := _connector.GetEnvironment;
+  if environment = nullref exit;
+  if environment.warehouses = nullref exit;
+  if environment.warehouses.count = 0 exit;
 
-    var warehouse: oWarehouse;
-    warehouse := oWarehouse(environment.warehouses.Item(0));
-    if warehouse = nullref exit;
+  var warehouse: oWarehouse;
+  warehouse := oWarehouse(environment.warehouses.Item(0));
+  if warehouse = nullref exit;
 
-    var documents: CLEVERENCE::oCollection;
-    documents := _connector.CreateDocumentCollection; //GetDocuments('Инвентаризация', false);
-    if documents = nullref exit;
+  var documents: CLEVERENCE::oCollection;
+  documents := _connector.CreateDocumentCollection;
+  if documents = nullref exit;
 
-    var document: CLEVERENCE::oDocument;
-    var documentItem: CLEVERENCE::oDocumentItem;
-    var i: integer;
+  var document: CLEVERENCE::oDocument;
+  var documentItem: CLEVERENCE::oDocumentItem;
+  var i: integer;
+  i := 0;
 
-    i := 0;
+  StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, '', recordsintable(#tabout));
 
-
-  StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, '', recordsintable(#tabmbpout));
-
-  _loop tabmbpout
+  _loop tabout
   {
     document := _connector.CreateDocument;
     if document = nullref exit;
-    document.Id := tabmbp.id;
-    document.Name := tabmbp.name;
+    document.Id := tabout.id;
+    document.Name := tabout.name;
     document.DocumentTypeName := 'Инвентаризация';
-    document.CreateDate := tabmbp.datesozd;
+    document.CreateDate := tabout.createdate;
     document.WarehouseId := warehouse.Id;
 
-    _loop tabmbpin
+    _loop tabin
     {
       documentItem := _connector.CreateDocumentItem;
         if documentItem = nullref exit;
 
-      documentItem.ProductId := prodid(2, tabz2.prid);
-      documentItem.PackingId := prodid(2, tabz2.prid);
-      documentItem.DeclaredQuantity := tabz2.kol;
-      documentItem.FirstStorageBarcode := tabz2.kod;
+      documentItem.ProductId := prodid(2, tabin.prid);
+      documentItem.PackingId := prodid(2, tabin.prid);
+      documentItem.DeclaredQuantity := tabin.kol;
+      documentItem.FirstStorageBarcode := tabin.kod;
+
       // установка атрибутов места хранения
-      ea.coSetAttr(1124, tabz2.spinvrec, currentplace, tabz2.sprec, tabz2.spname);
+      ea.coSetAttr(2006, tabin.spinvrec, currentplace, tabin.sprec, tabin.spname);
 
       document.DeclaredItems.Add(documentItem);
       FreeVipInterface(documentItem);
@@ -581,7 +626,7 @@ cmdocsmbp:
       }
       if not nextvisual break;
   }
-  StopVisual('',0);                                                              */
+  StopVisual('',0);
 }
 
 end;
