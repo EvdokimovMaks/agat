@@ -13,6 +13,7 @@ var
   ea: C_EXTCLASS::iExtAttr;
 const
   currentplace : string = 'МЕСТО ХРАНЕНИЕ ТЕКУЩЕЕ';
+  currentplace1 : string = 'Место хранения - план';
   factplace : string = 'МЕСТО ХРАНЕНИЕ ФАКТИЧЕСКОЕ';
 end;
 
@@ -102,7 +103,7 @@ update spinvtab set spinvtab.kol = :currentcount where spinvtab.cmc= :productid 
 
 // Запрос для получения списка документов спецоснастки
 sql query qmbpout=
-select mbpmove.nrec, mbpmove.nom, coalesce(mbpmove.nom,'')+' '+coalesce(katpodr.name,'')+' '+coalesce(katmol.name,''), mbpmove.dmove
+select mbpmove.nrec, mbpmove.atl_lastdate, mbpmove.atl_lasttime, coalesce(mbpmove.nom,'')+' '+coalesce(katpodr.name,'')+' '+coalesce(katmol.name,''), mbpmove.dmove
 from mbpmove
 left join katmol on katmol.nrec = mbpmove.cmolf
 left join katpodr on katpodr.nrec = mbpmove.cpodrf
@@ -110,12 +111,16 @@ where datetime(mbpmove.atl_lastdate, mbpmove.atl_lasttime) >= datetime(:dato, :t
 
 // Запрос для получения внутренностей документов "Акт спецоснастки"
 sql query qmbpin=
-select mbpmove.nrec, mbpinv.nrec, katmbp.name, coalesce(mbpmove.nom,'')+' '+coalesce(katpodr.name,'')+' '+coalesce(katmol.name,''), mbpinv.cntkol, mbpinv.fctkol
+select mbpmove.nrec, mbpmove.atl_lastdate, mbpmove.atl_lasttime, mbpin.nrec, mbpinv.cntkol, attrval.vstring, attrval.nrec, spkau.nrec, spkau.code
 from mbpinv
 join mbpmove on mbpmove.nrec = mbpinv.cmove
 join katmol on katmol.nrec = mbpmove.cmolf
 join katpodr on katpodr.nrec = mbpmove.cpodrf
 join katmbp on katmbp.nrec = mbpinv.ckatmbp
+join mbpin on mbpin.cmbp=katmbp.nrec
+left join attrnam on attrnam.wtable=2006 and attrnam.name='Место хранения - план'
+left join attrval on attrval.crec = mbpinv.nrec and attrval.cattrnam = attrnam.nrec
+left join spkau on spkau.nrec = attrval.vcomp
 where datetime(mbpmove.atl_lastdate, mbpmove.atl_lasttime) >= datetime(:dato, :timo) and mbpmove.cvalold = 0;
 
 // Описание таблицы номенклатуры
@@ -205,23 +210,22 @@ table struct tabin(
   id:       comp,
   dato:     date,
   timo:     time,
-  kol:      double,
-  innum:    string[20],
   prid:     comp,
-  spinvrec: comp,
+  kol:      double,
+  attrname: string[100],
+  attrcomp: comp,
   sprec:    comp,
-  spname:   string[100],
   kod:      string[20]
 ) with index (
-  ind = innum+dato+timo,
+  ind = prid+dato+timo,
   ind1 = id
 );
+
 create view
 as select *
 from tblts, tabz1, tabz2, tabcell, tabdoc, spplace, spinvtab, tabout, tabin
 where ((
-  tabz1.id == tabz2.id and
-  (tabout.id = tabin.id)
+  tabz1.id == tabz2.id and tabout.id == tabin.id
 ));
 
 // Функция "склеивания" nrec и числа-типа продукта (типы: 1 - ОС, 2 - спецоснастка)
@@ -347,7 +351,7 @@ handleevent
 cmgoods:
   {
     gettabdoc(date1, time1, 0, '', #tblts, qtest1, true);
-    gettabdoc(date1, time1, 0, '', #tblts, qtest2, false);
+    gettabdoc(date1, time1, 0, '', #tblts, qtest2, false);  // false потому что нельзя стирать основные средства
 
   if Connect
 
@@ -605,7 +609,7 @@ cmdocsmbp:
       documentItem.FirstStorageBarcode := tabin.kod;
 
       // установка атрибутов места хранения
-      ea.coSetAttr(2006, tabin.spinvrec, currentplace, tabin.sprec, tabin.spname);
+      ea.coSetAttr(1006, tabin.attrcomp, currentplace1, tabin.sprec, tabin.attrname);
 
       document.DeclaredItems.Add(documentItem);
       FreeVipInterface(documentItem);
@@ -616,7 +620,7 @@ cmdocsmbp:
 
      i := i + 1;
 
-     if i=60 then
+     if i=10 then
       {
         _connector.SetDocuments(documents);
         FreeVipInterface(documents);
