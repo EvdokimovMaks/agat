@@ -13,8 +13,9 @@ var
   ea: C_EXTCLASS::iExtAttr;
 const
   currentplace : string = 'МЕСТО ХРАНЕНИЕ ТЕКУЩЕЕ';
-  currentplace1 : string = 'Место хранения - план';
+  currentplacembp : string = 'Место хранения - план';
   factplace : string = 'МЕСТО ХРАНЕНИЕ ФАКТИЧЕСКОЕ';
+  factplacembp : string = 'Место хранения - факт';
 end;
 
   function Connect: boolean;
@@ -111,17 +112,18 @@ where datetime(mbpmove.atl_lastdate, mbpmove.atl_lasttime) >= datetime(:dato, :t
 
 // Запрос для получения внутренностей документов "Акт спецоснастки"
 sql query qmbpin=
-select mbpmove.nrec, mbpmove.atl_lastdate, mbpmove.atl_lasttime, mbpin.nrec, mbpinv.cntkol, attrval.vstring, attrval.nrec, spkau.nrec, spkau.code
+select mbpmove.nrec, mbpmove.atl_lastdate, mbpmove.atl_lasttime, mbpinv.crecs[1], mbpinv.cntkol, spkau.code
 from mbpinv
 join mbpmove on mbpmove.nrec = mbpinv.cmove
-join katmol on katmol.nrec = mbpmove.cmolf
-join katpodr on katpodr.nrec = mbpmove.cpodrf
 join katmbp on katmbp.nrec = mbpinv.ckatmbp
-join mbpin on mbpin.cmbp=katmbp.nrec
-left join attrnam on attrnam.wtable=2006 and attrnam.name='Место хранения - план'
+left join attrnam on attrnam.wtable = 2006 and attrnam.name = 'Место хранения - план'
 left join attrval on attrval.crec = mbpinv.nrec and attrval.cattrnam = attrnam.nrec
 left join spkau on spkau.nrec = attrval.vcomp
 where datetime(mbpmove.atl_lastdate, mbpmove.atl_lasttime) >= datetime(:dato, :timo) and mbpmove.cvalold = 0;
+
+// Запрос для добавления обслуженных документов спецоснастки в Галактику
+sql query qdocmbp=           // ТЛЕННЫЙ ЗАБРОС
+;
 
 // Описание таблицы номенклатуры
 table struct tblts(
@@ -188,6 +190,21 @@ table struct tabdoc(
 ) with index (
   ind = idprod
 );
+
+table struct tabdocmbp(       // ТЛЕННАЯ ТАБЛИЦА (ПОКА НЕ ПОНЯТНО)
+  iddoc:    comp,
+  idprod:   comp,
+  docname:  string[100],
+  names:    string[50],
+  kol:      double,
+  kolfact:  double,
+  spinvrec: comp,
+  sprec:    comp,
+  spname:   string[100],
+  kod:      string[20]
+) with index (
+  ind = idprod
+);
 // Таблица доп атрибутов
 table struct spplace(
   sprec:  comp,
@@ -212,9 +229,6 @@ table struct tabin(
   timo:     time,
   prid:     comp,
   kol:      double,
-  attrname: string[100],
-  attrcomp: comp,
-  sprec:    comp,
   kod:      string[20]
 ) with index (
   ind = prid+dato+timo,
@@ -223,7 +237,7 @@ table struct tabin(
 
 create view
 as select *
-from tblts, tabz1, tabz2, tabcell, tabdoc, spplace, spinvtab, tabout, tabin
+from tblts, tabz1, tabz2, tabcell, tabdoc, spplace, spinvtab, tabout, tabin, tabdocmbp
 where ((
   tabz1.id == tabz2.id and tabout.id == tabin.id
 ));
@@ -242,13 +256,22 @@ procedure gettabdoc(datein: date; timein: time; link: comp; cod: string; iTable:
   var rs:IResultSet;
 
   q := queryManager.createQuery(insquery);
+
+/*  case arg of
+   1: {
+       q.setParam('timo', timein);
+       q.setParam('dato', datein);
+      }
+   2:  q.setparam('docid', comp(link));
+   3:  q.setparam('kod', cod);
+  end;
+*/
   q.setParam('timo', timein);
   q.setParam('dato', datein);
   q.setparam('docid', comp(link));
   q.setparam('kod', cod);
 
   rs := q.getResultSet;
-
   if rs = nullref
    {
      message('Ошибка!', error);
@@ -259,63 +282,83 @@ procedure gettabdoc(datein: date; timein: time; link: comp; cod: string; iTable:
   rereadrecord(iTable);
 }
 
-procedure updater(id: comp; skolko: integer; docid: comp);
+procedure updater(id: comp; amount: integer; docid: comp);
 {
   var q:IQuery;
   var rs:IResultSet;
 
   q := queryManager.createQuery(updquery);
-  q.setparam('currentcount', skolko);
+  q.setparam('currentcount', amount);
   q.setParam('productid', id);
   q.setParam('documid', docid)
   q.execute;
 }
 
-procedure inserter(recorder: comp; kolvo: integer; id: comp);
+procedure inserter(recorder: comp; amount: integer; id: comp);
 {
-  insert spinvtab set spinvtab.cmc := recorder, spinvtab.kol := kolvo, spinvtab.cinvtab := id;
+  insert spinvtab set spinvtab.cmc := recorder, spinvtab.kol := amount, spinvtab.cinvtab := id;
 }
 
 // Процедура загрузки данных с сервера в Галактику
-procedure upddocs(doccol: oCollection);
+procedure upddocs(doccol: oCollection; doctype: integer);
 {
-  var i, n, k, l, m: integer;
+  var i, n: integer;
   var oled1: oOleObject;
   var PID: string;
 
   for (i := 0; i < doccol.count; i := i + 1)
   {
     oled1 := doccol.item(i);
-    gettabdoc(0, 0, comp(oDocument(oled1).id), '', #tabdoc, qdoc, true);
+
+    case doctype of
+      1: gettabdoc(0, 0, comp(oDocument(oled1).id), '', #tabdoc, qdoc, true);
+      2: gettabdoc(0, 0, comp(oDocument(oled1).id), '', #tabdocmbp, qdocmbp, true);
+    end;
+
     message(oDocument(oled1).name + ' обрабатывается!');
 
     for (n := 0; n < oDocument(oled1).DeclaredItems.count; n := n + 1)
     {
       PID := substr(oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).ProductId, 2, 255);
 
-      if getfirst tabdoc where ((PID == tabdoc.idprod )) = tsok
+      if getfirst tabdoc where (( PID == tabdoc.idprod )) = tsok
       {
         if oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).CurrentQuantity <> 0
         {
-          m := m + 1;
-          updater(PID, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).CurrentQuantity, oDocument(oled1).id);
-          gettabdoc(0, 0, 0, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).FirstStorageBarcode, #spplace, getspin, true);
-          ea.coSetAttr(1124, tabdoc.spinvrec, factplace, spplace.sprec, spplace.spname);
+          case doctype of
+           1:
+            {
+             updater(PID, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).CurrentQuantity, oDocument(oled1).id);
+             gettabdoc(0, 0, 0, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).FirstStorageBarcode, #spplace, getspin, true);
+             ea.coSetAttr(1124, tabdoc.spinvrec, factplace, spplace.sprec, spplace.spname);
+            }
+           2:
+            {
+             message('@*#$!?&*');
+             // update для спецоснастки
+             mbpinv.crecs[3] := oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).FirstStorageBarcode;
+            }
+          end;
         }
-        k := k + 1;
       }
       else
       {
-        l := l + 1;
-        inserter(PID, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).CurrentQuantity, oDocument(oled1).id);
-        gettabdoc(0, 0, 0, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).FirstStorageBarcode, #spplace, getspin, true);
-        ea.coSetAttr(1124, spinvtab.nrec, factplace, spplace.sprec, spplace.spname);
+        case doctype of
+         1:
+          {
+           inserter(PID, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).CurrentQuantity, oDocument(oled1).id);
+           gettabdoc(0, 0, 0, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).FirstStorageBarcode, #spplace, getspin, true);
+           ea.coSetAttr(1124, spinvtab.nrec, factplace, spplace.sprec, spplace.spname);
+          }
+         2:
+          {
+           message('@*#$!?&*');
+           // insert для спецоснастки
+           mbpinv.crecs[3] := oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).FirstStorageBarcode;
+          }
+        end;
       }
     }
-    message('Апдейтов '+m+' (из '+k+' вариантов)'+Chr(13)+'Инсёртов '+l+Chr(13)+'Итераций '+n);
-    k := 0;
-    l := 0;
-    m := 0;
   }
 }
 
@@ -557,8 +600,13 @@ cmInit:
 cmloading:
 {
   var alldocs: CLEVERENCE::oCollection;
+
   alldocs := _connector.GetDocuments('Инвентаризация', true);
-  upddocs(alldocs);
+  upddocs(alldocs, 1);
+  alldocs.clear;
+  alldocs := _connector.GetDocuments('ИнвентаризацияМБП', true);
+  upddocs(alldocs, 2);
+
   message('ТЕПЕРЬ ПИТАНИЕ КОМПЬЮТЕРА МОЖНО ОТКЛЮЧИТЬ');
 }
 // Обработка кнопки добавления документов (спецоснастка, вот это всё)
@@ -594,7 +642,7 @@ cmdocsmbp:
     if document = nullref exit;
     document.Id := tabout.id;
     document.Name := tabout.name;
-    document.DocumentTypeName := 'Инвентаризация';
+    document.DocumentTypeName := 'ИнвентаризацияМБП';
     document.CreateDate := tabout.createdate;
     document.WarehouseId := warehouse.Id;
 
@@ -607,9 +655,6 @@ cmdocsmbp:
       documentItem.PackingId := prodid(2, tabin.prid);
       documentItem.DeclaredQuantity := tabin.kol;
       documentItem.FirstStorageBarcode := tabin.kod;
-
-      // установка атрибутов места хранения
-      ea.coSetAttr(1006, tabin.attrcomp, currentplace1, tabin.sprec, tabin.attrname);
 
       document.DeclaredItems.Add(documentItem);
       FreeVipInterface(documentItem);
