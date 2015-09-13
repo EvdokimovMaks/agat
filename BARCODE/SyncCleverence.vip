@@ -12,7 +12,15 @@ interface SyncCleverence;
 var
   _connector: CLEVERENCE::oStorageConnector;
   _logger: UTILS::Logger new;
-  _loggerSyncCat: UTILS::Logger new;
+  _curLogger: UTILS::Logger noauto;
+  _extAttr: IExtAttr;
+
+create view
+as select *
+from spkau spkCells
+where ((
+  KODGRKAU_PLACE == spkCells.kodgrkau
+));
 
 embedded scLog interface _logger.wLog;
 show(,18,,) fixed_y;
@@ -27,29 +35,59 @@ buttons
 >>
 end;
 
+//#region Logger
+
+procedure SetCurLogger(aLogger: UTILS::Logger);
+{
+  _curLogger := aLogger;
+}
+procedure RefreshLog;
+{
+  rescanpanel(scLog);
+}
+procedure LogError  (indent: byte; s: string);
+{
+  _curLogger.LogError(indent, s); RefreshLog;
+}
+procedure LogWarning(indent: byte; s: string);
+{
+  _curLogger.LogWarning(indent, s); RefreshLog;
+}
+procedure LogSuccess(indent: byte; s: string);
+{
+  _curLogger.LogSuccess(indent, s); RefreshLog;
+}
+procedure LogInfo   (indent: byte; s: string);
+{
+  _curLogger.LogInfo(indent, s); RefreshLog;
+}
+//#endregion
+
 function Connect: boolean;
 {
   var connString: string;
   connString := sGetTune('AGAT.BARCODE.CONNECTIONSTRING');
-  _logger.LogInfo(0, 'Подключение к серверу "'+connString+'"');
+  LogInfo(0, 'Подключение к серверу "'+connString+'"');
   if _connector.InitializeServerConnection(connString)
   {
-    _logger.LogSuccess(1, 'Подключение успешно');
+    LogSuccess(1, 'Подключение успешно');
     result := true;
   }
   else
   {
-    _logger.LogError(1, 'Ошибка подключения');
+    LogError(1, 'Ошибка подключения');
     result := false;
   }
 }
+
+//#region SyncCatalogs
 
 function NewProductCollection(var pc: CLEVERENCE::oCollection): boolean;
 {
   pc := _connector.CreateProductCollection;
   if pc = nullref
   {
-    _logger.LogError(1,'Cleverence. Ошибка создания коллекции Products');
+    LogError(1,'Cleverence. Ошибка создания коллекции Products');
     result := false;
   }
   else
@@ -63,7 +101,7 @@ function SetProductPacking(aProduct: CLEVERENCE::oProduct): boolean;
   packing := _connector.CreatePacking;
   if (packing = nullref)
   {
-    _logger.LogError(1,'Cleverence. Ошибка создания Packing');
+    LogError(1,'Cleverence. Ошибка создания Packing');
     exit;
   }
   packing.Id := 1;
@@ -82,7 +120,7 @@ function SetProductField(aProduct: CLEVERENCE::oProduct; aFieldName: string; aFi
   fieldValue := _connector.CreateFieldValue;
   if (fieldValue = nullref)
   {
-    _logger.LogError(1,'Cleverence. Ошибка создания fieldValue');
+    LogError(1,'Cleverence. Ошибка создания fieldValue');
     exit;
   }
   fieldValue.FieldName := aFieldName;
@@ -98,7 +136,7 @@ function NewProduct(var aProduct: CLEVERENCE::oProduct; aId: string; aBarcode: s
   aProduct := _connector.CreateProduct;
   if aProduct = nullref
   {
-    _logger.LogError(1, 'Cleverence. Ошибка создания Product');
+    LogError(1, 'Cleverence. Ошибка создания Product');
     exit;
   }
   aProduct.Id := aId;
@@ -112,13 +150,15 @@ function SyncCatalogs: boolean;
 {
   result := false;
 
-  _logger.LogInfo(0, 'Экспорт справочников ОС и МБП');
-  _logger.LogInfo(1, 'Выбор элементов справочников, измененных с даты последней успешной синхронизации');
+  LogInfo(0, 'Экспорт справочников ОС и МБП');
+  LogInfo(1, 'Выбор элементов справочников, измененных с даты последней успешной синхронизации');
 
   var q: IQuery;
   q := queryManager.CreateQuery(qOSMBP);
-  q.setParam('date', dGetTune('AGAT.BARCODE.LASTCATSYNCDATE'));
-  q.setParam('time', tGetTune('AGAT.BARCODE.LASTCATSYNCTIME'));
+  var syncDate: date; syncDate := dGetTune('AGAT.BARCODE.LASTCATSYNCDATE');
+  var syncTime: time; syncTime := tGetTune('AGAT.BARCODE.LASTCATSYNCTIME');
+  q.setParam('date', syncDate);
+  q.setParam('time', syncTime);
   q.setParam('anMBPBarcode', ATTRNAME_MBP_BARCODE);
   q.setParam('anMBPPlace', ATTRNAME_MBP_PLACE);
 
@@ -127,7 +167,7 @@ function SyncCatalogs: boolean;
 
   if (rs = nullref)
   {
-    _logger.LogError(1, 'Ошибка выполнения запроса. Код ошибки:' + q.errorCode);
+    LogError(1, 'Ошибка выполнения запроса. Код ошибки:' + q.errorCode);
     exit;
   }
 
@@ -165,7 +205,7 @@ function SyncCatalogs: boolean;
 
     if (i = 1000) then
     {
-      _logger.LogInfo(1, 'Экспортировано позиций '+cnt+' из '+rs.count);
+      LogInfo(1, 'Экспортировано позиций '+cnt+' из '+rs.count);
       _connector.SetProducts(products);
       FreeVipInterface(products);
       i := 0;
@@ -184,11 +224,11 @@ function SyncCatalogs: boolean;
 
   if isUserBreak
   {
-    _logger.LogWarning(1, 'Экспорт справочников прерван пользователем');
+    LogWarning(1, 'Прерван пользователем. Обработано позиций '+cnt+' из '+rs.count);
   }
   else
   {
-    _logger.LogSuccess(1, 'Экспортировано позиций '+cnt+' из '+rs.count);
+    LogSuccess(1, 'Завершен успешно. Обработано позиций '+cnt+' из '+rs.count);
     dSetTune('AGAT.BARCODE.LASTCATSYNCDATE', cur_date);
     tSetTune('AGAT.BARCODE.LASTCATSYNCTIME', cur_time);
     _connector.SetProducts(products);
@@ -198,6 +238,123 @@ function SyncCatalogs: boolean;
   result := true;
 }
 
+//#endregion
+
+//#region SyncCells
+
+function NewEnvironment(var aEnvironment: CLEVERENCE::oEnvironment): boolean;
+{
+  aEnvironment := _connector.GetEnvironment;
+  if aEnvironment = nullref
+  {
+    LogError(1, 'Cleverence. Ошибка получения Environment');
+    result := false;
+  }
+  else
+    result := true;
+}
+
+function GetWarehouse(aEnvironment: CLEVERENCE::oEnvironment; var aWarehouse: CLEVERENCE::oWarehouse; aWarehouseIndex: integer): boolean;
+{
+  result := false;
+
+  if aEnvironment.warehouses = nullref
+  {
+    LogError(1, 'Cleverence. Ошибка получения коллекции складов');
+    exit;
+  }
+
+  if aEnvironment.warehouses.count <= aWarehouseIndex
+  {
+    LogError(1, 'Cleverence. Ошибка получения склада ' + aWarehouseIndex + '. Количество складов: '+ aEnvironment.warehouses.count);
+    exit;
+  }
+
+  aWarehouse := oWarehouse(aEnvironment.warehouses.Item(aWarehouseIndex));
+  if aWarehouse = nullref
+  {
+    LogError(1, 'Cleverence. Ошибка получения склада '+aWarehouseIndex);
+    exit;
+  }
+
+  result := true;
+}
+
+function SyncCells: boolean;
+{
+  result := false;
+  LogInfo(0, 'Экспорт мест хранения');
+
+  var environment: CLEVERENCE::oEnvironment;
+  if not NewEnvironment(environment) exit;
+
+  var warehouse: CLEVERENCE::oWarehouse;
+  if not GetWarehouse(environment, warehouse, 0) exit;
+
+  var wc: CLEVERENCE::oCollection
+  wc := _connector.CreateWarehouseCollection;
+  if wc = nullref
+  {
+    LogError(1, 'Cleverence. Ошибка создания коллекции складов');
+    exit;
+  }
+
+  var place: CLEVERENCE::oCell;
+  var cnt: longint; cnt := 0;
+  var isUserBreak: boolean; isUserBreak := false;
+
+  StartNewVisual(vtRotateVisual, vfTimer+vfBreak, '', 0);
+
+  _loop spkCells
+  {
+    cnt++;
+
+    place := CLEVERENCE::oCell(warehouse.cells.FindBy('barcode', spkCells.code));
+    if place != nullref
+    {
+      place.barcode := spkCells.code;
+      place.name := spkCells.name;
+    }
+    else
+    {
+      place := _connector.CreateCell;
+      if place = nullref
+      {
+        LogError(1, 'Cleverence. Ошибка создания ячейки');
+        exit;
+      }
+      place.barcode := spkCells.code;
+      place.name := spkCells.name;
+
+      warehouse.cells.add(place);
+    }
+
+    FreeVipInterface(place);
+
+    if not nextvisual
+    {
+      isUserBreak := true;
+      LogWarning(1, 'Прерван пользователем. Обработано позиций: ' + cnt);
+      break;
+    }
+
+  }
+
+  StopVisual('',0);
+
+  wc.add(warehouse);                        // Добавляем склад в коллекцию складов
+  _connector.SetWarehouses(wc);             // Записываем коллекцию складов
+  FreeVipInterface(warehouse);
+  FreeVipInterface(wc);
+
+  if not isUserBreak
+    LogSuccess(1, 'Завершен успешно. Обработано позиций: ' + cnt);
+
+  result := true;
+}
+
+//#endregion
+
 handleevent
 
 cmDoSync:
@@ -206,6 +363,9 @@ cmDoSync:
     message('Ошибка подключения к серверу', error)
   else if not SyncCatalogs
     message('Ошибка синхронизации справочников', error)
+  else if not SyncCells
+    message('Ошибка синхронизации мест хранения', error)
+  ;
 }
 
 cmInit:
@@ -216,6 +376,8 @@ cmInit:
     abort;
     exit;
   }
+
+  SetCurLogger(_logger);
 }
 
 end;
