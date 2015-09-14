@@ -1,0 +1,232 @@
+#include Query.vih
+#include extattr.vih
+#include kaureff.vih
+
+#component "F_OSOPER"
+
+alter interface invlist;
+
+sql query qPlace =
+select spinvtab.nrec as SpinvtabNrec, kr.ckau KatosPlace
+from spinvtab
+join kaureff kr on 3000 = kr.cotable and spinvtab.cmc = kr.crec and :KodgrkauPlace = kr.wkau
+join attrnam an on an.wtable = 1124 and an.name = :AttrnamPlace
+left join attrval av on spinvtab.nrec = av.crec and an.nrec = av.cattrnam
+where spinvtab.cinvtab=:InvtabNrec and kr.ckau <> coalesce(av.vcomp,#comp(0))
+;
+
+var
+  _extattr: iExtAttr;
+  _kaureff: EditKauReff;
+
+function GetPlaceStateName: string; forward;
+
+function GetBarcode: string; forward;
+
+create view
+var
+  anPlacePlanNrec: comp;
+  anPlaceFactNrec: comp;
+  anPlaceStateNrec: comp;
+as select GetPlaceStateName()(fieldname=PlaceStateName),
+          GetBarcode()(fieldname=Barcode)
+from attrnam anPlacePlan, attrnam anPlaceFact, attrnam anPlaceState,
+     attrval avPlacePlan, attrval avPlaceFact, attrval avPlaceState
+where ((
+  1124                       == anPlacePlan.wtable and
+  ATTRNAME_INVOS_PLACE_PLAN  == anPlacePlan.Name   and
+
+  1124                       == anPlaceFact.wtable and
+  ATTRNAME_INVOS_PLACE_FACT  == anPlaceFact.Name   and
+
+  1124                       == anPlaceState.wtable and
+  ATTRNAME_INVOS_PLACE_STATE == anPlaceState.Name   and
+
+  1124             == avPlacePlan.wtable   and
+  SpInvTab.Nrec    == avPlacePlan.crec     and
+  anPlacePlanNrec  == avPlacePlan.cattrnam and
+
+  1124             == avPlaceFact.wtable   and
+  SpInvTab.Nrec    == avPlaceFact.crec     and
+  anPlaceFactNrec  == avPlaceFact.cattrnam and
+
+  1124             == avPlaceState.wtable   and
+  SpInvTab.Nrec    == avPlaceState.crec     and
+  anPlaceStateNrec == avPlaceState.cattrnam
+));
+
+function GetPlaceStateName: string;
+{
+  result := 'оставить без изменений';
+  if (getfirst avPlaceState = tsOk)
+  {
+    case avPlaceState.vDouble of
+      1: result := 'изменить';
+      2: result := 'изменено';
+    end;
+  }
+}
+
+function GetBarcode: string;
+{
+  result := '';
+  if getfirst katos = tsOk
+    result := katos.dopinnum;
+}
+
+procedure FillPlaces;
+{
+  var q: IQuery;
+  q := queryManager.CreateQuery(qPlace);
+  q.setParam('KodgrkauPlace', KODGRKAU_PLACE);
+  q.setParam('AttrnamPlace', ATTRNAME_INVOS_PLACE_PLAN);
+  q.setParam('InvtabNrec', InvTab.Nrec);
+  var rs: IResultSet;
+  rs := q.getResultSet;
+  if rs = nullref exit;
+  var c: comp;
+  if (rs.getFirst = tsOk) do
+  {
+    c := rs.row.Val('KatosPlace');
+    _extattr.coSetAttr(1124, rs.row.Val('SpinvtabNrec'), ATTRNAME_INVOS_PLACE_PLAN, c, if(getanykau(1, KODGRKAU_PLACE, c), givenanname(1), ''));
+  } while (rs.getNext = tsOk);
+}
+
+procedure AddTreeColumn(browseName: string; fldName: string; fldTitle: string; fldIndex: integer; isPickButton: boolean);
+{
+  var l: longint;
+  cfsCreateObject('TreeColumn', browseName, fldName, false, l);
+  cfsSetProp(l, 'Title', fldTitle);
+  cfsSetProp(l, 'FieldName', fldName);
+  cfsSetProp(l, 'DefaultWidth', word(12));
+  cfsSetProp(l, 'Size_X', 100);
+  cfsSetProp(l, 'Index', fldIndex);
+  cfsSetProp(l, 'Protect', true);
+  if isPickButton
+    cfsSetProp(l, 'ButtonType', inPickButton);
+}
+
+procedure ChangePlaceState;
+{
+  var d: double;
+  d := if(getfirst avPlaceState = tsOk, avPlaceState.vDouble, 0);
+  case d of
+  1:
+  {
+    if getfirst avPlaceState = tsOk
+      delete current avPlaceState;
+  }
+  0:
+  {
+    var pp, pf: comp;
+    pf := _extattr.coGetAttrID(1124, SpInvTab.Nrec, anPlaceFactNrec);
+    if (pf = 0) exit;
+    pp := _extattr.coGetAttrID(1124, SpInvTab.Nrec, anPlacePlanNrec)
+    if (pp = pf) exit;
+    if getfirst avPlaceState != tsOk
+    {
+      clearbuffer(#avPlaceState);
+      avPlaceState.vDouble := 1;
+      insert current avPlaceState;
+    }
+    else
+    {
+      avPlaceState.vDouble := 1;
+      update current avPlaceState;
+    }
+  }
+  end;
+}
+
+window EditInvOpis;
+handleevent
+  cmPick:
+  {
+    case curfield of
+      #PlaceStateName:
+      {
+        if isnew
+        {
+          insert current SpInvTab;
+          setnew(false);
+        }
+        if getmarkercount(Markers) = 0
+        {
+          ChangePlaceState;
+        }
+        else
+        {
+          pushpos(#SpInvTab);
+          _loop SpInvTab
+          {
+            if not foundmarker(Markers, SpInvTab.Nrec) continue;
+            ChangePlaceState;
+          }
+          poppos(#SpInvTab);
+        }
+        rescanpanel(#SpInvTab);
+      }
+    else
+      inherited::handleevent(cmPick);
+    end;
+  }
+  cmInit:
+  {
+    inherited::handleevent(cmInit);
+
+    if getfirst anPlacePlan  = tsOk anPlacePlanNrec  := anPlacePlan.nrec;
+    if getfirst anPlaceFact  = tsOk anPlaceFactNrec  := anPlaceFact.nrec;
+    if getfirst anPlaceState = tsOk anPlaceStateNrec := anPlaceState.nrec;
+
+    cfsSetCurrentContainer('EditInvOpis');
+    AddTreeColumn('OSTREE', 'Barcode'            , 'Штрихкод'                  , 2, false);
+    AddTreeColumn('OSTREE', 'avPlacePlan.vString', 'Место хранения учетное'    , 2, false);
+    AddTreeColumn('OSTREE', 'avPlaceFact.vString', 'Место хранения фактическое', 2, false);
+    AddTreeColumn('OSTREE', 'PlaceStateName', 'Статус', 2, true);
+  }
+  cmAddNewRec:
+  {
+    inherited::handleevent(cmAddNewRec);
+    startnewvisual(vtRotateVisual, vfTimer, 'Установка мест хранения', 0);
+    FillPlaces;
+    stopvisual('',0);
+  }
+end;
+end;
+
+handleevent
+  cmCheckField:
+  {
+    case curfield of
+      #INVTAB.DINVEND:
+      {
+        pushpos(#spinvtab);
+        _loop spinvtab
+        {
+          if invtab.dInvEnd != 0
+          {
+            if _extattr.doGetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_STATE) = 1
+            {
+              _kaureff.SetKauReff(3000, spinvtab.cmc, KODGRKAU_PLACE, _extattr.coGetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_FACT));
+              _extattr.doSetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_STATE, 2);
+            }
+          }
+          else
+          {
+            if _extattr.doGetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_STATE) = 2
+            {
+              _kaureff.SetKauReff(3000, spinvtab.cmc, KODGRKAU_PLACE, _extattr.coGetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_PLAN));
+              _extattr.doSetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_STATE, 1);
+            }
+          }
+        }
+        poppos(#spinvtab);
+        rescanpanel(#spinvtab);
+      }
+    else
+      inherited::handleevent(cmCheckField);
+    end;
+  }
+end;
+
+end.

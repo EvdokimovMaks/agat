@@ -1,0 +1,344 @@
+#include extattr.vih
+
+#component "F_MBP"
+
+alter interface inv_mbp;
+
+overload
+  procedure CntOnDocDate;
+end;
+
+var _extattr: iextattr;
+
+//#region Функции для отображения дополнительных полей
+
+function GetMBPInName: string; forward;
+
+function GetPlaceState: string; forward;
+
+function GetBarcode: string;
+{
+  result := _extattr.sGetAttr(2001, MBPInvs.cRecs[1], ATTRNAME_MBP_BARCODE);
+}
+
+function GetStorePlace(aStorePlaceNrec: comp): string;
+{
+  result := if(getanykau(1, KODGRKAU_PLACE, aStorePlaceNrec), givenanname(1), '');
+}
+
+function GetStorePlacePlan: string;
+{
+  result := GetStorePlace(MBPInvs.cRecs[2]);
+}
+
+function GetStorePlaceFact: string;
+{
+  result := GetStorePlace(MBPInvs.cRecs[3]);
+}
+
+//#endregion
+
+create view
+as select GetMBPInName()(fieldname=MBPInName),
+          GetBarcode()(fieldname=Barcode),
+          GetStorePlacePlan()(fieldname=StorePlacePlan),
+          GetStorePlaceFact()(fieldname=StorePlaceFact),
+          GetPlaceState()(fieldname=PlaceState)
+from mbpin InvMBPIn, katpodr InvMBPInPodr, mbpIn pickMBPIn
+where ((
+  MBPInvs.cRecs[1] == InvMBPIn.nrec and
+  InvMBPIn.cPodr == InvMBPInPodr.nrec and
+  MBPInvs.cKatMBP == pickMBPIn.cMBP
+));
+
+function GetMBPInName: string;
+{
+  result := '';
+  if getfirst InvMBPIn = tsOk
+  {
+    result := 'От ' + InvMBPIn.din +
+              ', цена: ' + InvMBPIn.Price +
+              ', подр.: ' + if (getfirst InvMBPInPodr = tsOk, InvMBPInPodr.Kod, '') +
+              ', МОЛ: ' + if (getanykau(1, 60, InvMBPIn.cMOL), givenanname(1), '');
+  }
+}
+
+function GetPlaceState: string;
+{
+  case MBPInvs.sums[3] of
+    0: result := 'Оставить без изменений';
+    1: result := 'Изменить';
+    2: result := 'Изменено';
+  end;
+}
+
+//Перекрыта функция заполнения временной таблицы остатками МБП
+procedure CntOnDocDate;
+{
+  var sInv, sPas : String[50];
+  var Npp : comp;
+  Npp := 0;
+
+  CorrectOldVersions; // Инициализация поля MBPIn.DateZero
+
+  dForOut := MBPMove.dMove;
+
+  PushBounds(tbInByRaz);
+
+  if (MBPMove.cRecs[4] <> 0)
+    if (not ConditionActiveInLeave(tcInByPers, #MBPIn))
+      PushConditionForLeave(tcInByPers, #MBPIn);
+
+  _LOOP MBPIn // Проверка фильтров не нужна - все ограничения в Bounds
+  {
+    NextVisual;
+
+    // Приходы по типу предметов
+    if (MBPMove.wParams[2] > 0)
+    {
+      if (MBPMove.wParams[2] = 1) // включать только спецоснастку
+        if (KatMBP.DesGr = 'SFO') // предмет является СФО
+          continue;
+
+      if (MBPMove.wParams[2] = 2) // включать только СФО
+        if (KatMBP.DesGr <> 'SFO') // предмет не является СФО
+          continue;
+    }
+
+    // Фильтр по группам МЦ
+    if (not CheckFltGrp(KatMBP.cGroupMC))
+      continue;
+
+    GetKolAndPerc;
+    sInv := GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo);
+    sPas := GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo);
+
+    if not vTrans.TryGet(GetFirst MBPInv Where (( MBPMove.NRec == MBPInv.cMove and (MBPIn.NRec = MBPInv.cRecs[1]) )) )
+    {
+      if not vTrans.TryGet( GetFirst tmpGetInvMC Where (( MBPIn.NRec  == tmpGetInvMC.Nrec )) )
+      {
+        ClearBuffer(#tmpGetInvMC);
+        Npp ++;
+        tmpGetInvMC.Nrec    := MBPIn.NRec;
+        tmpGetInvMC.dInv    := MBPMove.dMove;
+        tmpGetInvMC.cMove   := MBPMove.NRec;
+        tmpGetInvMC.cKatMBP := MBPIn.cMBP;
+        tmpGetInvMC.Name    := KatMBP.Name;
+        tmpGetInvMC.Kod     := KatMBP.NNumber;
+        tmpGetInvMC.Price   := MBPIn.Price;
+        tmpGetInvMC.InExpl  := MBPIn.InEkspl;
+        tmpGetInvMC.Perc    := inPerc;
+        tmpGetInvMC.InvNom  := sInv;
+        tmpGetInvMC.pasNom  := sPas;
+        tmpGetInvMC.cntKol  := inKol;
+        tmpGetInvMC.fctKol  := inKol;
+        SetFlagsMC;
+        Insert Current tmpGetInvMC;
+      }
+      else // Соответствующая группа найдена
+        if (tmpGetInvMC.isDDiff = 0) // Не трогать с отличающейся датой!
+        {
+          tmpGetInvMC.cntKol := tmpGetInvMC.cntKol + inKol;
+
+          if (tmpGetInvMC.isEqual = 0)
+            tmpGetInvMC.fctKol := tmpGetInvMC.cntKol;
+
+          SetFlagsMC;
+          Update Current tmpGetInvMC;
+        }
+    }
+    else // Соответствующая группа найдена
+        if (MBPInv.isDDiff = 0) // Не трогать с отличающейся датой!
+        {
+          MBPInv.cntKol := MBPInv.cntKol + inKol;
+
+          if (MBPInv.isEqual = 0)
+            MBPInv.fctKol := MBPInv.cntKol;
+
+          SetFlags;
+          Update Current MBPInv;
+        }
+  }
+
+
+  if (MBPMove.cRecs[4] <> 0)
+    if (ConditionActiveInLeave(tcInByPers, #MBPIn))
+      PopConditionForLeave(tcInByPers, #MBPIn);
+
+  PopBounds(tbInByRaz);
+}
+
+//Перекрыт обработчик заполнения инвентаризации остатками МБП:
+Window wiGetInvSpec;
+handleevent
+cmDefault:
+{
+  if (GetMarkerCount(InvMCMarker) = 0)
+    InsertMarker(InvMCMarker, tmpGetInvMC.Nrec);
+
+  _loop tmpGetInvMC
+  {
+    if not SearchMarker(InvMCMarker, tmpGetInvMC.Nrec, 0)
+      delete current tmpGetInvMC;
+  }
+
+  _loop tmpGetInvMC
+  {
+    ClearBuffer( #MBPInv);
+    MBPInv.dInv     := tmpGetInvMC.dInv;
+    MBPInv.cMove    := tmpGetInvMC.cMove;
+    MBPInv.cKatMBP  := tmpGetInvMC.cKatMBP;
+    MBPInv.Name     := tmpGetInvMC.Name;
+    MBPInv.Kod      := tmpGetInvMC.Kod;
+    MBPInv.Price    := tmpGetInvMC.Price;
+    MBPInv.InExpl   := tmpGetInvMC.InExpl;
+    MBPInv.Perc     := tmpGetInvMC.Perc;
+    MBPInv.InvNom   := tmpGetInvMC.InvNom;
+    MBPInv.pasNom   := tmpGetInvMC.pasNom;
+    MBPInv.cntKol   := tmpGetInvMC.cntKol;
+    MBPInv.fctKol   := tmpGetInvMC.fctKol;
+    MBPInv.isEqual  := tmpGetInvMC.isEqual;
+    MBPInv.isDDiff  := tmpGetInvMC.isDDiff;
+    MBPInv.cRecs[1] := tmpGetInvMC.Nrec;
+    MBPInv.cRecs[2] := _extattr.coGetAttr(2001, MBPInv.cRecs[1], ATTRNAME_MBP_PLACE);
+    Insert Current MBPInv;
+  }
+
+  // Освобождение маркера
+  DoneMarker(InvMCMarker, '');
+}
+end; //handleevent
+end; //Window wiGetInvSpec
+
+//Процедура добавления колонки в брауз
+procedure AddBrowseColumn(browseName: string; fldName: string; fldTitle: string; fldIndex: integer; isPickButton: boolean);
+{
+  var l: longint;
+  cfsCreateObject('Column', browseName, fldName, false, l);
+  cfsSetProp(l, 'Title', fldTitle);
+  cfsSetProp(l, 'FieldName', fldName);
+  cfsSetProp(l, 'DefaultWidth', word(12));
+  cfsSetProp(l, 'Size_X', 100);
+  cfsSetProp(l, 'Index', fldIndex);
+  cfsSetProp(l, 'Protect', true);
+  if isPickButton
+    cfsSetProp(l, 'ButtonType', inPickButton);
+}
+
+window wPickMBPIn 'Выбор поступления' doaccept, escclose;
+browse brMBPIns;
+table pickMBPIn;
+fields
+  pickMBPIn.din 'Дата': [11], protect;
+  if(getanykau(1, 2, pickMBPIn.cPodr), givenanname(1), '') 'Подразделение': [15], protect;
+  if(getanykau(1, 60, pickMBPIn.cMOL), givenanname(1), '') 'МОЛ': [15], protect;
+  pickMBPIn.KolFact 'Количество': [11], protect;
+  pickMBPIn.Price 'Цена': [15], protect;
+  pickMBPIn.TPercent 'Износ': [7], protect;
+end;
+end;
+
+//Перекрыта инициализация окна редактирования инвентаризации:
+//добавлены колонки для отображения, добавлен обработкик Pick поступления
+window EditActOfInv;
+handleevent
+cminit:
+{
+  inherited::handleevent(cminit);
+  cfsSetCurrentContainer('EditActOfInv');
+  AddBrowseColumn('BRINVMBP', 'MBPInName', 'Поступление', 2, true);
+  AddBrowseColumn('BRINVMBP', 'Barcode', 'Штрихкод', 2, false);
+  AddBrowseColumn('BRINVMBP', 'StorePlacePlan', 'Место хранения - учетное', 2, false);
+  AddBrowseColumn('BRINVMBP', 'StorePlaceFact', 'Место хранения - фактическое', 2, false);
+  AddBrowseColumn('BRINVMBP', 'PlaceState', 'Статус', 2, true);
+}
+cmpick:
+{
+  case curfield of
+    #MBPInName:
+    {
+      if MBPInvs.cKatMBP = 0
+      {
+        message('Укажите карточку спецоснастки');
+        exit;
+      }
+      if (runwindowmodal(wPickMBPIn) = cmDefault)
+      {
+        if getfirst mbpinv where ((MBPInvs.cMove == mbpinv.cmove and MBPInvs.cKatMBP == MBPInv.cKatMBP and (pickMBPIn.Nrec = MBPInv.cRecs[1]) )) = tsOk
+        {
+          message('В инвентаризации уже присутствует позиция с выбранным поступлением');
+          exit;
+        }
+        MBPInvs.Price    := pickMBPIn.Price;
+        MBPInvs.InExpl   := pickMBPIn.InEkspl;
+        MBPInvs.Perc     := pickMBPIn.tpercent;
+        MBPInvs.cntKol   := pickMBPIn.kolfact;
+        MBPInvs.fctKol   := pickMBPIn.kolfact;
+        MBPInvs.cRecs[1] := pickMBPIn.Nrec;
+        MBPInvs.cRecs[2] := _extattr.coGetAttr(2001, MBPInvs.cRecs[1], ATTRNAME_MBP_PLACE);
+        setmodified(true);
+        rescanpanel(#MBPInvs);
+      }
+    }
+    #PlaceState:
+    {
+      case MBPInvs.Sums[3] of
+        0: if (MBPInvs.cRecs[3] != 0 and MBPInvs.cRecs[2] != MBPInvs.cRecs[3]) { MBPInvs.Sums[3] := 1; setmodified(true); }
+        1: { MBPInvs.Sums[3] := 0; setmodified(true); }
+      end;
+      rescanpanel(#MBPInvs);
+    }
+  else
+    inherited::handleevent(cmpick);
+  end;
+}
+end;
+
+tableevent table mbpmove;
+cmCheckField:
+{
+  case curfield of
+    #dEndDate:
+    {
+      pushpos(#mbpinvs);
+      _loop mbpinvs
+      {
+        if mbpmove.cvalold != 0
+        {
+          if MBPInvs.sums[3] = 1
+          {
+            _extattr.coSetAttr(2001, MBPInvs.cRecs[1], ATTRNAME_MBP_PLACE, MBPInvs.cRecs[3], GetStorePlaceFact);
+            update current MBPInvs set MBPInvs.sums[3] := 2;
+          }
+        }
+        else
+        {
+          if MBPInvs.sums[3] = 2
+          {
+            _extattr.coSetAttr(2001, MBPInvs.cRecs[1], ATTRNAME_MBP_PLACE, MBPInvs.cRecs[2], GetStorePlacePlan);
+            update current MBPInvs set MBPInvs.sums[3] := 1;
+          }
+        }
+      }
+      poppos(#mbpinvs);
+    }
+  else
+    inherited::handleevent(cmCheckRecord);
+  end;
+}
+end; //tableevent table mbpmove
+
+end;
+
+Panel pnlMBPInv;
+  Table MBPInvS;
+
+HandleEvent
+cmCheckRecord:
+{
+
+}
+end;
+end; //panel pnlMBPInv
+
+end.

@@ -1,0 +1,589 @@
+#include Cleverence.Warehouse.vih
+#include Extattr.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface osnsred;
+
+var
+  date1: date;
+  time1: time;
+  _connector: CLEVERENCE::oStorageConnector;
+  ea: C_EXTCLASS::iExtAttr;
+const
+  currentplace : string = 'МЕСТО ХРАНЕНИЕ ТЕКУЩЕЕ';
+  factplace : string = 'МЕСТО ХРАНЕНИЕ ФАКТИЧЕСКОЕ';
+end;
+
+  function Connect: boolean;
+{
+  result := _connector.InitializeServerConnection('http://127.0.0.1:8000/datastorage.asmx');
+}
+
+function CreateProductField(aProduct: CLEVERENCE::oProduct; aFieldName: string; aFieldValue: string): CLEVERENCE::oFieldValue;
+{
+  var fieldValue: CLEVERENCE::oFieldValue;
+  fieldValue := _connector.CreateFieldValue;
+  fieldValue.FieldName := aFieldName;
+  fieldValue.Value := aFieldValue;
+  aProduct.Fields.Add(fieldValue);
+  result := fieldValue;
+}
+
+// Запрос для получения списка основных средств
+sql query qtest1 =
+select katos.nameos, katos.atl_lastdate, katos.atl_lasttime, katos.nrec, katos.dopinnum, katmol.name, katpodr.name, katos.datek, spkau.name, katos.innum, 1
+from katos
+left join kaureff on kaureff.cotable=3000 and kaureff.crec=katos.nrec and kaureff.wkau=10004
+left join spkau on spkau.nrec=kaureff.ckau
+left join katmol on katmol.nrec=katos.cmol
+left join katpodr on katpodr.nrec=katos.cpodr
+where datetime(katos.atl_lastdate, katos.atl_lasttime) >= datetime(:dato, :timo) and katos.dopinnum <> '';
+
+// Запрос для получения списка спецоснастки
+sql query qtest2 =
+select katmbp.name, katmbp.atl_lastdate, katmbp.atl_lasttime, mbpin.nrec, attrval1.vstring, katmol.name, katpodr.name, mbpin.din, attrval2.vstring, katmbp.nnumber, 2
+from katmbp
+join mbpin on mbpin.cmbp=katmbp.nrec
+join attrnam attrnam1 on attrnam1.wtable=2001 and attrnam1.name='Инвентарный номер'
+join attrnam attrnam2 on attrnam2.wtable=2001 and attrnam2.name='Место хранения'
+left join attrval attrval1 on attrval1.crec = mbpin.nrec and attrval1.cattrnam = attrnam1.nrec
+left join attrval attrval2 on attrval2.crec = mbpin.nrec and attrval2.cattrnam = attrnam2.nrec
+left join katmol on katmol.nrec=mbpin.cmol
+left join katpodr on katpodr.nrec=mbpin.cpodr
+where datetime(katmbp.atl_lastdate, katmbp.atl_lasttime) >= datetime(:dato, :timo) and mbpin.kolfact <> 0 and attrval1.vstring <> '';
+
+// Запрос для получения списка документов инвентаризации
+sql query qtest3 =
+select invtab.nrec, invtab.atl_lastdate, invtab.atl_lasttime, invtab.ninv+' '+katpodr.name+' '+katmol.name, invtab.dinv
+from invtab
+join katmol on katmol.nrec = invtab.cmol
+join katpodr on katpodr.nrec = invtab.csklad
+where datetime(invtab.atl_lastdate, invtab.atl_lasttime) >= datetime(:dato, :timo) and invtab.dinvend = 0 and invtab.tipdoc = 15 and invtab.dinv <> 0;
+
+// Запрос для получения списка спецификаций (внутренностей) документов инвентаризации
+sql query qtest4 =
+select invtab.nrec, invtab.atl_lastdate, invtab.atl_lasttime, spinvtab.kolprg, katos.innum, katos.nrec, spinvtab.nrec, spkau.nrec, spkau.name, spkau.code
+from invtab
+join spinvtab on spinvtab.cinvtab = invtab.nrec
+join katos on katos.nrec = spinvtab.cmc
+join kaureff on kaureff.wkau = 10004 and kaureff.crec = katos.nrec and kaureff.cotable = 3000
+join spkau on spkau.nrec = kaureff.ckau
+where datetime(invtab.atl_lastdate, invtab.atl_lasttime) >= datetime(:dato, :timo) and invtab.dinvend = 0;
+
+// Запрос для получения списка мест хранения
+sql query qcell =
+select spkau.nrec, spkau.name, spkau.code
+from spkau
+where spkau.kodgrkau = 10004;
+
+// Запрос для добавления обслуженных документов в Галактику
+sql query qdoc =
+select invtab.nrec, katos.nrec, invtab.ninv+' '+katpodr.name+' '+katmol.name, katos.nameos, spinvtab.kolprg, spinvtab.kol, spinvtab.nrec, spkau.nrec, spkau.name, spkau.code
+from invtab
+join spinvtab on spinvtab.cinvtab = invtab.nrec
+join katos on katos.nrec = spinvtab.cmc
+join katmol on katmol.nrec = invtab.cmol
+join katpodr on katpodr.nrec = invtab.csklad
+join kaureff on kaureff.wkau = 10004 and kaureff.crec = katos.nrec and kaureff.cotable = 3000
+join spkau on spkau.nrec = kaureff.ckau
+where invtab.nrec = :docid and invtab.dinvend = 0 and invtab.tipdoc = 15 and invtab.dinv <> 0 and invtab.dinvend = 0;
+
+//Запрос получения доп атрибута по штрихкоду
+sql query getspin=
+select spkau.nrec, spkau.name
+from spkau
+where spkau.code = :kod;
+
+sql query updquery=
+update spinvtab set spinvtab.kol = :currentcount where spinvtab.cmc= :productid and spinvtab.cinvtab=:documid;
+
+// Описание таблицы номенклатуры
+table struct tblts(
+  nameos:   string[100],
+  dato:     date,
+  timo:     time,
+  nrec:     comp,
+  barkod:   string[20],
+  cmol:     string[50],
+  filialno: string[100],
+  datek:    date,
+  creserv2: string[40],
+  innum:    string [40],
+  tip: word
+) with index (
+  ind = nameos+dato+timo
+);
+// Описание таблицы документов
+table struct tabz1(
+  id:       comp,
+  dato:     date,
+  timo:     time,
+  name:     string[200],
+  datesozd: date
+) with index (
+  ind = name+dato+timo
+);
+// Описание таблицы спецификаций документов
+table struct tabz2(
+  id:       comp,
+  dato:     date,
+  timo:     time,
+  kol:      double,
+  innum:    string[20],
+  prid:     comp,
+  spinvrec: comp,
+  sprec:    comp,
+  spname:   string[100],
+  kod:      string[20]
+) with index (
+  ind = innum+dato+timo,
+  ind1 = id
+);
+// Описание таблицы мест хранения (ячеек склада)
+table struct tabcell(
+  id: comp,
+  name: string[50],
+  code: string[50]
+  ) with index (
+  ind = id
+);
+// Описание таблицы загрузки документов обратно в кратер Галактики
+table struct tabdoc(
+  iddoc:    comp,
+  idprod:   comp,
+  docname:  string[100],
+  names:    string[50],
+  kol:      double,
+  kolfact:  double,
+  spinvrec: comp,
+  sprec:    comp,
+  spname:   string[100],
+  kod:      string[20]
+) with index (
+  ind = idprod
+);
+// Таблица доп атрибутов
+table struct spplace(
+  sprec:  comp,
+  spname: string[100]
+) with index (
+  ind = sprec
+);
+
+create view
+as select *
+from tblts, tabz1, tabz2, tabcell, tabdoc, spplace, spinvtab
+where ((
+  tabz1.id == tabz2.id
+));
+
+// Функция "склеивания" nrec и числа-типа продукта (типы: 1 - ОС, 2 - спецоснастка)
+function prodid(tip: word; rec: comp): string;
+begin
+  prodid := tip + string(rec, 0, 0);
+end;
+
+// Универсальная процедура выгрузки всего
+procedure gettabdoc(datein: date; timein: time; link: comp; cod: string; iTable: integer; insquery: string; needdel: boolean);
+{
+  if needdel mtClear(iTable, mfNormal);
+  var q:IQuery;
+  var rs:IResultSet;
+
+  q := queryManager.createQuery(insquery);
+  q.setParam('timo', timein);
+  q.setParam('dato', datein);
+  q.setparam('docid', comp(link));
+  q.setparam('kod', cod);
+
+  rs := q.getResultSet;
+
+  if rs = nullref
+   {
+     message('Ошибка!', error);
+     exit;
+   }
+
+  sqlCopyInto(rs, iTable, false);
+  rereadrecord(iTable);
+}
+
+procedure updater(id: comp; skolko: integer; docid: comp);
+{
+  var q:IQuery;
+  var rs:IResultSet;
+
+  q := queryManager.createQuery(updquery);
+  q.setparam('currentcount', skolko);
+  q.setParam('productid', id);
+  q.setParam('documid', docid)
+  q.execute;
+}
+
+procedure inserter(recorder: comp; kolvo: integer; id: comp);
+{
+  insert spinvtab set spinvtab.cmc := recorder, spinvtab.kol := kolvo, spinvtab.cinvtab := id;
+}
+
+// Процедура загрузки данных с сервера в Галактику
+procedure upddocs(doccol: oCollection);
+{
+  var i, n, k, l, m: integer;
+  var oled1: oOleObject;
+  var PID: string;
+
+  for (i := 0; i < doccol.count; i := i + 1)
+  {
+
+    gettabdoc(0, 0, comp(oDocument(oled1).id), '', #tabdoc, qdoc, true);
+    message(oDocument(oled1).name + ' обрабатывается!');
+
+    for (n := 0; n < oDocument(oled1).DeclaredItems.count; n := n + 1)
+    {
+      PID := substr(oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).ProductId, 2, 255);
+
+      if getfirst tabdoc where ((PID == tabdoc.idprod )) = tsok
+      {
+        if oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).CurrentQuantity <> 0
+        {
+          m := m + 1;
+          updater(PID, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).CurrentQuantity, oDocument(oled1).id);
+          gettabdoc(0, 0, 0, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).FirstStorageBarcode, #spplace, getspin, true);
+          ea.coSetAttr(1124, tabdoc.spinvrec, factplace, spplace.sprec, spplace.spname);
+        }
+        k := k + 1;
+      }
+      else
+      {
+        l := l + 1;
+        inserter(PID, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).CurrentQuantity, oDocument(oled1).id);
+        gettabdoc(0, 0, 0, oDocumentItem(oDocument(oled1).DeclaredItems.item(n)).FirstStorageBarcode, #spplace, getspin, true);
+        ea.coSetAttr(1124, spinvtab.nrec, factplace, spplace.sprec, spplace.spname);
+      }
+    }
+    message('Апдейтов '+m+' (из '+k+' вариантов)'+Chr(13)+'Инсёртов '+l+Chr(13)+'Итераций '+n);
+    k := 0;
+    l := 0;
+    m := 0;
+  }
+}
+
+screen sc1;
+fields
+  date1: noprotect;
+  time1: noprotect;
+buttons
+  cmgoods;
+  cmdocs;
+  cmdocsmbp;
+  cmcell;
+  cmloading;
+<<
+
+Введите дату и время последней модификации .@@@@@@@@@@@@ .@@@@@@@
+
+<.Добавить продукты (ОС и спецоснастку).>
+
+<.       Добавить документы (ОС)       .>
+
+<.       Добавить документы (МБП)      .>
+
+<.       Добавить места хранения       .>
+
+<.      Обновить данные с сервера      .>
+
+>>
+end;
+
+handleevent
+// Обработка кнопки добавления номенклатуры
+cmgoods:
+  {
+    gettabdoc(date1, time1, 0, '', #tblts, qtest1, true);
+    gettabdoc(date1, time1, 0, '', #tblts, qtest2, false);
+
+  if Connect
+
+   {
+     var product: CLEVERENCE::oProduct;
+     var packing: CLEVERENCE::oPacking;
+     var mol, podr, dexpl, addr, invnum: CLEVERENCE::oFieldValue;
+
+     var i: integer;
+     var products: CLEVERENCE::oCollection;
+
+     products := _connector.CreateProductCollection;
+      if products = nullref exit;
+
+     i := 0;
+
+     StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, '', recordsintable(#tblts));
+
+     _loop tblts
+     {
+
+        packing := _connector.CreatePacking;
+        packing.Id := prodid(tblts.tip, tblts.nrec);
+        packing.name := 'шт';
+        packing.barcode := tblts.barkod;
+
+        product := _connector.CreateProduct;
+        product.Id := prodid(tblts.tip, tblts.nrec);
+        product.Name := tblts.nameos;
+        product.Barcode := tblts.barkod;
+        product.packings.Add(packing);               // Добавление упаковки
+        product.BasePackingId := packing.Id;         // Базовая упаковка
+        product.UnitConvertionRate := 1;
+
+        mol    := CreateProductField(product, 'МОЛ', tblts.cmol);
+        podr   := CreateProductField(product, 'Подразделение', tblts.filialno);
+        dexpl  := CreateProductField(product, 'ДатаВводаВЭксплуатацию', tblts.datek);
+        addr   := CreateProductField(product, 'АдресМестонахождения', tblts.CRESERV2);
+        invnum := CreateProductField(product, 'ИнвентарныйНомер', tblts.innum);
+
+        products.Add(product);
+
+        FreeVipInterface(product);
+        FreeVipInterface(mol);
+        FreeVipInterface(podr);
+        FreeVipInterface(dexpl);
+        FreeVipInterface(addr);
+        FreeVipInterface(invnum);
+        FreeVipInterface(packing);
+
+        i := i + 1;
+
+        if (i = 1000) then
+        {
+          _connector.SetProducts(products);
+          FreeVipInterface(products);
+          i := 0;
+          products := _connector.CreateProductCollection;
+          if products = nullref exit;
+        }
+        if not nextvisual break;
+     }
+     StopVisual('',0);
+
+     _connector.SetProducts(products);
+     FreeVipInterface(products);
+
+   }
+
+  }
+// Обработка кнопки добавления документов
+cmdocs:
+{
+    gettabdoc(date1, time1, 0, '', #tabz1, qtest3, true);  // процедура заполнения таблицы документов
+    gettabdoc(date1, time1, 0, '', #tabz2, qtest4, true);  // процедура заполнения таблицы внутренностей документов
+
+    var environment: CLEVERENCE::oEnvironment;
+    environment := _connector.GetEnvironment;
+    if environment = nullref exit;
+    if environment.warehouses = nullref exit;
+    if environment.warehouses.count = 0 exit;
+
+    var warehouse: oWarehouse;
+    warehouse := oWarehouse(environment.warehouses.Item(0));
+    if warehouse = nullref exit;
+
+    var documents: CLEVERENCE::oCollection;
+    documents := _connector.CreateDocumentCollection; //GetDocuments('Инвентаризация', false);
+    if documents = nullref exit;
+
+    var document: CLEVERENCE::oDocument;
+    var documentItem: CLEVERENCE::oDocumentItem;
+    var i: integer;
+
+    i := 0;
+
+    StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, '', recordsintable(#tabz1));
+
+    _loop tabz1
+    {
+      document := _connector.CreateDocument;
+      if document = nullref exit;
+      document.Id := tabz1.id;
+      document.Name := tabz1.name;
+      document.DocumentTypeName := 'Инвентаризация';
+      document.CreateDate := tabz1.datesozd;
+      document.WarehouseId := warehouse.Id;
+
+      _loop tabz2
+        {
+          documentItem := _connector.CreateDocumentItem;
+            if documentItem = nullref exit;
+
+          documentItem.ProductId := prodid(1, tabz2.prid);
+          documentItem.PackingId := prodid(1, tabz2.prid);
+          documentItem.DeclaredQuantity := tabz2.kol;
+          documentItem.FirstStorageBarcode := tabz2.kod;
+          // установка атрибутов места хранения
+          ea.coSetAttr(1124, tabz2.spinvrec, currentplace, tabz2.sprec, tabz2.spname);
+
+          document.DeclaredItems.Add(documentItem);
+          FreeVipInterface(documentItem);
+        }
+
+        documents.Add(document);
+        FreeVipInterface(document);
+
+        i := i + 1;
+
+        if i=60 then
+        {
+          _connector.SetDocuments(documents);
+          FreeVipInterface(documents);
+          i := 0;
+          documents := _connector.CreateDocumentCollection;
+          if documents = nullref exit;
+        }
+      if not nextvisual break;
+    }
+
+      StopVisual('',0);
+      _connector.SetDocuments(documents);
+      FreeVipInterface(documents);
+}
+// Обработка кнопки добавления ячеек (мест хранения)
+cmcell:
+{
+  gettabdoc(0, 0, 0, '', #tabcell, qcell, true);
+
+  var environment: CLEVERENCE::oEnvironment;
+  environment := _connector.GetEnvironment;
+  if environment = nullref exit;
+  if environment.warehouses = nullref exit;
+  if environment.warehouses.count = 0 exit;
+
+  var warehouse: CLEVERENCE::oWarehouse;
+  warehouse := oWarehouse(environment.warehouses.Item(0));
+  if warehouse = nullref exit;
+
+  var wc: CLEVERENCE::oCollection
+  wc := _connector.CreateWarehouseCollection;
+
+  var place: CLEVERENCE::oCell;
+
+  StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, '', recordsintable(#tabcell));
+
+  _loop tabcell
+  {
+    place := _connector.CreateCell;
+    place.barcode := tabcell.code;
+    place.name := tabcell.name;
+
+    warehouse.cells.add(place);
+    FreeVipInterface(place);
+
+    if not nextvisual break;
+  }
+
+   StopVisual('',0);
+   wc.add(warehouse);                        // Добавляем склад в коллекцию складов
+   _connector.SetWarehouses(wc);             // Записываем коллекцию складов
+   FreeVipInterface(warehouse);
+   FreeVipInterface(wc);
+}
+
+cmInit:
+{
+  if not (getvipref(_connector, 'CLEVERENCE::iStorageConnector'))
+  {
+    message('Ошибка инициализации коннектора', error);
+    abort;
+    exit;
+  }
+
+  if not connect
+  {
+    message('Ошибка подключения к серверу', error);
+    abort;
+    exit;
+  }
+}
+// Обработка загрузки изменений с сервера в галактику
+cmloading:
+{
+  var alldocs: CLEVERENCE::oCollection;
+  alldocs := _connector.GetDocuments('Инвентаризация', false);             // TRUE вернуть!
+  upddocs(alldocs);
+  message('ТЕПЕРЬ ПИТАНИЕ КОМПЬЮТЕРА МОЖНО ОТКЛЮЧИТЬ');
+}
+
+cmdocsmbp:
+{
+  gettabdoc(date1, time1, 0, '', 1, '', true);
+
+/*    var environment: CLEVERENCE::oEnvironment;
+    environment := _connector.GetEnvironment;
+    if environment = nullref exit;
+    if environment.warehouses = nullref exit;
+    if environment.warehouses.count = 0 exit;
+
+    var warehouse: oWarehouse;
+    warehouse := oWarehouse(environment.warehouses.Item(0));
+    if warehouse = nullref exit;
+
+    var documents: CLEVERENCE::oCollection;
+    documents := _connector.CreateDocumentCollection; //GetDocuments('Инвентаризация', false);
+    if documents = nullref exit;
+
+    var document: CLEVERENCE::oDocument;
+    var documentItem: CLEVERENCE::oDocumentItem;
+    var i: integer;
+
+    i := 0;
+
+
+  StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, '', recordsintable(#tabmbpout));
+
+  _loop tabmbpout
+  {
+    document := _connector.CreateDocument;
+    if document = nullref exit;
+    document.Id := tabmbp.id;
+    document.Name := tabmbp.name;
+    document.DocumentTypeName := 'Инвентаризация';
+    document.CreateDate := tabmbp.datesozd;
+    document.WarehouseId := warehouse.Id;
+
+    _loop tabmbpin
+    {
+      documentItem := _connector.CreateDocumentItem;
+        if documentItem = nullref exit;
+
+      documentItem.ProductId := prodid(2, tabz2.prid);
+      documentItem.PackingId := prodid(2, tabz2.prid);
+      documentItem.DeclaredQuantity := tabz2.kol;
+      documentItem.FirstStorageBarcode := tabz2.kod;
+      // установка атрибутов места хранения
+      ea.coSetAttr(1124, tabz2.spinvrec, currentplace, tabz2.sprec, tabz2.spname);
+
+      document.DeclaredItems.Add(documentItem);
+      FreeVipInterface(documentItem);
+    }
+
+     documents.Add(document);
+     FreeVipInterface(document);
+
+     i := i + 1;
+
+     if i=60 then
+      {
+        _connector.SetDocuments(documents);
+        FreeVipInterface(documents);
+        i := 0;
+        documents := _connector.CreateDocumentCollection;
+        if documents = nullref exit;
+      }
+      if not nextvisual break;
+  }
+  StopVisual('',0);                                                              */
+}
+
+end;
+
+end.
