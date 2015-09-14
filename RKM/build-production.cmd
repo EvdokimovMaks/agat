@@ -1,2 +1,2 @@
-@call ../config/build.cmd production RKM.prj
-@call ../config/frres.cmd production RKM reports
+@call ../config/build.cmd production ArgumentRKM.prj
+@call ../config/frres.cmd production ArgumentRKM reports

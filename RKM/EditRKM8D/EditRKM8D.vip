@@ -1,0 +1,1461 @@
+#include EditRKM8D.vih
+#include DeflatorResolver.vih
+#include Query.vih
+#include Marker.vih
+
+#component "AGAT"
+
+interface EditRKM8D;
+
+sql query QueryDetails =
+select spm.nrec                     as Nrec,
+       spm.cspmnplan                as ParentNrec,
+       spm.nrec                     as SpmnplanNrec,
+       coalesce(di.sfld[1],'')+coalesce(di.sfld[2],'')+coalesce(di.sfld[3],'')+coalesce(di.sfld[4],'')+coalesce(di.sfld[5],'') as ObjName,
+       (coalesce(vsp.kol      , 0)) as TotalLaborBase,
+       (coalesce(vsp.price    , 0)) as NoveltyCoeff,
+       (coalesce(vsp.vprice   , 0)) as DiffCoeff,
+       (coalesce(vsp.summa    , 0)) as TotalLabor,
+       (coalesce(vsp.kolfield5, 0)) as BaseHourCost,
+       (coalesce(vsp.kolfact  , 0)) as BaseSum,
+       (coalesce(vsp.pricefact, 0)) as TotalSum
+from mnplan mp
+join spmnplan spm on mp.nrec = spm.cmnplan and spm.typeizd = 35
+left join dopinfo di on spm.nrec = di.cperson and :DopTblRKM = di.cdoptbl
+left join spmnpl spl on spm.nrec = spl.cspmnplan and 24 = spl.wkolan and 28 = spl.wkodgr4 and mp.nrec = spl.canval4
+left join valspmnp vsp on coalesce(spl.nrec,#comp(0)) = vsp.cspmnpl and spl.nrec is not null
+where mp.nrec = :MnplanNrec
+;
+
+sql query QueryValues =
+select spm.nrec as Nrec,
+       year(datetime(per.dend, 0)) as Year,
+       sum(vsp.kol) as Labor,
+       max(case when vsp.price > 0 then vsp.price else 1 end) as Coeff,
+       max(vsp.vprice) as Summa
+from spmnplan spm
+join spmnpl spl on spm.nrec = spl.cspmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4
+join fpperiod per on spl.canval4 = per.nrec and year(datetime(per.dend, 0)) between :YearStart and :YearEnd
+join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where spm.cmnplan = :MnplanNrec and spm.typeizd = 35
+group by spm.nrec, year(datetime(per.dend, 0))
+;
+
+sql query QueryProfs =
+select spm.nrec                   as Nrec,
+       spm.cspmnplan              as rkm8dNrec,
+       spm.nrec                   as SpmnplanNrec,
+       spm.cizd                   as ProfNrec,
+       coalesce(vsp.kol      , 0) as Coeff,
+       coalesce(vsp.price    , 0) as Qty,
+       coalesce(vsp.vprice   , 0) as TotalLabor
+from mnplan mp
+join spmnplan spm on mp.nrec = spm.cmnplan and spm.typeizd = 36
+left join spmnpl spl on spm.nrec = spl.cspmnplan and 24 = spl.wkolan and 28 = spl.wkodgr4 and mp.nrec = spl.canval4
+left join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where mp.nrec = :MnplanNrec
+;
+
+sql query QueryProfsValues =
+select spm.nrec as Nrec,
+       year(datetime(per.dend, 0)) as Year,
+       sum(vsp.kol) as Labor
+from spmnplan spm
+join spmnpl spl on spm.nrec = spl.cspmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4
+join fpperiod per on spl.canval4 = per.nrec and year(datetime(per.dend, 0)) between :YearStart and :YearEnd
+join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where spm.cmnplan = :MnplanNrec and spm.typeizd = 36
+group by spm.nrec, year(datetime(per.dend, 0))
+;
+
+const
+  DopTblRKM = comp(-10);
+  ATTRNAM_PROFCOEFF = 'Коэффициент сложности (для РКМ)';
+  DEFLATOR_GROUP_SALARY = 000100000000101Ch;
+end;
+
+var
+  _parentNrec: comp;
+  _marks     : longint;
+  _yearcount : byte;
+  _curMnplanNrec: comp;
+  _yearStart : word;
+  _yearEnd   : word;
+  _getkau    : GetKau;
+  _extAttr   : iExtAttr;
+  _deflatorResolver: AGAT::oDeflatorResolver;
+
+  _savedSpmnplanNrec: comp;
+  _baseYear  : word;
+
+  _calcPercentTotalLabor: double;
+  _calcPercentPercent: double;
+
+create view
+as select *
+from tRKM8D t, tRKM8D tParent, trkm8dProfs tp, catalogs catProf,
+     tRKM8D, tRKM8D tRKM8D1, trkm8dProfs,
+     fpperiod, spmnplan, spmnpl, valspmnp, mnanal, pick, dopinfo, mnplan
+where ((
+  _parentNrec    == t.ParentNrec and
+  t.ParentNrec   == tParent.Nrec and
+  t.Nrec         == tp.rkm8dNrec and
+  tp.ProfNrec    == catProf.nrec
+));
+
+create view v
+var
+  _mnplanNrec: comp;
+  _typeIzd: word;
+as select *
+from mnplan mp, spmnplan spm, spmnpl spl, valspmnp vsp, dopinfo
+where ((
+  _mnplanNrec     == mp.nrec and
+  mp.nrec         == spm.cmnplan and
+  _typeIzd        == spm.typeizd and
+  spm.nrec        == spl.cspmnplan and
+  VID_PERIOD      == spl.wkolan and
+  KODGRKAU_PERIOD == spl.wkodgr4 and
+  spl.nrec        == vsp.cspmnpl and
+  spm.nrec        == dopinfo.cperson and
+  DopTblRKM       == dopinfo.cdoptbl
+));
+
+create view vOper
+var
+  _mnfOperNrec: comp;
+as select *
+from mnfoper, paramvol
+where ((
+  _mnfOperNrec == mnfoper.nrec and
+  0            == paramvol.tmaster and
+  0            == paramvol.cmaster and
+  11007        == paramvol.tobject and
+  _mnfOperNrec == paramvol.cobject
+));
+
+create view vDefl
+var
+  _deflMnplanNrec: comp;
+  _deflGroupSalary: comp;
+as select *
+from objacct deflatorOA, mnplan deflMnplanOA, mnplan deflMnplan, spkau deflGroup, tRKM8D tPicked, tRKM8D tChild
+where ((
+  4                      == deflatorOA.typeown  and
+  _curMnplanNrec         == deflatorOA.cowner   and
+  4                      == deflatorOA.typeobj  and
+  deflatorOA.cobject     == deflMnplanOA.nrec and (deflMnplanOA.cwayaccou = WAYACCOU_DEFLATOR) and
+  _deflMnplanNrec        == deflMnplan.nrec and
+  _deflGroupSalary       == deflGroup.nrec
+));
+
+create view vChild
+var
+  _RKM8DParentNrec: comp;
+  _excludeChildNrec: comp;
+as select *
+from tRKM8D tChild
+where ((_RKM8DParentNrec == tChild.ParentNrec and (tChild.Nrec <> _excludeChildNrec) ));
+
+//#region Функции для отображения значений в колонках дерева--------------------------------------------------
+
+function GetSumLabor: double;
+{
+  var d: double; d := 0;
+  var i: byte;
+  for(i:=1;i<=_yearcount;i++) { d += t.Labor[i]; }
+  result := d;
+}
+
+function GetTotalLaborName: string;
+{
+  var sumLabor: double;
+  sumLabor := GetSumLabor;
+  if t.TotalLabor = sumLabor result := doubletostr(round(t.TotalLabor,3), '[|-]3666666666666.888')
+  else result := doubletostr(round(t.TotalLabor,3), '[|-]3666666666666.888') + ' / ' +
+                 doubletostr(round(sumLabor,3), '[|-]3666666666666.888') + ' (' +
+                 doubletostr(round(t.TotalLabor - sumLabor,3), '[|-]3666666666666.888') + ')';
+}
+
+function GetTotalLaborColor: longint;
+{
+  var sumLabor: double;
+  sumLabor := GetSumLabor;
+  if t.TotalLabor < sumLabor result := 69
+  else if t.TotalLabor > sumLabor result := 17
+  else result := 0;
+}
+
+function GetProfSumLabor: double;
+{
+  var d: double; d := 0;
+  var i: byte;
+  for(i:=1;i<=_yearcount;i++) { d += tp.Labor[i]; }
+  result := d;
+}
+
+function GetProfTotalLaborName: string;
+{
+  var sumLabor: double;
+  sumLabor := GetProfSumLabor;
+  if tp.TotalLabor = sumLabor result := doubletostr(round(tp.TotalLabor,3), '[|-]3666666666666.888')
+  else result := doubletostr(round(tp.TotalLabor,3), '[|-]3666666666666.888') + ' / ' +
+                 doubletostr(round(sumLabor,3), '[|-]3666666666666.888') + ' (' +
+                 doubletostr(round(tp.TotalLabor - sumLabor,3), '[|-]3666666666666.888') + ')';
+}
+
+function GetProfTotalLaborColor: longint;
+{
+  var sumLabor: double;
+  sumLabor := GetProfSumLabor;
+  if tp.TotalLabor < sumLabor result := 69
+  else if tp.TotalLabor > sumLabor result := 17
+  else result := 0;
+}
+
+function GetProfName: string;
+{
+  result := if(getfirst catProf = tsOk, catProf.Name, '');
+}
+
+//#endregion -------------------------------------------------------------------------------------------------
+
+//#region Процедуры Pick--------------------------------------------------------------------------------------
+
+procedure ProcessCurrentRecord; forward;
+
+procedure PickObj;
+var
+  c: comp;
+{
+  c := t.ObjNrec;
+  if _getkau.GetCodeKau(1, 35, c) > 0
+  {
+    t.ObjNrec := c;
+    vOper._mnfOperNrec := c;
+    if vOper.getfirst mnfoper = tsOk
+      t.ObjName := vOper.mnfoper.name;
+    if vOper.getfirst paramvol = tsOk
+      t.TotalLaborBase := vOper.paramvol.value[9];
+    ProcessCurrentRecord;
+    rescanpanel(#t);
+  }
+}
+
+procedure InsertCurrentProf; forward;
+procedure UpdateCurrentProf; forward;
+
+function GetProfCoeff(aProfNrec: comp): string;
+{
+  result := _extAttr.doGetAttr(25031, aProfNrec, ATTRNAM_PROFCOEFF);
+}
+
+procedure PickProf;
+{
+  var c: comp;
+  c := tp.ProfNrec;
+
+  var cnt: longint;
+  cnt := _getkau.GetCodeKau(2,36, c);
+
+  if cnt = 1
+  {
+    tp.ProfNrec := c;
+    tp.Coeff := GetProfCoeff(c);
+    setmodified(true);
+    rescanpanel(#tp);
+  }
+  else if cnt > 1
+  {
+    var l: longint;
+    l := initmarker(_getkau.GetMarkerName(36), 8, 100, 100, false);
+    if getmarker(l, 0, c)
+    {
+      tp.ProfNrec := c;
+      tp.Coeff := GetProfCoeff(c);
+      if isNew
+        InsertCurrentProf
+      else
+        UpdateCurrentProf;
+    }
+    var i: longint;
+    for (i := 1; i < cnt; i++)
+      if getmarker(l, i, c)
+      {
+        clearbuffer(#tp);
+        tp.ProfNrec := c;
+        tp.Coeff := GetProfCoeff(c);
+        insert current tp;
+      }
+    donemarker(l, '');
+    rereadrecord(#tp);
+  }
+}
+
+//#endregion -------------------------------------------------------------------------------------------------
+
+//#region CalcPercent
+window wCalcPercent 'Трудоемкость: сумма по помеченным статьям * %', escclose, doaccept;
+show (,,50,5);
+screen scCalcPercent;
+buttons
+  cmCalcPercentRecalc;
+  cmCalcPercentDoOk, default;
+  cmCalcPercentCancel;
+fields
+  round(_calcPercentTotalLabor,3): skip;
+  _calcPercentPercent: noprotect;
+  round(_calcPercentTotalLabor * _calcPercentPercent / 100, 3): skip, left;
+<<
+ Результат = Сумма по помеченным статьям * процент
+ .@@@@@@@@@@@@@ * .@@@@@ = .@@@@@@@@@@@@@@@
+
+ <. Пересчет .> <. Установить .> <. Отмена .>
+>>
+end;
+handleevent
+  cmCheckField:
+  {
+    rescanpanel(scCalcPercent);
+  }
+  cmCalcPercentRecalc:
+  {
+    rescanpanel(scCalcPercent);
+  }
+  cmCalcPercentDoOk:
+  {
+    CloseWindowEx(wCalcPercent, cmDefault);
+  }
+  cmCalcPercentCancel:
+  {
+    CloseWindowEx(wCalcPercent, cmCancel);
+  }
+end;
+end;
+
+procedure CalcPercent;
+{
+  _calcPercentTotalLabor := 0;
+  _loop trkm8d where foundmarker(_marks, trkm8d.nrec)
+  {
+    _calcPercentTotalLabor += trkm8d.TotalLabor;
+  }
+  if (runwindowmodal(wCalcPercent) = cmDefault)
+  {
+    t.TotalLabor :=  round(_calcPercentTotalLabor * _calcPercentPercent / 100, 3);
+    if (t.NoveltyCoeff = 0) t.NoveltyCoeff := 1;
+    if (t.DiffCoeff = 0) t.DiffCoeff := 1;
+    t.TotalLaborBase := t.TotalLabor / t.NoveltyCoeff / t.DiffCoeff;
+    ProcessCurrentRecord;
+  }
+}
+
+//#endregion
+
+//#region CalcDiffCoeff
+
+procedure CalcDiffCoeff;
+{
+  var persQty: double;
+  persQty := 0;
+  pushpos(#tp);
+  _loop tp
+    persQty += tp.Qty;
+  if persQty <= 0
+  {
+    message('Не указаны количества сотрудников по должностям. Расчет не выполнен.', warning);
+    exit;
+  }
+  t.DiffCoeff := 0;
+  _loop tp
+    t.DiffCoeff += tp.Qty / persQty * tp.Coeff;
+  poppos(#tp);
+  ProcessCurrentRecord;
+}
+
+//#endregion
+
+//#region CalcDeflCoeff
+
+window wCalcDeflCoeff 'Расчет индексов-дефляторов' escclose, doaccept;
+show (,,80, 6);
+function GetDeflMnplanName: string;
+{
+  result := if(vDefl.getfirst deflMnplan = tsOk, vDefl.deflMnplan.name, '');
+}
+
+function GetDeflGroupSalaryName: string;
+{
+  result := if(vDefl.getfirst deflGroup = tsOk, vDefl.deflGroup.Name, '');
+}
+
+screen scCalcDeflCoeff;
+fields
+  [DeflMnplanName] GetDeflMnplanName: protect, pickbutton;
+  [DeflGroupSalaryName] GetDeflGroupSalaryName: protect, pickbutton;
+buttons
+  cmCalcDeflCoeff, default;
+  cmCancel;
+<<
+
+`План с коэффициентами-дефляторами` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Группа коэффициентов`              .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                                                 <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+cmPick:
+{
+  case curfield of
+    #DeflMnplanName:
+    {
+      var c: comp;
+      c := vDefl._deflMnplanNrec;
+      if _getkau.GetCodeKau(1, 28, c) > 0
+      {
+        vDefl._deflMnplanNrec := c;
+        rereadrecord;
+      }
+    }
+    #DeflGroupSalaryName:
+    {
+      var c: comp;
+      c := vDefl._deflGroupSalary;
+      if _getkau.GetCodeKau(1, KODGRKAU_DEFLATOR_GROUPS, c) > 0
+      {
+        vDefl._deflGroupSalary := c;
+        rereadrecord;
+      }
+    }
+  end;
+}
+cmCalcDeflCoeff:
+{
+  closewindowex(wCalcDeflCoeff, cmDefault);
+}
+cmInit:
+{
+  //Ищем план с коэффициентами во входящих к текущему документу.
+  vDefl._deflMnplanNrec := 0;
+
+  vDefl._loop deflatorOA
+  {
+    if vDefl.getfirst deflMnplanOA = tsOk
+    {
+      vDefl._deflMnplanNrec := vDefl.deflMnplanOA.nrec;
+      break;
+    }
+  }
+
+  //Если не находим во входящих - используем план из настроек к алгоритму
+  if (vDefl._deflMnplanNrec = 0)
+    if getlast mnplan where ((WAYACCOU_DEFLATOR == mnplan.cwayaccou)) = tsOk
+      vDefl._deflMnplanNrec := mnplan.nrec;
+
+  vDefl._deflGroupSalary := DEFLATOR_GROUP_SALARY;
+}
+end;
+end; //window wCalcDeflCoeff
+
+procedure ProcessParentNode(buf: ttRKM8D); forward;
+procedure ProcessRKM8DRecord(var buf: ttRKM8D); forward;
+
+procedure CalcDeflCoeff;
+{
+  if not getVipRef(_deflatorResolver, 'AGAT::IDeflatorResolver')
+  {
+    message('Ошибка инициализации алгоритма расчета коэффициентов-дефляторов');
+    exit;
+  }
+
+  if getmarkercount(_marks) = 0
+    insertmarker(_marks, t.Nrec);
+
+  if runwindowmodal(wCalcDeflCoeff) != cmDefault exit;
+
+  if (_baseYear = 0)
+  {
+    message('Укажите базовый год');
+    exit;
+  }
+
+  if (_yearStart = 0) or (_yearEnd = 0)
+  {
+    message('Укажите даты начала и окончания планирования');
+    exit;
+  }
+
+  var _fptperNrec: comp;
+  if getfirst mnplan where ((_curMnplanNrec == mnplan.nrec)) = tsOk
+    if getfirst fpperiod where ((mnplan.canval3 == fpperiod.nrec)) = tsOk
+      _fptperNrec := fpperiod.ctper;
+
+  if (_fptperNrec = 0)
+  {
+    message('Не определен тип периода планирования. Укажите базовый год');
+    exit;
+  }
+
+  _deflatorResolver.InitDeflators(vDefl._deflMnplanNrec, _fptperNrec);
+
+  var i: integer;
+  var buf: ttrkm8d;
+  var dc: array[0..0] of double;
+  setlimit(dc, _yearcount);
+  for(i := 0; i < _yearcount; i++)
+  {
+    dc[i] := _deflatorResolver.GetDeflator(vDefl._deflGroupSalary, _baseYear, _yearStart + i);
+  }
+
+  vDefl._loop tPicked where foundmarker(_marks, vDefl.tPicked.Nrec)
+  {
+    if vDefl.getfirst tChild where ((vDefl.tPicked.Nrec == tChild.ParentNrec)) = tsOk continue;
+    for(i := 0; i < _yearcount; i++)
+    {
+      vDefl.tPicked.Coeff[i+1] := dc[i];
+    }
+    buf := ttrkm8d(vDefl.tPicked.buffer);
+    ProcessRKM8DRecord(buf);
+    vDefl.tPicked.buffer := buf;
+    vDefl.update current tPicked;
+    ProcessParentNode(buf);
+  }
+
+  rereadrecord(#t);
+}
+
+//#endregion
+
+tree tr1 (,,sci1478EscExInsTree);// customsorting;     sci178EscExTree
+show(,,,15);
+table t;
+//fixedleft(t.ObjType, ObjName, ObjObozn,ObjGroupName,ObjOtpEdName);
+fields
+  {font={color=if(foundmarker(_marks, t.nrec), 5, 0); }};
+                 t.ObjName      ''#13'Наименование'         : [20], protect, pickbutton;
+  if(foundmarker(_marks, t.nrec), 'V', '')                   : [3] , skip, noautosize;
+                 t.TotalLaborBase 'Базовая'#13'трудоемкость' : [8,3], noprotect;
+                 t.NoveltyCoeff   'Коэффициент'#13'новизны'  : [8,3], noprotect;
+                 t.DiffCoeff      'Коэффициент'#13'сложности': [8,3], noprotect;
+  [TotalLaborName] GetTotalLaborName ''#13'Трудоемкость'     : [10], noprotect, {font={backcolor=GetTotalLaborColor;}};
+                 t.BaseHourCost   'Базовый'#13'стоим. н/час' : [8,2], noprotect;
+                 t.BaseSum        'Базовый'#13'основная з/п' : [8,2], protect;
+end;
+
+browse br1;
+show (,16,,);
+table tp;
+fields
+  [ProfName] GetProfName 'Профессия': [30], protect, pickbutton;
+  tp.Coeff 'Коэффициент'#13'сложности': [5,3], noprotect;
+  tp.Qty 'Кол-во'#13'сотрудников': [5], noprotect;
+  [ProfTotalLaborName] GetProfTotalLaborName 'Трудоемкость'#13'всего': [10], noprotect, {font={backcolor=GetProfTotalLaborColor;}};
+end;
+
+//#region Процедуры для модификации таблицы в дереве----------------------------------------------------------
+
+
+procedure ProcessRKM8DRecord(var buf: ttRKM8D);
+{
+  buf.TotalLabor  := buf.TotalLaborBase * buf.NoveltyCoeff * buf.DiffCoeff;
+  buf.BaseSum   := buf.BaseHourCost * buf.TotalLabor;
+
+  buf.TotalSum := 0;
+  var i: byte;
+  for(i:=1;i<=_yearcount;i++)
+  {
+    if buf.Coeff[i] <= 0 buf.Coeff[i] := 1;
+    buf.Sum[i] := buf.Labor[i] * buf.Coeff[i] * buf.BaseHourCost;
+    buf.TotalSum += buf.Sum[i];
+  }
+}
+
+procedure ProcessChildNodes(parentBuf: ttRKM8D);
+{
+  var i: byte;
+  var buf: ttRKM8D;
+  var oeDiskred: boolean;
+  var restQty: double;
+  _loop tRKM8D where ((parentBuf.Nrec == tRKM8D.ParentNrec))
+  {
+    buf := ttRKM8D(tRKM8D.buffer);
+    for(i:=1;i<=_yearcount;i++)
+    {
+      buf.Labor[i] := (parentBuf.Labor[i] / parentBuf.TotalLabor) * buf.TotalLabor;
+      if buf.Coeff[i] <= 0 buf.Coeff[i] := 1;
+      buf.Sum[i] := buf.Labor[i] * buf.Coeff[i] * buf.BaseHourCost;
+      buf.TotalSum += buf.Sum[i];
+    }
+    pushpos(#tRKM8D);
+    ProcessChildNodes(buf);
+    poppos(#tRKM8D);
+    tRKM8D.buffer := buf;
+    update current tRKM8D;
+  }
+}
+
+procedure ProcessParentNode(buf: ttRKM8D);
+{
+  if getfirst tRKM8D where ((buf.ParentNrec == tRKM8D.Nrec)) = tsOk
+  {
+    var parentBuf: ttRKM8D;
+    parentBuf := ttRKM8D(tRKM8D.Buffer);
+
+    var sumBuf: ttRKM8D;
+    ClearAdvRecord(sumBuf);
+
+    var i: integer;
+
+    vChild._RKM8DParentNrec := buf.ParentNrec;
+    vChild._excludeChildNrec := buf.Nrec;
+
+    vChild._loop tChild
+    {
+      sumBuf.TotalLaborBase += vChild.tChild.TotalLaborBase;
+      sumBuf.TotalLabor += vChild.tChild.TotalLabor;
+      sumBuf.TotalSum += vChild.tChild.TotalSum;
+      for(i:=1;i<=_yearcount;i++)
+      {
+        sumBuf.Labor[i] += vChild.tChild.Labor[i];
+        sumBuf.Sum[i] += vChild.tChild.Sum[i];
+      }
+    }
+
+    parentBuf.TotalLaborBase := sumBuf.TotalLaborBase + buf.TotalLaborBase;
+    parentBuf.TotalLabor := sumBuf.TotalLabor + buf.TotalLabor;
+    parentBuf.DiffCoeff := 1;
+    parentBuf.NoveltyCoeff := 1;
+    parentBuf.TotalSum := sumBuf.TotalSum + buf.TotalSum;
+    for(i:=1;i<=_yearcount;i++)
+    {
+      parentBuf.Labor[i] := sumBuf.Labor[i] + buf.Labor[i];
+      parentBuf.Sum[i] := sumBuf.Sum[i] + buf.Sum[i];
+      parentBuf.Coeff[i] := 1;
+    }
+    tRKM8D.buffer := parentBuf;
+    update current tRKM8D;
+    ProcessParentNode(parentBuf);
+  }
+}
+
+procedure ProcessCurrentRecord;
+{
+  var buf: ttRKM8D;
+  buf := ttRKM8D(t.buffer);
+  ProcessRKM8DRecord(buf);
+  t.buffer := buf;
+  if (not isNew)
+  {
+    ProcessChildNodes(buf);
+    ProcessParentNode(buf);
+    rescanpanel(#t);
+  }
+  setModified(true);
+}
+
+procedure DeleteChildEditRKM8D(aNrec: comp);
+{
+  while getfirst fastfirstrow tRKM8D where (( aNrec == tRKM8D.ParentNrec )) = tsOk
+  {
+    pushpos(#tRKM8D);
+    DeleteChildEditRKM8D(tRKM8D.Nrec);
+    poppos(#tRKM8D);
+    delete all trkm8dProfs where ((tRKM8D.Nrec == trkm8dProfs.rkm8dNrec));
+    delete current tRKM8D;
+  }
+}
+
+procedure MarkUnmarkChildEditRKM8D(aNrec: comp; setMark: boolean);
+{
+  _loop tRKM8D where (( aNrec == tRKM8D.ParentNrec ))
+  {
+    pushpos(#tRKM8D);
+    MarkUnmarkChildEditRKM8D(tRKM8D.Nrec, setMark);
+    poppos(#tRKM8D);
+    if ( setMark and (not foundmarker(_marks, tRKM8D.Nrec)) )
+      insertmarker(_marks, tRKM8D.Nrec)
+    else if ( (not setMark) and foundmarker(_marks, tRKM8D.Nrec) )
+      deletemarker(_marks, tRKM8D.Nrec);
+  }
+}
+
+procedure SetDefaultCurrentRecord;
+{
+  t.DiffCoeff  := 1;
+  t.NoveltyCoeff := 1;
+  t.ParentNrec := _parentNrec;
+}
+
+procedure InsertCurrentRecord;
+{
+  var buf: ttRKM8D;
+
+  t.nrec := GetNextNRec(#t, 0);
+  buf := ttRKM8D(t.buffer);
+  insert current t;
+  ProcessRKM8DRecord(buf);
+  t.buffer := buf;
+  update current t;
+  rereadrecord(#t);
+  TreeJumpToRecord(tr1, t.Nrec);
+}
+
+procedure UpdateCurrentRecord;
+{
+  ProcessCurrentRecord;
+  update current t;
+}
+
+procedure DeleteCurrentRecord;
+{
+  DeleteChildEditRKM8D(t.Nrec);
+  delete all trkm8dProfs where ((tRKM8D.Nrec == trkm8dProfs.rkm8dNrec));
+  delete current t;
+}
+
+procedure InsertCurrentProf;
+{
+    var buf: ttrkm8dProfs;
+    buf := ttrkm8dProfs(tp.buffer);
+    insert current tp;
+    buf.Nrec := tp.nrec;
+    tp.buffer := buf;
+    update current tp;
+}
+
+procedure UpdateCurrentProf;
+{
+  update current tp;
+}
+
+procedure DeleteCurrentProf;
+{
+  if not isNew
+    delete current tp
+  else
+    clearbuffer(#tp);
+}
+
+//#endregion--------------------------------------------------------------------------------------------------
+
+tableevent table t;
+  cmTreeTop           : _parentNrec := 0;
+  cmTreeDown          : _parentNrec := t.nrec;
+  cmTreeUp            : _parentNrec := t.ParentNrec;
+  cmTreeNodeType      : if (TreeIsTerminal(tr1)) TreeSetNodeType(tr1, ntfText);
+  cmTreeNeedOwner     : TreeJumpToRecord(tr1, t.ParentNrec);
+  cmPick:
+  {
+    case curfield of
+      #t.ObjName      : PickObj;
+    end;
+    ProcessCurrentRecord;
+  }
+  cmInsertRecord: InsertCurrentRecord;
+  cmDeleteRecord: DeleteCurrentRecord;
+  cmUpdateRecord: UpdateCurrentRecord;
+  cmSetDefault  : SetDefaultCurrentRecord;
+  cmCheckField  : ProcessCurrentRecord;
+  cmExprFieldChanged:
+  {
+    case curfield of
+      #TotalLaborName:
+      {
+        t.TotalLabor := double(ExprFieldValue);
+        if (t.NoveltyCoeff = 0) t.NoveltyCoeff := 1;
+        if (t.DiffCoeff = 0) t.DiffCoeff := 1;
+        t.TotalLaborBase := t.TotalLabor / t.NoveltyCoeff / t.DiffCoeff;
+        ProcessCurrentRecord;
+        rescanpanel(#t);
+      }
+    end;
+  }
+end;
+
+tableevent table tp;
+  cmInsertRecord: InsertCurrentProf;
+  cmUpdateRecord: UpdateCurrentProf;
+  cmExprFieldChanged:
+  {
+    case curfield of
+      #ProfTotalLaborName:
+      {
+        tp.TotalLabor := double(ExprFieldValue);
+        SetModified(true);
+        rescanpanel(#tp);
+      }
+    end;
+  }
+  cmPick:
+  {
+    case curfield of
+      #ProfName       : PickProf;
+    end;
+  }
+end;
+
+handleevent
+  cmAddNewRec:
+  {
+    if isNew
+      InsertCurrentRecord
+    else if isModified
+      UpdateCurrentRecord;
+
+    clearbuffer(#t);
+    SetDefaultCurrentRecord;
+    InsertCurrentRecord;
+    stop;
+  }
+  cmInsLevel:
+  {
+    if isNew
+      InsertCurrentRecord
+    else if isModified
+      UpdateCurrentRecord;
+
+    _parentNrec := t.Nrec;
+    clearbuffer(#t);
+    SetDefaultCurrentRecord;
+    InsertCurrentRecord;
+    stop;
+  }
+  cmDelete:
+  {
+    case CurTable of
+      #t:
+      {
+        if isNew or (not isvalid(#t)) exit;
+        var cnt: longint;
+        cnt := getmarkercount(_marks);
+        if cnt = 0
+        {
+          if getfirst fastfirstrow tRKM8D where (( t.nrec == tRKM8D.ParentNrec )) = tsOk
+          {
+            if message('Удалить текущую запись?', YesNo) = cmYes
+            {
+              DeleteCurrentRecord;
+              //redrawcurrentandgo(tr1, true);
+              rereadrecord(#t);
+            }
+          }
+          else
+          {
+            DeleteCurrentRecord;
+            //redrawcurrentandgo(tr1, true);
+            rereadrecord(#t);
+          }
+        }
+        else
+        {
+          if message('Удалить помеченные записи ('+cnt+')?', YesNo) = cmYes
+          {
+            delete all tRKM8D where (foundmarker(_marks, tRKM8D.Nrec));
+            clearmarker(_marks);
+            //redrawcurrentandgo(tr1, true);
+            rereadrecord(#t);
+          }
+        }
+        stop;
+      }
+      #tp:
+      {
+        DeleteCurrentProf;
+        rereadrecord(#tp);
+        stop;
+      }
+    end;
+  }
+  cmDoMarkUnmark:
+  {
+    if (foundmarker(_marks, t.nrec))
+    {
+      MarkUnmarkChildEditRKM8D(t.Nrec, false);
+      deletemarker(_marks, t.nrec);
+    }
+    else
+    {
+      MarkUnmarkChildEditRKM8D(t.Nrec, true);
+      insertmarker(_marks, t.nrec);
+    }
+    redrawcurrentandgo(tr1, true);
+    rereadrecord(#t);
+  }
+  cmSelAll:
+  {
+    pushpos(#t);
+    clearmarker(_marks);
+    StartNewVisual(vtRotateVisual, vfBreak+vfTimer, '', 0);
+    _loop tRKM8D
+    {
+      insertmarker(_marks, tRKM8D.Nrec);
+      if (not NextVisual) break;
+    }
+    StopVisual('',0);
+    poppos(#t);
+    rescanpanel(#t);
+  }
+  cmUnSelAll:
+  {
+    clearmarker(_marks);
+    rescanpanel(#t);
+  }
+  cmHotkeys:
+  {
+    var m: longint;
+    m := LoadMenu('mnuAGAT_EditRKM8D');
+    PutHotCommand(RunLoadMenu(m));
+  }
+  cmValue1: //раскрыть все папки
+  {
+    TreePushPos(tr1);
+    TreeGetFirst(tr1);
+    do {
+      TreeOpenNode(tr1);
+    } while TreeGetNext(tr1);
+    TreePopPos(tr1);
+    rescanpanel(#t);
+  }
+  cmValue2: //свернуть все папки
+  {
+    TreeCloseAllOpenedNode(tr1);
+    rescanpanel(#t);
+  }
+  cmPrintDoc: OnPrint(0);
+
+  cmValue3: OnPrint(1);
+
+  cmValue4: CalcPercent;
+
+  cmValue5: CalcDiffCoeff;
+
+  cmValue6: CalcDeflCoeff;
+end;
+
+//#region Вспомогательные функции для динамического формирования столбцов в дереве----------------------------
+procedure AddTreeColumn(aName: string; aTitle: string);
+{
+  var l: longint;
+  cfsCreateObject('TreeColumn', 'tr1', aName, false, l);
+  cfsSetProp(l, 'Title', aTitle);
+  cfsSetProp(l, 'FieldName', aName);
+  cfsSetProp(l, 'DefaultWidth', word(12));
+  cfsSetProp(l, 'Size_X', 70);
+  cfsSetProp(l, 'Points', 2);
+}
+
+procedure AddBrowseColumn(aName: string; aTitle: string);
+{
+  var l: longint;
+  cfsCreateObject('Column', 'br1', aName, false, l);
+  cfsSetProp(l, 'Title', aTitle);
+  cfsSetProp(l, 'FieldName', aName);
+  cfsSetProp(l, 'DefaultWidth', word(12));
+  cfsSetProp(l, 'Size_X', 70);
+  cfsSetProp(l, 'Points', 2);
+}
+
+procedure AddTreeYearColumns(aYear: word; aNum: byte);
+{
+  AddTreeColumn('t.Labor['+aNum+']', aYear+''#13'Трудоемкость');
+  AddTreeColumn('t.Coeff['+aNum+']', aYear+''#13'Коэффициент');
+  AddTreeColumn('t.Sum['+aNum+']', aYear+''#13'ОЗП');
+  AddBrowseColumn('tp.Labor['+aNum+']', aYear+''#13'Трудоемкость');
+}
+
+procedure deleteTreeYearColumns(aNum: byte);
+{
+  cfsDestroyObject('t.Labor['+aNum+']');
+  cfsDestroyObject('t.Coeff['+aNum+']');
+  cfsDestroyObject('t.Sum['+aNum+']');
+  cfsDestroyObject('tp.Labor['+aNum+']');
+}
+
+//#endregion -------------------------------------------------------------------------------------------------
+
+//#region Реализация oEditRKM8D----------------------------------------------------------------------------
+
+procedure InitInterface(aYearStart: word; aYearEnd: word; aBaseYear: word);
+{
+  var i: byte;
+
+  if (_yearstart != aYearStart or _yearend != aYearEnd)
+  {
+    cfsSetCurrentContainer('iEditRKM8D');
+
+    for (i := 1; i <= _yearcount; i++)
+    {
+      deleteTreeYearColumns(i);
+    }
+
+    _yearcount := aYearEnd - aYearStart + 1;
+    if (_yearcount > RKM_MAX_YEARS) _yearcount := RKM_MAX_YEARS;
+    _yearstart := aYearStart;
+    _yearend   := _yearstart + _yearcount - 1;
+    _baseYear  := if(aBaseYear = 0, _yearstart, aBaseYear);
+    for(i := 1; i <= _yearcount; i++)
+    {
+      AddTreeYearColumns(_yearstart+i-1, i);
+    }
+  }
+
+  if _marks = 0 _marks := initmarker('', 8, 100, 10, false);
+
+  //_savedSpmnplanNrec := 0;
+}
+
+procedure Load(aMnplanNrec: comp);
+{
+  _curMnplanNrec := aMnplanNrec;
+
+  delete all tRKM8D;
+
+  var q: IQuery;
+  var rs: IResultSet;
+
+  //загрузка спецификации
+  q := queryManager.createQuery(QueryDetails);
+  q.setParam('MnplanNrec', aMnplanNrec);
+  q.setParam('DopTblRKM', DopTblRKM);
+  rs := q.getResultSet;
+  if (q.errorCode != tsOk or rs = nullRef)
+  {
+    message('Ошибка выполнения запроса QueryDetails. Код '+q.errorCode, error);
+    exit;
+  }
+  sqlCopyInto(rs, #tRKM8D, true);
+
+  //загрузка годовых значений для позиций спецификации
+  q := queryManager.createQuery(QueryValues);
+  q.setParam('MnplanNrec', aMnplanNrec);
+  q.setParam('YearStart' , _yearStart);
+  q.setParam('YearEnd'   , _yearEnd);
+  rs := q.getResultSet;
+  if (q.errorCode != tsOk or rs = nullRef)
+  {
+    message('Интерфейс редактирования РКМ. Ошибка выполнения запроса QueryValues. Код '+q.errorCode, error);
+    exit;
+  }
+  if rs.getFirst = tsOk
+  {
+    var currentNrec, c: comp;
+    var i: word;
+    currentNrec := 0;
+    do
+    {
+      c := rs.row.val('Nrec');
+      if c != currentNrec
+      {
+        if (currentNrec != 0) update current tRKM8D;
+        if getfirst tRKM8D where (( c == tRKM8D.Nrec )) = tsOk
+        {
+          currentNrec := c;
+        }
+        else
+        {
+          continue;
+        }
+      }
+      i := rs.row.val('Year') - _yearStart + 1;
+      tRKM8D.Labor[i] := rs.row.val('Labor');
+      tRKM8D.Coeff[i] := rs.row.val('Coeff');
+      tRKM8D.Sum[i]   := rs.row.val('Summa');
+    }
+    while rs.getNext = tsOk;
+    if isvalid(#tRKM8D) update current tRKM8D;
+  }
+
+  //загрузка профессий к позициям спецификации
+  delete all tRKM8DProfs;
+
+  q := queryManager.createQuery(QueryProfs);
+  q.setParam('MnplanNrec', aMnplanNrec);
+  rs := q.getResultSet;
+  if (q.errorCode != tsOk or rs = nullRef)
+  {
+    message('Ошибка выполнения запроса QueryProfs. Код '+q.errorCode, error);
+    exit;
+  }
+  sqlCopyInto(rs, #trkm8dProfs, true);
+
+  //загрузка годовых значений для профессий
+  q := queryManager.createQuery(QueryProfsValues);
+  q.setParam('MnplanNrec', aMnplanNrec);
+  q.setParam('YearStart' , _yearStart);
+  q.setParam('YearEnd'   , _yearEnd);
+  rs := q.getResultSet;
+  if (q.errorCode != tsOk or rs = nullRef)
+  {
+    message('Интерфейс редактирования РКМ. Ошибка выполнения запроса QueryProfsValues. Код '+q.errorCode, error);
+    exit;
+  }
+  if rs.getFirst = tsOk
+  {
+    var currentNrec, c: comp;
+    var i: word;
+    currentNrec := 0;
+    do
+    {
+      c := rs.row.val('Nrec');
+      if c != currentNrec
+      {
+        if (currentNrec != 0) update current tRKM8DProfs;
+        if getfirst tRKM8DProfs where (( c == tRKM8DProfs.Nrec )) = tsOk
+        {
+          currentNrec := c;
+        }
+        else
+        {
+          continue;
+        }
+      }
+      i := rs.row.val('Year') - _yearStart + 1;
+      tRKM8DProfs.Labor[i] := rs.row.val('Labor');
+    }
+    while rs.getNext = tsOk;
+    if isvalid(#tRKM8DProfs) update current tRKM8DProfs;
+  }
+
+  //загрузка пометок
+  clearmarker(_marks);
+  _loop pick where (( 20000 == pick.wlist ))
+  {
+    if getfirst tRKM8D where ((pick.cRec == tRKM8D.SpmnplanNrec)) = tsOk
+      insertmarker(_marks, tRKM8D.Nrec);
+  }
+
+  //прыгаем в дереве спецификации на сохраненную строку
+  if _savedSpmnplanNrec != 0
+    if getfirst tRKM8D where (( _savedSpmnplanNrec == tRKM8D.SpmnplanNrec )) = TsOk
+      TreeJumpToRecord(tr1, tRKM8D.Nrec);
+  rereadrecord(#t);
+
+}
+
+type tmnanal = record as table mnanal;
+type tspmnplan = record as table spmnplan;
+type tspmnpl = record as table spmnpl;
+type tvalspmnp = record as table valspmnp;
+type tValspmnpValues = array[1..14] of double;
+
+function getmnanal(aSloj: comp; aBlock: comp; aAn1: comp; aAn2: comp; aAn3: comp): tmnanal;
+{
+  if getfirst mnanal where ((aSloj  == mnanal.csloj and
+                             aBlock == mnanal.cblock and
+                             aAn1   == mnanal.FldAn1 and
+                             aAn2   == mnanal.FldAn2 and
+                             aAn3   == mnanal.FldAn3 )) != tsOk
+  {
+    clearbuffer(#mnanal);
+    mnanal.csloj  := aSloj;
+    mnanal.cblock := aBlock;
+    mnanal.FldAn1 := aAn1;
+    mnanal.FldAn2 := aAn2;
+    mnanal.FldAn3 := aAn3;
+    insert current mnanal;
+  }
+  result := tmnanal(mnanal.buffer);
+}
+
+function getspmnpl(bufMnanal: tmnanal; bufSpmnplan: tspmnplan; aKolan: word; aRole4: comp; aCode4: word; aVal4: comp): tspmnpl;
+{
+  var newRecord: boolean;
+  newRecord := false;
+  if getfirst spmnpl where (( bufSpmnplan.nrec == spmnpl.cspmnplan and
+                              aKolan           == spmnpl.wkolan    and
+                              aCode4           == spmnpl.wkodgr4   and
+                              aVal4            == spmnpl.canval4   and
+                              0                == spmnpl.wkodgr5   and
+                              0                == spmnpl.canval5)) != tsOk
+  {
+    newRecord := true;
+    clearbuffer(#spmnpl);
+  }
+  spmnpl.cspmnplan := bufSpmnplan.nrec;
+  spmnpl.wkolan    := aKolan;
+  spmnpl.cRoleAn4  := aRole4;
+  spmnpl.wKodGr4   := aCode4;
+  spmnpl.cAnVal4   := aVal4;
+  spmnpl.cRoleAn1  := bufSpmnplan.cRoleAn1;
+  spmnpl.wKodGr1   := bufSpmnplan.wKodGr1;
+  spmnpl.cAnVal1   := bufSpmnplan.cAnVal1;
+  spmnpl.cRoleAn2  := bufSpmnplan.cRoleAn2;
+  spmnpl.wKodGr2   := bufSpmnplan.wKodGr2;
+  spmnpl.cAnVal2   := bufSpmnplan.cAnVal2;
+  spmnpl.cRoleAn3  := bufSpmnplan.cRoleAn3;
+  spmnpl.wKodGr3   := bufSpmnplan.wKodGr3;
+  spmnpl.cAnVal3   := bufSpmnplan.cAnVal3;
+  spmnpl.wKodGr8   := bufSpmnplan.wKodGr4;
+  spmnpl.cAnVal8   := bufSpmnplan.cAnVal4;
+  spmnpl.typeizd   := bufSpmnplan.TypeIzd;
+  spmnpl.cRoleIzd  := bufSpmnplan.cRoleIzd;
+  spmnpl.cIzd      := bufSpmnplan.cIzd;
+  spmnpl.cOtpEd    := bufSpmnplan.cOtpEd;
+  spmnpl.NumSort   := bufSpmnplan.NumSort;
+  spmnpl.Number    := bufSpmnplan.Number;
+  spmnpl.cSloj     := bufSpmnplan.cSloj;
+  spmnpl.cMnPlan   := bufSpmnplan.cmnplan;
+  spmnpl.cMnAnal   := bufMnanal.nrec;
+  if (newRecord)
+    insert current spmnpl;
+  else
+    update current spmnpl;
+  result := tspmnpl(spmnpl.buffer);
+}
+
+function setvalspmnp(bufSpmnpl: tspmnpl; v: tValspmnpValues): tvalspmnp;
+{
+  var newRecord: boolean;
+  newRecord := false;
+  if getfirst valspmnp where ((spmnpl.nrec == valspmnp.cspmnpl)) != tsOk
+  {
+    newRecord := true;
+    clearbuffer(#valspmnp);
+  }
+  valspmnp.cspmnpl   := bufSpmnpl.nrec;
+  valspmnp.cspmnplan := bufSpmnpl.cSpmnplan;
+  valspmnp.cmnanal   := bufSpmnpl.cmnanal;
+  valspmnp.Num       := 1;
+  valspmnp.cOtpEd    := bufSpmnpl.cOtpEd;
+  valspmnp.EdTime    := bufSpmnpl.EdTime;
+  ValSpMnP.kol       := v[1];
+  ValSpMnP.price     := v[2];
+  ValSpMnP.vprice    := v[3];
+  ValSpMnP.summa     := v[4];
+  ValSpMnP.kolfield5 := v[5];
+  ValSpMnP.kolfact   := v[6];
+  ValSpMnP.pricefact := v[7];
+  ValSpMnP.kolfield6 := v[8];
+  ValSpMnP.summafact := v[9];
+  ValSpMnP.kolfield7 := v[10];
+  ValSpMnP.kolfield1 := v[11];
+  ValSpMnP.kolfield2 := v[12];
+  ValSpMnP.kolfield3 := v[13];
+  ValSpMnP.kolfield4 := v[14];
+  if (newRecord)
+    insert current valspmnp;
+  else
+    update current valspmnp;
+  result := tvalspmnp(valspmnp.buffer);
+}
+
+procedure Save(aMnplanNrec: comp; aFptperNrec: comp);
+{
+  var i: byte;
+
+  v._mnplanNrec := aMnplanNrec;
+  if v.getfirst mp != tsOk
+  {
+    message('Не найден план nrec='+string(aMnplanNrec,0,0), error);
+    exit;
+  }
+  //Удаляем в бд удаленное в tRKM8D
+  v._typeIzd := 35;
+  v._loop spm
+  {
+    if getfirst tRKM8D where (( v.spm.nrec == tRKM8D.SpmnplanNrec )) != tsOk
+    {
+      v._loop spl
+      {
+        v.delete all vsp;
+        v.delete current spl;
+      }
+      v.delete all dopinfo;
+      v.delete current spm;
+    }
+  }
+
+  //Удаляем в бд удаленное в tRKM8DProfs
+  v._typeIzd := 36;
+  v._loop spm
+  {
+    if getfirst tRKM8DProfs where (( v.spm.nrec == tRKM8DProfs.SpmnplanNrec )) != tsOk
+    {
+      v._loop spl
+      {
+        v.delete all vsp;
+        v.delete current spl;
+      }
+      v.delete current spm;
+    }
+  }
+
+  //определяем нреки периодов планирования для столбцов
+  var y: word;
+  var periodnrec: array[1..1] of comp;
+  for(i := 1; i <= _yearcount; i++)
+  {
+    y := _yearStart + i - 1;
+    if getfirst fpperiod where (( aFptperNrec == fpperiod.ctper and date(1,1,y) == fpperiod.dbeg and date(31,12,y) == fpperiod.dend )) = tsok
+    {
+      periodnrec[i] := fpperiod.nrec;
+    }
+  }
+
+  //определяем nrec MnAnal для представления "План производства"
+  var bufMnanalPP: tmnanal;
+  bufMnanalPP := getmnanal(v.mp.csloj, 0, 0, v.mp.nrec, 0);
+
+  var newRecord: boolean;
+  var bufMnanal: tmnanal;
+  var bufSpmnplan: tspmnplan;
+  var bufSpmnpl: tspmnpl;
+  var val: tValspmnpValues;
+
+  //проходим по строкам tRKM8D и вносим изменения в бд
+  _loop tRKM8D
+  {
+    //----------------------------------------------------------SpMnPlan
+    newRecord := false;
+    if (tRKM8D.SpmnplanNrec = 0) or (getfirst spmnplan where ((tRKM8D.SpmnplanNrec == spmnplan.nrec)) != tsOk)
+    {
+      newRecord := true;
+      clearbuffer(#spmnplan);
+    }
+    spmnplan.cmnplan       := aMnplanNrec;
+    spmnplan.cizd          := tRKM8D.ObjNrec;
+    spmnplan.typeizd       := 35;
+    spmnplan.startdate     := v.mp.startdate;
+    spmnplan.enddate       := v.mp.enddate;
+    spmnplan.csloj         := v.mp.csloj;
+    if (newRecord)
+    {
+      insert current spmnplan;
+      update current tRKM8D set tRKM8D.SpmnplanNrec := spmnplan.nrec;
+    }
+    else
+      update current spmnplan;
+    bufSpmnplan := tspmnplan(spmnplan.buffer);
+
+    //----------------------------------------------------------Dopinfo
+    newRecord := false;
+    if getfirst dopinfo where ((tRKM8D.SpmnplanNrec == dopinfo.cPerson and DopTblRKM == dopinfo.cdoptbl)) !=tsOk
+    {
+      newRecord := true;
+      clearbuffer(#dopinfo);
+    }
+    dopinfo.cdoptbl := DopTblRKM;
+    dopinfo.cperson := tRKM8D.SpmnplanNrec;
+    dopinfo.sfld[1] := substr(tRKM8D.ObjName,1  ,50);
+    dopinfo.sfld[2] := substr(tRKM8D.ObjName,51 ,50);
+    dopinfo.sfld[3] := substr(tRKM8D.ObjName,101,50);
+    dopinfo.sfld[4] := substr(tRKM8D.ObjName,151,50);
+    dopinfo.sfld[5] := substr(tRKM8D.ObjName,201,50);
+    if (newRecord)
+      insert current dopinfo;
+    else
+      update current dopinfo;
+
+    //----------------------------------------------------------Суммы по периодам
+    for(i := 1; i <= _yearCount; i++)
+    {
+      bufMnanal := getmnanal(spmnplan.csloj, 0, periodnrec[i], 0, 0);
+      bufSpmnpl := getspmnpl(bufMnanal, bufSpmnplan, VID_PERIOD, coGetTune('SYSTEMANALIT.ROLEPERIOD'), KODGRKAU_PERIOD, periodnrec[i]);
+      val[1] := tRKM8D.Labor[i];
+      val[2] := tRKM8D.Coeff[i];
+      val[3] := tRKM8D.Sum[i];
+      setvalspmnp(bufSpmnpl, val);
+    } //for i.._yearcount
+
+    //----------------------------------------------------------Суммы итоговые
+    bufSpmnpl := getspmnpl(bufMnanalPP, bufSpmnplan, VID_PP, coGetTune('SYSTEMANALIT.ROLEPRODUCTPLAN'), KODGRKAU_PP, aMnplanNrec);
+    val[1] := tRKM8D.TotalLaborBase;
+    val[2] := tRKM8D.NoveltyCoeff;
+    val[3] := tRKM8D.DiffCoeff;
+    val[4] := tRKM8D.TotalLabor;
+    val[5] := tRKM8D.BaseHourCost;
+    val[6] := tRKM8D.BaseSum;
+    val[7] := tRKM8D.TotalSum;
+    setvalspmnp(bufSpmnpl, val);
+
+  } //_loop tRKM8D
+
+  //обнуляем массив значений
+  for(i:=1;i<=14;i++)
+    val[i] := 0;
+
+  //проходим по строкам tRKM8DProfs и вносим изменения в бд по профессиям
+  _loop tRKM8DProfs
+  {
+    //----------------------------------------------------------SpMnPlan
+    newRecord := false;
+    if (tRKM8DProfs.SpmnplanNrec = 0) or (getfirst spmnplan where ((tRKM8DProfs.SpmnplanNrec == spmnplan.nrec)) != tsOk)
+    {
+      newRecord := true;
+      clearbuffer(#spmnplan);
+    }
+    spmnplan.cmnplan       := aMnplanNrec;
+    spmnplan.cizd          := tRKM8DProfs.ProfNrec;
+    spmnplan.typeizd       := 36;
+    spmnplan.startdate     := v.mp.startdate;
+    spmnplan.enddate       := v.mp.enddate;
+    spmnplan.csloj         := v.mp.csloj;
+    if (newRecord)
+    {
+      insert current spmnplan;
+      update current tRKM8DProfs set tRKM8DProfs.SpmnplanNrec := spmnplan.nrec;
+    }
+    else
+      update current spmnplan;
+    bufSpmnplan := tspmnplan(spmnplan.buffer);
+
+    //----------------------------------------------------------Суммы по периодам
+    for(i := 1; i <= _yearCount; i++)
+    {
+      bufMnanal := getmnanal(spmnplan.csloj, 0, periodnrec[i], 0, 0);
+      bufSpmnpl := getspmnpl(bufMnanal, bufSpmnplan, VID_PERIOD, coGetTune('SYSTEMANALIT.ROLEPERIOD'), KODGRKAU_PERIOD, periodnrec[i]);
+      val[1] := tRKM8DProfs.Labor[i];
+      setvalspmnp(bufSpmnpl, val);
+    } //for i.._yearcount
+
+    //----------------------------------------------------------Суммы итоговые
+    bufSpmnpl := getspmnpl(bufMnanalPP, bufSpmnplan, VID_PP, coGetTune('SYSTEMANALIT.ROLEPRODUCTPLAN'), KODGRKAU_PP, aMnplanNrec);
+    val[1] := tRKM8DProfs.Coeff;
+    val[2] := tRKM8DProfs.Qty;
+    val[3] := tRKM8DProfs.TotalLabor;
+    setvalspmnp(bufSpmnpl, val);
+
+  } //_loop tRKM8DProfs
+
+
+  //сохраняем иерархию
+  _loop tRKM8D
+  {
+    if getfirst tRKM8D1 where ((tRKM8D.ParentNrec == tRKM8D1.Nrec)) = tsOk
+    {
+      update spmnplan where ((tRKM8D.SpmnplanNrec == spmnplan.nrec)) set spmnplan.cspmnplan := tRKM8D1.SpmnplanNrec;
+    }
+    _loop tRKM8DProfs where ((tRKM8D.Nrec == tRKM8DProfs.rkm8dNrec))
+    {
+      update spmnplan where ((tRKM8DProfs.SpmnplanNrec == spmnplan.nrec)) set spmnplan.cspmnplan := tRKM8D.SpmnplanNrec;
+    }
+  }
+
+  //сохраняем пометки
+  delete all pick where (( 20000 == pick.wlist ));
+  _loop tRKM8D where (foundmarker(_marks, tRKM8D.Nrec))
+  {
+    insert pick set pick.wlist := 20000, pick.crec := tRKM8D.SpmnplanNrec;
+  }
+
+  //сохраняем позицию
+  rereadrecord(#t);
+  _savedSpmnplanNrec := t.SpmnplanNrec;
+
+}
+//#endregion
+
+end.
+
+mnuAGAT_EditRKM8D Menu
+{
+- 'Раскрыть все папки', cmValue1, , , , , sci1Esc;
+- 'Свернуть все папки', cmValue2, , , , , sci1Esc;
+- 'Расчет трудоемкости: сумма помеченных * %', cmValue4, , , , , sci1Esc;
+- 'Расчет коэффициента сложности', cmValue5, , , , , sci1Esc;
+- 'Расчет коэффициентов дефляторов', cmValue6, , , , , ,sci1Esc;
+- 'Печать краткой формы РКМ', cmValue3, , , , , sci1Esc;
+- 'Печать формы РКМ', cmPrintDoc, , , , , sci1Esc;
+}

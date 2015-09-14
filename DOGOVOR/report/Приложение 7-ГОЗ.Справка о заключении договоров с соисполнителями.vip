@@ -1,0 +1,866 @@
+#component "AGAT"
+interface Forma7GOZ 'Приложение 7-ГОЗ.Справка о заключении договоров с соисполнителями';
+show (,,39,7);
+
+table struct td (            //контрагентские договора с пкп
+  cKontrakt : comp,
+  cKontrDS  : comp,
+  KontrNoDoc: string[40],
+  cDog      : comp,
+  DogNoDoc  : string[40],
+  cAppDog   : comp,
+  cCalPlan  : comp,
+  cKatStroy : comp,
+  dEnd      : date,
+  Summa     : double,
+  SumAkt    : double,
+  SumPlat   : double
+) with index (
+  i01 = cDog + cCalPlan + cKatStroy,
+  i02 = cDog + cKatStroy + dEnd,
+  i03 = cDog + dEnd,
+  i04 = KontrNoDoc + DogNoDoc + dEnd,
+  i05 = cKontrakt + cKatStroy
+);
+
+table struct tds (           //акты и платежи по контрагентским договорам
+  tip      : word,           //1 - акт/накладная, 2 - платеж
+  tidk     : word,
+  cDoc     : comp,
+  dDoc     : date,
+  sDoc     : double,
+  nDoc     : string[40],
+  cBaseDoc : comp,
+  sBaseDoc : double,
+  cCalPlan : comp,
+  cKatStroy: comp,
+  cDog     : comp,
+  cAppDog  : comp
+) with index (
+  i01 = cDog + dDoc,
+  i02 = dDoc,
+  i03 = tip + dDoc,
+  i04 = tip + cDog + cCalPlan
+);
+
+table struct tk (          //гос контракты с этапами, по которым заключены контрагентские договора
+  cKontrakt: comp,
+  cAppDog: comp,
+  cCalPlan: comp,
+  cKatStroy: comp,
+  cAVName: comp,
+  Name     : string,
+  KSName   : string,
+  NoDoc    : string[80],
+  NoDoc_Ext: string[80],
+  dBeg     : date,
+  dEnd     : date,
+  summa    : double
+) with index (
+  i01 = cKontrakt + NoDoc + dBeg + dEnd
+);
+
+table struct tks (           //акты и платежи по контрактам
+  tip      : word,           //1 - акт/накладная, 2 - платеж
+  tidk     : word,
+  cDoc     : comp,
+  dDoc     : date,
+  sDoc     : double,
+  nDoc     : string[40],
+  cBaseDoc : comp,
+  sBaseDoc : double,
+  cCalPlan : comp,
+  cKatStroy: comp,
+  cDog     : comp,
+  cAppDog  : comp
+) with index (
+  i01 = cDog + cKatStroy + dDoc,
+  i02 = dDoc,
+  i03 = cDog + cKatStroy + tip + dDoc + sDoc
+);
+
+table struct tkontrakt (
+  nrec : comp,
+  nodoc: string[80],
+  ddoc : date,
+  name : string
+) with index (
+  i01 = nodoc,
+  i02 = nrec (unique)
+);
+
+sql query SelectDogovor =
+  insert td (ckontrakt, ckontrds, cdog, cappdog, ccalplan, ckatstroy, dend, summa)
+  select tContr.ContractNrec, tContr.ContractDSNrec, dmain.nrec, d.nrec, cp.nrec, katstroy.nrec, coalesce(av.vdate,cp.dto), cp.summaspec
+  from dogovor d
+  join dogovor dmain on d.cdogovor = dmain.nrec
+  join calplan cp on d.nrec = cp.cdogovor and cp.directmc <> 0
+  join (
+        select distinct spschem.cdoc as CalplanNrec, spschem.cbasedoc as KatstroyNrec              //заказы к ПКП по схеме связей
+        from spschem
+        where spschem.tidk=403 and spschem.tidkbase=454
+        union
+        select distinct cp.nrec, spm.cobj                                                          //заказы к ПКП по ЦУ
+        from calplan cp
+        join spdocs spd on 403 = spd.tidk and cp.nrec = spd.cdoc
+        join specmtr spm on #comp(0001000000000001h) = spm.csaldtune and 1723 = spm.cotable and spd.nrec = spm.cspec
+        //where cp.directmc = 2 and cp.status <> 3
+       ) t on cp.nrec = t.CalplanNrec
+  join katstroy on t.KatstroyNrec = katstroy.nrec and katstroy.nrec not in (#comp(400101CD65EDBD15h))
+  join katorg on d.corg = katorg.nrec
+  join (select distinct spm.cobj as KatstroyNrec, dogovormain.nrec as ContractNrec, dogovormain.nodoc ContractNodoc, dogovor.nrec as ContractDSNrec
+        from dogovor
+        join dogovor dogovormain on dogovor.cdogovor = dogovormain.nrec
+        join calplan on dogovor.nrec = calplan.cdogovor and calplan.directmc<>0 and calplan.status<>3
+        join spdocs spd on 403=spd.tidk and calplan.nrec=spd.cdoc
+        join specmtr spm on #comp(0001000000000001h) = spm.csaldtune and 1723 = spm.cotable and spd.nrec = spm.cspec
+        where dogovor.direct = 1
+       ) tContr on katstroy.nrec = tContr.KatstroyNrec
+  left join attrval av on 1702 = av.wtable and coalesce(cp.nrec, #comp(0)) = av.crec and #comp(281474976710872) = av.cattrnam  //дата завершения пкп по приказу
+  where d.tidk = 401 and d.direct = 2 and d.status <> 3 and coalesce(av.vdate,cp.dto) > ?
+  order by tContr.ContractNrec, tContr.ContractDSNrec, dmain.nrec, d.nrec, cp.nrec, katstroy.nrec
+;
+
+sql query SelectDogovor2 =
+  insert td (ckontrakt, ckontrds, cdog, cappdog, ccalplan, ckatstroy, dend, summa)
+  select ContractMain.nrec, ContractDS.nrec, dmain.nrec, d.nrec, cp.nrec, coalesce(avz.vcomp, #comp(0)), coalesce(av.vdate,cp.dto), cp.summaspec
+  from dogovor d
+  join dogovor dmain on d.cdogovor = dmain.nrec
+  join attrval avc on 1707 = avc.wtable and dmain.nrec = avc.crec and #comp(00010000000000BCh) = avc.cattrnam   //№ госконтракта, где ОАО "Концерн "Моринсис-Агат" - исполнитель
+  join dogovor ContractMain on avc.vcomp = ContractMain.nrec
+  join dogovor ContractDS on ContractMain.nrec = ContractDS.cdogovor and ContractDS.status <> 3
+  left join attrval avz on 1707 = avz.wtable and ContractMain.nrec = avz.crec and #comp(00010000000000ABh) = avz.cattrnam //Номер заказа
+  join calplan cp on d.nrec = cp.cdogovor and cp.directmc <> 0
+  left join ( select ccalplan, count(*) as cnt from td group by ccalplan ) t on cp.nrec = t.ccalplan
+  left join attrval av on 1702 = av.wtable and coalesce(cp.nrec, #comp(0)) = av.crec and #comp(281474976710872) = av.cattrnam  //дата завершения пкп по приказу
+  where d.tidk = 401 and d.direct = 2 and d.status <> 3 and coalesce(t.cnt,0) = 0 and coalesce(av.vdate,cp.dto) > ?
+;
+
+sql query SelectSoprDoc =
+  select 1, ks.vidsopr, ks.nrec,
+         case when ks.dopr = 0 then ks.dsopr else ks.dopr end,
+         sopr.summa, ks.nsopr,
+         coalesce(bd.nrec, #comp(0)),
+         coalesce(bd.total, 0),
+         case when ks.ccalplan<>#comp(0) then ks.ccalplan else coalesce(td.cCalPlan, #comp(0)) end,
+         sopr.cKatStroy,
+         ks.cDogovor, ks.cAppDogovor
+  from (select distinct cdog from td) d
+  join katsopr ks on d.cdog = ks.cDogovor and ks.vidsopr in (101, 111)
+  join (select sps.csopr as csopr, coalesce(sm.cobj,#comp(0)) as cKatStroy, sum(sps.kolfact*sps.price+case when katsopr.vhodnal=2 then coalesce(n.summa,0) else 0 end) as summa
+        from spsopr sps
+        join katsopr on sps.csopr = katsopr.nrec
+        left join specmtr sm on #comp(0001000000000001h) = sm.csaldtune and 1110 = sm.cotable and sps.nrec = sm.cspec
+        left join (select cspdoc, tipdoc, sum(summa) as summa from spdocnal group by cspdoc, tipdoc) n on sps.nrec = n.cspdoc and katsopr.vidsopr = n.tipdoc
+        where sps.vidsopr in (101, 111)
+        group by sps.csopr, coalesce(sm.cobj,#comp(0))
+       ) sopr on ks.nrec = sopr.csopr
+  left join td on d.cdog = td.cDog and sopr.summa = td.Summa and (sopr.cKatStroy = td.cKatStroy or sopr.cKatStroy=#comp(0))
+  left join stepdoc on ks.cstepdoc = stepdoc.nrec
+  left join basedoc bd on coalesce(stepdoc.cbasedoc,#comp(0)) = bd.nrec;
+
+sql query SelectPlatDoc =
+  select 2, plp.tidkgal, plp.nrec, plp.datob, o.summa, plp.nodok, bd.nrec, bd.total,
+         coalesce(cp.nrec, #comp(0)),
+         o.cKatStroy,
+         d.cdog, bf.cappdogovor
+  from (select distinct cdog from td) d
+  join basedoc bd on d.cdog = bd.cdogovor
+  join basefin bf on bd.nrec = bf.cbasedoc
+  join (select csoprhoz, case when tblos[2]=40 then kauos[2] else kauos[4] end as cKatStroy, sum(SumOb) as summa
+        from oborot
+        where scheto in ('860','760') and schetk in ('851','751') and datob between ? and ?
+        group by csoprhoz, case when tblos[2]=40 then kauos[2] else kauos[4] end
+       ) o on bf.csoprhoz = o.csoprhoz
+  join plpor plp on bf.cplpor = plp.nrec
+  left join calplan cp on bf.ccalplan = cp.nrec;
+
+sql query SelectKontrakt =
+  insert tk (cKontrakt, cAppDog, cCalPlan, cKatStroy, cAVName, Name, KSName, NoDoc, NoDoc_Ext, dBeg, dEnd, summa)
+  select distinct
+         d.cKontrakt,
+         d.cAppDog,
+         coalesce(cp.cCalPlan, #comp(0)),
+         coalesce(katstroy.nrec,#comp(0)),
+         coalesce(cp.cAVName,#comp(0)),
+         coalesce(cp.Name,''),
+         coalesce(katstroy.name,''),
+         coalesce(cp.nodoc, ''),
+         coalesce(cp.nodocext, ''),
+         coalesce(cp.dBeg,#date(0,0,0)),
+         coalesce(cp.dEnd,#date(0,0,0)),
+         coalesce(cp.Summa, 0)
+  from (select distinct ckontrakt, ckontrds as cAppDog, ckatstroy as cKatStroy from td) d
+  left join ( select distinct calplan.cdogovor as cAppDog,
+                              katstroy.nrec as cKatStroy,
+                              calplan.nrec as cCalPlan,
+                              coalesce(avname.nrec,#comp(0)) as cAVName,
+                              case when spdocs.prmc = 1 then coalesce(katmc.name,'') else coalesce(katusl.name,'') end as Name,
+                              calplan.NoDoc as nodoc,
+                              calplan.NoDoc_Ext as nodocext,
+                              case when coalesce(avdbeg.vdate,#date(0,0,0)) <> #date(0,0,0) then avdbeg.vdate else calplan.dfrom end as dBeg,
+                              case when coalesce(avdend.vdate,#date(0,0,0)) <> #date(0,0,0) then avdend.vdate else calplan.dto   end as dEnd,
+                              calplan.summaspec as Summa
+              from calplan
+              join spdocs on 403 = spdocs.tidk and calplan.nrec = spdocs.cdoc
+              join specmtr on #comp(0001000000000001h) = specmtr.csaldtune and 1723 = specmtr.cotable and spdocs.nrec = specmtr.cspec
+              join katstroy on specmtr.cobj = katstroy.nrec
+              left join katmc on spdocs.cmcusl = katmc.nrec
+              left join katusl on spdocs.cmcusl = katusl.nrec
+              left join attrval avname on 1702=avname.wtable and calplan.nrec=avname.crec  and #comp(400114F932D05920h)=avname.cattrnam  //Наименование темы по этапу
+              left join attrval avdbeg on 1702=avdbeg.wtable and calplan.nrec=avdbeg.crec  and #comp(00010000000000D8h)=avdbeg.cattrnam  //По (дата окончания по приказу)
+              left join attrval avdend on 1702=avdend.wtable and calplan.nrec=avdend.crec  and #comp(00010000000000D7h)=avdend.cattrnam  //С (дата начала по приказу)
+              where calplan.directmc = 1
+            ) cp on d.cAppDog = cp.cAppDog and d.ckatstroy = cp.cKatStroy
+  join katstroy on d.ckatstroy=katstroy.nrec
+;
+
+sql query SelectKontraktSoprDoc =
+  select 1, ks.vidsopr, ks.nrec, ks.dsopr, sps.summa, ks.nsopr, bd.nrec, bd.total, tk.cCalPlan, tk.cKatStroy, tk.cKontrakt, tk.cAppDog
+  from tk
+  join basedoc bd on tk.cCalPlan = bd.ccalplan
+  join stepdoc sd on bd.nrec = sd.cbasedoc
+  join katsopr ks on sd.nrec = ks.cstepdoc
+  join (select ks.nrec as csopr, coalesce(sm.cobj,#comp(0)) as cKatStroy, sum(sps.kolfact*sps.price + case when ks.vhodnal=2 then coalesce(n.summa,0) else 0 end) as summa
+        from katsopr ks
+        join spsopr sps on ks.nrec = sps.csopr
+        left join specmtr sm on #comp(0001000000000001h) = sm.csaldtune and 1110 = sm.cotable and sps.nrec = sm.cspec
+        left join (select cspdoc, tipdoc, sum(summa) as summa from spdocnal group by cspdoc, tipdoc) n on sps.nrec = n.cspdoc and ks.vidsopr = n.tipdoc
+        where ks.dopr between ? and ?
+        group by ks.nrec, coalesce(sm.cobj,#comp(0))
+       ) sps on ks.nrec = sps.csopr and tk.cKatStroy = sps.cKatStroy
+  where tk.cCalPlan <> #comp(0)
+  ;
+
+sql query SelectKontraktPlatDoc=
+  select 2, sh.tidkgal, sh.csoprdoc, o.datob, o.sumob, sh.nodoc, coalesce(bd.nrec,#comp(0)), coalesce(bd.total,0), tk.ccalplan, tk.cKatStroy, tk.cKontrakt, tk.cAppDog
+  from tk
+  join oborot o on o.schetk = '862' and o.kauks[3] = tk.cKatStroy and (o.scheto <> '862' or (o.scheto = '862' and o.kauks[3] <> o.kauos[3])) and o.datob between ? and ?
+  join soprhoz sh on o.csoprhoz=sh.nrec
+  left join stepdoc sd on sh.cstepdoc = sd.nrec
+  left join basedoc bd on sd.cbasedoc = bd.nrec
+  where tk.cCalPlan <> #comp(0)
+  union
+  select 2, sh.tidkgal, sh.csoprdoc, o.datob, o.sumob, sh.nodoc, bd.nrec, bd.total, tk.ccalplan, tk.cKatStroy, tk.cKontrakt, tk.cAppDog
+  from tk
+  join oborot o on o.schetk = '862' and o.scheto <> '862' and o.datob between ? and ?
+  join soprhoz sh on o.csoprhoz=sh.nrec
+  join stepdoc sd on sh.cstepdoc=sd.nrec
+  join basedoc bd on sd.cbasedoc=bd.nrec and tk.cCalPlan=bd.cCalPlan
+  where tk.cCalPlan <> #comp(0)
+  ;
+
+
+
+
+var
+  drep1, drep2: date;
+  flag: byte;
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+  iGetKau: GetKAU;
+  ea: iExtAttr;
+
+file f;
+
+create view
+as select *
+from tkontrakt, tk, tks, td, tds,
+     td brtd (i04), calplan brtdcp, tds brtds, calplan brtdscp, tk brtk,
+     tks brtks
+where ((
+  brtd.cDog      == brtds.cDog   and
+  brtd.cCalPlan  == brtdcp.nrec and
+  brtds.cCalPlan == brtdscp.nrec and
+  brtd.cKontrakt == brtks.cDog  and
+  brtd.cKatStroy == brtks.cKatStroy
+));
+
+create view v
+as select *
+from tkontrakt, tk, attrval avtk, tks tks1, tks tks2, spdocs,
+     td, dogovor d, katorg o, dogovor d2, calplan dcp, tds tds1, tds tds2, plpor dplp
+where ((
+  tkontrakt.nrec == tk.cKontrakt and
+  tk.cAVName     == avtk.nrec and
+
+  tk.cKontrakt   == tks1.cDog and
+  tk.cKatStroy   == tks1.cKatStroy and
+  1              == tks1.tip and
+
+  tk.cKontrakt   == tks2.cDog and
+  tk.cKatStroy   == tks2.cKatStroy and
+  2              == tks2.tip and (tks2.tidk<>10) and
+
+  tk.cKontrakt   == td.cKontrakt and
+  tk.cKatStroy   == td.cKatStroy and
+
+  td.cDog        == d.nrec and
+  d.corg         == o.nrec and
+  td.cAppDog     == d2.nrec and
+  td.cCalPlan    == dcp.nrec and
+
+  1              == tds1.tip and
+  td.cDog        == tds1.cDog and
+  td.cCalPlan    == tds1.cCalPlan and
+
+  2              == tds2.tip and
+  td.cDog        == tds2.cDog and
+  td.cCalPlan    == tds2.cCalPlan and
+  tds2.cDoc      == dplp.nrec
+));
+
+screen scmain;
+fields
+  dRep1: noprotect;
+  dRep2: noprotect;
+  flag : noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Дата с` .@@@@@@@@@@ `по` .@@@@@@@@@@
+
+  [.] Показать расшифровку`
+
+         <. Продолжить .> <. Отмена .>
+>>
+end;
+
+window winfo 'Расшифровка';
+browse brtop (,,sci14Esc);
+show(,,,10);
+table brtd;
+fields
+               brtd.KontrNoDoc 'Контракт': [10], protect; //if(getanykau(0, 14, brtd.cKontrakt),givenanname(1),'')
+               brtd.DogNoDoc   'Договор' : [10], protect; //if(getanykau(0, 14, brtd.cDog),givenanname(1),'')
+  [fAppDogovor]if(getanykau(0, 14, brtd.cAppDog),givenanname(1),'') 'ДС/Договор': [10], protect;
+  [fPKP]       if(getfirst brtdcp = tsok, '№'+brtdcp.nodoc+' от '+brtdcp.dinput+', №'+brtdcp.nodoc_ext, '') 'ПКП': [10], protect;
+  if(getanykau(0, 40, brtd.cKatStroy),givenanname(1),'') 'Заказ': [10], protect;
+  brtd.dEnd    'Дата окончания':[10], protect;
+  brtd.Summa   'Сумма': [8,'\2p[|-]366`666`666`666`666.88'], protect;
+  brtd.SumPlat 'Сумма платежей': [8,'\2p[|-]366`666`666`666`666.88'], protect;
+  brtd.SumAkt  'Сумма актов': [8,'\2p[|-]366`666`666`666`666.88'], protect;
+end;
+tabbedsheet bottom tbDetails;
+show(,11,,);
+browse brbot1 'Документы по контрагентскому договору' (,,sci14Esc);
+table brtds;
+fields
+  [fDOC] if(brtds.tip=1,
+            if(getanykau(0, 80, brtds.cDoc),givenanname(1),''),
+            if(getanykau(0, 5019, brtds.cDoc),givenanname(1),''))
+  'Накладная/акт/платеж'                                            : [10], protect;
+  brtds.dDoc  'Дата  документа'                                     : [10], protect;
+  brtds.sDoc  'Сумма документа'                                     : [8,'\2p[|-]366`666`666`666`666.88'], protect;
+  [fBaseDoc]   if(getanykau(0, 6, brtds.cBaseDoc),givenanname(1),'') 'ДО'        : [10], protect;
+  brtds.sBaseDoc 'ДО - сумма'                                       : [8,'\2p[|-]366`666`666`666`666.88'], protect;
+  [fTSDogovor] if(getanykau(0, 14, brtds.cAppDog),givenanname(1),'') 'ДС/Договор': [10], protect;
+  [fTSPKP]     if(getfirst brtdscp = tsok, '№'+brtdscp.nodoc+' от '+brtdscp.dinput+', №'+brtdscp.nodoc_ext, '') 'ПКП'    : [10], protect;
+  if(getanykau(0, 40, brtds.cKatStroy),givenanname(1),'') 'Заказ'   : [10], protect;
+end; //browse brbot1
+browse brbot2 'Документы по контракту' (,,sci14Esc);
+table brtks;
+fields
+  [fKDOC] if(brtks.tip=1,
+             if(getanykau(0, 80, brtks.cDoc),givenanname(1),''),
+             if(getanykau(0, 5019, brtks.cDoc),givenanname(1),''))
+  'Накладная/акт/платеж'                                                          : [10], protect;
+  brtks.dDoc  'Дата  документа'                                                   : [10], protect;
+  brtks.sDoc  'Сумма документа'                                                   : [8,'\2p[|-]366`666`666`666`666.88'], protect;
+  [fKBaseDoc]   if(getanykau(0, 6, brtks.cBaseDoc),givenanname(1),'') 'ДО'        : [10], protect;
+  brtks.sBaseDoc 'ДО - сумма'                                                     : [8,'\2p[|-]366`666`666`666`666.88'], protect;
+  [fTKSDogovor] if(getanykau(0, 14, brtks.cAppDog),givenanname(1),'') 'ДС/Договор': [10], protect;
+  if(getanykau(0, 40, brtks.cKatStroy),givenanname(1),'') 'Заказ'                 : [10], protect;
+end; //browse brbot2
+browse brbot3 'Контракт/заказ' (,,sci14Esc);
+table brtk;
+fields
+  brtk.Name      'Наименование'   : [10], protect;
+  brtk.KSName    'Заказ'          : [10], protect;
+  brtk.NoDoc     'Номер'          : [10], protect;
+  brtk.NoDoc_Ext 'Шифр'           : [10], protect;
+  brtk.dBeg      'Дата начала'    : [10], protect;
+  brtk.dEnd      'Дата окончания' : [10], protect;
+  brtk.summa     'Сумма'          : [8,'\2p[|-]366`666`666`666`666.88'],protect;
+end; //browse brbot3
+end; //tabbedsheet tbDetails
+handleevent
+cmEdit:
+{
+  var c: comp;
+  case curfield of
+    #fDOC:
+    {
+      c := brtds.cDoc;
+      if (brtds.tip = 1)
+      {
+        PutCommand(cmEdit);
+        iGetKau.GetCodeKAU(1, 80, c);
+      }
+      else
+      {
+        PutCommand(cmEdit);
+        iGetKau.GetCodeKAU(1, 5019, c);
+      }
+    }
+    #brtd.KontrNoDoc:
+    {
+      c := brtd.cDog;
+      PutCommand(cmEdit);
+      iGetKau.GetCodeKAU(1, 14, c);
+    }
+    #brtd.DogNoDoc:
+    {
+      c := brtd.cDog;
+      PutCommand(cmEdit);
+      iGetKau.GetCodeKAU(1, 14, c);
+    }
+    #fAppDogovor:
+    {
+      c := brtd.cAppDog;
+      PutCommand(cmEdit);
+      iGetKau.GetCodeKAU(1, 14, c);
+    }
+    #fPKP:
+    {
+      c := brtd.cCalPlan;
+      runinterfacenomodal(L_DOGOVOR::CALPLAN, brtd.cAppDog, c);
+    }
+    #fBaseDoc:
+    {
+      c := brtds.cBaseDoc;
+      PutCommand(cmEdit);
+      iGetKau.GetCodeKAU(1, 6, c);
+    }
+    #fTSDogovor:
+    {
+      c := brtds.cAppDog;
+      PutCommand(cmEdit);
+      iGetKau.GetCodeKAU(1, 6, c);
+    }
+    #fTSPKP:
+    {
+      c := brtds.cCalPlan;
+      runinterfacenomodal(L_DOGOVOR::CALPLAN, if(brtds.cAppDog>0,brtds.cAppDog, brtds.cDog), c);
+    }
+  end;
+}
+end;
+end;
+
+procedure FillTables;
+var
+  s,stmt: longint;
+{
+  setvisualheader('Выборка данных - подготовка');
+  //временная таблица для контрагентских договоров
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table td (cKontrakt: comp, ckontrds: comp, cdog: comp, cappdog: comp, ccalplan:comp, ckatstroy:comp, dend: date, summa: double, SumAkt: double, SumPlat: double) with index (i01 = cdog + cappdog);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlExecDirect('DELETE FROM td');
+  //временная таблица для контрактов
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table tk (cKontrakt:comp, cAppDog:comp, cCalPlan:comp, cKatStroy:comp, cAVName:comp, Name:string, KSName:string, NoDoc:string, NoDoc_Ext:string, dBeg:date, dEnd:date, Summa:double);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlExecDirect('DELETE FROM tk');
+  //Заполняем таблицу контрагентских договоров
+  setvisualheader('Отбор контрагентских договоров');
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, SelectDogovor);
+  sqlBindParam(stmt, 1, drep1);
+  sqlExecute(stmt);
+  sqlFreeStmt(stmt);
+  //дополнительный запрос для отбора контрагентских договоров
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, SelectDogovor2);
+  sqlBindParam(stmt, 1, drep1);
+  sqlExecute(stmt);
+  sqlFreeStmt(stmt);
+  //Заполняем таблицу документов актами, накладными и платежами
+  setvisualheader('Отбор платежей и поставок по контрагентским договорам');
+  delete all tds;
+
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, SelectSoprDoc);
+  sqlBindParam(stmt, 1, drep1);
+  sqlBindParam(stmt, 2, drep2);
+  sqlExecute(stmt);
+  sqlFetchInto(stmt, #tds);
+  sqlFreeStmt(stmt);
+
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, SelectPlatDoc);
+  sqlBindParam(stmt, 1, drep1);
+  sqlBindParam(stmt, 2, drep2);
+  sqlExecute(stmt);
+  sqlFetchInto(stmt, #tds);
+  sqlFreeStmt(stmt);
+
+  //sqlSelectInto(SelectSoprDoc, #tds);
+  //sqlSelectInto(SelectPlatDoc, #tds);
+  //заполняем виповские таблицы
+  delete all td;
+  sqlFreeStr(s);
+  sqlAddStr(s, 'select td.cKontrakt, td.cKontrDS, k.nodoc, td.cdog, d.nodoc, td.cappdog, td.ccalplan, td.ckatstroy, td.dend, td.summa, td.SumAkt, td.SumPlat');
+  sqlAddStr(s, 'from td');
+  sqlAddStr(s, 'join dogovor d on td.cDog = d.nrec');
+  sqlAddStr(s, 'join dogovor k on td.cKontrakt = k.nrec');
+  sqlSelectInto(s, #td);
+
+  setvisualheader('Автоподстановка ПКП в накладных и актах по контрагентским договорам');
+  //определяем пкп там где они не определены в накладных и актах
+  _loop tds where ((1 == tds.tip))
+  {
+    if getfirst td where ((tds.cDog == td.cDog and tds.cCalPlan == td.cCalPlan )) = tsOk   //and (td.Summa-td.SumAkt-tds.sDoc>=-1)
+    {
+      if (td.cKatStroy = 0)
+        update current td set td.cKatStroy := tds.cKatStroy
+      else if (tds.cKatStroy <> td.cKatStroy)
+        update current tds set tds.cKatStroy := 0;
+      update current td set td.SumAkt := td.SumAkt + tds.sDoc;
+    }
+    else if (getfirst td where ((tds.cDog == td.cDog and ( abs(tds.sDoc - td.Summa)<1 and (td.Summa-td.SumAkt-tds.sDoc>=-1) ) )) = tsOk)
+    {
+      if (td.cKatStroy = 0)
+        update current td set td.cKatStroy := tds.cKatStroy
+      else if (tds.cKatStroy <> td.cKatStroy)
+        update current tds set tds.cKatStroy := 0;
+      update current tds set tds.cCalPlan = td.cCalPlan;
+      update current td set td.SumAkt := td.SumAkt + tds.sDoc;
+    }
+    else if (getfirst td where ((tds.cDog == td.cDog and ( abs(tds.sBaseDoc - td.Summa)<1 and (td.Summa-td.SumAkt-tds.sDoc>=-1) ) )) = tsOk)
+    {
+      if (td.cKatStroy = 0)
+        update current td set td.cKatStroy := tds.cKatStroy
+      else if (tds.cKatStroy <> td.cKatStroy)
+        update current tds set tds.cKatStroy := 0;
+      update current tds set tds.cCalPlan = td.cCalPlan;
+      update current td set td.SumAkt := td.SumAkt + tds.sDoc;
+    }
+  }
+
+  setvisualheader('Автоподстановка ПКП в платежных документах по контрагентским договорам');
+  //определяем пкп там где они не определены в платежах
+  _loop tds where ((2 == tds.tip))
+  {
+    if getfirst td where ((tds.cDog == td.cDog and tds.cCalPlan == td.cCalPlan and tds.cKatStroy == td.cKatStroy )) = tsOk //and (td.Summa-td.SumPlat-tds.sDoc>=-1)
+    {
+      update current td set td.SumPlat := td.SumPlat + tds.sDoc;
+    }
+    else if (getfirst td where ((tds.cDog == td.cDog and tds.cKatStroy == td.cKatStroy and ( abs(tds.sDoc - td.Summa)<1 and (td.Summa-td.SumPlat-tds.sDoc>=-1) ) )) = tsOk)
+    {
+      update current tds set tds.cCalPlan = td.cCalPlan;
+      update current td set td.SumPlat := td.SumPlat + tds.sDoc;
+    }
+    else if (getfirst td where ((tds.cDog == td.cDog and ( abs(tds.sDoc - td.Summa)<1 and (td.Summa-td.SumPlat-tds.sDoc>=-1) ) )) = tsOk)
+    {
+      update current tds set tds.cCalPlan = td.cCalPlan;
+      update current td set td.SumPlat := td.SumPlat + tds.sDoc, td.cKatStroy := if(td.cKatStroy=0,tds.cKatStroy,td.cKatStroy);
+    }
+    else if (getfirst td where ((tds.cDog == td.cDog and tds.cKatStroy == td.cKatStroy and (td.Summa-td.SumPlat-tds.sDoc>=-1) )) = tsOk)
+    {
+      update current tds set tds.cCalPlan = td.cCalPlan;
+      update current td set td.SumPlat := td.SumPlat + tds.sDoc;
+    }
+    else if (getfirst td where ((tds.cDog == td.cDog and (abs(tds.sBaseDoc - td.Summa)<1 and td.Summa-td.SumPlat-tds.sDoc>=-1) )) = tsOk)
+    {
+      update current tds set tds.cCalPlan = td.cCalPlan;
+      update current td set td.SumPlat := td.SumPlat + tds.sDoc, td.cKatStroy := if(td.cKatStroy=0,tds.cKatStroy,td.cKatStroy);
+    }
+    else if (getfirst td where ((tds.cDog == td.cDog and tds.cCalPlan == td.cCalPlan and (td.Summa-td.SumPlat-tds.sDoc>=-1) )) = tsOk)
+    {
+      update current td set td.SumPlat := td.SumPlat + tds.sDoc, td.cKatStroy := if(td.cKatStroy=0,tds.cKatStroy,td.cKatStroy);
+    }
+  }
+
+  //собираем список контрактов и их пкп по заказам
+  setvisualheader('Отбор контрактов');
+  sqlExecDirect(SelectKontrakt);
+  delete all tk;
+  sqlSelectInto('select * from tk', #tk);
+
+  delete all tks;
+
+  //sqlSelectInto(SelectKontraktSoprDoc, #tks);
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, SelectKontraktSoprDoc);
+  sqlBindParam(stmt, 1, drep1);
+  sqlBindParam(stmt, 2, drep2);
+  sqlExecute(stmt);
+  sqlFetchInto(stmt, #tks);
+  sqlFreeStmt(stmt);
+
+  //sqlSelectInto(SelectKontraktPlatDoc, #tks);
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, SelectKontraktPlatDoc);
+  sqlBindParam(stmt, 1, drep1);
+  sqlBindParam(stmt, 2, drep2);
+  sqlBindParam(stmt, 3, drep1);
+  sqlBindParam(stmt, 4, drep2);
+  sqlExecute(stmt);
+  sqlFetchInto(stmt, #tks);
+  sqlFreeStmt(stmt);
+
+  //дропаем временные таблицы
+  sqlDropTmpTable('td');
+  sqlDropTmpTable('tk');
+
+  delete all tkontrakt;
+  insert tkontrakt (nrec,nodoc,ddoc,name)
+  select d.nrec, d.nodoc, d.ddoc, d.nodoc_ext
+  from tk, dogovor d
+  where ((
+    tk.cKontrakt == d.nrec
+  )) ignore_errors(tsDuplicateKey);
+}
+
+procedure printrep(isCreateXLT : boolean);
+var
+  s, s1            : string;
+  _tks2, _td, _tds2: boolean;
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('drep1', datetostr(drep1,'DD.MM.YYYY'));
+  pXL.SetStringVar('drep2', datetostr(drep2,'DD.MM.YYYY'));
+  pXL.PublishVar;
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Контракт');
+  pXL.CreateTblFld('КонтрактСроки');
+  pXL.CreateTblFld('КонтрактПоставки');
+  pXL.CreateTblFld('КонтрактЦена');
+  pXL.CreateTblFld('КонтрактПлатежНомер');
+  pXL.CreateTblFld('КонтрактПлатежДата');
+  pXL.CreateTblFld('КонтрактПлатежСумма');
+  pXL.CreateTblFld('Соисп');
+  pXL.CreateTblFld('СоиспСроки');
+  pXL.CreateTblFld('СоиспПоставки');
+  pXL.CreateTblFld('СоиспЦена');
+  pXL.CreateTblFld('СоиспПлатежСумма');
+  pXL.CreateTblFld('СоиспПлатежНомер');
+  pXL.CreateTblFld('СоиспПлатежДата');
+  pXL.CreateTblFld('СоиспПримечание');
+  pXL.CreateTblFld('lvl');
+
+  if not isCreateXLT
+  {
+  v._loop tKontrakt
+  {
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('Контракт', 'Государственный контракт №'+v.tKontrakt.NoDoc+' от '+datetostr(v.tKontrakt.dDoc,'DD.MM.YYYY г. ')+v.tKontrakt.Name);
+    pXL.SetTblNumberFldValue('lvl', 1);
+    pXL.InsTblRow;
+    v._loop tk
+    {
+      pXL.ClearTblBuffer;
+      pXL.AddTblStringFldValue('Контракт', if(v.tk.NoDoc='', v.tk.NoDoc_Ext, v.tk.NoDoc)+' ');
+      if v.getfirst avtk = tsOk
+      {
+        if f.openmemo(v.avtk.vlvar)
+          while not f.eof
+          {
+            f.readln(s);
+            pXL.AddTblStringFldValue('Контракт', s+' ');
+          }
+      }
+      else
+      {
+        pXL.AddTblStringFldValue('Контракт', v.tk.Name+' ');
+      }
+      pXL.AddTblStringFldValue('Контракт', 'Заказ №'+substr(v.tk.KSName,1,pos(' ',v.tk.KSName+' ')-1));
+
+      pXL.SetTblStringFldValue('КонтрактСроки', datetostr(v.tk.dBeg,'DD.MM.YY г.') + ' - ' + datetostr(v.tk.dEnd,'DD.MM.YY г.'));
+
+      s1 := '';
+      v._loop tks1
+      {
+        s := datetostr(v.tks1.dDoc,'DD.MM.YY г. ')+chr(10);
+        if s <> s1
+        {
+          pXL.AddTblStringFldValue('КонтрактПоставки', s);
+          s1 := s;
+        }
+      }
+
+      pXL.SetTblNumberFldValue('КонтрактЦена', v.tk.summa);
+
+      _tks2 := v.getfirst tks2 = tsOk;
+      _td   := v.getfirst td   = tsOk;
+
+      while _tks2 or _td
+      {
+        if _tks2
+        {
+          pXL.SetTblStringFldValue('КонтрактПлатежНомер', v.tks2.nDoc);
+          pXL.SetTblStringFldValue('КонтрактПлатежДата',  datetostr(v.tks2.dDoc,'DD.MM.YY'));
+          pXL.SetTblNumberFldValue('КонтрактПлатежСумма', v.tks2.sDoc);
+          _tks2 := v.getnext tks2 = tsOk;
+        }
+        if _td
+        {
+          if v.getfirst d  = tsOk
+          if v.getfirst o  = tsOk
+          if v.getfirst d2 = tsOk
+          if v.getfirst dcp = tsOk
+          {
+            pXL.AddTblStringFldValue('Соисп', v.o.name);
+            pXL.AddTblStringFldValue('Соисп', ', контракт №'+v.d.nodoc+' от '+datetostr(v.d.ddoc,'DD.MM.YY г.'));
+            pXL.AddTblStringFldValue('Соисп', ', '+ea.mGetAttrId(1702, v.dcp.nrec, 000100000000000Fh));
+            if (v.td.cDog <> v.td.cAppDog)
+              pXL.AddTblStringFldValue('Соисп', ', '+v.d2.nodoc+' от '+datetostr(v.d2.ddoc,'DD.MM.YY г.'));
+            pXL.AddTblStringFldValue('Соисп', ', '+v.dcp.nodoc);
+
+            pXL.AddTblStringFldValue('СоиспСроки', datetostr(v.dcp.dfrom, 'DD.MM.YY г.')+' - '+datetostr(v.dcp.dto, 'DD.MM.YY г.'));
+
+            var __cdoc: comp;
+            var __tidk: word;
+
+            __cdoc := if(v.td.cCalPlan != 0, v.td.cCalPlan, v.td.cAppDog);
+            __tidk := if(v.td.cCalPlan != 0, 403, 401);
+
+            if( __cdoc != 0)
+            {
+              v._loop spdocs where ((__tidk == spdocs.tidk and __cdoc == spdocs.cdoc))
+              {
+                if v.spdocs.prmc = 2
+                  pXL.AddTblStringFldValue('СоиспСроки', chr(10)+if(getanykau(1, 5, v.spdocs.cmcusl), givenanname(1), '') + ' - ' + string(v.spdocs.kol,0,0) + ' - ' + string(v.spdocs.summa,0,0) )
+                else
+                  pXL.AddTblStringFldValue('СоиспСроки', chr(10)+if(getanykau(1, 4, v.spdocs.cmcusl), givenanname(1), '') + ' - ' + string(v.spdocs.kol,0,0) + ' - ' + string(v.spdocs.summa,0,0) );
+              }
+            }
+
+            s1 := '';
+            v._loop tds1
+            {
+              s := if(v.tds1.tidk=111,'акт №','накладная №')+v.tds1.ndoc+' от '+datetostr(v.tds1.ddoc,'DD.MM.YY г.')+chr(10);
+              if s <> s1
+              {
+                pXL.AddTblStringFldValue('СоиспПоставки', datetostr(v.tds1.dDoc,'DD.MM.YY г. ')+chr(10));
+                pXL.AddTblStringFldValue('СоиспПримечание', s);
+                s1 := s;
+              }
+            }
+
+            pXL.SetTblNumberFldValue('СоиспЦена', v.td.Summa);
+            pXL.SetTblNumberFldValue('СоиспПлатежСумма', v.td.SumPlat);
+            pXL.SetTblNumberFldValue('lvl', 2);
+
+            pXL.InsTblRow;
+            pXL.ClearTblBuffer;
+
+            _tds2 := v.getfirst tds2 = tsOk;
+
+            if _tds2
+            {
+              //_tks2 := v.getnext tks2 = tsOk;
+              while _tds2
+              {
+                pXL.ClearTblBuffer;
+                pXL.SetTblNumberFldValue('СоиспПлатежСумма', v.tds2.sDoc);
+                pXL.SetTblStringFldValue('СоиспПлатежНомер', v.tds2.nDoc);
+                pXL.SetTblStringFldValue('СоиспПлатежДата' , datetostr(v.tds2.dDoc,'DD.MM.YY г.'));
+                if v.getfirst dplp = tsOk
+                {
+                  pXL.AddTblStringFldValue('СоиспПримечание', v.dplp.namepl1+' ');
+                  pXL.AddTblStringFldValue('СоиспПримечание', v.dplp.namepl2+' ');
+                  pXL.AddTblStringFldValue('СоиспПримечание', v.dplp.namepl3+' ');
+                }
+                pXL.SetTblNumberFldValue('lvl', 3);
+                _tds2 := v.getnext tds2 = tsOk;
+                //if _tks2
+                //{
+                //  pXL.SetTblStringFldValue('КонтрактПлатежНомер', v.tks2.nDoc);
+                //  pXL.SetTblStringFldValue('КонтрактПлатежДата',  datetostr(v.tks2.dDoc,'DD.MM.YY'));
+                //  pXL.SetTblNumberFldValue('КонтрактПлатежСумма', v.tks2.sDoc);
+                //  _tks2 := v.getnext tks2 = tsOk;
+                //}
+                pXL.InsTblRow;
+                pXL.ClearTblBuffer;
+              } //while _tds2
+            }
+
+          }
+          _td := v.getnext td = tsOk;
+        } //if _td
+        else
+        {
+          pXL.InsTblRow;
+          pXL.ClearTblBuffer;
+        }
+      } //while
+
+    } // _loop tk
+  } //_loop Kontrakt
+  }
+
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+handleevent
+cmDoOk:
+{
+  StartNewVisual(vtRotateVisual, vfThread + vfTimer, '', 0);
+  FillTables;
+  SetVisualHeader('Выгрузка в Excel');
+  printrep(false);
+  StopVisual('',0);
+  rereadrecord;
+  if ((flag and 1) > 0)
+    runwindow(wInfo);
+}
+cminit:
+{
+  if not readmydsk(flag,  'Forma7GOZ_flag' , false) flag  := 1;
+  if not readmydsk(dRep1, 'Forma7GOZ_dRep1', false) dRep1 := date(1,1,year(cur_date));
+  if not readmydsk(dRep2, 'Forma7GOZ_dRep2', false) dRep2 := date(last_day(cur_date),month(cur_date),year(cur_date));
+  sXLTFileName := TranslatePath('%StartPath%xls\Forma7GOZ.xlt');
+}
+cmdone:
+{
+  SaveMyDsk(flag,  'Forma7GOZ_flag' );
+  savemydsk(dRep1, 'Forma7GOZ_dRep1');
+  savemydsk(dRep2, 'Forma7GOZ_dRep2');
+}
+end;
+end.
+
+VipInterface UserReport_Forma7GOZ Implements IUserReport licensed(free);
+Interface UserReport_Forma7GOZ;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::Forma7GOZ);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Приложение 7-ГОЗ.Справка о заключении договоров с соисполнителями';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1)
+      GetGroupName := 'Отчеты ГОЗ'
+    else
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'DOGOVOR';
+    end;
+  end;
+end.

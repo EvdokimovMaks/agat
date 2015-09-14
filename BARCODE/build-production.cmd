@@ -1,0 +1,1 @@
+@call ../config/build.cmd production ArgumentBarcode.prj
