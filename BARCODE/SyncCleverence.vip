@@ -40,6 +40,8 @@ const
   DOCTYPE_INV = 'Инвентаризация';
 end;
 
+type tspkau = record as table spkau;
+
 var
   _connector: CLEVERENCE::oStorageConnector;
   _logger: UTILS::Logger new;
@@ -48,7 +50,7 @@ var
 
 create view
 as select *
-from spkau spkCells, tdocs, tSpDocs, spkau, mbpinv
+from spkau spkCells, tdocs, tSpDocs, spkau, mbpinv, mbpin, spinvtab
 where ((
   KODGRKAU_PLACE == spkCells.kodgrkau
 ));
@@ -502,12 +504,65 @@ procedure RemoveDocs(docsCollection: CLEVERENCE::oCollection);
   }
 }
 
+function GetPlaceByCode(placeCode: string): tspkau;
+{
+  var rslt: tspkau;
+  if getfirst spkau where ((KODGRKAU_PLACE == spkau.kodgrkau and placeCode == spkau.code)) = tsOk
+    rslt := tspkau(spkau.buffer)
+  else
+    clearadvrecord(rslt);
+  result := rslt;
+}
+
+procedure SetSpInvFactPlace(kind: word; SpInvNrec: comp; placeBuf: tspkau);
+{
+  if kind = KIND_INVOS
+  {
+    _extattr.coSetAttr(1124, SpInvNrec, ATTRNAME_INVOS_PLACE_FACT, placeBuf.nrec, placeBuf.name);
+  }
+  else
+  {
+    update mbpinv where ((SpInvNrec == mbpinv.nrec)) set mbpinv.crecs[3] := placeBuf.nrec;
+  }
+}
+
+procedure AddSpInv(kind: word; invNrec: comp; item: CLEVERENCE::oDocumentItem);
+{
+  var productNrec: comp;
+  productNrec := comp(substr(item.ProductId,2,18));
+
+  var place: tspkau;
+  place := GetPlaceByCode(item.FirstStorageBarcode);
+
+  if kind = KIND_INVOS
+  {
+    clearbuffer(#spinvtab);
+    spinvtab.cinvtab := invNrec;
+    spinvtab.cmc := productNrec;
+    spinvtab.kol := item.CurrentQuantity;
+    insert current spinvtab;
+    _extattr.coSetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_FACT, place.nrec, place.name);
+  }
+  else
+  {
+    clearbuffer(#mbpinv);
+    mbpinv.cmove := invNrec;
+    if getfirst mbpin where ((productNrec == mbpin.nrec)) = tsOk
+    {
+      mbpinv.ckatmbp := mbpin.cmbp;
+      mbpinv.crecs[1] := mbpin.nrec;
+    }
+    mbpinv.fctkol := item.CurrentQuantity;
+    mbpinv.crecs[3] := place.nrec;
+    insert current mbpinv;
+  }
+}
+
 function SyncDocs: boolean;
 var
   q : IQuery;
   rs: IResultSet;
-  i, cnt: longint;
-  s: string;
+  i : longint;
 {
   result := false;
 
@@ -622,23 +677,22 @@ var
     //установка фактических мест хранения
     for (i:=0; i < document.CurrentItems.count; ++i)
     {
+
       item := CLEVERENCE::oDocumentItem(document.CurrentItems.Item(i));
       productNrec := comp(substr(item.ProductId,2,18));
-      if getfirst spkau where ((KODGRKAU_PLACE == spkau.kodgrkau and tSpDocs.placeFact == spkau.code)) = tsOk
+
+      if getfirst tSpDocs where ((tDocs.kind == tSpDocs.kind and tDocs.nrec == tSpDocs.docNrec and (tSpDocs.cRec = productNrec) )) = tsOk
       {
-        if getfirst tSpDocs where ((tDocs.kind == tSpDocs.kind and tDocs.nrec == tSpDocs.docNrec and (tSpDocs.cRec = productNrec) )) = tsOk
-        {
-          if tDocs.kind = KIND_INVOS
-          {
-            _extattr.coSetAttr(1124, tSpDocs.spDocNrec, ATTRNAME_INVOS_PLACE_FACT, spkau.nrec, spkau.name);
-          }
-          else
-          {
-            update mbpinv where ((tSpDocs.spDocNrec == mbpinv.nrec)) set mbpinv.crecs[3] := spkau.nrec;
-          }
-        }
+        var place: tspkau;
+        place := GetPlaceByCode(item.FirstStorageBarcode);
+        if place.nrec != 0
+          SetSpInvFactPlace(tspdocs.kind, tspdocs.spDocNrec, place);
       }
+      else
+        AddSpInv(tdocs.kind, tdocs.nrec, item);
+
       freevipinterface(item);
+
     }
 
     freevipinterface(document);

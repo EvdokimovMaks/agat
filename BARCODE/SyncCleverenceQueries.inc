@@ -88,7 +88,7 @@ union all
 select tdocs.kind,
        tdocs.nrec,
        mbpinv.nrec,
-       mbpinv.ckatmbp,
+       mbpinv.crecs[1],
        spkPlacePlan.code,
        spkPlaceFact.code,
        mbpinv.cntkol,
