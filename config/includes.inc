@@ -2,6 +2,8 @@
 /i:"../inc" 
 /i:"../RKM" 
 /i:"../UTILS" 
+/i:"../BARCODE" 
+/i:"../BARCODE/Cleverence"
 /i:"../config/deploy" 
 /i:"../config/local" 
 /i:"../inc/!Sborka" 
