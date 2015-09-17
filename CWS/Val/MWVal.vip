@@ -1,0 +1,487 @@
+#component "AGAT"
+interface iMWVal;
+
+var
+  fNumberOfShowedFields: byte;
+  GroupDeltas: array[1..255] of byte;
+  MWValFieldsManager: iMWValFieldsManager new;
+  MWRow: oMWRow(iMWRow) new;
+  CurMnPlan: comp;
+  CurPeriod: comp;
+  PeriodDBeg, PeriodDEnd: date;
+  CostItemKodGr: word;
+  AllVidOpl: array[1..1] of string;
+create view
+var
+  fActiveGroupIndex: byte;
+as select *
+from tValFields tVF,
+     tValFields tVF1, SpKAU, mnplan, fpperiod, td
+where ((
+  fActiveGroupIndex == tVF.GroupIndex
+))
+;
+
+create view v
+var _kodgr: word;
+as select *
+from spkau, attrnam, attrval
+where ((
+  _kodgr       /== spkau.kodgrkau and
+  8512         /== attrnam.wtable and
+  'Виды оплат' /== attrnam.name   and
+  8512         /== attrval.wtable and
+  spkau.nrec   /== attrval.crec   and
+  attrnam.nrec /== attrval.cattrnam
+));
+
+procedure SetActiveGroup(_GroupIndex: byte);
+{
+  fActiveGroupIndex := _GroupIndex;
+}
+
+function GetNumberOfFieldsInGroup(_GroupIndex: byte):byte;
+{
+  var NumberOfFields: byte;
+  NumberOfFields := 0;
+  _loop tVf1 where ((_GroupIndex == tVf1.GroupIndex))
+     NumberOfFields += 1;
+  result := NumberOfFields;
+}
+
+function GetShowedFieldTitle(_ShowedFieldIndex: byte): string;
+{
+  var _ind: byte;
+  _ind := GroupDeltas[fActiveGroupIndex]+_ShowedFieldIndex;
+  if (getfirst tVF1 where ((fActiveGroupIndex == tVF1.GroupIndex and _ind == tVF1.FieldIndex)) = tsOk )
+    result := tVF1.FieldTitle
+  else
+    result := '';
+}
+
+function GetShowedFieldValue(_ShowedFieldIndex: byte; Row: oMWRow): string;
+{
+  var _ind: byte;
+  _ind := GroupDeltas[fActiveGroupIndex]+_ShowedFieldIndex;
+  if (getfirst tVF1 where ((fActiveGroupIndex == tVF1.GroupIndex and _ind == tVF1.FieldIndex)) = tsOk )
+    result := MWValFieldsManager.GetFieldValue(Row, tVF1.nRec)
+  else
+    result := '';
+}
+
+function GetShowedFieldDistribute(_ShowedFieldIndex: byte; Row: oMWRow): double;
+{
+  var _ind: byte;
+  _ind := GroupDeltas[fActiveGroupIndex]+_ShowedFieldIndex;
+  if (getfirst tVF1 where ((fActiveGroupIndex == tVF1.GroupIndex and _ind == tVF1.FieldIndex)) = tsOk )
+    result := MWValFieldsManager.GetFieldDistribute(Row, tVF1.nRec)
+  else
+    result := 0;
+}
+
+function GetShowedFieldFontBackColor(_ShowedFieldIndex: byte; Row: oMWRow): integer;
+{
+  var _ind: byte;
+  _ind := GroupDeltas[fActiveGroupIndex]+_ShowedFieldIndex;
+  if (getfirst tVF1 where ((fActiveGroupIndex == tVF1.GroupIndex and _ind == tVF1.FieldIndex)) = tsOk )
+    result := MWValFieldsManager.GetFieldFontBackColor(Row, tVF1.nRec)
+  else
+    result := 0;
+}
+
+procedure LoadRowValues(Row:  oMWRow);
+{
+  if (getfirst td where ((Row.cPerson == td.cPerson)) <> tsOk)
+  {
+    var ls: longint;
+    var i: integer;
+    if dgettune('UP.DATOTCH') = fpperiod.dbeg   //если наряд по текущему периоду - берем данные из результатов расчета зп
+    {
+      //начисления по статьям наряда
+      v._kodgr := CostItemKodGr;
+      v._loop viewtable
+      {
+        if (trim(v.attrval.vstring)='') continue;
+        sqlAddStr(ls, 'select #comp('+v.spkau.nrec+'), #comp('+Row.cPerson+'), t.summa');
+        sqlAddStr(ls, 'from lschet ls');
+        sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.summa) as summa');
+        sqlAddStr(ls, '      from nachisl n');
+        sqlAddStr(ls, '      where n.yearn = '+year(PeriodDBeg)+' and n.mesn = '+month(PeriodDBeg)+' and n.vidopl in ('+v.attrval.vstring+') and n.cschetd=''20''');
+        //sqlAddStr(ls, '            (vidopl not in (106,133) or (vidopl in (106,133) and cschetd=''20'') )');
+        sqlAddStr(ls, '      group by n.clsch');
+        sqlAddStr(ls, '     ) t');
+        sqlAddStr(ls, 'on t.clsch = ls.nrec');
+        sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+') and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
+        sqlSelectInto(ls, #td);
+        sqlFreeStr(ls);
+      }
+      //зарплата всего
+      sqlAddStr(ls, 'select #comp(0), #comp('+Row.cPerson+'), t.summa');
+      sqlAddStr(ls, 'from lschet ls');
+      sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.summa) as summa');
+      sqlAddStr(ls, '      from nachisl n');
+      sqlAddStr(ls, '      where n.yearn = '+year(PeriodDBeg)+' and n.mesn = '+month(PeriodDBeg)+' and n.vidopl in (');
+      for (i:=1;i<=count(AllVidOpl);i++)
+      {
+        sqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
+      }
+      sqlAddStr(ls, '      ) and n.cschetd=''20''');
+      //sqlAddStr(ls, '      (vidopl not in (106,133) or (vidopl in (106,133) and cschetd=''20'') )');
+      sqlAddStr(ls, '      group by n.clsch');
+      sqlAddStr(ls, '     ) t');
+      sqlAddStr(ls, 'on t.clsch = ls.nrec');
+      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+') and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
+      sqlSelectInto(ls, #td);
+      sqlFreeStr(ls);
+      //часы по доплатам за командировки прошлых периодов
+      sqlAddStr(ls, 'select #comp('+comp(-1)+'), #comp('+Row.cPerson+'), t.summa');
+      sqlAddStr(ls, 'from lschet ls');
+      sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.chasf / 2) as summa');
+      sqlAddStr(ls, '      from nachisl n');
+      sqlAddStr(ls, '      where n.yearn = '+year(PeriodDBeg)+' and n.mesn = '+month(PeriodDBeg)+' and n.vidopl in (135)'); // and n.datok < #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+')');
+      sqlAddStr(ls, '      group by n.clsch');
+      sqlAddStr(ls, '     ) t');
+      sqlAddStr(ls, 'on t.clsch = ls.nrec');
+      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+') and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
+      sqlSelectInto(ls, #td);
+      //часы командировки с накладными расходами
+      sqlAddStr(ls, 'select #comp('+comp(-2)+'), #comp('+Row.cPerson+'), t.summa');
+      sqlAddStr(ls, 'from lschet ls');
+      sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.chasf) as summa');
+      sqlAddStr(ls, '      from nachisl n');
+      sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in (106) and n.cschetd<>''20''');
+      sqlAddStr(ls, '      group by n.clsch');
+      sqlAddStr(ls, '     ) t');
+      sqlAddStr(ls, 'on t.clsch = ls.nrec');
+      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+') and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
+      sqlSelectInto(ls, #td);
+    }
+    else    //если наряд по предыдущему периоду - берем данные из архива начислений
+    {
+      //начисления по статьям наряда
+      v._kodgr := CostItemKodGr;
+      v._loop viewtable
+      {
+        if (trim(v.attrval.vstring)='') continue;
+        sqlAddStr(ls, 'select #comp('+v.spkau.nrec+'), #comp('+Row.cPerson+'), sum(so.summa)');
+        sqlAddStr(ls, 'from lschet ls');
+        sqlAddStr(ls, 'join sumvidop so on ls.nrec = so.clsch and');
+        sqlAddStr(ls, '                    so.yearn = '+year(PeriodDBeg)+' and');
+        sqlAddStr(ls, '                    so.mesn = '+month(PeriodDBeg)+' and');
+        sqlAddStr(ls, '                    so.vidoplp in ('+v.attrval.vstring+') and so.cschetd=''20''');
+        //sqlAddStr(ls, '                    (vidoplp not in (106,133) or (vidoplp in (106,133) and cschetd=''20'') )');
+        sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+')');
+        sqlSelectInto(ls, #td);
+        sqlFreeStr(ls);
+      }
+      //зарплата всего
+      sqlAddStr(ls, 'select #comp(0), #comp('+Row.cPerson+'), sum(so.summa)');
+      sqlAddStr(ls, 'from lschet ls');
+      sqlAddStr(ls, 'join sumvidop so on ls.nrec = so.clsch and');
+      sqlAddStr(ls, '                    so.yearn = '+year(PeriodDBeg)+' and');
+      sqlAddStr(ls, '                    so.mesn = '+month(PeriodDBeg)+' and');
+      sqlAddStr(ls, '                    so.vidoplp in (');
+      for (i:=1;i<=count(AllVidOpl);i++)
+      {
+        sqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
+      }
+      sqlAddStr(ls, '                    ) and so.cschetd=''20''');
+      //sqlAddStr(ls, '                    (vidoplp not in (106,133) or (vidoplp in (106,133) and so.cschetd=''20'') )');
+      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+')');
+      sqlSelectInto(ls, #td);
+      //часы по доплатам за командировки прошлых периодов
+      sqlAddStr(ls, 'select #comp('+comp(-1)+'), #comp('+Row.cPerson+'), sum(so.chasf / 2)');
+      sqlAddStr(ls, 'from lschet ls');
+      sqlAddStr(ls, 'join sumvidop so on ls.nrec = so.clsch and');
+      sqlAddStr(ls, '                    so.yearn = '+year(PeriodDBeg)+' and');
+      sqlAddStr(ls, '                    so.mesn = '+month(PeriodDBeg)+' and');
+      sqlAddStr(ls, '                    so.vidoplp in (135)');
+      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+')');
+      sqlSelectInto(ls, #td);
+      //часы командировки с накладными расходами
+      sqlAddStr(ls, 'select #comp(-2), #comp('+Row.cPerson+'), sum(so.chasf)');
+      sqlAddStr(ls, 'from lschet ls');
+      sqlAddStr(ls, 'join sumvidop so on ls.nrec = so.clsch and');
+      sqlAddStr(ls, '                    so.yearn = '+year(fpperiod.dbeg)+' and');
+      sqlAddStr(ls, '                    so.mesn = '+month(fpperiod.dbeg)+' and');
+      sqlAddStr(ls, '                    so.vidoplp in (106) and');
+      sqlAddStr(ls, '                    so.cschetd<>''20''');
+      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+')');
+      sqlSelectInto(ls, #td);
+    }
+  }
+
+  MWValFieldsManager.LoadRowValues(Row);
+}
+
+procedure DeleteRowValues(Row:  oMWRow);
+{
+  MWValFieldsManager.DeleteRowValues(Row);
+}
+
+function ShowedFieldIsEditable(_ShowedFieldIndex: byte; Row: oMWRow): boolean;
+{
+  var _ind: byte;
+  _ind := GroupDeltas[fActiveGroupIndex]+_ShowedFieldIndex;
+  if (getfirst tVF1 where ((fActiveGroupIndex == tVF1.GroupIndex and _ind == tVF1.FieldIndex)) = tsOk )
+    result := MWValFieldsManager.FieldIsEditable(Row, tVF1.nRec)
+  else
+    result := false;
+}
+
+function ShowedFieldValueIsCorrect(_ShowedFieldIndex: byte; Row: oMWRow; _Value: double): boolean;
+{
+  var _ind: byte;
+  _ind := GroupDeltas[fActiveGroupIndex]+_ShowedFieldIndex;
+  if (getfirst tVF1 where ((fActiveGroupIndex == tVF1.GroupIndex and _ind == tVF1.FieldIndex)) = tsOk )
+    result := MWValFieldsManager.FieldValueIsCorrect(Row, tVF1.nRec, _Value)
+  else
+    result := false;
+}
+
+function SetShowedFieldValue(_ShowedFieldIndex: byte; Row: oMWRow; _Value: double): boolean;
+{
+  var _ind: byte;
+  _ind := GroupDeltas[fActiveGroupIndex]+_ShowedFieldIndex;
+  if (getfirst tVF1 where ((fActiveGroupIndex == tVF1.GroupIndex and _ind == tVF1.FieldIndex)) = tsOk )
+    result := MWValFieldsManager.SetFieldValue(Row, tVF1.nRec, _Value)
+  else
+    result := false;
+}
+
+function AddValField(_GroupIndex: byte; _FieldTitle: string; _cCostItem: comp): comp;
+{
+  var _FieldIndex: byte;
+  if (getlast tVF1 where ((_GroupIndex == tVF1.GroupIndex)) = tsOk)
+    _FieldIndex := tVF1.FieldIndex + 1
+  else
+    _FieldIndex := 1;
+  clearbuffer(#tVF1);
+  tVF1.GroupIndex := _GroupIndex;
+  tVF1.FieldIndex := _FieldIndex;
+  tVF1.FieldTitle := _FieldTitle;
+  tVF1.cCostItem  := _cCostItem;
+  insert current tVF1;
+  result := tVF1.nRec;
+}
+
+window winfo;
+browse br1;
+table td;
+fields
+  td.cperson 'cperson';
+  td.ccostitem 'ccostitem';
+  td.summa 'summa';
+end;
+end;
+
+procedure InitFields(_FormPl: TFormPl; _cMnPlan: comp);
+{
+  delete all tVF1;
+  MWValFieldsManager.InitValFieldInterfaces;
+  var _c: comp;
+  _c := AddValField(1, 'Плановая'#13'трудоемкость', _FormPl.ResComp[1]);
+  MWValFieldsManager.CreateMWValFieldPlanTrud(_c, _FormPl.ResComp[1], _cMnPlan);
+  _c := AddValField(1, 'Процент'#13'выполнения', _FormPl.ResComp[1]);
+  MWValFieldsManager.CreateMWValFieldProcTrud(_c, _FormPl.ResComp[1], _cMnPlan);
+  _c := AddValField(1, 'Выраб. трудоемкость'#13'за месяц', _FormPl.ResComp[1]);
+  MWValFieldsManager.CreateMWValFieldFactTrud(_c, _FormPl.ResComp[1], _cMnPlan);
+  _c := AddValField(1, 'Выраб. трудоемкость'#13'за пред. месяцы', _FormPl.ResComp[1]);
+  MWValFieldsManager.CreateMWValFieldPrevTrud(_c, _FormPl.ResComp[1], _cMnPlan);
+  _c := AddValField(1, 'Выраб. трудоемкость'#13'полная', _FormPl.ResComp[1]);
+  MWValFieldsManager.CreateMWValFieldFullTrud(_c, _FormPl.ResComp[1], _cMnPlan);
+  _c := AddValField(2, 'Отработано'#13'часов', _FormPl.ResComp[2]);
+  MWValFieldsManager.CreateMWValFieldHoursWorked(_c, _FormPl.ResComp[2], _cMnPlan);
+  _c := AddValField(2, 'Заработная'#13'плата', _FormPl.ResComp[3]);
+  MWValFieldsManager.CreateMWValFieldSalary(_c, _FormPl.ResComp[3], _cMnPlan);
+  _loop SpKAU where ((_FormPl.ResWord[10] == SpKAU.kodgrkau and _FormPl.ResComp[4] == SpKAU.cnode))
+  {
+    _c := AddValField(2, replace(SpKAU.Name,'|',''#13''), SpKAU.nRec);
+    MWValFieldsManager.CreateMWValFieldAccrual(_c, SpKAU.nRec, _cMnPlan);
+  }
+
+  _c := AddValField(3, 'Часов в'#13'командировке', _FormPl.ResComp[2]);
+  MWValFieldsManager.CreateMWValFieldHoursKom(_c, _FormPl.ResComp[2], _cMnPlan);
+
+  _loop SpKAU where ((_FormPl.ResWord[10] == SpKAU.kodgrkau and _FormPl.ResComp[5] == SpKAU.cnode))
+  {
+    _c := AddValField(3, replace(SpKAU.Name,'|',''#13''), SpKAU.nRec);
+    MWValFieldsManager.CreateMWValFieldAccrual(_c, SpKAU.nRec, _cMnPlan);
+  }
+  _loop SpKAU where ((_FormPl.ResWord[10] == SpKAU.kodgrkau and _FormPl.ResComp[6] == SpKAU.cnode))
+  {
+    _c := AddValField(4, replace(SpKAU.Name,'|',''#13''), SpKAU.nRec);
+    MWValFieldsManager.CreateMWValFieldAccrual(_c, SpKAU.nRec, _cMnPlan);
+  }
+  _loop SpKAU where ((_FormPl.ResWord[10] == SpKAU.kodgrkau and _FormPl.ResComp[7] == SpKAU.cnode))
+  {
+    _c := AddValField(5, replace(SpKAU.Name,'|',''#13''), SpKAU.nRec);
+    MWValFieldsManager.CreateMWValFieldAccrual(_c, SpKAU.nRec, _cMnPlan);
+  }
+
+  var s, stmt: longint;
+  var s1: string;
+  var _ccostitem: comp;
+  var _vidoplp: word;
+  var i: integer;
+
+  delete all td;
+  if (getfirst mnplan where ((_cMnPlan == mnplan.nrec)) = tsOk)
+    if (getfirst fpperiod where ((mnplan.canval1 == fpperiod.nrec)) = tsOk)
+    {
+      CurMnPlan     := mnplan.nrec;
+      CurPeriod     := fpperiod.nrec;
+      PeriodDBeg    := fpperiod.dbeg;
+      PeriodDEnd    := fpperiod.dend;
+      CostItemKodGr := _FormPl.ResWord[10];
+
+      var ls, stmt: longint;
+      setlimit(AllVidOpl, 0);
+      if dgettune('UP.DATOTCH') = fpperiod.dbeg
+      {
+        v._kodgr := CostItemKodGr;
+        v._loop viewtable
+        {
+          if (trim(v.attrval.vstring)='') continue;
+          sqlAddStr(ls, 'select #comp('+v.spkau.nrec+'), pers.cperson, t.summa');
+          sqlAddStr(ls, 'from mnplan mp');
+          sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
+          sqlAddStr(ls, 'join lschet ls on ls.tperson=pers.cperson'); // and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+') )
+          sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.summa) as summa');
+          sqlAddStr(ls, '      from nachisl n');
+          sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in ('+v.attrval.vstring+') and n.cschetd=''20''');
+          //sqlAddStr(ls, '            (vidopl not in (106,133) or (vidopl in (106,133) and cschetd=''20'') )');
+          sqlAddStr(ls, '      group by n.clsch');
+          sqlAddStr(ls, '     ) t');
+          sqlAddStr(ls, 'on t.clsch = ls.nrec');
+          sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
+          sqlSelectInto(ls, #td);
+          sqlFreeStr(ls);
+          if (v.spkau.cnode=_formpl.rescomp[4] or v.spkau.cnode=_formpl.rescomp[5] or v.spkau.cnode=_formpl.rescomp[6])
+          {
+            SetLimit(AllVidOpl, Count(AllVidOpl)+1);
+            AllVidOpl[Count(AllVidOpl)] := v.attrval.vstring;
+          }
+        }
+        sqlAddStr(ls, 'select #comp(0), pers.cperson, t.summa');
+        sqlAddStr(ls, 'from mnplan mp');
+        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
+        sqlAddStr(ls, 'join lschet ls on ls.tperson=pers.cperson'); // and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+') )
+        sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.summa) as summa');
+        sqlAddStr(ls, '      from nachisl n');
+        sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in (');
+        for (i:=1;i<=count(AllVidOpl);i++)
+        {
+          sqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
+        }
+        sqlAddStr(ls, '      ) and n.cschetd=''20''');
+        //sqlAddStr(ls, '      (vidopl not in (106,133) or (vidopl in (106,133) and cschetd=''20'') )');
+        sqlAddStr(ls, '      group by n.clsch');
+        sqlAddStr(ls, '     ) t');
+        sqlAddStr(ls, 'on t.clsch = ls.nrec');
+        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
+        sqlSelectInto(ls, #td);
+        sqlFreeStr(ls);
+
+        sqlAddStr(ls, 'select #comp(-1), pers.cperson, t.summa');
+        sqlAddStr(ls, 'from mnplan mp');
+        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
+        sqlAddStr(ls, 'join lschet ls on ls.tperson=pers.cperson'); // and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+') )
+        sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.chasf / 2) as summa');
+        sqlAddStr(ls, '      from nachisl n');
+        sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in (135)'); // and n.datok < #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+')');
+        sqlAddStr(ls, '      group by n.clsch');
+        sqlAddStr(ls, '     ) t');
+        sqlAddStr(ls, 'on t.clsch = ls.nrec');
+        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
+        sqlSelectInto(ls, #td);
+
+        sqlAddStr(ls, 'select #comp(-2), pers.cperson, t.summa');  //часы командировки с накладными расходами
+        sqlAddStr(ls, 'from mnplan mp');
+        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
+        sqlAddStr(ls, 'join lschet ls on ls.tperson=pers.cperson'); // and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+') )
+        sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.chasf) as summa');
+        sqlAddStr(ls, '      from nachisl n');
+        sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in (106) and n.cschetd<>''20''');
+        sqlAddStr(ls, '      group by n.clsch');
+        sqlAddStr(ls, '     ) t');
+        sqlAddStr(ls, 'on t.clsch = ls.nrec');
+        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
+        sqlSelectInto(ls, #td);
+      }
+      else
+      {
+        v._kodgr := _FormPl.ResWord[10];
+        v._loop viewtable
+        {
+          if (trim(v.attrval.vstring)='') continue;
+          sqlAddStr(ls, 'select #comp('+v.spkau.nrec+'), pers.cperson, t.summa');
+          sqlAddStr(ls, 'from mnplan mp');
+          sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
+          sqlAddStr(ls, 'join (select ls.tperson as cperson, sum(so.summa) as summa');
+          sqlAddStr(ls, '      from sumvidop so');
+          sqlAddStr(ls, '      join lschet ls on so.clsch = ls.nrec');
+          sqlAddStr(ls, '      where so.yearn = '+year(fpperiod.dbeg)+' and so.mesn = '+month(fpperiod.dbeg)+' and so.vidoplp in ('+v.attrval.vstring+') and so.cschetd=''20''');
+          //sqlAddStr(ls, '            (vidoplp not in (106,133) or (vidoplp in (106,133) and so.cschetd=''20'') )');
+          sqlAddStr(ls, '      group by ls.tperson');
+          sqlAddStr(ls, '     ) t on pers.cperson = t.cperson');
+          sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
+          sqlSelectInto(ls, #td);
+          sqlFreeStr(ls);
+          if (v.spkau.cnode=_formpl.rescomp[4] or v.spkau.cnode=_formpl.rescomp[5] or v.spkau.cnode=_formpl.rescomp[6])
+          {
+            SetLimit(AllVidOpl, Count(AllVidOpl)+1);
+            AllVidOpl[Count(AllVidOpl)] := v.attrval.vstring;
+          }
+        }
+        sqlAddStr(ls, 'select #comp(0), pers.cperson, t.summa');
+        sqlAddStr(ls, 'from mnplan mp');
+        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
+        sqlAddStr(ls, 'join (select ls.tperson as cperson, sum(so.summa) as summa');
+        sqlAddStr(ls, '      from sumvidop so');
+        sqlAddStr(ls, '      join lschet ls on so.clsch = ls.nrec');
+        sqlAddStr(ls, '      where so.yearn = '+year(fpperiod.dbeg)+' and so.mesn = '+month(fpperiod.dbeg)+' and so.vidoplp in (');
+        for (i:=1;i<=count(AllVidOpl);i++)
+        {
+          sqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
+        }
+        sqlAddStr(ls, '      ) and so.cschetd=''20''');
+        //sqlAddStr(ls, '      (vidoplp not in (106,133) or (vidoplp in (106,133) and so.cschetd=''20'') )');
+        sqlAddStr(ls, '      group by ls.tperson');
+        sqlAddStr(ls, '     ) t on pers.cperson = t.cperson');
+        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
+        sqlSelectInto(ls, #td);
+
+        sqlAddStr(ls, 'select #comp(-1), pers.cperson, t.summa');  //часы командировки за прошлые периоды (их нет в табеле)
+        sqlAddStr(ls, 'from mnplan mp');
+        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
+        sqlAddStr(ls, 'join (select ls.tperson as cperson, sum(so.chasf / 2) as summa');
+        sqlAddStr(ls, '      from sumvidop so');
+        sqlAddStr(ls, '      join lschet ls on so.clsch = ls.nrec');
+        sqlAddStr(ls, '      where so.yearn = '+year(fpperiod.dbeg)+' and so.mesn = '+month(fpperiod.dbeg)+' and so.vidoplp in (135)'); //and so.datok < #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+')');
+        sqlAddStr(ls, '      group by ls.tperson');
+        sqlAddStr(ls, '     ) t on pers.cperson = t.cperson');
+        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
+        sqlSelectInto(ls, #td);
+
+        sqlAddStr(ls, 'select #comp(-2), pers.cperson, t.summa');  //часы командировки с накладными расходами
+        sqlAddStr(ls, 'from mnplan mp');
+        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
+        sqlAddStr(ls, 'join (select ls.tperson as cperson, sum(so.chasf) as summa');
+        sqlAddStr(ls, '      from sumvidop so');
+        sqlAddStr(ls, '      join lschet ls on so.clsch = ls.nrec');
+        sqlAddStr(ls, '      where so.yearn = '+year(fpperiod.dbeg)+' and so.mesn = '+month(fpperiod.dbeg)+' and so.vidoplp in (106) and so.cschetd<>''20''');
+        sqlAddStr(ls, '      group by ls.tperson');
+        sqlAddStr(ls, '     ) t on pers.cperson = t.cperson');
+        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
+        sqlSelectInto(ls, #td);
+      }
+    }
+
+  //runwindowmodal(winfo);
+}
+
+property ActiveGroupIndex: byte read fActiveGroupIndex write SetActiveGroup(result);
+property NumberOfFieldsInActiveGroup: byte read GetNumberOfFieldsInGroup(ActiveGroupIndex);
+property NumberOfShowedFields: byte absolute fNumberOfShowedFields;
+end.
