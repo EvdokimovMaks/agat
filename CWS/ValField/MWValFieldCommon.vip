@@ -1,0 +1,302 @@
+#component "AGAT"
+interface iMWValFieldCommon;
+var
+  fcValField         : comp;
+  fIndexOfFieldInCell: byte;
+  fcCostItem         : comp;
+  fcMnPlan           : comp;
+  fMWValFieldsManager: oMWValFieldsManager;
+
+  CostItemKodGroup   : word;
+  CostItemRole       : comp;
+  PeriodKodGroup     : word;
+  PeriodRole         : comp;
+  cMnPlanWayAccou    : comp;
+
+  RowParent          : oMWRow(iMWRow) new;
+
+create view
+as select *
+from tVal, MnPlan, MnAnal, SpSloj, SpMnPlan, SpMnPl, ValSpMnP, FpPeriod, RowParent
+;
+
+procedure SetcMnPlan(_cMnPlan: comp);
+{
+  fcMnPlan := _cMnPlan;
+  if GetFirst MnPlan where ((_cMnPlan == MnPlan.nRec)) = tsOk
+  {
+    CostItemRole := coGetTune('SYSTEMANALIT.ROLEARTICLECOST');
+    if (getfirst SpSloj where ((CostItemRole == SpSloj.cRole and MnPlan.cSloj == SpSloj.cMain)) = tsOk)
+      CostItemKodGroup := SpSloj.KodGrKau
+    else
+      CostItemKodGroup := 0;
+    PeriodRole := coGetTune('SYSTEMANALIT.ROLEPERIOD');
+    if (getfirst SpSloj where ((PeriodRole == SpSloj.cRole and MnPlan.cSloj == SpSloj.cMain)) = tsOk)
+      PeriodKodGroup := SpSloj.KodGrKau
+    else
+      PeriodKodGroup := 0;
+    cMnPlanWayAccou := MnPlan.cWayAccou;
+  }
+}
+
+function GettValBuffer(_cRow: comp; _cValField: comp): ttVal_p;
+{
+  if getfirst tVal where ((_cRow == tVal.cRow and _cValField == tVal.cValField)) <> tsOk
+    insert tVal set tVal.cRow := _cRow, tVal.cValField := _cValField;
+  result := ttVal_p(tVal.BufferP);
+}
+
+procedure ChangeParentValue(Row: oMWRow; _Delta: double);
+{
+  if (_Delta = 0) or (Row.cParent = 0) exit;
+  if getfirst RowParent where ((Row.cParent == RowParent.nRec))= tsOk
+  {
+    var ValBuffer: ttVal_p;
+    ValBuffer := GettValBuffer(RowParent.nRec, fcValField);
+    ValBuffer.Value += _Delta;
+    tVal.bufferp := ValBuffer;
+    update current tVal;
+    ChangeParentValue(RowParent, _Delta);
+  }
+}
+
+procedure SyncWithValSpMnP(Row: oMWRow; var ValBuffer: ttVal_p);
+{
+  if (not Row.isLeaf) exit;
+  if getfirst ValSpMnP where ((ValBuffer.cValSpMnP == ValSpMnP.nRec)) <> tsOk
+    if getfirst SpMnPlan where ((Row.cSpMnPlan == SpMnPlan.nRec)) = tsOk
+      if GetFirst MnPlan where ((SpMnPlan.cMnPlan == MnPlan.nRec)) = tsOk
+      {
+        if getfirst MnAnal where ((MnPlan.cSloj   == MnAnal.cSloj  and
+                                   0              == MnAnal.cBlock and
+                                   0              == MnAnal.FldAn1 and
+                                   MnPlan.canval1 == MnAnal.FldAn2 and
+                                   fcCostItem     == MnAnal.FldAn3 )) <> tsOk
+        {
+          clearbuffer(#MnAnal);
+          MnAnal.cSloj  := MnPlan.cSloj;
+          MnAnal.cBlock := 0;
+          MnAnal.FldAn1 := 0;
+          MnAnal.FldAn2 := MnPlan.cAnVal1;
+          MnAnal.FldAn3 := fcCostItem;
+          insert current MnAnal;
+        }
+        if getfirst SpMnPl where ((Row.cSpMnPlan       == SpMnPl.cSpMnPlan and
+                                   22                  == SpMnPl.wKolAn    and
+                                   PeriodKodGroup      == SpMnPl.wKodGr4   and
+                                   PeriodNRec          == SpMnPl.cAnVal4   and
+                                   CostItemKodGroup    == SpMnPl.wKodGr5   and
+                                   fcCostItem          == SpMnPl.cAnVal5 )) <> tsOk
+        {
+          clearbuffer(#SpMnPl);
+          SpMnPl.cRoleAn1 := SpMnPlan.cRoleAn1;
+          SpMnPl.wKodGr1  := SpMnPlan.wKodGr1;
+          SpMnPl.cAnVal1  := SpMnPlan.cAnVal1;
+          SpMnPl.cRoleAn2 := SpMnPlan.cRoleAn2;
+          SpMnPl.wKodGr2  := SpMnPlan.wKodGr2;
+          SpMnPl.cAnVal2  := SpMnPlan.cAnVal2;
+          SpMnPl.cRoleAn3 := SpMnPlan.cRoleAn3;
+          SpMnPl.wKodGr3  := SpMnPlan.wKodGr3;
+          SpMnPl.cAnVal3  := SpMnPlan.cAnVal3;
+          SpMnPl.wKodGr8  := SpMnPlan.wKodGr4;
+          SpMnPl.cAnVal8  := SpMnPlan.cAnVal4;
+          SpMnPl.cRoleAn4 := PeriodRole;
+          SpMnPl.wKodGr4  := PeriodKodGroup;
+          SpMnPl.cAnVal4  := PeriodNRec;
+          SpMnPl.cRoleAn5 := CostItemRole;
+          SpMnPl.wKodGr5  := CostItemKodGroup;
+          SpMnPl.cAnVal5  := fcCostItem;
+          SpMnPl.StartDate:= PeriodDBeg;
+          SpMnPl.EndDate  := PeriodDEnd;
+          SpMnPl.RecomDate:= PeriodDEnd;
+          //SpMnPl.StartDateFact:= PeriodDBeg;
+          //SpMnPl.EndDateFact  := PeriodDEnd;
+          SpMnPl.typeizd  := SpMnPlan.TypeIzd;
+          SpMnPl.cRoleIzd := SpMnPlan.cRoleIzd;
+          SpMnPl.cIzd     := SpMnPlan.cIzd;
+          SpMnPl.cOtpEd   := SpMnPlan.cOtpEd;
+          SpMnPl.NumSort  := SpMnPlan.NumSort;
+          SpMnPl.Number   := SpMnPlan.Number;
+          SpMnPl.cMnAnal  := MnAnal.nRec;
+          SpMnPl.cSpMnPlan:= SpMnPlan.nRec;
+          SpMnPl.cSloj    := MnPlan.cSloj;
+          SpMnPl.cMnPlan  := MnPlan.nRec;
+          SpMnPl.wKolAn   := 22;
+          insert current SpMnPl;
+        }
+        if GetFirst ValSpMnP where ((SpMnPl.NRec == ValSpMnP.cSpMnPl)) <> tsOk
+        {
+          clearbuffer(#ValSpMnP);
+          ValSpMnP.cSpMnPl := SpMnPl.nRec;
+          ValSpMnP.Num     := 1;
+          ValSpMnP.cOtpEd  := SpMnPl.cOtpEd;
+          ValSpMnP.EdTime  := SpMnPl.EdTime;
+          insert current ValSpMnP;
+        }
+        ValBuffer.cValSpMnP := ValSpMnP.nRec;
+      }
+  case fIndexOfFieldInCell of
+    1 : ValSpMnP.kol       := ValBuffer.Value;
+    2 : ValSpMnP.price     := ValBuffer.Value;
+    3 : ValSpMnP.vprice    := ValBuffer.Value;
+    4 : ValSpMnP.summa     := ValBuffer.Value;
+    5 : ValSpMnP.kolfield5 := ValBuffer.Value;
+    6 : ValSpMnP.kolfact   := ValBuffer.Value;
+    7 : ValSpMnP.pricefact := ValBuffer.Value;
+    8 : ValSpMnP.kolfield6 := ValBuffer.Value;
+    9 : ValSpMnP.summafact := ValBuffer.Value;
+    10: ValSpMnP.kolfield7 := ValBuffer.Value;
+    11: ValSpMnP.kolfield1 := ValBuffer.Value;
+    12: ValSpMnP.kolfield2 := ValBuffer.Value;
+    13: ValSpMnP.kolfield3 := ValBuffer.Value;
+    14: ValSpMnP.kolfield4 := ValBuffer.Value;
+  end;
+  update current ValSpMnP;
+}
+
+function SetValue(Row: oMWRow; _Value: double): boolean;
+{
+  result := false;
+  var ValBuffer: ttVal_p;
+  ValBuffer := GettValBuffer(Row.nRec, fcValField);
+  if (ValBuffer.Value <> _Value)
+  {
+    ChangeParentValue(Row, _Value - ValBuffer.Value);
+    ValBuffer.Value := _Value;
+    SyncWithValSpMnP(Row, ValBuffer);
+    tVal.bufferp := ValBuffer;
+    update current tVal;
+    result := true;
+  }
+}
+
+procedure ChangeParentDistribute(Row: oMWRow; _Delta: double);
+{
+  if (_Delta = 0) or (Row.cParent = 0) exit;
+  if getfirst RowParent where ((Row.cParent == RowParent.nRec))= tsOk
+  {
+    var ValBuffer: ttVal_p;
+    ValBuffer := GettValBuffer(RowParent.nRec, fcValField);
+    ValBuffer.Distribute += _Delta;
+    tVal.bufferp := ValBuffer;
+    update current tVal;
+    ChangeParentValue(RowParent, _Delta);
+  }
+}
+
+function SetDistribute(Row: oMWRow; _Distribute: double): boolean;
+{
+  result := false;
+  var ValBuffer: ttVal_p;
+  ValBuffer := GettValBuffer(Row.nRec, fcValField);
+  if (ValBuffer.Distribute <> _Distribute)
+  {
+    ChangeParentDistribute(Row, _Distribute - ValBuffer.Distribute);
+    ValBuffer.Distribute := _Distribute;
+    tVal.bufferp := ValBuffer;
+    update current tVal;
+    result := true;
+  }
+}
+
+function CheckValue(Row: oMWRow; _Value: double): boolean;
+{
+  if (_Value = _Value) { };
+  result := Row.isLeaf;
+}
+
+function Editable(Row: oMWRow): boolean;
+{
+  result := Row.isLeaf;
+}
+
+procedure LoadValue(Row: oMWRow);
+{
+  if (Row.cSpMnPlan = 0) exit;
+  if getfirst SpMnPl where ((Row.cSpMnPlan       == SpMnPl.cSpMnPlan and
+                             22                  == SpMnPl.wKolAn    and
+                             PeriodKodGroup      == SpMnPl.wKodGr4   and
+                             PeriodNRec          == SpMnPl.cAnVal4   and
+                             CostItemKodGroup    == SpMnPl.wKodGr5   and
+                             fcCostItem          == SpMnPl.cAnVal5 )) = tsOk
+  {
+    if getfirst ValSpMnP where ((SpMnPl.nRec == ValSpMnP.cSpMnPl)) = tsOk
+    {
+      var ValBuffer: ttVal_p;
+      ValBuffer := GettValBuffer(Row.nRec, fcValField);
+      ValBuffer.cValSpMnP := ValSpMnP.nRec;
+      tVal.BufferP := ValBuffer;
+      update current tVal;
+      case fIndexOfFieldInCell of
+        1 : SetValue(Row, ValSpMnP.kol);
+        2 : SetValue(Row, ValSpMnP.price);
+        3 : SetValue(Row, ValSpMnP.vprice);
+        4 : SetValue(Row, ValSpMnP.summa);
+        5 : SetValue(Row, ValSpMnP.kolfield5);
+        6 : SetValue(Row, ValSpMnP.kolfact);
+        7 : SetValue(Row, ValSpMnP.pricefact);
+        8 : SetValue(Row, ValSpMnP.kolfield6);
+        9 : SetValue(Row, ValSpMnP.summafact);
+        10: SetValue(Row, ValSpMnP.kolfield7);
+        11: SetValue(Row, ValSpMnP.kolfield1);
+        12: SetValue(Row, ValSpMnP.kolfield2);
+        13: SetValue(Row, ValSpMnP.kolfield3);
+        14: SetValue(Row, ValSpMnP.kolfield4);
+      else
+        SetValue(Row, 0);
+      end;
+      update tVal where ((Row.nRec == tVal.cRow and fcValField == tVal.cValField)) set tVal.cValSpMnP := ValSpMnP.nRec;
+    }
+  }
+}
+
+function GetValue(Row: oMWRow): string;
+{
+  if getfirst tVal where ((Row.nRec == tVal.cRow and fcValField == tVal.cValField)) = tsOk
+    result := if(tVal.Value<>0,tVal.Value,'')
+  else
+    result := '';
+}
+
+function GetDistribute(Row: oMWRow): double;
+{
+  if getfirst tVal where ((Row.nRec == tVal.cRow and fcValField == tVal.cValField)) = tsOk
+    result := tVal.Distribute
+  else
+    result := 0;
+}
+
+function GetFontBackColor(Row: oMWRow): integer;
+{
+  Row := Row;
+  result := 0;
+}
+
+function GetPeriodNRec: comp;
+{
+  result := 0;
+  if GetFirst MnPlan where ((cMnPlan == MnPlan.nRec)) = tsOk
+    result := MnPlan.cAnVal1;
+}
+
+function GetPeriodDBeg: date;
+{
+  if (getfirst FpPeriod where ((PeriodNRec == FpPeriod.nRec)) = tsOk)
+    result := FpPeriod.dBeg;
+}
+
+function GetPeriodDEnd: date;
+{
+  if (getfirst FpPeriod where ((PeriodNRec == FpPeriod.nRec)) = tsOk)
+    result := FpPeriod.dEnd;
+}
+
+property cValField: comp absolute fcValField;
+property IndexOfFieldInCell:byte absolute fIndexOfFieldInCell;
+property cCostItem: comp absolute fcCostItem;
+property MWValFieldsManager: oMWValFieldsManager absolute fMWValFieldsManager;
+property cMnPlan: comp read fcMnPlan write SetcMnPlan(result);
+property PeriodDBeg: date read GetPeriodDBeg;
+property PeriodDEnd: date read GetPeriodDEnd;
+property PeriodNRec: comp read GetPeriodNRec;
+end.

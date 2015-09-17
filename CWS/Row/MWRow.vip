@@ -1,0 +1,524 @@
+#component "AGAT"
+interface iMWRow;
+
+type tMnPlanKAU = Record
+  cRole: comp;
+  KodGr: word;
+end;
+
+var
+  MWRowParent: oMWRow(iMWRow) new;
+  MWRowFields: array[1..1] of oMWRowField;
+  MWRowFieldsCount: integer;
+  MWRowLevels: array[1..6] of array[1..6] of oMWRowField;
+  MWRowFieldsInLevelCount: array [1..6] of integer;
+  MWRowLevelsCount: integer;
+  MWRowPersonLevelIndex: integer;
+  CurMnPlan: comp;
+  MnPlanKAU: array[1..6] of tMnPlanKAU;
+
+File fFile;
+
+create view
+as select *
+from tRow, tRow tChildRow, tRow tParentRow, tRow tDelRow,
+     MnPlan, WayAccou, SpWayAc, SpMnPlan, SpMnPl, ValSpMnP, AllMemo
+;
+
+function GetField(NumField: byte): string;
+{
+  if NumField <= MWRowFieldsCount
+  {
+    result := MWRowFields[NumField].GetValue(ttRow(tRow.Buffer));
+  }
+  else
+  {
+    result := '';
+  }
+}
+
+function GetFieldValueByKodGr(buf:ttRow; _wKodGr: word): comp;
+{
+  result := 0;
+  if (_wKodGr=0) exit;
+  var i: integer;
+  for (i := 1; i <= MWRowFieldsCount; inc(i))
+  {
+    if (MWRowFields[i].GetKodGroup = _wKodGr)
+    {
+      result := MWRowFields[i].GetValueNRec(buf);
+      break;
+    }
+  }
+}
+
+function SetFieldValueByKodGr(_cVal: comp; _kodgr: word; var buf:ttRow): boolean;
+{
+  result := false;
+  if (_kodgr = 0) exit;
+  var i: integer;
+  for (i := 1; i <= MWRowFieldsCount; inc(i))
+  {
+    if (MWRowFields[i].GetKodGroup = _kodgr)
+    {
+      result := true;
+      MWRowFields[i].SetValueNRec(_cVal, buf);
+      break;
+    }
+  }
+}
+
+function GetFieldTitle(NumField: byte): string;
+{
+  if NumField <= MWRowFieldsCount
+  {
+    result := MWRowFields[NumField].GetName;
+  }
+  else
+  {
+    result := '';
+  }
+}
+
+function GetFieldWidth(NumField: byte): integer;
+{
+  if NumField <= MWRowFieldsCount
+  {
+    result := MWRowFields[NumField].GetColumnWidth;
+  }
+  else
+  {
+    result := 10;
+  }
+}
+
+function GetFieldProtectedOption(NumField: byte): boolean;
+{
+  if NumField <= MWRowFieldsCount
+  {
+    result := MWRowFields[NumField].isProtected;
+  }
+  else
+  {
+    result := true;
+  }
+}
+
+function GetParentRow(buf: ttRow): ttRow;
+{
+  if (buf.Level <= 1)
+  {
+    clearadvrecord(buf);
+    result := buf;
+    exit;
+  }
+  var prnt_buf    : ttRow;
+  prnt_buf        := buf;
+  prnt_buf.Level  := prnt_buf.Level - 1;
+
+  var i: integer;
+  for (i := 1; i <= MWRowFieldsCount; inc(i) )
+  {
+    if (MWRowFields[i].Level >= buf.Level)
+    {
+      MWRowFields[i].SetValueNRec(comp(-1), prnt_buf);
+    }
+  }
+
+  if getfirst tParentRow where ((prnt_buf.Level == tParentRow.Level and (
+    if(prnt_buf.cPerson   = comp(-1), true, prnt_buf.cPerson   = tParentRow.cPerson  ) and
+    if(prnt_buf.cPost     = comp(-1), true, prnt_buf.cPost     = tParentRow.cPost    ) and
+    if(prnt_buf.cKatStroy = comp(-1), true, prnt_buf.cKatStroy = tParentRow.cKatStroy) and
+    if(prnt_buf.cKatMarsh = comp(-1), true, prnt_buf.cKatMarsh = tParentRow.cKatMarsh) and
+    if(prnt_buf.cMarshSp  = comp(-1), true, prnt_buf.cMarshSp  = tParentRow.cMarshSp ) )
+  )) <> tsOk
+  {
+    var prnt_buf2    : ttRow;
+    prnt_buf2        := GetParentRow(prnt_buf);
+    prnt_buf.cParent := prnt_buf2.nRec;
+    prnt_buf.nrec    := 0;
+
+    if(prnt_buf.cPerson   = comp(-1)) prnt_buf.cPerson   := 0;
+    if(prnt_buf.cPost     = comp(-1)) prnt_buf.cPost     := 0;
+    if(prnt_buf.cKatStroy = comp(-1)) prnt_buf.cKatStroy := 0;
+    if(prnt_buf.cKatMarsh = comp(-1)) prnt_buf.cKatMarsh := 0;
+    if(prnt_buf.cMarshSp  = comp(-1)) prnt_buf.cMarshSp  := 0;
+    prnt_buf.cSpMnPlan := 0;
+
+    tParentRow.buffer := prnt_buf;
+    insert current tParentRow;
+  }
+  result := ttRow(tParentRow.buffer);
+}
+
+procedure SetCurrentMnPlan(_cMnPlan: comp);
+{
+  if getfirst MnPlan where ((_cMnPlan == MnPlan.nRec)) = tsOk
+  {
+    CurMnPlan := _cMnPlan;
+    //Шаблон-вкладка Аналитика
+    if getfirst WayAccou where ((MnPlan.cWayAccou == WayAccou.cWayAccou and 16 == WayAccou.TypeAlgor)) = tsOk
+      if getFirst SpWayAc where ((MnPlan.cWayAccou == SpWayAc.cWayAcMain and WayAccou.nRec == SpWayAc.cWayAccou and 1 == SpWayAc.TypeRec)) = tsOk
+      {
+        MnPlanKAU[1].cRole := SpWayAc.cValRes[7];
+        MnPlanKAU[1].KodGr := SpWayAc.wValRes[7];
+        MnPlanKAU[2].cRole := SpWayAc.cValRes[8];
+        MnPlanKAU[2].KodGr := SpWayAc.wValRes[8];
+        MnPlanKAU[3].cRole := SpWayAc.cValRes[9];
+        MnPlanKAU[3].KodGr := SpWayAc.wValRes[9];
+        MnPlanKAU[4].cRole := coGetTune('SYSTEMANALIT.ROLEPROFPOST');
+        MnPlanKAU[4].KodGr := 36;
+      }
+  }
+}
+
+function SyncRowWithSpMnPlan(buf:ttRow): comp;
+{
+  if buf.Level = MWRowLevelsCount
+  {
+    if getfirst SpMnPlan where ((buf.cSpMnPlan == SpMnPlan.nRec)) <> tsOk
+    {
+      ClearBuffer(#SpMnPlan);
+      SpMnPlan.cMnPlan  := CurrentMnPlan;
+      SpMnPlan.Number   := '';
+      SpMnPlan.NumSort  := buf.Sort;
+      SpMnPlan.EdTime   := 0;
+      SpMnPlan.cRoleIzd := coGetTune('SYSTEMANALIT.ROLEEMPLOYEE');
+      SpMnPlan.TypeIzd  := 92;
+      if getfirst MnPlan where ((CurrentMnPlan == MnPlan.nRec)) = tsOk
+        SpMnPlan.cSloj  := MnPlan.cSloj;
+      insert current SpMnPlan;
+    }
+
+    SpMnPlan.cIzd     := buf.cPerson;
+
+    SpMnPlan.wKodGr1  := MnPlanKAU[1].KodGr;
+    SpMnPlan.cRoleAn1 := MnPlanKAU[1].cRole;
+    SpMnPlan.cAnVal1  := GetFieldValueByKodGr(buf, SpMnPlan.wKodGr1);
+
+    SpMnPlan.wKodGr2  := MnPlanKAU[2].KodGr;
+    SpMnPlan.cRoleAn2 := MnPlanKAU[2].cRole;
+    SpMnPlan.cAnVal2  := GetFieldValueByKodGr(buf, SpMnPlan.wKodGr2);
+
+    SpMnPlan.wKodGr3  := MnPlanKAU[3].KodGr;
+    SpMnPlan.cRoleAn3 := MnPlanKAU[3].cRole;
+    SpMnPlan.cAnVal3  := GetFieldValueByKodGr(buf, SpMnPlan.wKodGr3);
+
+    SpMnPlan.wKodGr4  := MnPlanKAU[4].KodGr;
+    SpMnPlan.cRoleAn4 := MnPlanKAU[4].cRole;
+    SpMnPlan.cAnVal4  := GetFieldValueByKodGr(buf, SpMnPlan.wKodGr4);
+
+    update current SpMnPlan;
+
+    if getfirst AllMemo where ((11038 == AllMemo.wTable and SpMnPlan.nRec == AllMemo.cRec)) <> tsOk
+    {
+      clearbuffer(#AllMemo);
+      AllMemo.wTable := 11038;
+      AllMemo.cRec := SpMnPlan.nRec;
+      insert current AllMemo;
+    }
+
+    fFile.OpenMemo(AllMemo.Mem);
+    fFile.Truncate;
+    fFile.WriteLn(buf.sBase);
+    fFile.Close;
+    update current AllMemo;
+
+    result := SpMnPlan.nRec;
+  }
+  else
+    result := 0;
+}
+
+procedure SyncChildrenRows(buf: ttRow);
+{
+  var child_buf: ttRow;
+  var i: integer;
+  _loop tChildRow where ((buf.nRec == tChildRow.cParent))
+  {
+    child_buf := ttRow(tChildRow.Buffer);
+    for (i := 1; i<=MWRowFieldsCount; inc(i))
+    {
+      if (MWRowFields[i].Level <= buf.Level)
+      {
+        MWRowFields[i].CopyValue(buf, child_buf);
+      }
+    }
+    tChildRow.buffer := child_buf;
+    tChildRow.cSpMnPlan := SyncRowWithSpMnPlan(child_buf);
+    update current tChildRow;
+    pushpos(#tChildRow);
+    SyncChildrenRows(child_buf);
+    poppos(#tChildRow);
+  }
+}
+
+procedure LoadData;
+{
+  if (CurrentMnPlan = 0) exit;
+  var buf, prnt_buf: ttRow;
+  var i: integer;
+  delete all tRow;
+  _loop spmnplan where ((CurrentMnPlan == SpMnPlan.cMnPlan))
+  {
+    if boGetTune('UP.STAFF.LOCK')
+      if getfirst persons where ((spmnplan.cIzd == persons.nRec)) = tsOk
+        if getfirst useraccess where ((UserId == useraccess.crec and (useraccess.cgroup = persons.department) )) <> tsOk
+          continue;
+    clearadvrecord(buf);
+    SetFieldValueByKodGr(spmnplan.cIzd   , 3               , buf);
+    SetFieldValueByKodGr(spmnplan.canval1, spmnplan.wkodgr1, buf);
+    SetFieldValueByKodGr(spmnplan.canval2, spmnplan.wkodgr2, buf);
+    SetFieldValueByKodGr(spmnplan.canval3, spmnplan.wkodgr3, buf);
+    SetFieldValueByKodGr(spmnplan.canval4, spmnplan.wkodgr4, buf);
+
+    buf.cSpMnPlan := spmnplan.nrec;
+    buf.Level     := MWRowLevelsCount;
+    prnt_buf      := GetParentRow(buf);
+    buf.cParent   := prnt_buf.nRec;
+
+    for (i := 1; i <= MWRowFieldsCount; inc(i))
+    {
+      if (MWRowFields[i].GetName = 'Основание')
+        if getfirst AllMemo where ((11038 == AllMemo.wTable and spmnplan.nrec == AllMemo.cRec)) = tsOk
+          if fFile.OpenMemo(AllMemo.Mem)
+          {
+            fFile.Readln(buf.sBase);
+            fFile.Close;
+          }
+    }
+
+    tRow.buffer   := buf;
+    insert current tRow;
+  }
+}
+
+procedure SetSort(_nRec: comp; _Sort: word);
+{
+  update tRow where ((_nRec == tRow.nRec)) set tRow.Sort := _Sort;
+}
+
+procedure PickField(NumField: byte);
+{
+  if NumField <= MWRowFieldsCount
+  {
+    if (MWRowFields[NumField].Level = if(isvalidall(#tRow),if(tRow.Level=0,1,tRow.Level),1))
+    {
+      var buf: ttRow_p;
+      buf := ttRow_p(tRow.BufferP);
+      MWRowFields[NumField].Pick(buf);
+      if (not isValidAll(#tRow))
+      {
+        tRow.BufferP   := buf;
+        tRow.cSpMnPlan := SyncRowWithSpMnPlan(ttRow(tRow.buffer));
+        tRow.Level     := 1;
+        insert current tRow;
+      }
+      else
+      {
+        tRow.BufferP   := buf;
+        tRow.cSpMnPlan := SyncRowWithSpMnPlan(ttRow(tRow.buffer));
+        update current tRow;
+        SyncChildrenRows(ttRow(tRow.buffer));
+      }
+      returnposition(tRow.nrec);
+    }
+  }
+}
+
+procedure SetFieldValueString(NumField: byte; _Value: string);
+{
+  if NumField <= MWRowFieldsCount
+  {
+    if (MWRowFields[NumField].Level = if(isvalidall(#tRow),if(tRow.Level=0,1,tRow.Level),1))
+    {
+      var buf: ttRow_p;
+      buf := ttRow_p(tRow.BufferP);
+      MWRowFields[NumField].SetValueString(_Value, buf);
+      if (not isValidAll(#tRow))
+      {
+        tRow.BufferP   := buf;
+        tRow.cSpMnPlan := SyncRowWithSpMnPlan(ttRow(tRow.buffer));
+        tRow.Level     := 1;
+        insert current tRow;
+      }
+      else
+      {
+        tRow.BufferP   := buf;
+        tRow.cSpMnPlan := SyncRowWithSpMnPlan(ttRow(tRow.buffer));
+        update current tRow;
+        SyncChildrenRows(ttRow(tRow.buffer));
+      }
+      returnposition(tRow.nrec);
+    }
+  }
+}
+
+procedure UpdateRecord;
+{
+  if (tRow.nrec = 0)
+  {
+    tRow.Level := 1;
+    tRow.cSpMnPlan := SyncRowWithSpMnPlan(ttRow(tRow.Buffer));
+    insert current tRow;
+  }
+  else
+  {
+    tRow.cSpMnPlan := SyncRowWithSpMnPlan(ttRow(tRow.Buffer));
+    update current tRow;
+    SyncChildrenRows(ttRow(tRow.buffer));
+  }
+}
+
+procedure InsertRecordInCurrentLevel;
+{
+  var CurBuffer: ttRow;
+  CurBuffer := ttRow(tRow.Buffer);
+  var NewBuffer: ttRow;
+  var i: integer;
+  for (i:=1; i<=MWRowFieldsCount; inc(i))
+  {
+    if (MWRowFields[i].Level < CurBuffer.Level)
+    {
+      MWRowFields[i].CopyValue(CurBuffer, NewBuffer)
+    }
+    else
+    {
+      MWRowFields[i].SetValueNRec(0, NewBuffer);
+    }
+  }
+  tRow.Buffer    := NewBuffer;
+  tRow.Sort      := word(-1);
+  tRow.Level     := CurBuffer.Level;
+  tRow.cParent   := CurBuffer.cParent;
+  tRow.cSpMnPlan := SyncRowWithSpMnPlan(ttRow(tRow.Buffer));
+  insert current tRow;
+}
+
+procedure InsertRecordInChildLevel;
+{
+  tRow.cParent   := tRow.nRec;
+  tRow.Level     := tRow.Level+1;
+  tRow.Sort      := word(-1);
+  tRow.nrec      := 0;
+  tRow.cSpMnPlan := SyncRowWithSpMnPlan(ttRow(tRow.Buffer));
+  insert current tRow;
+  ABORT;
+}
+
+procedure DeleteRow(_nRec: comp);
+{
+  _loop tDelRow where ((_nRec == tDelRow.cParent))
+  {
+    pushpos(#tDelRow);
+    DeleteRow(tDelRow.nRec);
+    poppos(#tDelRow);
+  }
+  if getfirst tDelRow where ((_nRec == tDelRow.nRec)) = tsOk
+  {
+    if getfirst SpMnPlan where ((tDelRow.cSpMnPlan == SpMnPlan.nRec)) = tsOk
+    {
+      _loop SpMnPl where ((SpMnPlan.nRec == SpMnPl.cSpMnPlan))
+      {
+        Delete All ValSpMnP where ((SpMnPl.nRec == ValSpMnP.cSpMnPl));
+        Delete Current SpMnPl;
+      }
+      Delete Current SpMnPlan;
+    }
+    Delete Current tDelRow;
+  }
+}
+
+procedure DeleteRecord;
+{
+  DeleteRow(tRow.nRec);
+}
+
+Function BitIsSet(v: longint; bitnmb: integer): boolean;
+{
+  var i: byte;
+  var power2: longint;
+  power2 := 1;
+  for(i:=1;i<=bitnmb;i:=i+1)
+  {
+    power2 := power2 * 2;
+  }
+  result := ((v and power2) > 0);
+}
+
+procedure InitFields(_FormPl: TFormPl);
+{
+  var i, lvl, lvl_i: integer;
+  i := 1;
+  lvl := 1;
+  lvl_i := 1;
+  while _FormPl.ResName[i] <> '' and i <= 6
+  {
+    LoadVipRef(MWRowFields[i],_FormPl.ResName[i]);
+    MWRowFields[i].Level := lvl;
+    MWRowFields[i].Enabled := BitIsSet(_FormPl.ResLngInt[2], i-1);
+    MWRowLevels[lvl][lvl_i] := MWRowFields[i];
+    MWRowFieldsInLevelCount[lvl] := lvl_i;
+    if (MWRowFields[i].GetKodGroup = 3)
+      MWRowPersonLevelIndex := lvl;
+    if BitIsSet(_FormPl.ResLngInt[1], i-1)
+    {
+      inc(lvl);
+      lvl_i := 1;
+    }
+    else
+    {
+      inc(lvl_i);
+    }
+    inc(i);
+  }
+  MWRowFieldsCount := i-1;
+  MWRowLevelsCount := lvl;
+}
+
+function GetIsLeaf: boolean;
+{
+  result := (Level = LevelsCount);
+}
+
+function GetIsPersonLevel: boolean;
+{
+  result := (MWRowPersonLevelIndex = Level);
+  /*
+  result := false;
+  var i, _cnt: integer;
+  var _RowField: oMWRowField;
+  i := 1;
+  _cnt := MWRowFieldsInLevelCount[Level];
+  for (i := 1; i <= _cnt; inc(i))
+  {
+    _RowField := MWRowLevels[Level][i];
+    if (_RowField.GetKodGroup = 3)
+    {
+      result := true;
+      break;
+    }
+  }
+  */
+}
+
+property nRec       : comp    absolute tRow.nRec        read;
+property cParent    : comp    absolute tRow.cParent     read;
+property Sort       : word    absolute tRow.Sort;
+property cPerson    : comp    absolute tRow.cPerson     read;
+property cPost      : comp    absolute tRow.cPost       read;
+property cKatStroy  : comp    absolute tRow.cKatStroy   read;
+property cKatMarsh  : comp    absolute tRow.cKatMarsh   read;
+property cMarshSp   : comp    absolute tRow.cMarshSp    read;
+property cSpMnPlan  : comp    absolute tRow.cSpMnPlan   read;
+property Level      : integer absolute tRow.Level       read;
+property LevelsCount: integer absolute MWRowLevelsCount read;
+property FieldsCount: integer absolute MWRowFieldsCount read;
+property CurrentMnPlan: comp read CurMnPlan write SetCurrentMnPlan(result);
+property IsLeaf       : boolean read GetIsLeaf;
+property IsPersonLevel: boolean read GetIsPersonLevel;
+
+index iByParent auto;
+index iByNRec auto;
+index iBySpMnPlan auto;
+end.

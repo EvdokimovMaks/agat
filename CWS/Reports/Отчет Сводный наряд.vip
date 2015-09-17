@@ -1,0 +1,485 @@
+#component "AGAT"
+interface WorkOrder 'Сводный наряд';
+show (,,78,15);
+
+table struct tt (
+  cSpMnPlan    : comp,
+  cPerson      : comp,
+  cDep         : comp,
+  Base         : string,
+  Oper         : string,
+  FIO          : string,
+  Post         : string,
+  Salary       : double,
+  WorkedHours  : double,
+  SalarySum    : double,
+  SalaryObjSum : double,
+  MonthBonusSum: double,
+  QrBonusSum   : double,
+  YrBonusSum   : double,
+  OrderSum     : double,
+  HolidaysSum  : double,
+  AllSum       : double
+) with index (
+  i01 = Base + Oper + FIO + Post,
+  i02 = Oper + FIO + Post
+);
+
+var
+  CurMnPlan    : comp;
+  CurWayAccou  : comp;
+  PeriodDBeg   : date;
+  PeriodDEnd   : date;
+  PeriodNRec   : comp;
+  PodrNRec     : comp;
+  PodrKodGr    : word;
+  sXLTFilename : string;
+  sXLSFileName : string;
+  pXL          : XLSRepBuilder;
+  isCreateXLT  : boolean;
+  VInter       : CommonFiltr new;
+  CostItemKodGr: word;
+  cFltrOrder   : comp;
+  iGetKAU      : GetKAU;
+  Commiss      : Commission;
+
+file f;
+
+create view
+as select *
+from MnPlan, FpPeriod, AllMemo, tt, useraccess, tt tt1
+where ((
+  //tt.Base == tt1.Base and
+  tt.Oper == tt1.Oper and
+  tt.FIO  == tt1.FIO  and
+  tt.Post == tt1.Post and (tt1.cSpMnPlan <> tt.cSpMnPlan)
+));
+
+create view v
+var
+  curSpMnPlan: comp;
+as select *
+from spmnplan spm, marsh_sp msp, asupmemo
+where ((
+  curSpMnPlan  /== spm.nrec and
+  spm.canval3  /== msp.nrec and
+  msp.casupmem /== asupmemo.nrec
+));
+
+parameters CurMnPlan, sXLTFilename, isCreateXLT;
+
+embedded ComFiltrEmbedded interface vInter;
+  show (,,,7);
+end;
+screen scMain;
+  show (,8,,);
+  fields
+    [fltrOrder] if(cFltrOrder=0, 'Укажите заказ', if(getanykau(0, 40, cFltrOrder),givenanname(1),'')): protect, pickbutton;
+    [sCommiss] Commiss.GetSelectionName: protect, pickbutton;
+  buttons
+    cmDoOk, default;
+    cmCancel;
+<<
+
+    `Фильтр по заказу`      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+    `Подписанты`            .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                                              <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+  cmDoOk:
+  {
+    var _s: string;
+    var mrk, mrkcnt: longint;
+    var _CurMnPlan: comp;
+    var _k: integer;
+
+    VInter.EndSelect;
+    mrk := VInter.GetPersonsMarker;
+    mrkcnt := VInter.GetPsnCount;
+
+    CostItemKodGr := 10029;
+    if GetFirst MnPlan where ((CurMnPlan == MnPlan.nRec)) = tsOk
+    {
+      if (getfirst FpPeriod where ((MnPlan.cAnVal1 == FpPeriod.nRec)) = tsOk)
+      {
+        PeriodDBeg := FpPeriod.dBeg;
+        PeriodDEnd := FpPeriod.dEnd;
+        PeriodNRec := FpPeriod.nRec;
+      }
+      PodrNRec  := MnPlan.cAnVal2;
+      PodrKodGr := MnPlan.wKodGr2;
+      CurWayAccou := MnPlan.cWayAccou;
+    }
+
+    delete all tt;
+    _loop mnplan where ((CurWayAccou == mnplan.cwayaccou and
+                         21 == mnplan.wkodgr1 and PeriodNRec == mnplan.canval1 and
+                         2  == mnplan.wkodgr2 and PodrNRec   == mnplan.canval2 ))
+    {
+      _CurMnPlan := mnplan.nrec;
+      insert tt (cSpMnPlan, cPerson, Oper, cDep, FIO, Post,
+                 WorkedHours, SalarySum, SalaryObjSum,
+                 MonthBonusSum, QrBonusSum, YrBonusSum,
+                 OrderSum, HolidaysSum, AllSum)
+      select SMP.nRec,
+             SMP.cIzd,
+             Oper.Name,
+             Pers.Department,
+             Pers.FIO,
+             CatPost.Name,
+             tWorkedHours.WorkedHours,
+             tSalary.SalarySum,
+             tSalaryObj.SalaryObjSum,
+             tMonthBonus.MonthBonusSum,
+             tQrBonus.QrBonusSum,
+             tYrBonus.YrBonusSum,
+             tOrder.OrderSum,
+             tHolidays.HolidaysSum,
+             tAllSum.AllSum
+      from SpMnPlan SMP, Persons Pers, Catalogs CatPost, Marsh_Sp MSP, MNFOper Oper,
+      (select sum(v1.kol+v1.price) (fieldname=WorkedHours)
+      from SpMnPl t1, ValSpMnP v1
+      where ((
+          SMP.nRec          == t1.cSpMnPlan and
+          22                == t1.wKolAn    and
+          21                == t1.wKodGr4   and
+          PeriodNRec        == t1.cAnVal4   and
+          CostItemKodGr     == t1.wKodGr5   and
+          00010000000008AEh == t1.cAnVal5   and
+          t1.nRec           == v1.cSpMnPl
+      )) ) tWorkedHours,
+      (select sum(v8.kol) (fieldname=SalaryObjSum)
+      from SpMnPl t8, ValSpMnP v8
+      where ((
+          SMP.nRec          == t8.cSpMnPlan and
+          22                == t8.wKolAn    and
+          21                == t8.wKodGr4   and
+          PeriodNRec        == t8.cAnVal4   and
+          CostItemKodGr     == t8.wKodGr5   and
+          00010000000008FDh == t8.cAnVal5   and
+          t8.nRec           == v8.cSpMnPl
+      )) ) tSalaryObj,
+      (select sum(v2.kol) (fieldname=MonthBonusSum)
+      from SpMnPl t2, ValSpMnP v2
+      where ((
+          SMP.nRec          == t2.cSpMnPlan and
+          22                == t2.wKolAn    and
+          21                == t2.wKodGr4   and
+          PeriodNRec        == t2.cAnVal4   and
+          CostItemKodGr     == t2.wKodGr5   and
+          0001000000000903h == t2.cAnVal5   and
+          t2.nRec           == v2.cSpMnPl
+      )) ) tMonthBonus,
+      (select sum(v3.kol) (fieldname=QrBonusSum)
+      from SpMnPl t3, ValSpMnP v3
+      where ((
+          SMP.nRec          == t3.cSpMnPlan and
+          22                == t3.wKolAn    and
+          21                == t3.wKodGr4   and
+          PeriodNRec        == t3.cAnVal4   and
+          CostItemKodGr     == t3.wKodGr5   and
+          0001000000000904h == t3.cAnVal5   and
+          t3.nRec           == v3.cSpMnPl
+      )) ) tQrBonus,
+      (select sum(v9.kol) (fieldname=YrBonusSum)
+      from SpMnPl t9, ValSpMnP v9
+      where ((
+          SMP.nRec          == t9.cSpMnPlan and
+          22                == t9.wKolAn    and
+          21                == t9.wKodGr4   and
+          PeriodNRec        == t9.cAnVal4   and
+          CostItemKodGr     == t9.wKodGr5   and
+          0001000000000905h == t9.cAnVal5   and
+          t9.nRec           == v9.cSpMnPl
+      )) ) tYrBonus,
+      (select sum(v4.kol) (fieldname=OrderSum)
+      from SpMnPl t4, ValSpMnP v4
+      where ((
+          SMP.nRec          == t4.cSpMnPlan  and
+          22                == t4.wKolAn     and
+          21                == t4.wKodGr4    and
+          PeriodNRec        == t4.cAnVal4    and
+          CostItemKodGr     == t4.wKodGr5    and (t4.cAnVal5=00010000000008FFh or t4.cAnVal5=0001000000000900h or t4.cAnVal5=0001000000000902h) and
+          t4.nRec           == v4.cSpMnPl
+      )) ) tOrder,
+      (select sum(v5.kol) (fieldname=HolidaysSum)
+      from SpMnPl t5, ValSpMnP v5
+      where ((
+          SMP.nRec          == t5.cSpMnPlan and
+          22                == t5.wKolAn    and
+          21                == t5.wKodGr4   and
+          PeriodNRec        == t5.cAnVal4   and
+          CostItemKodGr     == t5.wKodGr5   and (t5.cAnVal5=00010000000008FEh or t5.cAnVal5=0001000000000901h) and
+          t5.nRec           == v5.cSpMnPl
+      )) ) tHolidays,
+      (select sum(v6.kol) (fieldname=AllSum)
+      from SpMnPl t6, ValSpMnP v6
+      where ((
+          SMP.nRec          == t6.cSpMnPlan and
+          22                == t6.wKolAn    and
+          21                == t6.wKodGr4   and
+          PeriodNRec        == t6.cAnVal4   and
+          CostItemKodGr     == t6.wKodGr5   and
+          00010000000008F6h == t6.cAnVal5   and
+          t6.nRec           == v6.cSpMnPl
+      )) ) tAllSum,
+      (select sum(v7.kol) (fieldname=SalarySum)
+      from SpMnPl t7, ValSpMnP v7
+      where ((
+          SMP.nRec          == t7.cSpMnPlan and
+          22                == t7.wKolAn    and
+          21                == t7.wKodGr4   and
+          PeriodNRec        == t7.cAnVal4   and
+          CostItemKodGr     == t7.wKodGr5   and
+          00010000000008FBh == t7.cAnVal5   and
+          t7.nRec           == v7.cSpMnPl
+      )) ) tSalary
+      where ((
+        _CurMnPlan  == SMP.cMnPlan  and
+        40          == SMP.wKodGr1  and
+        cFltrOrder  == SMP.cAnVal1  and
+        SMP.cIzd    == Pers.nRec    and
+        SMP.cAnVal4 == CatPost.nRec and
+        SMP.cAnVal3 == MSP.nRec     and
+        MSP.NOpe    == Oper.nRec
+      )) and if(mrkcnt=0, true, foundmarker(mrk, SMP.cIzd));
+    } //_loop mnplan
+
+    _loop tt
+    {
+      if getfirst lschet where ((tt.cPerson == lschet.tPerson and (lschet.datUv = 0 or lschet.datUv >= PeriodDBeg) )) = tsOk
+      {
+        update current tt set tt.Salary := lschet.tarif;
+      }
+      else if getlast lschet where ((tt.cPerson == lschet.tPerson)) = tsOk
+      {
+        update current tt set tt.Salary := lschet.tarif;
+      }
+    }
+
+    _loop tt
+    {
+      if getfirst AllMemo where ((11038 == AllMemo.wTable and tt.cSpMnPlan == AllMemo.cRec)) = tsOk
+        if f.OpenMemo(AllMemo.Mem)
+        {
+          f.ReadLn(_s);
+          update current tt set tt.Base := _s;
+        }
+    }
+
+    _loop tt
+    {
+      while getfirst tt1 = tsOk
+      {
+        //tt.Salary        := tt.Salary        + tt1.Salary;
+        tt.WorkedHours   := tt.WorkedHours   + tt1.WorkedHours  ;
+        tt.SalarySum     := tt.SalarySum     + tt1.SalarySum    ;
+        tt.MonthBonusSum := tt.MonthBonusSum + tt1.MonthBonusSum;
+        tt.QrBonusSum    := tt.QrBonusSum    + tt1.QrBonusSum   ;
+        tt.OrderSum      := tt.OrderSum      + tt1.OrderSum     ;
+        tt.HolidaysSum   := tt.HolidaysSum   + tt1.HolidaysSum  ;
+        tt.AllSum        := tt.AllSum        + tt1.AllSum       ;
+        update current tt;
+        delete current tt1;
+      }
+    }
+
+    if boGetTune('UP.STAFF.LOCK')
+    _loop tt
+    {
+        if getfirst useraccess where ((UserId == useraccess.crec and (useraccess.cgroup = tt.cDep) )) <> tsOk
+          delete current tt;
+    }
+
+    if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, true)
+                else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, true);
+
+    pXL.CreateVar(sXLSFileName);
+    pXL.SetStringVar('dBeg'  , DateToStr(PeriodDBeg, 'DD.MM.YYYY'));
+    pXL.SetStringVar('dEnd'  , DateToStr(PeriodDEnd, 'DD.MM.YYYY'));
+    pXL.SetStringVar('Period', if(getanykau(0, 21, PeriodNRec),givenanname(1),''));
+    pXL.SetStringVar('Podr'  , if(getanykau(0, PodrKodGr, PodrNRec),givenanname(1),''));
+    pXL.SetStringVar('Order' , if(getanykau(0, 40, cFltrOrder),givenanname(1),''));
+    pXL.SetStringVar('ChairmanPost', Commiss.GetComponentPost(0));
+    pXL.SetStringVar('ChairmanFIO' , Commiss.GetComponentFIO(0));
+    pXL.SetNumberVar('BalHours', BalBwDates(11, PeriodDBeg,PeriodDEnd,1));
+    pXL.PublishVar;
+
+    pXL.CreateTbls(sXLSFileName);
+    pXL.CreateTbl('Main');
+    pXL.CreateTblFld('Base'         );
+    pXL.CreateTblFld('Oper'         );
+    pXL.CreateTblFld('FIO'          );
+    pXL.CreateTblFld('Post'         );
+    pXL.CreateTblFld('Salary'       );
+    pXL.CreateTblFld('WorkedHours'  );
+    pXL.CreateTblFld('SalarySum'    );
+    pXL.CreateTblFld('SalaryObjSum' );
+    pXL.CreateTblFld('SalaryFullSum');
+    pXL.CreateTblFld('MonthBonusSum');
+    pXL.CreateTblFld('QrBonusSum'   );
+    //pXL.CreateTblFld('YrBonusSum'   );
+    pXL.CreateTblFld('OrderSum'     );
+    pXL.CreateTblFld('HolidaysSum'  );
+    pXL.CreateTblFld('AllSum'       );
+
+    _loop tt
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('Base'         , tt.Base         );
+      _k := 0
+      v.curSpMnPlan := tt.cSpMnPlan;
+      if v.getfirst viewTable = tsOk
+      {
+        if f.OpenMemo(v.asupmemo.comment)
+        {
+          while not f.eof()
+          {
+            f.ReadLn(_s);
+            if trim(_s) <> ''
+            {
+              _k++;
+              pXL.AddTblStringFldValue('Oper' , trim(_s)+' '    );
+            }
+          }
+          f.Close();
+        }
+      }
+      if (_k = 0)
+      {
+        pXL.SetTblStringFldValue('Oper'       , tt.Oper         );
+      }
+      pXL.SetTblStringFldValue('FIO'          , tt.FIO          );
+      pXL.SetTblStringFldValue('Post'         , tt.Post         );
+      pXL.SetTblNumberFldValue('Salary'       , tt.Salary       );
+      pXL.SetTblNumberFldValue('WorkedHours'  , tt.WorkedHours  );
+      pXL.SetTblNumberFldValue('SalarySum'    , tt.SalarySum    );
+      pXL.SetTblNumberFldValue('SalaryObjSum' , tt.SalaryObjSum );
+      pXL.SetTblNumberFldValue('SalaryFullSum', tt.SalarySum + tt.SalaryObjSum );
+      pXL.SetTblNumberFldValue('MonthBonusSum', tt.MonthBonusSum);
+      pXL.SetTblNumberFldValue('QrBonusSum'   , tt.QrBonusSum   );
+      //pXL.SetTblNumberFldValue('YrBonusSum'   , tt.YrBonusSum   );
+      pXL.SetTblNumberFldValue('OrderSum'     , tt.OrderSum     );
+      pXL.SetTblNumberFldValue('HolidaysSum'  , tt.HolidaysSum  );
+      pXL.SetTblNumberFldValue('AllSum'       , tt.AllSum       );
+      pXL.InsTblRow;
+    }
+
+    pXL.PublishTbl('Main');
+
+    pXL.CreateTbl('Signers');
+    pXL.CreateTblFld('SignerPost');
+    pXL.CreateTblFld('SignerFIO');
+    var _i, _cnt: integer;
+    _cnt := Commiss.GetComponentsCount;
+    for (_i:=1;_i<=_cnt;inc(_i))
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('SignerPost', Commiss.GetComponentPost(_i));
+      pXL.SetTblStringFldValue('SignerFIO' , Commiss.GetComponentFIO(_i));
+      pXL.InsTblRow;
+    }
+    pXL.PublishTbl('Signers');
+
+    pXL.LoadReport(sXLSFileName);
+    pXL.DisConnectExcel;
+
+  }
+  cmDelOnProtect:
+  {
+    case curfield of
+      #fltrOrder:
+      {
+        cFltrOrder := 0;
+        rereadrecord;
+      }
+      #sCommiss:
+      {
+        Commiss.ClearSelection;
+        rereadrecord;
+      }
+    end;
+  }
+  cmPick:
+  {
+    case curfield of
+      #fltrOrder:
+      {
+        var _c: comp;
+        _c := cFltrOrder;
+        if iGetKAU.GetCodeKAU(1, 40, _c) > 0
+          cFltrOrder := _c;
+        rereadrecord;
+      }
+      #sCommiss:
+      {
+        Commiss.RunWindowSelection(1);
+        rereadrecord;
+      }
+    end;
+  }
+  cmInit:
+  {
+    Commiss.InitCommission(1881);
+    if not readmydsk(cFltrOrder, 'AGAT_WorkOrder_cFltrOrder', false) cFltrOrder := 0;
+    rereadrecord;
+  }
+  cmDone:
+  {
+    savemydsk(cFltrOrder, 'AGAT_WorkOrder_cFltrOrder');
+  }
+end;
+
+end.
+
+.LinkForm 'WorkOrder' Prototype is 'MNPLAN'
+.NameInList 'Сводный наряд'
+.f "NUL"
+.{CheckEnter MNPLAN_LOOP1
+.begin
+  runinterface(AGAT::WorkOrder, comp(_MNREC), TranslatePath('%StartPath%XLS\WorkOrder.xlt'), false);
+end.
+.{CheckEnter SPMNPL_LOOP1
+.}
+.{CheckEnter OBJACCT_IN_LOOP
+.{CheckEnter SPOBJACC_IN_LOOP
+.{CheckEnter SPOBJACC_CURIN_LOOP
+.}
+.}
+.}
+.{CheckEnter OBJACCT_OUT_LOOP
+.{CheckEnter SPOBJACC_CUROUT_LOOP
+.{CheckEnter SPOBJACC_OUT_LOOP
+.}
+.}
+.}
+.}
+.endform
+
+.LinkForm 'WorkOrderExt' Prototype is 'MNPLAN'
+.NameInList 'Сводный наряд (с окладом по объектовым работам)'
+.f "NUL"
+.{CheckEnter MNPLAN_LOOP1
+.begin
+  runinterface(AGAT::WorkOrder, comp(_MNREC), TranslatePath('%StartPath%XLS\WorkOrderExt.xlt'), false);
+end.
+.{CheckEnter SPMNPL_LOOP1
+.}
+.{CheckEnter OBJACCT_IN_LOOP
+.{CheckEnter SPOBJACC_IN_LOOP
+.{CheckEnter SPOBJACC_CURIN_LOOP
+.}
+.}
+.}
+.{CheckEnter OBJACCT_OUT_LOOP
+.{CheckEnter SPOBJACC_CUROUT_LOOP
+.{CheckEnter SPOBJACC_OUT_LOOP
+.}
+.}
+.}
+.}
+.endform

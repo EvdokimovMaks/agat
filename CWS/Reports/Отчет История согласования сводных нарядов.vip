@@ -1,0 +1,158 @@
+#component "AGAT"
+
+interface WorkOrderAcceptHist 'История изменения статусов';
+show (,,44,5);
+
+table struct thist (
+  ProtplanNrec: comp,
+  MnplanNumber: string[20],
+  MnplanName: string[80],
+  OperDatetime: datetime,
+  Username: string[60],
+  comment: string
+) with index (
+  i01 = MnplanNumber + OperDatetime
+);
+
+
+var
+  sDocuments: string;
+  lDocuments: longint;
+  iGetKau: getkau;
+  kaucode: word;
+  docName: string;
+
+file f;
+
+create view
+as select *
+from thist, protplan;
+
+create view v
+as select *
+from thist;
+
+parameters kaucode, docName;
+
+datastream repstream auto(v);
+
+screen sc1;
+fields
+  sDocuments: protect, pickbutton;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+ Документы .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+           <. Сформировать .> <. Отмена .>
+>>
+end;
+
+procedure refreshfields;
+{
+  var cnt: longint;
+  cnt := getmarkercount(lDocuments);
+  if cnt=0
+  {
+    sDocuments := 'Выберите '+docName;
+  }
+  else if cnt = 1
+  {
+    var c: comp;
+    if getmarker(lDocuments, 0, c)
+    {
+      sDocuments := if(getanykau(1, kaucode, c), givenanname(1), 'nrec: '+c);
+    }
+    else
+      sDocuments := 'nrec: '+c
+  }
+  else
+  {
+    sDocuments := 'Выбрано: '+cnt;
+  }
+  rereadrecord;
+}
+
+handleevent
+  cmDoOk:
+  {
+    delete all thist;
+    insert thist (ProtplanNrec,MnplanNumber,MnplanName,OperDatetime,Username)
+    select pp.nrec, mnp.number, mnp.name, _datetime1(pp.enddate, pp.endtime), u.xu$fullname
+    from mnplan mnp, protplan pp, x$users u
+    where ((
+      mnp.typeplan    == pp.typeown and
+      mnp.nrec        == pp.cowner and
+      pp.atl_lastuser == u.atl_nrec
+    )) and foundmarker(lDocuments, mnp.nrec);
+
+    _loop thist
+    {
+      if getfirst protplan where ((thist.ProtplanNrec == protplan.nrec)) = tsOk
+      {
+        if (not f.OpenMemo(protplan.textmemo)) continue;
+        var s: string;
+        f.Readln(s);
+        f.Readln(s);
+        update current thist set thist.comment := s;
+        f.Close;
+      }
+    }
+
+    RunFReport(repstream, '', true);
+  }
+  cmPick:
+  {
+    var _c: comp;
+    DoneMarker(lDocuments, iGetKau.GetMarkerName(40));
+    if iGetKau.GetCodeKau(2, kaucode, _c) > 0
+    {
+      lDocuments := initmarker(iGetKau.GetMarkerName(kaucode), 8, 10, 10, false);
+    }
+    refreshfields;
+  }
+  cmInit:
+  {
+    lDocuments := initmarker('WorkOrderAcceptHist_lDocuments', 8, 10, 10, false);
+    refreshfields;
+  }
+  cmDone:
+  {
+    donemarker(lDocuments, 'WorkOrderAcceptHist_lDocuments');
+    refreshfields;
+  }
+end;
+end.
+
+VipInterface UserReport_WorkOrderAcceptHist Implements IUserReport licensed(free);
+Interface UserReport_WorkOrderAcceptHist;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::WorkOrderAcceptHist, 38, 'сводные наряды');
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. История изменения статусов сводных нарядов';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    Level := 0;
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    Ind := 0;
+    VisibleInModule := 'MANUFPLAN';
+  end;
+end.
