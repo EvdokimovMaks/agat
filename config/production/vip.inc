@@ -5,6 +5,7 @@
 [Database]
   DataBaseName=AGAT910
   DataBaseDriver=MS70DRV.DLL
+  CheckRepository=Off
 
 [SQLDriver]
   SQLServer=ncacn_ip_tcp:GALSRV9[1997]
