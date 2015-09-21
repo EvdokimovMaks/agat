@@ -18,6 +18,7 @@ where ((
       0001000000000191h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), 'ŠŒ ”®à¬  6 Šˆ');
       00010000000001D2h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10495, 'ŠŒ ”®à¬  9 ™…•‡Ÿ‰‘’‚…›… €‘•„›');
       00010000000001F3h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10497, 'ŠŒ ”®à¬  14 ‘‚…„…ˆŸ  š…Œ€• …€‹ˆ‡€–ˆˆ „“Š–ˆˆ');
+      0001000000000172h: runinterface(AGAT::ReportRKMForm8D, comp(_MNREC), 'ŠŒ ”®à¬  8„ €‘˜ˆ”‚Š€ ‡ ˆ ’“„‡€’€’ Š€’Š€Ÿ', 2);
     else
     {
       var s: string;

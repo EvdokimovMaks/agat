@@ -18,6 +18,7 @@ where ((
       0001000000000191h: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC), 'ŠŒ ”®à¬  5„ Šˆ');                      //'ŠŒ_”®à¬  5„_Šˆ'
       000100000000019Ah: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC), 'ŠŒ ”®à¬  6„ ŠŽ’€ƒ…’‘Šˆ… Ž‘’€‚Šˆ');  //'ŠŒ_”®à¬  6„_ŠŽ’€ƒ…’‘Šˆ…_Ž‘’€‚Šˆ'
       00010000000001A3h: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC), 'ŠŒ ”®à¬  7„ ŠŽ’€ƒ…’‘Šˆ… €Ž’›');    //'ŠŒ_”®à¬  7„_ŠŽ’€ƒ…’‘Šˆ…_€Ž’›'
+      0001000000000172h: runinterface(AGAT::ReportRKMForm8D, comp(_MNREC), 'ŠŒ ”®à¬  8„ €‘˜ˆ”Ž‚Š€ ‡ ˆ ’“„Ž‡€’€’', 1);    //'ŠŒ_”®à¬  8„_€‘˜ˆ”Ž‚Š€_‡_ˆ_’“„Ž‡€’€’'
       00010000000001D2h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10495, 'ŠŒ ”®à¬  10„ Ž™…•Ž‡Ÿ‰‘’‚…›… €‘•Ž„›');
       00010000000001F3h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10497, 'ŠŒ ”®à¬  15„ ‘‚…„…ˆŸ Ž Žš…Œ€• …€‹ˆ‡€–ˆˆ Ž„“Š–ˆˆ');
     else
