@@ -468,6 +468,7 @@ end; //window wCalcDeflCoeff
 
 procedure ProcessParentNode(buf: ttRKM8D); forward;
 procedure ProcessRKM8DRecord(var buf: ttRKM8D); forward;
+procedure ProcessChildNodes(parentBuf: ttRKM8D); forward;
 
 procedure CalcDeflCoeff;
 {
@@ -580,20 +581,89 @@ procedure CalcBaseHourCost;
 
 //#endregion
 
+//#region DistributeLabor
+
+function GetMonthsInYear(aStartDate: date; aEndDate: date; aYear: word): byte;
+{
+  var d1, d2: date;
+  d1 := date(1,1,aYear);
+  d2 := date(31,12,aYear);
+  if (d1 < aStartDate) d1 := aStartDate;
+  if (d2 > aEndDate) d2 := aEndDate;
+  result := Months_Between(d1,d2) + 1;
+}
+
+procedure DistrLaborByMonths;
+{
+  var mnplanStartDate, mnplanEndDate: date;
+  mnplanStartDate := 0;
+  mnplanEndDate := 0;
+
+  if getfirst mnplan where ((_curMnplanNrec == mnplan.nrec)) = tsOk
+  {
+    mnplanStartDate := mnplan.StartDate;
+    mnplanEndDate := mnplan.EndDate;
+  }
+
+  if mnplanStartDate = 0 or mnplanEndDate <= mnplanStartDate
+  {
+    message('Некорректно заданы даты начала и окончания плана. Расчет прерван.', error);
+    exit;
+  }
+
+  var totalMonths: word;
+  totalMonths := Months_Between(mnplanStartDate, mnplanEndDate) + 1;
+
+  if totalMonths = 0
+  {
+    message('Ошибка расчета: количество месяцев между датой начала и окончания действия плана = 0. Расчет прерван', error);
+    exit;
+  }
+
+  if getmarkercount(_marks) = 0
+    insertmarker(_marks, t.Nrec);
+
+  var buf: ttrkm8d;
+  var hasChild: boolean;
+  var i: integer;
+  vPick._loop trkm8d
+  {
+    if vPick.trkm8d.TotalLabor = 0 continue;
+    hasChild := getfirst tRKM8D where ((vPick.trkm8d.nrec == tRKM8D.ParentNrec)) = tsOk;
+    buf := ttrkm8d(vPick.trkm8d.buffer);
+    for (i := 0; i < _yearcount; ++i)
+    {
+      buf.Labor[i+1] := GetMonthsInYear(mnplanStartDate, mnplanEndDate, (_yearStart + i)) / totalMonths * buf.TotalLabor;
+    }
+    ProcessRKM8DRecord(buf);
+    vPick.trkm8d.buffer := buf;
+    vPick.update current trkm8d;
+
+    if hasChild ProcessChildNodes(buf);
+
+    ProcessParentNode(buf);
+  }
+  rereadrecord(#t);
+
+}
+
+//#endregion
+
 tree tr1 (,,sci1478EscExInsTree);// customsorting;     sci178EscExTree
 show(,,,15);
 table t;
 //fixedleft(t.ObjType, ObjName, ObjObozn,ObjGroupName,ObjOtpEdName);
 fields
   {font={color=if(foundmarker(_marks, t.nrec), 5, 0); }};
-                 t.ObjName      ''#13'Наименование'         : [20], noprotect, pickbutton;
+                 t.ObjName      ''#13'Наименование'          : [20], noprotect, pickbutton;
   if(foundmarker(_marks, t.nrec), 'V', '')                   : [3] , skip, noautosize;
                  t.TotalLaborBase 'Базовая'#13'трудоемкость' : [8,3], noprotect;
                  t.NoveltyCoeff   'Коэффициент'#13'новизны'  : [8,3], noprotect;
                  t.DiffCoeff      'Коэффициент'#13'сложности': [8,3], noprotect;
   [TotalLaborName] GetTotalLaborName ''#13'Трудоемкость'     : [10], noprotect, {font={backcolor=GetTotalLaborColor;}};
                  t.BaseHourCost   'Базовый'#13'стоим. н/час' : [8,2], noprotect;
-                 t.BaseSum        'Базовый'#13'основная з/п' : [8,2], protect;
+                 t.BaseSum        'Базовый'#13'з/п'          : [8,2], protect;
+                 t.TotalSum       'Всего'#13'з/п'            : [8,2], protect;
 end;
 
 browse br1;
@@ -628,11 +698,20 @@ procedure ProcessChildNodes(parentBuf: ttRKM8D);
 {
   var i: byte;
   var buf: ttRKM8D;
-  var oeDiskred: boolean;
-  var restQty: double;
+
+  var childLabor: double;
+  childLabor := 0;
+  _loop tRKM8D where ((parentBuf.Nrec == tRKM8D.ParentNrec)) { childLabor += tRKM8D.TotalLabor; }
+
+  var changeCoeff: double
+  changeCoeff := if(childLabor = 0, 1, parentBuf.TotalLabor / childLabor);
+
   _loop tRKM8D where ((parentBuf.Nrec == tRKM8D.ParentNrec))
   {
     buf := ttRKM8D(tRKM8D.buffer);
+    buf.TotalLaborBase *= changeCoeff;
+    buf.TotalLabor *= changeCoeff;
+    buf.BaseSum := buf.BaseHourCost * buf.TotalLabor;
     for(i:=1;i<=_yearcount;i++)
     {
       buf.Labor[i] := (parentBuf.Labor[i] / parentBuf.TotalLabor) * buf.TotalLabor;
@@ -646,6 +725,8 @@ procedure ProcessChildNodes(parentBuf: ttRKM8D);
     tRKM8D.buffer := buf;
     update current tRKM8D;
   }
+  if getfirst tRKM8D where ((parentBuf.Nrec == tRKM8D.ParentNrec)) = tsOk
+    ProcessParentNode(ttRKM8D(tRKM8D.buffer));
 }
 
 procedure ProcessParentNode(buf: ttRKM8D);
@@ -988,6 +1069,8 @@ handleevent
   cmValue6: CalcDeflCoeff;
 
   cmValue7: CalcBaseHourCost;
+
+  cmValue8: DistrLaborByMonths;
 end;
 
 //#region Вспомогательные функции для динамического формирования столбцов в дереве----------------------------
@@ -1513,6 +1596,7 @@ mnuAGAT_EditRKM8D Menu
 - 'Расчет коэффициента сложности', cmValue5, , , , , sci1Esc;
 - 'Расчет коэффициентов дефляторов', cmValue6, , , , , ,sci1Esc;
 - 'Расчет стоимости нормочаса', cmValue7, , , , , ,sci1Esc;
+- 'Распределить трудоемкость ~ месяцам', cmValue8, , , , , ,sci1Esc;
 - 'Печать краткой формы РКМ', cmValue3, , , , , sci1Esc;
 - 'Печать формы РКМ', cmPrintDoc, , , , , sci1Esc;
 }
