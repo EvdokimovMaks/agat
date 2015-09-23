@@ -13,10 +13,10 @@ left join kaureff on kaureff.cotable=3000 and kaureff.crec=katos.nrec and kauref
 left join spkau on spkau.nrec=kaureff.ckau
 left join katmol on katmol.nrec=katos.cmol
 left join katpodr on katpodr.nrec=katos.cpodr
-where katos.dopinnum <> '' and (
-      datetime(katos.atl_lastdate, katos.atl_lasttime) >= datetime(:date, :time ) or
-      datetime(kaureff.atl_lastdate, kaureff.atl_lasttime) >= datetime(:date, :time ) )
-
+where katos.dopinnum <> '' //and (
+      //datetime(katos.atl_lastdate, katos.atl_lasttime) >= datetime(:date, :time ) or
+      //datetime(kaureff.atl_lastdate, kaureff.atl_lasttime) >= datetime(:date, :time ) )
+/*
 union all
 
 select 2                  as kind,
@@ -36,10 +36,12 @@ join attrval avBarcode on avBarcode.crec = mbpin.nrec and avBarcode.cattrnam = a
 left join attrval avPlace on avPlace.crec = mbpin.nrec and avPlace.cattrnam = anPlace.nrec
 left join katmol on katmol.nrec=mbpin.cmol
 left join katpodr on katpodr.nrec=mbpin.cpodr
-where datetime(avBarcode.atl_lastdate, avBarcode.atl_lasttime) >= datetime(:date, :time ) or
-      datetime(avPlace.atl_lastdate, avPlace.atl_lasttime) >= datetime(:date, :time ) or
-      datetime(mbpin.atl_lastdate, mbpin.atl_lasttime) >= datetime(:date, :time ) or
-      datetime(katmbp.atl_lastdate, katmbp.atl_lasttime) >= datetime(:date, :time );
+//where datetime(avBarcode.atl_lastdate, avBarcode.atl_lasttime) >= datetime(:date, :time ) or
+//      datetime(avPlace.atl_lastdate, avPlace.atl_lasttime) >= datetime(:date, :time ) or
+//      datetime(mbpin.atl_lastdate, mbpin.atl_lasttime) >= datetime(:date, :time ) or
+//      datetime(katmbp.atl_lastdate, katmbp.atl_lasttime) >= datetime(:date, :time )
+*/
+;
 
 sql query qDocs1 =
 insert tdocs (kind, nrec, startDate, name)
