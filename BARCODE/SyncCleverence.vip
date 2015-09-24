@@ -10,26 +10,42 @@ interface SyncCleverence 'Обмен данными с сервером ТСД', escclose;
 show (,,118,15);
 #include SyncCleverenceQueries.inc
 
-table struct tdocs (
-  kind     : word,
-  nrec     : comp,
-  startDate: date,
-  name     : string
+table struct tCats (
+  kind: word,
+  nrec: comp,
+  name: string,
+  barcode: string[50],
+  mol: string,
+  podr: string,
+  datek: date,
+  place: string,
+  innum: string[50]
 ) with index (
-  i01 = kind + nrec
+  i01 = kind + nrec (unique)
+);
+
+table struct tdocs (
+  Year     : word,
+  Month    : word,
+  PodrNrec : comp,
+  MOLNrec  : comp
+) with index (
+  i01 = Year + Month + PodrNrec + MOLNrec
 );
 
 table struct tSpDocs (
-  kind     : word,
-  docNrec  : comp,
-  spDocNrec: comp,
+  Year     : word,
+  Month    : word,
+  PodrNrec : comp,
+  MOLNrec  : comp,
+  Kind     : word,
   cRec     : comp,
   placePlan: string,
   placeFact: string,
   kolPlan  : double,
   kolFact  : double
 ) with index (
-  i01 = kind + docNrec
+  i01 = Year + Month + PodrNrec + MOLNrec + Kind
 );
 
 const
@@ -48,7 +64,7 @@ var
 
 create view
 as select *
-from spkau spkCells, tdocs, tSpDocs, spkau, mbpinv, mbpin, spinvtab, kaureff
+from spkau spkCells, tCats, tdocs, tSpDocs, spkau, mbpinv, mbpin, spinvtab, kaureff, katpodr
 where ((
   KODGRKAU_PLACE == spkCells.kodgrkau
 ));
@@ -72,7 +88,7 @@ show (,,,2) fixed_y;
 buttons
   cmDoSync, default;
 <<
-<.                                                  Синхронизация                                                  .>
+ <.                                                 Синхронизация                                                 .>
 >>
 end;
 
@@ -114,7 +130,7 @@ procedure LogInfo   (indent: byte; s: string);
 
 //#region SyncCatalogs
 
-function SyncCatalogs: boolean;
+function ExportCatalogs: boolean;
 {
   result := false;
 
@@ -133,6 +149,8 @@ function SyncCatalogs: boolean;
     LogError(1, 'Ошибка выполнения запроса. Код ошибки:' + q.errorCode);
     exit;
   }
+  delete all tCats;
+  sqlCopyInto(rs, #tCats, false);
 
   var fname: string;
   fname := translatepath(sgettune('AGAT.BARCODE.EXPORTPATH')+'Номенклатура.csv');
@@ -156,7 +174,7 @@ function SyncCatalogs: boolean;
 
   if (rs.getFirst = tsOk) do
   {
-    _writer.SetValue(0, string(rs.row.Val('kind'))+string(rs.row.Val('nrec')));
+    _writer.SetValue(0, string(rs.row.Val('kind'))+string(rs.row.Val('nrec'),0,0));
     _writer.SetValue(1, rs.row.Val('barcode'));
     _writer.SetValue(2, rs.row.Val('name'));
     _writer.SetValue(3, rs.row.Val('MOL'));
@@ -169,6 +187,7 @@ function SyncCatalogs: boolean;
 
   _writer.close;
 
+  LogSuccess(1, 'Экспорт справочников ОС и МБП завершен успешно');
   result := true;
 }
 
@@ -176,9 +195,35 @@ function SyncCatalogs: boolean;
 
 //#region SyncCells
 
-function SyncCells: boolean;
+function ExportCells: boolean;
 {
   result := false;
+  LogInfo(0, 'Экспорт мест хранения');
+
+  var fname: string;
+  fname := translatepath(sgettune('AGAT.BARCODE.EXPORTPATH')+'Места хранения.csv');
+  if not _writer.Open(fname)
+  {
+    LogError(1, 'Ошибка формирования файла '+fname);
+    LogError(1, 'Проверьте доступ на запись');
+    exit;
+  }
+
+  _writer.ClearBuffer;
+  _writer.SetValue(0, 'Штрихкод');
+  _writer.SetValue(1, 'Наименование');
+  _writer.WriteBuffer;
+
+  _loop spkCells
+  {
+    _writer.SetValue(0, spkCells.Code);
+    _writer.SetValue(1, spkCells.Name);
+    _writer.WriteBuffer;
+  }
+
+  _writer.close;
+
+  LogSuccess(1, 'Экспорт мест хранения завершен успешно');
   result := true;
 }
 
@@ -186,82 +231,133 @@ function SyncCells: boolean;
 
 //#region SyncDocs
 
-function SyncDocs: boolean;
+function ExportDocs: boolean;
 var
   q : IQuery;
   rs: IResultSet;
-  i : longint;
 {
-  result := false;
+  result := true;
 
-  LogInfo(0, 'Синхронизация документов');
-
-  //готовим временную таблицу с документами инвентаризации
-  sqlDropTmpTable('tDocs');
-  var sqlstr: longint; sqlstr := 0;
-  sqlAddStr(sqlstr, 'table tDocs(kind: word, nrec: comp, startdate: date, name: string);');
-  sqlCreateTmpTable(sqlstr, ctmNormal);
+  LogInfo(0, 'Экспорт документов инвентаризаций');
 
   var docsDateFrom: date;
   docsDateFrom := dGetTune('AGAT.BARCODE.DOCSTARTDATE');
 
-  //заполняем временную таблицу документов инвентаризациями ОС
-  q := queryManager.createQuery(qDocs1);
-  q.setParam('date', docsDateFrom);
-  if q.Execute.errorCode != 0
-  {
-    LogError(1, 'Ошибка выполнения запроса получения инвентаризаций ОС '+q.errorCode);
-    exit;
-  }
-
-  //заполняем временную таблицу документов инвентаризациями МБП
-  q := queryManager.createQuery(qDocs2);
-  q.setParam('date', docsDateFrom);
-  if q.Execute.errorCode != 0
-  {
-    LogError(1, 'Ошибка выполнения запроса получения инвентаризаций МБП '+q.errorCode);
-    exit;
-  }
-
-  //заполняем локальную таблицу документами
-  q := queryManager.createQuery('select kind, nrec, startdate, name from tDocs');
-  rs := q.getResultSet;
-  if rs = nullref
-  {
-    LogError(1, 'Ошибка выполнения запроса получения документов '+q.errorCode);
-    exit;
-  }
-  delete all tdocs;
-  sqlCopyInto(rs, #tdocs, false);
-
-  //заполняем локальную таблицу спецификаций документов
+  //заполняем временную таблицу спецификаций документов
   q := queryManager.createQuery(qSpDocs);
+  q.setParam('date', docsDateFrom);
   q.setParam('anPlacePlan', ATTRNAME_INVOS_PLACE_PLAN);
   q.setParam('anPlaceFact', ATTRNAME_INVOS_PLACE_FACT);
+
   rs := q.getResultSet;
-  if rs = nullref
+  if (rs = nullref)
   {
-    LogError(1, 'Ошибка выполнения запроса получения спецификаций документов '+q.errorCode);
+    LogError(1, 'Ошибка выполнения запроса'+q.errorCode);
+    result := false;
     exit;
   }
   delete all tspdocs;
-  sqlCopyInto(rs, #tspdocs, false);
+  sqlCopyInto(rs, #tspdocs, true);
 
+  //заполняем временную таблицу документов
+  delete all tdocs;
+  _loop tspdocs
+  {
+    if getfirst tdocs where ((tspdocs.Year == tdocs.Year and tspdocs.Month == tdocs.Month and tspdocs.PodrNrec == tdocs.PodrNrec and tspdocs.MOLNrec == tdocs.MOLNrec)) != tsOk
+    {
+      clearbuffer(#tdocs);
+      tdocs.Year     := tspdocs.Year;
+      tdocs.Month    := tspdocs.Month;
+      tdocs.PodrNrec := tspdocs.PodrNrec;
+      tdocs.MOLNrec  := tspdocs.MOLNrec;
+      insert current tdocs;
+    }
+  }
+
+  var fname: string;
+
+  //формируем файлы документов
+  _loop tdocs
+  {
+    fname := translatepath(sgettune('AGAT.BARCODE.EXPORTPATH')+'Инвентаризация №');
+    fname += if(getanykau(1,60, tdocs.MOLNrec),givenanname(1),'');
+    fname += ' '+if(getfirst katpodr where ((tdocs.PodrNrec == katpodr.nrec)) = tsOk, katpodr.kod, '');
+    fname += ' {'+tdocs.year+','+tdocs.month+','+string(tdocs.PodrNrec,0,0)+','+string(tdocs.MOLNrec,0,0)+'}.csv';
+    if not _writer.Open(fname)
+    {
+      LogError(1, 'Ошибка формирования файла '+fname);
+      result := false;
+      continue;
+    }
+    _writer.ClearBuffer;
+    _writer.SetValue(0, 'Штрихкод');
+    _writer.SetValue(1, 'План');
+    _writer.SetValue(2, 'Факт');
+    _writer.SetValue(3, 'Место хранения');
+    _writer.WriteBuffer;
+
+    _loop tspdocs where ((tdocs.Year == tspdocs.Year and tdocs.Month == tspdocs.Month and tdocs.PodrNrec == tspdocs.PodrNrec and tdocs.MOLNrec == tspdocs.MOLNrec))
+    {
+      if getfirst tCats where ((tspdocs.kind == tCats.kind and tspdocs.cRec == tCats.nrec)) = tsOk
+        _writer.SetValue(0, tcats.barcode);
+      else
+        _writer.SetValue(0, '');
+      _writer.SetValue(1, tspdocs.kolPlan);
+      _writer.SetValue(2, tspdocs.kolFact);
+      _writer.SetValue(3, tspdocs.placePlan);
+      _writer.WriteBuffer;
+    }
+    _writer.close;
+  }
+
+  if result
+    LogSuccess(1, 'Экспорт документов инвентаризаций завершен успешно');
+  else
+    LogError(1, 'Экспорт документов инвентаризаций завершен с ошибками');
 }
 
 //#endregion
+
+//#region SyncUtil
+
+function RunSyncUtilExport: boolean;
+{
+  LogInfo(0, 'Выгрузка данных на ТСД');
+
+  var appPath: string;
+  appPath := sGetTune('AGAT.BARCODE.SYNCCONPATH');
+
+  var rslt: integer;
+  ExecProgram(appPath, 'upload close closeerr tray', 'Выгрузка данных на ТСД', pfSilent, rslt);
+
+  if rslt = 0 or rslt = 1
+  {
+    LogSuccess(1, 'Выгрузка данных на ТСД завершена успешно');
+    result := true;
+  }
+  else
+  {
+    LogError(1, 'Выгрузка данных на ТСД завершена с ошибкой: '+rslt);
+    result := false;
+  }
+}
+
+//#endregion
+
+
 handleevent
 
 cmDoSync:
 {
-  startnewvisual(vtRotateVisual, vfThread+vfTimer, '', 0);
-  if not SyncCatalogs
-    message('Ошибка синхронизации справочников', error)
-  //else if not SyncCells
-  //  message('Ошибка синхронизации мест хранения', error)
-  //else if not SyncDocs
-  //  message('Ошибка синхронизации документов', error)
-  ;
+  startnewvisual(vtRotateVisual, vfTimer, '', 0);
+  if not ExportCatalogs
+    message('Ошибка экспорта справочников МБП и ОС', error)
+  else if not ExportCells
+    message('Ошибка экспорта мест хранения', error)
+  else if not ExportDocs
+    message('Ошибка экспорта документов', error)
+  else if not RunSyncUtilExport
+    message('Ошибка выгрузки данных на ТСД', error);
   stopvisual('',0)
 }
 

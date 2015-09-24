@@ -13,10 +13,10 @@ left join kaureff on kaureff.cotable=3000 and kaureff.crec=katos.nrec and kauref
 left join spkau on spkau.nrec=kaureff.ckau
 left join katmol on katmol.nrec=katos.cmol
 left join katpodr on katpodr.nrec=katos.cpodr
-where katos.dopinnum <> '' //and (
+where katos.dopinnum <> ''// and (
       //datetime(katos.atl_lastdate, katos.atl_lasttime) >= datetime(:date, :time ) or
       //datetime(kaureff.atl_lastdate, kaureff.atl_lasttime) >= datetime(:date, :time ) )
-/*
+
 union all
 
 select 2                  as kind,
@@ -40,63 +40,44 @@ left join katpodr on katpodr.nrec=mbpin.cpodr
 //      datetime(avPlace.atl_lastdate, avPlace.atl_lasttime) >= datetime(:date, :time ) or
 //      datetime(mbpin.atl_lastdate, mbpin.atl_lasttime) >= datetime(:date, :time ) or
 //      datetime(katmbp.atl_lastdate, katmbp.atl_lasttime) >= datetime(:date, :time )
-*/
-;
-
-sql query qDocs1 =
-insert tdocs (kind, nrec, startDate, name)
-select 3 as kind,
-       invtab.nrec as nrec,
-       invtab.dinv as startDate,
-       'Ž‘ '+katmol.name+' '+katpodr.name as Name
-from invtab
-join katmol on invtab.cmol = katmol.nrec
-join katpodr on invtab.csklad = katpodr.nrec
-where invtab.tipdoc = 15 and invtab.dinvend = 0 and invtab.dinv >= :date;
-
-sql query qDocs2 =
-insert tdocs (kind, nrec, startDate, name)
-select 4 as kind,
-       mbpmove.nrec as nrec,
-       mbpmove.dmove as startDate,
-       'Œ '+katmol.name+' '+katpodr.name as Name
-from mbpmove
-join katmol on mbpmove.cmolf = katmol.nrec
-join katpodr on mbpmove.cpodrf = katpodr.nrec
-where mbpmove.status = 11 and mbpmove.cvalold = #comp(0) and mbpmove.dmove >= :date
 ;
 
 sql query qSpDocs =
-select tdocs.kind        as kind,
-       tdocs.nrec        as docNrec,
-       spinvtab.nrec     as spDocNrec,
+select year(datetime(invtab.dinv,0)) as year,
+       month(datetime(invtab.dinv,0)) as month,
+       invtab.csklad     as PodrNrec,
+       invtab.cmol       as MOLNrec,
+       1                 as Kind,
        spinvtab.cmc      as cRec,
        spkPlacePlan.code as placePlan,
        spkPlaceFact.code as placeFact,
        spinvtab.kolprg   as kolPlan,
        spinvtab.kol      as kolFact
-from tdocs
-join spinvtab on tdocs.nrec = spinvtab.cinvtab
+from invtab
+join spinvtab on invtab.nrec = spinvtab.cinvtab
 join attrnam anPlacePlan on anPlacePlan.wtable = 1124 and anPlacePlan.name = :anPlacePlan
 join attrnam anPlaceFact on anPlaceFact.wtable = 1124 and anPlaceFact.name = :anPlaceFact
 left join attrval avPlacePlan on spinvtab.nrec = avPlacePlan.crec and anPlacePlan.nrec = avPlacePlan.cattrnam
 left join attrval avPlaceFact on spinvtab.nrec = avPlaceFact.crec and anPlaceFact.nrec = avPlaceFact.cattrnam
 left join spkau spkPlacePlan on avPlacePlan.vComp = spkPlacePlan.nrec
 left join spkau spkPlaceFact on avPlaceFact.vComp = spkPlaceFact.nrec
-where tdocs.kind = 3
+where invtab.tipdoc = 15 and invtab.dinvend = 0 and invtab.dinv >= :date
 
 union all
 
-select tdocs.kind,
-       tdocs.nrec,
-       mbpinv.nrec,
+select year(datetime(mbpmove.dmove,0)) as year,
+       month(datetime(mbpmove.dmove,0)) as month,
+       mbpmove.cpodrf,
+       mbpmove.cmolf,
+       2,
        mbpinv.crecs[1],
        spkPlacePlan.code,
        spkPlaceFact.code,
        mbpinv.cntkol,
        mbpinv.fctkol
-from tdocs
-join mbpinv on tdocs.nrec = mbpinv.cmove
+from mbpmove
+join mbpinv on mbpmove.nrec = mbpinv.cmove
 left join spkau spkPlacePlan on mbpinv.crecs[2] = spkPlacePlan.nrec
 left join spkau spkPlaceFact on mbpinv.crecs[3] = spkPlaceFact.nrec
-where tdocs.kind = 4;
+where mbpmove.status = 11 and mbpmove.cvalold = #comp(0) and mbpmove.dmove >= :date
+;
