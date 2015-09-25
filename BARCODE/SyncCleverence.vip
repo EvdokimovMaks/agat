@@ -48,6 +48,13 @@ table struct tSpDocs (
   i01 = Year + Month + PodrNrec + MOLNrec + Kind
 );
 
+table struct tcells (
+  barcode: string[50],
+  name: string
+) with index (
+  i01 = barcode (unique)
+);
+
 const
   KIND_OS = 1;
   KIND_MBP = 2;
@@ -64,7 +71,7 @@ var
 
 create view
 as select *
-from spkau spkCells, tCats, tdocs, tSpDocs, spkau, mbpinv, mbpin, spinvtab, kaureff, katpodr
+from spkau spkCells, tCats, tdocs, tSpDocs, tcells, spkau, mbpinv, mbpin, spinvtab, kaureff, katpodr
 where ((
   KODGRKAU_PLACE == spkCells.kodgrkau
 ));
@@ -214,11 +221,17 @@ function ExportCells: boolean;
   _writer.SetValue(1, 'Наименование');
   _writer.WriteBuffer;
 
+  delete all tCells;
+
   _loop spkCells
   {
-    _writer.SetValue(0, spkCells.Code);
-    _writer.SetValue(1, spkCells.Name);
-    _writer.WriteBuffer;
+    if getfirst tCells where ((spkCells.Code == tCells.barcode)) != tsOk
+    {
+      _writer.SetValue(0, spkCells.Code);
+      _writer.SetValue(1, spkCells.Name);
+      _writer.WriteBuffer;
+      insert tCells set tCells.barcode := spkCells.Code, tCells.name := spkCells.Name;
+    }
   }
 
   _writer.close;
@@ -280,15 +293,39 @@ var
   _loop tdocs
   {
     fname := translatepath(sgettune('AGAT.BARCODE.EXPORTPATH')+'Инвентаризация №');
-    fname += if(getanykau(1,60, tdocs.MOLNrec),givenanname(1),'');
-    fname += ' '+if(getfirst katpodr where ((tdocs.PodrNrec == katpodr.nrec)) = tsOk, katpodr.kod, '');
-    fname += ' {'+tdocs.year+','+tdocs.month+','+string(tdocs.PodrNrec,0,0)+','+string(tdocs.MOLNrec,0,0)+'}.csv';
+    fname += tdocs.Year+tdocs.Month+string(tdocs.PodrNrec,0,0)+string(tdocs.MOLNrec,0,0)+'.csv';
     if not _writer.Open(fname)
     {
       LogError(1, 'Ошибка формирования файла '+fname);
       result := false;
       continue;
     }
+    _writer.ClearBuffer;
+    _writer.SetValue(0, '#{Document}');
+    _writer.WriteBuffer;
+
+    _writer.ClearBuffer;
+    _writer.SetValue(0, 'Name');
+    _writer.SetValue(1, 'Year');
+    _writer.SetValue(2, 'Month');
+    _writer.SetValue(3, 'PodrNrec');
+    _writer.SetValue(4, 'MOLNrec');
+    _writer.WriteBuffer;
+
+    _writer.ClearBuffer;
+    _writer.SetValue(0, tdocs.Month+'.'+tdocs.year+' '+
+                        if(getanykau(1,60, tdocs.MOLNrec),givenanname(1),'') + ' ' +
+                        if(getfirst katpodr where ((tdocs.PodrNrec == katpodr.nrec)) = tsOk, katpodr.kod, ''));
+    _writer.SetValue(1, tdocs.year);
+    _writer.SetValue(2, tdocs.Month);
+    _writer.SetValue(3, if(getfirst katpodr where ((tdocs.PodrNrec == katpodr.nrec)) = tsOk, katpodr.kod, ''));
+    _writer.SetValue(4, if(getanykau(1,60, tdocs.MOLNrec),givenanname(1),''));
+    _writer.WriteBuffer;
+
+    _writer.ClearBuffer;
+    _writer.SetValue(0, '#{Document.DeclaredItems}');
+    _writer.WriteBuffer;
+
     _writer.ClearBuffer;
     _writer.SetValue(0, 'Штрихкод');
     _writer.SetValue(1, 'План');
@@ -301,9 +338,9 @@ var
       if getfirst tCats where ((tspdocs.kind == tCats.kind and tspdocs.cRec == tCats.nrec)) = tsOk
         _writer.SetValue(0, tcats.barcode);
       else
-        _writer.SetValue(0, '');
-      _writer.SetValue(1, tspdocs.kolPlan);
-      _writer.SetValue(2, tspdocs.kolFact);
+        continue;
+      _writer.SetValue(1, doubletostr(tspdocs.kolPlan, '[|-]3666,88'));
+      _writer.SetValue(2, doubletostr(tspdocs.kolFact, '[|-]3666,88'));
       _writer.SetValue(3, tspdocs.placePlan);
       _writer.WriteBuffer;
     }
