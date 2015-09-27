@@ -64,14 +64,17 @@ end;
 type tspkau = record as table spkau;
 
 var
-  _logger: UTILS::Logger new;
+  _logger   : UTILS::Logger new;
   _curLogger: UTILS::Logger noauto;
-  _extAttr: IExtAttr;
-  _writer: Cleverence::IWriter;
+  _extAttr  : IExtAttr;
+  _writer   : Cleverence::IWriter;
+  _reader   : Cleverence::IReader;
+  _docReader: Cleverence::DocumentReader new;
 
 create view
 as select *
-from spkau spkCells, tCats, tdocs, tSpDocs, tcells, spkau, mbpinv, mbpin, spinvtab, kaureff, katpodr
+from spkau spkCells, tCats, tdocs, tSpDocs, tcells, spkau, invtab, spinvtab, mbpmove, mbpinv,
+     mbpin, kaureff, katpodr, katmbp
 where ((
   KODGRKAU_PLACE == spkCells.kodgrkau
 ));
@@ -186,7 +189,7 @@ function ExportCatalogs: boolean;
     _writer.SetValue(2, rs.row.Val('name'));
     _writer.SetValue(3, rs.row.Val('MOL'));
     _writer.SetValue(4, rs.row.Val('Podr'));
-    _writer.SetValue(5, rs.row.Val('datek'));
+    _writer.SetValue(5, datetostr(rs.row.Val('datek'),'DD.MM.YYYY'));
     _writer.SetValue(6, rs.row.Val('place'));
     _writer.SetValue(7, rs.row.Val('innum'));
     _writer.WriteBuffer;
@@ -318,8 +321,8 @@ var
                         if(getfirst katpodr where ((tdocs.PodrNrec == katpodr.nrec)) = tsOk, katpodr.kod, ''));
     _writer.SetValue(1, tdocs.year);
     _writer.SetValue(2, tdocs.Month);
-    _writer.SetValue(3, if(getfirst katpodr where ((tdocs.PodrNrec == katpodr.nrec)) = tsOk, katpodr.kod, ''));
-    _writer.SetValue(4, if(getanykau(1,60, tdocs.MOLNrec),givenanname(1),''));
+    _writer.SetValue(3, string(tdocs.PodrNrec,0,0));
+    _writer.SetValue(4, string(tdocs.MOLNrec,0,0));
     _writer.WriteBuffer;
 
     _writer.ClearBuffer;
@@ -335,14 +338,23 @@ var
 
     _loop tspdocs where ((tdocs.Year == tspdocs.Year and tdocs.Month == tspdocs.Month and tdocs.PodrNrec == tspdocs.PodrNrec and tdocs.MOLNrec == tspdocs.MOLNrec))
     {
-      if getfirst tCats where ((tspdocs.kind == tCats.kind and tspdocs.cRec == tCats.nrec)) = tsOk
+      if getfirst tCats where ((tspdocs.kind == tCats.kind and tspdocs.cRec == tCats.nrec)) != tsOk continue;
+      if (tspdocs.KolPlan > 0 and tspdocs.placePlan <> '')
+      {
         _writer.SetValue(0, tcats.barcode);
-      else
-        continue;
-      _writer.SetValue(1, doubletostr(tspdocs.kolPlan, '[|-]3666,88'));
-      _writer.SetValue(2, doubletostr(tspdocs.kolFact, '[|-]3666,88'));
-      _writer.SetValue(3, tspdocs.placePlan);
-      _writer.WriteBuffer;
+        _writer.SetValue(1, doubletostr(tspdocs.kolPlan, '[|-]3666,88'));
+        _writer.SetValue(2, '0');
+        _writer.SetValue(3, tspdocs.placePlan);
+        _writer.WriteBuffer;
+      }
+      if (tspdocs.KolFact > 0 and tspdocs.placeFact <> '')
+      {
+        _writer.SetValue(0, tcats.barcode);
+        _writer.SetValue(1, '0');
+        _writer.SetValue(2, doubletostr(tspdocs.kolFact, '[|-]3666,88'));
+        _writer.SetValue(3, tspdocs.placeFact);
+        _writer.WriteBuffer;
+      }
     }
     _writer.close;
   }
@@ -351,6 +363,157 @@ var
     LogSuccess(1, 'Экспорт документов инвентаризаций завершен успешно');
   else
     LogError(1, 'Экспорт документов инвентаризаций завершен с ошибками');
+}
+
+function GetPlaceByCode(placeCode: string): tspkau;
+{
+  var rslt: tspkau;
+  if getfirst spkau where ((KODGRKAU_PLACE == spkau.kodgrkau and placeCode == spkau.code)) = tsOk
+    rslt := tspkau(spkau.buffer)
+  else
+    clearadvrecord(rslt);
+  result := rslt;
+}
+
+procedure SetOSInvItem(invtabNrec: comp; item:CLEVERENCE::IDocumentItem);
+{
+  var katosNrec: comp;
+  katosNrec := comp(substr(item.ProductId,2,255));
+
+  var place: tspkau;
+  place := GetPlaceByCode(item.Place);
+
+  if getfirst spinvtab where ((invtabNrec == spinvtab.cinvtab and katosNrec == spinvtab.cmc)) != tsOk
+  {
+    clearbuffer(#spinvtab);
+    spinvtab.cinvtab := invtabNrec;
+    spinvtab.cmc     := katosNrec;
+    insert current spinvtab;
+    if getfirst kaureff where (( 3000           == kaureff.cotable and
+                                 spinvtab.cmc   == kaureff.crec and
+                                 KODGRKAU_PLACE == kaureff.wkau )) = tsOk
+    {
+      _extattr.coSetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_PLAN, kaureff.ckau, if(getanykau(1,KODGRKAU_PLACE, kaureff.ckau), givenanname(1), '' ));
+    }
+  }
+  update current spinvtab set spinvtab.kol := item.FactQty;
+  _extattr.coSetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_FACT, place.nrec, place.name);
+}
+
+procedure SetMBPInvItem(mbpmoveNrec: comp; item:CLEVERENCE::IDocumentItem);
+{
+
+  var mbpinNrec: comp;
+  mbpinNrec := comp(substr(item.ProductId,2,255));
+
+  var place: tspkau;
+  place := GetPlaceByCode(item.Place);
+
+  if getfirst mbpinv where ((mbpmoveNrec == mbpinv.cmove and (mbpinv.crecs[1] = mbpinNrec) )) != tsOk
+  {
+    clearbuffer(#mbpinv);
+    mbpinv.cmove := mbpmoveNrec;
+    mbpinv.crecs[1] := mbpinNrec;
+    mbpinv.crecs[2] := _extattr.coGetAttr(2001, mbpinNrec, ATTRNAME_MBP_PLACE);
+    if getfirst mbpin where (( mbpinNrec == mbpin.nrec )) = tsOk
+    {
+      mbpinv.ckatmbp := mbpin.cmbp;
+      mbpinv.price := mbpin.price;
+      mbpinv.dinv := mbpin.din;
+      if getfirst katmbp where ((mbpin.cmbp == katmbp.nrec)) = tsOk
+      {
+        mbpinv.kod  := katmbp.name;
+        mbpinv.name := katmbp.nnumber;
+      }
+    }
+    insert current mbpinv;
+  }
+  update current mbpinv set mbpinv.crecs[3] := place.nrec, mbpinv.fctkol := item.FactQty;
+}
+
+function ImportDoc(d: CLEVERENCE::IDocument): boolean;
+{
+
+  LogInfo(1, 'Импорт документа '+d.name);
+
+  var d1, d2: date;
+  d1 := date(1, d.Month, d.Year);
+  d2 := date(last_day(d1), d.Month, d.Year);
+
+  //определяем нрек инвентаризации ОС с подразделением и молом из документа
+  var invtabNrec: comp;
+  var invtabEditable: boolean;
+  if getfirst invtab where ((15           == invtab.tipdoc and
+                             d.PodrNrec   == invtab.cSklad and
+                             d1          <<= invtab.dinv and
+                             (invtab.dinv <= d2 and invtab.cMol = d.MOLNrec) )) = tsOk
+  {
+    invtabNrec := invtab.nrec;
+    invtabEditable := invtab.dinvend = 0;
+  }
+  else
+  {
+    invtabNrec := 0;
+    invtabEditable := false;
+  }
+
+  //определяем нрек инвентаризации спецоснастки с подразделением и молом из документа
+  var mbpmoveNrec: comp;
+  var mbpmoveEditable: boolean;
+  if getfirst mbpmove where (( 11         == mbpmove.status and
+                               d.PodrNrec == mbpmove.cpodrf and
+                               d1        <<= mbpmove.dmove and
+                               (d.MOLNrec = mbpmove.cmolf and d2 >= mbpmove.dmove) )) = tsOk
+  {
+    mbpmoveNrec := mbpmove.nrec;
+    mbpmoveEditable := mbpmove.cvalold = 0;
+  }
+  else
+  {
+    mbpmoveNrec := 0;
+    mbpmoveEditable := false;
+  }
+
+  var i, productKind: word;
+  var productNrec: comp;
+  var item: CLEVERENCE::IDocumentItem;
+  for(i:=0; i < d.ItemCount; ++i)
+  {
+    item := d.GetItem(i);
+    if item = nullref continue;
+    if item.FactQty = 0 continue;
+    productKind := substr(item.ProductId,1,1);
+    case productKind of
+      KIND_OS : if (invtabEditable)  SetOSInvItem(invtabNrec, item);
+      KIND_MBP: if (mbpmoveEditable) SetMBPInvItem(mbpmoveNrec, item);
+    end;
+  }
+}
+
+function ImportDocs: boolean;
+{
+  result := true;
+
+  LogInfo(0, 'Импорт документов инвентаризаций');
+
+  var docsDateFrom: date;
+  docsDateFrom := dGetTune('AGAT.BARCODE.DOCSTARTDATE');
+
+  var d: CLEVERENCE::IDocument;
+
+  var fname: string;
+  fname := GetFirstFile(sGetTune('AGAT.BARCODE.IMPORTPATH'), 'Инвентаризация №*.csv');
+  while (fname != '')
+  {
+    d := _docReader.Load(fname);
+    if (d != nullref)
+    {
+      ImportDoc(d);
+      FreeVipInterface(d);
+    }
+    DeleteFile(fname);
+    fname := GetNextFile;
+  }
 }
 
 //#endregion
@@ -367,7 +530,7 @@ function RunSyncUtilExport: boolean;
   var rslt: integer;
   ExecProgram(appPath, 'upload close closeerr tray', 'Выгрузка данных на ТСД', pfSilent, rslt);
 
-  if rslt = 0 or rslt = 1
+  if rslt = 0
   {
     LogSuccess(1, 'Выгрузка данных на ТСД завершена успешно');
     result := true;
@@ -375,6 +538,28 @@ function RunSyncUtilExport: boolean;
   else
   {
     LogError(1, 'Выгрузка данных на ТСД завершена с ошибкой: '+rslt);
+    result := false;
+  }
+}
+
+function RunSyncUtilImport: boolean;
+{
+  LogInfo(0, 'Загрузка данных из ТСД');
+
+  var appPath: string;
+  appPath := sGetTune('AGAT.BARCODE.SYNCCONPATH');
+
+  var rslt: integer;
+  ExecProgram(appPath, 'download close closeerr tray', 'Загрузка данных из ТСД', pfSilent, rslt);
+
+  if rslt = 0
+  {
+    LogSuccess(1, 'Загрузка данных из ТСД завершена успешно');
+    result := true;
+  }
+  else
+  {
+    LogError(1, 'Загрузка данных из ТСД завершена с ошибкой: '+rslt);
     result := false;
   }
 }
@@ -387,14 +572,15 @@ handleevent
 cmDoSync:
 {
   startnewvisual(vtRotateVisual, vfTimer, '', 0);
-  if not ExportCatalogs
-    message('Ошибка экспорта справочников МБП и ОС', error)
-  else if not ExportCells
-    message('Ошибка экспорта мест хранения', error)
-  else if not ExportDocs
-    message('Ошибка экспорта документов', error)
-  else if not RunSyncUtilExport
-    message('Ошибка выгрузки данных на ТСД', error);
+  //RunSyncUtilImport;
+  ImportDocs;
+  //if not ExportCatalogs
+  //  message('Ошибка экспорта справочников МБП и ОС', error)
+  //else if not ExportCells
+  //  message('Ошибка экспорта мест хранения', error)
+  //else if not ExportDocs
+  //  message('Ошибка экспорта документов', error);
+  //else RunSyncUtilExport;
   stopvisual('',0)
 }
 
@@ -406,6 +592,13 @@ cmInit:
     abort;
     exit;
   }
+  if not getvipref(_reader, 'CLEVERENCE::CSVFileReader')
+  {
+    message('Ошибка инициализации', error);
+    abort;
+    exit;
+  }
+  _docReader.IReaderSet(_reader);
 
   SetCurLogger(_logger);
 }
