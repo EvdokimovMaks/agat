@@ -1,0 +1,699 @@
+#include XLREPORT.vih
+#include getkau.vih
+#include userreport.vih
+
+#component "AGAT"
+interface WorkOrder_Universal 'Сводный наряд - универсальный';
+show (,,41,10);
+
+type tkatpodr = record as table katpodr;
+
+const
+  ValueKind_Summa = 0;
+  ValueKind_HoursWorked = 1;
+  KATPODR_NIO = 4000D861ACC3D875h;
+  CATALOGS_NIO = 4000E0359D481238h;
+  ADDSUMTUNE_OSNZP = 40015542D9B27825h;
+end;
+
+//Суммы
+table struct tVal (
+  PlanNrec    : comp,
+  PersonNrec  : comp,
+  ZakazNrec   : comp,
+  MarshSpNrec : comp,
+  CostItemName: string[120],
+  PostName    : string[100],
+  ValueKind   : word,
+  Value       : double
+);
+
+//Балансовое время
+table struct tBal (
+  Year: word,
+  Month: word,
+  Value: double
+) with index (
+  i00 = Year + Month
+);
+
+//Планы
+table struct tPlan (
+  nrec        : comp,
+  Number      : string[20],
+  Descr       : string[80],
+  PeriodName  : string[100],
+  PeriodDBeg  : date,
+  PeriodDEnd  : date,
+  PodrNRec    : comp,
+  PodrName    : string[150],
+  PodrCode    : string[20]
+) with index (
+  i00 = nrec
+);
+
+//Сотрудники
+table struct tPerson (
+  nrec: comp,
+  Name: string[60],
+  Code: longint
+) with index (
+  i00 = nrec
+);
+
+//Заказы
+table struct tZakaz (
+  Nrec            : comp,
+  ZakazName       : string[200],
+  NTKName         : string[80],
+  CloseDate       : date,
+  PeriodStart     : date,
+  PeriodEnd       : date,
+  PlanTrudKatStroy: double,
+  PlanTrudKatMarsh: double,
+  PlanOZPKatStroy : double,
+  PriceKindName   : string,
+  FactOZPSumma    : double,
+  FactTrud        : double
+) with index (
+  i00 = Nrec
+);
+
+sql query qPlan =
+  insert tPlan (nrec, Number, Descr, PeriodName, PeriodDBeg, PeriodDEnd, PodrNrec, PodrName, PodrCode)
+  select mp.nrec, mp.number, mp.descr, per.name, per.dbeg, per.dend, kp.nrec, kp.name, kp.kod
+  from mnplan mp
+  join fpperiod per on mp.canval1 = per.nrec and  per.dend >= ? and  per.dbeg <= ?
+  join katpodr kp on mp.canval2 = kp.nrec
+  where mp.cwayaccou = #comp(0001000000000088h)  //шаблон "Сводный наряд"
+;
+
+sql query qValSums =
+  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, CostItemName, PostName, ValueKind, Value)
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, spk.name, coalesce(post.name,''), 0, vsp.kol
+  from tPlan
+  join mnplan mp on tPlan.nrec = mp.nrec
+  join spmnplan spm on mp.nrec = spm.cmnplan and ((?=1) or spm.canval1 in (select crec from fltr where filter=1))
+  join spmnpl spl on
+    spm.nrec = spl.cspmnplan and
+    22 = spl.wkolan and
+    21 = spl.wkodgr4 and
+    mp.canval1 = spl.canval4 and
+    10029 = spl.wkodgr5 and
+    spl.canval5 in (select crec from fltr where filter = 2)
+  join valspmnp vsp on spl.nrec = vsp.cspmnpl
+  join spkau spk on spl.canval5 = spk.nrec
+  left join catalogs post on spm.canval4 = post.nrec;
+
+sql query qValTime =
+  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, CostItemName, PostName, ValueKind, Value)
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, spk.name, coalesce(post.name,''), 1, vsp.kol+vsp.price
+  from tPlan
+  join mnplan mp on tPlan.nrec = mp.nrec
+  join spmnplan spm on mp.nrec = spm.cmnplan and ((?=1) or spm.canval1 in (select crec from fltr where filter=1))
+  join spmnpl spl on
+    spm.nrec = spl.cspmnplan and
+    22 = spl.wkolan and
+    21 = spl.wkodgr4 and
+    mp.canval1 = spl.canval4 and
+    10029 = spl.wkodgr5 and
+    spl.canval5 = #comp(00010000000008AEh)     //статья наряда "Отработано часов по заказу и виду работ за месяц"
+  join valspmnp vsp on spl.nrec = vsp.cspmnpl
+  join spkau spk on spl.canval5 = spk.nrec
+  left join catalogs post on spm.canval4 = post.nrec;
+
+sql query qPersonAll =
+  select p.nrec, p.fio, p.tabnmb
+  from (select distinct PersonNrec from tVal) as vp
+  join persons p on vp.PersonNrec = p.nrec;
+
+sql query qPerson =
+  select distinct p.nrec, p.fio, p.tabnmb
+  from tVal
+  join kaureff on kaureff.cotable=2101 and
+                  kaureff.crec=tVal.ZakazNrec and
+                  kaureff.wkau=2 and
+                  kaureff.ckau=?
+  join persons p on tVal.PersonNrec = p.nrec
+  union
+  select p.nrec, p.fio, p.tabnmb
+  from (select distinct PersonNrec from tVal) as vp
+  join persons p on vp.PersonNrec = p.nrec
+  join (select cgroup, max(nrec) as nrec
+        from useraccess
+        where crec = ?
+        group by cgroup) ua on p.department = ua.cgroup;
+
+sql query qZakaz =
+  select ks.nrec,
+         ks.name,
+         coalesce(ntk.name,''),
+         coalesce(cp.dto,#date(0,0,0)),
+         coalesce(cp.dfrom,#date(0,0,0)),
+         coalesce(cp.dto,#date(0,0,0)),
+         coalesce(avtrud.vdouble,0),
+         coalesce(trudKatMarsh.value,0),
+         coalesce(addsumobj.sumcur,0),
+         coalesce(attr.priceKind,''),
+         coalesce(FactOZP.summa,0),
+         coalesce(FactTrud.value,0)
+  from (select distinct ZakazNrec from tVal) as vz
+  join katstroy ks on vz.ZakazNrec = ks.nrec
+  left join kaureff on kaureff.cotable=2101 and kaureff.crec=ks.nrec and kaureff.wkau=2
+  left join katpodr ntk on coalesce(kaureff.ckau,#comp(0)) = ntk.nrec
+  left join (select ks.nrec, max(cp.nrec) as ccalplan, max(d.nrec) as cdogovor, max(coalesce(es.name,'')) as priceKind
+             from dogovor d
+             join calplan cp on d.nrec = cp.cdogovor and cp.directmc=1 and cp.status <> 3
+             join spdocs spd on cp.nrec = spd.cdoc and 403 = spd.tidk
+             join specmtr sm on 1723 = sm.cotable and #comp(0001000000000001h) = sm.csaldtune and spd.nrec = sm.cspec
+             join katstroy ks on sm.cobj = ks.nrec
+             left join exclassval ev on 1723=ev.wtable and 124=ev.classcode and spd.nrec=ev.crec
+             left join exclassseg es on coalesce(ev.cclassseg,#comp(0)) = es.nrec
+             where d.direct=1 and d.status <> 3
+             group by ks.nrec) attr on ks.nrec = attr.nrec
+  left join calplan cp on coalesce(attr.ccalplan,#comp(0)) = cp.nrec
+  //трудоемкость по объекту строительства
+  left join attrval avtrud on 2101=avtrud.wtable and #comp(0001000000000113h)=avtrud.cattrnam and ks.nrec=avtrud.crec    //вн.аттр. к объекту строительства "трудоемкость"
+  //трудоемкость по МК
+  left join (select spsetan.ckau as KatStroyNrec, sum((cast(paramvol.value[2] as double)) / case when normas.dnormed>0 then normas.dnormed else 1 end) as value
+             from spsetan
+             join katmarsh on 2 = katmarsh.tobject and spsetan.kodgrkau = katmarsh.cobject and 1 = katmarsh.active
+             join marsh_sp msp on katmarsh.nrec = msp.cmarsh
+             join normas on 11005=normas.tmaster and msp.nrec=normas.cmaster and 102=normas.normsort
+             join paramvol on 11000=paramvol.tobject and normas.nrec=paramvol.cobject
+             where spsetan.upgroup = 40
+             group by spsetan.ckau) as trudKatMarsh on ks.nrec = trudKatMarsh.KatStroyNrec
+  left join addsumobj on #comp(40015542D9B27825h) = addsumobj.caddsumtune and 2101 = addsumobj.cotable and ks.nrec = addsumobj.ckatstroy
+  //ФактОЗП
+  left join (select spm.canval1 as katstroynrec, sum(vsp.kol) as summa
+             from mnplan mp
+             join fpperiod per on mp.canval1 = per.nrec and per.dbeg <= ?
+             join spmnplan spm on mp.nrec = spm.cmnplan and spm.wkodgr1=40
+             join spmnpl spl on spm.nrec = spl.cspmnplan and 22 = spl.wkolan and 21 = spl.wkodgr4 and mp.canval1 = spl.canval4 and 10029 = spl.wkodgr5
+                                and spl.canval5 in (select crec from fltr where filter = 2)
+             join valspmnp vsp on spl.nrec = vsp.cspmnpl
+             where mp.cwayaccou = #comp(0001000000000088h)  //шаблон "сводный наряд"
+             group by spm.canval1
+            ) FactOZP on ks.nrec = FactOZP.katstroynrec
+  //трудоемкость
+  left join (select spm.canval1 as KatstroyNrec, sum(case when tbal.Value > 0 then (vsp.kol + vsp.price) / tbal.Value else 0 end) as value
+             from mnplan mp
+             join fpperiod per on mp.canval1 = per.nrec and per.dbeg between #date(1,1,2014) and ?    //все периоды за исключением сальдо
+             join tbal on year(datetime(per.dbeg,0)) = tbal.Year and month(datetime(per.dbeg,0)) = tbal.Month
+             join spmnplan spm on mp.nrec = spm.cmnplan
+             join spmnpl spl on spm.nrec = spl.cspmnplan and
+                                22 = spl.wkolan and
+                                21 = spl.wkodgr4 and
+                                mp.canval1 = spl.canval4 and
+                                10029 = spl.wkodgr5 and
+                                spl.canval5 = #comp(00010000000008AEh)     //статья наряда "Отработано часов по заказу и виду работ за месяц"
+             join valspmnp vsp on spl.nrec = vsp.cspmnpl
+             where mp.cwayaccou = #comp(0001000000000088h) //шаблон "сводный наряд"
+             group by spm.canval1
+            ) FactTrud on ks.nrec = FactTrud.KatstroyNrec
+;
+var
+  fZakaz: string;
+  lZakaz: longint;
+  dRepBeg, dRepEnd: date;
+  reportKind: byte;
+  iGetKau: GetKau;
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+
+create view
+as select *
+from tVal, tBal, tPlan, tPerson, tZakaz,
+     spkau,
+     tVal rVal, tPlan rPlan, tPerson rPerson, tZakaz rZakaz, tBal rBal
+where ((
+  rVal.PlanNrec           /== rPlan.nrec and
+  rVal.PersonNrec         /== rPerson.nrec and
+  rVal.ZakazNrec          /== rZakaz.nrec and
+  year(rPlan.PeriodDBeg)  /== rBal.year and
+  month(rPlan.PeriodDBeg) /== rBal.month
+));
+
+create view vTopPodr
+var
+  _katpodrNrec: comp;
+as select *
+from katpodr
+where (( _katpodrNrec == katpodr.nrec ));
+
+create view vNTK
+var
+  _uid: comp;
+as select *
+from useraccess, catalogs, extcatlinks
+where ((
+  _uid              /== useraccess.crec and
+  useraccess.cgroup /== catalogs.nrec and (catalogs.cparent = CATALOGS_NIO) and // Штатное расписание "НИО"
+  11                /== extcatlinks.objtype and
+  catalogs.nrec     /== extcatlinks.staffcat and
+  1                 /== extcatlinks.modtype
+));
+
+screen scmain;
+fields
+  dRepBeg: noprotect;
+  dRepEnd: noprotect;
+  fZakaz: protect, pickbutton;
+  reportKind: [list 'Новая форма', 'Старая форма' ];
+buttons
+  cmDoOk, default;
+<<
+
+ `Дата с` .@@@@@@@@@@ `по` .@@@@@@@@@@
+  Фильтр
+ `Заказ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ `Вид`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                       <. Продолжить .>
+>>
+end;
+
+procedure FillPickTableFromMarker(_filter: word; _l: longint); {
+  var i, cnt, stmt: longint;
+  var _c: comp;
+  var errcode: integer;
+  cnt := getmarkercount(_l);
+  if (cnt = 0) exit;
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, 'INSERT INTO fltr (filter, crec) VALUES (?, ?)');
+  for ( i := 0; i < cnt; i++) {
+    getmarker(_l, i, _c);
+    if (_c = 0) continue;
+    sqlBindParam(stmt, 1, _filter);
+    sqlBindParam(stmt, 2, _c);
+    errcode := sqlExecute(stmt);
+    if errcode <> 0 {
+      message('Ошибка при добавлении записи во временную таблицу: '+errcode);
+      exit;
+    }
+  }
+  sqlFreeStmt(stmt);
+}
+
+function GetTopPodr(podrNrec: comp; topParentPodrNrec: comp): tKatPodr;
+{
+  var rslt: tKatPodr;
+  vTopPodr._katpodrNrec := podrNrec;
+  if vTopPodr.getfirst katpodr = tsOk
+    if (vTopPodr.katpodr.cpodr = topParentPodrNrec or vTopPodr.katpodr.cpodr = 0)
+    {
+      rslt := vTopPodr.katpodr.buffer
+    }
+    else
+    {
+      vTopPodr._katpodrNrec := GetTopPodr(vTopPodr.katpodr.cpodr, topParentPodrNrec).Nrec;
+      if (vTopPodr.getfirst katpodr = tsOk)
+        rslt := vTopPodr.katpodr.buffer;
+    }
+  result := rslt;
+}
+
+function GetUserNTKNrec(uid: comp): comp;
+{
+  var c: comp;
+  c := 0;
+  vNTK._uid := uid;
+  if vNTK.getfirst viewTable = tsOk
+  {
+    c := GetTopPodr(vNTK.extcatlinks.extcat, KATPODR_NIO).Nrec;
+  }
+  result := c;
+}
+
+procedure MakeRep;
+{
+
+  var s, l, stmt, errcode: longint;
+  var _d: date;
+  var _t: double;
+
+  //готовим временную таблицу для фильтров
+  sqlAddStr(s, 'table fltr (          ');
+  sqlAddStr(s, ' filter : word,       ');
+  sqlAddStr(s, ' crec   : comp        ');
+  sqlAddStr(s, ') with index (        ');
+  sqlAddStr(s, '  i01 = filter + crec ');
+  sqlAddStr(s, ');');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlFreeStr(s);
+
+  //заполняем таблицу фильтров заказами
+  FillPickTableFromMarker(1, lZakaz);
+
+  //заполняем таблицу фильтров статьями
+  l := initmarker('', 8, 50, 10);
+  _loop spkau where ((10029 == spkau.kodgrkau and 00010000000008F7h == spkau.cnode)) { insertmarker(l, spkau.nrec); }
+  _loop spkau where ((10029 == spkau.kodgrkau and 00010000000008F8h == spkau.cnode)) { insertmarker(l, spkau.nrec); }
+  _loop spkau where ((10029 == spkau.kodgrkau and 00010000000008F9h == spkau.cnode)) { insertmarker(l, spkau.nrec); }
+  FillPickTableFromMarker(2, l);
+  DoneMarker(l, '');
+
+  //готовим временную таблицу балансового времени
+  sqlAddStr(s, 'table tbal (year: word, month: word, value: double) with index (i01=year+month);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlFreeStr(s);
+
+  //заполняем балансовое время по месяцам
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, 'insert tbal (year, month, value) values (?, ?, ?)');
+  delete all tBal;
+  _d := date(1,1,2014); //рассчитываем балансовое время с "начала времен" //date(1,month(dRepBeg), year(dRepBeg));
+  while _d <= dRepEnd
+  {
+    _t := BalBwDates(11, _d, date(Last_Day(_d),month(_d), year(_d)), 1);
+    insert tBal set tBal.Year := year(_d), tBal.Month := month(_d), tBal.Value := _t;
+    sqlBindParam(stmt, 1, tBal.Year);
+    sqlBindParam(stmt, 2, tBal.Month);
+    sqlBindParam(stmt, 3, tBal.Value);
+    sqlExecute(stmt);
+    _d := Add_Months(_d,1);
+  }
+  sqlFreeStmt(stmt);
+
+  //готовим временную таблицу для планов
+  sqlAddStr(s, 'table tPlan (                ');
+  sqlAddStr(s, '  nrec        : comp,        ');
+  sqlAddStr(s, '  Number      : string[20],  ');
+  sqlAddStr(s, '  Descr       : string[80],  ');
+  sqlAddStr(s, '  PeriodName  : string[100], ');
+  sqlAddStr(s, '  PeriodDBeg  : date,        ');
+  sqlAddStr(s, '  PeriodDEnd  : date,        ');
+  sqlAddStr(s, '  PodrNRec    : comp,        ');
+  sqlAddStr(s, '  PodrName    : string[150], ');
+  sqlAddStr(s, '  PodrCode    : string[20]   ');
+  sqlAddStr(s, ') with index (               ');
+  sqlAddStr(s, '  i01 = nrec                 ');
+  sqlAddStr(s, ');                           ');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlFreeStr(s);
+
+  //заполняем временную таблицу планами
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, qPlan);
+  sqlBindParam(stmt, 1, dRepBeg);
+  sqlBindParam(stmt, 2, dRepEnd);
+  errcode := sqlExecute(stmt);
+  if errcode <> 0 {
+    message('Ошибка выборки заказов'#13'Код ошибки:'+errcode, Error);
+    exit;
+  }
+  sqlFreeStmt(stmt);
+
+  //заполняем локальную таблицу планами
+  delete all tPlan;
+  sqlSelectInto('select * from tPlan', #tPlan);
+
+  //готовим временную таблицу для значений
+  sqlAddStr(s, 'table tVal (                ');
+  sqlAddStr(s, 'PlanNrec    : comp,         ');
+  sqlAddStr(s, 'PersonNrec  : comp,         ');
+  sqlAddStr(s, 'ZakazNrec   : comp,         ');
+  sqlAddStr(s, 'MarshSpNrec : comp,         ');
+  sqlAddStr(s, 'CostItemName: string[120],  ');
+  sqlAddStr(s, 'PostName    : string[100],  ');
+  sqlAddStr(s, 'ValueKind   : word,         ');
+  sqlAddStr(s, 'Value       : double        ');
+  sqlAddStr(s, ');                          ');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlFreeStr(s);
+
+  //заполняем временную таблицу для значений суммами
+  var everyZakaz: byte;
+  everyZakaz := if(getMarkerCount(lZakaz) = 0, 1, 0);
+
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt,  qValSums);
+  sqlBindParam(stmt, 1, everyZakaz);
+  errcode := sqlExecute(stmt);
+  if errcode <> 0 {
+    message('Ошибка выборки сумм по статьям'#13'Код ошибки:'+errcode, Error);
+    exit;
+  }
+  sqlFreeStmt(stmt);
+
+  //заполняем временную таблицу для значений отработанным временем
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, qValTime);
+  sqlBindParam(stmt, 1, everyZakaz);
+  errcode := sqlExecute(stmt);
+  if errcode <> 0 {
+    message('Ошибка выборки данных по отработанному времени'#13'Код ошибки:'+errcode, Error);
+    exit;
+  }
+  sqlFreeStmt(stmt);
+
+  //заполняем локальную таблицу значений
+  delete all tVal;
+  sqlSelectInto('select * from tVal', #tVal);
+
+  //заполняем локальную таблицу сотрудников
+  delete all tPerson;
+  if boGetTune('UP.STAFF.LOCK')
+  {
+    var uid, uNTK: comp;
+    uid := UserId;
+    uNTK := GetUserNTKNrec(uid);
+
+    stmt := sqlAllocStmt;
+    sqlPrepare(stmt, qPerson);
+    sqlBindParam(stmt, 1, uNTK);
+    sqlBindParam(stmt, 2, uid);
+    sqlExecute(stmt);
+    sqlFetchInto(stmt, #tPerson);
+    sqlFreeStmt(stmt);
+  }
+  else
+  {
+    sqlSelectInto(qPersonAll, #tPerson);
+  }
+
+  //заполняем локальную таблицу заказами
+  delete all tZakaz;
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, qZakaz);
+  sqlBindParam(stmt, 1, dRepEnd);
+  sqlBindParam(stmt, 2, dRepEnd);
+  if sqlExecute(stmt) = 0
+    sqlFetchInto(stmt, #tZakaz)
+  else
+    message('Ошибка выборки информации по заказам');
+  sqlFreeStmt(stmt);
+
+  //дропаем временные таблицы
+  sqlDropTmpTable('fltr');
+  sqlDropTmpTable('tPlan');
+  sqlDropTmpTable('tVal');
+  sqlDropTmpTable('tBal');
+
+  //формируем отчет
+  setvisualheader('Выгрузка в Excel');
+  sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+  //sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('dRepBeg', datetostr(dRepBeg, 'DD.MM.YYYY'));
+  pXL.SetStringVar('dRepEnd', datetostr(dRepEnd, 'DD.MM.YYYY'));
+  pXL.SetNumberVar('BalHours', BalBwDates(11, dRepBeg,dRepEnd,1));
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Период'           );
+  pXL.CreateTblFld('НомерНаряда'      );
+  pXL.CreateTblFld('Дескриптор'       );
+  pXL.CreateTblFld('ПериодНачДата'    );
+  pXL.CreateTblFld('ПериодКонДата'    );
+  pXL.CreateTblFld('ПодразделениеИмя' );
+  pXL.CreateTblFld('ПодразделениеКод' );
+  pXL.CreateTblFld('НТК'              );
+  pXL.CreateTblFld('ФИО'              );
+  pXL.CreateTblFld('ТабельныйНомер'   );
+  pXL.CreateTblFld('Заказ'            );
+  pXL.CreateTblFld('ЗаказДатаЗакрытия');
+  pXL.CreateTblFld('ЗаказСрокДействия');
+  pXL.CreateTblFld('ЗаказТрудоемкостьОС');
+  pXL.CreateTblFld('ЗаказТрудоемкостьМК');
+  pXL.CreateTblFld('ЗаказТрудоемкостьФакт');
+  pXL.CreateTblFld('ЗаказТрудоемкостьОтклонение');
+  pXL.CreateTblFld('ЗаказОЗП'         );
+  pXL.CreateTblFld('ФактОЗП'          );
+  pXL.CreateTblFld('ОтклонениеОЗП'    );
+  pXL.CreateTblFld('ВидЦены'          );
+  pXL.CreateTblFld('ЗаказНТК'         );
+  pXL.CreateTblFld('Операция'         );
+  pXL.CreateTblFld('Должность'        );
+  pXL.CreateTblFld('Статья'           );
+  pXL.CreateTblFld('Время'            );
+  pXL.CreateTblFld('ВремяБалансовое'  );
+  pXL.CreateTblFld('Трудоемкость'     );
+  pXL.CreateTblFld('Сумма'            );
+
+  _loop rVal
+  {
+    pXL.ClearTblBuffer;
+
+    if (getfirst rPerson != tsOk) continue;
+    if (getfirst rPlan = tsOk) {};
+    if (getfirst rBal = tsOk) {};
+    if (getfirst rZakaz = tsOk) {};
+
+    pXL.SetTblStringFldValue('Период'             , rPlan.PeriodName);
+    pXL.SetTblStringFldValue('НомерНаряда'        , rPlan.Number);
+    pXL.SetTblStringFldValue('Дескриптор'         , rPlan.Descr);
+    pXL.SetTblDateFldValue  ('ПериодНачДата'      , rPlan.PeriodDBeg);
+    pXL.SetTblDateFldValue  ('ПериодКонДата'      , rPlan.PeriodDEnd);
+    pXL.SetTblStringFldValue('ПодразделениеИмя'   , rPlan.PodrName);
+    pXL.SetTblStringFldValue('ПодразделениеКод'   , rPlan.PodrCode);
+    pXL.SetTblStringFldValue('НТК'                , GetTopPodr(rPlan.PodrNRec, KATPODR_NIO).Name);
+
+    pXL.SetTblStringFldValue('ФИО'                , rPerson.Name);
+    pXL.SetTblStringFldValue('ТабельныйНомер'     , rPerson.Code);
+    pXL.SetTblStringFldValue('Заказ'              , rZakaz.ZakazName);
+
+    pXL.SetTblStringFldValue('ЗаказДатаЗакрытия'  , datetostr(rZakaz.CloseDate,'DD.MM.YYYY'));
+    pXL.SetTblStringFldValue('ЗаказСрокДействия'  , datetostr(rZakaz.PeriodStart,'DD.MM.YYYY')+' - '+datetostr(rZakaz.PeriodEnd,'DD.MM.YYYY'));
+    pXL.SetTblStringFldValue('ЗаказНТК'           , rZakaz.NTKName);
+    pXL.SetTblNumberFldValue('ЗаказТрудоемкостьОС', rZakaz.PlanTrudKatStroy);
+    pXL.SetTblNumberFldValue('ЗаказТрудоемкостьМК', rZakaz.PlanTrudKatMarsh);
+    pXL.SetTblNumberFldValue('ЗаказТрудоемкостьФакт', rZakaz.FactTrud);
+    pXL.SetTblNumberFldValue('ЗаказТрудоемкостьОтклонение', rZakaz.PlanTrudKatStroy - rZakaz.FactTrud);
+    pXL.SetTblNumberFldValue('ЗаказОЗП'           , rZakaz.PlanOZPKatStroy);
+    pXL.SetTblNumberFldValue('ФактОЗП'            , rZakaz.FactOZPSumma);
+    pXL.SetTblNumberFldValue('ОтклонениеОЗП'      , rZakaz.PlanOZPKatStroy - rZakaz.FactOZPSumma);
+
+    pXL.SetTblStringFldValue('ВидЦены'            , rZakaz.PriceKindName);
+
+    pXL.SetTblStringFldValue('Операция'           , if(getanykau(0, 61, rVal.MarshSpNrec),givenanname(1),''));
+    pXL.SetTblStringFldValue('Должность'          , rVal.PostName);
+    pXL.SetTblStringFldValue('Статья'             , replace(rVal.CostItemName,'|',' '));
+
+    if(rVal.ValueKind = ValueKind_Summa)
+    {
+      pXL.SetTblNumberFldValue('Сумма'            , rVal.Value);
+    }
+    else
+    {
+      pXL.SetTblNumberFldValue('Время'            , rVal.Value);
+      pXL.SetTblNumberFldValue('ВремяБалансовое'  , rBal.Value);
+      pXL.SetTblNumberFldValue('Трудоемкость'     , rVal.Value / if(rBal.Value>0,rBal.Value,1));
+    }
+
+    pXL.InsTblRow;
+  }
+
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+
+procedure refreshfields;
+{
+  var _c: comp;
+  var _cnt: longint;
+  _cnt := GetMarkerCount(lZakaz);
+  if _cnt = 0
+    fZakaz := 'По всем заказам'
+  else if _cnt = 1
+  {
+    GetMarker(lZakaz, 0, _c);
+    fZakaz := if(getanykau(0, 40, _c),givenanname(1),'');
+  }
+  else
+  {
+    fZakaz := 'Выбрано заказов: '+_cnt;
+  }
+  rereadrecord;
+}
+
+handleevent
+cmDoOk:
+{
+  case reportKind of
+    1: sXLTFileName := TranslatePath('%StartPath%xls\workorder_universal_old.xlt');
+  else
+    sXLTFileName := TranslatePath('%StartPath%xls\workorder_universal.xlt');
+  end;
+  startnewvisual(vtRotateVisual, vfTimer, 'Формирование запроса', 0);
+  MakeRep;
+  stopvisual('', 0);
+}
+cmDelOnProtect:
+{
+  case curfield of
+    #fZakaz:
+    {
+      ClearMarker(lZakaz);
+      refreshfields;
+    }
+  end;
+}
+cmPick:
+{
+  case curfield of
+    #fZakaz:
+    {
+      var _c: comp;
+      DoneMarker(lZakaz, iGetKau.GetMarkerName(40));
+      if iGetKau.GetCodeKau(2, 40, _c) > 0
+      {
+        lZakaz := initmarker(iGetKau.GetMarkerName(40), 8, 10, 10, false);
+      }
+      refreshfields;
+    }
+  end;
+}
+cminit:
+{
+  lZakaz := initmarker('WorkOrder_Universal_Zakaz', 8, 10, 10, false);
+  if not readmydsk(dRepBeg, 'WorkOrder_Universal_dRepBeg', false) dRepBeg := date(1,month(sub_months(cur_date,1)), year(sub_months(cur_date,1)));
+  if not readmydsk(dRepEnd, 'WorkOrder_Universal_dRepEnd', false) dRepEnd := date(last_day(sub_months(cur_date,1)),month(sub_months(cur_date,1)), year(sub_months(cur_date,1)));
+  if not readmydsk(reportKind, 'WorkOrder_Universal_reportKind', false) reportKind := 0;
+  refreshfields;
+}
+cmdone:
+{
+  DoneMarker(lZakaz, 'WorkOrder_Universal_Zakaz');
+  savemydsk(dRepBeg, 'WorkOrder_Universal_dRepBeg');
+  savemydsk(dRepEnd, 'WorkOrder_Universal_dRepEnd');
+  savemydsk(reportKind, 'WorkOrder_Universal_reportKind');
+}
+end;
+end.
+
+VipInterface UserReport_WorkOrder_Universal Implements IUserReport licensed(free);
+Interface UserReport_WorkOrder_Universal;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::WorkOrder_Universal);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Сводный наряд';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    Level := 0;
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    Ind := 0;
+    VisibleInModule := 'MANUFPLAN';
+  end;
+end.

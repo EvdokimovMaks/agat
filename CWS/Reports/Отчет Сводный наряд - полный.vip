@@ -1,0 +1,530 @@
+#component "AGAT"
+interface WorkOrderFull 'Ведомость распределения заработной платы по заказам';
+show (,,76,13);
+
+table struct tCostGroups (
+  nRec: comp,
+  Name: string,
+  CostItemsCount: integer
+) with index (
+  i01 = nRec (unique)
+);
+
+table struct tCostItems (
+  nRec: comp,
+  cCostGroup: comp,
+  cSpKau: comp,
+  Name: String,
+  VidOpl: String
+) with index (
+  i01 = nRec (unique, surrogate),
+  i02 = cCostGroup + nRec
+);
+
+table struct tOrders (
+  nRec     : comp,
+  cPerson  : comp,
+  cLSch    : comp,
+  cPost    : comp,
+  cOrder   : comp,
+  cMarshSp : comp,
+  cSpMnPlan: comp,
+  OrderName: string[80],
+  OperName : string[80]
+) with index (
+  i00 = nRec (unique, surrogate),
+  i02 = cPerson + cPost + OrderName + OperName
+);
+
+table struct tPersons (
+  nRec   : comp,
+  cPerson: comp,
+  cDep   : comp,
+  cLSch  : comp,
+  cPost  : comp,
+  FIO    : string[100],
+  TabNmb : string[40],
+  Post   : string[100]
+) with index (
+  i00 = nRec (unique, surrogate),
+  i01 = cPerson + cPost (unique),
+  i02 = FIO + Post
+);
+
+table struct tValues (
+  lvl: byte,
+  cRec: comp,
+  cCostItem: comp,
+  Value: double,
+  Distribute: double
+) with index (
+  i01 = lvl + cRec + cCostItem
+);
+
+var
+  CurMnPlan    : comp;
+  ea           : iExtAttr;
+  PeriodDBeg   : date;
+  PeriodDEnd   : date;
+  PeriodNRec   : comp;
+  PodrNRec     : comp;
+  PodrKodGr    : word;
+  sXLTFilename : string;
+  sXLSFileName : string;
+  pXL          : XLSRepBuilder;
+  isCreateXLT  : boolean;
+  HoursWorked  : double;
+  CostItemKodGr: word;
+  cFltrOrder   : comp;
+  VInter       : CommonFiltr new;
+  iGetKAU      : GetKAU;
+
+file f;
+
+create view
+as select *
+from MnPlan, WayAccou WA1, WayAccou WA2, SpWayAc, FormPl, FpPeriod, SpMnPl, ValSpMnP, SpKAU, SumVidOp, Nachisl, AllMemo, useraccess,
+     tCostGroups, tCostItems, tPersons, tOrders, tValues;
+
+parameters CurMnPlan, sXLTFilename, isCreateXLT;
+
+/*
+window wInfo;
+  browse br1;
+  show at (,,,5);
+  table tPersons;
+  fields
+    tPersons.cPerson 'cPerson': [10], protect;
+    tPersons.FIO 'FIO': [30], protect;
+  end;
+  browse br2;
+  show at (,6,,10);
+  table tCostItems;
+  fields
+    tCostItems.cRec 'cRec': [10], protect;
+    tCostItems.Name 'name':[30], protect;
+  end;
+  browse br3;
+  show at (,11,,);
+  table tSalary;
+  fields
+    tSalary.cPerson 'cPerson': [10], protect;
+    tSalary.cCostItem 'cCostItem': [10], protect;
+    tSalary.VidOpl 'VidOpl': [5], protect;
+    tSalary.NameOpl 'NameOpl': [20], protect;
+    tSalary.Summa 'Summa': [8,2], protect;
+  end;
+end;
+*/
+
+embedded ComFiltrEmbedded interface vInter;
+  show (,,,7);
+end;
+screen scMain;
+  show (,8,,);
+  fields
+    [fltrOrder] if(cFltrOrder=0, 'Все заказы', if(getanykau(0, 40, cFltrOrder),givenanname(1),'')): protect, pickbutton;
+  buttons
+    cmDoOk, default;
+    cmCancel;
+<<
+
+    `Фильтр по заказу`      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                                              <. Продолжить .> <. Отмена .>
+>>
+end;
+
+procedure AddCostGroup(_GroupNRec: comp; _GroupName: String);
+{
+  if GetFirst tCostGroups where ((_GroupNRec == tCostGroups.nRec)) <> tsOk
+  {
+    insert tCostGroups set tCostGroups.nRec := _GroupNRec,
+                           tCostGroups.Name := _GroupName,
+                           tCostGroups.CostItemsCount := 0;
+  }
+  else
+  {
+    Update Current tCostGroups set tCostGroups.Name := _GroupName;
+  }
+}
+
+procedure AddCostItem(_GroupNRec: comp; _cSpKau: comp; _CostItemName: String; _CostItemVidOpl: String);
+{
+  insert tCostItems set tCostItems.cCostGroup := _GroupNRec,
+                        tCostItems.cSpKau     := _cSpKau,
+                        tCostItems.Name       := replace(_CostItemName,'|',' '),
+                        tCostItems.VidOpl     := _CostItemVidOpl;
+  update tCostGroups where ((_GroupNRec == tCostGroups.nRec)) set tCostGroups.CostItemsCount := tCostGroups.CostItemsCount + 1;
+}
+
+function GetValue(_cSpMnPlan: comp; _cCostItem: comp; var buf: TValSpMnP): boolean;
+{
+  result := false;
+  if getfirst SpMnPl where ((
+    _cSpMnPlan        == SpMnPl.cSpMnPlan and
+    22                == SpMnPl.wKolAn    and
+    21                == SpMnPl.wKodGr4   and
+    PeriodNRec        == SpMnPl.cAnVal4   and
+    CostItemKodGr     == SpMnPl.wKodGr5   and
+    _cCostItem        == SpMnPl.cAnVal5
+  )) = tsOk
+  {
+    if getfirst ValSpMnP where ((SpMnPl.nRec == ValSpMnP.cSpMnPl)) = tsOk
+    {
+      result := true;
+      buf := TValSpMnP(ValSpMnP.Buffer);
+    }
+  }
+}
+
+handleevent
+  cmDoOk:
+  {
+    var _c: comp;
+    var _s: string;
+    var _i, _j, _cnt: integer;
+    var _w: word;
+    var _v, _v1, _d, _n: double;
+    var cCostItemSalary, cCostItemTrud, cCostItemHoursWorked: comp;
+    var _buf: TValSpMnP;
+    var mrk, mrkcnt: longint;
+
+    VInter.EndSelect;
+    mrk := VInter.GetPersonsMarker;
+    mrkcnt := VInter.GetPsnCount;
+
+    delete all tCostGroups;
+    AddCostGroup(1, 'Начисления общие без заказов');
+    AddCostGroup(2, 'Начисления за работы при нахождении на объекте');
+    AddCostGroup(3, 'Премиальные начисления');
+    AddCostGroup(4, 'Дополнительная заработная плата');
+
+    if GetFirst MnPlan where ((CurMnPlan == MnPlan.nRec)) = tsOk
+    {
+      if getfirst WA1 where ((MnPlan.cWayAccou == WA1.cWayAccou and 8 == WA1.TypeAlgor)) = tsOk  //представления
+        if getfirst WA2 where ((WA1.nRec == WA2.cWayAccou and 128 == WA2.TypeAlgor and ('Сводный наряд' = WA2.Name) )) = tsOk // представление "Сводный наряд"
+          if getfirst SpWayAc where ((WA2.nRec == SpWayAc.cWayAccou and (SpWayAc.cValRes[1] > 0 and SpWayAc.cValRes[3] > 0) )) = tsOk //настройки представления
+            if getfirst FormPl where ((SpWayAc.cValRes[3] == FormPl.nRec)) = tsOk
+            {
+              CostItemKodGr        := FormPl.ResWord[10];
+              cCostItemSalary      := FormPl.ResComp[3];
+              cCostItemTrud        := FormPl.ResComp[1];
+              cCostItemHoursWorked := FormPl.ResComp[2];
+              Delete All tCostItems;
+
+              for (_i := 4; _i <= 7; inc(_i))
+              {
+                _loop SpKau where (( CostItemKodGr == SpKau.KodGrKAU and FormPl.ResComp[_i] == SpKau.cNode ))
+                {
+                  AddCostItem(_i-3, SpKau.nRec, SpKau.Name, ea.sGetAttr(8512, SpKau.nRec, 'Виды оплат'));
+                }
+              }
+            }
+
+      if (getfirst FpPeriod where ((MnPlan.cAnVal1 == FpPeriod.nRec)) = tsOk)
+      {
+        PeriodDBeg := FpPeriod.dBeg;
+        PeriodDEnd := FpPeriod.dEnd;
+        PeriodNRec := FpPeriod.nRec;
+      }
+
+      PodrNRec  := MnPlan.cAnVal2;
+      PodrKodGr := MnPlan.wKodGr2;
+
+      delete all tOrders;
+      insert tOrders (cPerson,cLSch, cPost,cOrder,cMarshSp,cSpMnPlan,OrderName,OperName)
+      select SpMnPlan.cIzd, LSchet.nRec, SpMnPlan.cAnVal4, KatStroy.nRec, Marsh_Sp.nRec, SpMnPlan.nRec,
+             substr(KatStroy.Name, 1, pos('"', KatStroy.Name)-1),
+             if(getanykau(0, 61, Marsh_Sp.nRec),givenanname(1),'')
+      from SpMnPlan, KatStroy, Marsh_Sp, LSchet
+      where ((
+        CurMnPlan == SpMnPlan.cMnPlan and
+        SpMnPlan.cAnVal1 == KatStroy.nRec and
+        SpMnPlan.cAnVal3 == Marsh_Sp.nRec and
+        SpMnPlan.cIzd    == LSchet.tPerson and (LSchet.Datuv = 0 or LSchet.DatUv >= PeriodDBeg )
+      )) and (if(mrkcnt=0, true, foundmarker(mrk, SpMnPlan.cIzd))) and (if(cFltrOrder=0, true, SpMnPlan.cAnVal1 = cFltrOrder))
+      ignore_errors (tsDuplicateKey);
+
+      delete all tPersons;
+      insert tPersons (cPerson, cDep, cLSch, cPost,FIO,TabNmb,Post)
+      select tOrders.cPerson, Persons.Department, tOrders.cLSch, tOrders.cPost, Persons.FIO, Persons.TabNmb, Catalogs.Name
+      from tOrders, Persons, Catalogs
+      where ((
+        tOrders.cPerson == Persons.nRec and
+        tOrders.cPost == Catalogs.nRec
+      )) ignore_errors (tsDuplicateKey);
+
+      if boGetTune('UP.STAFF.LOCK')
+      _loop tPersons
+      {
+          if getfirst useraccess where ((UserId == useraccess.crec and (useraccess.cgroup = tPersons.cDep) )) <> tsOk
+            delete current tPersons;
+      }
+
+      delete all tValues;
+      insert tValues (lvl,cRec,cCostItem,Value,Distribute)
+      select 2, tOrders.nRec, tCostItems.nRec, ValSpMnP.Kol, ValSpMnP.Price
+      from tOrders, tCostItems, SpMnPl, ValSpMnP
+      where ((
+        tOrders.cSpMnPlan == SpMnPl.cSpMnPlan and
+        22                == SpMnPl.wKolAn    and
+        21                == SpMnPl.wKodGr4   and
+        PeriodNRec        == SpMnPl.cAnVal4   and
+        CostItemKodGr     == SpMnPl.wKodGr5   and
+        tCostItems.cSpKAU == SpMnPl.cAnVal5   and
+        SpMnPl.nRec       == ValSpMnP.cSpMnPl
+      ));
+
+      _loop tPersons
+      {
+        _loop tCostItems
+        {
+          _v := 0;
+          _loop tOrders where ((tPersons.cPerson == tOrders.cPerson and tPersons.cPost == tOrders.cPost))
+            if getfirst tValues where ((2 == tValues.lvl and tOrders.nRec == tValues.cRec and tCostItems.nRec == tValues.cCostItem)) = tsOk
+              _v += tValues.Value;
+
+          _d := 0;
+          _s := ',' + replace(tCostItems.VidOpl,' ','') + ',';
+          if dgettune('UP.DATOTCH') = PeriodDBeg
+          {
+            _loop Nachisl where ((tPersons.cLSch == Nachisl.cLSch and (pos(','+Nachisl.VidOpl+',', _s) > 0) ))
+            {
+              _d += Nachisl.Summa;
+            }
+          }
+          else
+          {
+            _loop SumVidOp where ((tPersons.cLSch     == SumVidOp.cLSch and
+                                   Year(PeriodDBeg)   == SumVidOp.YearN and
+                                   Month(PeriodDBeg)  == SumVidOp.MesN and
+                                   (pos(','+SumVidOp.VidOplP+',', _s) > 0) ))
+            {
+              _d += SumVidOp.Summa;
+            }
+          }
+
+          insert tValues set tValues.lvl := 1,
+                             tValues.cRec := tPersons.nRec,
+                             tValues.cCostItem := tCostItems.nRec,
+                             tValues.Value := _v,
+                             tValues.Distribute := _d;
+        } //_loop tCostItems
+      }
+    }
+
+    if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, true)
+                else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, true);
+
+    pXL.CreateVar(sXLSFileName);
+    pXL.SetStringVar('dBeg', DateToStr(PeriodDBeg, 'DD.MM.YYYY'));
+    pXL.SetStringVar('dEnd', DateToStr(PeriodDEnd, 'DD.MM.YYYY'));
+    pXL.SetStringVar('Period', if(getanykau(0, 21, PeriodNRec),givenanname(1),''));
+    pXL.SetStringVar('Podr', if(getanykau(0, PodrKodGr, PodrNRec),givenanname(1),''));
+    _i := 0;
+    _loop tCostGroups
+    {
+      inc(_i);
+      pXL.SetStringVar('GroupName_'+_i, tCostGroups.Name);
+      pXL.SetStringVar('GroupCnt_'+_i, tCostGroups.CostItemsCount);
+    }
+    _i := 0;
+    _loop tCostGroups
+      _loop tCostItems where ((tCostGroups.nRec == tCostItems.cCostGroup))
+      {
+        inc(_i);
+        pXL.SetStringVar('Val_'+_i, tCostItems.Name);
+      }
+
+    pXL.PublishVar;
+
+    pXL.CreateTbls(sXLSFileName);
+    pXL.CreateTbl('Main');
+    pXL.CreateTblFld('TabNmb');
+    pXL.CreateTblFld('FIO');
+    pXL.CreateTblFld('Lvl');
+    pXL.CreateTblFld('Post');
+    pXL.CreateTblFld('Order');
+    pXL.CreateTblFld('Oper');
+    pXL.CreateTblFld('Base');
+    pXL.CreateTblFld('PlanTrud');
+    pXL.CreateTblFld('ProcTrud');
+    pXL.CreateTblFld('FactTrud');
+    pXL.CreateTblFld('PrevTrud');
+    pXL.CreateTblFld('FullTrud');
+    pXL.CreateTblFld('WorkedHours');
+    pXL.CreateTblFld('Salary');
+    _i := 0;
+    _loop tCostGroups
+      _loop tCostItems where ((tCostGroups.nRec == tCostItems.cCostGroup))
+      {
+        inc(_i);
+        pXL.CreateTblFld('Val_'+_i);
+      }
+
+    _loop tPersons
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('Lvl'     , 1);
+      pXL.SetTblStringFldValue('TabNmb'  , tPersons.TabNmb);
+      pXL.SetTblStringFldValue('FIO'     , GetSurnameWithInitials(tPersons.FIO));
+      pXL.SetTblStringFldValue('Post'    , tPersons.Post);
+
+      _v := 0; _v1 := 0;
+      _loop tOrders where ((tPersons.cPerson == tOrders.cPerson and tPersons.cPost == tOrders.cPost))
+      {
+        if GetValue(tOrders.cSpMnPlan, cCostItemHoursWorked, _buf)
+          _v += _buf.Kol+_buf.Price;
+        if GetValue(tOrders.cSpMnPlan, cCostItemSalary, _buf)
+          _v1 += _buf.Kol;
+      }
+
+      if InitWorkingTable
+        if LoadWorkingTable(tPersons.cLSch, Month(PeriodDBeg), Year(PeriodDBeg)) = 0
+        {
+          _d := WT_GetHours(12, 1);
+          if WT_LoadMonthlyAbsences = 0
+          {
+            _cnt := WT_GetMonthlyAbsenceCount;
+            for(_i:=0;_i<_cnt;inc(_i))
+            {
+              if WT_GetMonthlyAbsenceAttribute(_i, 1, _s)
+                if (_s='ВЧ' or _s='Г' or _s='Н' or _s='ОБЩ' or _s='ОВ' or _s='РП' or _s='С' or _s='Я' or _s='К')
+                  if WT_GetMonthlyAbsenceAttribute(_i, 5, _n)
+                    _d += _n;
+            }
+          }
+        }
+      pXL.SetTblStringFldValue('WorkedHours', _v + if(_d <> 0, ' / ' + _d, ''));
+
+      _d := 0;
+      _loop SumVidOp where ((tPersons.cLSch     == SumVidOp.cLSch and
+                             Year(PeriodDBeg)   == SumVidOp.YearN and
+                             Month(PeriodDBeg)  == SumVidOp.MesN ))
+      {
+        _d += SumVidOp.Summa;
+      }
+      pXL.SetTblStringFldValue('Salary', _v1 + if(_d <> 0, ' / ' + _d, ''));
+
+
+      _i := 0;
+      _loop tCostGroups
+        _loop tCostItems where ((tCostGroups.nRec == tCostItems.cCostGroup))
+        {
+          inc(_i);
+          if getfirst tValues where ((1 == tValues.lvl and tPersons.nRec == tValues.cRec and tCostItems.nRec == tValues.cCostItem)) = tsOk
+            pXL.SetTblStringFldValue('Val_'+_i, round(tValues.Value,2) + if(tValues.Distribute <> 0, ' / '+round(tValues.Distribute,2), ''));
+        }
+      pXL.InsTblRow;
+
+      _loop tOrders where ((tPersons.cPerson == tOrders.cPerson and tPersons.cPost == tOrders.cPost))
+      {
+        pXL.ClearTblBuffer;
+        pXL.SetTblStringFldValue('Lvl'     , 2);
+        pXL.SetTblStringFldValue('TabNmb'  , tPersons.TabNmb);
+        pXL.SetTblStringFldValue('FIO'     , tPersons.FIO);
+        pXL.SetTblStringFldValue('Post'    , tPersons.Post);
+        pXL.SetTblStringFldValue('Order'   , tOrders.OrderName);
+        pXL.SetTblStringFldValue('Oper'    , tOrders.OperName);
+
+        if getfirst AllMemo where ((11038 == AllMemo.wTable and tOrders.cSpMnPlan == AllMemo.cRec)) = tsOk
+          if f.OpenMemo(AllMemo.Mem)
+          {
+            f.ReadLn(_s);
+            pXL.SetTblStringFldValue('Base'  , _s);
+          }
+
+        if GetValue(tOrders.cSpMnPlan, cCostItemTrud, _buf)
+        {
+          pXL.SetTblNumberFldValue('PlanTrud', _buf.price);
+          pXL.SetTblNumberFldValue('ProcTrud', _buf.kol);
+          pXL.SetTblNumberFldValue('FactTrud', _buf.vprice);
+          pXL.SetTblNumberFldValue('PrevTrud', _buf.summa);
+          pXL.SetTblNumberFldValue('FullTrud', _buf.kolfield5);
+        }
+
+        if GetValue(tOrders.cSpMnPlan, cCostItemHoursWorked, _buf)
+          pXL.SetTblNumberFldValue('WorkedHours', _buf.Kol+_buf.price);
+
+        if GetValue(tOrders.cSpMnPlan, cCostItemSalary, _buf)
+          pXL.SetTblNumberFldValue('Salary', _buf.Kol);
+
+        _i := 0;
+        _loop tCostGroups
+          _loop tCostItems where ((tCostGroups.nRec == tCostItems.cCostGroup))
+          {
+            inc(_i);
+            if getfirst tValues where ((2 == tValues.lvl and tOrders.nRec == tValues.cRec and tCostItems.nRec == tValues.cCostItem)) = tsOk
+              pXL.SetTblNumberFldValue('Val_'+_i, round(tValues.Value,2));
+          }
+        pXL.InsTblRow;
+      }
+    }
+
+    pXL.PublishTbl('Main');
+
+    pXL.LoadReport(sXLSFileName);
+    pXL.DisConnectExcel;
+
+  } //cmDoOk
+
+  cmDelOnProtect:
+  {
+    case curfield of
+      #fltrOrder:
+      {
+        cFltrOrder := 0;
+        rereadrecord;
+      }
+    end;
+  }
+  cmPick:
+  {
+    case curfield of
+      #fltrOrder:
+      {
+        var _c: comp;
+        _c := cFltrOrder;
+        if iGetKAU.GetCodeKAU(1, 40, _c) > 0
+          cFltrOrder := _c;
+        rereadrecord;
+      }
+    end;
+  }
+  cmInit:
+  {
+    if not readmydsk(cFltrOrder, 'AGAT_WorkOrderFull_cFltrOrder', false) cFltrOrder := 0;
+    rereadrecord;
+  }
+  cmDone:
+  {
+    savemydsk(cFltrOrder, 'AGAT_WorkOrderFull_cFltrOrder');
+  }
+end;
+end.
+
+
+.LinkForm 'WorkOrderFull' Prototype is 'MNPLAN'
+.NameInList 'Ведомость распределения заработной платы по заказам'
+.f "NUL"
+.{CheckEnter MNPLAN_LOOP1
+.begin
+  runinterface(AGAT::WorkOrderFull, comp(_MNREC), TranslatePath('%StartPath%XLS\WorkOrderFull.xlt'), false);
+end.
+.{CheckEnter SPMNPL_LOOP1
+.}
+.{CheckEnter OBJACCT_IN_LOOP
+.{CheckEnter SPOBJACC_IN_LOOP
+.{CheckEnter SPOBJACC_CURIN_LOOP
+.}
+.}
+.}
+.{CheckEnter OBJACCT_OUT_LOOP
+.{CheckEnter SPOBJACC_CUROUT_LOOP
+.{CheckEnter SPOBJACC_OUT_LOOP
+.}
+.}
+.}
+.}
+.endform
