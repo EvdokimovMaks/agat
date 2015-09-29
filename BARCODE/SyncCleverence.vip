@@ -3,11 +3,12 @@
 #include Extattr.vih
 #include Query.vih
 #include Userreport.vih
+#include getkau.vih
 
 #component "AGAT"
 
-interface SyncCleverence 'Обмен данными с сервером ТСД', escclose;
-show (,,118,15);
+interface SyncCleverence 'Обмен данными с ТСД', escclose;
+show (,,48,11);
 #include SyncCleverenceQueries.inc
 
 table struct tCats (
@@ -70,6 +71,10 @@ var
   _writer   : Cleverence::IWriter;
   _reader   : Cleverence::IReader;
   _docReader: Cleverence::DocumentReader new;
+  _getkau   : GetKAU;
+  _syncYear, _syncMonth: word;
+  _lPodr, _lMOL: longint;
+  _syncFlags: word;
 
 create view
 as select *
@@ -89,18 +94,119 @@ where ((
   invtab.nrec == spinvtab.cinvtab
 ));
 
+window wLog 'Лог обмена данными с ТСД', escclose;
 embedded scLog interface _logger.wLog;
-show(,3,,);
+end;
 end;
 
+//#region Screen Main Handlers
+
+function GetMarkerFilterName(l: longint; kodgrkau: word): string;
+{
+  var cnt: longint;
+  cnt := getmarkercount(l);
+  if cnt = 0
+  {
+    result := 'Все'
+  }
+  else if cnt = 1
+  {
+    var c: comp;
+    if getmarker(l, 0, c)
+    {
+      result := if(getanykau(1,kodgrkau,c), givenanname(1), '??? Nrec='+c);
+    }
+    else
+      result := 'Ошибка. Выберите еще раз';
+  }
+  else
+    result := 'Выбрано элементов: '+cnt;
+}
+
+function GetPodrFilterName: string;
+{
+  result := GetMarkerFilterName(_lPodr, 2);
+}
+
+function GetMOLFilterName: string;
+{
+  result := GetMarkerFilterName(_lMOL, 60);
+}
+
+function PickMarkerFilter(var l: longint; kodgrkau: word): boolean;
+{
+  result := false;
+  var c: comp;
+  if _getkau.GetCodeKau(2, kodgrkau, c) > 0
+  {
+    if (l != 0) DoneMarker(l,'');
+    l := initMarker(_getkau.GetMarkerName(kodgrkau), 8, 10, 10, false);
+    result := true;
+  }
+}
+
+procedure PickPodrFilter;
+{
+  if PickMarkerFilter(_lPodr, 2) rereadrecord;
+}
+
+procedure PickMOLFilter;
+{
+  if PickMarkerFilter(_lMOL, 60) rereadrecord;
+}
+
+procedure ShowLogWindow;
+{
+  runwindow(wLog);
+}
+
 screen scMain;
-show (,,,2) fixed_y;
+fields
+  _syncMonth: [list 1 'Январь', 2 'Февраль', 3 'Март', 4 'Апрель', 5 'Май', 6 'Июнь',
+                    7 'Июль', 8 'Август', 9 'Сентябрь', 10 'Октябрь', 11 'Ноябрь', 12 'Декабрь'];
+  _syncYear: noprotect, spinbutton [1, 1900, 2100];
+  [PodrFilterName] GetPodrFilterName: protect, pickbutton;
+  [MOLFilterName] GetMOLFilterName: protect, pickbutton;
+  _syncFlags: noprotect;
 buttons
   cmDoSync, default;
+  cmShowLog;
 <<
- <.                                                 Синхронизация                                                 .>
+
+ `Месяц` .@@@@@@@@@@@@@@@ `Год`  .@@@@@@
+
+ `Подразделение` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ `МОЛ`           .@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+  [.] Выгружать справочники ОС и МБП`
+  [.] Выгружать места хранения`
+
+ <. Синхронизация .> <. Показать лог обмена .>
 >>
 end;
+
+handleevent
+  cmPick:
+  {
+    case curfield of
+      #PodrFilterName: PickPodrFilter;
+      #MOLFilterName : PickMOLFilter;
+    end;
+  }
+  cmDelOnProtect:
+  {
+    case curfield of
+      #PodrFilterName: { clearmarker(_lPodr); rereadrecord; }
+      #MOLFilterName : { clearmarker(_lMOL);  rereadrecord; }
+    end;
+  }
+  cmShowLog:
+  {
+    ShowLogWindow;
+  }
+end;
+
+//#endregion
 
 //#region Logger
 
@@ -247,6 +353,42 @@ function ExportCells: boolean;
 
 //#region SyncDocs
 
+function AllDocsFinished(docYear: word; docMonth: word; docPodrNrec: comp; docMOLNrec: comp): boolean;
+{
+  result := false;
+
+  var d1,d2: date;
+  d1 := date(1,docMonth, docYear);
+  d2 := date(last_day(d1), docMonth, docYear);
+
+  var q: IQuery;
+  q := queryManager.createQuery(qDocs);
+  q.setParam('podrNrec',docPodrNrec);
+  q.setParam('MOLNrec',docMOLNrec);
+  q.setParam('startdate',d1);
+  q.setParam('enddate',d2);
+
+  var rs: IResultSet;
+  rs := q.getResultSet;
+
+  if rs != nullref
+  {
+    result := true;
+    if (rs.getfirst = tsOk) do
+    {
+      var d: longint;
+      d := rs.row.val('docEndDate');
+      if d = 0
+      {
+        result := false;
+        break;
+      }
+    } while rs.getnext = tsOk;
+  }
+  else
+    message('AllDocsFinished. Ошибка выполнения запроса qDocs');
+}
+
 function ExportDocs: boolean;
 var
   q : IQuery;
@@ -256,12 +398,15 @@ var
 
   LogInfo(0, 'Экспорт документов инвентаризаций');
 
-  var docsDateFrom: date;
-  docsDateFrom := dGetTune('AGAT.BARCODE.DOCSTARTDATE');
+  //период
+  var d1, d2: date;
+  d1 := date(1,_syncMonth,_syncYear);
+  d2 := date(last_day(d1),_syncMonth,_syncYear);
 
   //заполняем временную таблицу спецификаций документов
   q := queryManager.createQuery(qSpDocs);
-  q.setParam('date', docsDateFrom);
+  q.setParam('startdate', d1);
+  q.setParam('enddate', d2);
   q.setParam('anPlacePlan', ATTRNAME_INVOS_PLACE_PLAN);
   q.setParam('anPlaceFact', ATTRNAME_INVOS_PLACE_FACT);
 
@@ -275,10 +420,19 @@ var
   delete all tspdocs;
   sqlCopyInto(rs, #tspdocs, true);
 
+  var allPodr: boolean;
+  allPodr := getmarkercount(_lPodr) = 0;
+
+  var allMOL: boolean;
+  allMOL := getmarkercount(_lMOL) = 0;
+
   //заполняем временную таблицу документов
   delete all tdocs;
   _loop tspdocs
   {
+    if not ( allPodr or foundmarker(_lPodr, tspdocs.PodrNrec) ) continue;
+    if not ( allMOL  or foundmarker(_lMOL , tspdocs.MOLNrec ) ) continue;
+
     if getfirst tdocs where ((tspdocs.Year == tdocs.Year and tspdocs.Month == tdocs.Month and tspdocs.PodrNrec == tdocs.PodrNrec and tspdocs.MOLNrec == tdocs.MOLNrec)) != tsOk
     {
       clearbuffer(#tdocs);
@@ -313,6 +467,7 @@ var
     _writer.SetValue(2, 'Month');
     _writer.SetValue(3, 'PodrNrec');
     _writer.SetValue(4, 'MOLNrec');
+    _writer.SetValue(5, 'Finished');
     _writer.WriteBuffer;
 
     _writer.ClearBuffer;
@@ -323,6 +478,7 @@ var
     _writer.SetValue(2, tdocs.Month);
     _writer.SetValue(3, string(tdocs.PodrNrec,0,0));
     _writer.SetValue(4, string(tdocs.MOLNrec,0,0));
+    _writer.SetValue(5, if(AllDocsFinished(tdocs.year, tdocs.Month, tdocs.PodrNrec, tdocs.MOLNrec), 'True', 'False'));
     _writer.WriteBuffer;
 
     _writer.ClearBuffer;
@@ -343,11 +499,14 @@ var
       {
         _writer.SetValue(0, tcats.barcode);
         _writer.SetValue(1, doubletostr(tspdocs.kolPlan, '[|-]3666,88'));
-        _writer.SetValue(2, '0');
+        if (tspdocs.placePlan = tspdocs.placeFact)
+          _writer.SetValue(2, doubletostr(tspdocs.kolFact, '[|-]3666,88'));
+        else
+          _writer.SetValue(2, '0');
         _writer.SetValue(3, tspdocs.placePlan);
         _writer.WriteBuffer;
       }
-      if (tspdocs.KolFact > 0 and tspdocs.placeFact <> '')
+      if (tspdocs.KolFact > 0 and tspdocs.placeFact <> '' and tspdocs.placePlan <> tspdocs.placeFact)
       {
         _writer.SetValue(0, tcats.barcode);
         _writer.SetValue(1, '0');
@@ -433,6 +592,7 @@ procedure SetMBPInvItem(mbpmoveNrec: comp; item:CLEVERENCE::IDocumentItem);
 
 function ImportDoc(d: CLEVERENCE::IDocument): boolean;
 {
+  result := false;
 
   LogInfo(1, 'Импорт документа '+d.name);
 
@@ -488,6 +648,8 @@ function ImportDoc(d: CLEVERENCE::IDocument): boolean;
       KIND_MBP: if (mbpmoveEditable) SetMBPInvItem(mbpmoveNrec, item);
     end;
   }
+
+  result := true;
 }
 
 function ImportDocs: boolean;
@@ -503,7 +665,7 @@ function ImportDocs: boolean;
 
   var fname: string;
   fname := GetFirstFile(sGetTune('AGAT.BARCODE.IMPORTPATH'), 'Инвентаризация №*.csv');
-  while (fname != '')
+  while (fname != strDataIsEmpty )
   {
     d := _docReader.Load(fname);
     if (d != nullref)
@@ -514,6 +676,7 @@ function ImportDocs: boolean;
     DeleteFile(fname);
     fname := GetNextFile;
   }
+  LogSuccess(1, 'Импорт документов инвентаризаций завершен успешно');
 }
 
 //#endregion
@@ -572,15 +735,55 @@ handleevent
 cmDoSync:
 {
   startnewvisual(vtRotateVisual, vfTimer, '', 0);
-  //RunSyncUtilImport;
+
+  var isSuccess: boolean;
+
+  var doExportCatalogs: boolean;
+  doExportCatalogs := (_syncFlags and 1) > 0;
+
+  var doExportCells: boolean;
+  doExportCells := (_syncFlags and 2) > 0;
+
+  RunSyncUtilImport;
   ImportDocs;
-  //if not ExportCatalogs
-  //  message('Ошибка экспорта справочников МБП и ОС', error)
-  //else if not ExportCells
-  //  message('Ошибка экспорта мест хранения', error)
-  //else if not ExportDocs
-  //  message('Ошибка экспорта документов', error);
-  //else RunSyncUtilExport;
+
+  isSuccess := true;
+
+  if doExportCatalogs
+  {
+    isSuccess := ExportCatalogs;
+    if not isSuccess message('Ошибка экспорта справочников МБП и ОС', error);
+  }
+
+  if doExportCells and isSuccess
+  {
+    isSuccess := ExportCells;
+    if not isSuccess message('Ошибка экспорта мест хранения', error)
+  }
+
+  if isSuccess
+  {
+    isSuccess := ExportDocs;
+    if not isSuccess message('Ошибка экспорта документов', error);
+  }
+
+  if isSuccess
+  {
+    isSuccess := RunSyncUtilExport;
+  }
+
+  RunSyncUtilImport;
+  ImportDocs;
+
+  if isSuccess
+  {
+    message('Обмен с ТСД завершен успешно');
+  }
+  else
+  {
+    ShowLogWindow;
+  }
+
   stopvisual('',0)
 }
 
@@ -601,6 +804,20 @@ cmInit:
   _docReader.IReaderSet(_reader);
 
   SetCurLogger(_logger);
+
+  if not readmydsk(_syncYear, 'SyncCleverence_syncYear', false) _syncYear := year(cur_date);
+  if not readmydsk(_syncMonth, 'SyncCleverence_syncMonth', false) _syncMonth := month(cur_date);
+  _lPodr := initmarker('SyncCleverence_lPodr', 8, 10, 10, false);
+  _lMOL := initmarker('SyncCleverence_lMOL', 8, 10, 10, false);
+  _syncFlags := 11111111b;
+}
+
+cmDone:
+{
+  savemydsk(_syncYear, 'SyncCleverence_syncYear');
+  savemydsk(_syncMonth, 'SyncCleverence_syncMonth');
+  donemarker(_lPodr, 'SyncCleverence_lPodr');
+  donemarker(_lMOL, 'SyncCleverence_lMOL');
 }
 
 end;
@@ -617,7 +834,7 @@ Interface UserReport_SyncCleverence;
 
   function GetReportName: String;
   begin
-    GetReportName := '0100 Обмен данными с сервером ТСД (2015)';
+    GetReportName := '0100 Обмен данными с ТСД (2015)';
   end;
 
   function GetGroupName (Level : Word) : String;

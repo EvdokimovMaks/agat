@@ -61,7 +61,7 @@ left join attrval avPlacePlan on spinvtab.nrec = avPlacePlan.crec and anPlacePla
 left join attrval avPlaceFact on spinvtab.nrec = avPlaceFact.crec and anPlaceFact.nrec = avPlaceFact.cattrnam
 left join spkau spkPlacePlan on avPlacePlan.vComp = spkPlacePlan.nrec
 left join spkau spkPlaceFact on avPlaceFact.vComp = spkPlaceFact.nrec
-where invtab.tipdoc = 15 and invtab.dinvend = 0 and invtab.dinv >= :date
+where invtab.tipdoc = 15 and invtab.dinv between :startdate and :enddate    //invtab.dinvend = 0 and
 
 union all
 
@@ -79,5 +79,17 @@ from mbpmove
 join mbpinv on mbpmove.nrec = mbpinv.cmove
 left join spkau spkPlacePlan on mbpinv.crecs[2] = spkPlacePlan.nrec
 left join spkau spkPlaceFact on mbpinv.crecs[3] = spkPlaceFact.nrec
-where mbpmove.status = 11 and mbpmove.cvalold = #comp(0) and mbpmove.dmove >= :date
+where mbpmove.status = 11  and mbpmove.dmove between :startdate and :enddate   //and mbpmove.cvalold = #comp(0)
+;
+
+sql query qDocs =
+select 1 as docType, invtab.nrec as docNrec, (cast(invtab.dinvend as longint)) as docEndDate
+from invtab
+where invtab.tipdoc = 15 and invtab.cSklad=:podrNrec and invtab.cMOL=:MOLNrec and (invtab.dinv between :startdate and :enddate )
+
+union all
+
+select 2 as docType, mbpmove.nrec as docNrec, (cast(mbpmove.cvalold as longint)) as docEndDate
+from mbpmove
+where mbpmove.status = 11 and mbpmove.cpodrf=:podrNrec and mbpmove.cMOLf=:MOLNrec and (mbpmove.dmove between :startdate and :enddate )
 ;
