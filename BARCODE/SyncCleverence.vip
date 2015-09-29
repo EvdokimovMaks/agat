@@ -1,56 +1,85 @@
-#include Cleverence.Warehouse.vih
+#include Cleverence.vih
 #include Logger.vih
 #include Extattr.vih
 #include Query.vih
 #include Userreport.vih
+#include getkau.vih
 
 #component "AGAT"
 
-interface SyncCleverence 'Обмен данными с сервером ТСД', escclose;
-show (,,118,15);
+interface SyncCleverence 'Обмен данными с ТСД', escclose;
+show (,,48,11);
 #include SyncCleverenceQueries.inc
 
-table struct tdocs (
-  kind     : word,
-  nrec     : comp,
-  startDate: date,
-  name     : string
+table struct tCats (
+  kind: word,
+  nrec: comp,
+  name: string,
+  barcode: string[50],
+  mol: string,
+  podr: string,
+  datek: date,
+  place: string,
+  innum: string[50]
 ) with index (
-  i01 = kind + nrec
+  i01 = kind + nrec (unique)
+);
+
+table struct tdocs (
+  Year     : word,
+  Month    : word,
+  PodrNrec : comp,
+  MOLNrec  : comp
+) with index (
+  i01 = Year + Month + PodrNrec + MOLNrec
 );
 
 table struct tSpDocs (
-  kind     : word,
-  docNrec  : comp,
-  spDocNrec: comp,
+  Year     : word,
+  Month    : word,
+  PodrNrec : comp,
+  MOLNrec  : comp,
+  Kind     : word,
   cRec     : comp,
   placePlan: string,
   placeFact: string,
   kolPlan  : double,
   kolFact  : double
 ) with index (
-  i01 = kind + docNrec
+  i01 = Year + Month + PodrNrec + MOLNrec + Kind
+);
+
+table struct tcells (
+  barcode: string[50],
+  name: string
+) with index (
+  i01 = barcode (unique)
 );
 
 const
   KIND_OS = 1;
   KIND_MBP = 2;
-  KIND_INVOS = 3;
-  KIND_INVMBP = 4;
   DOCTYPE_INV = 'Инвентаризация';
 end;
 
 type tspkau = record as table spkau;
 
 var
-  _connector: CLEVERENCE::oStorageConnector;
-  _logger: UTILS::Logger new;
+  _logger   : UTILS::Logger new;
   _curLogger: UTILS::Logger noauto;
-  _extAttr: IExtAttr;
+  _extAttr  : IExtAttr;
+  _writer   : Cleverence::IWriter;
+  _reader   : Cleverence::IReader;
+  _docReader: Cleverence::DocumentReader new;
+  _getkau   : GetKAU;
+  _syncYear, _syncMonth: word;
+  _lPodr, _lMOL: longint;
+  _syncFlags: word;
 
 create view
 as select *
-from spkau spkCells, tdocs, tSpDocs, spkau, mbpinv, mbpin, spinvtab
+from spkau spkCells, tCats, tdocs, tSpDocs, tcells, spkau, invtab, spinvtab, mbpmove, mbpinv,
+     mbpin, kaureff, katpodr, katmbp
 where ((
   KODGRKAU_PLACE == spkCells.kodgrkau
 ));
@@ -65,18 +94,119 @@ where ((
   invtab.nrec == spinvtab.cinvtab
 ));
 
+window wLog 'Лог обмена данными с ТСД', escclose;
 embedded scLog interface _logger.wLog;
-show(,3,,);
+end;
 end;
 
+//#region Screen Main Handlers
+
+function GetMarkerFilterName(l: longint; kodgrkau: word): string;
+{
+  var cnt: longint;
+  cnt := getmarkercount(l);
+  if cnt = 0
+  {
+    result := 'Все'
+  }
+  else if cnt = 1
+  {
+    var c: comp;
+    if getmarker(l, 0, c)
+    {
+      result := if(getanykau(1,kodgrkau,c), givenanname(1), '??? Nrec='+c);
+    }
+    else
+      result := 'Ошибка. Выберите еще раз';
+  }
+  else
+    result := 'Выбрано элементов: '+cnt;
+}
+
+function GetPodrFilterName: string;
+{
+  result := GetMarkerFilterName(_lPodr, 2);
+}
+
+function GetMOLFilterName: string;
+{
+  result := GetMarkerFilterName(_lMOL, 60);
+}
+
+function PickMarkerFilter(var l: longint; kodgrkau: word): boolean;
+{
+  result := false;
+  var c: comp;
+  if _getkau.GetCodeKau(2, kodgrkau, c) > 0
+  {
+    if (l != 0) DoneMarker(l,'');
+    l := initMarker(_getkau.GetMarkerName(kodgrkau), 8, 10, 10, false);
+    result := true;
+  }
+}
+
+procedure PickPodrFilter;
+{
+  if PickMarkerFilter(_lPodr, 2) rereadrecord;
+}
+
+procedure PickMOLFilter;
+{
+  if PickMarkerFilter(_lMOL, 60) rereadrecord;
+}
+
+procedure ShowLogWindow;
+{
+  runwindow(wLog);
+}
+
 screen scMain;
-show (,,,2) fixed_y;
+fields
+  _syncMonth: [list 1 'Январь', 2 'Февраль', 3 'Март', 4 'Апрель', 5 'Май', 6 'Июнь',
+                    7 'Июль', 8 'Август', 9 'Сентябрь', 10 'Октябрь', 11 'Ноябрь', 12 'Декабрь'];
+  _syncYear: noprotect, spinbutton [1, 1900, 2100];
+  [PodrFilterName] GetPodrFilterName: protect, pickbutton;
+  [MOLFilterName] GetMOLFilterName: protect, pickbutton;
+  _syncFlags: noprotect;
 buttons
   cmDoSync, default;
+  cmShowLog;
 <<
-<.                                                  Синхронизация                                                  .>
+
+ `Месяц` .@@@@@@@@@@@@@@@ `Год`  .@@@@@@
+
+ `Подразделение` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ `МОЛ`           .@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+  [.] Выгружать справочники ОС и МБП`
+  [.] Выгружать места хранения`
+
+ <. Синхронизация .> <. Показать лог обмена .>
 >>
 end;
+
+handleevent
+  cmPick:
+  {
+    case curfield of
+      #PodrFilterName: PickPodrFilter;
+      #MOLFilterName : PickMOLFilter;
+    end;
+  }
+  cmDelOnProtect:
+  {
+    case curfield of
+      #PodrFilterName: { clearmarker(_lPodr); rereadrecord; }
+      #MOLFilterName : { clearmarker(_lMOL);  rereadrecord; }
+    end;
+  }
+  cmShowLog:
+  {
+    ShowLogWindow;
+  }
+end;
+
+//#endregion
 
 //#region Logger
 
@@ -114,102 +244,16 @@ procedure LogInfo   (indent: byte; s: string);
 }
 //#endregion
 
-function Connect: boolean;
-{
-  var connString: string;
-  connString := sGetTune('AGAT.BARCODE.CONNECTIONSTRING');
-  LogInfo(0, 'Подключение к серверу "'+connString+'"');
-  if _connector.InitializeServerConnection(connString)
-  {
-    LogSuccess(1, 'Подключение успешно');
-    result := true;
-  }
-  else
-  {
-    LogError(1, 'Ошибка подключения');
-    result := false;
-  }
-}
-
 //#region SyncCatalogs
 
-function NewProductCollection(var pc: CLEVERENCE::oCollection): boolean;
-{
-  pc := _connector.CreateProductCollection;
-  if pc = nullref
-  {
-    LogError(1,'Cleverence. Ошибка создания коллекции Products');
-    result := false;
-  }
-  else
-    result := true;
-}
-
-function SetProductPacking(aProduct: CLEVERENCE::oProduct): boolean;
-{
-  result := false;
-  var packing: CLEVERENCE::oPacking;
-  packing := _connector.CreatePacking;
-  if (packing = nullref)
-  {
-    LogError(1,'Cleverence. Ошибка создания Packing');
-    exit;
-  }
-  packing.Id := 1;
-  packing.name := 'шт';
-  packing.barcode := aProduct.Barcode;
-  aProduct.packings.Add(packing);
-  aProduct.BasePackingId := packing.Id;
-  FreeVipInterface(packing);
-  result := true;
-}
-
-function SetProductField(aProduct: CLEVERENCE::oProduct; aFieldName: string; aFieldValue: string): boolean;
-{
-  result := false;
-  var fieldValue: CLEVERENCE::oFieldValue;
-  fieldValue := _connector.CreateFieldValue;
-  if (fieldValue = nullref)
-  {
-    LogError(1,'Cleverence. Ошибка создания fieldValue');
-    exit;
-  }
-  fieldValue.FieldName := aFieldName;
-  fieldValue.Value := aFieldValue;
-  aProduct.Fields.Add(fieldValue);
-  FreeVipInterface(fieldValue);
-  result := true;
-}
-
-function NewProduct(var aProduct: CLEVERENCE::oProduct; aId: string; aBarcode: string; aName: string): boolean;
-{
-  result := false;
-  aProduct := _connector.CreateProduct;
-  if aProduct = nullref
-  {
-    LogError(1, 'Cleverence. Ошибка создания Product');
-    exit;
-  }
-  aProduct.Id := aId;
-  aProduct.Name := aName;
-  aProduct.Barcode := aBarcode;
-  aProduct.UnitConvertionRate := 1;
-  result := true;
-}
-
-function SyncCatalogs: boolean;
+function ExportCatalogs: boolean;
 {
   result := false;
 
   LogInfo(0, 'Экспорт справочников ОС и МБП');
-  LogInfo(1, 'Выбор элементов справочников, измененных с даты последней успешной синхронизации');
 
   var q: IQuery;
   q := queryManager.CreateQuery(qOSMBP);
-  var syncDate: date; syncDate := dGetTune('AGAT.BARCODE.LASTCATSYNCDATE');
-  var syncTime: time; syncTime := tGetTune('AGAT.BARCODE.LASTCATSYNCTIME');
-  q.setParam('date', syncDate);
-  q.setParam('time', syncTime);
   q.setParam('anMBPBarcode', ATTRNAME_MBP_BARCODE);
   q.setParam('anMBPPlace', ATTRNAME_MBP_PLACE);
 
@@ -221,71 +265,45 @@ function SyncCatalogs: boolean;
     LogError(1, 'Ошибка выполнения запроса. Код ошибки:' + q.errorCode);
     exit;
   }
+  delete all tCats;
+  sqlCopyInto(rs, #tCats, false);
 
-  var products: CLEVERENCE::oCollection;
-  var product: CLEVERENCE::oProduct;
+  var fname: string;
+  fname := translatepath(sgettune('AGAT.BARCODE.EXPORTPATH')+'Номенклатура.csv');
+  if not _writer.Open(fname)
+  {
+    LogError(1, 'Ошибка формирования файла '+fname);
+    LogError(1, 'Проверьте доступ на запись');
+    exit;
+  }
 
-  var i, cnt: longint;
-  var isUserBreak: boolean;
-
-  if not NewProductCollection(products) exit;
-
-  i := 0; cnt := 0;
-  isUserBreak := false;
-
-  StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak+vfThread, '', rs.count);
+  _writer.ClearBuffer;
+  _writer.SetValue(0, 'Идентификатор');
+  _writer.SetValue(1, 'Штрихкод');
+  _writer.SetValue(2, 'Наименование');
+  _writer.SetValue(3, 'МОЛ');
+  _writer.SetValue(4, 'Подразделение');
+  _writer.SetValue(5, 'ДатаВводаВЭксплуатацию');
+  _writer.SetValue(6, 'АдресМестонахождения');
+  _writer.SetValue(7, 'ИнвентарныйНомер');
+  _writer.WriteBuffer;
 
   if (rs.getFirst = tsOk) do
   {
-    if not NewProduct(product, rs.row.Val('kind')+string(rs.row.Val('nrec'),0,0), rs.row.Val('barcode'), rs.row.Val('name')) exit;
-
-    if not SetProductPacking(product) exit;
-
-    if not SetProductField(product, 'МОЛ', rs.row.Val('mol')) exit;
-    if not SetProductField(product, 'Подразделение', rs.row.Val('podr')) exit;
-    if not SetProductField(product, 'ДатаВводаВЭксплуатацию', rs.row.Val('datek')) exit;
-    if not SetProductField(product, 'АдресМестонахождения', rs.row.Val('place')) exit;
-    if not SetProductField(product, 'ИнвентарныйНомер', rs.row.Val('innum')) exit;
-
-    products.Add(product);
-
-    FreeVipInterface(product);
-
-    i++;
-    cnt++;
-
-    if (i = 1000) then
-    {
-      LogInfo(1, 'Экспортировано позиций '+cnt+' из '+rs.count);
-      _connector.SetProducts(products);
-      FreeVipInterface(products);
-      i := 0;
-      if not NewProductCollection(products) exit;
-    }
-
-    if not nextvisual
-    {
-      isUserBreak := true;
-      break;
-    }
-
+    _writer.SetValue(0, string(rs.row.Val('kind'))+string(rs.row.Val('nrec'),0,0));
+    _writer.SetValue(1, rs.row.Val('barcode'));
+    _writer.SetValue(2, rs.row.Val('name'));
+    _writer.SetValue(3, rs.row.Val('MOL'));
+    _writer.SetValue(4, rs.row.Val('Podr'));
+    _writer.SetValue(5, datetostr(rs.row.Val('datek'),'DD.MM.YYYY'));
+    _writer.SetValue(6, rs.row.Val('place'));
+    _writer.SetValue(7, rs.row.Val('innum'));
+    _writer.WriteBuffer;
   } while (rs.getNext = tsOk);
 
-  StopVisual('',0);
+  _writer.close;
 
-  if isUserBreak
-  {
-    LogWarning(1, 'Прерван пользователем. Обработано позиций '+cnt+' из '+rs.count);
-  }
-  else
-  {
-    LogSuccess(1, 'Завершен успешно. Обработано позиций '+cnt+' из '+rs.count);
-    dSetTune('AGAT.BARCODE.LASTCATSYNCDATE', cur_date);
-    tSetTune('AGAT.BARCODE.LASTCATSYNCTIME', cur_time);
-    _connector.SetProducts(products);
-  }
-
-  FreeVipInterface(products);
+  LogSuccess(1, 'Экспорт справочников ОС и МБП завершен успешно');
   result := true;
 }
 
@@ -293,215 +311,217 @@ function SyncCatalogs: boolean;
 
 //#region SyncCells
 
-function NewEnvironment(var aEnvironment: CLEVERENCE::oEnvironment): boolean;
-{
-  aEnvironment := _connector.GetEnvironment;
-  if aEnvironment = nullref
-  {
-    LogError(1, 'Cleverence. Ошибка получения Environment');
-    result := false;
-  }
-  else
-    result := true;
-}
-
-function GetWarehouse(aEnvironment: CLEVERENCE::oEnvironment; var aWarehouse: CLEVERENCE::oWarehouse; aWarehouseIndex: integer): boolean;
-{
-  result := false;
-
-  if aEnvironment.warehouses = nullref
-  {
-    LogError(1, 'Cleverence. Ошибка получения коллекции складов');
-    exit;
-  }
-
-  if aEnvironment.warehouses.count <= aWarehouseIndex
-  {
-    LogError(1, 'Cleverence. Ошибка получения склада ' + aWarehouseIndex + '. Количество складов: '+ aEnvironment.warehouses.count);
-    exit;
-  }
-
-  aWarehouse := oWarehouse(aEnvironment.warehouses.Item(aWarehouseIndex));
-  if aWarehouse = nullref
-  {
-    LogError(1, 'Cleverence. Ошибка получения склада '+aWarehouseIndex);
-    exit;
-  }
-
-  result := true;
-}
-
-function SyncCells: boolean;
+function ExportCells: boolean;
 {
   result := false;
   LogInfo(0, 'Экспорт мест хранения');
 
-  var environment: CLEVERENCE::oEnvironment;
-  if not NewEnvironment(environment) exit;
-
-  var warehouse: CLEVERENCE::oWarehouse;
-  if not GetWarehouse(environment, warehouse, 0) exit;
-
-  var wc: CLEVERENCE::oCollection
-  wc := _connector.CreateWarehouseCollection;
-  if wc = nullref
+  var fname: string;
+  fname := translatepath(sgettune('AGAT.BARCODE.EXPORTPATH')+'Места хранения.csv');
+  if not _writer.Open(fname)
   {
-    LogError(1, 'Cleverence. Ошибка создания коллекции складов');
+    LogError(1, 'Ошибка формирования файла '+fname);
+    LogError(1, 'Проверьте доступ на запись');
     exit;
   }
 
-  var place: CLEVERENCE::oCell;
-  var cnt: longint; cnt := 0;
-  var isUserBreak: boolean; isUserBreak := false;
+  _writer.ClearBuffer;
+  _writer.SetValue(0, 'Штрихкод');
+  _writer.SetValue(1, 'Наименование');
+  _writer.WriteBuffer;
 
-  StartNewVisual(vtRotateVisual, vfTimer+vfBreak, 'Экспорт мест хранения', 0);
+  delete all tCells;
 
   _loop spkCells
   {
-    cnt++;
-
-    place := CLEVERENCE::oCell(warehouse.cells.FindBy('barcode', spkCells.code));
-    if place != nullref
+    if getfirst tCells where ((spkCells.Code == tCells.barcode)) != tsOk
     {
-      place.barcode := spkCells.code;
-      place.name := spkCells.name;
+      _writer.SetValue(0, spkCells.Code);
+      _writer.SetValue(1, spkCells.Name);
+      _writer.WriteBuffer;
+      insert tCells set tCells.barcode := spkCells.Code, tCells.name := spkCells.Name;
     }
-    else
-    {
-      place := _connector.CreateCell;
-      if place = nullref
-      {
-        LogError(1, 'Cleverence. Ошибка создания ячейки');
-        exit;
-      }
-      place.barcode := spkCells.code;
-      place.name := spkCells.name;
-
-      warehouse.cells.add(place);
-    }
-
-    FreeVipInterface(place);
-
-    if not nextvisual
-    {
-      isUserBreak := true;
-      LogWarning(1, 'Прерван пользователем. Обработано позиций: ' + cnt);
-      break;
-    }
-
   }
 
-  StopVisual('',0);
+  _writer.close;
 
-  wc.add(warehouse);                        // Добавляем склад в коллекцию складов
-  _connector.SetWarehouses(wc);             // Записываем коллекцию складов
-  FreeVipInterface(warehouse);
-  FreeVipInterface(wc);
-
-  if not isUserBreak
-    LogSuccess(1, 'Завершен успешно. Обработано позиций: ' + cnt);
-
+  LogSuccess(1, 'Экспорт мест хранения завершен успешно');
   result := true;
 }
 
 //#endregion
 
 //#region SyncDocs
-function GetDocsCollection( docType: string; checkForFinish: boolean; var aCollection: CLEVERENCE::oCollection): boolean;
+
+function AllDocsFinished(docYear: word; docMonth: word; docPodrNrec: comp; docMOLNrec: comp): boolean;
 {
   result := false;
-  aCollection := _connector.GetDocuments(docType, checkForFinish);
-  if aCollection = nullref
-  {
-    LogError(1, 'Cleverence. Ошибка получения коллекции документов');
-    exit;
-  }
-  result := true;
-}
 
-function FindDocByBarcode(aDocCollection: CLEVERENCE::oCollection; aBarcode: string; var aDocument: CLEVERENCE::oDocument): boolean;
-{
-  result := false;
-  var col: CLEVERENCE::oCollection;
-  col := CLEVERENCE::oCollection(aDocCollection.FindBy('Barcode', aBarcode));
-  if col = nullref
-  {
-    LogError(1, 'Cleverence. Ошибка поиска документа по баркоду');
-    exit;
-  }
-  if col.count = 0 exit;
-  aDocument := CLEVERENCE::oDocument(col.Item(0));
-  freevipinterface(col);
-  result := true;
-}
+  var d1,d2: date;
+  d1 := date(1,docMonth, docYear);
+  d2 := date(last_day(d1), docMonth, docYear);
 
-function CreateNewDocument(var aDocument:CLEVERENCE::oDocument; docType: string; docId: string; docDate: date): boolean;
-{
-  result := false
-  aDocument := _connector.CreateDocument;
-  if aDocument = nullRef
-  {
-    LogError(1, 'Ошибка создания документа');
-    exit;
-  }
-  if (docType != '') aDocument.DocumentTypeName := docType;
-  if (docId   != '')
-  {
-    aDocument.Id := docId;
-    aDocument.Barcode := docId;
-  }
-  if (docDate != 0 ) aDocument.CreateDate := docDate;
-  result := true;
-}
+  var q: IQuery;
+  q := queryManager.createQuery(qDocs);
+  q.setParam('podrNrec',docPodrNrec);
+  q.setParam('MOLNrec',docMOLNrec);
+  q.setParam('startdate',d1);
+  q.setParam('enddate',d2);
 
-function GetDocumentItem(aDocumentItems:CLEVERENCE::oCollection; var aDocumentItem:CLEVERENCE::oDocumentItem; aProductId: string): boolean;
-{
-  result := false;
-  var col: CLEVERENCE::oCollection;
-  col := CLEVERENCE::oCollection(aDocumentItems.FindBy('ProductId', aProductId));
-  if col = nullref
+  var rs: IResultSet;
+  rs := q.getResultSet;
+
+  if rs != nullref
   {
-    LogError(1, 'Cleverence. Ошибка поиска позиции документа');
-    exit;
-  }
-  if col.count = 0
-  {
-    aDocumentItem := _connector.CreateDocumentItem;
-    if aDocumentItem = nullref
+    result := true;
+    if (rs.getfirst = tsOk) do
     {
-      LogError(1, 'Cleverence. Ошибка создания строки спецификации документа');
-      exit;
-    }
-    aDocumentItem.ProductId := aProductId;
-    aDocumentItem.PackingId := 1;
-    aDocumentItems.Add(aDocumentItem);
+      var d: longint;
+      d := rs.row.val('docEndDate');
+      if d = 0
+      {
+        result := false;
+        break;
+      }
+    } while rs.getnext = tsOk;
   }
   else
-  {
-    aDocumentItem := CLEVERENCE::oDocumentItem(col.Item(0));
-  }
-  freevipinterface(col);
-  result := true;
+    message('AllDocsFinished. Ошибка выполнения запроса qDocs');
 }
 
-procedure RemoveDocs(docsCollection: CLEVERENCE::oCollection);
+function ExportDocs: boolean;
+var
+  q : IQuery;
+  rs: IResultSet;
 {
-  var document: CLEVERENCE::oDocument;
-  var i: longint;
-  var docKind: word;
-  var docNrec: comp;
+  result := true;
 
-  for (i := 0; i < docsCollection.count; ++i)
+  LogInfo(0, 'Экспорт документов инвентаризаций');
+
+  //период
+  var d1, d2: date;
+  d1 := date(1,_syncMonth,_syncYear);
+  d2 := date(last_day(d1),_syncMonth,_syncYear);
+
+  //заполняем временную таблицу спецификаций документов
+  q := queryManager.createQuery(qSpDocs);
+  q.setParam('startdate', d1);
+  q.setParam('enddate', d2);
+  q.setParam('anPlacePlan', ATTRNAME_INVOS_PLACE_PLAN);
+  q.setParam('anPlaceFact', ATTRNAME_INVOS_PLACE_FACT);
+
+  rs := q.getResultSet;
+  if (rs = nullref)
   {
-    document := CLEVERENCE::oDocument(docsCollection.Item(i));
-    docKind := substr(document.Id,1,1);
-    docNrec := substr(document.Id,2,18);
-    if getfirst tDocs where ((docKind == tDocs.kind and docNrec == tDocs.nrec)) != tsOk
-    {
-      _connector.RemoveDocument(document.Id);
-    }
-    freevipinterface(document);
+    LogError(1, 'Ошибка выполнения запроса'+q.errorCode);
+    result := false;
+    exit;
   }
+  delete all tspdocs;
+  sqlCopyInto(rs, #tspdocs, true);
+
+  var allPodr: boolean;
+  allPodr := getmarkercount(_lPodr) = 0;
+
+  var allMOL: boolean;
+  allMOL := getmarkercount(_lMOL) = 0;
+
+  //заполняем временную таблицу документов
+  delete all tdocs;
+  _loop tspdocs
+  {
+    if not ( allPodr or foundmarker(_lPodr, tspdocs.PodrNrec) ) continue;
+    if not ( allMOL  or foundmarker(_lMOL , tspdocs.MOLNrec ) ) continue;
+
+    if getfirst tdocs where ((tspdocs.Year == tdocs.Year and tspdocs.Month == tdocs.Month and tspdocs.PodrNrec == tdocs.PodrNrec and tspdocs.MOLNrec == tdocs.MOLNrec)) != tsOk
+    {
+      clearbuffer(#tdocs);
+      tdocs.Year     := tspdocs.Year;
+      tdocs.Month    := tspdocs.Month;
+      tdocs.PodrNrec := tspdocs.PodrNrec;
+      tdocs.MOLNrec  := tspdocs.MOLNrec;
+      insert current tdocs;
+    }
+  }
+
+  var fname: string;
+
+  //формируем файлы документов
+  _loop tdocs
+  {
+    fname := translatepath(sgettune('AGAT.BARCODE.EXPORTPATH')+'Инвентаризация №');
+    fname += tdocs.Year+tdocs.Month+string(tdocs.PodrNrec,0,0)+string(tdocs.MOLNrec,0,0)+'.csv';
+    if not _writer.Open(fname)
+    {
+      LogError(1, 'Ошибка формирования файла '+fname);
+      result := false;
+      continue;
+    }
+    _writer.ClearBuffer;
+    _writer.SetValue(0, '#{Document}');
+    _writer.WriteBuffer;
+
+    _writer.ClearBuffer;
+    _writer.SetValue(0, 'Name');
+    _writer.SetValue(1, 'Year');
+    _writer.SetValue(2, 'Month');
+    _writer.SetValue(3, 'PodrNrec');
+    _writer.SetValue(4, 'MOLNrec');
+    _writer.SetValue(5, 'Finished');
+    _writer.WriteBuffer;
+
+    _writer.ClearBuffer;
+    _writer.SetValue(0, tdocs.Month+'.'+tdocs.year+' '+
+                        if(getanykau(1,60, tdocs.MOLNrec),givenanname(1),'') + ' ' +
+                        if(getfirst katpodr where ((tdocs.PodrNrec == katpodr.nrec)) = tsOk, katpodr.kod, ''));
+    _writer.SetValue(1, tdocs.year);
+    _writer.SetValue(2, tdocs.Month);
+    _writer.SetValue(3, string(tdocs.PodrNrec,0,0));
+    _writer.SetValue(4, string(tdocs.MOLNrec,0,0));
+    _writer.SetValue(5, if(AllDocsFinished(tdocs.year, tdocs.Month, tdocs.PodrNrec, tdocs.MOLNrec), 'True', 'False'));
+    _writer.WriteBuffer;
+
+    _writer.ClearBuffer;
+    _writer.SetValue(0, '#{Document.DeclaredItems}');
+    _writer.WriteBuffer;
+
+    _writer.ClearBuffer;
+    _writer.SetValue(0, 'Штрихкод');
+    _writer.SetValue(1, 'План');
+    _writer.SetValue(2, 'Факт');
+    _writer.SetValue(3, 'Место хранения');
+    _writer.WriteBuffer;
+
+    _loop tspdocs where ((tdocs.Year == tspdocs.Year and tdocs.Month == tspdocs.Month and tdocs.PodrNrec == tspdocs.PodrNrec and tdocs.MOLNrec == tspdocs.MOLNrec))
+    {
+      if getfirst tCats where ((tspdocs.kind == tCats.kind and tspdocs.cRec == tCats.nrec)) != tsOk continue;
+      if (tspdocs.KolPlan > 0 and tspdocs.placePlan <> '')
+      {
+        _writer.SetValue(0, tcats.barcode);
+        _writer.SetValue(1, doubletostr(tspdocs.kolPlan, '[|-]3666,88'));
+        if (tspdocs.placePlan = tspdocs.placeFact)
+          _writer.SetValue(2, doubletostr(tspdocs.kolFact, '[|-]3666,88'));
+        else
+          _writer.SetValue(2, '0');
+        _writer.SetValue(3, tspdocs.placePlan);
+        _writer.WriteBuffer;
+      }
+      if (tspdocs.KolFact > 0 and tspdocs.placeFact <> '' and tspdocs.placePlan <> tspdocs.placeFact)
+      {
+        _writer.SetValue(0, tcats.barcode);
+        _writer.SetValue(1, '0');
+        _writer.SetValue(2, doubletostr(tspdocs.kolFact, '[|-]3666,88'));
+        _writer.SetValue(3, tspdocs.placeFact);
+        _writer.WriteBuffer;
+      }
+    }
+    _writer.close;
+  }
+
+  if result
+    LogSuccess(1, 'Экспорт документов инвентаризаций завершен успешно');
+  else
+    LogError(1, 'Экспорт документов инвентаризаций завершен с ошибками');
 }
 
 function GetPlaceByCode(placeCode: string): tspkau;
@@ -514,233 +534,290 @@ function GetPlaceByCode(placeCode: string): tspkau;
   result := rslt;
 }
 
-procedure SetSpInvFactPlace(kind: word; SpInvNrec: comp; placeBuf: tspkau);
+procedure SetOSInvItem(invtabNrec: comp; item:CLEVERENCE::IDocumentItem);
 {
-  if kind = KIND_INVOS
-  {
-    _extattr.coSetAttr(1124, SpInvNrec, ATTRNAME_INVOS_PLACE_FACT, placeBuf.nrec, placeBuf.name);
-  }
-  else
-  {
-    update mbpinv where ((SpInvNrec == mbpinv.nrec)) set mbpinv.crecs[3] := placeBuf.nrec;
-  }
-}
-
-procedure AddSpInv(kind: word; invNrec: comp; item: CLEVERENCE::oDocumentItem);
-{
-  var productNrec: comp;
-  productNrec := comp(substr(item.ProductId,2,18));
+  var katosNrec: comp;
+  katosNrec := comp(substr(item.ProductId,2,255));
 
   var place: tspkau;
-  place := GetPlaceByCode(item.FirstStorageBarcode);
+  place := GetPlaceByCode(item.Place);
 
-  if kind = KIND_INVOS
+  if getfirst spinvtab where ((invtabNrec == spinvtab.cinvtab and katosNrec == spinvtab.cmc)) != tsOk
   {
     clearbuffer(#spinvtab);
-    spinvtab.cinvtab := invNrec;
-    spinvtab.cmc := productNrec;
-    spinvtab.kol := item.CurrentQuantity;
+    spinvtab.cinvtab := invtabNrec;
+    spinvtab.cmc     := katosNrec;
     insert current spinvtab;
-    _extattr.coSetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_FACT, place.nrec, place.name);
-  }
-  else
-  {
-    clearbuffer(#mbpinv);
-    mbpinv.cmove := invNrec;
-    if getfirst mbpin where ((productNrec == mbpin.nrec)) = tsOk
+    if getfirst kaureff where (( 3000           == kaureff.cotable and
+                                 spinvtab.cmc   == kaureff.crec and
+                                 KODGRKAU_PLACE == kaureff.wkau )) = tsOk
     {
-      mbpinv.ckatmbp := mbpin.cmbp;
-      mbpinv.crecs[1] := mbpin.nrec;
+      _extattr.coSetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_PLAN, kaureff.ckau, if(getanykau(1,KODGRKAU_PLACE, kaureff.ckau), givenanname(1), '' ));
     }
-    mbpinv.fctkol := item.CurrentQuantity;
-    mbpinv.crecs[3] := place.nrec;
-    insert current mbpinv;
   }
+  update current spinvtab set spinvtab.kol := item.FactQty;
+  _extattr.coSetAttr(1124, spinvtab.nrec, ATTRNAME_INVOS_PLACE_FACT, place.nrec, place.name);
 }
 
-function SyncDocs: boolean;
-var
-  q : IQuery;
-  rs: IResultSet;
-  i : longint;
+procedure SetMBPInvItem(mbpmoveNrec: comp; item:CLEVERENCE::IDocumentItem);
+{
+
+  var mbpinNrec: comp;
+  mbpinNrec := comp(substr(item.ProductId,2,255));
+
+  var place: tspkau;
+  place := GetPlaceByCode(item.Place);
+
+  if getfirst mbpinv where ((mbpmoveNrec == mbpinv.cmove and (mbpinv.crecs[1] = mbpinNrec) )) != tsOk
+  {
+    clearbuffer(#mbpinv);
+    mbpinv.cmove := mbpmoveNrec;
+    mbpinv.crecs[1] := mbpinNrec;
+    mbpinv.crecs[2] := _extattr.coGetAttr(2001, mbpinNrec, ATTRNAME_MBP_PLACE);
+    if getfirst mbpin where (( mbpinNrec == mbpin.nrec )) = tsOk
+    {
+      mbpinv.ckatmbp := mbpin.cmbp;
+      mbpinv.price := mbpin.price;
+      mbpinv.dinv := mbpin.din;
+      if getfirst katmbp where ((mbpin.cmbp == katmbp.nrec)) = tsOk
+      {
+        mbpinv.kod  := katmbp.name;
+        mbpinv.name := katmbp.nnumber;
+      }
+    }
+    insert current mbpinv;
+  }
+  update current mbpinv set mbpinv.crecs[3] := place.nrec, mbpinv.fctkol := item.FactQty;
+}
+
+function ImportDoc(d: CLEVERENCE::IDocument): boolean;
 {
   result := false;
 
-  LogInfo(0, 'Синхронизация документов');
+  LogInfo(1, 'Импорт документа '+d.name);
 
-  //готовим временную таблицу с документами инвентаризации
-  sqlDropTmpTable('tDocs');
-  var sqlstr: longint; sqlstr := 0;
-  sqlAddStr(sqlstr, 'table tDocs(kind: word, nrec: comp, startdate: date, name: string);');
-  sqlCreateTmpTable(sqlstr, ctmNormal);
+  var d1, d2: date;
+  d1 := date(1, d.Month, d.Year);
+  d2 := date(last_day(d1), d.Month, d.Year);
 
-  var docsDateFrom: date;
-  docsDateFrom := dGetTune('AGAT.BARCODE.DOCSTARTDATE');
-
-  //заполняем временную таблицу документов инвентаризациями ОС
-  q := queryManager.createQuery(qDocs1);
-  q.setParam('date', docsDateFrom);
-  if q.Execute.errorCode != 0
+  //определяем нрек инвентаризации ОС с подразделением и молом из документа
+  var invtabNrec: comp;
+  var invtabEditable: boolean;
+  if getfirst invtab where ((15           == invtab.tipdoc and
+                             d.PodrNrec   == invtab.cSklad and
+                             d1          <<= invtab.dinv and
+                             (invtab.dinv <= d2 and invtab.cMol = d.MOLNrec) )) = tsOk
   {
-    LogError(1, 'Ошибка выполнения запроса получения инвентаризаций ОС '+q.errorCode);
-    exit;
+    invtabNrec := invtab.nrec;
+    invtabEditable := invtab.dinvend = 0;
+  }
+  else
+  {
+    invtabNrec := 0;
+    invtabEditable := false;
   }
 
-  //заполняем временную таблицу документов инвентаризациями МБП
-  q := queryManager.createQuery(qDocs2);
-  q.setParam('date', docsDateFrom);
-  if q.Execute.errorCode != 0
+  //определяем нрек инвентаризации спецоснастки с подразделением и молом из документа
+  var mbpmoveNrec: comp;
+  var mbpmoveEditable: boolean;
+  if getfirst mbpmove where (( 11         == mbpmove.status and
+                               d.PodrNrec == mbpmove.cpodrf and
+                               d1        <<= mbpmove.dmove and
+                               (d.MOLNrec = mbpmove.cmolf and d2 >= mbpmove.dmove) )) = tsOk
   {
-    LogError(1, 'Ошибка выполнения запроса получения инвентаризаций МБП '+q.errorCode);
-    exit;
+    mbpmoveNrec := mbpmove.nrec;
+    mbpmoveEditable := mbpmove.cvalold = 0;
+  }
+  else
+  {
+    mbpmoveNrec := 0;
+    mbpmoveEditable := false;
   }
 
-  //заполняем локальную таблицу документами
-  q := queryManager.createQuery('select kind, nrec, startdate, name from tDocs');
-  rs := q.getResultSet;
-  if rs = nullref
+  var i, productKind: word;
+  var productNrec: comp;
+  var item: CLEVERENCE::IDocumentItem;
+  for(i:=0; i < d.ItemCount; ++i)
   {
-    LogError(1, 'Ошибка выполнения запроса получения документов '+q.errorCode);
-    exit;
+    item := d.GetItem(i);
+    if item = nullref continue;
+    if item.FactQty = 0 continue;
+    productKind := substr(item.ProductId,1,1);
+    case productKind of
+      KIND_OS : if (invtabEditable)  SetOSInvItem(invtabNrec, item);
+      KIND_MBP: if (mbpmoveEditable) SetMBPInvItem(mbpmoveNrec, item);
+    end;
   }
-  delete all tdocs;
-  sqlCopyInto(rs, #tdocs, false);
-
-  //заполняем локальную таблицу спецификаций документов
-  q := queryManager.createQuery(qSpDocs);
-  q.setParam('anPlacePlan', ATTRNAME_INVOS_PLACE_PLAN);
-  q.setParam('anPlaceFact', ATTRNAME_INVOS_PLACE_FACT);
-  rs := q.getResultSet;
-  if rs = nullref
-  {
-    LogError(1, 'Ошибка выполнения запроса получения спецификаций документов '+q.errorCode);
-    exit;
-  }
-  delete all tspdocs;
-  sqlCopyInto(rs, #tspdocs, false);
-
-  //получаем окружение
-  var environment: CLEVERENCE::oEnvironment;
-  if not NewEnvironment(environment) exit;
-
-  //получаем склад
-  var warehouse: CLEVERENCE::oWarehouse;
-  if not GetWarehouse(environment, warehouse, 0) exit;
-
-  //получаем коллекции документов с сервера
-  var finishedDocs, notFinishedDocs: CLEVERENCE::oCollection;
-  if not GetDocsCollection(DOCTYPE_INV, true, finishedDocs) exit;
-  if not GetDocsCollection(DOCTYPE_INV, false, notFinishedDocs) exit;
-
-  //выгружаем документы из галактики на сервер
-  var document: CLEVERENCE::oDocument;
-  var item: CLEVERENCE::oDocumentItem;
-  var docId, itemId: string;
-  _loop tDocs
-  {
-    LogInfo(1, 'Инвентаризация '+tDocs.Name);
-    docId := tDocs.kind + string(tDocs.nrec,0,0);
-    if not FindDocByBarcode(finishedDocs, docId, document)
-    {
-      if not FindDocByBarcode(notFinishedDocs, docId, document)
-      {
-        if not CreateNewDocument(document, DOCTYPE_INV, docId, tdocs.startDate) exit;
-        notFinishedDocs.Add(document);
-      }
-    }
-    document.Name := tdocs.name;
-    document.WarehouseId := warehouse.Id;
-
-    //экспортируем строки документа на сервер
-    _loop tSpDocs where ((tDocs.kind == tSpDocs.kind and tDocs.nrec == tSpDocs.docNrec))
-    {
-      itemId := if(tSpDocs.kind=KIND_INVOS, KIND_OS, KIND_MBP) + string(tSpDocs.cRec,0,0);
-      if not GetDocumentItem(document.DeclaredItems, item, itemId) exit;
-      item.DeclaredQuantity := tSpDocs.kolPlan;
-      item.FirstStorageBarcode := tSpDocs.placePlan;
-      freevipinterface(item);
-    }
-
-    //удаляем на сервере лишние строки
-    var productNrec: comp;
-    for (i:=0; i < document.DeclaredItems.count; ++i)
-    {
-      item := CLEVERENCE::oDocumentItem(document.DeclaredItems.Item(i));
-      productNrec := comp(substr(item.ProductId,2,18));
-      if getfirst tSpDocs where ((tDocs.kind == tSpDocs.kind and tDocs.nrec == tSpDocs.docNrec and (tSpDocs.cRec = productNrec) )) != tsOk
-      {
-        document.DeclaredItems.Remove(item);
-      }
-      freevipinterface(item);
-    }
-
-    //установка фактических мест хранения
-    for (i:=0; i < document.CurrentItems.count; ++i)
-    {
-
-      item := CLEVERENCE::oDocumentItem(document.CurrentItems.Item(i));
-      productNrec := comp(substr(item.ProductId,2,18));
-
-      if getfirst tSpDocs where ((tDocs.kind == tSpDocs.kind and tDocs.nrec == tSpDocs.docNrec and (tSpDocs.cRec = productNrec) )) = tsOk
-      {
-        var place: tspkau;
-        place := GetPlaceByCode(item.FirstStorageBarcode);
-        if place.nrec != 0
-          SetSpInvFactPlace(tspdocs.kind, tspdocs.spDocNrec, place);
-      }
-      else
-        AddSpInv(tdocs.kind, tdocs.nrec, item);
-
-      freevipinterface(item);
-
-    }
-
-    freevipinterface(document);
-  }
-
-  LogInfo(1, 'Проверка завершенных инвентаризаций');
-  RemoveDocs(notFinishedDocs);
-  RemoveDocs(finishedDocs);
-
-  _connector.SetDocuments(notFinishedDocs);
-  _connector.SetDocuments(finishedDocs);
-
-  //удаляем временные таблицы sql
-  sqlDropTmpTable('tDocs');
-
-  LogSuccess(1, 'Синхронизация документов завершена');
 
   result := true;
 }
 
+function ImportDocs: boolean;
+{
+  result := true;
+
+  LogInfo(0, 'Импорт документов инвентаризаций');
+
+  var docsDateFrom: date;
+  docsDateFrom := dGetTune('AGAT.BARCODE.DOCSTARTDATE');
+
+  var d: CLEVERENCE::IDocument;
+
+  var fname: string;
+  fname := GetFirstFile(sGetTune('AGAT.BARCODE.IMPORTPATH'), 'Инвентаризация №*.csv');
+  while (fname != strDataIsEmpty )
+  {
+    d := _docReader.Load(fname);
+    if (d != nullref)
+    {
+      ImportDoc(d);
+      FreeVipInterface(d);
+    }
+    DeleteFile(fname);
+    fname := GetNextFile;
+  }
+  LogSuccess(1, 'Импорт документов инвентаризаций завершен успешно');
+}
+
 //#endregion
+
+//#region SyncUtil
+
+function RunSyncUtilExport: boolean;
+{
+  LogInfo(0, 'Выгрузка данных на ТСД');
+
+  var appPath: string;
+  appPath := sGetTune('AGAT.BARCODE.SYNCCONPATH');
+
+  var rslt: integer;
+  ExecProgram(appPath, 'upload close closeerr tray', 'Выгрузка данных на ТСД', pfSilent, rslt);
+
+  if rslt = 0
+  {
+    LogSuccess(1, 'Выгрузка данных на ТСД завершена успешно');
+    result := true;
+  }
+  else
+  {
+    LogError(1, 'Выгрузка данных на ТСД завершена с ошибкой: '+rslt);
+    result := false;
+  }
+}
+
+function RunSyncUtilImport: boolean;
+{
+  LogInfo(0, 'Загрузка данных из ТСД');
+
+  var appPath: string;
+  appPath := sGetTune('AGAT.BARCODE.SYNCCONPATH');
+
+  var rslt: integer;
+  ExecProgram(appPath, 'download close closeerr tray', 'Загрузка данных из ТСД', pfSilent, rslt);
+
+  if rslt = 0
+  {
+    LogSuccess(1, 'Загрузка данных из ТСД завершена успешно');
+    result := true;
+  }
+  else
+  {
+    LogError(1, 'Загрузка данных из ТСД завершена с ошибкой: '+rslt);
+    result := false;
+  }
+}
+
+//#endregion
+
+
 handleevent
 
 cmDoSync:
 {
-  startnewvisual(vtRotateVisual, vfThread+vfTimer, '', 0);
-  if not connect
-    message('Ошибка подключения к серверу', error)
-  else if not SyncCatalogs
-    message('Ошибка синхронизации справочников', error)
-  else if not SyncCells
-    message('Ошибка синхронизации мест хранения', error)
-  else if not SyncDocs
-    message('Ошибка синхронизации документов', error)
-  ;
+  startnewvisual(vtRotateVisual, vfTimer, '', 0);
+
+  var isSuccess: boolean;
+
+  var doExportCatalogs: boolean;
+  doExportCatalogs := (_syncFlags and 1) > 0;
+
+  var doExportCells: boolean;
+  doExportCells := (_syncFlags and 2) > 0;
+
+  RunSyncUtilImport;
+  ImportDocs;
+
+  isSuccess := true;
+
+  if doExportCatalogs
+  {
+    isSuccess := ExportCatalogs;
+    if not isSuccess message('Ошибка экспорта справочников МБП и ОС', error);
+  }
+
+  if doExportCells and isSuccess
+  {
+    isSuccess := ExportCells;
+    if not isSuccess message('Ошибка экспорта мест хранения', error)
+  }
+
+  if isSuccess
+  {
+    isSuccess := ExportDocs;
+    if not isSuccess message('Ошибка экспорта документов', error);
+  }
+
+  if isSuccess
+  {
+    isSuccess := RunSyncUtilExport;
+  }
+
+  RunSyncUtilImport;
+  ImportDocs;
+
+  if isSuccess
+  {
+    message('Обмен с ТСД завершен успешно');
+  }
+  else
+  {
+    ShowLogWindow;
+  }
+
   stopvisual('',0)
 }
 
 cmInit:
 {
-  if not (getvipref(_connector, 'CLEVERENCE::iStorageConnector'))
+  if not getvipref(_writer, 'CLEVERENCE::CSVFileWriter')
   {
-    message('Ошибка инициализации коннектора', error);
+    message('Ошибка инициализации', error);
     abort;
     exit;
   }
+  if not getvipref(_reader, 'CLEVERENCE::CSVFileReader')
+  {
+    message('Ошибка инициализации', error);
+    abort;
+    exit;
+  }
+  _docReader.IReaderSet(_reader);
 
   SetCurLogger(_logger);
+
+  if not readmydsk(_syncYear, 'SyncCleverence_syncYear', false) _syncYear := year(cur_date);
+  if not readmydsk(_syncMonth, 'SyncCleverence_syncMonth', false) _syncMonth := month(cur_date);
+  _lPodr := initmarker('SyncCleverence_lPodr', 8, 10, 10, false);
+  _lMOL := initmarker('SyncCleverence_lMOL', 8, 10, 10, false);
+  _syncFlags := 11111111b;
+}
+
+cmDone:
+{
+  savemydsk(_syncYear, 'SyncCleverence_syncYear');
+  savemydsk(_syncMonth, 'SyncCleverence_syncMonth');
+  donemarker(_lPodr, 'SyncCleverence_lPodr');
+  donemarker(_lMOL, 'SyncCleverence_lMOL');
 }
 
 end;
@@ -757,7 +834,7 @@ Interface UserReport_SyncCleverence;
 
   function GetReportName: String;
   begin
-    GetReportName := '0100 Обмен данными с сервером ТСД (2015)';
+    GetReportName := '0100 Обмен данными с ТСД (2015)';
   end;
 
   function GetGroupName (Level : Word) : String;
