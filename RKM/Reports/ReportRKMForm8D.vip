@@ -2,10 +2,10 @@
 
 #component "AGAT"
 
-interface ReportRKMForm3D;
+interface ReportRKMForm8D;
 
 table struct tPeriods (
-  year: word
+  year: longint
 );
 
 table struct trkm8dValues (
@@ -18,7 +18,7 @@ table struct trkm8dValues (
   i01 = rkm8dNrec + year
 );
 
-table struct tkrm8dProfsValues (
+table struct trkm8dProfsValues (
   rkm8dProfNrec: comp,
   year: word,
   Labor: double
@@ -30,10 +30,11 @@ var
   _editRKM8D: AGAT::EditRKM8D new;
   _mnplanNrec: comp;
   _reportName: string;
+  _reportMode: word;
 
 create view
 as select *
-from mnplan, fpperiod, tPeriods, trkm8dValues, tkrm8dProfsValues
+from mnplan, fpperiod, tPeriods, trkm8d, trkm8dprofs, trkm8dValues, trkm8dProfsValues
 where ((
   _mnplanNrec    == mnplan.nrec and
   mnplan.canval3 == fpperiod.nrec
@@ -41,14 +42,15 @@ where ((
 
 create view vRep
 var
-  tDetailsParentNrec   : comp;
-  tDetailsNrec         : comp;
-  Level                : longInt;
-  isFirst              : boolean;
-  isLeaf               : boolean;
-  BaseYear             : word;
+  trkm8dParentNrec   : comp;
+  trkm8dNrec         : comp;
+  Level              : longInt;
+  isFirst            : boolean;
+  isLeaf             : boolean;
+  BaseYear           : word;
+  Mode               : word;
 as select *
-from trkm8d, trkm8d trkm8dChild, tPeriods, trkm8dValues, trkm8dProfs, tkrm8dProfsValues
+from trkm8d, trkm8d trkm8dChild, tPeriods, trkm8dValues, trkm8dProfs, trkm8dProfsValues
 where ((
   trkm8dParentNrec == trkm8d.ParentNrec and
 
@@ -59,11 +61,11 @@ where ((
 
   trkm8d.Nrec      == trkm8dProfs.rkm8dNrec and
 
-  trkm8dProfs.Nrec == tkrm8dProfsValues.rkm8dProfNrec and
-  tPeriods.year    == tkrm8dProfsValues.year
+  trkm8dProfs.Nrec == trkm8dProfsValues.rkm8dProfNrec and
+  tPeriods.year    == trkm8dProfsValues.year
 ));
 
-parameters _mnplanNrec, _reportName;
+parameters _mnplanNrec, _reportName, _reportMode;
 
 datastream dsRep1
 (
@@ -73,7 +75,7 @@ datastream dsRep1
   [MnplanStartDate] mnplan.startdate;
   [MnplanEndDate]   mnplan.enddate;
   [MnplanBaseYear]  vrep.BaseYear;
-  dataset Details
+  dataset trkm8d
   (
     [ObjName]           vrep.trkm8d.ObjName;
     [BaseHourCost]      vrep.trkm8d.BaseHourCost;
@@ -84,7 +86,7 @@ datastream dsRep1
     [TotalLabor]        vrep.trkm8d.TotalLabor;
     [TotalSum]          vrep.trkm8d.TotalSum;
     [Level]             vrep.Level;
-    [IsLeaf]            vrep.getfirst trkm8dChild != tsOk;
+    [IsLeaf]            (vrep.getfirst trkm8dChild != tsOk);
 
     table vrep.tPeriods
     (
@@ -98,15 +100,74 @@ datastream dsRep1
       [ValueSum]       vrep.trkm8dValues.Sum;
     );
 
-    table vrep.tValues
+    table vrep.trkm8dProfs
     (
-      [ValueNorm]     vrep.tValues.Norm;
-      [ValueCoeff]    vrep.tValues.Coeff;
-      [ValuePrice]    vrep.tValues.Price;
-      [ValueTotal]    vrep.tValues.Total;
+      [ProfName]       if(getanykau(1, 36, vrep.trkm8dProfs.ProfNrec), givenanname(1), '');
+      [ProfCoeff]      vrep.trkm8dProfs.Coeff;
+      [ProfQty]        vrep.trkm8dProfs.Qty;
+      [ProfTotalLabor] vrep.trkm8dProfs.TotalLabor;
+    );
+
+    table vrep.trkm8dProfsValues
+    (
+      [ProfLabor]      vrep.trkm8dProfsValues.Labor;
     );
   );
 )
+
+handleevent dataset trkm8d
+  cmPreProcess:
+  {
+    vrep.trkm8dParentNrec := 0;
+    if vrep.getFirst trkm8d = tsOk
+    {
+      vrep.trkm8dNrec := vrep.trkm8d.Nrec;
+      vrep.Level := 1;
+      vrep.isFirst := true;
+    };
+  }
+  cmOnProcess:
+  {
+    vrep.trkm8dNrec := vrep.trkm8d.Nrec;
+    vrep.isLeaf := vrep.getfirst trkm8dChild != tsOk;
+
+    if (vrep.isFirst)
+    {
+      ContinueDataset;
+      vrep.isFirst := false;
+      exit;
+    }
+
+    if vrep.getfirst trkm8dChild = tsOk
+    {
+      vrep.trkm8dParentNrec := vrep.trkm8d.Nrec;
+      if (vrep.getfirst trkm8d = tsOk)
+      {
+        vrep.Level++;
+        ContinueDataset;
+      }
+    }
+    else
+    {
+      while vrep.getnext trkm8d != tsOk
+      {
+        vrep.trkm8dNrec := vrep.trkm8d.ParentNrec;
+        if vrep.getfirst trkm8d where ((trkm8dNrec == trkm8d.Nrec)) = tsOk
+        {
+          vrep.trkm8dParentNrec := vrep.trkm8d.ParentNrec;
+          vrep.Level--;
+        }
+        else
+        {
+          exit;
+        }
+      }
+      ContinueDataset;
+    }
+  }
+end; //handleevent dataset dsRep1;
+
+end; //datastream dsrep1
 
 function FillTables: boolean;
 {
@@ -126,8 +187,10 @@ function FillTables: boolean;
   yearcount := y2 - y1 + 1;
   vrep.BaseYear := yb;
 
-  ifc.initinterface(y1, y2, yb);
-  ifc.Load(mnplan.nrec);
+  vrep.Mode := _reportMode;
+
+  _editRKM8D.initinterface(y1, y2, yb);
+  _editRKM8D.Load(mnplan.nrec);
 
   delete all tperiods;
   for (i := 0; i < yearcount; ++i)
@@ -142,20 +205,20 @@ function FillTables: boolean;
       clearbuffer(#trkm8dValues);
       trkm8dValues.rkm8dNrec := trkm8d.Nrec;
       trkm8dValues.year      := yb + i;
-      trkm8dValues.Labor     := trkm8d.Labor[i];
-      trkm8dValues.Coeff     := trkm8d.Coeff[i];
-      trkm8dValues.Sum       := trkm8d.Sum[i];
+      trkm8dValues.Labor     := trkm8d.Labor[i+1];
+      trkm8dValues.Coeff     := trkm8d.Coeff[i+1];
+      trkm8dValues.Sum       := trkm8d.Sum[i+1];
       insert current trkm8dValues;
     }
     _loop trkm8dProfs
     {
       for (i:=0; i < yearcount; ++i)
       {
-        clearbuffer(#trkm8dValues);
-        trkm8dValues.rkm8dNrec := trkm8dProfs.Nrec;
-        trkm8dValues.year      := yb + i;
-        trkm8dValues.Labor     := trkm8dProfs.Labor[i];
-        insert current trkm8dValues;
+        clearbuffer(#trkm8dProfsValues);
+        trkm8dProfsValues.rkm8dProfNrec := trkm8dProfs.Nrec;
+        trkm8dProfsValues.year          := yb + i;
+        trkm8dProfsValues.Labor         := trkm8dProfs.Labor[i+1];
+        insert current trkm8dProfsValues;
       }
     }
   }
