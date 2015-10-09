@@ -1,0 +1,299 @@
+#include query.vih
+
+#component "AGAT"
+
+interface BuhInv62 'Инвентаризация расчетов с покупателями' escclose, doaccept;
+show (,,30,5);
+
+sql query q62 =
+insert tsald (schet, subsch, kau1, kau2, summa)
+select '862', o.subsch, o.kau1, o.kau2, o.summa
+from (select o.subsch, o.kau1, o.kau2, sum(o.summa) as summa
+      from (select subossch as subsch, kauos[1] as kau1, kauos[2] as kau2, sum(sumob) as summa
+            from oborot
+            where scheto='862' and datob between 1 and :date
+            group by subossch, kauos[1], kauos[2]
+            union all
+            select subschk, kauks[1], kauks[2], sum( sumob * (-1) )
+            from oborot
+            where schetk='862' and datob between 1 and :date
+            group by subschk, kauks[1], kauks[2]
+           ) as o
+      group by o.subsch, o.kau1, o.kau2
+     ) o
+where abs(o.summa) >= 0.01;
+
+sql query q62docs =
+select 0, tsald.schet, tsald.subsch, tsald.kau1, tsald.kau2, o.datob as ddoc, o.tidkgal, o.csoprdoc, o.csoprhoz, sum(o.sumob) as summa
+from tsald
+join oborot o on o.scheto=tsald.schet and o.subossch=tsald.subsch and
+                 o.kauos[1]=tsald.kau1 and o.kauos[2]=tsald.kau2 and
+                 datob between 1 and :date
+group by tsald.schet, tsald.subsch, tsald.kau1, tsald.kau2, o.datob, o.tidkgal, o.csoprdoc, o.csoprhoz
+union all
+select 1, tsald.schet, tsald.subsch, tsald.kau1, tsald.kau2, o.datob, o.tidkgal, o.csoprdoc, o.csoprhoz, sum( o.sumob * (-1) )
+from tsald
+join oborot o on o.schetk=tsald.schet and o.subschk=tsald.subsch and
+                 o.kauks[1]=tsald.kau1 and o.kauks[2]=tsald.kau2 and
+                 o.datob between 1 and :date
+group by tsald.schet, tsald.subsch, tsald.kau1, tsald.kau2, o.datob, o.tidkgal, o.csoprdoc, o.csoprhoz
+;
+
+table struct tDocs (
+  kind   : word,
+  schet  : string[10],
+  subsch : string[10],
+  kau1   : comp,
+  kau2   : comp,
+  ddoc   : date,
+  tidkgal: word,
+  csoprdoc: comp,
+  csoprhoz: comp,
+  summa: double
+) with index (
+  i01 = schet + subsch + kau1 + kau2 + ddoc
+);
+
+table struct tSald (
+  schet  : string[10],
+  subsch : string[10],
+  kau1   : comp,
+  kau2   : comp,
+  summa  : double
+) with index (
+  i01 = kau1 + kau2 + schet + subsch
+);
+
+var
+  _drep: date;
+  _ea: iextattr;
+
+create view
+as select *
+from tsald, tdocs, tdocs tdocs1,
+     tsald tsld, tdocs tdcs, katdoc, soprhoz, plpor plp, dogovor dog, attrdog, katorg org
+where ((
+  tsld.schet    == tdcs.schet and
+  tsld.subsch   == tdcs.subsch and
+  tsld.kau1     == tdcs.kau1 and
+  tsld.kau2     == tdcs.kau2 and
+  tdcs.tidkgal  == katdoc.tidkgal and
+  tdcs.csoprhoz == soprhoz.nrec and
+  tdcs.csoprdoc == plp.nrec and
+  tdcs.kau2     == dog.nrec and
+  dog.nrec      == attrdog.cdogovor and
+  tdcs.kau1     == org.nrec
+));
+
+function getSubject: string;
+{
+  var s: string;
+  s := '';
+
+  if (tdcs.tidkgal = 10 or tdcs.tidkgal = 2) and (getfirst plp = tsOk)
+  {
+    s := plp.namepl1+plp.namepl2;
+  }
+
+  if getfirst soprhoz = tsOk
+  {
+    if s = ''
+      s := _ea.mgetattr(1702, soprhoz.ccalplan, 'НИОКР. Наименование этапа');
+
+    if s = '' and getfirst dog = tsOk
+      if getfirst attrdog = tsOk
+      {
+        s := attrdog.subject1+' '+attrdog.subject2+' '+attrdog.subject3;
+      }
+  }
+  result := s;
+}
+
+datastream tsld62
+(
+  [drep] _drep;
+  table tsld
+  (
+    [schet]    tsld.schet;
+    [subsch]   tsld.subsch;
+    [kau1]     tsld.kau1;
+    [kau1Name] if(getanykau(1,1,tsld.kau1), givenanname(1), '');
+    [kau2]     tsld.kau2;
+    [kau2Name] if(getanykau(1,14,tsld.kau2), givenanname(1), '');
+    [sum]      tsld.summa;
+    [sumd]     if(tsld.summa>0, tsld.summa, 0);
+    [sumk]     if(tsld.summa<0, abs(tsld.summa), 0);
+  );
+  table tdcs
+  (
+    [kind]     tdcs.kind;
+    [schet]    tdcs.schet;
+    [subsch]   tdcs.subsch;
+    [kau1]     tdcs.kau1;
+    [kau1Name] if(getanykau(1,1,tdcs.kau1), givenanname(1), '');
+    [kau2]     tdcs.kau2;
+    [kau2Name] if(getanykau(1,14,tdcs.kau2), givenanname(1), '');
+    [tidkgal]  tdcs.tidkgal;
+    [csoprdoc] tdcs.csoprdoc;
+    [csoprhoz] tdcs.csoprhoz;
+    [ddoc]     tdcs.ddoc;
+    [namedoc]  if(getfirst katdoc = tsOk, katdoc.name, '??');
+    [nodoc]    if(getfirst soprhoz = tsok, soprhoz.nodoc, '');
+    [Subject]  getSubject;
+    [orgName]  if(getfirst org = tsOk, org.Name, '');
+    [orgINN]   if(getfirst org = tsOk, org.UNN, '');
+    [sum]      tdcs.summa;
+    [sumd]     if(tdcs.kind=0, tdcs.summa, 0);
+    [sumk]     if(tdcs.kind=1, abs(tdcs.summa), 0);
+  );
+)
+end;
+
+screen sc1;
+fields
+  _drep: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Дата отчета` .@@@@@@@@@@
+
+<. Продолжить .> <. Отмена .>
+>>
+end;
+
+window wdata;
+browse br1;
+  show(,,,10);
+  table tsld;
+  fields
+    tsld.schet+if(tsld.subsch<>'', '.'+tsld.subsch, '') 'Счет': [7], protect;
+    if(getanykau(1,1,tsld.kau1), givenanname(1), '') 'Организация': [20], protect;
+    if(getanykau(1,14,tsld.kau2), givenanname(1), '') 'Договор': [20], protect;
+    tsld.summa 'Сумма': [10,2], protect;
+end;
+browse br2;
+  show(,11,,);
+  table tdcs;
+  fields
+    if(getfirst katdoc = tsOk, katdoc.name, '??') 'Наименование документа': [20], protect;
+    if(getfirst soprhoz = tsok, soprhoz.nodoc, '') 'Номер документа': [10], protect;
+    if(getfirst soprhoz = tsok, soprhoz.datob, '') 'Дата документа': [10], protect;
+    tdcs.summa 'Сумма': [10,2], protect;
+end;
+end;
+
+procedure fillTables;
+{
+  var q: IQuery;
+  var rs: IResultSet;
+  var s: longint;
+
+  //создаем временную таблицу для сальдо по 62
+  sqlDropTmpTable('tsald');
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table tsald (schet:string[10], subsch:string[10], kau1:comp, kau2:comp, summa:double);');
+  sqlCreateTmpTable(s,ctmNormal);
+
+  //рассчитываем сальдо по 62 до уровня организация/договор/ДО
+  q := queryManager.createQuery(q62);
+  q.setParam('date', _drep);
+  if q.execute.errorcode != tsOk
+  {
+    message('Ошибка выполнения запроса q62: '+q.errorcode, error);
+    exit;
+  }
+
+  //заполняем логическую таблицу сальдо tsald
+  delete all tsald;
+  q := queryManager.createQuery('select schet, subsch, kau1, kau2, summa from tsald');
+  sqlCopyInto(q, #tsald, false);
+
+  //заполняем логическую таблицу tdocs документами, сформировавшими сальдо
+  q := queryManager.createQuery(q62Docs);
+  q.setParam('date', _drep);
+  rs := q.getresultset;
+  if rs = nullref
+  {
+    message('Ошибка формирования запроса q62docs:'+q.errorCode, error);
+    exit;
+  }
+
+  delete all tdocs;
+  sqlCopyInto(rs, #tdocs, false);
+
+  //находим документы, формирующие задолженность путем закрытия дебетовых документов кредитовыми и наоборот
+  if getfirst tdocs = tsok do
+  {
+    while getfirst tdocs1 where (( tdocs.schet == tdocs1.schet and tdocs.subsch == tdocs1.subsch and
+                                   tdocs.kau1 == tdocs1.kau1 and tdocs.kau2 == tdocs1.kau2 and
+                                   tdocs.ddoc >>= tdocs1.ddoc and ( if(tdocs.kind=0, tdocs1.kind=1, tdocs1.kind=0) and abs(tdocs1.summa) >= 0.01 ) )) = tsOk  //if(tdocs.summa>0, tdocs1.summa < 0, tdocs1.summa > 0)
+    {
+      if abs(tdocs1.summa) > abs(tdocs.summa)
+      {
+        update current tdocs1 set tdocs1.summa := tdocs1.summa + tdocs.summa;
+        update current tdocs set tdocs.summa := 0;
+        break;
+      }
+      else
+      {
+        update current tdocs set tdocs.summa := tdocs.summa + tdocs1.summa;
+        update current tdocs1 set tdocs1.summa := 0;
+      }
+    }
+  } while getnext tdocs = tsok;
+  delete all tdocs where abs(tdocs.summa) < 0.01;
+}
+
+handleevent
+cmdook:
+{
+  filltables;
+  runfreport(tsld62, '', true);
+  //runwindowmodal(wdata);
+}
+cminit:
+{
+  if not readmydsk(_drep, 'BuhInv_dRep', false) _drep := cur_date;
+}
+cmdone:
+{
+  savemydsk(_drep, 'BuhInv_dRep');
+}
+end;
+
+end.
+
+VipInterface UserReport_buhinv62 Implements IUserReport licensed(free);
+Interface UserReport_buhinv62;
+  create view dummy;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::buhinv62);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'Агат. Инвентаризация расчетов с покупателями';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'B_FINANS';
+    end;
+  }
+end.
