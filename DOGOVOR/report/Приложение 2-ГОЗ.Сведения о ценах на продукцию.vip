@@ -1,0 +1,692 @@
+#component "AGAT"
+interface Forma2GOZ 'Приложение 2-ГОЗ. Сведения о ценах на продукцию';
+show at (,,31,5);
+
+sql query sqlCostItemsFact = //расчет фактических сумм по заказам
+  //1. Затраты на материалы
+  insert tt (wYear, cKatStroy, wCostItem, Summa)
+  select ksy.wYear, ksy.cKatStroy, 1, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.subschk in ('01','02') and o.kauks[1] = ksy.cKatStroy
+  group by ksy.wYear, ksy.cKatStroy
+  //2. в т.ч. сырье и материалы
+  union all
+  select ksy.wYear, ksy.cKatStroy, 2, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.subschk in ('01','02') and o.kauks[1] = ksy.cKatStroy
+  join spkau on o.kauks[2] = spkau.nrec and spkau.code in ('20010101','20010102','20010100','0101')
+  group by ksy.wYear, ksy.cKatStroy
+  //3. в т.ч. покупные полуфабрикаты и комплектующие
+  union all
+  select ksy.wYear, ksy.cKatStroy, 3, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.subschk in ('01','02') and o.kauks[1] = ksy.cKatStroy
+  join spkau on o.kauks[2] = spkau.nrec and spkau.code in ('0102','010201','010202','010203','010204','010205','010206','010207','20010201','20010202','20010203','20010200')
+  group by ksy.wYear, ksy.cKatStroy
+  //4. Фонд оплаты труда
+  union all
+  select ksy.wYear, ksy.cKatStroy, 4, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.subschk in ('03','0301','04','18') and o.kauks[1] = ksy.cKatStroy
+  group by ksy.wYear, ksy.cKatStroy
+  //5. Сумма платежей (взносов) по договорам обязательного страхования
+  union all
+  select ksy.wYear, ksy.cKatStroy, 5, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.subschk in ('05') and o.kauks[1] = ksy.cKatStroy
+  group by ksy.wYear, ksy.cKatStroy
+  //6. Накладные расходы (общехозяйственные и общепроизводственные расходы)
+  union all
+  select ksy.wYear, ksy.cKatStroy, 6, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.subschk in ('07','071','072','073','074','075','076') and o.kauks[1] = ksy.cKatStroy
+  group by ksy.wYear, ksy.cKatStroy
+  //7. Услуги сторонних организаций
+  union all
+  select ksy.wYear, ksy.cKatStroy, 7, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.subschk in ('08') and o.kauks[1] = ksy.cKatStroy
+  group by ksy.wYear, ksy.cKatStroy
+  //8. Прочие производственные затраты
+  union all
+  select ksy.wYear, ksy.cKatStroy, 8, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.subschk in ('11') and o.kauks[1] = ksy.cKatStroy
+  group by ksy.wYear, ksy.cKatStroy
+  //10. Производственная себестоимость
+  union all
+  select ksy.wYear, ksy.cKatStroy, 10, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.kauks[1] = ksy.cKatStroy
+  group by ksy.wYear, ksy.cKatStroy
+  //12. Полная себестоимость
+  union all
+  select ksy.wYear, ksy.cKatStroy, 12, sum(o.sumob*ksy.koef/1000)
+  from ksy
+  join oborot o on ((o.scheto = '890' and o.subossch = '02') or o.scheto in ('840','843','845')) and
+                     o.schetk = '820' and o.kauks[1] = ksy.cKatStroy
+  group by ksy.wYear, ksy.cKatStroy
+  //13. Прибыль
+  union all
+  /*
+  select ksy.wYear, ksy.cKatStroy, 13, coalesce(ok.summa,0) - coalesce(od.summa,0)
+  from ksy
+  left join (select year(datetime(datob,0)) as wYear, kauos[2] as cKatStroy, sum(sumob/1000) as summa
+             from oborot
+             where scheto='890' and subossch='09' and schetk<>'899'
+             group by year(datetime(datob,0)), kauos[2]) od on ksy.cKatStroy=od.cKatStroy and ksy.wYear = od.wYear
+  left join (select year(datetime(datob,0)) as wYear, kauks[2] as cKatStroy, sum(sumob/1000) as summa
+             from oborot
+             where schetk='890' and subschk='09' and scheto<>'899'
+             group by year(datetime(datob,0)), kauks[2]) ok on ksy.cKatStroy=ok.cKatStroy and ksy.wYear = ok.wYear*/
+  select ksy.wYear, ksy.cKatStroy, 13, coalesce(o1.summa,0) - coalesce(o2.summa,0)
+  from ksy
+  left join (select year(datetime(datob,0)) as wYear, kauks[2] as cKatStroy, sum(sumob/1000) as summa
+             from oborot
+             where schetk='890' and subschk='01'
+             group by year(datetime(datob,0)), kauks[2]) o1 on ksy.cKatStroy=o1.cKatStroy and ksy.wYear = o1.wYear
+  left join (select year(datetime(datob,0)) as wYear, kauos[2] as cKatStroy, sum(sumob/1000) as summa
+             from oborot
+             where scheto='890' and subossch in ('02','03')
+             group by year(datetime(datob,0)), kauos[2]) o2 on ksy.cKatStroy=o2.cKatStroy and ksy.wYear = o2.wYear
+  //14. Цена без НДС
+  union all
+  //15. Цена с НДС
+  select ksy.wYear, ksy.cKatStroy, 14, sum(o.sumob / case when o.subschk='03' then -1000 else 1000 end)
+  from ksy
+  join oborot o on o.schetk = '890' and o.subschk in ('01','03') and
+                   o.kauks[2] = ksy.cKatStroy and year(datetime(o.datob,0)) = ksy.wyear
+  group by ksy.wYear, ksy.cKatStroy
+  union all
+  select ksy.wYear, ksy.cKatStroy, 15, sum(o.sumob/1000)
+  from ksy
+  join oborot o on o.schetk = '890' and o.subschk = '01' and
+                   o.kauks[2] = ksy.cKatStroy and year(datetime(o.datob,0)) = ksy.wyear
+  group by ksy.wYear, ksy.cKatStroy
+  //16. Технологическая трудоемкость по изделию
+  union all
+  select ksy.wYear, ksy.cKatStroy, 16, sum(valspmnp.kol+valspmnp.price)
+  from ksy
+  join spmnplan smp on smp.canval1 = ksy.cKatStroy
+  join mnplan mp on smp.cmnplan = mp.nrec
+  join fpperiod per on mp.canval1 = per.nrec and year(datetime(per.dbeg,0)) = ksy.wYear
+  join spmnpl on smp.nrec = spmnpl.cspmnplan and 22 = spmnpl.wKolAn and
+                 21 = spmnpl.wKodGr4 and per.nRec = spmnpl.cAnVal4 and
+                 10029 = spmnpl.wKodGr5 and #comp(00010000000008AEh) = spmnpl.cAnVal5
+  join valspmnp on spmnpl.nRec = valspmnp.cSpMnPl
+  group by ksy.wYear, ksy.cKatStroy
+  ;
+
+sql query sqlCostItemsPlan = //расчет плановых сумм по заказам
+  //1. Затраты на материалы
+  select ks.cKatStroy, 1, 0, tplan.sumcur / 1000
+  from ks
+  join (select cKatStroy, sum(sumcur) as sumcur
+        from addsumobj
+        where cAddSumTune = #comp(4001CDF978292006h) and coTable = 2101
+        group by cKatStroy) tplan on ks.cKatStroy = tplan.cKatStroy
+  union all
+  //4. Фонд оплаты труда
+  select ks.cKatStroy, 4, 0, tplan.sumcur / 1000
+  from ks
+  join (select cKatStroy, sum(sumcur) as sumcur
+        from addsumobj
+        where cAddSumTune in (#comp(40015542D9B27825h),#comp(4001B735E017C36Eh)) and coTable = 2101
+        group by cKatStroy) tplan on ks.cKatStroy = tplan.cKatStroy
+  union all
+  //5. Сумма платежей (взносов) по договорам обязательного страхования
+  select ks.cKatStroy, 5, 0, tplan.sumcur / 1000
+  from ks
+  join (select cKatStroy, sum(sumcur) as sumcur
+        from addsumobj
+        where cAddSumTune = #comp(4001F9878D012A31h) and coTable = 2101
+        group by cKatStroy) tplan on ks.cKatStroy = tplan.cKatStroy
+  union all
+  //6. Накладные расходы (общехозяйственные и общепроизводственные расходы)
+  select ks.cKatStroy, 6, 0, tplan.sumcur / 1000
+  from ks
+  join (select cKatStroy, sum(sumcur) as sumcur
+        from addsumobj
+        where cAddSumTune = #comp(40014FD884195463h) and coTable = 2101
+        group by cKatStroy) tplan on ks.cKatStroy = tplan.cKatStroy
+  union all
+  //7. Услуги сторонних организаций
+  select ks.cKatStroy, 7, 0, tplan.sumcur / 1000
+  from ks
+  join (select cKatStroy, sum(sumcur) as sumcur
+        from addsumobj
+        where cAddSumTune = #comp(4001E5BA98205EEEh) and coTable = 2101
+        group by cKatStroy) tplan on ks.cKatStroy = tplan.cKatStroy
+  union all
+  //8. Прочие производственные затраты
+  select ks.cKatStroy, 8, 0, tplan.sumcur / 1000
+  from ks
+  join (select cKatStroy, sum(sumcur) as sumcur
+        from addsumobj
+        where cAddSumTune = #comp(40017B9A6AFB5EE8h) and coTable = 2101
+        group by cKatStroy) tplan on ks.cKatStroy = tplan.cKatStroy
+  union all
+  //10. Производственная себестоимость
+  select ks.cKatStroy, 10, 0, tplan.sumcur / 1000
+  from ks
+  join (select cKatStroy, sum(sumcur) as sumcur
+        from addsumobj
+        where cAddSumTune <> #comp(40016A1FFF9BB13Dh) and coTable = 2101
+        group by cKatStroy) tplan on ks.cKatStroy = tplan.cKatStroy
+  union all
+  //12. Полная себестоимость
+  select ks.cKatStroy, 12, 0, tplan.sumcur / 1000
+  from ks
+  join (select cKatStroy, sum(sumcur) as sumcur
+        from addsumobj
+        where cAddSumTune <> #comp(40016A1FFF9BB13Dh) and coTable = 2101
+        group by cKatStroy) tplan on ks.cKatStroy = tplan.cKatStroy
+  union all
+  //13. Прибыль
+  select ks.cKatStroy, 13, 0, tplan.sumcur / 1000
+  from ks
+  join (select cKatStroy, sum(sumcur) as sumcur
+        from addsumobj
+        where cAddSumTune = #comp(40016A1FFF9BB13Dh) and coTable = 2101
+        group by cKatStroy) tplan on ks.cKatStroy = tplan.cKatStroy
+  union all
+  //14. Цена без НДС
+  select ks.cKatStroy, 14, 0, katstroy.sumcur / 1000
+  from ks
+  join katstroy on ks.ckatstroy = katstroy.nrec
+  union all
+  //15. Цена с НДС
+  select ks.cKatStroy, 15, 0,
+         case when instr('С НДС',upper(katstroy.name),0)>0
+              then katstroy.sumcur*1.18
+              else katstroy.sumcur
+         end / 1000
+  from ks
+  join katstroy on ks.ckatstroy = katstroy.nrec
+  union all
+  //16. Технологическая трудоемкость по изделию
+  select ks.cKatStroy, 16, 0, sum( (cast(pv.value[2] as double)) / case when n.dnormed > 0 then n.dnormed else 1 end )
+  from ks
+  join (select spsetan.ckau as cKatStroy, max(katmarsh.nrec) as cKatMarsh
+        from katkau
+        join spsetan on katkau.kodgroup = spsetan.kodgrkau
+        join katmarsh on 2 = katmarsh.tobject and katkau.kodgroup = katmarsh.cobject and 1 = katmarsh.active
+        where katkau.upgroup = 40
+        group by spsetan.ckau) km on ks.cKatStroy = km.cKatStroy
+  join marsh_sp on km.cKatMarsh = marsh_sp.cMarsh
+  join normas n on 11005 = n.tmaster and marsh_sp.nrec = n.cmaster and 102 = n.normsort
+  join paramvol pv on 11000 = pv.tobject and n.nrec = pv.cobject
+  group by ks.cKatStroy
+;
+
+sql query sqlKatStroy =
+insert ks (cKatStroy, Name, cOrg)
+select katstroy.nrec, katstroy.name, td.corg
+from oborot o
+join katstroy on o.kauos[2] = katstroy.nrec
+join (select sm.cobj as cKatStroy, max(o.nrec) as cOrg
+      from dogovor d
+      join attrval avPrPr on avPrPr.wTable=1707 and avPrPr.cRec=d.nrec and avPrPr.cattrnam=#comp(281474976710833) and avPrPr.vComp=#comp(281474976711945)
+      join katorg o on d.corg = o.nrec
+      join calplan cp on cp.cdogovor=d.nrec and cp.directmc=1
+      join spdocs spd on spd.tidk=403 and spd.cdoc=cp.nrec
+      join specmtr sm on #comp(0001000000000001h) = sm.csaldtune and 1723 = sm.cotable and spd.nrec = sm.cspec
+      where d.status<>3
+      group by sm.cobj
+     ) td on o.kauos[2] = td.cKatStroy
+where o.datob between ? and ? and o.scheto='890' and o.subossch='09' and o.kauos[2] <> #comp(0)
+group by katstroy.nrec, katstroy.name, td.corg
+;
+
+sql query sqlKSY =
+
+insert ksy (cKatStroy, wYear, koef)
+
+select ks.cKatstroy, o.year, case when ofull.summa <> 0 then abs(o.summa/ofull.summa) else 0 end
+
+from ks
+
+join (select kauos[2] as cKatstroy, year(datetime(datob,0)) as year, sum(sumob) as summa
+      from oborot
+      where datob between ? and ? and scheto='890' and subossch='02' and
+            (schetk<>'890' or (schetk='890' and subschk<>'09'))
+      group by kauos[2], year(datetime(datob,0))
+     ) o on o.cKatstroy = ks.cKatStroy
+
+join (select kauos[2] as ckatstroy, sum(sumob) as summa
+      from oborot
+      where scheto='890' and subossch='02' and (schetk<>'890' or (schetk='890' and subschk<>'09'))
+      group by kauos[2]) ofull on ks.cKatStroy = ofull.ckatstroy
+;
+
+/*
+insert ksy (cKatStroy, wYear, koef)
+select ks.ckatstroy, year(datetime(o.datob,0)), sum(case when ofull.summa <> 0 then abs(o.sumob/ofull.summa) else 0 end)
+from ks
+join oborot o on o.datob between ? and ? and o.scheto='890' and o.subossch='02' and
+                 (o.schetk<>'890' or (o.schetk='890' and o.subschk<>'09')) and o.kauos[2] = ks.cKatStroy
+join (select kauos[2] as ckatstroy, sum(sumob) as summa
+      from oborot
+      where scheto='890' and subossch='02' and (schetk<>'890' or (schetk='890' and subschk<>'09'))
+      group by kauos[2]) ofull on ks.cKatStroy = ofull.ckatstroy
+group by ks.ckatstroy, year(datetime(o.datob,0))
+;
+*/
+
+table struct tKatStroy (
+  nrec    : comp,
+  name    : string,
+  cOrg    : comp
+) with index (
+  i01 = nrec (unique),
+  i02 = cOrg + name,
+  i03 = name
+);
+
+table struct tCostItem (  //Статьи
+  Code: word,
+  name: string
+) with index (
+  i01 = Code
+);
+
+table struct tt (        //Фактические суммы с разбивкой по годам, заказам, статьям
+  wYear    : word,
+  cKatStroy: comp,
+  wCostItem: word,
+  Summa    : double
+) with index (
+  i01 = wCostItem + cKatStroy + wYear,
+  i02 = cKatStroy + wYear
+);
+
+table struct tp (        //Плановые суммы с разбивкой по заказам, статьям
+  cKatStroy: comp,
+  wCostItem: word,
+  wYear    : word,
+  Summa    : double
+) with index (
+  i01 = wCostItem + cKatStroy + wYear,
+  i02 = wYear
+);
+
+table struct tYear (
+  wYear: longint
+) with index (
+  i01 = wYear
+);
+
+table struct tOrg (
+  nRec: comp,
+  Name: string
+) with index (
+  i01 = nRec (unique),
+  i02 = Name
+);
+
+var
+  wYearRep1, wYearRep2: word;
+  dRep1, dRep2: date;
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+
+create view
+as select *
+from tt, tp, tKatStroy, tCostItem, tYear, tOrg,
+     tKatStroy brKatStroy (i03), tCostItem brCostItem, tYear brYear, tt brtt, tp brtp,
+     tOrg rOrg (i02), tKatStroy rKatStroy, tCostItem rCostItem, tYear rYear, tt rtt, tt rtt10, tp rtp
+where ((
+  brCostItem.Code == brtt.wCostItem and
+  brKatStroy.nRec == brtt.cKatStroy and
+  brYear.wYear    == brtt.wYear     and
+
+  brCostItem.Code == brtp.wCostItem and
+  brKatStroy.nRec == brtp.cKatStroy and
+  brYear.wYear    == brtp.wYear     and
+
+  rOrg.nRec       == rKatStroy.cOrg and
+
+  rCostItem.Code  == rtt.wCostItem and
+  rKatStroy.nRec  == rtt.cKatStroy and
+  rYear.wYear     == rtt.wYear     and
+
+  10              == rtt10.wCostItem and
+  rKatStroy.nRec  == rtt10.cKatStroy and
+  rYear.wYear     == rtt10.wYear     and
+
+  rCostItem.Code  == rtp.wCostItem and
+  rKatStroy.nRec  == rtp.cKatStroy and
+  rYear.wYear     == rtp.wYear
+));
+
+window winfo2;
+browse brtKatStroy;
+show(11,,,4);
+table tKatStroy;
+fields
+  tKatStroy.Name 'Заказ': protect;
+end;
+end;
+
+window wInfo 'Результаты расчета';
+
+browse brYear;
+show (,,10,4);
+table brYear;
+fields
+  brYear.wYear 'Год': protect;
+end;
+
+browse brKatStroy;
+show(11,,,4);
+table brKatStroy;
+fields
+  brKatStroy.Name 'Заказ': protect;
+end;
+
+browse brCostItem;
+show(,5,,);
+table brCostItem;
+fields
+  brCostItem.Name 'Статья': [20] , protect;
+  if(getfirst brtp = tsOk, brtp.Summa, '')  'План'  : [8], protect;
+  if(getfirst brtt = tsOk, brtt.Summa, '')  'Факт'  : [8], protect;
+end;
+
+end; //window
+
+screen scmain;
+fields
+  wYearRep1: noprotect, spinbutton [1, 2013, 2100];
+  wYearRep2: noprotect, spinbutton [1, 2013, 2100];
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+ `Год с` .@@@@@@ `по` .@@@@@@
+
+ <. Продолжить .> <. Отмена .>
+>>
+end;
+
+procedure filltables;
+var
+  stmt, s: longint;
+  i: integer;
+{
+  //временная таблица для фактических сумм
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table tt (wYear: word, cKatStroy: comp, wCostItem: word, Summa: double);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlTruncateTmpTable('tt');
+  //временная таблица для заказов
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table ks (cKatStroy:comp, name:string, cOrg:comp);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlTruncateTmpTable('ks');
+  //временная таблица для сумм по заказам в разрезе лет
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table ksy (cKatStroy:comp, wYear:word, koef:double);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlTruncateTmpTable('ksy');
+  //заполняем временную таблицу ks заказами
+  stmt := sqlAllocStmt;
+  sqlFreeStr(s);
+  sqlPrepare(stmt, sqlKatStroy);
+  sqlBindParam(stmt, 1, dRep1);
+  sqlBindParam(stmt, 2, dRep2);
+  sqlExecute(stmt);
+  sqlFreeStmt(stmt);
+  //заполняем временную таблицу ksy суммами по заказам и годам по 90.02
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, sqlKSY);
+  sqlBindParam(stmt, 1, dRep1);
+  sqlBindParam(stmt, 2, dRep2);
+  sqlExecute(stmt);
+  sqlFreeStmt(stmt);
+  //заполняем логическую таблицу tKatStroy заказами из ks
+  delete all tKatStroy;
+  sqlSelectInto('select * from ks', #tKatStroy);
+  //заполняем временную таблицу фактическими суммами
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, sqlCostItemsFact);
+  /*
+  i := 0;
+  while (i<30)
+  {
+    i++; sqlBindParam(stmt, i, dRep1);
+    i++; sqlBindParam(stmt, i, dRep2);
+  }
+  */
+  sqlExecute(stmt);
+  sqlFreeStmt(stmt);
+  //заполняем логическую таблицу tt данными из временной таблицы tt
+  delete all tt;
+  sqlSelectInto('select * from tt', #tt);
+  //заполняем логическую таблицу tp плановыми суммами
+  delete all tp;
+  sqlSelectInto(sqlCostItemsPlan, #tp);
+  //заполняем таблицу с организациями
+  delete all tOrg;
+  insert tOrg (nRec, Name)
+  select KatOrg.nRec, KatOrg.Name
+  from tKatStroy, KatOrg
+  where ((tKatStroy.cOrg == KatOrg.nRec))
+  ignore_errors(tsDuplicateKey);
+  //дропаем временные таблицы
+  sqlDropTmpTable('tt');
+  sqlDropTmpTable('ks');
+  sqlDropTmpTable('ksy');
+  //заполняем таблицу с годами
+  delete all tYear;
+  for (i:=wYearRep1; i<=wYearRep2; i++)
+  {
+    insert tYear set tYear.wYear := i;
+  }
+  //распределяем плановые суммы по годам
+  var y, y2: longint;
+  var d: double;
+  _loop tKatStroy
+  {
+
+    if (getlast tt where ((tKatStroy.nrec == tt.cKatStroy)) = tsOk)
+      y2 := tt.wYear;
+
+    _loop tCostItem
+    {
+      if getfirst tp where ((tKatStroy.nRec == tp.cKatStroy and tCostItem.Code == tp.wCostItem and 0 == tp.wYear)) = tsOk
+      {
+        d := tp.summa;
+        for(y:=wYearRep1; y<y2; y++)
+        {
+          if getfirst tt where ((tKatStroy.nRec == tt.cKatStroy and tCostItem.Code == tt.wCostItem and y == tt.wYear and (tt.summa > 0) )) = tsOk
+          {
+            insert tp set tp.cKatStroy := tKatStroy.nRec, tp.wCostItem := tCostItem.Code, tp.wYear := y, tp.summa := tt.summa;
+            d := d - tt.summa;
+          }
+        }
+        insert tp set tp.cKatStroy := tKatStroy.nRec, tp.wCostItem := tCostItem.Code, tp.wYear := y2, tp.summa := d;
+      }
+    }
+  }
+}
+
+procedure PrintRep(isCreateXLT : boolean);
+var
+  i, npp: integer;
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetNumberVar('ГодНач', wYearRep1);
+  pXL.SetStringVar('ГодКон', wYearRep2);
+  i := 0;
+  _loop tYear
+  {
+    i++;
+    pXL.SetStringVar('Заголовок_'+i, 'за единицу продукции по контракту тыс.руб.*');
+    i++;
+    pXL.SetStringVar('Заголовок_'+i, 'тыс. руб.');
+    i++;
+    pXL.SetStringVar('Год_'+(i div 3), tYear.wYear);
+    pXL.SetStringVar('Заголовок_'+i, 'Доля (% от производст- венной себестои- мости)');
+  }
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Нпп');
+  pXL.CreateTblFld('Показатель');
+  pXL.CreateTblFld('lvl');
+  i := 0;
+  _loop tYear
+  {
+    i++; pXL.CreateTblFld('Колонка_'+i);
+    i++; pXL.CreateTblFld('Колонка_'+i);
+    i++; pXL.CreateTblFld('Колонка_'+i);
+  }
+
+  if not isCreateXLT
+  {
+    _loop rOrg
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('Нпп', rOrg.Name);
+      pXL.SetTblStringFldValue('lvl', 1);
+      pXL.InsTblRow;
+      _loop rKatStroy
+      {
+
+        pXL.ClearTblBuffer;
+        pXL.SetTblStringFldValue('Нпп', rKatStroy.Name);
+        pXL.SetTblStringFldValue('lvl', 2);
+        pXL.InsTblRow;
+        npp := 0;
+        _loop rCostItem
+        {
+          npp++;
+          pXL.ClearTblBuffer;
+          pXL.SetTblNumberFldValue('Нпп', npp);
+          pXL.SetTblStringFldValue('Показатель', rCostItem.Name);
+          pXL.SetTblStringFldValue('lvl', 3);
+          i := 0;
+          _loop rYear
+          {
+            i++;
+            if(getfirst rtp = tsOk) pXL.SetTblNumberFldValue('Колонка_'+i, rtp.summa);
+            i++;
+            if(getfirst rtt = tsOk) pXL.SetTblNumberFldValue('Колонка_'+i, rtt.summa);
+            i++;
+            if((getfirst rtt10 = tsOk) and (getfirst rtt = tsOk))
+              if ((rtt10.summa > 0) and (rCostItem.Code <= 13))
+                pXL.SetTblStringFldValue('Колонка_'+i, ''''+doubletostr(round(rtt.summa/rtt10.summa*100), '[|-]36666666666')+'%');
+          }
+          pXL.InsTblRow;
+        }
+      } //rKatStroy
+    } //rOrg
+  } //if not isCreateXLT
+
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+
+handleevent
+cmPositionChanged:
+{
+  case curtable of
+    #brKatStroy, #brYear: rereadrecord(#brCostItem);
+  end;
+}
+cmDoOk:
+{
+  StartNewVisual(vtRotateVisual, vfThread + vfTimer, 'Выборка данных', 0);
+  if (wYearRep1 > wYearRep2) wYearRep2 := wYearRep1;
+  dRep1 := date(1 ,1 ,wYearRep1);
+  dRep2 := date(31,12,wYearRep2);
+  filltables;
+  SetVisualHeader('Вывод в Excel');
+  PrintRep(false);
+  StopVisual('',0);
+  //runwindow(winfo);
+}
+cminit:
+{
+  sXLTFileName := TranslatePath('%StartPath%xls\Forma2GOZ.xlt');
+  if not readmydsk(wYearRep1, 'Forma2GOZ_wYearRep1', false) wYearRep1 := year(cur_date);
+  if not readmydsk(wYearRep2, 'Forma2GOZ_wYearRep2', false) wYearRep2 := wYearRep1;
+
+  delete all tCostItem;
+  insert tCostItem set tCostItem.Code := 1 , tCostItem.name := 'Затраты на материалы';
+  insert tCostItem set tCostItem.Code := 2 , tCostItem.name := 'в т.ч. сырье и материалы';
+  insert tCostItem set tCostItem.Code := 3 , tCostItem.name := 'в т.ч. покупные полуфабрикаты и комплектующие';
+  insert tCostItem set tCostItem.Code := 4 , tCostItem.name := 'Фонд оплаты труда';
+  insert tCostItem set tCostItem.Code := 5 , tCostItem.name := 'Сумма платежей (взносов) по договорам обязательного страхования';
+  insert tCostItem set tCostItem.Code := 6 , tCostItem.name := 'Накладные расходы (общехозяйственные и общепроизводственные расходы)';
+  insert tCostItem set tCostItem.Code := 7 , tCostItem.name := 'Услуги сторонних организаций';
+  insert tCostItem set tCostItem.Code := 8 , tCostItem.name := 'Прочие производственные затраты';
+  insert tCostItem set tCostItem.Code := 9 , tCostItem.name := 'Потери от брака';
+  insert tCostItem set tCostItem.Code := 10, tCostItem.name := 'Производственная себестоимость';
+  insert tCostItem set tCostItem.Code := 11, tCostItem.name := 'Внепроизводственные затраты';
+  insert tCostItem set tCostItem.Code := 12, tCostItem.name := 'Полная себестоимость';
+  insert tCostItem set tCostItem.Code := 13, tCostItem.name := 'Прибыль';
+  insert tCostItem set tCostItem.Code := 14, tCostItem.name := 'Цена за единицу продукции без НДС';
+  insert tCostItem set tCostItem.Code := 15, tCostItem.name := 'Цена за единицу продукции с НДС';
+  insert tCostItem set tCostItem.Code := 16, tCostItem.name := 'Технологическая трудоемкость по изделию (работам, услугам) планируемая/фактическая';
+}
+cmDone:
+{
+  savemydsk(wYearRep1, 'Forma2GOZ_wYearRep1');
+  savemydsk(wYearRep2, 'Forma2GOZ_wYearRep2');
+}
+end;
+
+end.
+
+VipInterface UserReport_Forma2GOZ Implements IUserReport licensed(free);
+Interface UserReport_Forma2GOZ;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::Forma2GOZ);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Приложение 2-ГОЗ.Сведения о ценах на продукцию';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1)
+      GetGroupName := 'Отчеты ГОЗ'
+    else
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'DOGOVOR';
+    end;
+  end;
+end.
