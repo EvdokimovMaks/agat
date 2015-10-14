@@ -1,0 +1,222 @@
+#component "AGAT"
+
+interface dogovorcalplanree;
+
+table struct t (
+  tdNodoc     : string[40],
+  tdNodocExt  : string[40],
+  tdDdoc      : date,
+  tdStatusName: string[80],
+  tdTipKonPotr: string[120],
+  tdSumma     : double,
+  tdNDS       : double,
+  KatstroyName: string[200],
+  dNodoc      : string[40],
+  dDdoc       : date,
+  VidDogName  : string[80],
+  KatOrgName  : string[150],
+  dDbeg       : date,
+  dDend       : date,
+  dStatusName : string[80],
+  DirectName  : string[10],
+  cpNodoc     : string[40],
+  cpStatusName: string[80],
+  cpDbeg      : date,
+  cpDend      : date,
+  cpKol       : double,
+  cpSumma     : double,
+  cpNDS       : double,
+  ZavNum      : string[120],
+  ProjNum     : string[120],
+  UndoneReason: string[255],
+  PriceKind   : string[50],
+  PodrName    : string[150]
+) with index (
+  i01 = tdNodoc + tdDdoc + dNodoc + dDdoc + cpNodoc
+);
+
+sql query q1 =
+select coalesce(td.nodoc,d.nodoc), coalesce(td.nodoc_ext,d.nodoc_ext), coalesce(td.ddoc,d.ddoc), coalesce(tdkn.name, coalesce(dkn.name, '')),
+       coalesce(spktkp.name,''), coalesce(td.summa,d.summa), coalesce(td.sumnds,d.sumnds),
+       coalesce(ks.name,''), d.nodoc, d.ddoc, v.name, o.name, d.dbeg, d.dend, coalesce(dkn.name, ''),
+       case when d.direct = 1 then 'реализация' else 'закупка' end,
+       cp.nodoc, coalesce(kn.name,''), cp.dfrom, cp.dto,
+       coalesce(t.kol,0),
+       coalesce(t.summa,0) - case when cp.vhodnal = 1 then coalesce(t.sumnds,0) else 0 end,
+       coalesce(t.sumnds,0),
+       coalesce(spk1.name,''), coalesce(spk2.name,''), coalesce(av3.vstring, ''), coalesce(tPriceKind.Name, ''), coalesce(kp.name,'')
+from dogovor d
+left join katnotes dkn on d.cnote = dkn.nrec
+left join katorg o on d.corg = o.nrec
+left join dogovor td on d.cdogovor = td.nrec
+left join katnotes tdkn on coalesce(td.cnote, #comp(0)) = tdkn.nrec
+left join attrval avtkp on 1707 = avtkp.wtable and coalesce(td.nrec, #comp(0)) = avtkp.crec and #comp(00010000000000AFh) = avtkp.cattrnam    //конечный потребитель
+left join spkau spktkp on coalesce(avtkp.vcomp,#comp(0)) = spktkp.nrec
+left join calplan cp on d.nrec = cp.cdogovor and cp.directmc <> 0
+left join katnotes kn on cp.cnote = kn.nrec and coalesce(cp.cnote,#comp(0)) <> #comp(0)
+left join (select spd.cdoc as ccalplan, specmtr.cobj as ckatstroy, sum(spd.summa) as summa, sum(spd.sumnds) as sumnds, sum(spd.kol) as kol
+           from spdocs spd
+           join specmtr on #comp(0001000000000001h) = specmtr.csaldtune and 1723 = specmtr.cotable and spd.nrec = specmtr.cspec
+           where spd.tidk = 403
+           group by spd.cdoc, specmtr.cobj
+          ) t on cp.nrec = t.ccalplan and coalesce(cp.nrec,#comp(0)) <> #comp(0)
+left join (select distinct spd.cdoc as ccalplan, es.name as name
+           from spdocs spd
+           join exclassval ev on 1723 = ev.wtable and spd.nrec = ev.crec and 124 = ev.classcode
+           join exclassseg es on ev.cclassseg = es.nrec
+           where spd.tidk = 403
+          ) tPriceKind on cp.nrec = tPriceKind.ccalplan and coalesce(cp.nrec,#comp(0)) <> #comp(0)
+left join katstroy ks on coalesce(t.ckatstroy, #comp(0)) = ks.nrec
+left join attrval av1 on 2101 = av1.wtable and coalesce(ks.nrec,#comp(0)) = av1.crec and #comp(281474976711616) = av1.cattrnam    //заводской номер
+left join spkau spk1 on coalesce(av1.vcomp,#comp(0)) = spk1.nrec
+left join attrval av2 on 2101 = av2.wtable and coalesce(ks.nrec,#comp(0)) = av2.crec and #comp(281474976711615) = av2.cattrnam    //№ проекта
+left join spkau spk2 on coalesce(av2.vcomp,#comp(0)) = spk2.nrec
+left join attrval av3 on 2101 = av3.wtable and coalesce(ks.nrec,#comp(0)) = av3.crec and #comp(281474976710826) = av3.cattrnam    //причина невыполнения
+left join kaureff kr on 2101 = kr.cotable and coalesce(ks.nrec,#comp(0)) = kr.crec and 2 = kr.wkau and coalesce(ks.nrec,#comp(0)) <> #comp(0) //подразделение по заказу
+left join katpodr kp on coalesce(kr.ckau,#comp(0)) = kp.nrec
+left join katvidd v on d.cviddog = v.nrec
+//where d.status <> 3
+;
+
+var
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+
+create view as select *
+from t;
+
+procedure printReport(isCreateXLT: boolean);
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('РодительНомер' );
+  pXL.CreateTblFld('РодительШифр'  );
+  pXL.CreateTblFld('РодительДата'  );
+  pXL.CreateTblFld('РодительСумма' );
+  pXL.CreateTblFld('РодительНДС'   );
+  pXL.CreateTblFld('РодительСтатус');
+  pXL.CreateTblFld('РодительТипКонечногоПотребителя');
+  pXL.CreateTblFld('Заказ'         );
+  pXL.CreateTblFld('Номер'         );
+  pXL.CreateTblFld('Статус'        );
+  pXL.CreateTblFld('Дата'          );
+  pXL.CreateTblFld('Вид'           );
+  pXL.CreateTblFld('Контрагент'    );
+  pXL.CreateTblFld('ДатаС'         );
+  pXL.CreateTblFld('ДатаПо'        );
+  pXL.CreateTblFld('Направление'   );
+  pXL.CreateTblFld('КалПланНомер'  );
+  pXL.CreateTblFld('КалПланСтатус' );
+  pXL.CreateTblFld('КалПланДатаС'  );
+  pXL.CreateTblFld('КалПланДатаПо' );
+  pXL.CreateTblFld('КалПланКолво'  );
+  pXL.CreateTblFld('КалПланСумма'  );
+  pXL.CreateTblFld('КалПланНДС'    );
+  pXL.CreateTblFld('ЗаводскойНомер');
+  pXL.CreateTblFld('НомерПроекта'  );
+  pXL.CreateTblFld('ПричинаНевып'  );
+  pXL.CreateTblFld('ВидЦены'       );
+  pXL.CreateTblFld('Подразделение' );
+
+  if not isCreateXLT
+  {
+    _loop t
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('РодительНомер' ,t.tdNodoc     );
+      pXL.SetTblStringFldValue('РодительШифр'  ,t.tdNodocExt  );
+      pXL.SetTblDateFldValue  ('РодительДата'  ,t.tdDdoc      );
+      pXL.SetTblStringFldValue('РодительСтатус',t.tdStatusName);
+      pXL.SetTblStringFldValue('РодительТипКонечногоПотребителя', t.tdTipKonPotr);
+      pXL.SetTblNumberFldValue('РодительСумма' ,t.tdSumma     );
+      pXL.SetTblNumberFldValue('РодительНДС'   ,t.tdNDS       );
+      pXL.SetTblStringFldValue('Заказ'         ,t.KatstroyName);
+      pXL.SetTblStringFldValue('Номер'         ,t.dNodoc      );
+      pXL.SetTblStringFldValue('Статус'        ,t.dStatusName );
+      pXL.SetTblDateFldValue  ('Дата'          ,t.dDdoc       );
+      pXL.SetTblStringFldValue('Вид'           ,t.VidDogName  );
+      pXL.SetTblStringFldValue('Статус'        ,t.dStatusName );
+      pXL.SetTblStringFldValue('Контрагент'    ,t.KatOrgName  );
+      pXL.SetTblDateFldValue  ('ДатаС'         ,t.dDbeg       );
+      pXL.SetTblDateFldValue  ('ДатаПо'        ,t.dDend       );
+      pXL.SetTblStringFldValue('Направление'   ,t.DirectName  );
+      pXL.SetTblStringFldValue('КалПланНомер'  ,t.cpNodoc     );
+      pXL.SetTblStringFldValue('КалПланСтатус' ,t.cpStatusName);
+      pXL.SetTblDateFldValue  ('КалПланДатаС'  ,t.cpDbeg      );
+      pXL.SetTblDateFldValue  ('КалПланДатаПо' ,t.cpDend      );
+      pXL.SetTblNumberFldValue('КалПланКолво'  ,t.cpKol       );
+      pXL.SetTblNumberFldValue('КалПланСумма'  ,t.cpSumma     );
+      pXL.SetTblNumberFldValue('КалПланНДС'    ,t.cpNDS       );
+      pXL.SetTblStringFldValue('ЗаводскойНомер',t.ZavNum      );
+      pXL.SetTblStringFldValue('НомерПроекта'  ,t.ProjNum     );
+      pXL.SetTblStringFldValue('ПричинаНевып'  ,t.UndoneReason);
+      pXL.SetTblStringFldValue('ВидЦены'       ,t.PriceKind   );
+      pXL.SetTblStringFldValue('Подразделение' ,t.PodrName    );
+      pXL.InsTblRow;
+    }
+  }
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+function filltables: boolean;
+{
+  result := false;
+  delete all t;
+  if (sqlSelectInto(q1, #t) != tsOk)
+  {
+    message('Ошибка запроса данных для отчета', error);
+    exit;
+  }
+  result := true;
+}
+handleevent
+  cminit:
+  {
+    sXLTFileName := TranslatePath('%StartPath%xls\РеестрДоговоровИЭтапов.xlt');
+    StartNewVisual(vtRotateVisual, vfThread, 'Формирование отчета. Запрос к БД', 0);
+    if (filltables)
+    {
+      setvisualheader('Формирование отчета. Выгрузка в Excel');
+      printReport(false);
+    }
+    StopVisual('',0);
+  }
+end;
+end.
+
+VipInterface UserReport_dogovorcalplanree Implements IUserReport licensed(free);
+Interface UserReport_dogovorcalplanree;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::dogovorcalplanree);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат.Реестр договоров и этапов';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1) {}
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'DOGOVOR';
+    end;
+  end;
+end.
