@@ -230,6 +230,7 @@ function GetProfName: string;
 //#region Процедуры Pick--------------------------------------------------------------------------------------
 
 procedure ProcessCurrentRecord; forward;
+procedure SaveCurrentRecord; forward;
 
 procedure PickObj;
 var
@@ -244,7 +245,8 @@ var
       t.ObjName := vOper.mnfoper.name;
     if vOper.getfirst paramvol = tsOk
       t.TotalLaborBase := vOper.paramvol.value[9];
-    ProcessCurrentRecord;
+    //ProcessCurrentRecord;
+    SaveCurrentRecord;
     rescanpanel(#t);
   }
 }
@@ -355,6 +357,7 @@ procedure CalcPercent;
     t.TotalLaborBase := t.TotalLabor / t.NoveltyCoeff / t.DiffCoeff;
     ProcessCurrentRecord;
   }
+  rereadrecord(#t);
 }
 
 //#endregion
@@ -378,6 +381,7 @@ procedure CalcDiffCoeff;
     t.DiffCoeff += tp.TotalLabor / total * tp.Coeff;
   poppos(#tp);
   ProcessCurrentRecord;
+  rereadrecord(#t);
 }
 
 //#endregion
@@ -548,19 +552,26 @@ procedure CalcBaseHourCost;
     exit;
   }
 
-  var hours: double;
-  hours := ei.GetHours(_baseYear);
-  if hours = 0
-  {
-    message('В таблице экономических показателей не найдено количество рабочих часов за '+_baseYear+' год', error);
-    exit;
-  }
-
-  var mainSalary: double;
-  mainSalary := ei.GetMainSalary(_baseYear);
-
+  //ищем стоимость нормочаса в таблице экон. показателей
   var cost: double;
-  cost := mainSalary * 12 / hours;
+  cost := ei.GetHourCost(_baseYear);
+
+  //если показатель не найден - пытаемся расчитать
+  if cost = 0
+  {
+    var hours: double;
+    hours := ei.GetHours(_baseYear);
+    if hours = 0
+    {
+      message('В таблице экономических показателей не найдено количество рабочих часов за '+_baseYear+' год', error);
+      exit;
+    }
+
+    var mainSalary: double;
+    mainSalary := ei.GetMainSalary(_baseYear);
+
+    cost := mainSalary * 12 / hours;
+  }
 
   if getmarkercount(_marks) = 0
     insertmarker(_marks, t.Nrec);
@@ -849,10 +860,10 @@ procedure SetDefaultCurrentRecord;
 procedure InsertCurrentRecord;
 {
   var buf: ttRKM8D;
-
   t.nrec := GetNextNRec(#t, 0);
   buf := ttRKM8D(t.buffer);
   insert current t;
+  setNew(false);
   t.buffer := buf;
   update current t;
   ProcessCurrentRecord;
@@ -870,12 +881,12 @@ procedure DeleteCurrentRecord;
 {
   DeleteChildEditRKM8D(t.Nrec);
   delete all trkm8dProfs where ((tRKM8D.Nrec == trkm8dProfs.rkm8dNrec));
-  delete current t;
+  if isvalid(#t) delete current t;
 }
 
 procedure SaveCurrentRecord;
 {
-  if isNew
+  if isNew or ( not IsValid(#t) )
     InsertCurrentRecord
   else
     UpdateCurrentRecord;
@@ -1089,9 +1100,17 @@ handleevent
     TreeCloseAllOpenedNode(tr1);
     rescanpanel(#t);
   }
-  cmPrintDoc: OnPrint(0);
+  cmPrintDoc:
+  {
+    OnPrint(0);
+    rescanpanel(#t);
+  }
 
-  cmValue3: OnPrint(1);
+  cmValue3:
+  {
+    OnPrint(1);
+    rescanpanel(#t);
+  }
 
   cmValue4: CalcPercent;
 
@@ -1413,6 +1432,7 @@ function setvalspmnp(bufSpmnpl: tspmnpl; v: tValspmnpValues): tvalspmnp;
 
 procedure Save(aMnplanNrec: comp; aFptperNrec: comp);
 {
+  SaveCurrentRecord;
   var i: byte;
 
   v._mnplanNrec := aMnplanNrec;
