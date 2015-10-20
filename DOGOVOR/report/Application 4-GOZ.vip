@@ -1,0 +1,192 @@
+#include Query.vih
+
+#component "AGAT"
+interface Forma4GOZ 'Приложение 4-ГОЗ. Справка о заключенных контрактах с государственными заказчиками на выполнение ГОЗ', escclose, doaccept;
+show (,,47,6);
+
+sql query qSelectContr =
+insert tContr (Nrec, Number, AppNrec, AppDate, AppDBeg, AppDEnd, AppKind, AppName, AppSum, AppPKind)
+select d.nrec as Nrec,
+       d.nodoc as Number,
+       app.nrec as AppNrec,
+       app.ddoc as AppDate,
+       app.dbeg as AppDBeg,
+       app.dend as AppDEnd,
+       coalesce(katvidd.Name,'') as AppKind,
+       app.nodoc_ext as AppName,
+       app.summa as AppSum,
+       coalesce(ecs.name,'') as AppPKind
+from dogovor d
+//фильтр договоров по вн.атр. Принадлежность продукции = "Спецтехника"
+join attrval avPrPr on avPrPr.wTable=1707 and avPrPr.cRec=d.nrec and avPrPr.cattrnam=#comp(281474976710833) and avPrPr.vComp=#comp(281474976711945)
+//фильтр договоров по входимости в группу (Прямой ГОЗ / Косвенный ГОЗ)
+join spgrsch on 1 = spgrsch.wlist and d.nrec = spgrsch.cbasedoc and spgrsch.cgroupsch=:GroupNrec
+//допник к договору
+left join (select dogovor.cdogovor as cdogovor, max(dogovor.nrec) as nrec
+           from dogovor
+           left join attrval on attrval.wtable=1707 and attrval.crec = dogovor.nrec and attrval.cattrnam=#comp(281474976710830)
+           where dogovor.tidk=401 and dogovor.status<>3 and coalesce(attrval.vcomp,#comp(0)) <> #comp(4001AB188D71B97Ah) //исключение отмененных допников и допников с Источником финансирования "Внебюджетное финансирование"
+           group by dogovor.cdogovor
+          ) sogl on d.nrec = sogl.cdogovor
+//если у договора нет допника - считаем допником сам договор
+left join dogovor app on coalesce(sogl.nrec,d.nrec) = app.nrec
+//вид допника
+left join katvidd on app.cviddog = katvidd.nrec
+//внешний классификатор "вид цены" к допнику
+left join exclassval ecv on 123 = ecv.classcode and 1707 = ecv.wtable and app.nrec = ecv.crec
+left join exclassseg ecs on coalesce(ecv.cclassseg,#comp(0)) = ecs.nrec
+where d.tidk = 400
+;
+
+table struct tContr (
+  Nrec        : comp,
+  Number      : string[100],
+  AppNrec     : comp,
+  AppDate     : date,
+  AppStartDate: date,
+  AppEndDate  : date,
+  AppKind     : string[80],
+  AppName     : string[100],
+  AppSum      : double,
+  AppPriceKind: string
+) with index (
+  i01 = Nrec,
+  i02 = AppNrec
+);
+
+var
+  _repStartDate, _repEndDate: date;
+  _repGroupNrec: comp;
+  _q: IQuery;
+
+create view
+as select *
+from tContr, groupsch repGroupSch
+where ((
+  _repGroupNrec == repGroupSch.nrec
+))
+;
+
+function PrepareTmpTables: boolean;
+{
+  result := true;
+
+  var s: longint;
+  var errCode: integer;
+
+  sqlDropTmpTable('tContr');
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table tContr (');
+  sqlAddStr(s, 'Nrec    : comp,');
+  sqlAddStr(s, 'Number  : string[100],');
+  sqlAddStr(s, 'AppNrec : comp,');
+  sqlAddStr(s, 'AppDate : date,');
+  sqlAddStr(s, 'AppDBeg : date,');
+  sqlAddStr(s, 'AppDEnd : date,');
+  sqlAddStr(s, 'AppKind : string[80],');
+  sqlAddStr(s, 'AppName : string[100],');
+  sqlAddStr(s, 'AppSum  : double,');
+  sqlAddStr(s, 'AppPKind: string );');
+  errCode := sqlCreateTmpTable(s, ctmNormal);
+  if errCode != tsOk
+  {
+    message('Ошибка формирования временной sql таблицы tContr:' + errCode, error);
+    result := false;
+  }
+}
+
+procedure DropTmpTables;
+{
+  sqlDropTmpTable('tContr');
+}
+
+function FillTables: boolean;
+{
+  result := false;
+
+  _q := queryManager.createQuery(qSelectContr);
+  _q.setParam('GroupNrec', _repGroupNrec);
+  _q.execute;
+  if _q.errorCode != tsOk
+  {
+    message('Ошибка выполнения запроса qSelectContr: '+_q.errorCode, error);
+    exit;
+  }
+
+  delete all tContr;
+  _q := queryManager.createQuery('select Nrec, Number, AppNrec, AppDate, AppDBeg, AppDEnd, AppKind, AppName, AppSum, AppPKind from tContr');
+  sqlCopyInto(_q, #tContr, false);
+
+
+
+  result := true;
+}
+
+procedure ShowReport;
+{
+}
+
+function GetRepGroupName: string;
+{
+  if getfirst repGroupSch = tsOk
+    result := repGroupSch.Name
+  else
+    result := 'Укажите группу договоров для анализа (Прямой ГОЗ / Косвенный ГОЗ)';
+}
+
+procedure PickRepGroupName;
+{
+  var c: comp;
+  c := if(_repGroupNrec = 0, 0001000000000007h, _repGroupNrec);
+  if runinterface(L_GRSCH::GetGroupSch, 3, 3, 3, false, c, false) = cmDefault
+    _repGroupNrec := c;
+  rereadrecord;
+}
+
+screen sc1;
+fields
+  _repStartDate: noprotect;
+  _repEndDate: noprotect;
+  [RepGroupName] GetRepGroupName: protect, pickbutton;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Период отчета с`  .@@@@@@@@@@ `по`.@@@@@@@@@@
+`Группа договоров` .@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                  <.Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+cmDoOk:
+{
+  if PrepareTmpTables
+  {
+    if FillTables ShowReport;
+    DropTmpTables;
+  }
+}
+cmPick:
+{
+  case curfield of
+    #RepGroupName: PickRepGroupName;
+  end;
+}
+cmInit:
+{
+  if not readmydsk(_repStartDate, 'Forma4GOZ_repStartDate', false) _repStartDate := date(1,1,year(cur_date));
+  if not readmydsk(_repEndDate, 'Forma4GOZ_repEndDate', false) _repEndDate := date(31,12,year(cur_date));
+  if not readmydsk(_repGroupNrec, 'Forma4GOZ_repGroupNrec', false) _repGroupNrec := 0001000000000007h;
+}
+cmDone:
+{
+  savemydsk(_repStartDate, 'Forma4GOZ_repStartDate');
+  savemydsk(_repEndDate, 'Forma4GOZ_repEndDate');
+  savemydsk(_repGroupNrec, 'Forma4GOZ_repGroupNrec');
+}
+end;
+
+end.
