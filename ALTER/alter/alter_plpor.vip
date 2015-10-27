@@ -1,0 +1,79 @@
+#include ContractID.vih
+
+#component "F_PLPOR"
+alter interface PLPOR;
+  var
+    agat_ea: iextattr;
+    cidHelper: AGAT::ContractIDHelper;
+
+  create view
+  as select cidHelper.GetContractID(GetContractIDKey_ByPlpor, plpor.nrec) (fieldname=ContractID)
+  ;
+
+  create view vagat
+  var
+    _cstepdoc: comp;
+  as select *
+  from stepdoc sd, basedoc bd
+  where ((
+    _cstepdoc == sd.nrec and
+    sd.cbasedoc == bd.nrec
+  ));
+
+  procedure agat_copyattr(_attrnam: string; _cbasedoc: comp; _cplpor: comp); {
+    var _c, _old: comp;
+    _old := agat_ea.coGetAttr(9015, _cplpor, _attrnam);
+    if (_old <> 0) exit;
+    _c := agat_ea.coGetAttr(1102, _cbasedoc, _attrnam);
+    if _c > 0 {
+      var _s: string;
+      _s := agat_ea.sGetAttr (1102, _cbasedoc, _attrnam);
+      agat_ea.coSetAttr(9015, _cplpor, _attrnam, _c, _s);
+    }
+  }
+
+  handleevent
+    cmpick: {
+      case curfield of
+        #stepplpor: {
+          vagat._cstepdoc := plpor.cstepdoc;
+          if vagat.getfirst sd = tsOk {
+            agat_copyattr('Исполнитель договора', vagat.sd.cbasedoc, plpor.nrec);
+            agat_copyattr('Объект строительства', vagat.sd.cbasedoc, plpor.nrec);
+            if (plpor.tidkgal <> 7) and (plpor.tidkgal <> 8)
+            {
+              agat_copyattr('Статья ДДС'        , vagat.sd.cbasedoc, plpor.nrec);
+            }
+
+            if Message('Скопировать из ДО назначение платежа?', yesNo+Confirmation) = cmYes
+            {
+              var s, snds: string;
+              snds := '';
+              s := agat_ea.sGetAttr (1102, vagat.sd.cbasedoc, 'Назначение платежа');
+              if vagat.getfirst bd = tsOk
+                if vagat.bd.nds > 0
+                {
+                  var i: integer;
+                  i := length(s) - 3;
+                  while (i > 0 and upcase(substr(s,i,3))<>'НДС') { i--; }
+                  if (i > 0) s := trim(substr(s,1,i-1));
+                  snds := 'НДС '+ doubletostr(round(vagat.bd.nds,2),'[|-]3666666666666-88 руб.');
+                }
+                else
+                {
+                  var i: integer;
+                  i := pos('НДС не облагается', s);
+                  if (i>0) s := trim(substr(s,1,i-1));
+                  snds := 'НДС не облагается';
+                }
+              plpor.namepl1 := groupwrap(s, 1, 100);
+              plpor.namepl2 := groupwrap(s, 2, 100);
+              plpor.namepl3 := groupwrap(s, 3, 100);
+              plpor.namepl4 := snds;
+            }
+          };
+        }
+      end;
+    }
+  end;
+end.

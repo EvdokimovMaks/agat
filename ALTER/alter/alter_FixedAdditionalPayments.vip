@@ -1,0 +1,79 @@
+#component "Z_ZAR"
+alter interface FixedAdditionalPayments;
+create view mw
+as select * from lschet, planssch, buhschet;
+handleevent
+  cmalt1:
+  {
+    if getmarkercount(PaymentMarkers)=0
+    {
+      message('Пометьте строки для анализа');
+      exit;
+    }
+    var plsc: string;
+    if mw.getfirst planssch where ((cogettune('fin.user.cplanssch') == planssch.nrec)) = tsOk
+      plsc := mw.planssch.code;
+    startnewvisual(vtRotateVisual, vfTimer, 'Обработка', 0);
+    var i,j,k, cnt: integer;
+    var kod, sch, subs: string;
+    var c, cPodgr, cCateg: comp;
+    cnt := 0;
+    pushpos(#doplata);
+    _loop doplata where foundmarker(PaymentMarkers, doplata.nrec)
+    {
+      cnt++;
+      c      := doplata.clsch;
+      sch    := doplata.cschetd;
+      subs   := doplata.csubschd;
+      kod    := '';
+      cPodgr := 0;
+      cCateg := 0;
+      if mw.getfirst lschet where ((c == lschet.nrec)) = tsOk
+      {
+        k := 0;
+        for (j:=1;j<=6;j++)
+        {
+          case mw.lschet.tbld[j] of
+            10016: k := j;
+            10057: cPodgr := mw.lschet.ckaud[j];
+            10036: cCateg := mw.lschet.ckaud[j];
+          end;
+        }
+        if (k > 0) kod := if(getanykau(0,mw.lschet.tbld[k],mw.lschet.ckaud[k]),givenanname(2),'');
+      }
+      if mw.getfirst buhschet where ((plsc+sch == buhschet.schet and subs == buhschet.subsch)) = tsOk
+        for (j:=1;j<=6;j++)
+        {
+          case mw.buhschet.kodtable[j] of
+            10016:
+            {
+              case kod of
+                '08020101': doplata.ckaud[j] := 0001000000000BAFh;
+                '20020101': doplata.ckaud[j] := 0001000000000961h;
+                '23010101': doplata.ckaud[j] := 0001000000000991h;
+                '26010101': doplata.ckaud[j] := 00010000000009DFh;
+                '29010101': doplata.ckaud[j] := 0001000000000AAEh;
+                '44010101': doplata.ckaud[j] := 0001000000000A75h;
+              end;
+              doplata.tbld[j] := 10016;
+            }
+            10057:
+            {
+              if (cPodgr<>0) doplata.ckaud[j] := cPodgr;
+              doplata.tbld[j] := 10057;
+            }
+            10036:
+            {
+              if (cCateg<>0) doplata.ckaud[j] := cCateg;
+              doplata.tbld[j] := 10036;
+            }
+          end;
+        }
+      update current doplata;
+    }
+    poppos(#doplata);
+    rereadrecord;
+    stopvisual('Обработано доплат: '+cnt, vfWait);
+  }
+end;
+end.

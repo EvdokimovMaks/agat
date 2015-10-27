@@ -1,0 +1,353 @@
+#include ContractId.vih
+#component "L_BASEDOC"
+
+alter interface VSCHET;
+
+  var
+    cidHelper: AGAT::ContractIDHelper;
+
+  create view
+  as select cidHelper.GetContractID(GetContractIDKey_ByKatstroy, specmtr.cobj) (fieldname=ContractID)
+  ;
+end.
+
+alter interface VSCHETB;
+
+  overload
+    function CopyDO(nRecDO : Comp; naltype : Word; NRecDog : Comp; WithOutRes : Boolean; ChargeParam : Word; NeedNomMes : Word): comp;
+    Function DoBaseDocDelete(DelSoprDoc : boolean; bPack: boolean = FALSE): word;
+  end;
+
+  var
+    cDogovor_old, cAppDogovor_old, cCalPlan_old: comp;
+    mw_ea: iExtAttr;
+    cidHelper: AGAT::ContractIDHelper;
+
+  create view
+  as select cidHelper.GetContractID(GetContractIDKey_ByKatstroy, specmtr.cobj) (fieldname=ContractID)
+  from attrval mwav_naznpl
+  where ((1102 == mwav_naznpl.wtable and basedoc.nrec == mwav_naznpl.crec and ATTRNAM_NAZNPL == mwav_naznpl.cattrnam))
+  ;
+
+  create view mw_v
+  as select *
+  from attrval av, basedoc bd, dogovor, stepdoc sd, spstep sps, specmtr sm, katstroy ks, katsopr;
+
+  Function PermitDelete: boolean;
+  {
+    var _s: string;
+    var _c: comp;
+    _c := basedoc.nrec;
+    _s := '';
+    if (mw_v.getfirst av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_SOGL == av.cattrnam)) = tsOk)
+      _s := trim(mw_v.av.vstring);
+    result := not(_s <> '' and basedoc.desgr <> sgettune('USER.DESCR'));
+  }
+
+  Function DoBaseDocDelete(DelSoprDoc : boolean; bPack: boolean = FALSE): word;
+  {
+    result := 0;
+    if not PermitDelete
+    {
+      message('Запрещено удалять счета, созданные другим пользователем, переданные на согласование');
+      result := 0;
+    }
+    else
+    {
+      result := inherited::DoBaseDocDelete(DelSoprDoc,bPack);
+    }
+  }
+
+  function CopyDO(nRecDO : Comp; naltype : Word; NRecDog : Comp; WithOutRes : Boolean; ChargeParam : Word; NeedNomMes : Word): comp; {
+    var _c: comp;
+    _c := inherited::CopyDO(nRecDO,naltype,NRecDog,WithOutRes,ChargeParam,NeedNomMes);
+    if _c <> 0 {
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_SOGL   == av.cattrnam));
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_BUH    == av.cattrnam));
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_DIR    == av.cattrnam));
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_KAZN   == av.cattrnam));
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_PEU    == av.cattrnam));
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_REZERV == av.cattrnam));
+
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_PRBUH  == av.cattrnam));
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_PRKAZ  == av.cattrnam));
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_PRDIR  == av.cattrnam));
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_PRPEU  == av.cattrnam));
+
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_BUHSCH == av.cattrnam));
+      mw_v.delete all av where ((1102 == av.wtable and _c == av.crec and ATTRNAM_BDR    == av.cattrnam));
+
+      mw_v.update bd where ((_c == bd.nrec)) set bd.dform := cur_date;
+    }
+    result := _c;
+  }
+
+  window wdopattr;
+    tableevent table basedoc;
+      cmPositionChanged: {
+        inherited::handleevent(cmPositionChanged);
+        cDogovor_old    := basedoc.cdogovor;
+        cAppDogovor_old := basedoc.cappdogovor;
+        cCalPlan_old    := basedoc.ccalplan;
+      }
+      cmInsert: {
+        inherited::handleevent(cmInsert);
+        cDogovor_old    := basedoc.cdogovor;
+        cAppDogovor_old := basedoc.cappdogovor;
+        cCalPlan_old    := basedoc.ccalplan;
+      }
+    end;
+
+    handleevent
+      cmpick: {
+        case curfield of
+          #dognodoc, #APPDOGNODOC, #calplan.nodoc: {
+            if (basedoc.status = 2) and (basedoc.cdogovor <> cDogovor_old) or (basedoc.cappdogovor <> cAppDogovor_old) or (basedoc.ccalplan <> cCalPlan_old) {
+              basedoc.cnote  := '40009D44C1790C6Bh';
+              basedoc.status := 1;
+              update current basedoc;
+              stepdoc.status := 1;
+              update current stepdoc;
+              if (cDogovor_old > 0) {
+                message('Счет переведен в статус "Оформляемый"');
+              }
+            }
+            cDogovor_old    := basedoc.cdogovor;
+            cAppDogovor_old := basedoc.cappdogovor;
+            cCalPlan_old    := basedoc.ccalplan;
+          }
+        end;
+      }
+    end; //handleeven
+  end; //window
+
+  handleevent
+    cmCheckField:
+    {
+      case curfield of
+        #mwav_naznpl.vstring:
+        {
+          if isvalidall(#mwav_naznpl)
+          {
+            update current mwav_naznpl;
+          }
+          else
+          {
+            var s: string;
+            s := mwav_naznpl.vstring;
+            clearbuffer(#mwav_naznpl);
+            mwav_naznpl.vstring := s;
+            insert current mwav_naznpl;
+          }
+        }
+      end;
+    }
+    cmpick: {
+      case curfield of
+        #mwav_naznpl.vstring:
+        {
+          if basedoc.nrec <> 0
+          {
+            /*
+            var s: string;
+            s := 'По счету №' + basedoc.nodoc + ' от ' + datetostr(basedoc.ddoc,'DD.MM.YYYY');
+            s += ' ' + basedoc.name;
+            s += ' дог/контр ' + DOGNODOC + ' от ' + datetostr(DOGDDOC, 'DD.MM.YYYY');
+            if (basedoc.nds > 0)
+              s += if(basedoc.vhodnal = 1, ', в т.ч. ', ', кроме того ') + 'НДС ' + doubletostr(basedoc.nds,'[|-]3666 666 666 666.88');
+            */
+            var s1,s2,s3, DDS, Prim, Dog, Schet, Isp, Etap, Akt: string;
+            s1 := ''; s2 := ''; s3 := '';
+            var Avans, Predopl: boolean;
+            var _c: comp;
+            DDS     := trim(if(getanykau(0, 10009, mw_ea.coGetAttrID(1102, basedoc.nrec, 000100000000008Fh)), givenanname(2),''));
+            Isp     := trim(if(getanykau(0, 2    , mw_ea.coGetAttrID(1102, basedoc.nrec, 000100000000005Bh)), givenanname(5),''));
+            Avans   := upcase(trim(if(getanykau(0, 10008, mw_ea.coGetAttrID(1102, basedoc.nrec, 000100000000008Dh)), givenanname(2),''))) = 'А';
+            Predopl := BaseDoc.VidDoc = 111;
+            Prim    := BaseDoc.Name;
+            if (substr(Prim,1,1) <> locase(substr(Prim,1,1)) and substr(Prim,2,1) <> upcase(substr(Prim,2,1))) //если у примечания первая буква большая, а вторая маленькая
+              Prim := locase(substr(Prim,1,1)) + substr(Prim,2,255);
+            //_c := if(BaseDoc.cAppDogovor <> 0, BaseDoc.cAppDogovor, BaseDoc.cDogovor);
+            _c := BaseDoc.cDogovor;
+            if mw_v.getfirst Dogovor where ((_c == Dogovor.nRec)) = tsOk
+              Dog   := 'договор '+mw_v.Dogovor.NoDoc+' от '+datetostr(mw_v.Dogovor.DDoc,'DD/MM/YY')
+            else
+              Dog   := '';
+            Schet   := 'По счету №'+Basedoc.Nodoc+' от '+datetostr(Basedoc.DDoc,'DD/MM/YY');
+
+            _c := BaseDoc.nRec;
+            Etap  := '';
+            if mw_v.getfirst sd where ((_c == sd.cbasedoc)) = tsOk
+              mw_v._loop sps where ((sd.nrec == sps.cstepdoc))
+              {
+                if mw_v.getfirst sm where ((0001000000000001h == sm.csaldtune and 1104 == sm.cotable and sps.nrec == sm.cspec)) = tsOk
+                  if mw_v.getfirst ks where ((sm.cobj == ks.nrec)) = tsOk
+                  {
+                    Etap := 'заказ '+substr(mw_v.ks.name,1,pos(' ',mw_v.ks.name+' '));
+                    break;
+                  }
+              }
+            Etap  := '';  //заказ не нужен, но код оставлю
+
+            Akt     := '';
+            _c := stepdoc.nrec;
+            mw_v._loop katsopr where ((_c == katsopr.cstepdoc))
+            {
+              Akt   += if(Akt<>'',', ','') + if(mw_v.katsopr.vidsopr=101,'накладная', 'акт') + ' №' + mw_v.katsopr.nsopr + ' от ' + datetostr(mw_v.katsopr.dsopr,'DD/MM/YY');
+            }
+            case Isp of
+            '44201':
+            {
+              case DDS of
+                '204001','204002','204003','204004','204005','204006','204007','204008','204009','210301', '210303', '210800', '403002':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                  s3 := if(Avans and Predopl, 'аванс', '');
+                }
+              end;
+            }
+            '44202':
+            {
+              case DDS of
+                '204001':
+                {
+                  s1 := Schet + if(Dog <> '', ' ' + Dog, '');
+                  s2 := Prim;
+                  s3 := if(Avans, 'аванс', '');
+                }
+                '206006':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                  s3 := if(Avans and Predopl, 'аванс', '');
+                }
+              end;
+            }
+            '100', '300', '480', '490', '900':
+            {
+              case DDS of
+                '205000':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                  s3 := Dog + if(Etap<>'', ' ' + Etap, '') + if(Avans, ' аванс', '') + if(Akt<>'', ' ' + Akt, '');
+                }
+              end;
+            }
+            '090':
+            {
+              case DDS of
+                '205000':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                  s3 := Dog + if(Etap<>'', ' ' + Etap, '') + if(Avans, ' аванс', '') + if(Akt<>'', ' ' + Akt, '');
+                }
+                '210407', '210701', '210702':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                  s3 := if(Avans and Predopl, 'аванс', '');
+                }
+                '206002':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                  s3 := Dog + if(Avans, ' аванс', '') + if(Akt<>'', ' ' + Akt, '');
+                }
+              end;
+            }
+            '777':
+            {
+              case DDS of
+                '210305', '210306':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                }
+                '210404', '210407':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                  s3 := Dog + if(Avans, ' аванс', '') + if(Akt<>'', ' ' + Akt, '');
+                }
+              end;
+            }
+            '77706':
+            {
+              case DDS of
+                '209001', '209002', '209004':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                }
+              end;
+            }
+            '77703':
+            {
+              case DDS of
+                '210602':
+                {
+                  s1 := Schet + if(Dog<>'', ' '+Dog, '');
+                  s2 := Prim;
+                  s3 := if(Avans, 'аванс', '') + if(Akt<>'', ' ' + Akt, '');
+                }
+              end;
+            }
+            '762':
+            {
+              case DDS of
+                '207101', '207102', '207103', '208002':
+                {
+                  s1 := Schet;
+                  s2 := Prim;
+                  s3 := Dog;
+                }
+              end;
+            }
+            '640':
+            {
+              case DDS of
+                '401201', '401202', '401400':
+                {
+                  s1 := Schet + if(Dog<>'', ' '+Dog, '');
+                  s2 := Prim;
+                  s3 := if(Avans, 'аванс', '');
+                }
+                '401101', '401102', '401301', '401302', '403001', '403003', '404000':
+                {
+                  s1 := Schet + if(Dog<>'', ' '+Dog, '');
+                  s2 := Prim;
+                  s3 := if(Avans, 'аванс', '') + if(Akt<>'', ' ' + Akt, '');
+                }
+              end;
+            }
+            end;
+
+            if s1='' and s2='' and s3=''
+            {
+              s1 := Schet;
+              s2 := Prim;
+            }
+
+            if not isvalidall(#mwav_naznpl)
+            {
+              clearbuffer(#mwav_naznpl);
+              insert current mwav_naznpl;
+            }
+
+            if (basedoc.nds > 0)
+              s3 += if(s3<>'',' ','') + 'НДС ' + doubletostr(round(basedoc.nds,2),'[|-]3666 666 666 666.88')
+            else
+              s3 += if(s3<>'',' ','') + 'НДС не облагается';
+            mwav_naznpl.vstring := s1+if(s2<>'', ' '+s2,'')+if(s3<>'',' '+s3,'');
+            update current mwav_naznpl;
+            rescanpanel(#basedoc);
+            rescanpanel(#mwav_naznpl);
+          }
+        }
+      end;
+    }
+  end;
+end.
