@@ -1,0 +1,93 @@
+#include ContractID.vih
+
+#component "F_CASHBANK"
+
+alter interface selusdoc;
+
+var lFilter: longint;
+
+create view
+as select *
+condition byMarker = foundmarker(lFilter, cashbank.nrec);
+
+var
+  filterStepdocNrec: comp;
+  plansschNrec: comp;
+  cidHelper: AGAT::ContractIDHelper;
+
+create view vagat
+as select *
+from stepdoc, basedoc, katbank, cashbank, spcash, spkau spkau1, spkau spkau2
+where ((
+  filterStepdocNrec == stepdoc.nrec and
+  stepdoc.cbasedoc  == basedoc.nrec and
+  basedoc.cmybank   == katbank.nrec and
+  cashbank.nrec     == spcash.ccashbank and
+  plansschNrec      == spcash.cplanssch and
+  spcash.kauos[1]   == spkau1.nrec and
+  spcash.kauos[2]   == spkau2.nrec
+));
+
+procedure fillMarkerByRSFromDO;
+{
+  var rs: string; rs := '';
+
+  if vagat.getfirst stepdoc = tsOk
+    if vagat.getfirst basedoc = tsOk
+      if vagat.getfirst katbank = tsOk
+        rs := vagat.katbank.schet1;
+
+  if rs = '' exit;
+
+  vagat._loop cashbank
+  {
+    if vagat.getfirst spcash = tsOk
+      if vagat.getfirst spkau2 = tsOk
+        if pos(rs,vagat.spkau2.name) > 0
+          insertmarker(lFilter,vagat.cashbank.nrec);
+  }
+}
+
+procedure fillMarkerByContractIdFromDO;
+{
+  var cid: string; cid := '';
+
+  if vagat.getfirst stepdoc = tsOk
+    cid := cidHelper.GetContractId(GetContractIDKey_ByStepdoc, vagat.stepdoc.nrec);
+
+  vagat._loop cashbank
+  {
+    if vagat.getfirst spcash = tsOk
+      if vagat.getfirst spkau1 = tsOk
+        if pos(vagat.spkau1.name,cid) > 0
+          insertmarker(lFilter,vagat.cashbank.nrec);
+  }
+
+}
+
+procedure SetFilterByStepdoc;
+{
+  plansschNrec := cogettune('FIN.USER.CPLANSSCH');
+
+  if lFilter != 0 donemarker(lFilter,'');
+  lFilter := initmarker('',8,50,10,false);
+
+  fillMarkerByContractIdFromDO;
+
+  if getmarkercount(lFilter) = 0
+    fillMarkerByRSFromDO;
+
+  if getmarkercount(lFilter) > 0
+    PushCondition(tcByMarker);
+  rereadrecord;
+}
+
+handleevent
+cminit:
+{
+  if readmydsk(filterStepdocNrec, 'SELUSDOC.FILTER.STEPDOC.NREC', false) setFilterByStepdoc;
+  inherited::handleevent(cminit);
+}
+end;
+
+end.
