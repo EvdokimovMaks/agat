@@ -1,0 +1,231 @@
+#include query.vih
+
+#component "AGAT"
+
+interface OverheadsByContracts 'Накладные расходы по доходным договорам', escclose, doaccept;
+show (,,39,7);
+const
+  ATTRNAM_NZAK_DOGOVOR = '00010000000000ABh';
+  SALDTUNE_DEFAULT     = '0001000000000001h';
+  WTABLE_SPDOCS        = 1723;
+end;
+
+sql query q1=
+select o.kauos[1] as katstroyNrec,
+       '' as katstroyName,
+       #comp(0) as dogovorNrec,
+       '' as dogovorName,
+       '' as katorgName,
+       sum(o.sumob) as summa
+from (select o.kauos[1], o.sumob
+      from oborot o
+      join katstroy ks on o.kauos[1] = ks.nrec
+      where o.scheto='820' and o.datob between :d1 and :d2 and o.subossch in ('07','071','072','073','074','075','076')       //o.kauos[2]=#comp(0001000000000985h)
+      //union all
+      //select o.kauos[1], o.sumob * (-1)
+      //from oborot o
+      //join katstroy ks on o.kauks[1] = ks.nrec
+      //where o.schetk='820' and o.kauks[2]=#comp(0001000000000985h) and o.datob between :d1 and :d2
+     ) o
+group by o.kauos[1]
+;
+
+table struct t (
+  katstroyNrec: comp,
+  katstroyName: string,
+  dogovorNrec: comp,
+  dogovorName: string,
+  katorgName: string,
+  summa: double
+) with index (
+  i01 = dogovorNrec
+);
+
+var
+  _d1,_d2: date;
+  _q: IQuery;
+
+create view
+as select *
+from t, dogovor dog, katstroy ks, katorg, attrval av, katstroy;
+
+create view v
+  var
+    curKatStroy: comp;
+  as select *
+  from specmtr sm, spdocs spd, calplan cp, dogovor d
+  where ((
+    SALDTUNE_DEFAULT /== sm.csaldtune and
+    WTABLE_SPDOCS    /== sm.cotable and
+    curKatStroy      /== sm.cobj and
+    sm.cspec         /== spd.nrec and
+    spd.cdoc         /== cp.nrec and
+    cp.cdogovor      /== d.nrec
+  )) and (spd.tidk = 403) and (cp.directmc = 1) and (d.status <> 3);
+
+create view vRep
+var
+  startDate: date;
+  endDate: date;
+as select * from t;
+
+datastream dsRep auto(vRep);
+
+screen sc1;
+fields
+  _d1: noprotect;
+  _d2: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Дата с` .@@@@@@@@@@ `по` .@@@@@@@@@@
+
+ Обороты Д20.07*
+
+        <. Продолжить .> <. Отмена .>
+>>
+end;
+
+function GetTopDogovor(_c: comp): comp; {
+  result := 0;
+  if getfirst dog where ((_c == dog.nrec)) = tsOk {
+    do {
+      _c := dog.cdogovor;
+      result := dog.nrec;
+    } while (_c > 0) and (getfirst dog where ((_c == dog.nrec)) = tsOk );
+  }
+}
+
+function GetDogovorByKatstroy(aKatstroyNrec: comp): comp;
+{
+  var c: comp;
+  c := 0;
+  if getfirst katstroy where ((aKatstroyNrec == katstroy.nrec)) = tsOk
+  {
+
+    v.curKatStroy := katstroy.nrec;
+    if v.getfirst viewTable = tsOk
+      c := GetTopDogovor(v.d.nrec);
+
+    if (c = 0)
+    {
+      v.curKatStroy := katstroy.cstroy;
+      if v.getfirst viewTable = tsOk
+        c := GetTopDogovor(v.d.nrec);
+    }
+
+    if (c = 0)
+    {
+      if getfirst av where (( ATTRNAM_NZAK_DOGOVOR == av.cattrnam and (av.vcomp = katstroy.nrec) )) = tsOk
+        c := GetTopDogovor(av.crec);
+    }
+
+    if (c = 0)
+    {
+      if getfirst av where (( ATTRNAM_NZAK_DOGOVOR == av.cattrnam and (av.vcomp = katstroy.cstroy) )) = tsOk
+        c := GetTopDogovor(av.crec);
+    }
+
+  }
+
+  result := c;
+}
+
+function FillTables: boolean;
+{
+  result := false;
+
+  _q := queryManager.CreateQuery(q1);
+  _q.setParam('d1',_d1);
+  _q.setParam('d2',_d2);
+
+  var rs: IResultSet;
+  rs := _q.getResultSet;
+
+  if rs = nullref
+  {
+    message('Ошибка выполнения запроса выборки проводок: '+_q.errorCode, error);
+    exit;
+  }
+
+  delete all t;
+  sqlCopyInto(rs, #t, false);
+
+  _loop t
+  {
+    t.dogovorNrec := GetDogovorByKatstroy(t.katstroyNrec);
+    if getfirst dog where ((t.dogovorNrec == dog.nrec)) = tsOk
+    {
+      t.dogovorName := dog.nodoc+' от '+datetostr(dog.ddoc,'DD.MM.YYYY');
+      if getfirst katorg where ((dog.corg == katorg.nrec)) = tsOk
+        t.katorgName := katorg.name;
+    }
+    if getfirst ks where ((t.katstroyNrec == ks.nrec)) = tsOk
+      t.katstroyName := ks.name;
+    update current t;
+  }
+
+  result := true;
+}
+
+procedure ShowReport;
+{
+  vrep.startDate := _d1;
+  vrep.endDate := _d2;
+  runfreport(dsRep, '', true);
+}
+
+handleevent
+cminit:
+{
+  if not readmydsk(_d1, 'OverheadsByContracts_d1', false) _d1 := date(1,1,year(cur_date));
+  if not readmydsk(_d2, 'OverheadsByContracts_d2', false) _d2 := date(31,12,year(cur_date));
+}
+cmdone:
+{
+  savemydsk(_d1, 'OverheadsByContracts_d1');
+  savemydsk(_d2, 'OverheadsByContracts_d2');
+}
+cmDoOk:
+{
+  if FillTables
+    ShowReport;
+}
+end;
+
+end.
+
+VipInterface UserReport_OverheadsByContracts Implements IUserReport licensed(free);
+Interface UserReport_OverheadsByContracts;
+  create view dummy;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::OverheadsByContracts);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'Агат. Накладные расходы по доходным договорам';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'B_FINANS';
+    end;
+  }
+end.
