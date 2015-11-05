@@ -1,6 +1,6 @@
 #component "AGAT"
 interface Forma7GOZ 'Приложение 7-ГОЗ.Справка о заключении договоров с соисполнителями';
-show (,,39,7);
+show (,,39,8);
 
 table struct td (            //контрагентские договора с пкп
   cKontrakt : comp,
@@ -256,6 +256,7 @@ sql query SelectKontraktPlatDoc=
 var
   drep1, drep2: date;
   flag: byte;
+  contractNrecForReport: comp;
   pXL: XLSRepBuilder;
   sXLSFileName, sXLTFileName: string;
   iGetKau: GetKAU;
@@ -267,7 +268,7 @@ create view
 as select *
 from tkontrakt, tk, tks, td, tds,
      td brtd (i04), calplan brtdcp, tds brtds, calplan brtdscp, tk brtk,
-     tks brtks
+     tks brtks, tkontrakt brtkontrakt
 where ((
   brtd.cDog      == brtds.cDog   and
   brtd.cCalPlan  == brtdcp.nrec and
@@ -323,6 +324,7 @@ buttons
 `Дата с` .@@@@@@@@@@ `по` .@@@@@@@@@@
 
   [.] Показать расшифровку`
+  [.] Выбрать контракт для отчета`
 
          <. Продолжить .> <. Отмена .>
 >>
@@ -449,6 +451,28 @@ cmEdit:
 }
 end;
 end;
+
+window wFilterByContract 'Выбор контракта', escclose, doaccept;
+browse brkontrakt;
+table brtkontrakt;
+fields
+  brtkontrakt.nodoc 'Номер': [20], protect;
+  brtkontrakt.ddoc 'Дата': [10], protect;
+  brtkontrakt.name 'Наименование': [50], protect;
+  if (getfirst tk where ((brtkontrakt.nrec == tk.cKontrakt)) = tsOk, substr(tk.KSName,1,pos(' ',tk.KSName+' ')-1), '') 'Заказ': [10], protect;
+end;
+end;
+
+function GetContract(var contractNrec: comp): boolean;
+{
+  result := false;
+  contractNrec := 0;
+  if runwindowmodal(wFilterByContract) = cmDefault
+  {
+    result := true;
+    contractNrec := brtkontrakt.nrec;
+  }
+}
 
 procedure FillTables;
 var
@@ -616,7 +640,7 @@ var
   )) ignore_errors(tsDuplicateKey);
 }
 
-procedure printrep(isCreateXLT : boolean);
+procedure printrep(isCreateXLT : boolean; setFilterByContract: boolean; filterContractNrec: comp);
 var
   s, s1            : string;
   _tks2, _td, _tds2: boolean;
@@ -650,6 +674,9 @@ var
   {
   v._loop tKontrakt
   {
+
+    if (setFilterByContract and filterContractNrec != v.tkontrakt.nrec) continue;
+
     pXL.ClearTblBuffer;
     pXL.SetTblStringFldValue('Контракт', 'Государственный контракт №'+v.tKontrakt.NoDoc+' от '+datetostr(v.tKontrakt.dDoc,'DD.MM.YYYY г. ')+v.tKontrakt.Name);
     pXL.SetTblNumberFldValue('lvl', 1);
@@ -746,7 +773,12 @@ var
             }
 
             pXL.SetTblNumberFldValue('СоиспЦена', v.td.Summa);
-            pXL.SetTblNumberFldValue('СоиспПлатежСумма', v.td.SumPlat);
+
+            var sumpl: double; sumpl := 0;
+            v._loop tds2
+              sumpl += v.tds2.sDoc;
+
+            pXL.SetTblNumberFldValue('СоиспПлатежСумма', sumpl);
             pXL.SetTblNumberFldValue('lvl', 2);
 
             pXL.InsTblRow;
@@ -807,8 +839,22 @@ cmDoOk:
 {
   StartNewVisual(vtRotateVisual, vfThread + vfTimer, '', 0);
   FillTables;
-  SetVisualHeader('Выгрузка в Excel');
-  printrep(false);
+
+  var showRep: boolean;
+  showRep := true;
+
+  var setFilterByContract: boolean;
+  setFilterByContract := ((flag and 2) > 0);
+
+  if setFilterByContract
+    showRep := GetContract(contractNrecForReport);
+
+  if showRep
+  {
+    SetVisualHeader('Выгрузка в Excel');
+    printrep(false, setFilterByContract, contractNrecForReport);
+  }
+
   StopVisual('',0);
   rereadrecord;
   if ((flag and 1) > 0)
@@ -816,7 +862,7 @@ cmDoOk:
 }
 cminit:
 {
-  if not readmydsk(flag,  'Forma7GOZ_flag' , false) flag  := 1;
+  if not readmydsk(flag,  'Forma7GOZ_flag' , false) flag  := 3;
   if not readmydsk(dRep1, 'Forma7GOZ_dRep1', false) dRep1 := date(1,1,year(cur_date));
   if not readmydsk(dRep2, 'Forma7GOZ_dRep2', false) dRep2 := date(last_day(cur_date),month(cur_date),year(cur_date));
   sXLTFileName := TranslatePath('%StartPath%xls\Forma7GOZ.xlt');

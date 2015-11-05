@@ -1,0 +1,569 @@
+#include Query.vih
+
+#component "AGAT"
+
+interface Accomplices 'Сведения по соисполнителям', escclose, doaccept;
+show (,,37,5);
+
+sql query qCalplan =
+insert tcp (DNrec, DSNrec, CPNrec, KSNrec, DFrom, DTo)
+select d.nrec, ds.nrec, cp.nrec, ks.nrec, cp.dfrom, case when o.datob > cp.dto then o.datob else cp.dto end as dto
+from dogovor d
+
+join attrval avPrPr on avPrPr.wTable=1707 and avPrPr.cRec=d.nrec and avPrPr.cattrnam=#comp(281474976710833) and avPrPr.vComp=#comp(281474976711945)
+
+left join (
+            select dogovor.cdogovor as cdogovor, max(dogovor.nrec) as nrec
+            from dogovor
+            left join attrval on attrval.wtable=1707 and attrval.crec = dogovor.nrec and attrval.cattrnam=#comp(281474976710830)
+            where dogovor.tidk=401 and dogovor.status<>3 and coalesce(attrval.vcomp,#comp(0)) <> #comp(4001AB188D71B97Ah)
+            group by dogovor.cdogovor
+          ) sogl on d.nrec = sogl.cdogovor
+
+join dogovor ds on coalesce(sogl.nrec,d.nrec) = ds.nrec
+
+join calplan cp on cp.cdogovor = ds.nrec and cp.directmc = ds.direct and cp.status <> 3
+
+join (
+      select distinct spschem.cdoc as CalplanNrec, spschem.cbasedoc as KatstroyNrec              //заказы к ПКП по схеме связей
+      from spschem
+      where spschem.tidk=403 and spschem.tidkbase=454 and spschem.cdoc <> #comp(0) and spschem.cbasedoc <> #comp(0)
+      union
+      select distinct cp.nrec, spm.cobj                                                          //заказы к ПКП по ЦУ
+      from calplan cp
+      join spdocs spd on 403 = spd.tidk and cp.nrec = spd.cdoc
+      join specmtr spm on #comp(0001000000000001h) = spm.csaldtune and 1723 = spm.cotable and spd.nrec = spm.cspec and spm.cobj <> #comp(0)
+     ) tks on cp.nrec = tks.CalplanNrec
+
+join katstroy ks on tks.KatstroyNrec = ks.nrec
+
+left join (
+            select o.KatstroyNrec, max(o.datob) as datob
+            from ( select ks.nrec as KatstroyNrec, datob
+                   from oborot
+                   join katstroy ks on case when schetk='745' then kauks[2] else kauks[1] end = ks.nrec
+                   where scheto='790' and subossch='02' and schetk in ('720','740','743','745')
+                   union all
+                   select ks.nrec, datob
+                   from oborot
+                   join katstroy ks on kauos[2] = ks.nrec
+                   where scheto='890' and subossch='02'
+                 ) o
+            group by o.KatstroyNrec
+          ) o on tks.KatstroyNrec = o.KatstroyNrec
+
+where d.tidk = 400 and d.direct = 1 // and cp.dfrom <= #date(31,12,2015) and case when cp.dto < coalesce(o.datob,0) then o.datob else cp.dto end >= #date(1,1,2012)
+;
+
+sql query qTopCalplan =
+insert tcp (DNrec, DSNrec, CPNrec, KSNrec, DFrom, DTo)
+select distinct tcp.DNrec, tcp.DSNrec, #comp(0), topks.nrec, dogovor.dbeg, dogovor.dend
+from tcp
+join dogovor on tcp.DSNrec = dogovor.nrec
+join katstroy ks on tcp.KSNrec = ks.nrec
+join katstroy topks on ks.cstroy = topks.nrec;
+
+
+
+sql query qSelectContractPlPorNew =
+insert tdocs (Type, ContrNrec, KSNrec, DogNrec, OrgNrec, TidkGal, Nodoc, Ddoc, Summa)
+select 6201,t.DNrec, t.KSNrec, o.kauks[2], o.kauks[1], o.tidkgal, sh.nodoc, sh.datob, sum(o.sumob)
+from (select distinct DNrec, KSNrec from tcp) as t
+join oborot o on o.scheto='851' and o.schetk='862' and o.kauks[3]=t.KSNrec and o.datob between :d1 and :d2
+join soprhoz sh on o.csoprhoz = sh.nrec
+group by t.DNrec, t.KSNrec, o.kauks[2], o.kauks[1], o.tidkgal, sh.nodoc, sh.datob;
+
+sql query qSelectContractPlPorOld =
+insert tdocs (Type, ContrNrec, KSNrec, DogNrec, OrgNrec, TidkGal, Nodoc, Ddoc, Summa)
+select 6201,t.DNrec, t.KSNrec, o.kauks[3], o.kauks[1], o.tidkgal, sh.nodoc, sh.datob, sum(o.sumob)
+from (select distinct DNrec, KSNrec from tcp) as t
+join oborot o on o.scheto='751' and o.schetk='762' and o.kauks[2]=t.KSNrec and o.datob between :d1 and :d2
+join soprhoz sh on o.csoprhoz = sh.nrec
+group by t.DNrec, t.KSNrec, o.kauks[3], o.kauks[1], o.tidkgal, sh.nodoc, sh.datob;
+
+sql query qSelectContractSoprNew =
+insert tdocs (Type, ContrNrec, KSNrec, DogNrec, OrgNrec, TidkGal, Nodoc, Ddoc, Summa)
+select 6210, t.DNrec, t.KSNrec, o.kauos[2], o.kauos[1], o.tidkgal, sh.nodoc, sh.datob, sum(o.sumob)
+from (select distinct DNrec, KSNrec from tcp) as t
+join oborot o on o.scheto='862' and o.kauos[3]=t.KSNrec and o.datob between :d1 and :d2 and o.schetk<>'862'
+join soprhoz sh on o.csoprhoz = sh.nrec
+group by t.DNrec, t.KSNrec, o.kauos[2], o.kauos[1], o.tidkgal, sh.nodoc, sh.datob;
+
+sql query qSelectContractSoprOld =
+insert tdocs (Type, ContrNrec, KSNrec, DogNrec, OrgNrec, TidkGal, Nodoc, Ddoc, Summa)
+select 6210, t.DNrec, t.KSNrec, o.kauos[3], o.kauos[1], o.tidkgal, sh.nodoc, sh.datob, sum(o.sumob)
+from (select distinct DNrec, KSNrec from tcp) as t
+join oborot o on o.scheto='762' and o.kauos[2]=t.KSNrec and o.datob between :d1 and :d2 and o.schetk<>'762'
+join soprhoz sh on o.csoprhoz = sh.nrec
+group by t.DNrec, t.KSNrec, o.kauos[3], o.kauos[1], o.tidkgal, sh.nodoc, sh.datob;
+
+
+
+sql query qSelectPlPorNew =
+insert tdocs (Type, ContrNrec, KSNrec, DogNrec, OrgNrec, TidkGal, Nodoc, Ddoc, Summa)
+select case when coalesce(avAvans.vComp,#comp(0)) = #comp(281474976711134) then 6000 else 6001 end,
+       t.DNrec, t.KSNrec, o.kauos[2], o.kauos[1], o.tidkgal, sh.nodoc, sh.datob, sum(o.sumob)
+from (select distinct DNrec, KSNrec from tcp) as t
+join oborot o on o.scheto='860' and o.schetk='851' and o.kauos[4]=t.KSNrec and o.datob between :d1 and :d2
+join soprhoz sh on o.csoprhoz = sh.nrec
+left join stepdoc sd on sh.cstepdoc=sd.nrec
+left join attrval avAvans on avAvans.wtable=1102 and avAvans.crec=sd.cbasedoc and avAvans.cattrnam=#comp(281474976710797)
+group by coalesce(avAvans.vComp,#comp(0)), t.DNrec, t.KSNrec, o.kauos[2], o.kauos[1], o.tidkgal, sh.nodoc, sh.datob;
+
+sql query qSelectPlPorOld =
+insert tdocs (Type, ContrNrec, KSNrec, DogNrec, OrgNrec, TidkGal, Nodoc, Ddoc, Summa)
+select case when coalesce(avAvans.vComp,#comp(0)) = #comp(281474976711134) then 6000 else 6001 end,
+       t.DNrec, t.KSNrec, sh.cdogovor, sh.corg, o.tidkgal, sh.nodoc, sh.datob, sum(o.sumob)
+from (select distinct DNrec, KSNrec from tcp) as t
+join oborot o on o.scheto='760' and o.schetk='751' and o.kauos[2]=t.KSNrec and o.datob between :d1 and :d2
+join soprhoz sh on o.csoprhoz = sh.nrec
+left join stepdoc sd on sh.cstepdoc=sd.nrec
+left join attrval avAvans on avAvans.wtable=1102 and avAvans.crec=sd.cbasedoc and avAvans.cattrnam=#comp(281474976710797)
+group by coalesce(avAvans.vComp,#comp(0)), t.DNrec, t.KSNrec, sh.cdogovor, sh.corg, o.tidkgal, sh.nodoc, sh.datob;
+
+sql query qSelectSoprNew =
+insert tdocs (Type, ContrNrec, KSNrec, DogNrec, OrgNrec, TidkGal, Nodoc, Ddoc, Summa)
+select 6010, t.DNrec, t.KSNrec, o.kauks[2], o.kauks[1], o.tidkgal, sh.nodoc, sh.datob, sum(o.sumob)
+from (select distinct DNrec, KSNrec from tcp) as t
+join oborot o on o.schetk='860' and o.kauks[4]=t.KSNrec and o.datob between :d1 and :d2 and o.scheto<>'860'
+join soprhoz sh on o.csoprhoz = sh.nrec
+group by t.DNrec, t.KSNrec, o.kauks[2], o.kauks[1], o.tidkgal, sh.nodoc, sh.datob;
+
+sql query qSelectSoprOld =
+insert tdocs (Type, ContrNrec, KSNrec, DogNrec, OrgNrec, TidkGal, Nodoc, Ddoc, Summa)
+select 6010, t.DNrec, t.KSNrec, sh.cdogovor, sh.corg, o.tidkgal, sh.nodoc, sh.datob, sum(o.sumob)
+from (select distinct DNrec, KSNrec from tcp) as t
+join oborot o on o.schetk='760' and o.kauos[2]=t.KSNrec and o.datob between :d1 and :d2 and o.scheto<>'760'
+join soprhoz sh on o.csoprhoz = sh.nrec
+group by t.DNrec, t.KSNrec, sh.cdogovor, sh.corg, o.tidkgal, sh.nodoc, sh.datob;
+
+
+
+
+sql query qSelectDocs =
+select Type,ContrNrec,KSNrec,OrgNrec,DogNrec,TidkGal,Nodoc,Ddoc,Summa
+from tdocs;
+
+table struct tdocs (
+  Type     : word,
+  ContrNrec: comp,
+  KSNrec   : comp,
+  OrgNrec  : comp,
+  DogNrec  : comp,
+  TidkGal  : word,
+  Nodoc    : string[100],
+  Ddoc     : date,
+  Summa    : double
+) with index (
+  i01 = Type + ContrNrec + KSNrec + OrgNrec + DogNrec + Ddoc
+);
+
+sql query qSelectDogs =
+select t.ContrNrec    as ContrNrec,
+       t.KSNrec       as KSNrec,
+       t.OrgNrec      as OrgNrec,
+       o.Name         as OrgName,
+       o.Addr         as OrgAddr,
+       o.UNN          as OrgINN,
+       o.KodPlatNDS   as OrgKPP,
+       o.Tel          as OrgTel,
+       t.DogNrec      as DogNrec,
+       d.nodoc        as DogNum,
+       d.ddoc         as DogDate,
+       ad.subject1    as DogSubj1,
+       ad.subject2    as DogSubj2,
+       ad.subject3    as DogSubj3,
+       d.dbeg         as DogStartDate,
+       d.dend         as DogEndDate,
+       d.summa        as DogSumma
+from (select ContrNrec, KSNrec, OrgNrec, DogNrec
+      from tdocs
+      group by ContrNrec, KSNrec, OrgNrec, DogNrec) t
+left join katorg o on t.OrgNrec = o.nrec
+left join dogovor d on t.DogNrec = d.nrec
+left join attrdog ad on t.DogNrec = ad.cdogovor
+join (select o2060.KSNrec, o2060.OrgNrec, o2060.DogNrec, count(*) as cnt
+      from (select kauks[4] as KSNrec, kauks[1] as OrgNrec, kauks[2] as DogNrec, nrec
+            from oborot
+            where scheto='820' and schetk='860' and datob>0 and kauks[4]<>#comp(0)
+            union all
+            select oborot.kauks[2], sh.cOrg, sh.cDogovor, oborot.nrec
+            from oborot
+            join soprhoz sh on oborot.csoprhoz = sh.nrec
+            where oborot.scheto='720' and oborot.schetk='760' and oborot.datob>0 and oborot.kauks[2]<>#comp(0)
+           ) o2060
+      group by o2060.KSNrec, o2060.OrgNrec, o2060.DogNrec
+     ) ocnt on t.KSNrec = ocnt.KSNrec and t.OrgNrec = ocnt.OrgNrec and t.DogNrec = t.DogNrec and ocnt.cnt > 0
+;
+
+table struct tdogs (
+  ContrNrec   : comp,
+  KSNrec      : comp,
+  OrgNrec     : comp,
+  OrgName     : string,
+  OrgAddr     : string,
+  OrgINN      : string[20],
+  OrgKPP      : string[20],
+  OrgTel      : string,
+  DogNrec     : comp,
+  DogNum      : string[100],
+  DogDate     : date,
+  DogSubj1    : string,
+  DogSubj2    : string,
+  DogSubj3    : string,
+  DogStartDate: date,
+  DogEndDate  : date,
+  DogSumma    : double
+) with index (
+  i01 = ContrNrec + KSNrec
+);
+
+sql query qSelectCP =
+select tcp.DNrec  as DNrec,
+       tcp.DSNrec as DSNrec,
+       tcp.CPNrec as CPNrec,
+       tcp.KSNrec as KSNrec,
+       substring(coalesce(ks.name,''), 1, instr(' ',coalesce(ks.name,'')+' ',1)-1) as KSNum,
+       tcp.DFrom  as DFrom,
+       tcp.DTo    as DTo,
+       coalesce(cp.Summa,0) as Summa
+from tcp
+left join katstroy ks on tcp.KSNrec = ks.nrec
+left join calplan cp on tcp.CPNrec = cp.nrec
+;
+
+table struct tcp (
+  DNrec : comp,
+  DSNrec: comp,
+  CPNrec: comp,
+  KSNrec: comp,
+  KSNum : string[40],
+  DFrom : date,
+  DTo   : date,
+  Summa : double
+) with index (
+  i01 = DNrec
+);
+
+sql query qSelectContr =
+  select t.DNrec as DNrec,
+         t.DSNrec as DSNrec,
+         d.nodoc as ContrNumber,
+         d.ddoc as ContrDate,
+         coalesce(attrdog.subject1,'')+' '+coalesce(attrdog.subject2,'')+' '+coalesce(attrdog.subject3,'') as ContrSubj,
+         o.name as OrgName,
+         d.summa as ContrSumma,
+         t.summa as cpSumma
+  from (select DNrec, DSNrec, sum(coalesce(calplan.Summa,0)) as summa
+        from tcp
+        left join calplan on tcp.CPNrec = calplan.nrec
+        group by DNrec, DSNrec ) t
+  join dogovor d on t.DNrec = d.nrec
+  left join attrdog on d.nrec = attrdog.cdogovor
+  join katorg o on d.corg = o.nrec
+;
+
+table struct tcontr (
+  DNrec      : comp,
+  DSNrec     : comp,
+  ContrNumber: string,
+  ContrDate  : date,
+  ContrSubj  : string,
+  OrgName    : string,
+  ContrSumma : double,
+  cpSumma    : double
+) with index (
+  i01 = ContrNumber
+);
+
+var
+  _dRep1, _dRep2: date;
+
+create view
+as select *
+from tcontr, tcp, tdogs, tdocs
+;
+
+create view v
+as select *
+from tcontr, tcp, tdogs,
+     tdocs tDogPredopl, tdocs tDogOpl, tdocs tDogOtgr,
+     tdocs tContrPredopl, tdocs tContrOpl, tdocs tContrOtgr
+where ((
+  tcontr.DNrec == tcp.DNrec and
+
+  tcp.DNrec    == tdogs.ContrNrec and
+  tcp.KSNrec   == tdogs.KSNrec and
+
+  6000            == tDogPredopl.Type and
+  tdogs.ContrNrec == tDogPredopl.ContrNrec and
+  tdogs.KSNrec    == tDogPredopl.KSNrec and
+  tdogs.OrgNrec   == tDogPredopl.OrgNrec and
+  tdogs.DogNrec   == tDogPredopl.DogNrec and
+
+  6001            == tDogOpl.Type and
+  tdogs.ContrNrec == tDogOpl.ContrNrec and
+  tdogs.KSNrec    == tDogOpl.KSNrec and
+  tdogs.OrgNrec   == tDogOpl.OrgNrec and
+  tdogs.DogNrec   == tDogOpl.DogNrec and
+
+  6010            == tDogOtgr.Type and
+  tdogs.ContrNrec == tDogOtgr.ContrNrec and
+  tdogs.KSNrec    == tDogOtgr.KSNrec and
+  tdogs.OrgNrec   == tDogOtgr.OrgNrec and
+  tdogs.DogNrec   == tDogOtgr.DogNrec and
+
+  6200            == tContrPredopl.Type and
+  tdogs.ContrNrec == tContrPredopl.ContrNrec and
+  tdogs.KSNrec    == tContrPredopl.KSNrec and
+
+  6201            == tContrOpl.Type and
+  tdogs.ContrNrec == tContrOpl.ContrNrec and
+  tdogs.KSNrec    == tContrOpl.KSNrec and
+
+  6210            == tContrOtgr.Type and
+  tdogs.ContrNrec == tContrOtgr.ContrNrec and
+  tdogs.KSNrec    == tContrOtgr.KSNrec
+))
+;
+
+datastream dsRep
+ (
+   [RepStartDate] _dRep1;
+   [RepEndDate] _dRep2;
+
+   dataset Contracts (
+     [ContractNrec]    v.tcontr.DNrec;
+     [ContractDSNrec]  v.tcontr.DSNrec;
+     [ContractNumber]  v.tcontr.ContrNumber;
+     [ContractDate]    v.tcontr.ContrDate;
+     [ContractSubject] v.tcontr.ContrSubj;
+     [ContractOrgName] v.tcontr.OrgName;
+     [ContractSumma]   v.tcontr.ContrSumma;
+     [ContractCPSumma] v.tcontr.cpSumma;
+   );
+ )
+ handleevent dataset Contracts
+  cmPreProcess:
+  {
+    v.getfirst tcontr;
+  }
+  cmOnProcess:
+  {
+    if v.getnext tcontr = tsOk
+    {
+      ContinueDataSet;
+    }
+  }
+ end;
+end;
+
+datastream dsRep1 auto(v);
+
+screen sc1;
+fields
+  _dRep1: noprotect;
+  _dRep2: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Дата с`.@@@@@@@@@@ `по`.@@@@@@@@@@
+
+      <. Продолжить .> <. Отмена .>
+>>
+end;
+
+function CreateTmpTables: boolean;
+{
+  result := false;
+
+  var s: longint;
+
+  //формируем временную таблицу tcp (контракты, их календарные планы и их заказы)
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table tcp (DNrec:comp, DSNrec:comp, CPNrec:comp, KSNrec:comp, DFrom:date, DTo:date) with index (i01 = DNrec);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlExecDirect('DELETE FROM tcp');
+
+  //формируем временную таблицу tpl (платежные поручения, накладные)
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table tdocs (Type: word, ContrNrec: comp, KSNrec: comp, DogNrec: comp, OrgNrec: comp, ');
+  sqlAddStr(s, 'TidkGal: word, Nodoc: string[100], Ddoc: date, Summa: double) with index (i01 = KSNrec);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlExecDirect('DELETE FROM tdocs');
+
+  result := true;
+}
+
+procedure DropTmpTables;
+{
+  sqlDropTmpTable('tcp');
+  sqlDropTmpTable('tdocs');
+}
+
+function CopyQueryToTable(aQuery: string; lTable: longint; byName: boolean = false): boolean;
+{
+  var q: IQuery;
+  var rs: IresultSet;
+  q := queryManager.createQuery(aQuery);
+  rs := q.getResultSet;
+  if rs = nullref
+  {
+    message('Ошибка выполнения запроса '+aQuery+': '+q.errorCode, error);
+    result := false;
+  }
+  else
+  {
+    sqlCopyInto(rs, lTable, byName);
+    result := true;
+  }
+}
+
+function FillDocs(queryStr: string; d1: date; d2: date): boolean;
+{
+  var q: iquery;
+  q := queryManager.createQuery(queryStr);
+  q.setParam('d1', d1);
+  q.setParam('d2', d2);
+  if q.execute.errorcode != tsOk
+  {
+    message('Ошибка выполнения запроса '+queryStr+': '+q.errorcode, error);
+    result := false;
+  }
+  else
+    result := true;
+}
+
+function FillTables: boolean;
+{
+  result := false;
+
+  var q: IQuery;
+  var d: date;
+
+  //заполняем временную таблицу tcp
+  q := queryManager.createQuery(qCalPlan);
+  if q.execute.errorcode != tsOk
+  {
+    message('Ошибка выполнения запроса qCalPlan: '+q.errorcode, error);
+    exit;
+  }
+
+  //добавляем в таблицу tcp строки с контрактами, их заказами верхнего уровня, без ПКП
+  //чтобы при отборе платежек не пропали платежки, некорректно привязанные к заказу верхнего уровня
+  q := queryManager.createQuery(qTopCalplan);
+  if q.execute.errorcode != tsOk
+  {
+    message('Ошибка выполнения запроса qTopCalplan: '+q.errorcode, error);
+    exit;
+  }
+
+  //заполняем tpl платежками по новому плану счетов
+  if (_dRep2 > date(31,12,2012))
+  {
+    d := if(_dRep1 < date(1,1,2013), date(1,1,2013), _dRep1);
+
+    if not FillDocs(qSelectContractPlPorNew, d, _dRep2) exit;
+
+    if not FillDocs(qSelectContractSoprNew, d, _dRep2) exit;
+
+    if not FillDocs(qSelectPlPorNew, d, _dRep2) exit;
+
+    if not FillDocs(qSelectSoprNew, d, _dRep2) exit;
+  }
+
+  //заполняем tpl платежками по старому плану счетов
+  if (_dRep1 < date(1,1,2013))
+  {
+    d := if(_dRep2 > date(31,12,2012), date(31,12,2012), _dRep2);
+
+    if not FillDocs(qSelectContractPlPorOld, _dRep1, d) exit;
+
+    if not FillDocs(qSelectContractSoprOld, _dRep1, d) exit;
+
+    if not FillDocs(qSelectPlPorOld, _dRep1, d) exit;
+
+    if not FillDocs(qSelectSoprOld, _dRep1, d) exit;
+  }
+
+  delete all tcontr;
+  if not CopyQueryToTable(qSelectContr, #tcontr) exit;
+
+  delete all tcp;
+  if not CopyQueryToTable(qSelectCP, #tcp) exit;
+
+  delete all tdogs;
+  if not CopyQueryToTable(qSelectDogs, #tdogs) exit;
+
+  delete all tdocs;
+  if not CopyQueryToTable(qSelectDocs, #tdocs) exit;
+
+  result := true;
+}
+
+procedure ShowReport;
+{
+  RunFReport(dsRep1,'',true);
+}
+
+
+handleevent
+cmDoOk:
+{
+  if CreateTmpTables
+  {
+    if FillTables
+      ShowReport;
+    DropTmpTables;
+  }
+}
+cmInit:
+{
+  if not readmydsk(_dRep1, 'Accomplices_dRep1', false) _dRep1 := date(1,1,2012);
+  if not readmydsk(_dRep2, 'Accomplices_dRep2', false) _dRep2 := date(31,12,2015);
+}
+cmDone:
+{
+  savemydsk(_dRep1, 'Accomplices_dRep1');
+  savemydsk(_dRep2, 'Accomplices_dRep2');
+}
+end;
+
+end.
+
+VipInterface UserReport_Accomplices Implements IUserReport licensed(free);
+Interface UserReport_Accomplices;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::Accomplices);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Сведения по соисполнителям';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1)
+      GetGroupName := 'Отчеты ГОЗ'
+    else
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'DOGOVOR';
+    end;
+  end;
+end.
