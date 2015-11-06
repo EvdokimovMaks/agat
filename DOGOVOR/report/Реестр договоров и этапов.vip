@@ -6,6 +6,7 @@ table struct t (
   tdNodoc     : string[40],
   tdNodocExt  : string[40],
   tdDdoc      : date,
+  tdVidDogName: string[80],
   tdStatusName: string[80],
   tdTipKonPotr: string[120],
   tdSumma     : double,
@@ -13,7 +14,7 @@ table struct t (
   KatstroyName: string[200],
   dNodoc      : string[40],
   dDdoc       : date,
-  VidDogName  : string[80],
+  dVidDogName : string[80],
   KatOrgName  : string[150],
   dDbeg       : date,
   dDend       : date,
@@ -36,46 +37,92 @@ table struct t (
 );
 
 sql query q1 =
-select coalesce(td.nodoc,d.nodoc), coalesce(td.nodoc_ext,d.nodoc_ext), coalesce(td.ddoc,d.ddoc), coalesce(tdkn.name, coalesce(dkn.name, '')),
-       coalesce(spktkp.name,''), coalesce(td.summa,d.summa), coalesce(td.sumnds,d.sumnds),
-       coalesce(ks.name,''), d.nodoc, d.ddoc, v.name, o.name, d.dbeg, d.dend, coalesce(dkn.name, ''),
-       case when d.direct = 1 then 'реализация' else 'закупка' end,
-       cp.nodoc, coalesce(kn.name,''), cp.dfrom, cp.dto,
-       coalesce(t.kol,0),
-       coalesce(t.summa,0) - case when cp.vhodnal = 1 then coalesce(t.sumnds,0) else 0 end,
-       coalesce(t.sumnds,0),
-       coalesce(spk1.name,''), coalesce(spk2.name,''), coalesce(av3.vstring, ''), coalesce(tPriceKind.Name, ''), coalesce(kp.name,'')
+select coalesce(td.nodoc,d.nodoc) as tdNodoc,
+       coalesce(td.nodoc_ext,d.nodoc_ext) as tdNodocExt,
+       coalesce(td.ddoc,d.ddoc) as tdDdoc,
+       coalesce(tdv.name, coalesce(dv.name, '')) as tdVidDogName,
+       coalesce(tdkn.name, coalesce(dkn.name, '')) as tdStatusName,
+       coalesce(tdtkp.name, coalesce(dtkp.name,'')) as tdTipKonPotr,
+       coalesce(td.summa,d.summa) as tdSumma,
+       coalesce(td.sumnds,d.sumnds) as tdNDS,
+       coalesce(ks.name,'') as KatstroyName,
+       d.nodoc as dNodoc,
+       d.ddoc as dDdoc,
+       coalesce(dv.name,'') as dVidDogName,
+       coalesce(o.name,'') as KatOrgName,
+       d.dbeg as dDbeg,
+       d.dend as dDend,
+       coalesce(dkn.name, '') as dStatusName,
+       case when d.direct = 1 then 'реализация' else 'закупка' end as DirectName,
+       coalesce(cp.nodoc, '') as cpNodoc,
+       coalesce(kn.name,'') as cpStatusName,
+       coalesce(cp.dfrom, #date(0,0,0)) as cpDbeg,
+       coalesce(cp.dto, #date(0,0,0)) as cpDend,
+       coalesce(t.kol,0) as cpKol,
+       coalesce(t.summa,0) - case when coalesce(cp.vhodnal,0) = 1 then coalesce(t.sumnds,0) else 0 end as cpSumma,
+       coalesce(t.sumnds,0) as cpNDS,
+       coalesce(spk1.name,'') as ZavNum,
+       coalesce(spk2.name,'') as ProjNum,
+       coalesce(av3.vstring, '') as UndoneReason,
+       coalesce(tPriceKind.Name, '') as PriceKind,
+       coalesce(kp.name,'') as PodrName
 from dogovor d
+//количество подчиненных договоров
+left join (select cdogovor, count(*) as cnt
+           from dogovor
+           where cdogovor <> #comp(0)
+           group by cdogovor) dChildCnt on d.nrec = dChildCnt.cdogovor
+//статус договора
 left join katnotes dkn on d.cnote = dkn.nrec
+//контрагент по договору
 left join katorg o on d.corg = o.nrec
+//конечный потребитель по договору
+left join attrval davtkp on 1707 = davtkp.wtable and d.nrec = davtkp.crec and #comp(00010000000000AFh) = davtkp.cattrnam
+left join spkau dtkp on coalesce(davtkp.vcomp,#comp(0)) = dtkp.nrec
+//вид договора
+left join katvidd dv on d.cviddog = dv.nrec
+//договор верхнего уровня
 left join dogovor td on d.cdogovor = td.nrec
+//статус договора верхнего уровня
 left join katnotes tdkn on coalesce(td.cnote, #comp(0)) = tdkn.nrec
-left join attrval avtkp on 1707 = avtkp.wtable and coalesce(td.nrec, #comp(0)) = avtkp.crec and #comp(00010000000000AFh) = avtkp.cattrnam    //конечный потребитель
-left join spkau spktkp on coalesce(avtkp.vcomp,#comp(0)) = spktkp.nrec
+//конечный потребитель по договору верхнего уровня td
+left join attrval tdavtkp on 1707 = tdavtkp.wtable and coalesce(td.nrec, #comp(0)) = tdavtkp.crec and #comp(00010000000000AFh) = tdavtkp.cattrnam
+left join spkau tdtkp on coalesce(tdavtkp.vcomp,#comp(0)) = tdtkp.nrec
+//вид договора верхнего уровня
+left join katvidd tdv on coalesce(td.cviddog,#comp(0)) = tdv.nrec
+//этап
 left join calplan cp on d.nrec = cp.cdogovor and cp.directmc <> 0
-left join katnotes kn on cp.cnote = kn.nrec and coalesce(cp.cnote,#comp(0)) <> #comp(0)
+//статус этапа
+left join katnotes kn on coalesce(cp.cnote,#comp(0)) = kn.nrec
+//объекты строительства из целевого учета строк этапа с суммами
 left join (select spd.cdoc as ccalplan, specmtr.cobj as ckatstroy, sum(spd.summa) as summa, sum(spd.sumnds) as sumnds, sum(spd.kol) as kol
            from spdocs spd
            join specmtr on #comp(0001000000000001h) = specmtr.csaldtune and 1723 = specmtr.cotable and spd.nrec = specmtr.cspec
            where spd.tidk = 403
            group by spd.cdoc, specmtr.cobj
           ) t on cp.nrec = t.ccalplan and coalesce(cp.nrec,#comp(0)) <> #comp(0)
+//вид цены из внешней классификации к строкам этапа
 left join (select distinct spd.cdoc as ccalplan, es.name as name
            from spdocs spd
            join exclassval ev on 1723 = ev.wtable and spd.nrec = ev.crec and 124 = ev.classcode
            join exclassseg es on ev.cclassseg = es.nrec
            where spd.tidk = 403
           ) tPriceKind on cp.nrec = tPriceKind.ccalplan and coalesce(cp.nrec,#comp(0)) <> #comp(0)
+//объект строительства по этапу
 left join katstroy ks on coalesce(t.ckatstroy, #comp(0)) = ks.nrec
-left join attrval av1 on 2101 = av1.wtable and coalesce(ks.nrec,#comp(0)) = av1.crec and #comp(281474976711616) = av1.cattrnam    //заводской номер
+//заводской номер - вн.атр. к объекту строительства
+left join attrval av1 on 2101 = av1.wtable and coalesce(ks.nrec,#comp(0)) = av1.crec and #comp(281474976711616) = av1.cattrnam
 left join spkau spk1 on coalesce(av1.vcomp,#comp(0)) = spk1.nrec
-left join attrval av2 on 2101 = av2.wtable and coalesce(ks.nrec,#comp(0)) = av2.crec and #comp(281474976711615) = av2.cattrnam    //№ проекта
+//№ проекта - вн.атр. к объекту строительства
+left join attrval av2 on 2101 = av2.wtable and coalesce(ks.nrec,#comp(0)) = av2.crec and #comp(281474976711615) = av2.cattrnam
 left join spkau spk2 on coalesce(av2.vcomp,#comp(0)) = spk2.nrec
-left join attrval av3 on 2101 = av3.wtable and coalesce(ks.nrec,#comp(0)) = av3.crec and #comp(281474976710826) = av3.cattrnam    //причина невыполнения
-left join kaureff kr on 2101 = kr.cotable and coalesce(ks.nrec,#comp(0)) = kr.crec and 2 = kr.wkau and coalesce(ks.nrec,#comp(0)) <> #comp(0) //подразделение по заказу
+//причина невыполнения - вн.атр. к объекту строительства
+left join attrval av3 on 2101 = av3.wtable and coalesce(ks.nrec,#comp(0)) = av3.crec and #comp(281474976710826) = av3.cattrnam
+//подразделение по заказу - внешн. КАУ к объекту строительства
+left join kaureff kr on 2101 = kr.cotable and coalesce(ks.nrec,#comp(0)) = kr.crec and 2 = kr.wkau and coalesce(ks.nrec,#comp(0)) <> #comp(0)
 left join katpodr kp on coalesce(kr.ckau,#comp(0)) = kp.nrec
-left join katvidd v on d.cviddog = v.nrec
-//where d.status <> 3
+where d.tidk = 401 or (d.tidk=400 and coalesce(dChildCnt.cnt,0) = 0) //не выводим строки с папками (договоа у которых есть допники)
+order by coalesce(td.ddoc,d.ddoc), coalesce(td.nodoc,d.nodoc), d.ddoc, d.nodoc
 ;
 
 var
@@ -98,9 +145,11 @@ procedure printReport(isCreateXLT: boolean);
   pXL.CreateTblFld('РодительНДС'   );
   pXL.CreateTblFld('РодительСтатус');
   pXL.CreateTblFld('РодительТипКонечногоПотребителя');
+  pXL.CreateTblFld('РодительВид'   );
   pXL.CreateTblFld('Заказ'         );
   pXL.CreateTblFld('Номер'         );
   pXL.CreateTblFld('Статус'        );
+  pXL.CreateTblFld('ТипКонечногоПотребителя');
   pXL.CreateTblFld('Дата'          );
   pXL.CreateTblFld('Вид'           );
   pXL.CreateTblFld('Контрагент'    );
@@ -120,43 +169,43 @@ procedure printReport(isCreateXLT: boolean);
   pXL.CreateTblFld('ВидЦены'       );
   pXL.CreateTblFld('Подразделение' );
 
-  if not isCreateXLT
+  _loop t
   {
-    _loop t
-    {
-      pXL.ClearTblBuffer;
-      pXL.SetTblStringFldValue('РодительНомер' ,t.tdNodoc     );
-      pXL.SetTblStringFldValue('РодительШифр'  ,t.tdNodocExt  );
-      pXL.SetTblDateFldValue  ('РодительДата'  ,t.tdDdoc      );
-      pXL.SetTblStringFldValue('РодительСтатус',t.tdStatusName);
-      pXL.SetTblStringFldValue('РодительТипКонечногоПотребителя', t.tdTipKonPotr);
-      pXL.SetTblNumberFldValue('РодительСумма' ,t.tdSumma     );
-      pXL.SetTblNumberFldValue('РодительНДС'   ,t.tdNDS       );
-      pXL.SetTblStringFldValue('Заказ'         ,t.KatstroyName);
-      pXL.SetTblStringFldValue('Номер'         ,t.dNodoc      );
-      pXL.SetTblStringFldValue('Статус'        ,t.dStatusName );
-      pXL.SetTblDateFldValue  ('Дата'          ,t.dDdoc       );
-      pXL.SetTblStringFldValue('Вид'           ,t.VidDogName  );
-      pXL.SetTblStringFldValue('Статус'        ,t.dStatusName );
-      pXL.SetTblStringFldValue('Контрагент'    ,t.KatOrgName  );
-      pXL.SetTblDateFldValue  ('ДатаС'         ,t.dDbeg       );
-      pXL.SetTblDateFldValue  ('ДатаПо'        ,t.dDend       );
-      pXL.SetTblStringFldValue('Направление'   ,t.DirectName  );
-      pXL.SetTblStringFldValue('КалПланНомер'  ,t.cpNodoc     );
-      pXL.SetTblStringFldValue('КалПланСтатус' ,t.cpStatusName);
-      pXL.SetTblDateFldValue  ('КалПланДатаС'  ,t.cpDbeg      );
-      pXL.SetTblDateFldValue  ('КалПланДатаПо' ,t.cpDend      );
-      pXL.SetTblNumberFldValue('КалПланКолво'  ,t.cpKol       );
-      pXL.SetTblNumberFldValue('КалПланСумма'  ,t.cpSumma     );
-      pXL.SetTblNumberFldValue('КалПланНДС'    ,t.cpNDS       );
-      pXL.SetTblStringFldValue('ЗаводскойНомер',t.ZavNum      );
-      pXL.SetTblStringFldValue('НомерПроекта'  ,t.ProjNum     );
-      pXL.SetTblStringFldValue('ПричинаНевып'  ,t.UndoneReason);
-      pXL.SetTblStringFldValue('ВидЦены'       ,t.PriceKind   );
-      pXL.SetTblStringFldValue('Подразделение' ,t.PodrName    );
-      pXL.InsTblRow;
-    }
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('РодительНомер' ,t.tdNodoc     );
+    pXL.SetTblStringFldValue('РодительШифр'  ,t.tdNodocExt  );
+    pXL.SetTblDateFldValue  ('РодительДата'  ,t.tdDdoc      );
+    pXL.SetTblStringFldValue('РодительВид'   ,t.tdVidDogName);
+    pXL.SetTblStringFldValue('РодительСтатус',t.tdStatusName);
+    pXL.SetTblStringFldValue('РодительТипКонечногоПотребителя', t.tdTipKonPotr);
+    pXL.SetTblNumberFldValue('РодительСумма' ,t.tdSumma     );
+    pXL.SetTblNumberFldValue('РодительНДС'   ,t.tdNDS       );
+    pXL.SetTblStringFldValue('Заказ'         ,t.KatstroyName);
+    pXL.SetTblStringFldValue('Номер'         ,t.dNodoc      );
+    pXL.SetTblStringFldValue('Статус'        ,t.dStatusName );
+    pXL.SetTblDateFldValue  ('Дата'          ,t.dDdoc       );
+    pXL.SetTblStringFldValue('Вид'           ,t.dVidDogName );
+    pXL.SetTblStringFldValue('Статус'        ,t.dStatusName );
+    pXL.SetTblStringFldValue('ТипКонечногоПотребителя', t.tdTipKonPotr);
+    pXL.SetTblStringFldValue('Контрагент'    ,t.KatOrgName  );
+    pXL.SetTblDateFldValue  ('ДатаС'         ,t.dDbeg       );
+    pXL.SetTblDateFldValue  ('ДатаПо'        ,t.dDend       );
+    pXL.SetTblStringFldValue('Направление'   ,t.DirectName  );
+    pXL.SetTblStringFldValue('КалПланНомер'  ,t.cpNodoc     );
+    pXL.SetTblStringFldValue('КалПланСтатус' ,t.cpStatusName);
+    pXL.SetTblDateFldValue  ('КалПланДатаС'  ,t.cpDbeg      );
+    pXL.SetTblDateFldValue  ('КалПланДатаПо' ,t.cpDend      );
+    pXL.SetTblNumberFldValue('КалПланКолво'  ,t.cpKol       );
+    pXL.SetTblNumberFldValue('КалПланСумма'  ,t.cpSumma     );
+    pXL.SetTblNumberFldValue('КалПланНДС'    ,t.cpNDS       );
+    pXL.SetTblStringFldValue('ЗаводскойНомер',t.ZavNum      );
+    pXL.SetTblStringFldValue('НомерПроекта'  ,t.ProjNum     );
+    pXL.SetTblStringFldValue('ПричинаНевып'  ,t.UndoneReason);
+    pXL.SetTblStringFldValue('ВидЦены'       ,t.PriceKind   );
+    pXL.SetTblStringFldValue('Подразделение' ,t.PodrName    );
+    pXL.InsTblRow;
   }
+
   pXL.PublishTbl('Main');
   pXL.LoadReport(sXLSFileName);
   pXL.DisConnectExcel;

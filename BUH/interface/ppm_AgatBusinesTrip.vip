@@ -1,0 +1,167 @@
+#include PPMacros.vih
+#Component "F_Template"
+VipInterface PPM_AGATTrip implements ObjPPMacros licensed(free);
+interface PPM_AGATTrip;
+
+const
+  STR_SEPARATOR=', ';
+end;
+
+var
+  resultArr: array [0..0] of string;
+  resultIndex: integer;
+  resultValue: array[0..0] of string;
+  ea: iextattr;
+
+create view
+var
+  plporNrec  : comp;
+as select *
+from docpodot, spprikaz, lschet, persons, prikaz, katorg, katstate, katcity
+where ((
+  22               == docpodot.tipdoc and
+  plporNrec        == docpodot.cvtdoc and
+  docpodot.cprdoc  == spprikaz.nrec and
+  spprikaz.clsch   == lschet.nrec and
+  lschet.tperson   == persons.nrec and
+  spprikaz.cprikaz == prikaz.nrec and
+  prikaz.corg      == katorg.nrec and
+  prikaz.cstate    == katstate.nrec and
+  prikaz.ccity     == katcity.nrec
+));
+
+procedure InitResultArr;
+{
+  resultArr[0] := 'НОМЕРДАТА';
+  resultArr[1] := 'СОТРУДНИК';
+  resultArr[2] := 'МЕСТО';
+  resultArr[3] := 'ТЕМА';
+  resultArr[4] := 'ОСНОВАНИЕ';
+  resultArr[5] := 'ЦЕЛЬ';
+  resultArr[6] := 'НАЧАЛООКОНЧАНИЕ';
+  resultArr[7] := 'ПРИБЫТИЕВЫБЫТИЕ';
+}
+
+Function GetInfo: string;
+{
+  GetInfo := 'Агат. Информация из приказа на командировку. Параметры: [РЕЗ:НОМЕРДАТА|СОТРУДНИК|МЕСТО|Организация|ТЕМА|ОСНОВАНИЕ|ЦЕЛЬ|НАЧАЛООКОНЧАНИЕ|ПРИБЫТИЕВЫБЫТИЕ]';
+}
+
+window wParam 'Параметры макроса "Информация из приказа на командировку"' escclose, doaccept;
+  show (,,32,3);
+  screen scParam;
+  fields
+    resultIndex: [list ''];
+<<
+
+  Результат: .@@@@@@@@@@@@@@@@
+>>
+  end;
+  handleevent
+    cminit:
+    {
+      SetEnumList(scParam, #resultIndex, resultArr);
+    }
+  end;
+end;
+
+Function ParamMaster: string;
+{
+  InitResultArr;
+  if (RunWindowModal(wParam) = cmDefault)
+    result := '[РЕЗ:'+resultArr[resultIndex]+']';
+}
+
+Procedure ParamParser(PpmServer: ObjPPTemplate; var Err: string);
+{
+  var i: word;
+  var s: string; s := '';
+  for(i := 1; i <= PPmServer.ParamCount; ++i)
+  {
+    case UpCase(PPMServer.ParamName(i)) of
+      'РЕЗ': s := PPMServer.ParamValue(i);
+    else
+    {
+      Err := PPMServer.ParamName(i);
+      exit;
+    }
+    end;
+  }
+  resultIndex := FindItem(resultArr, s);
+  if resultIndex = -1
+  {
+    err := 'Некорректное значение параметра "РЕЗ"';
+  }
+}
+
+procedure AddDistinctString(addingString: string; var whereString: string; separator: string = STR_SEPARATOR);
+{
+  if pos(separator+trim(addingString)+separator, separator+trim(whereString)+separator) = 0
+  {
+    whereString += if(trim(whereString)='','',separator) + trim(addingString);
+  }
+}
+
+Function Culc(TiDkGal, TiDkUser: word; cSoprDoc: comp; PpmServer: ObjPPTemplate;
+              isSyntaxCheck: boolean; var ErrDescr: string): string;
+{
+  TiDkGal := TiDkGal; TiDkUser := TiDkUser; isSyntaxCheck := isSyntaxCheck;
+
+  InitResultArr;
+
+  ParamParser(PpmServer, ErrDescr);
+
+  var i: integer;
+  for (i := 0; i < Count(resultArr); ++i)
+    resultValue[i] := '';
+
+  plporNrec := cSoprDoc;
+  _loop docpodot
+  {
+    if getfirst spprikaz = tsOk
+    {
+      if getfirst lschet = tsOk
+        if getfirst persons = tsOk
+          AddDistinctString(persons.fio, resultValue[1]);
+
+      if getfirst prikaz = tsOk
+      {
+        AddDistinctString(prikaz.nodoc+' от '+datetostr(prikaz.ddoc,'DD.MM.YYYY'), resultValue[0]);
+
+        var sOrg: string; sOrg := '';
+
+        if getfirst katstate = tsOk
+          sOrg := katstate.name;
+        if getfirst katcity = tsOk
+          sOrg += if(sOrg='', '', ', ') + katcity.name;
+        if getfirst katorg = tsOk
+          sOrg += if(sOrg='', '', ', ') + katorg.name;
+        else
+          sOrg += if(sOrg='', '', ', ') + prikaz.mesto;
+
+        if sOrg != ''
+          AddDistinctString(sOrg, resultValue[2]);
+
+        AddDistinctString(prikaz.tema, resultValue[3]);
+
+        AddDistinctString(prikaz.osnov, resultValue[4]);
+
+        AddDistinctString(prikaz.name, resultValue[5]);
+
+        AddDistinctString(datetostr(prikaz.dstart,'DD.MM.YYYY')+' - '+datetostr(prikaz.dend,'DD.MM.YYYY'), resultValue[6]);
+
+        AddDistinctString(datetostr(ea.dGetAttr(9308, prikaz.nrec, 'Дата выбытия'),'DD.MM.YYYY')+' - '+
+                          datetostr(ea.dGetAttr(9308, prikaz.nrec, 'Дата прибытия'),'DD.MM.YYYY'), resultValue[7]);
+
+      } //if getfirst prikaz = tsOk
+
+    } //if getfirst spprikaz = tsOk
+
+  } //_loop docpodot
+
+  if resultIndex != -1
+    result := resultValue[resultIndex]
+  else
+    result := '-';
+}
+end.
