@@ -1,0 +1,141 @@
+#include Stock.vih
+#include SqlHelper.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface Stock;
+
+sql query q1 =
+select KatmcNrec, Qty %fields1
+from (select spo.cmc as KatmcNrec, sum(case when spo.vidorder=0 then 1 else (-1) end * spo.kol) as Qty %fields2
+      from sporder spo
+      left join specmtr spm on spm.cotable=1112 and spm.csaldtune=#comp(0001000000000001h) and spm.cspec=spo.nrec
+      where spo.sp=0 and spo.dord between 1 and :date %where
+      group by spo.cmc %groupby
+     ) spo
+where abs(Qty)>=0.001
+;
+
+var
+  _sqlHelper: System::SqlHelper new;
+  tmpTable: array[0..0] of string;
+  tmpTableCount: longint;
+
+function IsFlagSet(aFlag: longint; aFlags: longint): boolean;
+{
+  result := (aFlag and aFlags) > 0;
+}
+
+procedure AddFieldIfFlagSet(aFlag: longint; aFlags: longint; aFieldName: string; asFieldName: string;
+                            var macroFields1: longint; var macroFields2: longint; var macroGroupBy: longint);
+{
+  sqlAddStr(macroFields1, ', '+asFieldName);
+
+  if IsFlagSet(aFlag, aFlags)
+  {
+    sqlAddStr(macroFields2, ', '+aFieldName+' as '+asFieldName);
+    sqlAddStr(macroGroupBy, ', '+aFieldName);
+  }
+  else
+  {
+    sqlAddStr(macroFields2, ', #comp(0) as '+asFieldName);
+  }
+}
+
+procedure AddTmpTableToArray(tableName: string);
+{
+  tmpTable[tmpTableCount++] := tableName;
+}
+
+procedure CreateTmpFilterTable(tableName: string);
+{
+  sqlDropTmpTable(tableName);
+  var s: longint;
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table '+tableName+' (Nrec: comp) with index (i01 = Nrec);');
+  sqlCreateTmpTable(s, ctmNormal);
+  AddTmpTableToArray(tableName);
+}
+
+function GetTmpFilterTableName(aFlag: longint): string;
+{
+  result := 'Filter'+aFlag;
+}
+
+procedure DropTmpFilterTables;
+{
+  var i: longint;
+  for (i := 0; i < tmpTableCount; ++i)
+    sqlDropTmpTable(tmpTable[i]);
+  tmpTableCount := 0;
+}
+
+procedure AddFilterIfFlagSet(aFlag: longint; aFlags: longint; aFieldName: string; aMarker: longint; var macroWhere: longint);
+{
+  if IsFlagSet(aFlag, aFlags)
+  {
+    var tableName: string;
+    tableName := GetTmpFilterTableName(aFlag);
+    CreateTmpFilterTable(tableName);
+    _sqlHelper.FillSqlTmpTableWithMarker(tableName, aMarker, 'Nrec');
+    sqlAddStr(macroWhere, ' and '+aFieldName+' in (select nrec from '+tableName+')');
+  }
+}
+
+function GetStock(params: IStockParams): IStockSet;
+{
+  result := nullref;
+  if params = nullref exit;
+
+  var macroFields1, macroFields2, macroWhere, macroGroupBy: longint;
+  sqlFreeStr(macroFields1);
+  sqlFreeStr(macroFields2);
+  sqlFreeStr(macroWhere);
+  sqlFreeStr(macroGroupBy);
+
+  AddFieldIfFlagSet(WarehouseSectionFlag_Katpodr , params.GroupByFlags, 'spo.ccpodr', 'KatpodrNrec' ,
+                    macroFields1, macroFields2, macroGroupBy);
+
+  AddFieldIfFlagSet(WarehouseSectionFlag_Katmol  , params.GroupByFlags, 'spo.ccmol' , 'KatmolNrec'  ,
+                    macroFields1, macroFields2, macroGroupBy);
+
+  AddFieldIfFlagSet(WarehouseSectionFlag_Katparty, params.GroupByFlags, 'spo.cparty', 'KatpartyNrec',
+                    macroFields1, macroFields2, macroGroupBy);
+
+  AddFieldIfFlagSet(WarehouseSectionFlag_Katstroy, params.GroupByFlags, 'coalesce(spm.cobj,#comp(0))', 'KatstroyNrec',
+                    macroFields1, macroFields2, macroGroupBy);
+
+  tmpTableCount := 0;
+
+  AddFilterIfFlagSet(WarehouseSectionFlag_Katmc   , params.FilterFlags, 'spo.cmc'                    , params.fltrKatmcMarker   , macroWhere);
+  AddFilterIfFlagSet(WarehouseSectionFlag_Katpodr , params.FilterFlags, 'spo.ccpodr'                 , params.fltrKatpodrMarker , macroWhere);
+  AddFilterIfFlagSet(WarehouseSectionFlag_Katmol  , params.FilterFlags, 'spo.ccmol'                  , params.fltrKatmolMarker  , macroWhere);
+  AddFilterIfFlagSet(WarehouseSectionFlag_Katparty, params.FilterFlags, 'spo.cparty'                 , params.fltrKatpartyMarker, macroWhere);
+  AddFilterIfFlagSet(WarehouseSectionFlag_Katstroy, params.FilterFlags, 'coalesce(spm.cobj,#comp(0))', params.fltrKatstroyMarker, macroWhere);
+
+  var q: IQuery;
+  q := queryManager.createQuery(q1);
+  q.setMacro('fields1', macroFields1);
+  q.setMacro('fields2', macroFields2);
+  q.setMacro('where'  , macroWhere);
+  q.setMacro('groupby', macroGroupBy);
+  q.setParam('date', params.OnDate);
+
+  var rs: IResultSet;
+  rs := q.getResultSet;
+
+  if rs != nullref and q.errorCode = tsOk
+  {
+    var _stockSet: IStockSet;
+    if loadvipref(_stockSet, 'AGAT::StockSet')
+    {
+      _stockSet.Load(rs);
+      result := _stockSet;
+    }
+  }
+
+  DropTmpFilterTables;
+}
+
+end.

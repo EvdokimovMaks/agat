@@ -1,0 +1,129 @@
+#include DistrMatByStock.vih
+#include Stock.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface DistrMatByStock;
+
+table struct tForDistr (
+  KatpodrNrec   : comp,
+  KatmolNrec    : comp,
+  KatstroyNrec  : comp,
+  KatmcNrec     : comp,
+  KatmcObozn    : string[150],
+  QtyForDistr   : double,
+  QtyDistributed: double
+) with index (
+  i01 = KatpodrNrec + KatmolNrec + KatstroyNrec + KatmcNrec (unique)
+);
+
+table struct tStock (
+  Priority      : word,
+  KatpodrNrec   : comp,
+  KatmolNrec    : comp,
+  KatstroyNrec  : comp,
+  KatmcNrec     : comp,
+  KatmcObozn    : string[150],
+  Qty           : double,
+  QtyDistributed: double
+) with index (
+  i01 = KatmcNrec + Priority + KatstroyNrec + KatpodrNrec + KatmolNrec
+);
+
+var
+  _paramsFactory: AGAT::StockParamsFactory;
+  _params       : AGAT::IStockParams;
+  _stock        : AGAT::Stock;
+  _stockSet     : AGAT::IStockSet;
+
+create view
+as select *
+from tForDistr, tStock, katmc,
+     tForDistr brForDistr, tStock brStock
+where ((
+  brForDistr.KatmcNrec == brStock.KatmcNrec
+));
+
+function GetPriority(KatstroyNrec: comp; KatstroyName: string; KatstroyCode: string): word;
+{
+  if pos('закрыт',locase(KatstroyName)) > 0
+    result := 1
+  else if KatstroyCode = '000028'
+    result := 2
+  else if KatstroyNrec = 0
+    result := 3
+  else if KatstroyCode = '000029'
+    result := 4
+  else
+    result := 5;
+}
+
+function DistributeOnDate(aDate: date): boolean;
+{
+  result := false;
+
+  _params := _paramsFactory.Get(StockParamsType_NoInit);
+
+  _params.OnDate := aDate;
+
+  _params.SetGroupByFlag(WarehouseSectionFlag_Katpodr)
+        .SetGroupByFlag(WarehouseSectionFlag_Katmol)
+        .SetGroupByFlag(WarehouseSectionFlag_Katstroy);
+
+  _params.SetFilterFlag(WarehouseSectionFlag_Katmc);
+
+  _loop tForDistr
+  {
+    _params.AddNrecToFilter(WarehouseSectionFlag_Katmc, tForDistr.KatmcNrec);
+    if tForDistr.KatmcObozn != ''
+      _loop katmc where (( tForDistr.KatmcObozn == katmc.obozn and (katmc.nrec <> tForDistr.KatmcNrec) ))
+        _params.AddNrecToFilter(WarehouseSectionFlag_Katmc, katmc.Nrec);
+  }
+
+  var ss: IStockSet;
+  ss := _stock.GetStock(_params);
+
+  if ss != nullref
+  {
+    _stockSet := ss;
+
+    insert tStock (Priority,KatpodrNrec,KatmolNrec,KatstroyNrec,KatmcNrec,KatmcObozn,Qty,QtyDistributed)
+    select GetPriority(_stockSet.KatstroyNrec, katstroy.name, katstroy.code),
+           _stockSet.KatpodrNrec,
+           _stockSet.KatmolNrec,
+           _stockSet.KatstroyNrec,
+           _stockSet.KatmcNrec,
+           katmc.obozn,
+           _stockSet.Qty,
+           0
+    from _stockSet, katmc, katstroy
+    where ((
+      _stockSet.KatmcNrec    == katmc.nrec and
+      _stockSet.KatstroyNrec == katstroy.nrec
+    ));
+
+    result := true;
+  }
+  else
+    result := false;
+}
+
+procedure AddWarehousePartForDistr(aKatpodrNrec, aKatmolNrec, aKatstroyNrec, aKatmcNrec: comp; aQty: double);
+{
+  clearbuffer(#tForDistr);
+  tForDistr.KatpodrNrec  := aKatpodrNrec;
+  tForDistr.KatmolNrec   := aKatmolNrec;
+  tForDistr.KatstroyNrec := aKatstroyNrec;
+  tForDistr.KatmcNrec    := aKatmcNrec;
+  tForDistr.KatmcObozn   := if(getfirst katmc where ((aKatmcNrec == katmc.nrec)) = tsOk, katmc.obozn, '');
+  tForDistr.QtyForDistr  := aQty ;
+  insert current tForDistr;
+}
+
+procedure ClearWarehousePartsForDistr;
+{
+  delete all tForDistr;
+}
+
+end.

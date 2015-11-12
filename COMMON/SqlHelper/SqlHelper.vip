@@ -1,0 +1,77 @@
+#include SqlHelper.vih
+#include Query.vih
+
+#component "System"
+
+interface SqlHelper;
+
+function GetWordCount(s: string; wordSeparator: string = ','): byte;
+{
+  var p: byte; p := pos(wordSeparator,s);
+  if p=0
+    result := 1
+  else
+    result := 1 + GetWordCount(substr(s,p+1,255), wordSeparator);
+}
+
+function FillSqlTmpTableWithMarker(tableName: string; lMarker: longint; fieldNames: string = 'Nrec'): boolean;
+var
+  fldValue: TFldValues;
+  fldCount, i: byte;
+  paramNames: string;
+  s: longint;
+  q: IQuery;
+  c: comp;
+  m: longint;
+{
+  result := true;
+
+  fldCount := GetWordCount(fieldNames);
+
+  paramNames := '';
+  for(i := 0; i < fldCount; ++i)
+    paramNames += if(i>0,',','') + ':p'+i;
+
+  sqlFreeStr(s);
+  sqlAddStr(s, 'insert '+tableName+' (');
+  sqlAddStr(s, fieldNames);
+  sqlAddStr(s, ') values (');
+  sqlAddStr(s, paramNames);
+  sqlAddStr(s, ')');
+
+  q := queryManager.createQuery(s);
+  for(i := 0; i < fldCount; ++i)
+  {
+    fldValue[i] := '';
+  }
+
+  m := 0;
+  while GetMarker(lMarker, m, c)
+  {
+    fldValue[0] := c;
+    OnInsertSqlTmpTableRecord(fldValue);
+    for(i := 0; i < fldCount; ++i)
+    {
+      case vtype(fldValue[i]) of
+        VT_I8  : q.setParam('p'+i, comp(fldValue[i]));
+        VT_R8  : q.setParam('p'+i, double(fldValue[i]));
+        VT_I4  : q.setParam('p'+i, longint(fldValue[i]));
+        VT_UI2 : q.setParam('p'+i, word(fldValue[i]));
+        VT_DATE: q.setParam('p'+i, strtodate(fldValue[i],'DD/MM/YYYY'));
+        VT_I2  : q.setParam('p'+i, integer(fldValue[i]));
+        VT_BOOL: q.setParam('p'+i, boolean(fldValue[i]));
+      else
+        q.setParam('p'+i, string(fldValue[i]));
+      end;
+    }
+    if q.execute.errorcode != tsOk
+    {
+      message('Ошибка вставки записи во временную таблицу ' + tableName + ': ' + q.errorCode, error);
+      result := false;
+      break;
+    }
+    m++;
+  }
+}
+
+end.
