@@ -7,6 +7,7 @@
 interface DistrMatByStock;
 
 table struct tForDistr (
+  Nrec          : comp,
   KatpodrNrec   : comp,
   KatmolNrec    : comp,
   KatstroyNrec  : comp,
@@ -15,11 +16,12 @@ table struct tForDistr (
   QtyForDistr   : double,
   QtyDistributed: double
 ) with index (
+  i00 = Nrec (unique, surrogate),
   i01 = KatpodrNrec + KatmolNrec + KatstroyNrec + KatmcNrec (unique)
 );
 
 table struct tStock (
-  Priority      : word,
+  Nrec          : comp,
   KatpodrNrec   : comp,
   KatmolNrec    : comp,
   KatstroyNrec  : comp,
@@ -28,7 +30,17 @@ table struct tStock (
   Qty           : double,
   QtyDistributed: double
 ) with index (
-  i01 = KatmcNrec + Priority + KatstroyNrec + KatpodrNrec + KatmolNrec
+  i00 = Nrec (unique, surrogate),
+  i01 = KatmcNrec + KatstroyNrec + KatpodrNrec + KatmolNrec
+);
+
+table struct tLink (
+  ForDistrNrec  : comp,
+  StockNrec     : comp,
+  Priority      : word,
+  QtyDistribute : double
+) with index (
+  i01 = ForDistrNrec + Priority
 );
 
 var
@@ -39,11 +51,53 @@ var
 
 create view
 as select *
-from tForDistr, tStock, katmc,
-     tForDistr brForDistr, tStock brStock
+from _stockSet, tForDistr, tStock, tLink, katmc, katstroy,
+     tForDistr brForDistr, tLink brLink, tStock brStock
 where ((
-  brForDistr.KatmcNrec == brStock.KatmcNrec
+  brForDistr.Nrec  == brLink.ForDistrNrec and
+  brLink.StockNrec == brStock.Nrec
 ));
+
+window wStock;
+browse br1;
+show(,,,5);
+table brForDistr;
+fields
+  if( getanykau(1, 2 , brForDistr.KatpodrNrec), givenanname(1), '') 'Подразделение': [20], protect;
+  if( getanykau(1, 60, brForDistr.KatmolNrec), givenanname(1), '') 'МОЛ': [20], protect;
+  if( getanykau(1, 40, brForDistr.KatstroyNrec), givenanname(1), '') 'Заказ': [20], protect;
+  if( getanykau(1, 4 , brForDistr.KatmcNrec), givenanname(1), '') 'МЦ': [20], protect;
+  brForDistr.KatmcObozn 'Обозначение': [20], protect;
+  brForDistr.QtyForDistr 'Для распр-я': [10,3], protect;
+  brForDistr.QtyDistributed 'Распределено': [10,3], protect;
+end;
+browse br2;
+show(,6,,);
+table brLink;
+fields
+  brLink.Priority 'Приоритет': [3], protect;
+  if( getanykau(1, 2 , brStock.KatpodrNrec) , givenanname(1), '') 'Подразделение': [20], protect;
+  if( getanykau(1, 60, brStock.KatmolNrec)  , givenanname(1), '') 'МОЛ': [20], protect;
+  if( getanykau(1, 40, brStock.KatstroyNrec), givenanname(1), '') 'Заказ': [20], protect;
+  if( getanykau(1, 4 , brStock.KatmcNrec)   , givenanname(1), '') 'МЦ': [20], protect;
+  brStock.Qty 'Кол-во':[10,3], protect;
+  brStock.QtyDistributed 'Распределено': [10,3], protect;
+  (brStock.Qty - brStock.QtyDistributed) 'Осталось для распр-я': [10,3], protect;
+  tLink.QtyDistribute 'Распределить': [10,3], noprotect;
+end;
+end;
+
+tableevent table brLink;
+  cmUpdateRecord:
+  {
+    update current brLink;
+  }
+  cmExprFieldChanged:
+  {
+    message(curfield);
+  }
+end; //tableevent brLink;
+
 
 function GetPriority(KatstroyNrec: comp; KatstroyName: string; KatstroyCode: string): word;
 {
@@ -88,21 +142,38 @@ function DistributeOnDate(aDate: date): boolean;
   {
     _stockSet := ss;
 
-    insert tStock (Priority,KatpodrNrec,KatmolNrec,KatstroyNrec,KatmcNrec,KatmcObozn,Qty,QtyDistributed)
-    select GetPriority(_stockSet.KatstroyNrec, katstroy.name, katstroy.code),
-           _stockSet.KatpodrNrec,
-           _stockSet.KatmolNrec,
-           _stockSet.KatstroyNrec,
-           _stockSet.KatmcNrec,
-           katmc.obozn,
-           _stockSet.Qty,
-           0
-    from _stockSet, katmc, katstroy
-    where ((
-      _stockSet.KatmcNrec    == katmc.nrec and
-      _stockSet.KatstroyNrec == katstroy.nrec
-    ));
+    delete all tStock;
 
+    _loop _stockSet
+    {
+      clearbuffer(#tStock);
+      tStock.KatpodrNrec    := _stockSet.KatpodrNrec;
+      tStock.KatmolNrec     := _stockSet.KatmolNrec;
+      tStock.KatstroyNrec   := _stockSet.KatstroyNrec;
+      tStock.KatmcNrec      := _stockSet.KatmcNrec;
+      if getfirst katmc where (( tStock.KatmcNrec == katmc.nrec )) = tsOk
+        tStock.KatmcObozn   := katmc.obozn;
+      tStock.Qty            := _stockSet.Qty;
+      insert current tStock;
+    }
+
+    delete all tLink;
+
+    _loop tStock
+    {
+      _loop tForDistr where ( tStock.KatmcNrec = tForDistr.KatmcNrec or
+                              (tStock.KatmcObozn = tForDistr.KatmcObozn and tStock.KatmcObozn <> '') )
+      {
+        clearbuffer(#tLink);
+        if getfirst katstroy where ((tStock.KatstroyNrec == katstroy.nrec)) = tsOk
+          tLink.Priority   := GetPriority(katstroy.nrec, katstroy.name, katstroy.code);
+        tLink.ForDistrNrec := tForDistr.Nrec;
+        tLink.StockNrec    := tStock.Nrec;
+        insert current tLink;
+      }
+    }
+
+    runwindowmodal(wStock);
     result := true;
   }
   else
