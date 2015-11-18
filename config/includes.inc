@@ -1225,3 +1225,6 @@
 /i:"../UTILS/Tests" 
 /i:"../COMMON/ContractId"
 /i:"../COMMON/OrgKPP"
+/i:"../COMMON/Stock"
+/i:"../COMMON/SqlHelper"
+/i:"../REGRADE/DistrMatByStock"
