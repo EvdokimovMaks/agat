@@ -1,0 +1,329 @@
+#include Stock.vih
+#include DistrMatByStock.vih
+#include Query.vih
+
+#component "M_MNPLAN"
+
+VipInterface Algoritm_5108 Implements oAlgoritm_Sys;
+Interface Algoritm_5108 '' (,hcNoContext,) EscClose, Cyan;
+
+sql query qInsertTmc =
+insert tmc (KatpodrNrec, KatmolNrec, KatstroyNrec, cKau1, cKau2, cKau3, cKau4, cKau5, cKau6, cKau7, cKau8, cKau9, KatmcNrec, Qty)
+select ks.cpodrfrom                   as KatpodrNrec,
+       ks.cmolfrom                    as KatmolNrec,
+       coalesce(spm.cobj,#comp(0))    as KatstroyNrec,
+       coalesce(spm.ckau[1],#comp(0)) as cKau1,
+       coalesce(spm.ckau[2],#comp(0)) as cKau2,
+       coalesce(spm.ckau[3],#comp(0)) as cKau3,
+       coalesce(spm.ckau[4],#comp(0)) as cKau4,
+       coalesce(spm.ckau[5],#comp(0)) as cKau5,
+       coalesce(spm.ckau[6],#comp(0)) as cKau6,
+       coalesce(spm.ckau[7],#comp(0)) as cKau7,
+       coalesce(spm.ckau[8],#comp(0)) as cKau8,
+       coalesce(spm.ckau[9],#comp(0)) as cKau9,
+       sps.cmcusl                     as KatmcNrec,
+       sum(sps.kolfact)               as Qty
+from katsopr ks
+join spsopr sps on sps.csopr=ks.nrec
+left join specmtr spm on spm.cotable=1110 and spm.csaldtune=#comp(0001000000000001h) and spm.cspec=sps.nrec
+where ks.nrec = :KatsoprNrec
+group by  ks.cpodrfrom,
+          ks.cmolfrom,
+          coalesce(spm.cobj,#comp(0)),
+          coalesce(spm.ckau[1],#comp(0)),
+          coalesce(spm.ckau[2],#comp(0)),
+          coalesce(spm.ckau[3],#comp(0)),
+          coalesce(spm.ckau[4],#comp(0)),
+          coalesce(spm.ckau[5],#comp(0)),
+          coalesce(spm.ckau[6],#comp(0)),
+          coalesce(spm.ckau[7],#comp(0)),
+          coalesce(spm.ckau[8],#comp(0)),
+          coalesce(spm.ckau[9],#comp(0)),
+          sps.cmcusl;
+
+sql query qSelectTgroup =
+select distinct KatpodrNrec, KatmolNrec, KatstroyNrec, cKau1, cKau2, cKau3, cKau4, cKau5, cKau6, cKau7, cKau8, cKau9
+from tmc;
+
+sql query qSelectTmc =
+select KatpodrNrec, KatmolNrec, KatstroyNrec, cKau1, cKau2, cKau3, cKau4, cKau5, cKau6, cKau7, cKau8, cKau9, KatmcNrec, Qty, 0 as Stock
+from tmc;
+
+table struct tmc (
+  KatpodrNrec: comp, KatmolNrec: comp, KatstroyNrec: comp,
+  cKau1: comp, cKau2: comp, cKau3: comp, cKau4: comp,
+  cKau5: comp, cKau6: comp, cKau7: comp, cKau8: comp,
+  cKau9: comp, KatmcNrec: comp, Qty: double, Stock: double
+) with index (
+  i01 = KatpodrNrec + KatmolNrec + KatstroyNrec +
+        cKau1 + cKau2 + cKau3 + cKau4 + cKau5 + cKau6 + cKau7 + cKau8 + cKau9 + KatmcNrec
+);
+
+table struct tGroup (
+  KatpodrNrec: comp, KatmolNrec: comp, KatstroyNrec: comp,
+  cKau1: comp, cKau2: comp, cKau3: comp, cKau4: comp,
+  cKau5: comp, cKau6: comp, cKau7: comp, cKau8: comp,
+  cKau9: comp
+);
+
+var
+  _paramsFactory    : AGAT::StockParamsFactory;
+  _stock            : AGAT::Stock;
+  _stockSet         : AGAT::IStockSet(StockSet);
+  _regradeDocManager: AGAT::RegradeDocManager;
+  _distrMatByStock  : AGAT::DistrMatByStock;
+
+create view
+var
+  _katsoprNrec: comp;
+as select *
+from _stockSet, katsopr, tGroup, tmc, tmc tmcChild
+where ((
+  _katsoprNrec        == katsopr.nrec and
+  tGroup.KatpodrNrec  == tmcChild.KatpodrNrec and
+  tGroup.KatmolNrec   == tmcChild.KatmolNrec and
+  tGroup.KatstroyNrec == tmcChild.KatstroyNrec and
+  tGroup.cKau1        == tmcChild.cKau1 and
+  tGroup.cKau2        == tmcChild.cKau2 and
+  tGroup.cKau3        == tmcChild.cKau3 and
+  tGroup.cKau4        == tmcChild.cKau4 and
+  tGroup.cKau5        == tmcChild.cKau5 and
+  tGroup.cKau6        == tmcChild.cKau6 and
+  tGroup.cKau7        == tmcChild.cKau7 and
+  tGroup.cKau8        == tmcChild.cKau8 and
+  tGroup.cKau9        == tmcChild.cKau9
+));
+
+procedure FillTmc(aKatsoprNrec: comp);
+{
+  var s: longint;
+  sqlDropTmpTable('tmc');
+  sqlfreestr(s);
+  sqladdstr(s, 'table tmc (');
+  sqladdstr(s, '  KatpodrNrec: comp, KatmolNrec: comp, KatstroyNrec: comp,');
+  sqladdstr(s, '  cKau1: comp, cKau2: comp, cKau3: comp, cKau4: comp,');
+  sqladdstr(s, '  cKau5: comp, cKau6: comp, cKau7: comp, cKau8: comp,');
+  sqladdstr(s, '  cKau9: comp, KatmcNrec: comp, Qty: double');
+  sqladdstr(s, ') with index (');
+  sqladdstr(s, '  i01 = KatpodrNrec + KatmolNrec + KatstroyNrec +');
+  sqladdstr(s, '        cKau1 + cKau2 + cKau3 + cKau4 + cKau5 + cKau6 + cKau7 + cKau8 + cKau9 + KatmcNrec');
+  sqladdstr(s, ');');
+  sqlcreatetmptable(s, ctmNormal);
+
+  var q: IQuery;
+  q := queryManager.createQuery(qInsertTmc);
+  q.setParam('KatsoprNrec', aKatsoprNrec);
+  if q.execute.errorcode != tsOk
+  {
+    message('Ошибка выполнения запроса выборки МЦ', error);
+    exit;
+  }
+}
+
+procedure PrepareTables(aKatsoprNrec: comp);
+var
+  q: IQuery;
+  rs: IResultSet;
+{
+
+  FillTmc(aKatsoprNrec);
+
+  q := queryManager.createQuery(qSelectTgroup);
+  rs := q.getResultSet;
+  if rs = nullref or q.errorCode != tsOk
+  {
+    message('Ошибка выполнения запроса qSelectTgroup: '+q.errorCode, error);
+    exit;
+  }
+  delete all tgroup;
+  sqlCopyInto(rs, #tgroup, false);
+
+  q := queryManager.createQuery(qSelectTmc);
+  rs := q.getResultSet;
+  if rs = nullref or q.errorCode != tsOk
+  {
+    message('Ошибка выполнения запроса qSelectTmc: '+q.errorCode, error);
+    exit;
+  }
+  delete all tmc;
+  sqlCopyInto(rs, #tmc, false);
+
+}
+
+procedure FillStock;
+{
+  var _params: AGAT::IStockParams;
+
+  _loop tGroup
+  {
+    _params := _paramsFactory.Get(StockParamsType_NoInit);
+
+    _params.OnDate := katsopr.dsopr;
+
+    _params.SetGroupByFlag(WarehouseSectionFlag_Katpodr)
+           .SetGroupByFlag(WarehouseSectionFlag_Katmol)
+           .SetGroupByFlag(WarehouseSectionFlag_Katstroy)
+           .SetGroupByFlag(WarehouseSectionFlag_Kau1)
+           .SetGroupByFlag(WarehouseSectionFlag_Kau2)
+           .SetGroupByFlag(WarehouseSectionFlag_Kau3)
+           .SetGroupByFlag(WarehouseSectionFlag_Kau4)
+           .SetGroupByFlag(WarehouseSectionFlag_Kau5)
+           .SetGroupByFlag(WarehouseSectionFlag_Kau6)
+           .SetGroupByFlag(WarehouseSectionFlag_Kau7)
+           .SetGroupByFlag(WarehouseSectionFlag_Kau8)
+           .SetGroupByFlag(WarehouseSectionFlag_Kau9);
+
+    _params.SetFilterFlag(WarehouseSectionFlag_Katpodr)
+           .SetFilterFlag(WarehouseSectionFlag_Katmol)
+           .SetFilterFlag(WarehouseSectionFlag_Katstroy)
+           .SetFilterFlag(WarehouseSectionFlag_Kau1)
+           .SetFilterFlag(WarehouseSectionFlag_Kau2)
+           .SetFilterFlag(WarehouseSectionFlag_Kau3)
+           .SetFilterFlag(WarehouseSectionFlag_Kau4)
+           .SetFilterFlag(WarehouseSectionFlag_Kau5)
+           .SetFilterFlag(WarehouseSectionFlag_Kau6)
+           .SetFilterFlag(WarehouseSectionFlag_Kau7)
+           .SetFilterFlag(WarehouseSectionFlag_Kau8)
+           .SetFilterFlag(WarehouseSectionFlag_Kau9)
+           .SetFilterFlag(WarehouseSectionFlag_Katmc);
+
+    _params.AddNrecToFilter(WarehouseSectionFlag_Katpodr , tGroup.KatpodrNrec)
+           .AddNrecToFilter(WarehouseSectionFlag_Katmol  , tGroup.KatmolNrec)
+           .AddNrecToFilter(WarehouseSectionFlag_Katstroy, tGroup.KatstroyNrec)
+           .AddNrecToFilter(WarehouseSectionFlag_Kau1    , tGroup.cKau1)
+           .AddNrecToFilter(WarehouseSectionFlag_Kau2    , tGroup.cKau2)
+           .AddNrecToFilter(WarehouseSectionFlag_Kau3    , tGroup.cKau3)
+           .AddNrecToFilter(WarehouseSectionFlag_Kau4    , tGroup.cKau4)
+           .AddNrecToFilter(WarehouseSectionFlag_Kau5    , tGroup.cKau5)
+           .AddNrecToFilter(WarehouseSectionFlag_Kau6    , tGroup.cKau6)
+           .AddNrecToFilter(WarehouseSectionFlag_Kau7    , tGroup.cKau7)
+           .AddNrecToFilter(WarehouseSectionFlag_Kau8    , tGroup.cKau8)
+           .AddNrecToFilter(WarehouseSectionFlag_Kau9    , tGroup.cKau9);
+
+    _loop tmcChild
+      _params.AddNrecToFilter(WarehouseSectionFlag_Katmc, tmcChild.KatmcNrec);
+
+    var ss: IStockSet;
+    ss := _stock.GetStock(_params);
+
+    if ss != nullref
+    {
+      _stockSet := ss;
+      _loop _stockSet
+      {
+        if getfirst tmc where ((_stockSet.KatpodrNrec  == tmc.KatpodrNrec  and
+                                _stockSet.KatmolNrec   == tmc.KatmolNrec   and
+                                _stockSet.KatstroyNrec == tmc.KatstroyNrec and
+                                _stockSet.cKau1        == tmc.cKau1        and
+                                _stockSet.cKau2        == tmc.cKau2        and
+                                _stockSet.cKau3        == tmc.cKau3        and
+                                _stockSet.cKau4        == tmc.cKau4        and
+                                _stockSet.cKau5        == tmc.cKau5        and
+                                _stockSet.cKau6        == tmc.cKau6        and
+                                _stockSet.cKau7        == tmc.cKau7        and
+                                _stockSet.cKau8        == tmc.cKau8        and
+                                _stockSet.cKau9        == tmc.cKau9        and
+                                _stockSet.KatmcNrec    == tmc.KatmcNrec
+                              )) = tsOk
+          update current tmc set tmc.Stock := _stockSet.Qty;
+      }
+    }
+
+    getvipref(_stockSet, 'AGAT::StockSet');
+    freevipinterface(ss);
+    freevipinterface(_params);
+
+  } //_loop tGroup
+
+}
+
+procedure RunDistr;
+{
+  var kau: tSpecmtrKau;
+
+  _distrMatByStock.ClearWarehousePartsForDistr;
+
+  if ( getfirst tmc where (tmc.Qty > tmc.Stock) ) <> tsOk
+  {
+    message('Все МЦ есть в наличии', Information);
+    exit;
+  }
+
+  _loop tmc where (tmc.Qty > tmc.Stock)
+  {
+    kau[1] := tmc.cKau1;
+    kau[2] := tmc.cKau2;
+    kau[3] := tmc.cKau3;
+    kau[4] := tmc.cKau4;
+    kau[5] := tmc.cKau5;
+    kau[6] := tmc.cKau6;
+    kau[7] := tmc.cKau7;
+    kau[8] := tmc.cKau8;
+    kau[9] := tmc.cKau9;
+    _distrMatByStock.AddWarehousePartForDistr(tmc.KatpodrNrec,tmc.KatmolNrec,tmc.KatstroyNrec,tmc.KatmcNrec, kau, tmc.Qty - tmc.Stock);
+  }
+
+  if _distrMatByStock.PrepareOnDate(katsopr.dsopr)
+  {
+    _distrMatByStock.AutoDistribute;
+    if _distrMatByStock.ShowUI('Распределение') = cmDefault
+    {
+      var aMoveSet: AGAT::IMatMoveSet;
+      aMoveSet := _distrMatByStock.GetMatMoveSet;
+      var a: tCompArray;
+      a := _regradeDocManager.CreateRegradeDocs(aMoveSet, katsopr.dsopr, katsopr.nsopr);
+      if Count(a) > 0
+        runinterfacenomodal(L_SKLAD::Peresort, a[0]);
+    }
+  }
+
+}
+
+Function RunInter(wflag: word; var pt: TRecAcc): boolean;
+{
+  result := false;
+  wflag := wflag;
+  _katsoprNrec := pt.cpNrec;
+  if getfirst katsopr != tsOk
+  {
+    message('Не найдена накладная nrec='+string(pt.cpNrec,0,0), error);
+    exit;
+  }
+  PrepareTables(pt.cpNrec);
+  FillStock;
+  RunDistr;
+  result := true;
+}
+
+function InitInter(var pt: TRecAcc): boolean;
+{
+  pt.Position := pt.Position;
+  result := true;
+}
+
+function GetNum: word;
+{
+  GetNum := 5108;
+}
+
+function GetName: string;
+{
+  GetName := 'АГАТ. Перенос остатков МЦ между заказами в накладной';
+}
+
+function GetMemo (st:oSteckCommonString): boolean;
+{
+  GetMemo := true;
+  st.push(string(''));
+}
+
+function GetNameInter: string;
+{
+  GetNameInter := 'Algoritm_5108' ;
+}
+
+function GetNameInterPr: string;
+{
+  GetNameInterPr := 'AlgoritmSetup_5108' ;
+}
+end.

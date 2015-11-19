@@ -13,11 +13,13 @@ table struct tForDistr (
   KatstroyNrec  : comp,
   KatmcNrec     : comp,
   KatmcObozn    : string[150],
+  Kau           : tSpecmtrKau,
   QtyForDistr   : double,
   QtyDistributed: double
 ) with index (
   i00 = Nrec (unique, surrogate),
-  i01 = KatpodrNrec + KatmolNrec + KatstroyNrec + KatmcNrec (unique)
+  i01 = KatpodrNrec + KatmolNrec + KatstroyNrec + KatmcNrec +
+        Kau[1] + Kau[2] + Kau[3] + Kau[4] + Kau[5] + Kau[6] + Kau[7] + Kau[8] + Kau[9] (unique)
 );
 
 table struct tStock (
@@ -27,11 +29,13 @@ table struct tStock (
   KatstroyNrec  : comp,
   KatmcNrec     : comp,
   KatmcObozn    : string[150],
+  Kau           : tSpecmtrKau,
   Qty           : double,
   QtyDistributed: double
 ) with index (
   i00 = Nrec (unique, surrogate),
-  i01 = KatmcNrec + KatstroyNrec + KatpodrNrec + KatmolNrec
+  i01 = KatmcNrec + KatstroyNrec + KatpodrNrec + KatmolNrec +
+        Kau[1] + Kau[2] + Kau[3] + Kau[4] + Kau[5] + Kau[6] + Kau[7] + Kau[8] + Kau[9] (unique)
 );
 
 table struct tLink (
@@ -40,7 +44,8 @@ table struct tLink (
   Priority      : word,
   QtyDistribute : double
 ) with index (
-  i01 = ForDistrNrec + Priority
+  i01 = ForDistrNrec + Priority,
+  i02 = StockNrec
 );
 
 var
@@ -48,56 +53,306 @@ var
   _params       : AGAT::IStockParams;
   _stock        : AGAT::Stock;
   _stockSet     : AGAT::IStockSet;
+  _matMoveSet   : AGAT::IMatMoveSet(MatMoveSet);
+  _wkau         : array[1..9] of word;
+  _skau         : array[1..9] of string;
 
 create view
 as select *
-from _stockSet, tForDistr, tStock, tLink, katmc, katstroy,
+from _stockSet, tForDistr, tStock, tLink, katmc, katstroy, _matMoveSet, saldtune, katrole,
      tForDistr brForDistr, tLink brLink, tStock brStock
 where ((
   brForDistr.Nrec  == brLink.ForDistrNrec and
   brLink.StockNrec == brStock.Nrec
 ));
 
-window wStock;
+//вьюха для автоподбора распределения
+create view v
+as select *
+from tForDistr, tLink, tStock
+where ((
+  tForDistr.Nrec  == tLink.ForDistrNrec and (tLink.Priority < 5) and
+  tLink.StockNrec == tStock.Nrec and (
+    tForDistr.KatpodrNrec  <> tStock.KatpodrNrec or
+    tForDistr.KatmolNrec   <> tStock.KatmolNrec or
+    tForDistr.KatstroyNrec <> tStock.KatstroyNrec or
+    tForDistr.KatmcNrec    <> tStock.KatmcNrec or
+    tForDistr.Kau[1]       <> tStock.Kau[1] or
+    tForDistr.Kau[2]       <> tStock.Kau[2] or
+    tForDistr.Kau[3]       <> tStock.Kau[3] or
+    tForDistr.Kau[4]       <> tStock.Kau[4] or
+    tForDistr.Kau[5]       <> tStock.Kau[5] or
+    tForDistr.Kau[6]       <> tStock.Kau[6] or
+    tForDistr.Kau[7]       <> tStock.Kau[7] or
+    tForDistr.Kau[8]       <> tStock.Kau[8] or
+    tForDistr.Kau[9]       <> tStock.Kau[9]
+  )
+));
+
+//вьюха используется в GetMatMoveSet
+create view vr
+as select *
+from tLink, tForDistr, tStock
+where ((
+  tLink.ForDistrNrec == tForDistr.Nrec and
+  tLink.StockNrec == tStock.Nrec
+)) and (tLink.QtyDistribute != 0);
+
+//#region Расчет распределенных количеств по МЦ для распределения и по распределяемым МЦ
+
+create view vLinkSum
+var
+  curStockNrec: comp;
+  curForDistrNrec: comp;
+as select *
+from tLink StockLink, tLink ForDistrLink
+where ((
+  curStockNrec == StockLink.StockNrec and (StockLink.QtyDistribute <> 0) and
+  curForDistrNrec == ForDistrLink.ForDistrNrec and (ForDistrLink.QtyDistribute <> 0)
+));
+
+function GetStockQtyDistributed(aStockNrec: comp): double;
+{
+  vLinkSum.curStockNrec := aStockNrec;
+  var rslt: double; rslt := 0;
+  vLinkSum._loop StockLink
+    rslt += vLinkSum.StockLink.QtyDistribute;
+  result := rslt;
+}
+
+function GetForDistrQtyDistributed(aForDistrNrec: comp): double;
+{
+  vLinkSum.curForDistrNrec := aForDistrNrec;
+  var rslt: double; rslt := 0;
+  vLinkSum._loop ForDistrLink
+    rslt += vLinkSum.ForDistrLink.QtyDistribute;
+  result := rslt;
+}
+
+//#endregion
+
+//Основной пользовательский интерфейс для работы с распределением МЦ
+window wMain doaccept, escClose;
+
+function GetDistrColor(aQty, aQtyDistributed: double): word;
+{
+  if aQty > aQtyDistributed
+    result := 17
+  else if aQty = aQtyDistributed
+    result := 78
+  else
+    result := 10;
+}
+
 browse br1;
 show(,,,5);
 table brForDistr;
 fields
-  if( getanykau(1, 2 , brForDistr.KatpodrNrec), givenanname(1), '') 'Подразделение': [20], protect;
-  if( getanykau(1, 60, brForDistr.KatmolNrec), givenanname(1), '') 'МОЛ': [20], protect;
-  if( getanykau(1, 40, brForDistr.KatstroyNrec), givenanname(1), '') 'Заказ': [20], protect;
+  if( getanykau(1, 2 , brForDistr.KatpodrNrec), givenanname(1), '') 'Подразделение': [10], protect;
+  if( getanykau(1, 60, brForDistr.KatmolNrec), givenanname(1), '') 'МОЛ': [10], protect;
+  if( getanykau(1, 40, brForDistr.KatstroyNrec), givenanname(1), '') 'Заказ': [10], protect;
   if( getanykau(1, 4 , brForDistr.KatmcNrec), givenanname(1), '') 'МЦ': [20], protect;
-  brForDistr.KatmcObozn 'Обозначение': [20], protect;
-  brForDistr.QtyForDistr 'Для распр-я': [10,3], protect;
-  brForDistr.QtyDistributed 'Распределено': [10,3], protect;
+  brForDistr.KatmcObozn 'Обозначение': [10], protect;
+
+  [brForDistrKau1] if( getanykau(1, _wkau[1], brForDistr.Kau[1]), givenanname(1), '') 'КАУ1': [20], protect;
+  [brForDistrKau2] if( getanykau(1, _wkau[2], brForDistr.Kau[2]), givenanname(1), '') 'КАУ2': [20], protect;
+  [brForDistrKau3] if( getanykau(1, _wkau[3], brForDistr.Kau[3]), givenanname(1), '') 'КАУ3': [20], protect;
+  [brForDistrKau4] if( getanykau(1, _wkau[4], brForDistr.Kau[4]), givenanname(1), '') 'КАУ4': [20], protect;
+  [brForDistrKau5] if( getanykau(1, _wkau[5], brForDistr.Kau[5]), givenanname(1), '') 'КАУ5': [20], protect;
+  [brForDistrKau6] if( getanykau(1, _wkau[6], brForDistr.Kau[6]), givenanname(1), '') 'КАУ6': [20], protect;
+  [brForDistrKau7] if( getanykau(1, _wkau[7], brForDistr.Kau[7]), givenanname(1), '') 'КАУ7': [20], protect;
+  [brForDistrKau8] if( getanykau(1, _wkau[8], brForDistr.Kau[8]), givenanname(1), '') 'КАУ8': [20], protect;
+  [brForDistrKau9] if( getanykau(1, _wkau[9], brForDistr.Kau[9]), givenanname(1), '') 'КАУ9': [20], protect;
+
+  brForDistr.QtyForDistr 'Для распр-я': [12,3], protect, {font={backcolor=GetDistrColor(brForDistr.QtyForDistr, brForDistr.QtyDistributed);}};
+  brForDistr.QtyDistributed 'Распределено': [12,3], protect, {font={backcolor=GetDistrColor(brForDistr.QtyForDistr, brForDistr.QtyDistributed);}};
+  (brForDistr.QtyForDistr - brForDistr.QtyDistributed) 'Осталось распределить': [12,3], protect, {font={backcolor=GetDistrColor(brForDistr.QtyForDistr, brForDistr.QtyDistributed);}};
 end;
+
 browse br2;
 show(,6,,);
 table brLink;
 fields
   brLink.Priority 'Приоритет': [3], protect;
-  if( getanykau(1, 2 , brStock.KatpodrNrec) , givenanname(1), '') 'Подразделение': [20], protect;
-  if( getanykau(1, 60, brStock.KatmolNrec)  , givenanname(1), '') 'МОЛ': [20], protect;
-  if( getanykau(1, 40, brStock.KatstroyNrec), givenanname(1), '') 'Заказ': [20], protect;
+  if( getanykau(1, 2 , brStock.KatpodrNrec) , givenanname(1), '') 'Подразделение': [10], protect;
+  if( getanykau(1, 60, brStock.KatmolNrec)  , givenanname(1), '') 'МОЛ': [10], protect;
+  if( getanykau(1, 40, brStock.KatstroyNrec), givenanname(1), '') 'Заказ': [10], protect;
   if( getanykau(1, 4 , brStock.KatmcNrec)   , givenanname(1), '') 'МЦ': [20], protect;
+  brStock.KatmcObozn 'Обозначение':[10], protect;
+
+  [brStockKau1] if( getanykau(1, _wkau[1], brStock.Kau[1]), givenanname(1), '') 'КАУ1': [20], protect;
+  [brStockKau2] if( getanykau(1, _wkau[2], brStock.Kau[2]), givenanname(1), '') 'КАУ2': [20], protect;
+  [brStockKau3] if( getanykau(1, _wkau[3], brStock.Kau[3]), givenanname(1), '') 'КАУ3': [20], protect;
+  [brStockKau4] if( getanykau(1, _wkau[4], brStock.Kau[4]), givenanname(1), '') 'КАУ4': [20], protect;
+  [brStockKau5] if( getanykau(1, _wkau[5], brStock.Kau[5]), givenanname(1), '') 'КАУ5': [20], protect;
+  [brStockKau6] if( getanykau(1, _wkau[6], brStock.Kau[6]), givenanname(1), '') 'КАУ6': [20], protect;
+  [brStockKau7] if( getanykau(1, _wkau[7], brStock.Kau[7]), givenanname(1), '') 'КАУ7': [20], protect;
+  [brStockKau8] if( getanykau(1, _wkau[8], brStock.Kau[8]), givenanname(1), '') 'КАУ8': [20], protect;
+  [brStockKau9] if( getanykau(1, _wkau[9], brStock.Kau[9]), givenanname(1), '') 'КАУ9': [20], protect;
+
   brStock.Qty 'Кол-во':[10,3], protect;
   brStock.QtyDistributed 'Распределено': [10,3], protect;
   (brStock.Qty - brStock.QtyDistributed) 'Осталось для распр-я': [10,3], protect;
-  tLink.QtyDistribute 'Распределить': [10,3], noprotect;
+  brLink.QtyDistribute 'Распределить': [10,3], noprotect;
 end;
-end;
+
+procedure RecalcStockDistributedQty;
+{
+  if isvalid(#brStock)
+  {
+    brStock.QtyDistributed := GetStockQtyDistributed(brStock.Nrec);
+    update current brStock;
+    if brStock.QtyDistributed > brStock.Qty
+    {
+      brLink.QtyDistribute := brLink.QtyDistribute + (brStock.Qty - brStock.QtyDistributed);
+      update current brLink;
+      RecalcStockDistributedQty;
+    }
+  }
+}
+
+procedure RecalcForDistrDistributedQty;
+{
+  if isValid(#brForDistr)
+  {
+    brForDistr.QtyDistributed := GetForDistrQtyDistributed(brForDistr.Nrec);
+    update current brForDistr;
+    if brForDistr.QtyDistributed > brForDistr.QtyForDistr
+    {
+      brLink.QtyDistribute := brLink.QtyDistribute + (brForDistr.QtyForDistr - brForDistr.QtyDistributed);
+      update current brLink;
+      RecalcStockDistributedQty;
+      RecalcForDistrDistributedQty;
+    }
+  }
+}
+
+procedure RecalcDistributedQty;
+{
+  RecalcStockDistributedQty;
+  RecalcForDistrDistributedQty;
+}
 
 tableevent table brLink;
   cmUpdateRecord:
   {
     update current brLink;
-  }
-  cmExprFieldChanged:
-  {
-    message(curfield);
+    RecalcDistributedQty;
+    rereadrecord(#brForDistr);
   }
 end; //tableevent brLink;
 
+handleevent
+cmInit:
+{
+
+  if getfirst saldtune where ((0001000000000001h == saldtune.nrec)) != tsOk
+  {
+    message('Ошибка получения настройки целевого учета', error);
+    closewindowex(wMain, cmCancel);
+  }
+
+  var i: integer;
+  for (i:=1; i<=9; ++i)
+  {
+    _wkau[i] := saldtune.wkau[i];
+    if getfirst katrole where ((saldtune.crole[i] == katrole.nrec)) = tsOk
+      _skau[i] := 'КАУ'+i+' '+katrole.name
+    else
+      _skau[i] := 'КАУ'+i;
+  }
+
+  SetColumnTitle(br1, #brForDistrKau1, _skau[1]); SetColumnTitle(br2, #brStockKau1, _skau[1]);
+  SetColumnTitle(br1, #brForDistrKau2, _skau[2]); SetColumnTitle(br2, #brStockKau2, _skau[2]);
+  SetColumnTitle(br1, #brForDistrKau3, _skau[3]); SetColumnTitle(br2, #brStockKau3, _skau[3]);
+  SetColumnTitle(br1, #brForDistrKau4, _skau[4]); SetColumnTitle(br2, #brStockKau4, _skau[4]);
+  SetColumnTitle(br1, #brForDistrKau5, _skau[5]); SetColumnTitle(br2, #brStockKau5, _skau[5]);
+  SetColumnTitle(br1, #brForDistrKau6, _skau[6]); SetColumnTitle(br2, #brStockKau6, _skau[6]);
+  SetColumnTitle(br1, #brForDistrKau7, _skau[7]); SetColumnTitle(br2, #brStockKau7, _skau[7]);
+  SetColumnTitle(br1, #brForDistrKau8, _skau[8]); SetColumnTitle(br2, #brStockKau8, _skau[8]);
+  SetColumnTitle(br1, #brForDistrKau9, _skau[9]); SetColumnTitle(br2, #brStockKau9, _skau[9]);
+
+  var maxColumn: integer; maxColumn := 0;
+  _loop tForDistr
+  {
+    for(i:=maxColumn+1;i<=9;++i)
+      if tForDistr.Kau[i] != 0
+        maxColumn := i;
+  }
+  SetFieldVisible(#brForDistrKau1, maxColumn >=1);
+  SetFieldVisible(#brForDistrKau2, maxColumn >=2);
+  SetFieldVisible(#brForDistrKau3, maxColumn >=3);
+  SetFieldVisible(#brForDistrKau4, maxColumn >=4);
+  SetFieldVisible(#brForDistrKau5, maxColumn >=5);
+  SetFieldVisible(#brForDistrKau6, maxColumn >=6);
+  SetFieldVisible(#brForDistrKau7, maxColumn >=7);
+  SetFieldVisible(#brForDistrKau8, maxColumn >=8);
+  SetFieldVisible(#brForDistrKau9, maxColumn  =9);
+
+  maxColumn := 0;
+  _loop tStock
+  {
+    for(i:=maxColumn+1;i<=9;++i)
+      if tStock.Kau[i] != 0
+        maxColumn := i;
+  }
+  SetFieldVisible(#brStockKau1, maxColumn >=1);
+  SetFieldVisible(#brStockKau2, maxColumn >=2);
+  SetFieldVisible(#brStockKau3, maxColumn >=3);
+  SetFieldVisible(#brStockKau4, maxColumn >=4);
+  SetFieldVisible(#brStockKau5, maxColumn >=5);
+  SetFieldVisible(#brStockKau6, maxColumn >=6);
+  SetFieldVisible(#brStockKau7, maxColumn >=7);
+  SetFieldVisible(#brStockKau8, maxColumn >=8);
+  SetFieldVisible(#brStockKau9, maxColumn  =9);
+
+}
+end;
+
+end; //window wMain
+
+function ShowUI(aTitle: string): word;
+{
+  SetWindowTitle(wMain, aTitle);
+  result := runwindowmodal(wMain);
+}
+
+procedure AutoDistribute;
+var
+  dStock, dForDistr, d: double;
+{
+  //автораспределение
+  v._loop tForDistr
+  {
+    if v.getfirst tLink = tsOk
+    {
+      do
+      {
+        if v.getfirst tStock = tsOk
+        {
+          dStock    := v.tStock.Qty - v.tStock.QtyDistributed;
+          dForDistr := v.tForDistr.QtyForDistr - v.tForDistr.QtyDistributed;
+
+          if dForDistr > dStock d := dStock
+          else d := dForDistr;
+
+          if d > 0
+          {
+            v.tStock.QtyDistributed += d;
+            v.update current tStock;
+
+            v.tLink.QtyDistribute := d
+            v.update current tLink;
+
+            v.tForDistr.QtyDistributed += d;
+          }
+
+        }
+      } while ( (v.getnext tLink = tsOk) and (v.tForDistr.QtyForDistr > v.tForDistr.QtyDistributed) );
+      v.update current tForDistr;
+    }
+  }
+}
 
 function GetPriority(KatstroyNrec: comp; KatstroyName: string; KatstroyCode: string): word;
 {
@@ -113,7 +368,7 @@ function GetPriority(KatstroyNrec: comp; KatstroyName: string; KatstroyCode: str
     result := 5;
 }
 
-function DistributeOnDate(aDate: date): boolean;
+function PrepareOnDate(aDate: date): boolean;
 {
   result := false;
 
@@ -122,8 +377,17 @@ function DistributeOnDate(aDate: date): boolean;
   _params.OnDate := aDate;
 
   _params.SetGroupByFlag(WarehouseSectionFlag_Katpodr)
-        .SetGroupByFlag(WarehouseSectionFlag_Katmol)
-        .SetGroupByFlag(WarehouseSectionFlag_Katstroy);
+         .SetGroupByFlag(WarehouseSectionFlag_Katmol)
+         .SetGroupByFlag(WarehouseSectionFlag_Katstroy)
+         .SetGroupByFlag(WarehouseSectionFlag_Kau1)
+         .SetGroupByFlag(WarehouseSectionFlag_Kau2)
+         .SetGroupByFlag(WarehouseSectionFlag_Kau3)
+         .SetGroupByFlag(WarehouseSectionFlag_Kau4)
+         .SetGroupByFlag(WarehouseSectionFlag_Kau5)
+         .SetGroupByFlag(WarehouseSectionFlag_Kau6)
+         .SetGroupByFlag(WarehouseSectionFlag_Kau7)
+         .SetGroupByFlag(WarehouseSectionFlag_Kau8)
+         .SetGroupByFlag(WarehouseSectionFlag_Kau9);
 
   _params.SetFilterFlag(WarehouseSectionFlag_Katmc);
 
@@ -151,6 +415,15 @@ function DistributeOnDate(aDate: date): boolean;
       tStock.KatmolNrec     := _stockSet.KatmolNrec;
       tStock.KatstroyNrec   := _stockSet.KatstroyNrec;
       tStock.KatmcNrec      := _stockSet.KatmcNrec;
+      tStock.Kau[1]         := _stockSet.cKau1;
+      tStock.Kau[2]         := _stockSet.cKau2;
+      tStock.Kau[3]         := _stockSet.cKau3;
+      tStock.Kau[4]         := _stockSet.cKau4;
+      tStock.Kau[5]         := _stockSet.cKau5;
+      tStock.Kau[6]         := _stockSet.cKau6;
+      tStock.Kau[7]         := _stockSet.cKau7;
+      tStock.Kau[8]         := _stockSet.cKau8;
+      tStock.Kau[9]         := _stockSet.cKau9;
       if getfirst katmc where (( tStock.KatmcNrec == katmc.nrec )) = tsOk
         tStock.KatmcObozn   := katmc.obozn;
       tStock.Qty            := _stockSet.Qty;
@@ -173,14 +446,13 @@ function DistributeOnDate(aDate: date): boolean;
       }
     }
 
-    runwindowmodal(wStock);
     result := true;
   }
   else
     result := false;
 }
 
-procedure AddWarehousePartForDistr(aKatpodrNrec, aKatmolNrec, aKatstroyNrec, aKatmcNrec: comp; aQty: double);
+procedure AddWarehousePartForDistr(aKatpodrNrec, aKatmolNrec, aKatstroyNrec, aKatmcNrec: comp; aKau: tSpecmtrKau; aQty: double);
 {
   clearbuffer(#tForDistr);
   tForDistr.KatpodrNrec  := aKatpodrNrec;
@@ -188,6 +460,15 @@ procedure AddWarehousePartForDistr(aKatpodrNrec, aKatmolNrec, aKatstroyNrec, aKa
   tForDistr.KatstroyNrec := aKatstroyNrec;
   tForDistr.KatmcNrec    := aKatmcNrec;
   tForDistr.KatmcObozn   := if(getfirst katmc where ((aKatmcNrec == katmc.nrec)) = tsOk, katmc.obozn, '');
+  tForDistr.Kau[1]       := aKau[1];
+  tForDistr.Kau[2]       := aKau[2];
+  tForDistr.Kau[3]       := aKau[3];
+  tForDistr.Kau[4]       := aKau[4];
+  tForDistr.Kau[5]       := aKau[5];
+  tForDistr.Kau[6]       := aKau[6];
+  tForDistr.Kau[7]       := aKau[7];
+  tForDistr.Kau[8]       := aKau[8];
+  tForDistr.Kau[9]       := aKau[9];
   tForDistr.QtyForDistr  := aQty ;
   insert current tForDistr;
 }
@@ -195,6 +476,52 @@ procedure AddWarehousePartForDistr(aKatpodrNrec, aKatmolNrec, aKatstroyNrec, aKa
 procedure ClearWarehousePartsForDistr;
 {
   delete all tForDistr;
+}
+
+function GetMatMoveSet: IMatMoveSet;
+{
+  result := nullref;
+  if not loadvipref(_matMoveSet, 'AGAT::MatMoveSet') exit;
+  vr._loop tLink
+  {
+    clearbuffer(#_matMoveSet);
+    if vr.getfirst tStock = tsOk
+    {
+      _matMoveSet.FromKatpodrNrec  := vr.tStock.KatpodrNrec;
+      _matMoveSet.FromKatmolNrec   := vr.tStock.KatmolNrec;
+      _matMoveSet.FromKatstroyNrec := vr.tStock.KatstroyNrec;
+      _matMoveSet.FromKatmcNrec    := vr.tStock.KatmcNrec;
+      _matMoveSet.SetFromKau(1, vr.tStock.Kau[1]);
+      _matMoveSet.SetFromKau(2, vr.tStock.Kau[2]);
+      _matMoveSet.SetFromKau(3, vr.tStock.Kau[3]);
+      _matMoveSet.SetFromKau(4, vr.tStock.Kau[4]);
+      _matMoveSet.SetFromKau(5, vr.tStock.Kau[5]);
+      _matMoveSet.SetFromKau(6, vr.tStock.Kau[6]);
+      _matMoveSet.SetFromKau(7, vr.tStock.Kau[7]);
+      _matMoveSet.SetFromKau(8, vr.tStock.Kau[8]);
+      _matMoveSet.SetFromKau(9, vr.tStock.Kau[9]);
+    }
+    if vr.getfirst tForDistr = tsOk
+    {
+      _matMoveSet.ToKatpodrNrec    := vr.tForDistr.KatpodrNrec;
+      _matMoveSet.ToKatmolNrec     := vr.tForDistr.KatmolNrec;
+      _matMoveSet.ToKatstroyNrec   := vr.tForDistr.KatstroyNrec;
+      _matMoveSet.ToKatmcNrec      := vr.tForDistr.KatmcNrec;
+      _matMoveSet.SetToKau(1, vr.tForDistr.Kau[1]);
+      _matMoveSet.SetToKau(2, vr.tForDistr.Kau[2]);
+      _matMoveSet.SetToKau(3, vr.tForDistr.Kau[3]);
+      _matMoveSet.SetToKau(4, vr.tForDistr.Kau[4]);
+      _matMoveSet.SetToKau(5, vr.tForDistr.Kau[5]);
+      _matMoveSet.SetToKau(6, vr.tForDistr.Kau[6]);
+      _matMoveSet.SetToKau(7, vr.tForDistr.Kau[7]);
+      _matMoveSet.SetToKau(8, vr.tForDistr.Kau[8]);
+      _matMoveSet.SetToKau(9, vr.tForDistr.Kau[9]);
+    }
+    _matMoveSet.Qty                := vr.tLink.QtyDistribute;
+    insert current _matMoveSet;
+  }
+  result := _matMoveSet;
+  GetVipRef(_matMoveSet, 'AGAT::MatMoveSet');
 }
 
 end.

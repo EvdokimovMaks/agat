@@ -1,0 +1,160 @@
+#include Peresort.vih
+#include DistrMatByStock.vih
+#include Stock.vih
+
+#component "AGAT"
+
+interface RegradeDocManager;
+
+type tkatsopr = record as table katsopr;
+type tspsopr  = record as table spsopr;
+type tspecmtr = record as table specmtr;
+type tsoprhoz = record as table soprhoz;
+
+table struct tStore (
+  cPodrFrom: comp,
+  cMolFrom : comp,
+  cPodrTo  : comp,
+  cMolTo   : comp
+) with index (
+  i01 = cPodrFrom + cMolFrom + cPodrTo + cMolTo
+);
+
+var
+  ms: IMatMoveSet(MatMoveSet);
+  _peresort: L_SKLAD::Peresort;
+
+create view
+as select *
+from ms, tStore, katsopr, spsopr, specmtr, soprhoz;
+
+function CreateSpecmtr(_spsopr: tspsopr; _ckatstroy: comp; _kau: tSpecmtrKau): tspecmtr;
+{
+  clearbuffer(#specmtr);
+  specmtr.cotable   := 1110;
+  specmtr.cspec     := _spsopr.nrec;
+  specmtr.csaldtune := 0001000000000001h;
+  specmtr.cobj      := _ckatstroy;
+  specmtr.ckau[1]   := _kau[1];
+  specmtr.ckau[2]   := _kau[2];
+  specmtr.ckau[3]   := _kau[3];
+  specmtr.ckau[4]   := _kau[4];
+  specmtr.ckau[5]   := _kau[5];
+  specmtr.ckau[6]   := _kau[6];
+  specmtr.ckau[7]   := _kau[7];
+  specmtr.ckau[8]   := _kau[8];
+  specmtr.ckau[9]   := _kau[9];
+  insert current specmtr;
+  result := tspecmtr(specmtr.buffer);
+}
+
+function CreateSpsopr(_npp: word; _prmc: word; _cmcusl: comp; _katsopr: tkatsopr; _qty: double): tspsopr;
+{
+    clearbuffer(#spsopr);
+    spsopr.npp     := _npp;
+    spsopr.prmc    := _prmc;
+    spsopr.cmcusl  := _cmcusl;
+    spsopr.csopr   := _katsopr.nrec;
+    spsopr.dsopr   := _katsopr.dsopr;
+    spsopr.vidsopr := 630;
+    spsopr.kol     := _qty;
+    spsopr.kolfact := _qty;
+    insert current spsopr;
+    result := tspsopr(spsopr.buffer);
+}
+
+function CreateSoprhoz(_katsopr: tkatsopr): tsoprhoz;
+{
+  clearbuffer(#soprhoz);
+  soprhoz.datob    := _katsopr.dsopr;
+  soprhoz.csoprdoc := _katsopr.nrec;
+  soprhoz.tipdoc   := _katsopr.vidsopr;
+  soprhoz.tidkgal  := _katsopr.vidsopr;
+  soprhoz.nodoc    := _katsopr.nsopr;
+  soprhoz.descr    := _katsopr.descr;
+  soprhoz.desgr    := _katsopr.desgr;
+  soprhoz.vhsumhoz := '+';
+  insert current soprhoz;
+  result := tsoprhoz(soprhoz.buffer);
+}
+
+function CreateKatsopr(_dsopr: date; _nsopr: string; _cpodrfrom: comp; _cmolfrom: comp; _cpodrto: comp; _cmolto: comp): tkatsopr;
+{
+  clearbuffer(#katsopr);
+  katsopr.descr     := sGetTune('USER.DESCR');
+  katsopr.desgr     := sGetTune('USER.DESGR');
+  katsopr.dsopr     := _dsopr;
+  katsopr.yearsopr  := year(_dsopr);
+  katsopr.nsopr     := _nsopr;
+  katsopr.vidsopr   := 630;
+  katsopr.cpodrfrom := _cPodrFrom;
+  katsopr.cmolfrom  := _cMolFrom;
+  katsopr.cpodrto   := _cPodrTo;
+  katsopr.cmolto    := _cMolTo;
+  katsopr.cnote     := 0001000000000012h;
+  insert current katsopr;
+  result := tkatsopr(katsopr.buffer);
+}
+
+function CreateRegradeDoc(aDate: date; aNumber: string): comp;
+var
+  _npp: word;
+  _katsopr: tkatsopr;
+  _spsopr: tspsopr;
+{
+
+  _katsopr := CreateKatsopr(aDate, aNumber, tStore.cPodrFrom, tStore.cMolFrom, tStore.cPodrTo, tStore.cMolTo);
+  CreateSoprhoz(_katsopr);
+
+  _npp := 1;
+  _loop ms where (( tStore.cPodrFrom == ms.FromKatpodrNrec and
+                    tStore.cMolFrom  == ms.FromKatmolNrec  and
+                    tStore.cPodrTo   == ms.ToKatpodrNrec   and
+                    tStore.cMolTo    == ms.ToKatmolNrec    ))
+  {
+    _npp++;
+    _spsopr := CreateSpsopr(_npp, 0, ms.FromKatmcNrec, _katsopr, ms.Qty);
+    CreateSpecmtr(_spsopr, ms.FromKatstroyNrec, ms.FromKau);
+    _spsopr := CreateSpsopr(_npp, 1, ms.ToKatmcNrec, _katsopr, ms.Qty);
+    CreateSpecmtr(_spsopr, ms.ToKatstroyNrec, ms.ToKau);
+  }
+
+  _peresort.setPosition(_katsopr.nrec);
+  _peresort.FullRast1;
+  _peresort.FullRast2;
+  _peresort.ReCalcSumma;
+
+  result := _katsopr.nrec;
+}
+
+function CreateRegradeDocs(aMatMoveSet: IMatMoveSet; aDate: date; aNumber: string): tCompArray;
+{
+  ms := aMatMoveSet;
+  _loop ms
+  {
+    if getfirst tStore where (( ms.FromKatpodrNrec == tStore.cPodrFrom and
+                                ms.FromKatmolNrec  == tStore.cMolFrom and
+                                ms.ToKatpodrNrec   == tStore.cPodrTo and
+                                ms.ToKatmolNrec    == tStore.cMolTo )) != tsOk
+    {
+      clearbuffer(#tStore);
+      tStore.cPodrFrom := ms.FromKatpodrNrec;
+      tStore.cMolFrom  := ms.FromKatmolNrec;
+      tStore.cPodrTo   := ms.ToKatpodrNrec;
+      tStore.cMolTo    := ms.ToKatmolNrec;
+      insert current tStore;
+    }
+  }
+
+  var a: tCompArray;
+  var i: integer; i := 0;
+
+  _loop tStore
+  {
+    a[i++] := CreateRegradeDoc(aDate, aNumber);
+  }
+
+  result := a;
+}
+
+end.
