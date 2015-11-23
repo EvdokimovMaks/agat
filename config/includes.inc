@@ -1228,3 +1228,4 @@
 /i:"../COMMON/Stock"
 /i:"../COMMON/SqlHelper"
 /i:"../REGRADE/DistrMatByStock"
+/i:"../REGRADE/RecoverSporderKAU"

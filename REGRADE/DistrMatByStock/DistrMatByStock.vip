@@ -1,4 +1,5 @@
 #include DistrMatByStock.vih
+#include RecoverSporderKAU.vih
 #include Stock.vih
 #include Query.vih
 
@@ -49,6 +50,7 @@ table struct tLink (
 );
 
 var
+  _recovery     : AGAT::RecoverSporderKAU;
   _paramsFactory: AGAT::StockParamsFactory;
   _params       : AGAT::IStockParams;
   _stock        : AGAT::Stock;
@@ -59,7 +61,7 @@ var
 
 create view
 as select *
-from _stockSet, tForDistr, tStock, tLink, katmc, katstroy, _matMoveSet, saldtune, katrole,
+from _stockSet, tForDistr, tStock, tStock tStock1, tLink, katmc, katstroy, _matMoveSet, saldtune, katrole,
      tForDistr brForDistr, tLink brLink, tStock brStock
 where ((
   brForDistr.Nrec  == brLink.ForDistrNrec and
@@ -396,7 +398,10 @@ function PrepareOnDate(aDate: date): boolean;
     _params.AddNrecToFilter(WarehouseSectionFlag_Katmc, tForDistr.KatmcNrec);
     if tForDistr.KatmcObozn != ''
       _loop katmc where (( tForDistr.KatmcObozn == katmc.obozn and (katmc.nrec <> tForDistr.KatmcNrec) ))
+      {
+        _recovery.RecoverMC(katmc.Nrec, 0);
         _params.AddNrecToFilter(WarehouseSectionFlag_Katmc, katmc.Nrec);
+      }
   }
 
   var ss: IStockSet;
@@ -430,6 +435,31 @@ function PrepareOnDate(aDate: date): boolean;
       insert current tStock;
     }
 
+    //Закрываем отрицательные остатки на положительные
+    var delta: double;
+    _loop tStock where tStock.Qty < 0
+    {
+      _loop tStock1 where ((tStock.KatmcNrec    == tStock1.KatmcNrec and
+                            tStock.KatstroyNrec == tStock1.KatstroyNrec and
+                            tStock.KatpodrNrec  == tStock1.KatpodrNrec and
+                            tStock.KatmolNrec   == tStock1.KatmolNrec and (tStock.Nrec <> tStock1.Nrec and tStock1.Qty > 0)
+                          ))
+      {
+        if tStock1.Qty > abs(tStock.Qty)
+          delta := abs(tStock.Qty)
+        else
+          delta := tStock1.Qty;
+        tStock1.Qty -= delta;
+        update current tStock1;
+        tStock.Qty += delta;
+        update current tStock;
+        if tStock.Qty = 0 break;
+      }
+    }
+
+    delete all tStock where (tStock.Qty = 0);
+
+    //устанавливаем связи между остатками и мц для распределения
     delete all tLink;
 
     _loop tStock
