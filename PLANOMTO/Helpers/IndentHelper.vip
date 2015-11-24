@@ -1,0 +1,93 @@
+#include IndentHelper.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface iIndentHelper;
+
+//запрос возвращает колво всех позиций заявки, колво исполняемых+закрытых позиций, колво закрытых позиций
+//в анализе не участвуют строки в статусе "заменена"
+sql query qClaimStatusList =
+select tAll.cnt as AllCnt, tActive.cnt as ActiveCnt, tClosed.cnt as ClosedCnt
+from (select count(*) as cnt from claim where :IndentNrec = cIndent and cState <> :ClaimStateNrecZamenena ) tAll,
+     (select count(*) as cnt from claim where :IndentNrec = cIndent and State > 1) tActive,
+     (select count(*) as cnt from claim where :IndentNrec = cIndent and State = 3) tClosed
+;
+
+create view
+as select *
+from indent, claim;
+
+procedure UpdateIndentState(aIndentNrec: comp);
+{
+  if getfirst fastfirstrow indent where ((aIndentNrec == indent.nrec)) = tsOk
+  {
+    var claimStatus: word;
+
+    //инициализируем запрос, возвращающий количества всех/исполняемых/закрытых строк заявки
+    var q: IQuery;
+    q := queryManager.createQuery(qClaimStatusList);
+    q.setParam('IndentNrec', aIndentNrec);
+    q.setParam('ClaimStateNrecZamenena', CLAIM_STATENREC_ZAMENENA);
+
+    var rs: IResultSet;
+    rs := q.getResultSet;
+    if rs != nullRef
+    {
+      if rs.getFirst = tsOk
+      {
+        //если все строки заявки - закрыты
+        if rs.row.val('AllCnt') = rs.row.val('ClosedCnt')
+        {
+          //устанавливаем статус заявки "исполнена"
+          update current indent set cstate := INDENT_STATENREC_ISPOLNENA, state := 3; //исполнена
+        }
+        //если не все строки заявки закрыты, а все незакрытые - приняты к исполнению
+        else if rs.row.val('AllCnt') = rs.row.val('ActiveCnt')
+        {
+          //устанавливаем статус заявки "принята к исполнению"
+          update current indent set cstate := INDENT_STATENREC_PRINISP, state := 2; //принята к исполнению
+        }
+      }
+    }
+
+  } //if getfirst fastfirstrow indent
+}
+
+//вспомогательная ф-я. возвращает истину, если статус строки относится к заменяющей позиции
+function IsClaimStateZamen(aStateNrec: comp): boolean;
+{
+  result := aStateNrec = CLAIM_STATENREC_ZAMENYAUSHAYA or
+            aStateNrec = CLAIM_STATENREC_ZAMPRINISP or
+            aStateNrec = CLAIM_STATENREC_ZAMISPOLNENA;
+}
+
+procedure SetClaimState(aClaimNrec: comp; aState: word);
+{
+  if getfirst fastfirstrow claim where ((aClaimNrec == claim.nrec)) = tsOk
+  {
+    //если статус строки относится к заменяющим
+    if IsClaimStateZamen(claim.cstate)
+    {
+      case aState of
+        1: claim.cstate := CLAIM_STATENREC_ZAMENYAUSHAYA;
+        2: claim.cstate := CLAIM_STATENREC_ZAMPRINISP;
+        3: claim.cstate := CLAIM_STATENREC_ZAMISPOLNENA;
+      end;
+    }
+    //если статус строки не относится к заменяющим
+    else
+    {
+      case aState of
+        1: claim.cstate := CLAIM_STATENREC_OFORMLENA;
+        2: claim.cstate := CLAIM_STATENREC_PRINISP;
+        3: claim.cstate := CLAIM_STATENREC_ISPOLNENA;
+      end;
+    }
+    claim.state := aState;
+    update current claim;
+    UpdateIndentState(claim.cIndent);
+  }
+}
+
+end.

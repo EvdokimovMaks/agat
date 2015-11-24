@@ -1229,3 +1229,8 @@
 /i:"../COMMON/SqlHelper"
 /i:"../REGRADE/DistrMatByStock"
 /i:"../REGRADE/RecoverSporderKAU"
+/i:"../PLANOMTO/AgatKartStorage"
+/i:"../PLANOMTO/CustomPicker"
+/i:"../PLANOMTO/Helpers"
+/i:"../PLANOMTO/PlanOMTO"
+/i:"../PLANOMTO/SqlPickFilter"

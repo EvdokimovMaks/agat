@@ -1,0 +1,182 @@
+#include SqlPickFilter.vih
+#include GetKAU.vih
+
+#component "AGAT"
+
+interface SqlPickFilterCommon;
+
+var
+  _kauCode      : word;
+  _isActive     : boolean;
+  _getkau       : GetKAU;
+  _lmarker      : longint;
+
+create view
+as select *
+from katkau
+where ((
+  _kauCode == katkau.kodgroup
+));
+
+function GetDskMarkerName: string;
+{
+  result := 'PickFilterCommon'+_kauCode;
+}
+
+procedure DoneFilterMarker(dskMarkerName: string);
+{
+  if (_lmarker != 0)
+  {
+    donemarker(_lmarker, dskMarkerName);
+    _lmarker := 0;
+  }
+}
+
+procedure InitFilterMarker(dskMarkerName: string);
+{
+  _lmarker := initmarker(dskMarkerName, 8, 10, 100, false);
+}
+
+procedure SetKauCode(aKauCode: word);
+{
+  DoneFilterMarker(GetDskMarkerName);
+  _kauCode := aKauCode;
+  InitFilterMarker(GetDskMarkerName);
+}
+
+constructor InitKau(aKauCode: word);
+{
+  SetKauCode(aKauCode);
+  result := true;
+}
+
+function oSqlPickFilter.GetSqlTableName: string;
+{
+  result := 'tmpfiltertbl'+_kauCode;
+}
+
+function oSqlPickFilter.Caption: string;
+{
+  if getfirst katkau = tsOk
+    result := katkau.name
+  else
+    result := '';
+}
+
+function oSqlPickFilter.Presentation: string;
+{
+  if (_lmarker = 0)
+  {
+    result := 'Все записи';
+  }
+  else
+  {
+    var cnt: longint;
+    cnt := getmarkercount(_lmarker);
+    if (cnt = 0)
+    {
+      result := 'Все записи'
+    }
+    else if (cnt = 1)
+    {
+      var c: comp;
+      if getmarker(_lmarker,0,c)
+        result := if(getanykau(0, _kauCode, c),givenanname(1),'')
+      else
+        result := 'Ошибка получения первой записи маркера';
+    }
+    else
+    {
+      result := 'Выбрано записей: '+cnt;
+    }
+  }
+}
+
+function oSqlPickFilter.Pick: boolean;
+{
+  var c: comp;
+  if _getkau.GetCodeKau(2, _kauCode, c) > 0
+  {
+    DoneFilterMarker('');
+    InitFilterMarker(_getKau.GetMarkerName(_kauCode));
+    result := true;
+  }
+  else
+  {
+    result := false;
+  }
+}
+
+function oSqlPickFilter.CreateSqlTable: boolean;
+{
+  result := false;
+  var stmt, s: longint;
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table '+GetSqlTableName+' (cRec: comp);');
+  if sqlCreateTmpTable(s, ctmNormal) = 0
+  {
+    stmt := sqlAllocStmt;
+    sqlPrepare(stmt, 'insert '+GetSqlTableName+' (crec) values (?)');
+    var c: comp;
+    var i: longint;
+    i := 0;
+    while getmarker(_lmarker, i, c)
+    {
+      sqlBindParam(stmt, 1, c);
+      if (sqlExecute(stmt) != 0)
+      {
+        message('Ошибка при вставке пометки в sql таблицу фильтра '+GetSqlTableName);
+        exit;
+      }
+      i++;
+    }
+    sqlFreeStmt(stmt);
+    result := true;
+  }
+}
+
+function oSqlPickFilter.DropSqlTable: boolean;
+{
+  result := sqlDropTmpTable(GetSqlTableName) = 0;
+}
+
+function oSqlPickFilter.IsActive: boolean;
+{
+  result := _isActive;
+}
+
+procedure oSqlPickFilter.Activate;
+{
+  _isActive := true;
+}
+
+procedure oSqlPickFilter.Deactivate;
+{
+  _isActive := false;
+}
+
+function oSqlPickFilter.SelectCount: longint;
+{
+  result := 0;
+  if (_lmarker != 0) result := getmarkercount(_lmarker);
+}
+
+procedure oSqlPickFilter.ClearSelection;
+{
+  clearmarker(_lmarker);
+}
+
+procedure oSqlPickFilter.AddSelection(aNrec: comp);
+{
+  if (_lmarker != 0) insertmarker(_lmarker, aNrec);
+}
+
+
+handleevent
+cmOnVipUnload:
+{
+  DoneFilterMarker(GetDskMarkerName);
+}
+end;
+
+end.

@@ -1,0 +1,321 @@
+#include IndentHelper.vih
+
+#component "AGAT"
+
+interface PlanOMTORepository;
+#include PlanOMTORepository.inc
+
+table struct t1 (
+  IndentNrec   : comp,
+  ClaimNrec    : comp,
+  SpmnplanNrec : comp,
+  SpmnplNrec   : comp,
+  ValspmnpNrec : comp,
+  KatmcNrec    : comp,
+  OtpedNrec    : comp,
+  KatnotesNrec : comp,
+  KatstroyNrec : comp,
+  PersonNrec   : comp,
+  PriorNrec    : comp,
+  dbeg         : date,
+  dend         : date,
+  daccept      : date,
+  ClaimQty     : double
+) with index (
+  i01 = SpmnplanNrec
+);
+
+table struct t2 (
+  SpmnplanNrec : comp,
+  SpmnplNrec   : comp,
+  ValspmnpNrec : comp,
+  dDeliverPlan : date,
+  dDeliverFact : date,
+  dPayFact     : date,
+  BasedocNrec  : comp,
+  KatorgNrec   : comp,
+  BasedocQty   : double,
+  BasedocSum   : double,
+  BasedocPaid  : double,
+  BuyQtyFact   : double,
+  RegradingQty : double,
+  IssueQty     : double
+);
+
+var
+  mnPlanNrec: comp;
+  _indentHelper: iIndentHelper;
+
+create view
+as select *
+from mnplan mnp, mnanal mna, t1, spmnplan spm1, spmnpl spl1, valspmnp vsp1, objacct oa1, spobjacc spoa10, spobjacc spoa11,
+     spmnplan spm, spmnpl spl, valspmnp vsp, spobjacc spoa0, spobjacc spoa1,
+     t2, spmnplan spm2, spmnpl spl2, valspmnp vsp2
+where ((
+  mnPlanNrec      == mnp.nrec and
+  mnp.csloj       == mna.csloj and
+  0               == mna.cblock and
+  0               == mna.fldan1 and
+  mnp.nrec        == mna.fldan2 and
+  t1.SpmnplanNrec == spm1.nrec and
+  t1.SpmnplNrec   == spl1.nrec and
+  t1.ValspmnpNrec == vsp1.nrec and
+
+  29              == oa1.typeown and
+  mnPlanNrec      == oa1.cowner  and
+  3               == oa1.typeobj and
+  t1.IndentNrec   == oa1.cobject and
+
+  13              == spoa10.typepos and
+  t1.ClaimNrec    == spoa10.cpos and
+  oa1.nrec        == spoa10.cobjacct and
+  0               == spoa10.typehier and
+
+  31              == spoa11.typeobj and
+  t1.SpmnplNrec   == spoa11.cobject and
+  oa1.nrec        == spoa11.cobjacct and
+  1               == spoa11.typehier and
+  spoa10.nrec     == spoa11.cspobjacc and
+  13              == spoa11.typepos and
+  t1.ClaimNrec    == spoa11.cpos and
+
+  t2.SpmnplanNrec == spm2.nrec and
+  t2.SpmnplNrec   == spl2.nrec and
+  t2.ValspmnpNrec == vsp2.nrec
+));
+
+parameters mnPlanNrec;
+
+handleevent
+cminit:
+{
+  //mnPlanNrec := 281474976712271;
+  if getfirst mnp != tsOk exit;
+  //mnanal
+  if getfirst mna != tsOk
+  {
+    clearbuffer(#mna);
+    mna.csloj := mnp.csloj;
+    mna.cblock := 0;
+    mna.fldan1 := 0;
+    mna.fldan2 := mnp.nrec;
+    insert current mna;
+  }
+  //выборка из заявок во временную таблицу
+  delete all t1;
+  var stmt: longint;
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, q1);
+  sqlBindParam(stmt, 1, mnPlanNrec);
+  sqlExecute(stmt);
+  sqlFetchInto(stmt, #t1);
+  sqlFreeStmt(stmt);
+  //создание/обновление позиций плана в соответствии с выборкой
+  var newRecord: boolean;
+  _loop t1
+  {
+    //----------------------------------------------------------SpMnPlan
+    newRecord := false;
+    if getfirst spm1 != tsOk
+    {
+      newRecord := true;
+      clearbuffer(#spm1);
+    }
+    spm1.cmnplan       := mnplanNrec;
+    spm1.cizd          := t1.KatmcNrec;
+    spm1.typeizd       := 1;
+    spm1.COtpEd        := t1.OtpedNrec;
+    spm1.startdate     := t1.dbeg;
+    spm1.enddate       := t1.dend;
+    //spm1.startdatefact := t1.daccept;
+    spm1.crolean1      := ROLE_KATSTROY;
+    spm1.wkodgr1       := 40;
+    spm1.canval1       := t1.KatstroyNrec;
+    spm1.crolean2      := ROLE_PERSON;
+    spm1.wkodgr2       := 3;
+    spm1.canval2       := t1.PersonNrec;
+    spm1.crolean3      := ROLE_INDENT;
+    spm1.wkodgr3       := 26;
+    spm1.canval3       := t1.IndentNrec;
+    spm1.CStatus       := t1.KatnotesNrec;
+    spm1.Prior         := t1.PriorNrec;
+    spm1.csloj         := mnp.csloj;
+    if (newRecord)
+    {
+      insert current spm1;
+      update current t1 set t1.SpmnplanNrec := spm1.nrec;
+    }
+    else
+      update current spm1;
+    //----------------------------------------------------------Spmnpl
+    newRecord := false;
+    if getfirst spl1 != tsOk
+    {
+      newRecord := true;
+      clearbuffer(#spl1);
+    }
+    spl1.cspmnplan := spm1.nrec;
+    spl1.wkolan    := 25;
+    spl1.cRoleAn4  := ROLE_PLSNAB;
+    spl1.wKodGr4   := 29;
+    spl1.cAnVal4   := spm1.cmnplan;
+    spl1.cRoleAn1  := spm1.cRoleAn1;
+    spl1.wKodGr1   := spm1.wKodGr1;
+    spl1.cAnVal1   := spm1.cAnVal1;
+    spl1.cRoleAn2  := spm1.cRoleAn2;
+    spl1.wKodGr2   := spm1.wKodGr2;
+    spl1.cAnVal2   := spm1.cAnVal2;
+    spl1.cRoleAn3  := spm1.cRoleAn3;
+    spl1.wKodGr3   := spm1.wKodGr3;
+    spl1.cAnVal3   := spm1.cAnVal3;
+    spl1.wKodGr8   := spm1.wKodGr4;
+    spl1.cAnVal8   := spm1.cAnVal4;
+    spl1.typeizd   := spm1.TypeIzd;
+    spl1.cRoleIzd  := spm1.cRoleIzd;
+    spl1.cIzd      := spm1.cIzd;
+    spl1.cOtpEd    := spm1.cOtpEd;
+    spl1.NumSort   := spm1.NumSort;
+    spl1.Number    := spm1.Number;
+    spl1.cSloj     := spm1.cSloj;
+    spl1.cMnPlan   := spm1.cmnplan;
+    spl1.cMnAnal   := mna.nrec;
+    if (newRecord)
+    {
+      insert current spl1;
+      update current t1 set t1.SpmnplNrec := spl1.nrec;
+    }
+    else
+      update current spl1;
+    //----------------------------------------------------------Valspmnp
+    newRecord := false;
+    if getfirst vsp1 != tsOk
+    {
+      newRecord := true;
+      clearbuffer(#vsp1);
+    }
+    vsp1.cspmnpl   := spl1.nrec;
+    vsp1.cspmnplan := spl1.cSpmnplan;
+    vsp1.cmnanal   := spl1.cmnanal;
+    vsp1.Num       := 1;
+    vsp1.cOtpEd    := spl1.cOtpEd;
+    vsp1.EdTime    := spl1.EdTime;
+    vsp1.kol       := t1.ClaimQty;
+    if (newRecord)
+    {
+      insert current vsp1;
+      update current t1 set t1.ValspmnpNrec := vsp1.nrec;
+    }
+    else
+      update current vsp1;
+    //----------------------------------------------------------Objacct
+    if (getfirst oa1 != tsOk)
+    {
+      clearbuffer(#oa1);
+      oa1.typeown  := 29;
+      oa1.cowner   := mnPlanNrec;
+      oa1.typeobj  := 3;
+      oa1.cobject  := t1.IndentNrec;
+      oa1.kindrec  := 1;
+      insert current oa1;
+    }
+    //----------------------------------------------------------Spobjacc
+    if (getfirst spoa10 != tsOk)
+    {
+      clearbuffer(#spoa10);
+      spoa10.typepos  := 13;
+      spoa10.cpos     := t1.ClaimNrec;
+      spoa10.cobjacct := oa1.nrec;
+      spoa10.typehier := 0;
+      insert current spoa10;
+    }
+    spoa10.kolcpos  := t1.ClaimQty;
+    spoa10.kolcfact := spoa10.kolcpos;
+    spoa10.startdate:= t1.daccept;
+    spoa10.enddate  := t1.daccept;
+    spoa10.cotped   := t1.otpednrec;
+    update current spoa10;
+
+    if (getfirst spoa11 != tsOk)
+    {
+      clearbuffer(#spoa11);
+      spoa11.typeobj   := 31;
+      spoa11.cobject   := t1.SpmnplNrec;
+      spoa11.cobjacct  := oa1.nrec;
+      spoa11.typehier  := 1;
+      spoa11.cspobjacc := spoa10.nrec;
+      spoa11.typepos   := 13;
+      spoa11.cpos      := t1.ClaimNrec;
+      spoa11.typenorm  := 1;
+      insert current spoa11;
+    }
+    spoa11.kolcpos   := t1.ClaimQty;
+    spoa11.kolcfact  := spoa10.kolcpos;
+    spoa11.startdate := t1.daccept;
+    spoa11.enddate   := t1.daccept;
+    spoa11.cotped    := t1.otpednrec;
+    update current spoa11;
+  } //loop t
+
+  //удаление лишних позиций
+  _loop spm where (( mnPlanNrec == spm.cmnplan ))
+  {
+    if (getfirst t1 where ((spm.nrec == t1.SpmnplanNrec)) = tsOk) continue;
+    while getfirst spl where (( spm.nrec == spl.cmnplan )) = tsOk
+    {
+      while getfirst spoa1 where ((31 == spoa1.typeobj and spl.nrec == spoa1.cobject)) = tsOk
+      {
+        delete all spoa0 where ((spoa1.cspobjacc == spoa0.nrec));
+        delete current spoa1;
+      }
+      delete all vsp where ((spl.nrec == vsp.cspmnpl));
+      delete current spl;
+    }
+    delete current spm;
+  }
+
+  //расчет количеств дат и сумм
+  delete all t2;
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, q2);
+  sqlBindParam(stmt, 1, mnPlanNrec);
+  sqlExecute(stmt);
+  sqlFetchInto(stmt, #t2);
+  sqlFreeStmt(stmt);
+
+  _loop t2
+  {
+    if (getfirst spm2 = tsok)
+      update current spm2 set
+                              spm2.wkodgr4       := 1,
+                              spm2.crolean4      := ROLE_PROVIDER,
+                              spm2.canval4       := t2.KatorgNrec,
+                              spm2.wkodgr5       := 6,
+                              spm2.crolean5      := ROLE_BASEDOC,
+                              spm2.canval5       := t2.BasedocNrec,
+                              spm2.enddatefact   := t2.dDeliverPlan,
+                              spm2.startdatetime := _DateTime1(t2.dDeliverFact,0),
+                              spm2.enddatetime   := _DateTime1(t2.dPayFact,0);
+    if (getfirst vsp2 = tsok)
+    {
+      update current vsp2 set vsp2.vprice    := if(vsp2.kol >= t2.RegradingQty, vsp2.kol - t2.RegradingQty, 0),
+                              vsp2.summa     := t2.BasedocQty,
+                              vsp2.kolfield5 := t2.BuyQtyFact,
+                              vsp2.kolfact   := t2.BasedocSum,
+                              vsp2.pricefact := t2.BasedocPaid,
+                              vsp2.summafact := t2.RegradingQty,
+                              vsp2.kolfield6 := t2.IssueQty;
+      //если количество отпущенное в производство больше или равно количеству по заявке - переводим строку в статус "Исполнена"
+      if (vsp2.kol <= t2.IssueQty)
+      {
+        update current spm2 set spm2.cstatus := KATNOTES_DONE;
+        if getfirst t1 where ((t2.SpmnplanNrec == t1.SpmnplanNrec )) = tsOk
+        {
+          _indentHelper.SetClaimState(t1.ClaimNrec, 3);
+        }
+      }
+    }
+  }
+}
+end;
+
+end.
