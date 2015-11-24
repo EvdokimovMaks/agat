@@ -1,0 +1,865 @@
+#include Query.vih
+#include GetKau.vih
+#include SqlPickFilter.vih
+#include AgatKartStorage.vih
+#include PlanOMTO.vih
+#include IndentHelper.vih
+#include Stock.vih
+#include DistrMatByStock.vih
+
+#component "AGAT"
+
+const
+  cmCreateBasedoc   = 9901;
+  cmLinkBasedoc     = 9902;
+  cmCreateRegrade   = 9903;
+end;
+
+interface EditPlanOMTO;
+#include PlanOMTO.inc
+
+const
+  cmDocBas          = 5055;
+  sci1378InsPM      = 6958;
+  sci1InsPM         = 6967;
+  sci14InsPMEnEsc   = 9008;
+  WLIST_SPMNPLAN    = 20000;
+  COLOR_WARN        = 67;
+  cmEdit            = 2242;
+end;
+
+var
+  filtersFlag    : word;
+  specFiltersFlag: word;
+  dateFiltersFlag: word;
+  filtersScreenVisible: boolean;
+  GroupmcFilter  : oSqlCustomPickFilter;
+  KatmcFilter    : oSqlCustomPickFilter;
+  IndentFilter   : oSqlCustomPickFilter;
+  KatstroyFilter : oSqlCustomPickFilter;
+  PersonFilter   : oSqlCustomPickFilter;
+  KatorgFilter   : oSqlCustomPickFilter;
+  BasedocFilter  : oSqlCustomPickFilter;
+  StatusFilter   : oSqlCustomPickFilter;
+  PriorFilter    : oSqlCustomPickFilter;
+  BasedocDateStart: date;
+  BasedocDateEnd  : date;
+  Sort1          : byte;
+  Sort2          : byte;
+  Sort3          : byte;
+  _kartStorage   : L_SKLAD::AgatKartstorage;
+  _indentHelper  : iIndentHelper;
+  _getKau        : GetKau;
+  _distrMatByStock  : AGAT::DistrMatByStock;
+  _regradeDocManager: AGAT::RegradeDocManager;
+
+create view
+var
+  _mnplanNrec: comp;
+as select *
+from mnplan mnp, tPlanOMTO brpl, pick brpick, spobjacc spoa, attrval avtu, allmemo memDescr,
+     tPlanOMTO, Allmemo Allmemo1, pick, katnotes, spmnplan, basedoc, claim
+where ((
+  _mnplanNrec       == mnp.nrec and
+  //помеченные позиции плана
+  WLIST_SPMNPLAN    == brpick.wlist and
+  brpl.SpmnplanNrec == brpick.crec and
+  //связка позиции плана с позицией заявки
+  0                 == spoa.kindrec and
+  31                == spoa.typeobj and
+  brpl.SpmnplNrec   == spoa.cobject and
+  13                == spoa.typepos and  (spoa.typehier = 1) and
+  //внешний атрибут позиции заявки "Технические условия"
+  31012             == avtu.wtable and
+  spoa.cpos         == avtu.crec and
+  0001000000000421h == avtu.cattrnam and
+  //мемо-поле примечание к позиции плана из брауза
+  11038             == memDescr.wtable and
+  brpl.SpmnplanNrec == memDescr.cRec and
+  //мемо-поле примечание к позиции плана
+  11038                  == Allmemo1.wtable and
+  tPlanOMTO.SpmnplanNrec == Allmemo1.cRec
+));
+
+create view vMark
+as select *
+from pick, tPlanOMTO
+where ((
+  WLIST_SPMNPLAN /== pick.wlist and
+  pick.crec      /== tPlanOMTO.SpmnplanNrec
+));
+
+parameters _mnplanNrec;
+
+file f;
+
+function GetKatmcTU: string;
+{
+  result := '';
+  if getfirst fastfirstrow spoa = tsOk
+    if getfirst fastfirstrow avtu = tsOk
+      result := avtu.vstring;
+}
+
+function GetDeficitPurchase: double;
+{
+ result := brpl.BuyQtyPlan - brpl.BuyQtyFact;
+}
+
+function GetDeficitIndent: double;
+{
+ result := brpl.IndentQty - brpl.IssueQty;
+}
+
+window wKartStorage 'Карточка МЦ', escclose;
+embedded em1 '' interface _kartStorage;
+end;
+end;
+
+screen scFilters;
+show(,,45,) fixed_x;
+fields
+  filtersFlag                : noprotect;
+  [GroupmcFilterPresentation ] GroupmcFilter.Presentation : protect, pickbutton;
+  [KatmcFilterPresentation   ] KatmcFilter.Presentation   : protect, pickbutton;
+  [IndentFilterPresentation  ] IndentFilter.Presentation  : protect, pickbutton;
+  [KatstroyFilterPresentation] KatstroyFilter.Presentation: protect, pickbutton;
+  [PersonFilterPresentation  ] PersonFilter.Presentation  : protect, pickbutton;
+  [KatorgFilterPresentation  ] KatorgFilter.Presentation  : protect, pickbutton;
+  [BasedocFilterPresentation ] BasedocFilter.Presentation : protect, pickbutton;
+  [StatusFilterPresentation  ] StatusFilter.Presentation  : protect, pickbutton;
+  [PriorFilterPresentation   ] PriorFilter.Presentation   : protect, pickbutton;
+
+  dateFiltersFlag            : noprotect;
+  BasedocDateStart           : noprotect;
+  BasedocDateEnd             : noprotect;
+
+  specFiltersFlag            : noprotect;
+
+  sort1: [list ' ', 'Группа МЦ', 'Матценность', 'Заявка', 'Заказ', 'Сотрудник', 'Счет', 'Статус', 'Приоритет',
+               'Дата принятия в работу', 'Дата поставки расчетная', 'Дата поставки фактическая', 'Дата оплаты фактическая'];
+  sort2: [list ' ', 'Группа МЦ', 'Матценность', 'Заявка', 'Заказ', 'Сотрудник', 'Счет', 'Статус', 'Приоритет',
+               'Дата принятия в работу', 'Дата поставки расчетная', 'Дата поставки фактическая', 'Дата оплаты фактическая'];
+  sort3: [list ' ', 'Группа МЦ', 'Матценность', 'Заявка', 'Заказ', 'Сотрудник', 'Счет', 'Статус', 'Приоритет',
+               'Дата принятия в работу', 'Дата поставки расчетная', 'Дата поставки фактическая', 'Дата оплаты фактическая'];
+<<
+
+`Фильтры по полям:`
+ [.] Группа МЦ`     .@@@@@@@@@@@@@@@@@@@@@@
+ [.] Матценность`   .@@@@@@@@@@@@@@@@@@@@@@
+ [.] Заявка`        .@@@@@@@@@@@@@@@@@@@@@@
+ [.] Заказ`         .@@@@@@@@@@@@@@@@@@@@@@
+ [.] Отв. сотрудник`.@@@@@@@@@@@@@@@@@@@@@@
+ [.] Поставщик`     .@@@@@@@@@@@@@@@@@@@@@@
+ [.] Счет`          .@@@@@@@@@@@@@@@@@@@@@@
+ [.] Статус`        .@@@@@@@@@@@@@@@@@@@@@@
+ [.] Приоритет`     .@@@@@@@@@@@@@@@@@@@@@@
+
+`Фильтры по датам:`
+ [.] Счет` с .@@@@@@@@@@ по .@@@@@@@@@@
+
+`Специальные фильтры:`
+ [.] Нарушены сроки поставки`
+ [.] Не оплачены счета`
+
+ Сортировка
+`Поле 1` .@@@@@@@@@@@@@@@@@@@@@@
+`Поле 2` .@@@@@@@@@@@@@@@@@@@@@@
+`Поле 3` .@@@@@@@@@@@@@@@@@@@@@@
+>>
+end;
+
+function brplMarked: boolean;
+{
+  result := getfirst brpick = tsOk;
+}
+
+procedure brplMark;
+{
+  if (not brplMarked)
+    insert brpick set brpick.wlist := 20000, brpick.crec := brpl.SpmnplanNrec;
+}
+
+procedure brplUnmark;
+{
+  if (brplMarked)
+    delete current brpick;
+}
+
+function brplDeliveryOverdate: boolean;
+{
+  result := brpl.BuyQtyPlan > brpl.BuyQtyFact and cur_date > brpl.dDeliverPlan and brpl.dDeliverPlan > 0;
+}
+
+function brplUnpaidBasedoc: boolean;
+{
+  result := brpl.BasedocNrec > 0 and brpl.BasedocPaid = 0 and CalcDaysBetweenDates(brpl.BasedocDate, cur_date, false) >= 10;
+}
+
+browse brPlanOMTO (,,sci14InsPMEnEsc);
+show(46,,,);
+table brpl;
+fields
+  {font={bold=brplMarked}};
+  brpl.GroupmcName  ' '#13'Группа'                 : [10], protect;
+  brpl.KatmcName    ' '#13'Матценность'            : [30], protect, pickbutton;
+  GetKatmcTU        ' '#13'ТУ'                     : [10], protect;
+  brpl.Description  ' '#13'Примечания'             : [10], noprotect;
+  brpl.OtpedName    ' '#13'Ед.изм.'                : [5 ], protect;
+  brpl.IndentQty    'По'#13'заявке'                : [8 ], protect;
+  brpl.SaldoQty     'Свободный'#13'остаток'        : [8 ], protect;
+  brpl.RegradingQty 'Кол-во'#13'перенесено'        : [8 ], protect;
+  brpl.BuyQtyPlan   'Кол-во'#13'к закупке'         : [8 ], noprotect;
+  brpl.BaseDocQty   'Кол-во'#13'заказано'          : [8 ], protect;
+  brpl.BasedocSum   'Сумма'#13'заказано'           : [8 ], protect;
+  brpl.BasedocPaid  'Сумма'#13'оплачено'           : [8 ], protect;
+  brpl.BuyQtyFact   'Кол-во'#13'закуплено'         : [8 ], protect;
+  brpl.IssueQty     'Кол-во'#13'выдано'            : [8 ], protect;
+  GetDeficitPurchase'Дефицит'#13'по закупке'       : [8 ], protect;
+  GetDeficitIndent  'Дефицит'#13'по заявке'        : [8 ], protect;
+  brpl.KatnotesName ' '#13'Статус'                 : [10], protect, pickbutton;
+  brpl.PriorName    ' '#13'Приоритет'              : [10], protect;
+  brpl.dbeg         'Заявка'#13'от'                : [10], protect;
+  brpl.dend         'Требуемая дата'#13'поставки'  : [10], protect;
+  brpl.daccept      'Дата'#13'принятия в работу'   : [10], protect;
+  brpl.ddeliverPlan 'Дата поставки'#13'расчетная'  : [10], protect, {font={backColor=if(brplDeliveryOverdate, COLOR_WARN, 0);}};
+  brpl.ddeliverNew  'Дата поставки'#13'измененная' : [10], noprotect;
+  brpl.ddeliverFact 'Дата поставки'#13'фактическая': [10], protect, {font={backColor=if(brplDeliveryOverdate, COLOR_WARN, 0);}};
+  brpl.BasedocDate  'Дата'#13'счета'               : [10], protect, {font={backColor=if(brplUnpaidBasedoc, COLOR_WARN, 0);}};
+  brpl.dPayFact     'Дата оплаты'#13'счета'        : [10], protect, {font={backColor=if(brplUnpaidBasedoc, COLOR_WARN, 0);}};
+  brpl.BasedocName  'Счет'#13'номер'               : [10], protect, pickbutton;
+  brpl.KatorgName   ' '#13'Поставщик'              : [10], protect;
+  brpl.KatstroyName ' '#13'Заказ'                  : [10], protect, pickbutton;
+  brpl.IndentName   ' '#13'Заявка'                 : [10], protect, pickbutton;
+  brpl.PersonName   'Ответственный'#13'сотрудник'  : [10], protect;
+end;
+
+procedure AddBoundToQuery(f: oSqlPickFilter; aField: string; qString: longint);
+{
+  if f.IsActive
+    if f.CreateSqlTable and f.SelectCount > 0
+    {
+      sqlAddStr(qString, 'and '+aField+' in (select crec from '+f.GetSqlTableName+')');
+    }
+}
+
+function GetSortField(listIndex: byte): string;
+{
+  result := '';
+  case listIndex of
+    0 : result := '';                            //' '
+    1 : result := 'groupmc.name';                //'Группа МЦ'
+    2 : result := 'katmc.name';                  //'Матценность'
+    3 : result := 'indent.dind, indent.noind';   //'Заявка'
+    4 : result := 'ks.name';                     //'Заказ'
+    5 : result := 'pers.fio';                    //'Сотрудник'
+    6 : result := 'basedoc.ddoc, basedoc.nodoc'; //'Счет'
+    7 : result := 'katnotes.name';               //'Статус'
+    8 : result := 'farinfo.name';                //'Приоритет'
+    9 : result := 'spm.startdatefact';           //'Дата принятия в работу'
+    10: result := 'spm.enddatefact';             //'Дата поставки расчетная'
+    11: result := 'spm.startdatetime';           //'Дата поставки фактическая'
+    12: result := 'spm.enddatetime';             //'Дата оплаты фактическая'
+  end;
+}
+
+function  LoadDataByMnplanNrec(aMnplanNrec: comp): boolean;
+{
+  result := false;
+  delete all tPlanOMTO;
+
+  var stmt, s: longint;
+  stmt := sqlAllocStmt;
+
+  //готовим запрос. берем основную часть
+  sqlAddStr(s, queryLoadPlanOMTO);
+  //добавляем ограничения по фильтрам
+  AddBoundToQuery(GroupmcFilter , 'coalesce(katmc.cgroupmc,#comp(0))', s);
+  AddBoundToQuery(KatmcFilter   , 'spm.cizd', s);
+  AddBoundToQuery(IndentFilter  , 'spm.canval3', s);
+  AddBoundToQuery(KatstroyFilter, 'spm.canval1', s);
+  AddBoundToQuery(PersonFilter  , 'spm.canval2', s);
+  AddBoundToQuery(KatorgFilter  , 'spm.canval4', s);
+  AddBoundToQuery(BasedocFilter , 'spm.canval5', s);
+  AddBoundToQuery(StatusFilter  , 'spm.cstatus', s);
+  AddBoundToQuery(PriorFilter   , 'spm.prior'  , s);
+  //добавляем ограничения по фильтрам по датам
+  // - счет
+  if ((dateFiltersFlag and 1) > 0)
+  {
+    sqlAddStr(s, 'and coalesce(basedoc.ddoc,0) between #date('+datetostr(BasedocDateStart,'DD,MM,YYYY')+') and #date('+datetostr(BasedocDateEnd,'DD,MM,YYYY')+')');
+  }
+  //добавляем ограничения по специальным фильтрам
+  // - нарушены сроки поставки
+  if ((specFiltersFlag and 1) > 0)
+  {
+    sqlAddStr(s, 'and coalesce(vsp.vprice,0) > coalesce(vsp.kolfield5,0)');
+    sqlAddStr(s, 'and #date('+datetostr(cur_date,'DD,MM,YYYY')+') > date(spm.enddatefact)');
+  }
+  // - не оплачены счета
+  if ((specFiltersFlag and 2) > 0)
+  {
+    sqlAddStr(s, 'and basedoc.nrec is not null');
+    sqlAddStr(s, 'and coalesce(vsp.pricefact,0) < coalesce(vsp.kolfact,0)');
+  }
+  //добавляем сортировку
+  var sortstr: string;
+  sortstr := GetSortField(sort1);
+  sortstr += if(sortstr<>'' and GetSortField(sort2) <> '',',','') + GetSortField(sort2);
+  sortstr += if(sortstr<>'' and GetSortField(sort3) <> '',',','') + GetSortField(sort3);
+  if (sortstr = '') sortstr := 'katmc.name';
+  sqlAddStr(s, 'order by '+sortstr);
+  //выполняем запрос
+  sqlPrepare(stmt, s);
+  sqlBindParam(stmt, 1, aMnplanNrec);
+  if sqlExecute(stmt) = 0
+  {
+    sqlFetchInto(stmt, #tPlanOMTO);
+    result := true;
+  }
+  else
+  {
+    message('Ошибка выполнения запроса загрузки данных плана', error);
+  }
+  sqlFreeStr(s);
+  sqlFreeStmt(stmt);
+
+  //загружаем примечания
+  _loop tPlanOMTO
+  {
+    if getfirst fastfirstrow Allmemo1 = tsOk
+    {
+      f.OpenMemo(Allmemo1.mem);
+      f.Readln(tPlanOMTO.Description);
+      update current tPlanOMTO;
+      f.Close;
+    }
+  }
+
+  if (GroupmcFilter .IsActive) GroupmcFilter.DropSqlTable;
+  if (KatmcFilter   .IsActive) KatmcFilter.DropSqlTable;
+  if (IndentFilter  .IsActive) IndentFilter.DropSqlTable;
+  if (KatstroyFilter.IsActive) KatstroyFilter.DropSqlTable;
+  if (PersonFilter  .IsActive) PersonFilter.DropSqlTable;
+  if (KatorgFilter  .IsActive) KatorgFilter.DropSqlTable;
+  if (BasedocFilter .IsActive) BasedocFilter.DropSqlTable;
+  if (StatusFilter  .IsActive) StatusFilter.DropSqlTable;
+  if (PriorFilter   .IsActive) PriorFilter.DropSqlTable;
+
+  rereadrecord(#tPlanOMTO);
+}
+
+procedure FillCustomFiltersSelectionTables;
+{
+  GroupmcFilter .CustomPicker.ClearSelectionTable;
+  KatmcFilter   .CustomPicker.ClearSelectionTable;
+  IndentFilter  .CustomPicker.ClearSelectionTable;
+  KatstroyFilter.CustomPicker.ClearSelectionTable;
+  PersonFilter  .CustomPicker.ClearSelectionTable;
+  KatorgFilter  .CustomPicker.ClearSelectionTable;
+  BasedocFilter .CustomPicker.ClearSelectionTable;
+  StatusFilter  .CustomPicker.ClearSelectionTable;
+  PriorFilter   .CustomPicker.ClearSelectionTable;
+
+  pushpos(#brpl);
+  _loop brpl
+  {
+    GroupmcFilter .CustomPicker.AddSelectionTableRecord(brpl.GroupmcNrec , brpl.GroupmcName);
+    KatmcFilter   .CustomPicker.AddSelectionTableRecord(brpl.KatmcNrec   , brpl.KatmcName);
+    IndentFilter  .CustomPicker.AddSelectionTableRecord(brpl.IndentNrec  , brpl.IndentName);
+    KatstroyFilter.CustomPicker.AddSelectionTableRecord(brpl.KatstroyNrec, brpl.KatstroyName);
+    PersonFilter  .CustomPicker.AddSelectionTableRecord(brpl.PersonNrec  , brpl.PersonName);
+    KatorgFilter  .CustomPicker.AddSelectionTableRecord(brpl.KatorgNrec  , brpl.KatorgName);
+    BasedocFilter .CustomPicker.AddSelectionTableRecord(brpl.BasedocNrec , brpl.BasedocName);
+    StatusFilter  .CustomPicker.AddSelectionTableRecord(brpl.KatnotesNrec, brpl.KatnotesName);
+    PriorFilter   .CustomPicker.AddSelectionTableRecord(brpl.PriorNrec   , brpl.PriorName);
+  }
+  poppos(#brpl);
+
+  GroupmcFilter .DeleteMismatchSelections;
+  KatmcFilter   .DeleteMismatchSelections;
+  IndentFilter  .DeleteMismatchSelections;
+  KatstroyFilter.DeleteMismatchSelections;
+  PersonFilter  .DeleteMismatchSelections;
+  KatorgFilter  .DeleteMismatchSelections;
+  BasedocFilter .DeleteMismatchSelections;
+  StatusFilter  .DeleteMismatchSelections;
+  PriorFilter   .DeleteMismatchSelections;
+}
+
+function bitset(aFlag: word; aBit: byte): boolean;
+{
+  var w: word;
+  w := 1;
+  var i: byte;
+  i := 1;
+  for (i := 1; i <= aBit; i++)
+  {
+    w := w * 2;
+  }
+  result := ((w and aFlag) > 0);
+}
+
+procedure SetFilterActivity(f: oSqlPickFilter; fld: longint; active: boolean);
+{
+  if active
+  {
+    f.Activate;
+    SetFieldOption(fld, ofSelectable);
+  }
+  else
+  {
+    f.Deactivate;
+    ClearFieldOption(fld, ofSelectable);
+  }
+}
+
+procedure RefreshFiltersActivity;
+{
+  SetFilterActivity(GroupmcFilter , #GroupmcFilterPresentation , (bitset(filtersFlag, 0)));
+  SetFilterActivity(KatmcFilter   , #KatmcFilterPresentation   , (bitset(filtersFlag, 1)));
+  SetFilterActivity(IndentFilter  , #IndentFilterPresentation  , (bitset(filtersFlag, 2)));
+  SetFilterActivity(KatstroyFilter, #KatstroyFilterPresentation, (bitset(filtersFlag, 3)));
+  SetFilterActivity(PersonFilter  , #PersonFilterPresentation  , (bitset(filtersFlag, 4)));
+  SetFilterActivity(KatorgFilter  , #KatorgFilterPresentation  , (bitset(filtersFlag, 5)));
+  SetFilterActivity(BasedocFilter , #BasedocFilterPresentation , (bitset(filtersFlag, 6)));
+  SetFilterActivity(StatusFilter  , #StatusFilterPresentation  , (bitset(filtersFlag, 7)));
+  SetFilterActivity(PriorFilter   , #PriorFilterPresentation   , (bitset(filtersFlag, 8)));
+
+  if bitset(dateFiltersFlag, 0)
+  {
+    SetFieldOption(#BasedocDateStart, ofSelectable);
+    SetFieldOption(#BasedocDateEnd  , ofSelectable);
+  }
+  else
+  {
+    ClearFieldOption(#BasedocDateStart, ofSelectable);
+    ClearFieldOption(#BasedocDateEnd  , ofSelectable);
+  }
+
+}
+
+//обновление выборки по фильтрам, да и вообще, обновление всего что можно
+procedure refresh;
+{
+  var tmpSpmnplanNrec: comp;
+  tmpSpmnplanNrec := brpl.SpmnplanNrec;
+
+  //Обновим активность фильтров
+  RefreshFiltersActivity;
+
+  //Загружаем данные во временную таблицу
+  LoadDataByMnplanNrec(_mnplanNrec);
+
+  //Обновляем таблицы выбора фильтров
+  FillCustomFiltersSelectionTables;
+
+  _loop brpl
+  {
+    if tmpSpmnplanNrec = brpl.SpmnplanNrec break;
+  }
+
+  rereadrecord(#brpl);
+  rereadrecord;
+}
+
+procedure InitInterface(mnplanNrec: comp);
+{
+  _mnplanNrec := mnplanNrec; //000100000000064Fh;
+
+  //Проверяем план
+  if (getfirst mnp != tsOk)
+  {
+    message('Попытка открыть план с несуществующим nrec', error);
+    exit;
+  }
+
+  //Инициализируем фильтры
+  GroupmcFilter  := oSqlCustomPickFilter(new(SqlCustomPickFilter, InitSqlCustomPickFilter('Фильтр по группам МЦ', 'GroupmcFilter')));
+  KatmcFilter    := oSqlCustomPickFilter(new(SqlCustomPickFilter, InitSqlCustomPickFilter('Фильтр по МЦ','KatmcFilter')));
+  IndentFilter   := oSqlCustomPickFilter(new(SqlCustomPickFilter, InitSqlCustomPickFilter('Фильтр по заявкам','IndentFilter')));
+  KatstroyFilter := oSqlCustomPickFilter(new(SqlCustomPickFilter, InitSqlCustomPickFilter('Фильтр по заказам','KatstroyFilter')));
+  PersonFilter   := oSqlCustomPickFilter(new(SqlCustomPickFilter, InitSqlCustomPickFilter('Фильтр по сотрудникам','PersonFilter')));
+  KatorgFilter   := oSqlCustomPickFilter(new(SqlCustomPickFilter, InitSqlCustomPickFilter('Фильтр по поставщикам','KatorgFilter')));
+  BasedocFilter  := oSqlCustomPickFilter(new(SqlCustomPickFilter, InitSqlCustomPickFilter('Фильтр по счетам','BasedocFilter')));
+  StatusFilter   := oSqlCustomPickFilter(new(SqlCustomPickFilter, InitSqlCustomPickFilter('Фильтр по статусам','StatusFilter')));
+  PriorFilter    := oSqlCustomPickFilter(new(SqlCustomPickFilter, InitSqlCustomPickFilter('Фильтр по приоритетам','PriorFilter')));
+
+  //по умолчанию устанавливаем фильтр по всем статусам строк плана, кроме исполненных
+  _loop katnotes where (( 1200 == katnotes.viddoc and (katnotes.status <> 2) ))
+  {
+    StatusFilter.CustomPicker.AddSelectionTableRecord(katnotes.nrec, katnotes.name);
+  }
+
+  //флаги применимости фильтров
+  filtersFlag := 0;
+  //флаги применимости фильтров по датам
+  dateFiltersFlag := 0;
+  if not readmydsk(BasedocDateStart, 'PlanOMTO_BasedocDateStart', false) BasedocDateStart := date(1 ,  1, year(cur_date));
+  if not readmydsk(BasedocDateEnd  , 'PlanOMTO_BasedocDateEnd'  , false) BasedocDateEnd   := date(31, 12, year(cur_date));
+  //флаги применимости специальных фильтров
+  specFiltersFlag := 0;
+  //видимость скрина с фильтрами
+  filtersScreenVisible := true;
+
+  refresh;
+}
+
+procedure DoneInterface;
+{
+  if (not nullvipref(GroupmcFilter )) FreeVipInterface(GroupmcFilter );
+  if (not nullvipref(KatmcFilter   )) FreeVipInterface(KatmcFilter   );
+  if (not nullvipref(IndentFilter  )) FreeVipInterface(IndentFilter  );
+  if (not nullvipref(KatstroyFilter)) FreeVipInterface(KatstroyFilter);
+  if (not nullvipref(PersonFilter  )) FreeVipInterface(PersonFilter  );
+  if (not nullvipref(KatorgFilter  )) FreeVipInterface(KatorgFilter  );
+  if (not nullvipref(BasedocFilter )) FreeVipInterface(BasedocFilter );
+  if (not nullvipref(StatusFilter  )) FreeVipInterface(StatusFilter  );
+  if (not nullvipref(PriorFilter   )) FreeVipInterface(PriorFilter   );
+
+  savemydsk(BasedocDateStart, 'PlanOMTO_BasedocDateStart');
+  savemydsk(BasedocDateEnd  , 'PlanOMTO_BasedocDateEnd');
+
+}
+
+tableevent table brpl;
+  cmDoMarkUnmark:
+  {
+    if (brplMarked)
+      brplUnmark
+    else
+      brplMark;
+    redrawcurrentandgo(brPlanOMTO, true);
+  }
+  cmSelAll:
+  {
+    pushpos(#brpl);
+    delete all pick where ((WLIST_SPMNPLAN == pick.wlist));
+    StartNewVisual(vtRotateVisual, vfBreak+vfTimer, '', 0);
+    _loop brpl
+    {
+      brplMark;
+      if (not NextVisual) break;
+    }
+    StopVisual('',0);
+    poppos(#brpl);
+    rescanpanel(#brpl);
+  }
+  cmUnSelAll:
+  {
+    delete all pick where ((WLIST_SPMNPLAN == pick.wlist));
+    rescanpanel(#brpl);
+  }
+  cmPick:
+  {
+    case curfield of
+      #brpl.KatstroyName:
+      {
+        //проверяем, устанавливаем заказ для текущей строки или для помеченных
+        var multiple: boolean;  //установка для помеченных
+        multiple := false;
+        pushpos(#brpl);
+        _loop brpl
+        {
+          if brplMarked
+          {
+            if (message('Установить заказ для помеченных позиций?', yesNo) <> cmYes) exit;
+            multiple := true;
+            break;
+          }
+        }
+        poppos(#brpl);
+        //выбираем заказ
+        var c: comp;    //нрек заказа
+        c := brpl.KatstroyNrec;
+
+        if _getKau.GetCodeKau(1, 40, c) = 0 exit;
+
+        var ksName: string;
+        ksName := if(getanykau(1,40,c), givenanname(1), '');
+
+        if multiple
+        {
+          pushpos(#brpl);
+          _loop brpl
+          {
+            if (not brplMarked) continue;
+            update current brpl set brpl.KatstroyNrec := c, brpl.KatstroyName := ksName;
+            update spmnplan where ((brpl.SpmnplanNrec == spmnplan.nrec)) set spmnplan.cAnVal1 := c, spmnplan.wKodGr1 := 40;
+            if (getfirst spoa = tsOk)
+              if (getfirst fastfirstrow claim where ((spoa.cPos == claim.nrec)) = tsOk)
+                update current claim set claim.cvalkau[1] := c;
+          }
+          poppos(#brpl);
+        }
+        else
+        {
+          update current brpl set brpl.KatstroyNrec := c, brpl.KatstroyName := ksName;
+          update spmnplan where ((brpl.SpmnplanNrec == spmnplan.nrec)) set spmnplan.cAnVal1 := c, spmnplan.wKodGr1 := 40;
+          if (getfirst spoa = tsOk)
+            if (getfirst fastfirstrow claim where ((spoa.cPos == claim.nrec)) = tsOk)
+              update current claim set claim.cvalkau[1] := c;
+        }
+
+      }
+      #brpl.KatnotesName:
+      {
+        //проверяем, устанавливаем статус для текущей строки или для помеченных
+        var multiple: boolean;  //установка для помеченных
+        multiple := false;
+        pushpos(#brpl);
+        _loop brpl
+        {
+          if brplMarked
+          {
+            if (message('Установить статус для помеченных позиций?', yesNo) <> cmYes) exit;
+            multiple := true;
+            break;
+          }
+        }
+        poppos(#brpl);
+        //выбираем статус
+        var c: comp;    //нрек статуса
+        var n: string;  //наименование статуса
+        var st: word;
+        c := brpl.KatnotesNrec;
+        if (runinterface(l_dogovor::getsomkatnotes, 1200, 0, 0, false, c) != cmDefault) exit;
+        //определяем наименование выбранного статуса и проверяем, что такой статус существует
+        if (getfirst katnotes where ((c == katnotes.nrec)) = tsOk)
+        {
+          n := katnotes.name;
+          st := katnotes.status;
+        }
+        else
+        {
+          message('Ошибка установки статуса', Error);
+          exit;
+        }
+        //дата приема в работу
+        var newDateAccept: date;
+        newDateAccept := if (st > 0, cur_date, 0);
+        //устанавливаем статус для помеченных позиций
+        if multiple
+        {
+          pushpos(#brpl);
+          _loop brpl
+          {
+            if (not brplMarked) continue;
+            update current brpl set brpl.KatnotesNrec := c, brpl.KatnotesName := n, brpl.daccept := newDateAccept;
+            update spmnplan where ((brpl.SpmnplanNrec == spmnplan.nrec)) set spmnplan.cstatus := c, spmnplan.startdatefact := newDateAccept;
+            if (getfirst spoa = tsOk) _indentHelper.SetClaimState(spoa.cPos, st+1);
+          }
+          poppos(#brpl);
+        }
+        else //или для текущей позиции
+        {
+          update current brpl set brpl.KatnotesNrec := c, brpl.KatnotesName := n, brpl.daccept := newDateAccept;
+          update spmnplan where ((brpl.SpmnplanNrec == spmnplan.nrec)) set spmnplan.cstatus := c, spmnplan.startdatefact := newDateAccept;
+          if (getfirst spoa = tsOk) _indentHelper.SetClaimState(spoa.cPos, st+1);
+        }
+      }
+      #brpl.BasedocName:
+      {
+        if getfirst basedoc where ((brpl.basedocNrec == basedoc.nrec)) = tsOk
+          if basedoc.viddoc = 101 {
+            runinterfacenomodal(L_BASEDOC::VSCHETB,basedoc.nrec);
+          } else {
+            runinterfacenomodal(L_BASEDOC::VSCHETPB,basedoc.nrec);
+          }
+      }
+      #brpl.IndentName:
+      {
+        puthotcommand(cmEdit);
+        runinterface(M_MNPLAN::BOOKINGS, 0, brpl.IndentNrec, 0);
+      }
+      #brpl.KatmcName:
+      {
+        puthotcommand(cmDefault);
+        _kartStorage.StandOnMC(brpl.KatmcNrec);
+        runwindow(wKartStorage);
+      }
+    end;
+    rereadrecord(#brpl);
+  }
+  cmUpdateRecord:
+  {
+    update current brpl;
+    if getfirst spmnplan where ((brpl.SpmnplanNrec == spmnplan.nrec)) = tsOk
+      update current spmnplan set spmnplan.utvdate := brpl.ddeliverNew;
+  }
+  cmDeleteRecord: delete current brpl;
+  cmInsertRecord:
+  {
+    insert current brpl;
+    if getfirst spmnplan where ((brpl.SpmnplanNrec == spmnplan.nrec)) = tsOk
+      update current spmnplan set spmnplan.utvdate := brpl.ddeliverNew;
+  }
+end;
+
+handleevent
+cmHotKeys: puthotcommand(runmenu('mnuPlanOMTO'));
+
+cmCreateBasedoc:
+{
+  runinterface(AGAT::PlanOMTOCreateBasedoc, _mnplanNrec);
+  refresh;
+}
+
+cmLinkBasedoc:
+{
+  var positionMarked: boolean;
+  positionMarked := false;
+  pushpos(#brpl);
+  _loop brpl
+  {
+    if brplMarked
+    {
+      positionMarked := true;
+      break;
+    }
+  }
+  poppos(#brpl);
+  if not positionMarked brplMark;
+  runinterface(AGAT::PlanOMTOLinkBasedoc, _mnplanNrec);
+  if not positionMarked brplUnmark;
+  refresh;
+}
+
+cmCreateRegrade:
+{
+  var kau: tSpecmtrKau;
+  kau[1] := 0; kau[2] := 0; kau[3] := 0; kau[5] := 0; kau[6] := 0; kau[7] := 0; kau[8] := 0; kau[9] := 0;
+
+  var IndentNumbers, IndentNumber: string; IndentNumbers := '';
+
+  _distrMatByStock.ClearWarehousePartsForDistr;
+  if vMark.getfirst pick = tsOk
+  {
+    vMark._loop pick
+    {
+      if vMark.tPlanOMTO.IndentQty > vMark.tPlanOMTO.RegradingQty
+      {
+        kau[4] := vMark.tPlanOMTO.IndentNrec;
+        _distrMatByStock.AddWarehousePartForDistr(0, 0, vMark.tPlanOMTO.KatstroyNrec, vMark.tPlanOMTO.KatmcNrec, kau, vMark.tPlanOMTO.IndentQty - vMark.tPlanOMTO.RegradingQty);
+        IndentNumber := if(getanykau(1,26,vMark.tPlanOMTO.IndentNrec),givenanname(6),'');
+        if IndentNumber != '' and pos(IndentNumber, IndentNumbers) = 0
+          IndentNumbers += if(IndentNumbers<>'',',','')+IndentNumber;
+      }
+    }
+  }
+  else
+  {
+     kau[4] := brpl.IndentNrec;
+    _distrMatByStock.AddWarehousePartForDistr(0, 0, brpl.KatstroyNrec, brpl.KatmcNrec, kau, brpl.IndentQty - brpl.RegradingQty);
+  }
+
+  if _distrMatByStock.PrepareOnDate(cur_date)
+  {
+    _distrMatByStock.AutoDistribute;
+    if _distrMatByStock.ShowUI('Распределение') = cmDefault
+    {
+      var aMoveSet: AGAT::IMatMoveSet;
+      aMoveSet := _distrMatByStock.GetMatMoveSet;
+      var a: tCompArray;
+      a := _regradeDocManager.CreateRegradeDocs(aMoveSet, cur_date, 'РЗ'+IndentNumbers);
+      if Count(a) > 0
+        runinterfacenomodal(L_SKLAD::Peresort, a[0]);
+    }
+  }
+
+  runinterface(AGAT::PlanOMTORepository, _mnplanNrec);
+
+  refresh;
+}
+
+cmDocBas:
+{
+  if (filtersScreenVisible)
+  {
+    filtersScreenVisible := false;
+    cfsSetProp('scFilters', 'Visible', false);
+    cfsSetProp('brPlanOMTO', 'RectA_X', 1);
+  }
+  else
+  {
+    filtersScreenVisible := true;
+    var sx: longint;
+    cfsGetProp('brPlanOMTO','Size_X', sx);
+    cfsSetProp('brPlanOMTO', 'RectA_X', sx);
+    cfsSetProp('scFilters', 'Visible', true);
+  }
+}
+
+cmDelOnProtect:
+{
+  case curfield of
+    #GroupmcFilterPresentation : GroupmcFilter.ClearSelection;
+    #KatmcFilterPresentation   : KatmcFilter.ClearSelection;
+    #IndentFilterPresentation  : IndentFilter.ClearSelection;
+    #KatstroyFilterPresentation: KatstroyFilter.ClearSelection;
+    #PersonFilterPresentation  : PersonFilter.ClearSelection;
+    #KatorgFilterPresentation  : KatorgFilter.ClearSelection;
+    #BasedocFilterPresentation : BasedocFilter.ClearSelection;
+    #StatusFilterPresentation  : StatusFilter.ClearSelection;
+    #PriorFilterPresentation   : PriorFilter.ClearSelection;
+  end;
+  refresh;
+}
+
+cmPick:
+{
+  case curfield of
+    #GroupmcFilterPresentation : if(GroupmcFilter.Pick)  Refresh;
+    #KatmcFilterPresentation   : if(KatmcFilter.Pick)    Refresh;
+    #IndentFilterPresentation  : if(IndentFilter.Pick)   Refresh;
+    #KatstroyFilterPresentation: if(KatstroyFilter.Pick) Refresh;
+    #PersonFilterPresentation  : if(PersonFilter.Pick)   Refresh;
+    #KatorgFilterPresentation  : if(KatorgFilter.Pick)   Refresh;
+    #BasedocFilterPresentation : if(BasedocFilter.Pick)  Refresh;
+    #StatusFilterPresentation  : if(StatusFilter.Pick)   Refresh;
+    #PriorFilterPresentation   : if(PriorFilter.Pick)    Refresh;
+  end;
+}
+
+cmCheckField:
+{
+  case curfield of
+    #filtersFlag: refresh;
+    #dateFiltersFlag: refresh;
+    #BasedocDateStart: refresh;
+    #BasedocDateEnd: refresh;
+    #specFiltersFlag: refresh;
+    #sort1: refresh;
+    #sort2: refresh;
+    #sort3: refresh;
+    #brpl.Description:
+    {
+      if getfirst memDescr != tsOk
+      {
+        clearbuffer(#memDescr);
+        insert current memDescr;
+      }
+      ClearMemoField(memDescr.mem);
+      f.OpenMemo(memDescr.mem);
+      f.Writeln(brpl.Description);
+      f.Close;
+      update current memDescr;
+    }
+  end;
+}
+
+cmInit:
+{
+  //initinterface(000100000000064Fh);
+}
+
+end;
+
+end.
+
+mnuPlanOMTO menu
+{
+- 'Формирование ДО по помеченным позициям', cmCreateBasedoc, , , , , sci1Esc;
+- 'Привязка ДО к помеченным позициям', cmLinkBasedoc, , , , , sci1Esc;
+- 'Формирование акта на пересортицу', cmCreateRegrade, , , , , sci1Esc;
+}

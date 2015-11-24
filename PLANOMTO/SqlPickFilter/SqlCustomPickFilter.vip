@@ -1,0 +1,149 @@
+#include SqlPickFilter.vih
+#include CustomPicker.vih
+
+#component "AGAT"
+
+interface SqlCustomPickFilter;
+
+var
+  _customPicker: oCustomPicker(iCustomPicker) new;
+  _lMarker: longint;
+  _selectionTitle: string;
+  _tmptablename: string;
+  _active: boolean;
+
+function oSqlPickFilter.Caption: string;
+{
+  result := 'CustomPicker';
+}
+
+function oSqlPickFilter.Presentation: string;
+{
+  if (_lmarker = 0)
+  {
+    result := 'Все записи';
+  }
+  else
+  {
+    var cnt: longint;
+    cnt := getmarkercount(_lmarker);
+    if (cnt = 0)
+    {
+      result := 'Все записи'
+    }
+    else if (cnt = 1)
+    {
+      var c: comp;
+      if getmarker(_lmarker,0,c)
+        result := _customPicker.GetName(c)
+      else
+        result := 'Ошибка получения первой записи маркера';
+    }
+    else
+    {
+      result := 'Выбрано записей: '+cnt;
+    }
+  }
+}
+
+function oSqlPickFilter.Pick: boolean;
+{
+  result := _customPicker.Pick(_lmarker, _selectionTitle);
+}
+
+procedure oSqlPickFilter.ClearSelection;
+{
+  clearmarker(_lmarker);
+}
+
+procedure oSqlPickFilter.AddSelection(aNrec: comp);
+{
+  if (_lmarker != 0) insertmarker(_lmarker, aNrec);
+}
+
+function oSqlPickFilter.GetSqlTableName: string;
+{
+  result := _tmptablename;
+}
+
+function oSqlPickFilter.CreateSqlTable: boolean;
+{
+  result := false;
+  var stmt, s: longint;
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table '+_tmptablename+' (cRec: comp);');
+  if sqlCreateTmpTable(s, ctmNormal) = 0
+  {
+    stmt := sqlAllocStmt;
+    sqlPrepare(stmt, 'insert '+_tmptablename+' (crec) values (?)');
+    var c: comp;
+    var i: longint;
+    i := 0;
+    while getmarker(_lmarker, i, c)
+    {
+      sqlBindParam(stmt, 1, c);
+      if (sqlExecute(stmt) != 0)
+      {
+        message('Ошибка при вставке пометки в sql таблицу фильтра '+_tmptablename);
+        exit;
+      }
+      i++;
+    }
+    sqlFreeStmt(stmt);
+    result := true;
+  }
+}
+
+function oSqlPickFilter.DropSqlTable: boolean;
+{
+  result := sqlDropTmpTable(_tmptablename) = 0;
+}
+
+function oSqlPickFilter.IsActive: boolean;
+{
+  result := _active;
+}
+
+function oSqlPickFilter.SelectCount: longint;
+{
+  result := getmarkercount(_lmarker);
+}
+
+procedure oSqlPickFilter.Activate;
+{
+  _active := true;
+}
+
+procedure oSqlPickFilter.Deactivate;
+{
+  _active := false;
+}
+
+procedure oSqlCustompickFilter.DeleteMismatchSelections;
+{
+  var i: longint;
+  var c: comp;
+  i := 0;
+  while (getmarker(_lmarker, i, c))
+  {
+    if (not _customPicker.SelectionTableRecordExists(c))
+    {
+      deletemarker(_lmarker, c);
+    }
+    else
+    {
+      i++;
+    }
+  }
+}
+
+constructor InitSqlCustomPickFilter(aSelectionTitle: string; aTmpTableName: string);
+{
+  _selectionTitle := aSelectionTitle;
+  _tmptablename := aTmpTableName;
+  result := true;
+}
+
+property oSqlCustomPickFilter.CustomPicker: oCustomPicker read _customPicker;
+
+end.
