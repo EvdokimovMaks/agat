@@ -1,0 +1,139 @@
+#include query.vih
+
+#component "AGAT"
+
+interface OSBuhNalIznos 'Суммы износа в бухгалтерском и налоговом регистрах за период' escclose, doaccept;
+show (,,39,5);
+sql query query1 =
+select katos.innum, katos.nameos, period.year, period.month, coalesce(buh.iznos,0) as buhiznos, coalesce(nal.iznos,0) as naliznos,
+       coalesce(buhho.name1,'') as buhhozopername, coalesce(nalho.name1,'') as nalhozopername
+from katos
+
+left join spkatos buhos on buhos.ckatos = katos.nrec and buhos.cnastros = #comp(40004458C3DFDFBFh)
+left join hozoper buhho on buhho.nrec = buhos.chozoper
+
+left join spkatos nalos on nalos.ckatos = katos.nrec and nalos.cnastros = #comp(0001000000000002h)
+left join hozoper nalho on nalho.nrec = nalos.chozoper
+
+join (select ckatos, cast(year(datetime(datob,0)) as word) as year, cast(month(datetime(datob,0)) as byte) as month
+      from spmoveos
+      where sysoper=5 and datob between :StartDate and :EndDate
+      group by ckatos, cast(year(datetime(datob,0)) as word), cast(month(datetime(datob,0)) as byte)
+     ) period on katos.nrec = period.ckatos
+
+left join (select ckatos, cast(year(datetime(datob,0)) as word) as year, cast(month(datetime(datob,0)) as byte) as month, sum(newsumizn) as iznos
+           from spmoveos
+           where sysoper=5 and cnastros=#comp(40004458C3DFDFBFh) and datob between :StartDate and :EndDate
+           group by ckatos, cast(year(datetime(datob,0)) as word), cast(month(datetime(datob,0)) as byte)
+          ) buh on katos.nrec = buh.ckatos and period.year = buh.year and period.month = buh.month
+
+left join (select ckatos, cast(year(datetime(datob,0)) as word) as year, cast(month(datetime(datob,0)) as byte) as month, sum(newsumizn) as iznos
+           from spmoveos
+           where sysoper=5 and cnastros=#comp(0001000000000002h) and datob between :StartDate and :EndDate
+           group by ckatos, cast(year(datetime(datob,0)) as word), cast(month(datetime(datob,0)) as byte)
+          ) nal on katos.nrec = nal.ckatos and period.year = nal.year and period.month = nal.month
+
+where coalesce(buh.iznos,0)<>0 or coalesce(nal.iznos,0)<>0
+;
+
+table struct tRep (
+  innum    : string,
+  nameos   : string,
+  year     : word,
+  month    : byte,
+  buhiznos : double,
+  naliznos : double,
+  buhhoname: string,
+  nalhoname: string
+) with index (
+  i01 = innum + year + month
+);
+
+create view
+var
+  d1: date;
+  d2: date;
+as select *
+from tRep;
+
+datastream dsRep auto;
+
+screen sc1;
+fields
+  d1: noprotect;
+  d2: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Период с `.@@@@@@@@@@ `по`.@@@@@@@@@@
+
+         <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+cmDoOk:
+{
+  var q: IQuery;
+  q := queryManager.createQuery(query1);
+  q.setParam('StartDate', d1);
+  q.setParam('EndDate', d2);
+  var rs: IResultSet;
+  rs := q.getResultSet;
+  if (rs != nullref) and (q.errorCode = tsOk)
+  {
+    delete all tRep;
+    sqlCopyInto(rs, #tRep, false);
+    runfreport(dsRep, '', false);
+  }
+  else
+    message('Ошибка выполнения запроса', error);
+}
+cmInit:
+{
+  if not readmydsk(d1, 'OSBuhNalIznos_d1', false) d1 := date(1 , 1 , year(cur_date));
+  if not readmydsk(d2, 'OSBuhNalIznos_d2', false) d2 := date(31, 12, year(cur_date));
+}
+cmDone:
+{
+  savemydsk(d1, 'OSBuhNalIznos_d1');
+  savemydsk(d2, 'OSBuhNalIznos_d2');
+}
+end;
+
+end.
+
+VipInterface UserReport_OSBuhNalIznos Implements IUserReport licensed(free);
+Interface UserReport_OSBuhNalIznos;
+  create view dummy;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::OSBuhNalIznos);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'Агат. Суммы износа в бухгалтерском и налоговом регистрах за период';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'B_OSN';
+    end;
+  }
+end.
