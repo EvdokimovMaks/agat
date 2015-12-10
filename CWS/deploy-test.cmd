@@ -1,2 +1,2 @@
-@call ../config/deploy.cmd test ArgumentBarcode %%%%startpath%%%%_Argument\ _Argument
+@call ../config/deploy.cmd test ArgumentCWS %%%%startpath%%%%_Argument\ _Argument
 
