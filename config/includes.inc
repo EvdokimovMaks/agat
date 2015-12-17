@@ -1224,6 +1224,8 @@
 /i:"../COMMON/OrgKPP"
 /i:"../COMMON/Stock"
 /i:"../COMMON/SqlHelper"
+/i:"../COMMON/JSLib"
+/i:"../COMMON/HashTable"
 /i:"../REGRADE/DistrMatByStock"
 /i:"../REGRADE/RecoverSporderKAU"
 /i:"../PLANOMTO/AgatKartStorage"
