@@ -2,7 +2,7 @@
 
 #component "AGAT"
 
-interface ReportRKMForm10D;
+interface ReportRKMForm14D;
 
 //выбор заполненных периодов из плана
 sql query QueryPeriods =
@@ -56,6 +56,7 @@ where mp.nrec = :MnplanNrec
 //значения в количественных колонках плана
 sql query QueryValues =
 select spm.nrec      as SpmnplanNrec,
+       spm.canval2   as DetailsNrec,
        per.nrec      as FpperiodNrec,
        vsp.kol       as Field1,
        vsp.price     as Field2,
@@ -85,6 +86,7 @@ table struct tPeriods (
 //таблица значений из плана (заполняется QueryValues)
 table struct tValues (
   SpmnplanNrec: comp,
+  DetailsNrec : comp,
   FpperiodNrec: comp,
   Field1      : double,
   Field2      : double,
@@ -94,8 +96,10 @@ table struct tValues (
   Field6      : double,
   Field7      : double
 ) with index (
-  i01 = SpmnplanNrec + FpperiodNrec
+  i01 = SpmnplanNrec + DetailsNrec + FpperiodNrec
 );
+
+type TTValues = record as table tValues;
 
 //таблица спецификации плана (заполняется QueryDetails)
 table struct tDetails (
@@ -138,7 +142,7 @@ var
 
 create view
 as select *
-from mnplan, tPeriods, tValues, tDetails, AllMemo
+from mnplan, tPeriods, tValues, tDetails, AllMemo, tDetails tDetails1, tValues tValues1
 where ((
   _mnplanNrec == mnplan.nrec
 ));
@@ -161,6 +165,7 @@ where ((
   tDetails.Nrec         == tDetChild.ParentNrec and
 
   tDetails.SpmnplanNrec == tValues.SpmnplanNrec and
+  tDetails.Nrec         == tValues.DetailsNrec and
   tPeriods.nrec         == tValues.FpperiodNrec
 ));
 
@@ -294,6 +299,32 @@ end; //handleevent dataset dsRep1;
 
 end; //datastream dRep1
 
+procedure AddValue(aDetailsNrec: comp; aValuesBuffer: TTValues);
+{
+  if getfirst tDetails1 where ((aDetailsNrec == tDetails1.Nrec)) = tsOk
+  {
+    if getfirst tValues1 where ((tDetails1.SpmnplanNrec     == tValues1.SpmnplanNrec and
+                                 aDetailsNrec               == tValues1.DetailsNrec and
+                                 aValuesBuffer.fpPeriodNrec == tValues1.fpPeriodNrec )) != tsOk
+    {
+      clearbuffer(#tValues1);
+      tValues1.SpmnplanNrec := tDetails1.SpmnplanNrec;
+      tValues1.DetailsNrec  := aDetailsNrec;
+      tValues1.fpPeriodNrec := aValuesBuffer.fpPeriodNrec;
+      insert current tValues1;
+    }
+    tValues1.Field1 += aValuesBuffer.Field1;
+    tValues1.Field2 += aValuesBuffer.Field2;
+    tValues1.Field3 += aValuesBuffer.Field3;
+    tValues1.Field4 += aValuesBuffer.Field4;
+    tValues1.Field5 += aValuesBuffer.Field5;
+    tValues1.Field6 += aValuesBuffer.Field6;
+    tValues1.Field7 += aValuesBuffer.Field7;
+    update current tValues1;
+    if (tDetails1.ParentNrec != 0) AddValue( tDetails1.ParentNrec, aValuesBuffer );
+  }
+}
+
 function FillTables: boolean;
 {
   result := false;
@@ -364,10 +395,38 @@ function FillTables: boolean;
   delete all tValues;
   sqlCopyInto(rs, #tValues, true);
 
-  insert tValues (SpmnplanNrec,FpperiodNrec,Field1,Field2,Field3,Field4,Field5,Field6,Field7)
-  select 0, tPeriods.nrec, 0, 0, 0, 0, 0, 0, 0
-  from tPeriods;
+  _loop tDetails
+    _loop tPeriods
+      if getfirst tValues where ((tDetails.SpmnplanNrec == tValues.SpmnplanNrec and tDetails.Nrec == tValues.DetailsNrec and tPeriods.Nrec == tValues.fpPeriodNrec )) != tsOk
+      {
+        clearbuffer(#tValues);
+        tValues.SpmnplanNrec := tDetails.SpmnplanNrec;
+        tValues.DetailsNrec  := tDetails.Nrec;
+        tValues.fpPeriodNrec := tPeriods.Nrec;
+        insert current tValues;
+      }
 
+  _loop tDetails where (tDetails.ChildCount > 0)
+  {
+    update tValues
+    where (( tDetails.SpmnplanNrec == tValues.SpmnplanNrec and tDetails.Nrec == tValues.DetailsNrec ))
+    set tValues.Field1 := 0,
+        tValues.Field2 := 0,
+        tValues.Field3 := 0,
+        tValues.Field4 := 0,
+        tValues.Field5 := 0,
+        tValues.Field6 := 0,
+        tValues.Field7 := 0;
+  }
+
+  _loop tDetails where (tDetails.ChildCount = 0 and tDetails.ParentNrec != 0)
+  {
+    _loop tPeriods
+    {
+      if getfirst tValues where ((tDetails.SpmnplanNrec == tValues.SpmnplanNrec and tDetails.Nrec == tValues.DetailsNrec and tPeriods.Nrec == tValues.fpPeriodNrec )) = tsOk
+        AddValue(tDetails.ParentNrec, TTValues(tValues.buffer));
+    }
+  }
   result := true;
 }
 

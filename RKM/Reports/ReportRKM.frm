@@ -13,6 +13,7 @@ where ((
   if v.getfirst mnplan = tsok
   {
     case v.mnplan.cwayaccou of
+      000100000000022Ch: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10620, 'РКМ Форма 2Д ПЛАНОВАЯ КАЛЬКУЛЯЦИЯ');     //'РКМ_Форма 2Д_Плановая_калькуляция'
       0001000000000125h: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC), 'РКМ Форма 3Д Материалы');                //'РКМ_Форма 3Д_Материалы'
       0001000000000188h: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC), 'РКМ Форма 4Д Полуфабрикаты');            //'РКМ_Форма 4Д_Полуфабрикаты'
       0001000000000191h: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC), 'РКМ Форма 5Д ПКИ');                      //'РКМ_Форма 5Д_ПКИ'
@@ -22,6 +23,7 @@ where ((
       00010000000001EBh: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10618, 'РКМ Форма 9Д ОБЩЕПРОИЗВОДСТВЕННЫЕ РАСХОДЫ');
       00010000000001D2h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10495, 'РКМ Форма 10Д ОБЩЕХОЗЯЙСТВЕННЫЕ РАСХОДЫ');
       0001000000000223h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10619, 'РКМ Форма 11Д СПЕЦИАЛЬНЫЕ ЗАТРАТЫ');
+      0001000000000235h: runinterface(AGAT::ReportRKMForm14D, comp(_MNREC), 10642, 'РКМ Форма 14Д ПРОЧИЕ ПРОИЗВОДСТВЕННЫЕ ЗАТРАТЫ');
       00010000000001F3h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10497, 'РКМ Форма 15Д СВЕДЕНИЯ ОБ ОБЪЕМАХ РЕАЛИЗАЦИИ ПРОДУКЦИИ');
     else
     {

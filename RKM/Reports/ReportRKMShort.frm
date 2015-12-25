@@ -13,6 +13,7 @@ where ((
   if v.getfirst mnplan = tsok
   {
     case v.mnplan.cwayaccou of
+      000100000000022Ch: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10620, 'ŠŒ ”®à¬  2 ‹€‚€Ÿ Š€‹œŠ“‹Ÿ–ˆŸ');
       0001000000000125h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), 'ŠŒ ”®à¬  4 Œ â¥à¨ «ë');
       0001000000000188h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), 'ŠŒ ”®à¬  5 ®«ãä ¡à¨ª âë');
       0001000000000191h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), 'ŠŒ ”®à¬  6 Šˆ');
@@ -21,6 +22,7 @@ where ((
       0001000000000223h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10619, 'ŠŒ ”®à¬  10 ‘…–ˆ€‹œ›… ‡€’€’›');
       00010000000001F3h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10497, 'ŠŒ ”®à¬  14 ‘‚…„…ˆŸ  š…Œ€• …€‹ˆ‡€–ˆˆ „“Š–ˆˆ');
       0001000000000172h: runinterface(AGAT::ReportRKMForm8D, comp(_MNREC), 'ŠŒ ”®à¬  7 €‘˜ˆ”‚Š€ ‡ ˆ ’“„‡€’€’', 1);
+      0001000000000235h: runinterface(AGAT::ReportRKMForm14D, comp(_MNREC), 10642, 'ŠŒ ”®à¬  14„ —ˆ… ˆ‡‚„‘’‚…›… ‡€’€’› Š€’Š€Ÿ');
     else
     {
       var s: string;
