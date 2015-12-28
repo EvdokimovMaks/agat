@@ -1,0 +1,828 @@
+#include pws.vih
+#include pwsDataRepository.vih
+#define sum_format '\2p[|-]366`666`666`666`666.88'
+#define time_format '\2p[|-]366`666`666`666`666.888'
+
+#component "AGAT"
+
+const
+  cmCopyWorks = 30005;
+  cmCopyWorksToPerson = 30006;
+  cmDocBas         = 5055;
+  cmImportPersonWorks = 5056;
+  cmShowOrdersInfo = 5057;
+end;
+
+
+interface editpws;
+
+var
+  _mnplanNrec: comp;
+  _pwsDataRepository: pwsDataRepository new;
+
+  pickOptions: iPickOptions(vPickOptions);
+  PAM: PersonalAccountMarks;
+  PV: PeriodValidator;
+
+  lpsnMarker: longint;
+  lwrkMarker: longint;
+  igetkau: getkau;
+  ea: iExtAttr;
+
+create view
+var
+  _pwsNrec: comp;
+as select *
+from pws brpws,
+     pwsPerson brPerson, klsisopl pwsPersonPayModel, klrejim pwsPersonWorkMode, lschet pwsPersonLschet, tSums pwsPersonSums,
+     pwsWork brWork, katstroy pwsWorkKatstroy,
+     pws, pwsPerson, pwsWork, tSums
+where ((
+  _pwsNrec            == brPws.Nrec and
+  _pwsNrec            == brPerson.pwsNrec and
+
+  brPerson.PayModel   == pwsPersonPayModel.sisopl and
+  brPerson.WorkMode   == pwsPersonWorkMode.rejim and
+  brPerson.LSchetNrec == pwsPersonLschet.nrec and
+  brPerson.Nrec       == pwsPersonSums.pwsPersonNrec and
+
+  brPerson.Nrec       == brWork.pwsPersonNrec and
+  brWork.KatstroyNrec == pwsWorkKatstroy.nrec
+));
+
+create view v
+as select *
+from persons, normtmr, rasoper, rasdop, tarstav;
+
+//parameters _mnplanNrec;
+
+function GetPayModelName: string;
+{
+  if getfirst pwsPersonPayModel = tsOk
+    result := pwsPersonPayModel.nasisopl
+  else
+    result := '';
+}
+
+function GetWorkModeName: string;
+{
+  if getfirst pwsPersonWorkMode = tsOk
+    result := pwsPersonWorkMode.nrejim
+  else
+    result := '';
+}
+
+browse brPers (,,sci1378InsPM);
+show(,,,7);
+table brPerson;
+fields
+  {font={color=if(foundmarker(lpsnMarker, brPerson.Nrec), 5,0)}};
+  if(foundmarker(lpsnMarker, brPerson.Nrec), 'V', '')      : [3] , noautosize, skip;
+  brPerson.PersonName        ' '#13'ФИО'                   : [40], protect, pickbutton;
+  brPerson.PersonCode        ' '#13'Таб.№'                 : [20], protect, pickbutton;
+  GetPayModelName             'Система'#13'оплаты'         : [5], protect;
+  GetWorkModeName             'Режим'#13'работы'           : [5], protect;
+  brPerson.Grade             ' '#13'Разряд'                : [4], noprotect;
+  brPerson.BalanceHoursPlan  'Фонд'#13'времени'            : [10, #sum_format], noprotect;
+  brPerson.BalanceHoursFact  'Отработано'#13'по факту'     : [10, #sum_format], noprotect;
+  if(brPerson.PayModel<>20, doubletostr(brPerson.SalaryPlan, #sum_format), '') 'Оклад'#13'плановый': [10], protect;
+  if(brPerson.PayModel<>20, doubletostr(brPerson.SalaryFact, #sum_format), '') 'Оклад'#13'фактический': [10], protect;
+  brPerson.WorkedHoursFull   'Отработано'#13'всего часов'  : [10, #sum_format], protect;
+  brPerson.RatePercent       '% выполнения'#13'нормы'      : [8 , #sum_format], protect;
+  brPerson.PaymentValue      'Сумма'#13'заработка'         : [10, #sum_format], protect;
+  brPerson.BonusPercent      'Процент'#13'премии'          : [10, #sum_format], noprotect;
+  brPerson.BonusValue        'Сумма'#13'премии'            : [10, #sum_format], protect;
+  brPerson.QualifPayValue    'Сумма'#13'межразр. надбавки' : [10, #sum_format], protect;
+  brPerson.HazardPayValue    'Сумма'#13'надб. за вредность': [10, #sum_format], protect;
+  brPerson.BonusHzrdPercent  'Процент'#13'прем. за вредн.' : [10, #sum_format], noprotect;
+  brPerson.BonusHzrdValue    'Сумма'#13'прем. за вредн.'   : [10, #sum_format], noprotect;
+  brPerson.BonusOtherValue   'Сумма'#13'доп. надбавка'     : [10, #sum_format], noprotect;
+end;
+
+browse brWork (,,sci1378InsPM);
+show(,8,,);
+table brWork;
+fields
+  {font={color=if(foundmarker(lwrkMarker, brWork.Nrec), 5,0)}};
+  if(foundmarker(lwrkMarker, brWork.Nrec), 'V', '')      : [3] , noautosize, skip;
+  brWork.Number                    'Номер'#13'наряда'              : [10] , noprotect;
+  brWork.JobCreationDate           'Дата'#13'выдачи задания'       : [10] , noprotect;
+  brWork.JobFinishDate             'Дата'#13'выполнения задания'   : [10] , noprotect;
+  brWork.Kind                      ' '#13'Вид'                     : [10] , [list 0 '20.03', 1 'Гар. рем.', 2 '26.01'];
+  [KatstroyName] if(getanykau(0, 40, brWork.KatstroyNrec),givenanname(1),'') ' '#13'Заказ': [10] , protect, pickbutton, quickChoice;
+  brWork.KatmarshCode              'Работа'#13'код'                : [6]  , noprotect, pickbutton;
+  brWork.KatmarshName              'Работа'#13'наименование'       : [20] , noprotect, pickbutton;
+  brWork.MarshspCode               'Операция'#13'код'              : [6]  , noprotect, pickbutton;
+  brWork.MarshspName               'Операция'#13'наименование'     : [20] , noprotect, pickbutton;
+  brWork.Grade                     'Разряд'#13'работы'             : [6]  , noprotect;
+  brWork.Qty                       'Количество'#13'работ'          : [8]  , noprotect;
+  brWork.PieceHours                'Время'#13'штучное'             : [8,#time_format], noprotect;
+  brWork.PrepareHours              'Время'#13'подг./закл.'         : [8,#time_format], noprotect;
+  brWork.StdHours                  'Время'#13'с уч. подг./закл.'   : [8,#time_format], protect;
+  brWork.FullHours                 'Время'#13'на партию'           : [8,#time_format], protect;
+  brWork.AvgHours                  'Время'#13'усредненное'         : [8,#time_format], protect;
+  brWork.Koeff                     ' '#13'Коэффициент'             : [8,#time_format], noprotect;
+  brWork.Price                     'Расценка'#13'на 1 шт'          : [8,#time_format], protect;
+  brWork.Tarif                     'Тар. ставка'#13'разряда работы': [8,#sum_format], protect;
+  brWork.PaymentValue              'Сумма'#13'Заработка'           : [8,#sum_format], protect;
+  brWork.HazardPayPercent          '% надбавки'#13'за вредность'   : [8,#sum_format], noprotect;
+  brWork.HazardPayValue            'Надбавка'#13'за вредность'     : [8,#sum_format], protect;
+  brWork.QualifPayPercent          'Межразр.'#13'% надбавки'       : [8,#sum_format], noprotect;
+  brWork.QualifPayValue            'Межразр.'#13'сумма'            : [8,#sum_format], protect;
+end;
+
+window wSelectPwsPerson 'Выбор сотрудника наряда', escclose, doaccept;
+browse brselectperson;
+table brPerson;
+fields
+  brPerson.PersonName        ' '#13'ФИО'                   : [40], protect, pickbutton;
+  brPerson.PersonCode        ' '#13'Таб.№'                 : [20], protect, pickbutton;
+  GetPayModelName             'Система'#13'оплаты'         : [5], protect;
+  GetWorkModeName             'Режим'#13'работы'           : [5], protect;
+  brPerson.Grade             ' '#13'Разряд'                : [4], noprotect;
+end;
+end;
+
+function LoadData: boolean;
+{
+  _pwsNrec := _pwsDataRepository.LoadPwsByMnplanNrec(_mnplanNrec);
+  result := _pwsNrec != 0;
+  rereadrecord(#brPerson);
+  rereadrecord(#brWork);
+}
+
+function SaveData: boolean;
+{
+  result := _pwsDataRepository.SavePws(_pwsNrec);
+}
+
+procedure CalcPwsPersonBalanceTimePlan;
+{
+  brPerson.BalanceHoursPlan := BalBwDates(brPerson.WorkMode, brpws.StartDate, brpws.EndDate, 1);
+}
+
+procedure CalcPersonSums(_pwsPersonNrec: comp);
+{
+  delete all tSums where ((_pwsPersonNrec == tSums.pwsPersonNrec));
+  clearbuffer(#tsums);
+  tSums.pwsPersonNrec := _pwsPersonNrec;
+  _loop pwsWork where ((_pwsPersonNrec == pwsWork.pwsPersonNrec))
+  {
+    if pwsWork.HazardPayPercent > 0
+      tSums.HazardHours := tSums.HazardHours + pwsWork.FullHours;
+    else
+      tSums.ClearHours := tSums.ClearHours + pwsWork.FullHours;
+    tSums.FullHours := tSums.FullHours + pwsWork.FullHours;
+    tSums.PaymentValue := tSums.PaymentValue + pwsWork.PaymentValue;
+    tSums.HazardPayValue := tSums.HazardPayValue + pwsWork.HazardPayValue;
+    tSums.QualifPayValue := tSums.QualifPayValue + pwsWork.QualifPayValue;
+  }
+  insert current tsums;
+}
+
+procedure pwsPersonCalc;
+{
+  CalcPersonSums(brPerson.Nrec);
+
+  var _timeKoef: double;
+  _timeKoef := 0;
+
+  if getfirst pwsPersonSums = tsOk
+  {
+    if (getfirst pwsPersonLschet = tsOk)
+    {
+      if (pwsPersonLschet.rejim = 128)
+      {
+        if (pwsPersonSums.ClearHours > pwsPersonSums.HazardHours and brPerson.WorkMode <> 11)
+        {
+          brPerson.WorkMode := 11;
+          CalcPwsPersonBalanceTimePlan;
+        }
+        else if (pwsPersonSums.ClearHours <= pwsPersonSums.HazardHours and brPerson.WorkMode <> 128)
+        {
+          brPerson.WorkMode := 128;
+          CalcPwsPersonBalanceTimePlan;
+        }
+      }
+    }
+
+    brPerson.SalaryFact :=  if(brPerson.BalanceHoursPlan<>0, brPerson.BalanceHoursFact / brPerson.BalanceHoursPlan * brPerson.SalaryPlan, 0)
+
+    _timeKoef := if(brPerson.balanceHoursFact<>0, pwsPersonSums.FullHours / brPerson.balanceHoursFact, 0);
+    pushpos(#brWork);
+    _loop brWork
+    {
+      brWork.AvgHours := if(_timeKoef > 0, brWork.FullHours / _timeKoef, 0);
+
+      if brPerson.PayModel = 20
+      {
+        var _codtar: word;
+        if (getfirst pwsPersonLschet = tsOk) _codtar := pwsPersonLschet.codtar;
+
+        var _sisopl: word;
+        _sisopl := brPerson.PayModel;
+
+        var _razr: word;
+        _razr := brWork.Grade;
+
+        if v.getlast tarstav where ((_sisopl == tarstav.sisopl and _codtar == tarstav.codtar and _razr == tarstav.razr)) = tsOk
+          brWork.Tarif := v.tarstav.tarif;
+
+        brWork.PaymentValue := brWork.FullHours * brWork.Tarif * brWork.Koeff;
+      }
+      else
+      {
+        brWork.PaymentValue := if( pwsPersonSums.FullHours<>0, brPerson.SalaryFact * brWork.FullHours / pwsPersonSums.FullHours, 0);
+        brWork.Tarif := brWork.PaymentValue / brWork.FullHours;
+      }
+
+      brWork.Price := brWork.Tarif * brWork.StdHours;
+      brWork.HazardPayValue := brWork.PaymentValue * brWork.HazardPayPercent / 100;
+      brWork.QualifPayValue := brPerson.SalaryPlan * brWork.AvgHours * brWork.QualifPayPercent / 100;
+      update current brWork;
+    }
+    poppos(#brWork);
+  }
+
+  CalcPersonSums(brPerson.Nrec);
+  if getfirst pwsPersonSums = tsOk
+  {
+    brPerson.WorkedHoursFull := pwsPersonSums.FullHours;
+    brPerson.RatePercent     := _timeKoef * 100;
+    brPerson.PaymentValue    := pwsPersonSums.PaymentValue;
+    brPerson.HazardPayValue  := pwsPersonSums.HazardPayValue;
+    brPerson.QualifPayValue  := pwsPersonSums.QualifPayValue;
+    brPerson.BonusValue      := brPerson.BonusPercent * brPerson.PaymentValue / 100;
+    brPerson.BonusHzrdValue  := brPerson.BonusHzrdPercent * brPerson.HazardPayValue / 100;
+    update current brPerson;
+  }
+}
+
+procedure pwsWorkCalc;
+{
+  brWork.StdHours := brWork.PieceHours + if (brWork.Qty > 0, brWork.PrepareHours / brWork.Qty, 0);
+  brWork.FullHours := brWork.StdHours * brWork.Qty;
+
+  case brWork.Grade of
+    2:
+    {
+      case brPerson.Grade of
+        6: brWork.QualifPayPercent := 39.11;
+        5: brWork.QualifPayPercent := 29.38;
+        4: brWork.QualifPayPercent := 18.93;
+        3: brWork.QualifPayPercent := 9.27;
+      end;
+    }
+    3:
+    {
+      case brPerson.Grade of
+        6: brWork.QualifPayPercent := 32.88;
+        5: brWork.QualifPayPercent := 22.16;
+        4: brWork.QualifPayPercent := 10.65;
+      end;
+    }
+    4:
+    {
+      case brPerson.Grade of
+        6: brWork.QualifPayPercent := 24.88;
+        5: brWork.QualifPayPercent := 12.89;
+      end;
+    }
+    5:
+    {
+      if brPerson.Grade = 6 brWork.QualifPayPercent := 13.78
+    }
+  end;
+
+  update current brWork;
+
+  pwsPersonCalc;
+}
+
+procedure pwsWorkSaveChanges;
+{
+  if brWork.Nrec = 0
+  {
+    insert current brWork;
+  }
+  else
+  {
+    update current brWork;
+  }
+  SetNew(false);
+  SetModified(false);
+  pwsWorkCalc;
+}
+
+procedure pwsPersonSaveChanges;
+{
+  if brPerson.Nrec = 0
+    insert current brPerson
+  else
+    update current brPerson;
+  SetNew(false);
+  SetModified(false);
+}
+
+procedure CalcPwsPersonWorkMode;
+{
+  var _workmode: word;
+  if (getfirst pwsPersonLschet = tsOk) _workmode := pwsPersonLschet.rejim;
+  brPerson.WorkMode := _workmode;
+}
+
+procedure SetPwsPersonLschetNrec(_lschetNrec: comp);
+{
+  brPerson.LschetNrec := _lschetNrec;
+  if getfirst pwsPersonLschet = tsOk
+  {
+    var _personNrec: comp;
+    _personNrec := pwsPersonLschet.tperson;
+    if v.getfirst persons where ((_personNrec == persons.nrec)) = tsOk
+    {
+      brPerson.PersonNrec := v.persons.nrec;
+      brPerson.PersonName := v.persons.fio;
+      brPerson.PersonCode := v.persons.tabnmb;
+    }
+    brPerson.PayModel := pwsPersonLschet.sisopl;
+    brPerson.Grade := pwsPersonLschet.razr;
+    CalcPwsPersonWorkMode;
+    CalcPwsPersonBalanceTimePlan;
+    brPerson.BalanceHoursFact := brPerson.BalanceHoursPlan;
+    brPerson.SalaryPlan := pwsPersonLschet.tarif;
+  }
+}
+
+procedure pickPerson;
+{
+  if (brpws.PodrNrec = 0)
+  {
+    message('Укажите подразделение');
+    exit;
+  }
+  pickOptions.setFlags(256);  //vfViewByDepartment
+  pickOptions.SetShowValue(false);
+  pickOptions.SetCode(15001);
+  pickOptions.setGroup(brpws.PodrNrec);
+  pickOptions.SetVisibilityValidator(IPersonalAccountValidator(PV));
+  PV.SetPeriod(brpws.startDate, brpws.endDate);
+  PAM.SelectPersonalAccount(pickOptions);
+  var PAMI: IPersonalAccountMarksIterator;
+  PAMI := PAM.GetIterator;
+  var _c: comp;
+  if PAMI.First
+  {
+    _c := PAMI.GetPersonalAccount;
+    if getFirst brPerson where ((brpws.Nrec == brPerson.pwsNrec and  (_c = brPerson.LschetNrec) )) <> tsOk
+    {
+      brPerson.pwsNrec := brpws.Nrec;
+      SetPwsPersonLschetNrec(_c);
+      pwsPersonSaveChanges;
+    }
+  }
+}
+
+procedure AddPersons;
+{
+  if (brpws.PodrNrec = 0)
+  {
+    message('Укажите подразделение');
+    exit;
+  }
+  pickOptions.setFlags(256+96);  //vfViewByDepartment + vfMultipleSelection
+  pickOptions.SetShowValue(false);
+  pickOptions.SetCode(15001);
+  pickOptions.setGroup(brpws.PodrNrec);
+  pickOptions.SetVisibilityValidator(IPersonalAccountValidator(PV));
+  PV.SetPeriod(brpws.startDate, brpws.endDate);
+  PAM.SelectPersonalAccount(pickOptions);
+  var PAMI: IPersonalAccountMarksIterator;
+  PAMI := PAM.GetIterator;
+  var _c: comp;
+  if PAMI.First
+  do
+  {
+    _c := PAMI.GetPersonalAccount;
+    if getFirst brPerson where ((brpws.Nrec == brPerson.pwsNrec and  (_c = brPerson.LschetNrec) )) <> tsOk
+    {
+      clearbuffer(#brPerson);
+      brPerson.pwsNrec := brpws.Nrec;
+      SetPwsPersonLschetNrec(_c);
+      insert current brPerson;
+    }
+  }
+  while PAMI.Next;
+}
+
+procedure pickKatstroy;
+{
+  var _c: comp;
+  _c := brWork.KatstroyNrec;
+  if iGetKau.GetCodeKau(1, 40, _c) > 0
+  {
+    brWork.KatstroyNrec := _c;
+  }
+}
+
+procedure PickWorkAndOper;
+{
+  var _workCode: word;
+  var _operCode: integer;
+  _workCode := brWork.KatmarshCode;
+  _operCode := brWork.MarshSpCode;
+  if runinterface(z_mp::view_norm, _workCode, _operCode, 32) = cmdefault
+  {
+    brWork.KatmarshCode := _workCode;
+    brWork.MarshSpCode := _operCode;
+    if v.getfirst normtmr where (( _workCode == normtmr.kodwork)) = tsOk
+    {
+      brWork.KatmarshNrec := v.normtmr.nrec;
+      brWork.KatmarshName := v.normtmr.nwork;
+      brWork.KatmarshCode := v.normtmr.kodwork;
+    }
+    if v.getfirst rasoper where (( _workCode == rasoper.kodwork and _opercode == rasoper.noper )) = tsOk
+    {
+      brWork.Grade        := v.rasoper.razr;
+      brWork.MarshSpNrec  := v.rasoper.nrec;
+      brWork.MarshSpName  := v.rasoper.nmoper;
+      brWork.PieceHours   := v.rasoper.nrmtime;
+      brWork.PrepareHours := ea.doGetAttrID(16033,v.rasoper.nrec,ATTRNAM_PREPTIME)
+    }
+    if v.getfirst rasdop where ((_workCode == rasdop.kodwork and _operCode == rasdop.noper and (rasdop.vidopl = 16) )) = tsOk
+      brWork.HazardPayPercent := v.rasdop.proc
+    else
+      brWork.HazardPayPercent := 0;
+  }
+}
+
+tableevent table brPerson;
+  cmCheckField:
+  {
+    pwsPersonSaveChanges;
+    pwsPersonCalc;
+    rescanpanel(#brPerson);
+    rescanpanel(#brWork);
+  }
+  cmInsertRecord:
+  {
+    pwsPersonSaveChanges;
+    pwsPersonCalc;
+    rescanpanel(#brPerson);
+    rescanpanel(#brWork);
+  }
+  cmUpdateRecord:
+  {
+    pwsPersonSaveChanges;
+    pwsPersonCalc;
+    rescanpanel(#brPerson);
+    rescanpanel(#brWork);
+  }
+  cmDoMarkUnMark:
+  {
+    if not foundmarker(lpsnMarker, brPerson.Nrec)
+      insertmarker(lpsnMarker, brPerson.Nrec)
+    else
+      deletemarker(lpsnmarker, brPerson.Nrec);
+    redrawcurrentandgo(brPers, true);
+  }
+  cmSelAll:
+  {
+    clearmarker(lpsnMarker);
+    pushPos(#brPerson);
+    _loop brPerson
+    {
+      insertmarker(lpsnmarker, brPerson.Nrec);
+    }
+    popPos(#brPerson);
+    rescanpanel(#brPerson);
+  }
+  cmUnSelAll:
+  {
+    clearmarker(lpsnMarker);
+    rescanpanel(#brPerson);
+  }
+end;
+
+tableevent table brWork;
+  cmCheckField:
+  {
+    pwsWorkSaveChanges;
+    rescanpanel(#brWork);
+    rescanpanel(#brPerson);
+  }
+  cmSetDefault:
+  {
+    brWork.Koeff := 1;
+    brWork.JobCreationDate := brpws.StartDate;
+    brWork.JobFinishDate := brpws.EndDate;
+    brWork.pwsPersonNrec := brPerson.Nrec;
+  }
+  cmInsertRecord:
+  {
+    pwsWorkSaveChanges;
+    rescanpanel(#brWork);
+    rescanpanel(#brPerson);
+  }
+  cmUpdateRecord:
+  {
+    pwsWorkSaveChanges;
+    rescanpanel(#brWork);
+    rescanpanel(#brPerson);
+  }
+  cmDoMarkUnMark:
+  {
+    if not foundmarker(lwrkMarker, brWork.Nrec)
+      insertmarker(lwrkMarker, brWork.Nrec)
+    else
+      deletemarker(lwrkMarker, brWork.Nrec);
+    redrawcurrentandgo(brWork, true);
+  }
+  cmSelAll:
+  {
+    clearmarker(lwrkMarker);
+    pushPos(#brWork);
+    _loop brWork
+    {
+      insertmarker(lwrkMarker, brWork.Nrec);
+    }
+    popPos(#brWork);
+    rescanpanel(#brWork);
+  }
+  cmUnSelAll:
+  {
+    clearmarker(lwrkMarker);
+    rescanpanel(#brWork);
+  }
+end;
+
+function oEditPws.InitInterface(aMnplanNrec: comp): boolean;
+{
+  result := false;
+  _mnplanNrec := aMnplanNrec; //0001000000000659h;
+
+  delete all pws;
+  delete all pwsPerson;
+  delete all pwsWork
+
+  if not LoadData
+  {
+    message('Ошибка при открытии наряда. Попытка открыть несуществующий наряд.', error);
+    exit;
+  }
+  if getfirst brpws != tsOk
+  {
+    message('Ошибка при открытии наряда. Ошибка открытия временной таблицы', error);
+    exit;
+  }
+  lpsnMarker := initmarker('', 8, 10, 100);
+  lwrkMarker := initmarker('', 8, 10, 100);
+  result := true;
+}
+
+function oEditPws.DoneInterface: boolean;
+{
+  result := false;
+  if not SaveData
+  {
+    message('Ошибка сохранения изменений', error);
+    exit;
+  }
+  donemarker(lpsnMarker, '');
+  donemarker(lwrkMarker, '');
+  result := true;
+}
+
+function oEditPws.ReloadHeader: boolean;
+{
+  result := false;
+  pushPos(#brPws);
+  if getfirst brPws = tsOk
+  {
+    result := _pwsDataRepository.LoadPws(brPws.MnplanNrec, _pwsNrec);
+  }
+  popPos(#brPws);
+  rescanpanel(#brPerson);
+  rescanpanel(#brWork);
+}
+
+function oEditPws.RecalcBalanceHoursPlan: boolean;
+{
+  result := false;
+  pushpos(#brPerson);
+  _loop brPerson
+  {
+    CalcPwsPersonBalanceTimePlan;
+    pwsPersonCalc;
+  }
+  poppos(#brPerson);
+  rescanpanel(#brPerson);
+  rescanpanel(#brWork);
+  result := true;
+}
+
+handleevent
+  cmShowOrdersInfo:
+  {
+    runinterface(AGAT::pwsOrderInfo, _pwsNrec);
+  }
+  cmImportPersonWorks:
+  {
+    runinterface(AGAT::pwsImportWorksFromExcel, brpws.nrec, brperson.nrec);
+    pushpos(#brWork);
+    _loop brWork
+    {
+      pwsWorkCalc;
+    }
+    poppos(#brWork);
+    rescanpanel(#brPerson);
+    rescanpanel(#brWork);
+  }
+  cmCopyWorks:
+  {
+    if (isvalid(#pwsWork)) pwsWorkSaveChanges;
+    if getfirst pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) )) != tsOk
+    {
+      if (brWork.nrec != 0) insertmarker(lwrkMarker, brWork.nrec)
+      else exit;
+    }
+    _loop pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) ))
+    {
+      pushpos(#pwsWork);
+      pwsWork.Nrec := 0;
+      pwsWork.SpmnplNrec := 0;
+      pwsWork.ValspmnpNrec := 0;
+      insert current pwsWork;
+      poppos(#pwsWork);
+      deletemarker(lwrkMarker, pwsWork.nrec);
+    }
+    pwsPersonCalc;
+    rescanpanel(#brPerson);
+    rescanpanel(#brWork);
+  }
+  cmCopyWorksToPerson:
+  {
+    if (isvalid(#pwsWork)) pwsWorkSaveChanges;
+    if getfirst pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) )) != tsOk
+    {
+      if (brWork.nrec != 0) insertmarker(lwrkMarker, brWork.nrec)
+      else exit;
+    }
+    var _curPersonNrec: comp;
+    _curPersonNrec := brPerson.nrec;
+    pushpos(#brPerson);
+    if (runwindowmodal(wSelectPwsPerson) = cmDefault)
+    {
+      _loop pwsWork where ((_curPersonNrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) ))
+      {
+        pushpos(#pwsWork);
+        pwsWork.Nrec := 0;
+        pwsWork.SpmnplNrec := 0;
+        pwsWork.ValspmnpNrec := 0;
+        pwsWork.PwsPersonNrec := brPerson.Nrec;
+        insert current pwsWork;
+        poppos(#pwsWork);
+        deletemarker(lwrkMarker, pwsWork.nrec);
+      }
+      pwsPersonCalc;
+    }
+    poppos(#brPerson);
+    rescanpanel(#brPerson);
+    rescanpanel(#brWork);
+  }
+  cmPick:
+  {
+    case curfield of
+      #KatstroyName:
+      {
+        pickKatstroy;
+        setmodified(true);
+        rescanpanel(#brwork);
+      }
+      #brWork.KatmarshCode,
+      #brWork.KatmarshName,
+      #brWork.MarshSpCode,
+      #brWork.MarshSpName:
+      {
+        PickWorkAndOper;
+        setmodified(true);
+        rescanpanel(#brwork);
+      }
+      #brPerson.PersonName,
+      #brPerson.PersonCode:
+      {
+        PickPerson;
+        pwsPersonSaveChanges;
+        rereadrecord(#brPerson);
+      }
+    end;
+  }
+  cmInsert:
+  {
+    case curtable of
+      #brPerson:
+      {
+        AddPersons;
+        Abort;
+        rereadrecord(#brPerson);
+      }
+      /*
+      #brWork:
+      {
+        clearbuffer(#pwsWork);
+        pwsWork.pwsPersonNrec := pwsPerson.Nrec;
+        PickWorkAndOper;
+        insert current pwsWork;
+        Abort;
+        rereadrecord(#pwsWork);
+      }       */
+    end;
+  }
+
+  cmDelete:
+  {
+    case curtable of
+      #brPerson:
+      {
+        if getmarkercount(lpsnmarker) > 0
+        {
+          if message('Удалить помеченные позиции сотрудников?', YesNo) = cmYes
+          {
+            pushpos(#brPerson);
+            _loop brPerson where ((brpws.nrec == brPerson.pwsNrec and (foundmarker(lpsnMarker, brPerson.Nrec) ) ))
+            {
+              delete all pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec));
+              delete current brPerson;
+            }
+            poppos(#brPerson);
+            clearmarker(lpsnMarker);
+          }
+        }
+        else
+        {
+          if message('Удалить сотрудника?', YesNo) = cmYes
+          {
+            delete all pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec));
+            delete current brPerson;
+          }
+        }
+        Abort;
+        rereadrecord(#brWork);
+        rereadrecord(#brPerson);
+      }
+      #brWork:
+      {
+        if getfirst pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) )) = tsOk
+        {
+          if message('Удалить помеченные позиции работ?', YesNo) = cmYes
+          {
+            _loop pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) ))
+            {
+              deletemarker(lwrkmarker, pwsWork.nrec);
+              delete current pwsWork;
+
+            }
+          }
+        }
+        else if message('Удалить работу?', YesNo) = cmYes
+        {
+          delete current brWork;
+        }
+        pwsPersonCalc;
+        Abort;
+        rereadrecord(#brWork);
+        rereadrecord(#brPerson);
+      }
+    end;
+  }
+
+  cmInit:
+  {
+    //InitInterface(0001000000000659h);
+  }
+
+  cmHotKeys:
+  {
+    case curTable of
+      #brWork: puthotcommand(runmenu('pwsWork_HotKeys'));
+      #brPerson: puthotcommand(runmenu('pwsPerson_HotKeys'));
+    end;
+  }
+  cmDocBas:
+  {
+    puthotcommand(cmCopyWorks);
+  }
+end;
+
+end.
+
+pwsWork_HotKeys Menu
+{
+- 'Скопировать работы',cmCopyWorks,'Скопировать текущую или помеченные работы',,'Alt+D',kbAltD,;
+- 'Скопировать работы другому сотруднику',cmCopyWorksToPerson,'',,,,;
+}
+
+pwsPerson_HotKeys Menu
+{
+- 'Импортировать наряды по сотруднику', cmImportPersonWorks;
+- 'Информация по заказам', cmShowOrdersInfo,'',,,,;
+}

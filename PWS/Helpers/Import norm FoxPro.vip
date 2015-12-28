@@ -1,0 +1,444 @@
+#include getkau.vih
+#include extattr.vih
+#component "AGAT"
+interface ImportFoxPro 'Импорт норм FoxPro', doAccept, escClose;
+show at (,,72,5);
+
+const
+  ATTRNAM_VRPZ = 00010000000003A9h;
+  sci1EnIns    =  6937;
+end;
+
+table struct detal (
+  nrec  : comp,
+  kod   : string[7],
+  obozn : string[30],
+  naim  : string[69]
+) with index (
+  i00 = nrec (unique,surrogate),
+  i01 = kod
+);
+
+table struct trud (
+  nrec : comp,
+  kod  : string[7],
+  kop  : string[5],
+  nop  : string[3],
+  ncex : string[3],
+  razr : double,
+  tpz  : double,
+  tct  : double
+) with index (
+  i00 = nrec (unique, surrogate),
+  i01 = kod + nop
+);
+
+table struct oper (
+  kop   : string[5],
+  naim  : string[15],
+  vrusl : integer
+) with index (
+  i01 = kop
+);
+
+var
+  dirPath  : string;
+  lMarker  : longint;
+  iGetKau  : GetKau;
+  ImportCnt: longint;
+  ea       : iExtAttr;
+
+create view
+as select *
+from detal, trud, oper, katmc, normtmr, katotped oe,
+     detal brdetal, trud brtrud, oper broper,
+     katmc brmc, normtmr brnormtmr, rasoper brrasoper, attrval avtpz, rasdop rdhazard
+where ((
+  brdetal.kod        == brtrud.kod         and
+
+  brtrud.kop         == broper.kop         and
+
+  brdetal.kod        == brmc.barkod2       and
+
+  brmc.nrec          == brnormtmr.cmc      and
+
+  brnormtmr.kodwork  == brrasoper.kodwork  and
+  brtrud.nop         == brrasoper.noper    and
+
+  16033              == avtpz.wtable       and
+  brrasoper.nrec     == avtpz.crec         and
+  ATTRNAM_VRPZ       == avtpz.cattrnam     and
+
+  brrasoper.kodwork  == rdhazard.kodwork   and
+  brrasoper.noper    == rdhazard.noper     and (16 = rdhazard.vidopl)
+))
+condition byMarker = foundmarker(lmarker, brdetal.nrec);
+
+window wInfo 'Данные для импорта';
+browse brDet (,,sci1EnIns); //sci13EnIns
+  show at (,,,10);
+  table brdetal;
+  fields
+    {font={color=if(foundmarker(lmarker, brdetal.nrec), 5, 0);}};
+    if(foundmarker(lmarker, brdetal.nrec),'V','') '': [3], skip, noautosize;
+    brdetal.kod   'FoxPro'#13'Код'         : [10], protect;
+    brdetal.obozn 'FoxPro'#13'Обозначение' : [15], protect;
+    brdetal.naim  'FoxPro'#13'Наименование': [30], protect;
+    [GalMC]   if(getfirst brmc = tsOk, brmc.name,'') 'Галактика'#13'МЦ': [30], protect, pickbutton;
+    [GalNorm] if(getfirst brmc = tsOk, if(getfirst brnormtmr = tsOk, brnormtmr.nwork,''), '') 'Галактика'#13'Работа': [30], protect;
+end;
+browse brtrud (,,sci1En);
+  show at (,11,50,);
+  table brtrud;
+  fields
+    brtrud.kop  'Код'   : [6], protect;
+    brtrud.nop  'Номер' : [4], protect;
+    if(getfirst broper = tsOk, broper.naim, '') 'Наименование': [20], protect;
+    brtrud.ncex 'Цех'   : [4], protect;
+    brtrud.razr 'Разряд': [4], protect;
+    brtrud.tpz  'Время подг.закл.': [5,2], protect;
+    brtrud.tct  'Время' : [5,2], protect;
+    if(getfirst broper = tsOk, broper.vrusl, '') 'Процент по вредности': [5], protect;
+end;
+screen scbot;
+  show at (51,11,,);
+  buttons
+    cmImport, default;
+<<
+
+  <. Импортировать помеченные записи .>
+>>
+end;
+
+procedure doImport;
+var
+  doInsert: boolean;
+{
+  _loop brdetal
+  {
+    beginConcurrentTransaction(0);
+    if getfirst brmc <> tsOk
+    {
+      clearbuffer(#brmc);
+      brmc.name     := brdetal.obozn+' '+brdetal.naim;
+      brmc.barkod   := brdetal.obozn;
+      brmc.obozn    := brdetal.obozn;
+      brmc.barkod2  := brdetal.kod;
+      brmc.ced      := 400073121191079Dh;
+      brmc.cgroupmc := 40015979EBB77C9Bh;
+      brmc.kgroupmc := '05.01';
+      brmc.cgrnal   := 4001A6F2CE900165h;
+      brmc.kind     := 1;
+      brmc.prmat    := 1;
+      brmc.ctype    := 0001000000000010h;
+      insert current brmc;
+      clearbuffer(#oe);
+      oe.name       := 'штука';
+      oe.prmc       := 1;
+      oe.cmcusl     := brmc.nrec;
+      oe.koef       := 1;
+      oe.akt        := 1;
+      oe.pr         := 0;
+      oe.diskret    := 1;
+      oe.abbr       := 'шт';
+      oe.ckated     := brmc.ced;
+      insert current oe;
+    }
+    else
+    {
+      brmc.name     := brdetal.obozn+' '+brdetal.naim;
+      brmc.barkod   := brdetal.obozn;
+      brmc.obozn    := brdetal.obozn;
+      update current brmc;
+    }
+    endTransaction;
+
+    beginConcurrentTransaction(0);
+    if getfirst brnormtmr <> tsOk
+    {
+      clearbuffer(#brnormtmr);
+      if (getlast normtmr ordered by normtmr.kodwork) = tsOk
+        brnormtmr.kodwork := normtmr.kodwork + 1
+      else
+        brnormtmr.kodwork := 1;
+      brnormtmr.nwork     := brmc.name;
+      brnormtmr.factor    := 1;
+      brnormtmr.cmc       := brmc.nrec;
+      brnormtmr.cschetd   := '20';
+      brnormtmr.csubschd  := '03';
+      insert current brnormtmr;
+    }
+    else
+    {
+      brnormtmr.nwork     := brmc.name;
+      update current brnormtmr;
+    }
+    endTransaction;
+
+    brnormtmr.rascen := 0;
+
+    _loop brtrud
+    {
+      if getfirst broper <> tsOk continue;
+      //операция
+      if getfirst brrasoper <> tsOk
+      {
+        clearbuffer(#brrasoper);
+        brrasoper.kodwork  := brnormtmr.kodwork;
+        brrasoper.noper    := brtrud.nop;
+        brrasoper.cschetd  := '20';
+        brrasoper.csubschd := '03';
+        brrasoper.factor   := 1;
+        doInsert := true;
+      }
+      else
+      {
+        doInsert := false;
+      }
+      brrasoper.nmoper   := broper.naim;
+      brrasoper.nrmtime  := brtrud.tct;
+      brrasoper.sisopl   := 20;
+      brrasoper.codtar   := 1;
+      brrasoper.razr     := brtrud.razr;
+      brrasoper.rascen   := 0;
+      brnormtmr.rascen   += brrasoper.rascen;
+      brrasoper.filialno := 1;
+      if doInsert
+        insert current brrasoper
+      else
+        update current brrasoper;
+
+      //время подготовительно-заключительное
+      if getfirst avtpz = tsOk
+      {
+        if (brtrud.tpz = 0)
+          delete current avtpz
+        else if (avtpz.vdouble <> brtrud.tpz)
+          update current avtpz set avtpz.vdouble := brtrud.tpz;
+      }
+      else if (brtrud.tpz <> 0)
+      {
+        clearbuffer(#avtpz);
+        avtpz.vdouble := brtrud.tpz;
+        insert current avtpz;
+      }
+
+      //доплата за вредность
+      if getfirst rdhazard = tsOk
+      {
+        if (broper.vrusl = 0)
+          delete current rdhazard
+        else if rdhazard.proc <> broper.vrusl
+          update current rdhazard set rdhazard.proc := broper.vrusl;
+      }
+      else if (broper.vrusl <> 0)
+      {
+        clearbuffer(#rdhazard);
+        rdhazard.kodwork := brrasoper.kodwork;
+        rdhazard.noper   := brrasoper.noper;
+        rdhazard.vidopl  := 16;
+        rdhazard.proc    := broper.vrusl;
+        insert current rdhazard;
+      }
+    }
+
+    beginConcurrentTransaction(0);
+    update current brnormtmr;
+    endTransaction;
+
+    if (not NextVisual) break;
+  }
+}
+
+handleevent
+  cmImport:
+  {
+    if getmarkercount(lmarker) = 0
+    {
+      if (message('Импортировать все записи?', yesNo) = cmYes)
+      {
+        if ConditionActive(tcbyMarker) PopCondition(tcbyMarker);
+        ImportCnt := recordsintable(#brdetal);
+      }
+      else
+      {
+        exit;
+      }
+    }
+    else
+    {
+      if (not ConditionActive(tcbyMarker)) PushCondition(tcbyMarker);
+      ImportCnt := getmarkercount(lmarker);
+    }
+    StartNewVisual(vtIndicatorVisual, vfBreak+vfTimer, 'Импорт', ImportCnt);
+    pushpos(#brdetal);
+    doImport;
+    poppos(#brdetal);
+    if ConditionActive(tcbyMarker) PopCondition(tcbyMarker);
+    stopvisual('',0);
+    rereadrecord(#brdetal);
+  }
+  cmPick:
+  {
+    case curfield of
+      #GalMC:
+      {
+        var _c: comp;
+        if iGetKau.getCodeKAU(1, 4, _c) > 0
+        {
+          if getfirst katmc where ((brdetal.kod == katmc.barkod2)) = tsOk
+          {
+            if getfirst normtmr where ((katmc.nrec == normtmr.cmc)) = tsOk
+              update current normtmr set normtmr.cmc := _c;
+            update current katmc set katmc.barkod2 := '';
+          }
+          if getfirst katmc where ((_c == katmc.nrec)) = tsOk
+          {
+            update current katmc set katmc.barkod2 := brdetal.kod;
+            update normtmr where ((katmc.nrec == normtmr.cmc)) set normtmr.nwork := katmc.name;
+          }
+          rereadrecord(#brdetal);
+        }
+      }
+    end;
+  }
+  cmDoMarkUnmark:
+  {
+    if not foundmarker(lmarker, brdetal.nrec)
+      insertmarker(lmarker, brdetal.nrec)
+    else
+      deletemarker(lmarker, brdetal.nrec);
+    redrawcurrentandgo(brDet, true);
+  }
+  cmSelAll:
+  {
+    pushpos(#brdetal);
+    clearmarker(lmarker);
+    StartNewVisual(vtRotateVisual, vfBreak+vfTimer, 'Помечаем позиции', 0);
+    _loop brdetal
+    {
+      insertmarker(lmarker, brdetal.nrec);
+      if (not NextVisual) break;
+    }
+    StopVisual('',0);
+    poppos(#brdetal);
+    rescanpanel(#brdetal);
+  }
+  cmUnSelAll:
+  {
+    clearmarker(lmarker);
+    rescanpanel(#brdetal);
+  }
+end;
+end; //window
+
+screen scMain;
+fields
+  dirPath: noprotect, pickButton;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+ `Путь к папке с базой FoxPro` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                                   <. Продолжить .>       <. Отмена .>
+>>
+end;
+
+procedure loadDBFFiles(_dir: string);
+var
+  _l    : longint;
+  _rslt : longint;
+  _fname: string;
+{
+  _fname := _dir+'detal.dbf';
+  _l := dbfOpen(_fname, stOpenRead);
+  if (_l = 0) { message('Ошибка открытия '+_fname); exit; }
+  delete all detal;
+  _rslt := dbfGetFirst(_l);
+  while _rslt = 0
+  {
+    clearbuffer(#detal);
+    detal.kod   := trim(dbfGetFieldValue(_l, 'kod'));
+    detal.obozn := trim(dbfGetFieldValue(_l, 'obozn'));
+    detal.naim  := trim(dbfGetFieldValue(_l, 'naim'));
+    if detal.kod <> ''
+      insert current detal;
+    _rslt := dbfGetNext(_l);
+  }
+  DBFClose(_l);
+
+  _fname := _dir+'trud.dbf';
+  setVisualHeader('Чтение '+_fname);
+  _l := dbfOpen(_fname, stOpenRead);
+  if (_l = 0) { message('Ошибка открытия '+_fname); exit; }
+  delete all trud;
+  _rslt := dbfGetFirst(_l);
+  while _rslt = 0
+  {
+    clearbuffer(#trud);
+    trud.kod   := trim(dbfGetFieldValue(_l, 'kod'));
+    trud.kop   := trim(dbfGetFieldValue(_l, 'kop'));
+    trud.nop   := trim(dbfGetFieldValue(_l, 'nop'));
+    trud.ncex  := trim(dbfGetFieldValue(_l, 'ncex'));
+    trud.razr  := double(replace(trim(dbfGetFieldValue(_l, 'razr')),',','.'));
+    trud.tpz   := double(replace(trim(dbfGetFieldValue(_l, 'tpz')),',','.'));
+    trud.tct   := double(replace(trim(dbfGetFieldValue(_l, 'tct')),',','.'));
+    insert current trud;
+    _rslt := dbfGetNext(_l);
+  }
+  DBFClose(_l);
+
+  _fname := _dir+'oper.dbf';
+  setVisualHeader('Чтение '+_fname);
+  _l := dbfOpen(_fname, stOpenRead);
+  if (_l = 0) { message('Ошибка открытия '+_fname); exit; }
+  delete all oper;
+  _rslt := dbfGetFirst(_l);
+  while _rslt = 0
+  {
+    clearbuffer(#oper);
+    oper.kop   := trim(dbfGetFieldValue(_l, 'kop'));
+    oper.naim  := trim(dbfGetFieldValue(_l, 'naim'));
+    oper.vrusl := trim(dbfGetFieldValue(_l, 'vr_usl'));
+    insert current oper;
+    _rslt := dbfGetNext(_l);
+  }
+  DBFClose(_l);
+}
+
+handleevent
+  cmPick:
+  {
+    case curfield of
+      #dirPath:
+      {
+        var s: string;
+        s := GetDirName('Укажите папку с базой FoxPro');
+        if s <> '' dirPath := s;
+        rereadrecord;
+      }
+    end;
+  }
+  cmDoOk:
+  {
+    dirPath := trim(dirPath);
+    StartNewVisual(vtRotateVisual, vfTimer, '', 0);
+    loadDBFFiles(dirPath+'\');
+    StopVisual('', 0);
+    runwindow(winfo);
+  }
+  cmInit:
+  {
+    if not readmydsk(dirPath, 'ImportFoxProDirPath', false) dirPath := '';
+    lmarker := initmarker('',8,100,10,false);
+  }
+  cmDone:
+  {
+    savemydsk(dirPath, 'ImportFoxProDirPath');
+    donemarker(lmarker,'');
+  }
+end;
+
+end.

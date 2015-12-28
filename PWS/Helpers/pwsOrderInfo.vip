@@ -1,0 +1,113 @@
+#component "AGAT"
+const
+  cmOpenAllGroups       = 9944;
+  cmCloseAllGroups      = 9945;
+end;
+
+interface pwsOrderInfo 'Информация по заказам', escclose;
+table struct tTree (
+  nrec: comp,
+  cParent: comp,
+  cRec: comp,
+  Name: string,
+  FullHours: double,
+  AvgHours: double,
+  PaymentValue: double
+) with index (
+  i00 = nrec (unique, surrogate),
+  i01 = cParent + Name,
+  i02 = cParent + cRec
+);
+
+var
+  _pwsNrec: comp;
+
+create view
+var
+  _cparent: comp;
+as select *
+from pwsPerson, pwsWork, ttree, ttree brtree
+where ((
+  _cparent == brtree.cParent
+));
+
+parameters _pwsNrec;
+
+tree trmain;
+table brtree;
+fields
+  brtree.name 'заказ / сотрудник / работа' : protect, [20];
+  brtree.FullHours 'Время на партию': protect, [8, '\2p[|-]366`666`666`666`666.88'];
+  brtree.AvgHours 'Время усредненное': protect, [8, '\2p[|-]366`666`666`666`666.88'];
+  brtree.PaymentValue 'Сумма заработка': protect, [8, '\2p[|-]366`666`666`666`666.88'];
+end;
+
+handleevent
+cmTreeTop : _cparent := 0;
+cmTreeUp  : _cparent := brtree.cParent;
+cmTreeDown: _cparent := brtree.nrec;
+cmTreeNeedOwner: TreeJumpToRecord(trmain, brtree.cParent);
+cmTreeNodeType : if (TreeIsTerminal(trmain)) TreeSetNodeType(trmain, ntfText);
+cmOpenAllGroups:
+{
+  TreePushPos(trMain);
+  TreeGetFirst(trMain);
+  do {
+    if(TreeLevel(trmain)<1) TreeOpenNode(trMain);
+  } while TreeGetNext(trMain);
+  TreePopPos(trMain);
+  rereadrecord;
+}
+cmCloseAllGroups:
+{
+  TreeCloseAllOpenedNode(trMain);
+  rereadrecord;
+}
+cmHotkeys:
+{
+  PutHotCommand(RunMenu('mnuAGAT_PWSORDERINFO'));
+}
+cmInit:
+{
+  var nrec0, nrec1: comp;
+  delete all tTree;
+  _loop pwsWork
+  {
+    if getfirst ttree where ((0 == ttree.cParent and pwsWork.KatstroyNrec == ttree.cRec)) != tsOk
+      insert ttree set ttree.cRec := pwsWork.KatstroyNrec,
+                       ttree.Name := if(getanykau(0, 40, pwsWork.KatstroyNrec),givenanname(1),'');
+    nrec0 := ttree.nrec;
+
+    if getfirst ttree where ((nrec0 == ttree.cParent and pwsWork.pwsPersonNrec == ttree.cRec)) != tsOk
+      insert ttree set ttree.cParent := nrec0,
+                       ttree.cRec := pwsWork.pwsPersonNrec,
+                       ttree.Name := if(getfirst pwsPerson where ((pwsWork.pwsPersonNrec == pwsPerson.nrec)) = tsOk, pwsPerson.PersonName, '');
+    nrec1 := ttree.nrec;
+
+    insert ttree set ttree.cParent := nrec1,
+                     ttree.cRec := pwsWork.nrec,
+                     ttree.Name := pwsWork.KatMarshName+'.'+pwsWork.MarshSpName,
+                     ttree.FullHours := pwsWork.FullHours,
+                     ttree.AvgHours := pwsWork.AvgHours,
+                     ttree.PaymentValue := pwsWork.PaymentValue + pwsWork.HazardPayValue + pwsWork.QualifPayValue;
+
+    update ttree where ((nrec1 == ttree.nrec)) set ttree.FullHours := ttree.FullHours + pwsWork.FullHours,
+                                                   ttree.AvgHours := ttree.AvgHours + pwsWork.AvgHours,
+                                                   ttree.PaymentValue := ttree.PaymentValue + pwsWork.PaymentValue + pwsWork.HazardPayValue + pwsWork.QualifPayValue;
+
+    update ttree where ((nrec0 == ttree.nrec)) set ttree.FullHours := ttree.FullHours + pwsWork.FullHours,
+                                                   ttree.AvgHours := ttree.AvgHours + pwsWork.AvgHours,
+                                                   ttree.PaymentValue := ttree.PaymentValue + pwsWork.PaymentValue + pwsWork.HazardPayValue + pwsWork.QualifPayValue;
+  }
+
+  rereadrecord(#brtree);
+}
+end;
+
+end.
+
+mnuAGAT_PWSORDERINFO Menu
+{
+- 'Раскрыть все папки', cmOpenAllGroups, , , , , sci1Esc;
+- 'Свернуть все папки', cmCloseAllGroups, , , , , sci1Esc;
+}

@@ -1,0 +1,373 @@
+#component "AGAT"
+interface pwsImportWorksFromExcel 'Импорт сдельных нарядов по сотруднику', doaccept, escclose;
+show (,,50,8);
+table struct tt (
+  number       : string,
+  ordername    : string,
+  workcode     : string,
+  workname     : string,
+  opercode     : string,
+  opername     : string,
+  grade        : word,
+  ordernrec    : comp,
+  qty          : integer,
+  PieceHours   : double,
+  PrepareHours : double,
+  StdHours     : double,
+  FullHours    : double,
+  AvgHours     : double,
+  Price        : double,
+  Tarif        : double,
+  PaymentValue : double
+);
+table struct torder (nrec: comp, name: string) with index (i01 = name);
+table struct twork (code: longint, name: string) with index (i01 = name);
+table struct tsheet (name: string) with index (i01 = name);
+var
+  _pwsNrec: comp;
+  _pwsPersonNrec: comp;
+  xlsFileName: string;
+  xlsSheetName: string;
+  loadedsheetlist: string;
+  iGetKAU: getKAU;
+
+create view
+as select *
+from pws, pwsWork, pwsPerson, tt, normtmr brnormtmr, tt tt1, torder, twork, tsheet, rasoper, rasdop
+where ((
+  _pwsNrec          == pws.nrec and
+  _pwsPersonNrec    == pwsWork.pwsPersonNrec and
+  _pwsPersonNrec    == pwsPerson.nrec and
+  tt.workcode       == brnormtmr.kodwork and
+  tt.workcode       == rasoper.kodwork and
+  tt.opercode       == rasoper.noper
+));
+
+create view v
+var
+  _kodwork: longint;
+  _noper: integer;
+as select * //rasoper.nrec, rasoper.kodwork, rasoper.noper, rasoper.nrmtime, attrval.vdouble
+from rasoper, attrval, normtmr
+where ((
+  _kodwork == rasoper.kodwork and
+  _noper == rasoper.noper and
+  16033 == attrval.wtable and
+  rasoper.nrec == attrval.crec and
+  00010000000003A9h == attrval.cattrnam and
+  _kodwork == normtmr.kodwork
+));
+
+parameters _pwsNrec, _pwsPersonNrec;
+screen scmain;
+fields
+  pwsPerson.PersonCode: skip;
+  pwsPerson.PersonName: skip;
+  xlsFileName: noprotect, pickbutton;
+  xlsSheetName: noprotect, pickbutton;
+buttons
+  cmDook, default;
+<<
+
+ Сотрудник .@@@@@@@@@@ .@@@@@@@@@@@@@@@@@@@@@@@@@
+ Путь к xls-файлу .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ Название листа   .@@@@@@@@@@@@@@@@@@@@
+
+                                 <. Продолжить .>
+>>
+end;
+
+window wSheets 'Выбор листа для импорта' escclose doaccept;
+browse brsheets;
+  table tsheet;
+  fields
+    tsheet.name 'Наименование': [20], protect;
+end;
+end;
+
+function fillsheetlist(_fname: string): boolean;
+{
+  result := false;
+  if not xlOpenNewExcel(false) exit;
+  xlDisplayAlerts(false);
+  if not xlOpenWorkBook(_fname) exit;
+  var i,cnt: longint;
+  var s: string;
+  xlGetSheetsCount(cnt);
+  for (i:=1; i<=cnt; i++)
+  {
+    if xlGetSheetName(i, s)
+      insert tsheet set tsheet.name := s;
+  }
+  xlCloseWorkBook(1);
+  xlKillExcel;
+  result := true;
+
+}
+function normalWorkName(s: string): string;
+{
+  s := replace(replace(replace(locase(s),'.',''),' ',''),'-','');
+  if (locase(substr(s,1,1)) = 'д' and locase(substr(s,1,4)) <> 'даеи') or (locase(substr(s,1,1)) = 'd')
+  {
+    s := 'даеи'+substr(s,2,255);
+  }
+  result := s;
+}
+
+function loadXLSFile(_fname: string; _sheetname: string): boolean;
+var
+  y: integer;
+  s: string;
+{
+  result := false;
+  if not xlOpenNewExcel(false) exit;
+  xlDisplayAlerts(false);
+  if not xlOpenWorkBook(_fname) exit;
+  if not xlSetActiveSheetByName(_sheetname) exit;
+  if not xlcreatematrix(1000,20) exit;
+  if not xlReadMatrixFromExcel(14, 1, 200, 20) exit;
+  y := 1;
+  if not xlReadFromMatrix(y,3, s) exit; s := trim(s);
+  while s <> ''
+  {
+    clearbuffer(#tt);
+    tt.ordername := s;
+
+    if not xlReadFromMatrix(y,1, s) exit; s := trim(s);
+    tt.number := s;
+
+    if not xlReadFromMatrix(y,4, s) exit; s := trim(s);
+    tt.workname := s;
+
+    if not xlReadFromMatrix(y,5, s) exit; s := trim(s);
+    tt.opercode := s;
+
+    if not xlReadFromMatrix(y,6, s) exit; s := trim(s);
+    tt.opername := s;
+
+    if not xlReadFromMatrix(y,7, s) exit; s := trim(s);
+    tt.grade := word(s);
+
+    if getfirst torder where ((tt.ordername == torder.name)) = tsOk
+      tt.ordernrec := torder.nrec;
+
+    s := normalWorkName(tt.workname);
+    if ( getfirst twork where ( s = substr( twork.name,1,length(s) ) ) ) = tsOk
+      tt.workcode := twork.code;
+
+    if not xlReadFromMatrix(y,9, s) exit; s := trim(s);
+    tt.qty := s;
+
+    if not xlReadFromMatrix(y,13, s) exit; s := replace(trim(s),',','.');
+    tt.PieceHours := double(s);
+
+    if not xlReadFromMatrix(y,14, s) exit; s := replace(trim(s),',','.');
+    tt.StdHours := double(s);
+
+    if not xlReadFromMatrix(y,15, s) exit; s := replace(trim(s),',','.');
+    tt.FullHours := double(s);
+
+    if not xlReadFromMatrix(y,16, s) exit; s := replace(trim(s),',','.');
+    tt.PrepareHours := double(s);
+
+    if not xlReadFromMatrix(y,2, s) exit; s := replace(trim(s),',','.');
+    tt.AvgHours := double(s);
+
+    if not xlReadFromMatrix(y,17, s) exit; s := replace(trim(s),',','.');
+    tt.Price := double(s);
+
+    if not xlReadFromMatrix(y,18, s) exit; s := replace(trim(s),',','.');
+    tt.Tarif := double(s);
+
+    if not xlReadFromMatrix(y,19, s) exit; s := replace(trim(s),',','.');
+    tt.PaymentValue := double(s);
+
+    insert current tt;
+
+    y++;
+    if not xlReadFromMatrix(y,3, s) exit; s := trim(s);
+  }
+  xlfreematrix;
+  xlCloseWorkBook(1);
+  xlKillExcel;
+  result := true;
+}
+
+procedure doImport;
+{
+  if getfirst pws = tsOk {};
+  _loop tt
+  {
+    clearbuffer(#pwsWork);
+    pwsWork.pwsPersonNrec   := _pwsPersonNrec ;
+    pwsWork.Number          := tt.number      ;
+    pwsWork.JobCreationDate := pws.StartDate  ;
+    pwsWork.JobFinishDate   := pws.EndDate    ;
+    pwsWork.Grade           := tt.grade       ;
+    pwsWork.KatstroyNrec    := tt.ordernrec   ;
+    pwsWork.KatmarshName    := tt.workname    ;
+    pwsWork.KatmarshCode    := tt.workcode    ;
+    pwsWork.MarshspCode     := tt.opercode    ;
+    pwsWork.MarshspName     := tt.opername    ;
+    pwsWork.koeff           := 1              ;
+    pwsWork.qty             := tt.qty         ;
+    pwsWork.PrepareHours    := tt.PrepareHours;
+    pwsWork.PieceHours      := tt.PieceHours  ;
+
+    v._kodwork := tt.workcode;
+    v._noper := tt.opercode;
+    if v.getfirst rasoper = tsok
+    {
+      pwsWork.PieceHours    := v.rasoper.nrmtime;
+      pwsWork.MarshspName   := v.rasoper.nmoper;
+      if v.getfirst attrval = tsok
+      {
+        pwsWork.PrepareHours:= v.attrval.vdouble;
+      }
+    }
+    if v.getfirst normtmr = tsOK
+    {
+      pwsWork.KatmarshName := v.normtmr.nwork;
+    }
+ //
+    pwsWork.StdHours        := tt.StdHours    ;
+    pwsWork.FullHours       := tt.FullHours   ;
+    pwsWork.AvgHours        := tt.AvgHours    ;
+    pwsWork.Price           := tt.Price       ;
+    pwsWork.Tarif           := tt.Tarif       ;
+    pwsWork.PaymentValue    := tt.PaymentValue;
+    if getfirst rasoper = tsOk
+      if getfirst rasdop where ((tt.workcode == rasdop.kodwork and tt.opercode == rasdop.noper and (rasdop.vidopl = 16) )) = tsOk
+      {
+        pwsWork.HazardPayPercent := rasdop.proc;
+        pwsWork.HazardPayValue := rasdop.proc / 100 * pwsWork.PaymentValue;
+      }
+    insert current pwsWork;
+  }
+}
+
+window wmain 'Импортируемые данные';
+  show (,,160,20);
+  browse brtt;
+  show (,,,17);
+  table tt;
+  fields
+    tt.number       'Номер': [5], protect;
+    tt.ordername    'Заказ': [10], protect;
+    tt.workcode     'Работа код': [10], protect;
+    tt.workname     'Работа название': [20], protect;
+    tt.opername     'Операции': [10], protect;
+    tt.qty          'Количество': [10], protect;
+    tt.PieceHours   'Время штучное': [10,3], protect;
+    tt.PrepareHours 'Время подг./закл.': [10,3], protect;
+    tt.StdHours     'Время с уч. подг./закл.': [10,3], protect;
+    tt.FullHours    'Время на партию': [10,3], protect;
+    tt.AvgHours     'Время усредненное': [10,3], protect;
+    tt.Price        'Расценка на 1 шт': [10,3], protect;
+    tt.Tarif        'Тар. ставка разряда работы': [10,2], protect;
+    tt.PaymentValue 'Сумма заработка': [10,2], protect;
+    [galorder] if(getanykau(0, 40, tt.ordernrec),givenanname(1),'') 'Гал - заказ': [20], protect, pickbutton;
+  end;
+  screen sctop;
+  show(,18,,) fixed_y;
+  buttons
+    cmImport;
+<<
+                                                                                                                                           <. Импортировать .>
+>>
+  end;
+  handleevent
+    cmImport:
+    {
+      StartNewVisual(vtRotateVisual, vfTimer, 'Импорт данных', 0);
+      doImport;
+      StopVisual('',0);
+      closeInterface(cmDefault);
+    }
+    cmpick:
+    {
+      case curfield of
+        #galorder:
+        {
+          var c: comp;
+          if iGetKAU.getcodekau(1,40,c) > 0
+          {
+            update tt1 where (tt.ordername = tt1.ordername) set tt1.ordernrec := c;
+            rereadrecord;
+          }
+        }
+      end;
+    }
+  end;
+end;
+
+handleevent
+cmPick:
+{
+  case curfield of
+    #xlsFileName:
+    {
+      var s: string;
+      s := GetFileName('*.xl*', 'Выбор файла для импорта');
+      if s <> '' xlsFileName := s;
+      rereadrecord;
+    }
+    #xlsSheetName:
+    {
+      if loadedsheetlist<>xlsFileName
+      {
+        StartNewVisual(vtRotateVisual, vfTimer, 'Получение списка листов', 0);
+        delete all tsheet;
+        if not fillsheetlist(xlsFileName)
+        {
+          stopvisual('Ошибка загрузки: '+xlGetLastError,0);
+          exit;
+        }
+        loadedsheetlist := xlsFileName;
+        stopvisual('',0);
+      }
+      if runwindowmodal(wsheets) = cmdefault
+      {
+        xlsSheetName := tsheet.name;
+        rereadrecord;
+      }
+    }
+  end;
+}
+cmDook:
+{
+  delete all tt;
+  StartNewVisual(vtRotateVisual, vfTimer, 'Чтение данных для импорта', 0);
+  if not loadXLSFile(xlsFileName,xlsSheetName)
+  {
+    stopvisual('Ошибка чтения файла:'+xlGetLastError,0);
+  }
+  else
+  {
+    stopvisual('',0);
+    runwindowmodal(wMain);
+    closeinterface(cmDefault);
+  }
+}
+cminit:
+{
+  readmydsk(xlsFileName, 'jobSheetSpecImportFromExcel_xlsFileName', false);
+  readmydsk(xlsSheetName, 'jobSheetSpecImportFromExcel_xlsSheetName', false);
+
+  delete all twork;
+  insert twork (code, name)
+  select normtmr.kodwork, normalWorkName(substr(normtmr.nwork,1,pos(' ',normtmr.nwork)-1))
+  from normtmr;
+
+  delete all torder;
+  insert torder (nrec, name)
+  select katstroy.nrec, substr(katstroy.name,1,pos(' ',katstroy.name)-1)
+  from katstroy;
+}
+cmDone:
+{
+  savemydsk(xlsFileName, 'jobSheetSpecImportFromExcel_xlsFileName');
+  savemydsk(xlsSheetName, 'jobSheetSpecImportFromExcel_xlsSheetName');
+}
+end;
+end.
