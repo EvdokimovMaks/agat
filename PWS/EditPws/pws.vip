@@ -13,8 +13,9 @@ const
   cmShowOrdersInfo = 5057;
 end;
 
-
 interface editpws;
+
+table struct tSortedMarks (key: string, cRec: comp, qty: double) with index ( i01 = key);
 
 var
   _mnplanNrec: comp;
@@ -35,7 +36,7 @@ var
 as select *
 from pws brpws,
      pwsPerson brPerson, klsisopl pwsPersonPayModel, klrejim pwsPersonWorkMode, lschet pwsPersonLschet, tSums pwsPersonSums,
-     pwsWork brWork, katstroy pwsWorkKatstroy,
+     pwsWork brWork, katstroy pwsWorkKatstroy, tSortedMarks,
      pws, pwsPerson, pwsWork, tSums
 where ((
   _pwsNrec            == brPws.Nrec and
@@ -72,6 +73,38 @@ function GetWorkModeName: string;
     result := '';
 }
 
+function GetAvgHoursBwMonths(aWorkMode: word; aStartYear: word; aStartMonth: byte; aEndYear: word; aEndMonth: byte): double; cacheable;
+{
+  var d1, d2: date;
+  d1 := date(1, aStartMonth, aStartYear);
+  d2 := date(last_day(date(1, aEndMonth, aEndYear)), aEndMonth, aEndYear);
+
+  var h: double;
+  h := BalBwDates(aWorkMode, d1, d2, 1);
+
+  var month_cnt: word;
+  month_cnt := aEndYear*12 + aEndMonth - aStartYear*12 - aStartMonth + 1;
+
+  result := if(month_cnt=0, 0, h / month_cnt);
+}
+
+function GetAvgHoursYear(aWorkMode: word): double; cacheable;
+{
+  var y: word;
+  y := year(brPws.StartDate);
+  result := GetAvgHoursBwMonths(aWorkMode, y, 1, y, 12);
+}
+
+function GetAvgHoursQuart(aWorkMode: word): double; cacheable;
+{
+  var m, m1, m2, y: word;
+  m := month(brPws.StartDate);
+  y := year(brPws.StartDate);
+  m1 := (m div 3 + if(m mod 3 = 0, -1, 0) ) * 3 + 1;
+  m2 := m1 + 2;
+  result := GetAvgHoursBwMonths(aWorkMode, y, m1, y, m2);
+}
+
 browse brPers (,,sci1378InsPM);
 show(,,,7);
 table brPerson;
@@ -97,6 +130,10 @@ fields
   brPerson.BonusHzrdPercent  'Процент'#13'прем. за вредн.' : [10, #sum_format], noprotect;
   brPerson.BonusHzrdValue    'Сумма'#13'прем. за вредн.'   : [10, #sum_format], noprotect;
   brPerson.BonusOtherValue   'Сумма'#13'доп. надбавка'     : [10, #sum_format], noprotect;
+  brPerson.BonusQuarPercent  'Процент'#13'кварт. премии'   : [10, #sum_format], noprotect;
+  brPerson.BonusQuarValue    'Сумма'#13'кварт. премии'     : [10, #sum_format], protect;
+  brPerson.BonusYearPercent  'Процент'#13'год. премии'     : [10, #sum_format], noprotect;
+  brPerson.BonusYearValue    'Сумма'#13'год. премии'       : [10, #sum_format], protect;
 end;
 
 browse brWork (,,sci1378InsPM);
@@ -206,7 +243,18 @@ procedure pwsPersonCalc;
       }
     }
 
-    brPerson.SalaryFact :=  if(brPerson.BalanceHoursPlan<>0, brPerson.BalanceHoursFact / brPerson.BalanceHoursPlan * brPerson.SalaryPlan, 0)
+    brPerson.SalaryFact :=  if(brPerson.BalanceHoursPlan<>0, brPerson.BalanceHoursFact / brPerson.BalanceHoursPlan * brPerson.SalaryPlan, 0);
+
+    if(brPerson.PayModel=20)
+    {
+      brPerson.BonusQuarValue := brPerson.SalaryPlan * brPerson.BonusQuarPercent / 100 * GetAvgHoursQuart(brPerson.WorkMode);
+      brPerson.BonusYearValue := brPerson.SalaryPlan * brPerson.BonusYearPercent / 100 * GetAvgHoursYear(brPerson.WorkMode);
+    }
+    else
+    {
+      brPerson.BonusQuarValue := brPerson.SalaryPlan * brPerson.BonusQuarPercent / 100;
+      brPerson.BonusYearValue := brPerson.SalaryPlan * brPerson.BonusYearPercent / 100;
+    }
 
     _timeKoef := if(brPerson.balanceHoursFact<>0, pwsPersonSums.FullHours / brPerson.balanceHoursFact, 0);
     pushpos(#brWork);
@@ -312,6 +360,21 @@ procedure pwsWorkSaveChanges;
   SetNew(false);
   SetModified(false);
   pwsWorkCalc;
+}
+
+procedure pwsWorkSetDefault;
+{
+  brWork.Koeff := 1;
+  brWork.JobCreationDate := brpws.StartDate;
+  brWork.JobFinishDate := brpws.EndDate;
+  brWork.pwsPersonNrec := brPerson.Nrec;
+}
+
+function pwsWorkPresent: boolean;
+{
+  pushpos(#brWork);
+  result := getfirst brWork = tsOk;
+  poppos(#brWork);
 }
 
 procedure pwsPersonSaveChanges;
@@ -424,34 +487,59 @@ procedure pickKatstroy;
   }
 }
 
+procedure SetOper(rasoperNrec: comp);
+{
+  if v.getfirst rasoper where (( rasoperNrec == rasoper.nrec )) = tsOk
+  {
+    if v.getfirst normtmr where (( v.rasoper.kodwork == normtmr.kodwork)) = tsOk
+    {
+      brWork.KatmarshNrec := v.normtmr.nrec;
+      brWork.KatmarshName := v.normtmr.nwork;
+      brWork.KatmarshCode := v.normtmr.kodwork;
+
+      if v.getfirst rasdop where ((v.normtmr.kodwork == rasdop.kodwork and v.rasoper.noper == rasdop.noper and (rasdop.vidopl = 16) )) = tsOk
+        brWork.HazardPayPercent := v.rasdop.proc
+      else
+        brWork.HazardPayPercent := 0;
+    }
+    brWork.Grade        := v.rasoper.razr;
+    brWork.MarshSpNrec  := v.rasoper.nrec;
+    brWork.MarshSpName  := v.rasoper.nmoper;
+    brWork.MarshSpCode  := v.rasoper.noper;
+    brWork.PieceHours   := v.rasoper.nrmtime;
+    brWork.PrepareHours := ea.doGetAttrID(16033,v.rasoper.nrec,ATTRNAM_PREPTIME)
+  }
+}
+
 procedure PickWorkAndOper;
 {
   var _workCode: word;
   var _operCode: integer;
   _workCode := brWork.KatmarshCode;
   _operCode := brWork.MarshSpCode;
-  if runinterface(z_mp::view_norm, _workCode, _operCode, 32) = cmdefault
+  if runinterface(z_mp::view_norm, _workCode, _operCode, vfMultipleSelection) = cmdefault
   {
-    brWork.KatmarshCode := _workCode;
-    brWork.MarshSpCode := _operCode;
-    if v.getfirst normtmr where (( _workCode == normtmr.kodwork)) = tsOk
+    delete all tSortedMarks;
+
+    insert tSortedMarks (key, cRec, qty)
+    select LPadCh(rasoper.kodwork,'0',20)+LPadCh(rasoper.noper,'0',20), rasoper.nrec, formarks.summa
+    from formarks, rasoper
+    where (( cRates == formarks.choice and 1 == formarks.cPodr and formarks.field1 == rasoper.nrec ));
+
+    if getfirst tSortedMarks = tsOk
     {
-      brWork.KatmarshNrec := v.normtmr.nrec;
-      brWork.KatmarshName := v.normtmr.nwork;
-      brWork.KatmarshCode := v.normtmr.kodwork;
+      SetOper(tSortedMarks.cRec);
+      brWork.Qty := tSortedMarks.Qty;
+      pwsWorkSaveChanges;
+      while getnext tSortedMarks = tsOk
+      {
+        clearbuffer(#brWork);
+        pwsWorkSetDefault;
+        SetOper(tSortedMarks.cRec);
+        brWork.Qty := tSortedMarks.Qty;
+        pwsWorkSaveChanges;
+      }
     }
-    if v.getfirst rasoper where (( _workCode == rasoper.kodwork and _opercode == rasoper.noper )) = tsOk
-    {
-      brWork.Grade        := v.rasoper.razr;
-      brWork.MarshSpNrec  := v.rasoper.nrec;
-      brWork.MarshSpName  := v.rasoper.nmoper;
-      brWork.PieceHours   := v.rasoper.nrmtime;
-      brWork.PrepareHours := ea.doGetAttrID(16033,v.rasoper.nrec,ATTRNAM_PREPTIME)
-    }
-    if v.getfirst rasdop where ((_workCode == rasdop.kodwork and _operCode == rasdop.noper and (rasdop.vidopl = 16) )) = tsOk
-      brWork.HazardPayPercent := v.rasdop.proc
-    else
-      brWork.HazardPayPercent := 0;
   }
 }
 
@@ -510,13 +598,7 @@ tableevent table brWork;
     rescanpanel(#brWork);
     rescanpanel(#brPerson);
   }
-  cmSetDefault:
-  {
-    brWork.Koeff := 1;
-    brWork.JobCreationDate := brpws.StartDate;
-    brWork.JobFinishDate := brpws.EndDate;
-    brWork.pwsPersonNrec := brPerson.Nrec;
-  }
+  cmSetDefault: pwsWorkSetDefault;
   cmInsertRecord:
   {
     pwsWorkSaveChanges;
@@ -725,16 +807,6 @@ handleevent
         Abort;
         rereadrecord(#brPerson);
       }
-      /*
-      #brWork:
-      {
-        clearbuffer(#pwsWork);
-        pwsWork.pwsPersonNrec := pwsPerson.Nrec;
-        PickWorkAndOper;
-        insert current pwsWork;
-        Abort;
-        rereadrecord(#pwsWork);
-      }       */
     end;
   }
 
@@ -771,23 +843,28 @@ handleevent
       }
       #brWork:
       {
-        if getfirst pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) )) = tsOk
+        if isValidAll(#brWork)
         {
-          if message('Удалить помеченные позиции работ?', YesNo) = cmYes
+          if getfirst pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) )) = tsOk
           {
-            _loop pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) ))
+            if message('Удалить помеченные позиции работ?', YesNo) = cmYes
             {
-              deletemarker(lwrkmarker, pwsWork.nrec);
-              delete current pwsWork;
+              _loop pwsWork where ((brPerson.Nrec == pwsWork.pwsPersonNrec and (foundmarker(lwrkMarker, pwsWork.Nrec)) ))
+              {
+                deletemarker(lwrkmarker, pwsWork.nrec);
+                delete current pwsWork;
 
+              }
             }
           }
+          else if message('Удалить работу?', YesNo) = cmYes
+          {
+            delete current brWork;
+          }
+          pwsPersonCalc;
+          if not pwsWorkPresent
+            putcommand(cmInsert);
         }
-        else if message('Удалить работу?', YesNo) = cmYes
-        {
-          delete current brWork;
-        }
-        pwsPersonCalc;
         Abort;
         rereadrecord(#brWork);
         rereadrecord(#brPerson);

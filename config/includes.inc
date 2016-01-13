@@ -1238,3 +1238,8 @@
 /i:"../CWS/RowField"
 /i:"../CWS/Val"
 /i:"../CWS/ValField"
+/i:"../PWS"
+/i:"../PWS/DataRepository"
+/i:"../PWS/EditPws"
+/i:"../PWS/Helpers"
+/i:"../PWS/InterfSys"
