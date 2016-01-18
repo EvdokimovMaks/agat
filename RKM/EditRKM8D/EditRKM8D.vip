@@ -642,11 +642,18 @@ procedure DistrLaborByMonths;
     if vPick.trkm8d.TotalLabor = 0 continue;
     hasChild := getfirst tRKM8D where ((vPick.trkm8d.nrec == tRKM8D.ParentNrec)) = tsOk;
     buf := ttrkm8d(vPick.trkm8d.buffer);
+
+    var sumLabor: double; sumLabor := 0;
+    var lastI: integer; lastI := 0;
     for (i := 0; i < _yearcount; ++i)
     {
-      buf.Labor[i+1] := GetMonthsInYear(mnplanStartDate, mnplanEndDate, (_yearStart + i)) / totalMonths * buf.TotalLabor;
+      buf.Labor[i+1] := round(GetMonthsInYear(mnplanStartDate, mnplanEndDate, (_yearStart + i)) / totalMonths * buf.TotalLabor,3);
+      sumLabor += buf.Labor[i+1];
+      if buf.Labor[i+1] != 0 lastI := i;
     }
-    ProcessRKM8DRecord(buf);
+    buf.Labor[lastI+1] += buf.TotalLabor - sumLabor;
+
+    if not hasChild ProcessRKM8DRecord(buf);
     vPick.trkm8d.buffer := buf;
     vPick.update current trkm8d;
 
@@ -698,15 +705,15 @@ end;
 
 procedure ProcessRKM8DRecord(var buf: ttRKM8D);
 {
-  buf.TotalLabor  := buf.TotalLaborBase * buf.NoveltyCoeff * buf.DiffCoeff;
-  buf.BaseSum   := buf.BaseHourCost * buf.TotalLabor;
+  buf.TotalLabor  := round(buf.TotalLaborBase * buf.NoveltyCoeff * buf.DiffCoeff, 3);
+  buf.BaseSum     := round(buf.BaseHourCost * buf.TotalLabor, 2);
 
   buf.TotalSum := 0;
   var i: byte;
   for(i:=1;i<=_yearcount;i++)
   {
     if buf.Coeff[i] <= 0 buf.Coeff[i] := 1;
-    buf.Sum[i] := buf.Labor[i] * buf.Coeff[i] * buf.BaseHourCost;
+    buf.Sum[i] := round(buf.Labor[i] * buf.Coeff[i] * buf.BaseHourCost, 2);
     buf.TotalSum += buf.Sum[i];
   }
 }
@@ -755,10 +762,10 @@ procedure DistrToChildNodes(var parentBuf: ttRKM8D);
   var i: byte;
   var buf: ttRKM8D;
 
-  //трудоемкость из дочерних узлов
-  var childLabor: double;
-  childLabor := 0;
-  _loop tRKM8D where ((parentBuf.Nrec == tRKM8D.ParentNrec)) { childLabor += tRKM8D.TotalLabor; }
+  //трудоемкость из дочерних узлов, кол-во дочерних узлов
+  var childLabor: double; childLabor := 0;
+  var childQty: integer; childQty := 0;
+  _loop tRKM8D where ((parentBuf.Nrec == tRKM8D.ParentNrec)) { childLabor += tRKM8D.TotalLabor; childQty++; }
 
   //коэффициент отличия трудоемкости родительского узла от суммы трудоемкостей дочерних узлов
   var changeCoeff: double
@@ -768,12 +775,32 @@ procedure DistrToChildNodes(var parentBuf: ttRKM8D);
   _loop tRKM8D where ((parentBuf.Nrec == tRKM8D.ParentNrec))
   {
     buf := ttRKM8D(tRKM8D.buffer);
-    buf.TotalLaborBase *= changeCoeff;
-    buf.TotalLabor *= changeCoeff;
+
+    if (childLabor > 0)
+      buf.TotalLabor := round(buf.TotalLabor * changeCoeff, 3);
+    else
+      buf.TotalLabor := round( parentBuf.TotalLabor / if(childQty>0, childQty, 1), 3);
+
+    buf.TotalLaborBase := round( buf.TotalLabor / if(buf.DiffCoeff>0, buf.DiffCoeff, 1) / if(buf.NoveltyCoeff>0, buf.NoveltyCoeff, 1), 3);
+
+    var err: double; err := 0;
     for(i:=1;i<=_yearcount;i++)
     {
       buf.Labor[i] := (parentBuf.Labor[i] / parentBuf.TotalLabor) * buf.TotalLabor;
+      err += buf.Labor[i] - round(buf.Labor[i],3);
+      buf.Labor[i] := round(buf.Labor[i],3);
+      if err >= 0.001
+      {
+        buf.Labor[i] += 0.001;
+        err -= 0.001;
+      }
+      else if err <= -0.001
+      {
+        buf.Labor[i] -= 0.001;
+        err += 0.001;
+      }
     }
+
     ProcessRKM8DRecord(buf);
     pushpos(#tRKM8D);
     DistrToChildNodes(buf);
@@ -806,11 +833,22 @@ procedure ProcessCurrentRecord;
 {
   var buf: ttRKM8D;
   buf := ttRKM8D(t.buffer);
-  ProcessRKM8DRecord(buf);
+  if getfirst tChild != tsOk
+    ProcessRKM8DRecord(buf);
   t.buffer := buf;
   update current t;
-  ProcessParentNode(buf);
 }
+
+procedure ProcessCurrentParentRecord;
+{
+  if (t.ParentNrec != 0)
+  {
+    var buf: ttRKM8D;
+    buf := ttRKM8D(t.buffer);
+    ProcessParentNode(buf);
+  }
+}
+
 
 procedure DistributeCurrentRecord;
 {
@@ -937,21 +975,24 @@ tableevent table t;
   cmSetDefault  : SetDefaultCurrentRecord;
   cmCheckField  :
   {
-    SaveCurrentRecord;
-    DistributeCurrentRecord;
+    if getfirst tChild = tsOk
+    {
+      DistributeCurrentRecord;
+      SaveCurrentRecord;
+    }
+    else
+      SaveCurrentRecord;
+    ProcessCurrentParentRecord;
   }
   cmExprFieldChanged:
   {
     case curfield of
       #TotalLaborName:
       {
-        t.TotalLabor := double(ExprFieldValue);
+        t.TotalLabor := round(double(ExprFieldValue), 3);
         if (t.NoveltyCoeff = 0) t.NoveltyCoeff := 1;
         if (t.DiffCoeff = 0) t.DiffCoeff := 1;
-        t.TotalLaborBase := t.TotalLabor / t.NoveltyCoeff / t.DiffCoeff;
-        SaveCurrentRecord;
-        DistributeCurrentRecord;
-        rescanpanel(#t);
+        t.TotalLaborBase := round(t.TotalLabor / t.NoveltyCoeff / t.DiffCoeff, 3);
       }
     end;
   }
@@ -1124,7 +1165,7 @@ handleevent
 end;
 
 //#region Вспомогательные функции для динамического формирования столбцов в дереве----------------------------
-procedure AddTreeColumn(aName: string; aTitle: string);
+procedure AddTreeColumn(aName: string; aTitle: string; points: byte = 2);
 {
   var l: longint;
   cfsCreateObject('TreeColumn', 'tr1', aName, false, l);
@@ -1132,7 +1173,7 @@ procedure AddTreeColumn(aName: string; aTitle: string);
   cfsSetProp(l, 'FieldName', aName);
   cfsSetProp(l, 'DefaultWidth', word(12));
   cfsSetProp(l, 'Size_X', 70);
-  cfsSetProp(l, 'Points', 2);
+  cfsSetProp(l, 'Points', points);
 }
 
 procedure AddBrowseColumn(aName: string; aTitle: string);
@@ -1148,8 +1189,8 @@ procedure AddBrowseColumn(aName: string; aTitle: string);
 
 procedure AddTreeYearColumns(aYear: word; aNum: byte);
 {
-  AddTreeColumn('t.Labor['+aNum+']', aYear+''#13'Трудоемкость');
-  AddTreeColumn('t.Coeff['+aNum+']', aYear+''#13'Коэффициент');
+  AddTreeColumn('t.Labor['+aNum+']', aYear+''#13'Трудоемкость', 3);
+  AddTreeColumn('t.Coeff['+aNum+']', aYear+''#13'Коэффициент', 3);
   AddTreeColumn('t.Sum['+aNum+']', aYear+''#13'ОЗП');
   AddBrowseColumn('tp.Labor['+aNum+']', aYear+''#13'Трудоемкость');
 }
