@@ -1226,6 +1226,7 @@
 /i:"../COMMON/SqlHelper"
 /i:"../COMMON/JSLib"
 /i:"../COMMON/HashTable"
+/i:"../COMMON/KatstroyHelper"
 /i:"../REGRADE/DistrMatByStock"
 /i:"../REGRADE/RecoverSporderKAU"
 /i:"../PLANOMTO/AgatKartStorage"

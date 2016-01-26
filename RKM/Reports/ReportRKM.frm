@@ -13,6 +13,7 @@ where ((
   if v.getfirst mnplan = tsok
   {
     case v.mnplan.cwayaccou of
+      0001000000000033h: runinterface(AGAT::ReportRKMForm1D, comp(_MNREC), 'РКМ Форма 1Д ПРОТОКОЛ ЦЕНЫ');
       000100000000022Ch: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10620, 'РКМ Форма 2Д ПЛАНОВАЯ КАЛЬКУЛЯЦИЯ');     //'РКМ_Форма 2Д_Плановая_калькуляция'
       0001000000000125h: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC), 'РКМ Форма 3Д Материалы');                //'РКМ_Форма 3Д_Материалы'
       0001000000000188h: runinterface(AGAT::ReportRKMForm3D, comp(_MNREC), 'РКМ Форма 4Д Полуфабрикаты');            //'РКМ_Форма 4Д_Полуфабрикаты'
