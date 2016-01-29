@@ -1227,6 +1227,7 @@
 /i:"../COMMON/JSLib"
 /i:"../COMMON/HashTable"
 /i:"../COMMON/KatstroyHelper"
+/i:"../COMMON/SFHelper"
 /i:"../REGRADE/DistrMatByStock"
 /i:"../REGRADE/RecoverSporderKAU"
 /i:"../PLANOMTO/AgatKartStorage"

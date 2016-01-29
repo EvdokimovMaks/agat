@@ -1,0 +1,159 @@
+#include SFHelper.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface SFHelper;
+
+sql query qTickets =
+select spdn.nalog, sum(spdn.sumval) as sumval, sum(spdn.sumnal) as sumnal, sum(spdn.summa) as summa
+from spstep
+join specmtr spm on spm.csaldtune=#comp(0001000000000001h) and spm.cotable=1104 and spm.cspec=spstep.nrec and spm.ckau[3]= :PersonNrec
+join katusl u on u.nrec=spstep.cmcusl and u.name like '%билет%' and u.name not like '%сбор%'
+join spdocnal spdn on spdn.tipdoc=1101 and spdn.cspdoc = spstep.nrec
+where spstep.cstepdoc = :StepdocNrec and spstep.prmc = 2
+group by spdn.nalog;
+
+sql query qTaxes =
+select spdn.nalog, sum(spdn.sumval) as sumval, sum(spdn.sumnal) as sumnal, sum(spdn.summa) as summa
+from spstep
+join specmtr spm on spm.csaldtune=#comp(0001000000000001h) and spm.cotable=1104 and spm.cspec=spstep.nrec and spm.ckau[3]= :PersonNrec
+join katusl u on u.nrec=spstep.cmcusl and u.name like '%сбор%'
+join spdocnal spdn on spdn.tipdoc=1101 and spdn.cspdoc = spstep.nrec
+where spstep.cstepdoc = :StepdocNrec and spstep.prmc = 2
+group by spdn.nalog;
+
+
+create view
+as select *
+from soprhoz, schfact, stepdoc, plpor, persons;
+
+function CalcSFByBasedoc(SchfactNrec: comp; StepdocNrec: comp; PersonNrec: comp; queryStr: string): boolean;
+{
+  result := false;
+  if getfirst schfact where ((SchfactNrec == schfact.nrec)) = tsOk
+  {
+    var q: IQuery;
+    q := queryManager.createQuery(queryStr);
+    q.setParam('StepdocNrec', StepdocNrec);
+    q.setParam('PersonNrec', PersonNrec);
+
+    var rs: IResultSet;
+    rs := q.getResultSet;
+    if rs != nullref
+    {
+      if (rs.getfirst = tsOk)
+      {
+        schfact.sum[1] := 0;
+        schfact.sum[2] := 0;
+        schfact.sum[3] := 0;
+        schfact.sum[4] := 0;
+        schfact.sum[5] := 0;
+        schfact.sum[6] := 0;
+        schfact.sum[7] := 0;
+        schfact.sum[8] := 0;
+        schfact.sum[9] := 0;
+
+        do
+        {
+          var nal: double;
+          nal := rs.row.Val('sumnal');
+          if (rs.row.Val('nalog') = 10)
+          {
+            schfact.sum[4] := 110 / 10 * nal - nal;
+            schfact.sum[5] := nal;
+            schfact.sum[6] := schfact.sum[4] + schfact.sum[5];
+
+          }
+          else if (rs.row.Val('nalog') = 18)
+          {
+            schfact.sum[1] := 118 / 18 * nal - nal;
+            schfact.sum[2] := nal;
+            schfact.sum[3] := schfact.sum[1] + schfact.sum[2];
+
+          }
+          //message(rs.row.Val('nalog')+' '+rs.row.Val('sumval'));
+        } while (rs.getnext = tsOk);
+
+        schfact.sum[11] := schfact.sum[1];
+        schfact.sum[12] := schfact.sum[2];
+        schfact.sum[13] := schfact.sum[3];
+        schfact.sum[14] := schfact.sum[4];
+        schfact.sum[15] := schfact.sum[5];
+        schfact.sum[16] := schfact.sum[6];
+        schfact.sum[17] := schfact.sum[7];
+        schfact.sum[18] := schfact.sum[8];
+        schfact.sum[19] := schfact.sum[9];
+
+        update current schfact;
+        result := true;
+      }
+      else _raise ExTaxesNotFound;
+    }
+  }
+  else _raise ExSchfactNotFound;
+}
+
+function CalcSFByBasedocRRTickets(SchfactNrec: comp; StepdocNrec: comp; PersonNrec: comp): boolean;
+{
+  result := CalcSFByBasedoc(SchfactNrec, StepdocNrec, PersonNrec, qTickets);
+}
+
+function CalcSFByBasedocRRTaxes(SchfactNrec: comp; StepdocNrec: comp; PersonNrec: comp): boolean;
+{
+  result := CalcSFByBasedoc(SchfactNrec, StepdocNrec, PersonNrec, qTaxes);
+}
+
+function CalcSFBySoprhozRRTickets(SoprhozNrec: comp): boolean;
+{
+  result := false;
+  if getfirst soprhoz where ((SoprhozNrec == soprhoz.nrec)) = tsOk
+  {
+    if soprhoz.tidkgal=9 and (getfirst plpor where ((soprhoz.csoprdoc == plpor.nrec)) = tsOk)
+    {
+      if getfirst persons where ((plpor.cpersons == persons.nrec)) = tsOk
+      {
+        if getfirst schfact where ((soprhoz.cschfact == schfact.nrec)) = tsOk
+        {
+          if getfirst stepdoc where ((soprhoz.cstepdoc == stepdoc.nrec)) = tsOk
+          {
+            result := CalcSFByBasedocRRTickets(schfact.nrec, stepdoc.nrec, persons.nrec);
+          }
+          else _raise ExBasedocNotFound;
+        }
+        else _raise ExSchfactNotFound;
+      }
+      else _raise ExPersonNotFound;
+    }
+    else _raise ExAvOtchNotFound;
+  }
+  else _raise ExSoprhozNotFound;
+}
+
+function CalcSFBySoprhozRRTaxes(SoprhozNrec: comp): boolean;
+{
+  result := false;
+  if getfirst soprhoz where ((SoprhozNrec == soprhoz.nrec)) = tsOk
+  {
+    if soprhoz.tidkgal=9 and (getfirst plpor where ((soprhoz.csoprdoc == plpor.nrec)) = tsOk)
+    {
+      if getfirst persons where ((plpor.cpersons == persons.nrec)) = tsOk
+      {
+        if getfirst schfact where ((soprhoz.cschfact == schfact.nrec)) = tsOk
+        {
+          if getfirst stepdoc where ((soprhoz.cstepdoc == stepdoc.nrec)) = tsOk
+          {
+            result := CalcSFByBasedocRRTaxes(schfact.nrec, stepdoc.nrec, persons.nrec);
+          }
+          else _raise ExBasedocNotFound;
+        }
+        else _raise ExSchfactNotFound;
+      }
+      else _raise ExPersonNotFound;
+    }
+    else _raise ExAvOtchNotFound;
+  }
+  else _raise ExSoprhozNotFound;
+}
+
+end.
