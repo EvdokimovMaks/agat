@@ -1,0 +1,196 @@
+#component "AGAT"
+#include SvodVedZPSdel.vih
+
+interface SelectNaryad 'Формирование сводной ведомости по з/п сдельщикам';
+show(,,62,5);
+const
+  MARK_NAME = 'MNPLmarkers';
+end;
+var
+  SV: AGAT::SvodVedZPSdel;
+  selnarady: string;
+  M, L: longint;
+  i: word;
+  NarNrec: comp;
+
+create view vMNPL
+as select *
+from mnplan
+where ((
+  NarNrec == mnplan.nrec
+));
+
+procedure SetStrNar;
+{
+  case GetMarkerCount(M) of
+    0: selnarady := 'Укажите сдельный наряд';
+    1: {
+         GetMarker(M, 0, NarNrec);
+         if vMNPL.getfirst mnplan = tsOk { };
+         selnarady := vMNPL.mnplan.name;
+       }
+    else selnarady := 'Выбрано ' + GetMarkerCount(M) + ' сдельных наряда';
+  end;
+}
+
+screen sc1;
+fields
+  selnarady: protect, pickbutton;
+
+buttons
+  cmMakeRep;
+  cmCancel;
+
+<<
+
+  Сдельные наряды .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+  <. Сформировать .>                             <. Отмена .>
+>>
+end;
+
+handleevent
+cminit:
+{
+  NarNrec := 0;
+  M := InitMarker(MARK_NAME, sizeof(comp), 100, 10);
+  SetStrNar;
+}
+cmpick:
+{
+  if curfield = #selnarady then
+  {
+    L := 0;
+    DoneMarker(M, MARK_NAME);
+    if RunInterface(Naryady, L) = cmDefault
+      M := L
+    else
+      M := InitMarker(MARK_NAME, sizeof(comp), 100, 10);
+    SetStrNar;
+  }
+}
+cmMakeRep:
+{
+  if GetMarkerCount(M) = 0 then
+  {
+    message('Не выбраны сдельные наряды');
+    exit;
+  }
+  SV.ClearTPW;
+  for (i:=0; i<GetMarkerCount(M); i++)
+  {
+    GetMarker(M, i, NarNrec);
+    SV.addPws(NarNrec, GetMarkerCount(M));
+  }
+  SV.printreport;
+}
+cmCancel:
+{
+  exit;
+}
+cmDelOnProtect:
+{
+  ClearMarker(M);
+  selnarady := 'Укажите сдельный наряд';
+  ReReadRecord;
+}
+end;
+
+end.
+
+interface Naryady 'Выбор сдельных нарядов' doaccept, escclose;
+
+const
+  SDEL_NREC = 00010000000000F7h;
+end;
+
+var
+  MRKR: longint;
+
+create view
+as select *
+from mnplan
+where ((
+  SDEL_NREC == mnplan.CWAYACCOU
+));
+
+parameters MRKR;
+
+browse br1 (,, scAtlTreeMark)
+table mnplan;
+fields
+  if(FoundMarker(MRKR, NREC), 'v', ' ') '' : [1], skip;
+  mnplan.name 'Сдельные наряды' : [20], protect;
+end;
+
+handleevent
+cminit:
+{
+  if getfirst mnplan != tsOk { message('Не найдены сдельные наряды.'); exit; };
+  if MRKR = 0 then
+    MRKR := InitMarker('MNPLmarkers', sizeof(comp), 100, 10);
+//  RescanPanel(#mnplan);
+}
+cmMarkRec:
+{
+  InvertMarker(MRKR, NREC);
+  RedrawCurrentAndGo(#mnplan, true);
+}
+cmMarkAll:
+{
+  PushPos(#mnplan);
+  if GetFirst mnplan = tsOk do
+    InsertMarker(MRKR, NREC);
+  while GetNext mnplan = tsOk;
+  PopPos(#mnplan);
+  RescanPanel(#mnplan);
+}
+cmUnmarkAll:
+{
+  ClearMarker(MRKR);
+  RescanPanel(#mnplan);
+}
+cmDefault:
+{
+  if GetMarkerCount(MRKR) = 0 then
+    InvertMarker(MRKR, NREC);
+}
+cmCancel:
+{
+  ClearMarker(MRKR);
+}
+end;
+end.
+
+VipInterface UserReport_SVZPS implements IUserReport Licensed(free);
+Interface UserReport_SVZPS;
+  create view;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::SelectNaryad);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'Сводная ведомость начисленной заработной платы рабочим сдельщикам по основным заказам';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'MANUFPLAN';
+    end;
+  }
+end.
