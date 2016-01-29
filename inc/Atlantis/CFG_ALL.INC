@@ -116,6 +116,7 @@ const cfpSpinMin            = 1071;
 const cfpSpinMax            = 1072;
 
 const cfpFixing             = 1073;
+const cfpEditButton         = 1074;
 
 const cfpLines              = 1169;
 const cfpIdle               = 1170;
@@ -186,6 +187,9 @@ const cfpFixedState         = 1220;
 const cfpDocPanelMode       = 1221;
 const cfpOnlyOneDoc         = 1222;
 
+const cfpImgName            = 1223;
+
+const cfpTabbedSheetOrder   = 1224;
 //=============================================================================
 // Флаги свойства
 //=============================================================================

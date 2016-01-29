@@ -10,14 +10,27 @@
 .set name='PlVedRee'
 .hide
 .fields
-BegDate EndDate
-PlatVedNrec: comp
-NoDok NamePrizn DForm DataN datOk PodrName Name1 Summa sFond
-SpVedPrizn TabN SpdForm FIO SumUd SumOpl
-sum1 sum2
+PlatVedNrec : comp
+NoDok
+NamePrizn
+DForm : date
+DataN : date
+DatOk : date
+PodrName
+Name1
+Summa
+sFond
+
+SpVedPrizn
+TabN
+SpdForm : date
+FIO
+SumUd
+SumOpl
+
+sum1
+sum2
 .endfields
- BegDate      ^
- EndDate      ^
 .{
 .{
 Ведомость
@@ -35,7 +48,7 @@ sum1 sum2
   Спецификация
     SpVedPrizn ^
     TabN       ^
-    SpdForm      ^
+    SpdForm    ^
     FIO        ^
     SumUd      ^
     SumOpl     ^
@@ -49,10 +62,10 @@ sum2 ^
 
 
 .linkform 'PlVedRee01' prototype is 'PlVedRee'
-.nameinlist 'Краткий реестр платежных ведомостей (без спецификаций)'
+.group 'Реестр платежных ведомостей'
+.nameinlist 'Реестр платежных ведомостей'
 .fields
 CommonFormHeader
-if(BegDate<>'','с '+string(BegDate)+' по '+string(EndDate),'')
 NoDok NamePrizn DForm Summa sFond DataN datOk PodrName Name1
 sum1
 sum2
@@ -61,7 +74,6 @@ sum2
 .{
 .[H
                                                                     ПЛАТЕЖНЫЕ ВЕДОМОСТИ
-                                                               @~@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 ───────┬───────────────────┬───────────┬────────────────┬────────────────┬─────────────┬────────────┬───────────────┬────────────────────
  Номер │  Статус ведомости │ Дата форм.│      Сумма     │    Выплачено   │ Дата начала │ Дата окон. │ Подразделение │    Наименование
@@ -78,42 +90,30 @@ sum2
 .endform
 
 .linkform 'PlVedRee02' prototype is 'PlVedRee'
-.nameinlist 'Подробный реестр платежных ведомостей (со спецификациями)'
-.var
-isSpecOut: boolean
-.endvar
+.group 'Реестр платежных ведомостей'
+.nameinlist 'Реестр платежных ведомостей с расшифровкой'
 .fields
 CommonFormHeader
-if(BegDate<>'','с '+string(BegDate)+' по '+string(EndDate),'')
 NoDok NamePrizn DForm Summa sFond DataN datOk PodrName Name1
-if(isSpecOut,'Спецификации:','')
-SpVedPrizn TabN SpdForm SumUd SumOpl FIO
+SpdForm SumUd SumOpl FIO + ', ' + TabN
 sum1 sum2
 .endfields
 ^
 .{
 .[H
                                                                     ПЛАТЕЖНЫЕ ВЕДОМОСТИ
-                                                               @~@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 ───────┬───────────────────┬───────────┬────────────────┬────────────────┬─────────────┬────────────┬───────────────┬────────────────────
  Номер │  Статус ведомости │ Дата форм.│      Сумма     │    Выплачено   │ Дата начала │ Дата окон. │ Подразделение │    Наименование
 ───────┴───────────────────┴───────────┴────────────────┴────────────────┴─────────────┴────────────┴───────────────┴────────────────────
 .]H
 .{
-.BEGIN
- isSpecOut:=True;
-END.
 @@@@@@@ @@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@ &#&'&&&&&&&&&.&& &#&'&&&&&&&&&.&& @@@@@@@@@@@@@ @@@@@@@@@@@@ @@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@
 .{
-@@@@@@@@@@@@@ @@@@ @@@@@@@@ @@@@@@@@@@@ &#&'&&&&&&&&&.&& &#&'&&&&&&&&&.&& @@@@@@@@@@@@@@@@@@@@@@@@@@
-.BEGIN
-  isSpecOut:=False;
-END.
+                            @@@@@@@@@@@ &#&'&&&&&&&&&.&& &#&'&&&&&&&&&.&&                            @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}
 .}
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Итого по реестру :                      &#&'&&&&&&&&&.&& &#&'&&&&&&&&&.&&
 .}
 .endform
-

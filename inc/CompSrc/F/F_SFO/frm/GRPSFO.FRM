@@ -9,31 +9,18 @@
 #end
 .Form LstGrSFO
 .Hide
-.Var
-  IsCustom : boolean;
-.endVar
-.Begin
-  if (Lic_ItemExists('Custom'))
-    IsCustom := True;
-end.
 .Fields
    fKod : String  fName : String  fEd : String
-   fRost : String   fOd1 : String    fOd2 : String
-   fOb : String     fGUb : String    fPerch : String
-   fICZ : String
+   fRost : String fOd1 : String   fOd2 : String
+   fOb : String   fGUb : String   fPerch : String
+   fICZ : String  fPog : String   fOb2 : String
+   fUv : String   fSizes : String
+   fClean : Word  fByPers : Word  fGrNRec : Comp
 .endFields
 .{
-   ^ ^ ^  ^ ^ ^ ^ ^ ^ ^
-.{?INTERNAL; (IsCustom)
-.Fields
-   fPog : String
-.endFields
- ^
-.}
-.Fields
-   fOb2 : String  fUv : String
-.endFields
- ^  ^
+   ^ ^ ^
+   ^ ^ ^ ^ ^ ^ ^ ^ ^
+   ^ ^ ^ ^ ^
 .}
 .endform
 
@@ -62,18 +49,18 @@ end.
 Ъ░  ^
 
                                        ┐ЮЦ╞╞К А╞╔Ф╗═╚Л╜╝╘ (Д╝Ю╛╔╜╜╝╘) ╝╓╔╕╓К
-.{?INTERNAL; not (IsCustom)
+.{?INTERNAL; (not Lic_ItemExists('Custom'))
  здддддддддддддддбддддддддддддддддддддддддддддддддддддддддбддддддддддддбддддбддддбддддбддддбддддбддддбддддбддддбдддд©
  Ё      ┼╝╓      Ё              █═╗╛╔╜╝╒═╜╗╔              Ё┘╓╗╜╗Ф═ ╗╖╛.Ё░╝АБЁ ▌╓1Ё ▌╓2Ё ▌║1Ё ▌║2Ё┐.Ц║Ё▐╔ЮГЁ ┬▒┤Ё ⌠╒ Ё
  юдддддддддддддддаддддддддддддддддддддддддддддддддддддддддаддддддддддддаддддаддддаддддаддддаддддаддддаддддаддддадддды
 .}
-.{?INTERNAL; (IsCustom)
+.{?INTERNAL; (Lic_ItemExists('Custom'))
  здддддддддддддддбддддддддддддддддддддддддддддддддддддддддбддддддддддддбддддбддддбддддбддддбддддбддддбддддбддддбддддбдддд©
  Ё      ┼╝╓      Ё              █═╗╛╔╜╝╒═╜╗╔              Ё┘╓╗╜╗Ф═ ╗╖╛.Ё░╝АБЁ ▌╓1Ё ▌╓2Ё ▌║1Ё ▌║2Ё┐.Ц║Ё▐╔ЮГЁ ┬▒┤Ё ▐╝ёЁ ⌠╒ Ё
  юдддддддддддддддаддддддддддддддддддддддддддддддддддддддддаддддддддддддаддддаддддаддддаддддаддддаддддаддддаддддаддддадддды
 .}
 .{
-.{?INTERNAL; not (IsCustom)
+.{?INTERNAL; (not Lic_ItemExists('Custom'))
 .Fields
    fKod  fName  fEd
    fRost fOd1 fOd2 fOb fOb2 fGUb fPerch fICZ
@@ -81,7 +68,7 @@ end.
 .endFields
   @@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@  &&   &&   &&   &&   &&   &&   &&   &&    @
 .}
-.{?INTERNAL; (IsCustom)
+.{?INTERNAL; (Lic_ItemExists('Custom'))
 .Fields
    fKod  fName  fEd
    fRost fOd1 fOd2 fOb fOb2 fGUb fPerch fICZ fPog

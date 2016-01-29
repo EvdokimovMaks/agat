@@ -19,7 +19,7 @@ Const
   MaxRazSFO   = 8; // В модуле Спецодежда
   MaxRazCtm   = 9; // В модуле Вещевое имущество
 
-  szHRost = 1;
+  szHRost = 1; // Типы размеров сотрудника
   szWear1 = 2;
   szWear2 = 3;
   szObuv1 = 4;

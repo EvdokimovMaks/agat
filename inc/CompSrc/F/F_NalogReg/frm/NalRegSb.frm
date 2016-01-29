@@ -13,8 +13,8 @@
 .Hide
 .Fields
   NalRegDc_NRec : comp   RegTypeStr : String Num   : string  dFrom    : Date
-  InvNum     : String ObjName  : String  SumPr  : Double  InFuture : Boolean
-  NoDoc      : String KatklProchName : String
+  InvNum     : String ObjName  : String  SumPr  : Double  val  : string 
+  InFuture : Boolean  NoDoc      : String KatklProchName : String
   SumRs1     : Double SumRs4   : Double  SumRs2 : Double  SumRs3      : Double
   dDoc       : Date   DateEnd  : Date    DopWrd1: Word
   Refin      : Double
@@ -22,6 +22,35 @@
   RasprMode  : String
 
   DatDoc     : Date SumRs     : Double  THO    : String
+
+  // цикл по Oborot
+  IsProv      : string
+  NumProv     : string
+  SchO        : string
+  SubSchO     : string
+  SchK        : string
+  SubSchK     : string
+  DbKau       : string
+  KrKau       : string
+  VhProv      : string
+  SumProv     : double
+  SumValProv  : double
+  SimvValProv : string
+  DateProv    : string
+  SodrProv    : string
+
+  // цикл по FpOborot
+  IsFin        : string
+  NumFin       : string
+  StBudFin     : string
+  COFin        : string
+  PeriodFin    : string
+  KauFin       : string
+  SumFin       : double
+  SumValFin    : double
+  NameValFin   : string
+  DateFin      : string
+  SodrFin      : string
 .endFields
 ! Подкачка Excel форматов
 ! Эта строчка нужна пока не будет решена 102.31867
@@ -31,7 +60,7 @@
    ^ ^ ^ ^
    ^
    ^
-   ^ ^
+   ^ ^ ^
    ^ ^
    ^ ^
    ^ ^ ^ ^ ^ ^ ^
@@ -40,6 +69,39 @@
    ^
 .{
    ^ ^ ^
+.if OKOborot
+IsProv     наличие проводок         ^
+.{CheckEnter Oborot
+  NumProv         Номер проводки             ^
+  SchO            Счет по дебету в проводке  ^
+  SubSchO         Субсчет счета по дебету    ^
+  SchK            Счет по кредиту в проводке ^
+  SubSchK         Субсчет счета по кредиту   ^
+  DbKau           Объект учета счета по дебету в проводке     ^
+  KrKau           Объект учета счета по кредиту в проводке    ^
+  VhProv          Входимость сумму платежа   ^
+  SumProv         Сумма оборота              ^
+  SumValProv      Сумма оборота в валюте     ^
+  SimvValProv     Наименование валюты        ^
+  DateProv        Дата формирования проводки ^
+  SodrProv        Содержание проводки        ^
+.}
+.end
+.if OKFPOborot
+IsFin      наличие финпроводок     ^
+.{CheckEnter FpOborot
+  NumFin          Номер финпроводки             ^
+  StBudFin        Статья бюджета                ^
+  COFin           ЦО                            ^
+  PeriodFin       Период                        ^
+  KauFin          КАУ                           ^
+  SumFin          Сумма финоборота              ^
+  SumValFin       Сумма финоборота в валюте     ^
+  NameValFin      Наименование валюты           ^
+  DateFin         Дата формирования финпроводки ^
+  SodrFin         Содержание финпроводки        ^
+.}
+.end
 .}
 
 .endForm
@@ -92,6 +154,14 @@
   DatDoc   SumRs  THO
 .endFields
       @@@@@@@@@@   &#&&&&&&&&&&&.&&   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.if OKOborot
+.{CheckEnter Oborot
+.}
+.end
+.if OKFPOborot
+.{CheckEnter FPOborot
+.}
+.end
 .}
  И
 .endForm
@@ -144,6 +214,14 @@
   DatDoc   SumRs  THO
 .endFields
       @@@@@@@@@@   &#&&&&&&&&&&&.&&   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.if OKOborot
+.{CheckEnter Oborot
+.}
+.end
+.if OKFPOborot
+.{CheckEnter FPOborot
+.}
+.end
 .}
  И
 .endForm
@@ -196,6 +274,14 @@
   DatDoc   SumRs  THO
 .endFields
       @@@@@@@@@@   &#&&&&&&&&&&&.&&   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.if OKOborot
+.{CheckEnter Oborot
+.}
+.end
+.if OKFPOborot
+.{CheckEnter FPOborot
+.}
+.end
 .}
  И
 .endForm
@@ -241,6 +327,14 @@
   DatDoc   SumRs  THO
 .endFields
       @@@@@@@@@@   &#&&&&&&&&&&&.&&  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.if OKOborot
+.{CheckEnter Oborot
+.}
+.end
+.if OKFPOborot
+.{CheckEnter FPOborot
+.}
+.end
 .}
  И
 .endForm
@@ -288,6 +382,14 @@
   DatDoc   SumRs  THO
 .endFields
       @@@@@@@@@@   &#&&&&&&&&&&&.&&   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.if OKOborot
+.{CheckEnter Oborot
+.}
+.end
+.if OKFPOborot
+.{CheckEnter FPOborot
+.}
+.end
 .}
  И
 .endForm
@@ -337,6 +439,14 @@
   DatDoc   SumRs  THO
 .endFields
       @@@@@@@@@@   &#&&&&&&&&&&&.&&   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.if OKOborot
+.{CheckEnter Oborot
+.}
+.end
+.if OKFPOborot
+.{CheckEnter FPOborot
+.}
+.end
 .}
  И
 .endForm
@@ -385,6 +495,14 @@
   DatDoc   SumRs  THO
 .endFields
       @@@@@@@@@@   &#&&&&&&&&&&&.&&   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.if OKOborot
+.{CheckEnter Oborot
+.}
+.end
+.if OKFPOborot
+.{CheckEnter FPOborot
+.}
+.end
 .}
  И
 .endForm
@@ -400,6 +518,7 @@
   CommonFormHeader
   '"'+RegTypeStr+'"' Num dFrom
   SumPr
+  val
   KatklProchName
   VidRash
   RasprMode
@@ -412,7 +531,7 @@
       @~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
                                 № ^ от ^
 
-      Сумма, принятая к учету &&&&&&&&&&&.&&
+      Сумма, принятая к учету &&&&&&&&&&&.&& @@@@@
       Вид операции: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
       Вид расхода  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
       ^
@@ -426,6 +545,91 @@
   DatDoc   SumRs  THO
 .endFields
       @@@@@@@@@@   &#&&&&&&&&&&&.&&   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.Fields
+  IsProv
+  DateProv NumProv
+  SchO SubSchO DbKau
+  SchK SubSchK KrKau
+  VhProv SumProv SumValProv SimvValProv SodrProv
+.endFields
+.if OKOborot
+      ^
+.{CheckEnter Oborot
+      @@@@@@@@@@
+      @@@ Д: ^ ^ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+          К: ^ ^ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+          На сумму:  ^ ^'/ В валюте: ^' ^
+          Содержание: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.}
+.end
+.Fields
+  IsFin
+  DateFin NumFin
+  StBudFin COFin PeriodFin KauFin
+  SumFin SumValFin NameValFin SodrFin
+.endFields
+.if OKFPOborot
+      ^
+.{CheckEnter FPOborot
+      @@@@@@@@@@
+      @@@ Статья: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+          ЦО:     @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+          Период: ^
+          КАУ:    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+          На сумму:  ^ / В валюте: ^' ^
+          Содержание: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.}
+.end
+.}
+ И
+.endForm
+
+//-----------------------------------------------------------------------------
+
+.LinkFORM NalRegSb09 Prototype Is NalRegSb
+.NameInList 'Расходы будущих периодов (сокращенная)'
+.Group 'Форма регистра для расходов будущих периодов'
+.p 80
+.Defo Portrait
+.Fields
+  CommonFormHeader
+  '"'+RegTypeStr+'"' Num dFrom
+  SumPr
+  val
+  KatklProchName
+  VidRash
+  RasprMode
+.endFields
+ И.[h
+                                      Лист @Np@
+.]h
+^
+                                  НАЛОГОВЫЙ РЕГИСТР
+      @~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+                                № ^ от ^
+
+      Сумма, принятая к учету &&&&&&&&&&&.&& @@@@@
+      Вид операции: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+      Вид расхода  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+      ^
+.{
+.[h
+     ─────────────┬─────────────────┬───────────────────────────────────────────
+          Дата    │      Сумма      │    ТХО
+     ─────────────┴─────────────────┴───────────────────────────────────────────
+.]h
+.Fields
+  DatDoc   SumRs  THO
+.endFields
+      @@@@@@@@@@   &#&&&&&&&&&&&.&&   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.if OKOborot
+.{CheckEnter Oborot
+.}
+.end
+.if OKFPOborot
+.{CheckEnter FPOborot
+.}
+.end
 .}
  И
 .endForm

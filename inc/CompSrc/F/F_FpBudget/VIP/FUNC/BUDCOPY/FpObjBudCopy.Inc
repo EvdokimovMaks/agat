@@ -34,7 +34,7 @@ end;
 
 Type TFpBudCopyAll = record
   rcBudCopyInit   : TFpBudCopyInit;
-  rcBudCopyStruct : TFpBudCopyStruct
+  rcBudCopyStruct : TFpBudCopyStruct;
 end;
 
 #endif//__FpAdvBudCop_Inc__

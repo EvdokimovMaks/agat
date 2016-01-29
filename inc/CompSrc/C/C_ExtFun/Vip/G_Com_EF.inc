@@ -47,6 +47,8 @@ function  TypeRound_Ord                               : Word;    external 'G_Com
 function  ValRound            (Word, Comp, Double)    : Double;  external 'G_Common.dll';
 function  fRoundRubSoprRem    (Double)                : Double;  external 'G_Common.dll';
 function  fRoundValSoprRem    (Double)                : Double;  external 'G_Common.dll';
+function  fRoundRubRozn       (Double)                : Double;  external 'G_Common.dll';
+function  fRoundValRozn       (Double)                : Double;  external 'G_Common.dll';
 //------------------------------------------------------------------------------
 function  StrKol              (Double)                : String;  external 'G_Common.dll';
 //------------------------------------------------------------------------------
@@ -85,6 +87,18 @@ function  UserNameMinusDomen  (String)                : String;  external 'G_Com
 function  WordCount           (string, string)        : byte;    external 'G_Common.dll';
 function  WordPosition        (byte, string, string)  : byte;    external 'G_Common.dll';
 function  ExtractWord         (byte, string, string)  : string;  external 'G_Common.dll';
+#doc
+Открытие файла (ссылки) в browse поумолчанию
+#end
+function  OpenLink            (string,boolean)        : integer;  external 'G_Common.dll'; 
+#doc
+Открытие файла (ссылки) в browse по настройкам:
+ Браузер по умолчанию из операционной системы .
+ Браузер Chrome если нет, то Internet Explorer.
+ Только браузер Chrome.
+ Только браузер Internet Explorer.
+#end
+function  OpenLinkEx          (string,boolean,longint) : integer;  external 'G_Common.dll'; 
 
 //------------------------------------------------------------------------------
 // ImpList.pas
@@ -218,3 +232,6 @@ function  InitBitmapList                               : boolean; external 'G_Co
 function  GetNextBitmap        (var string)            : boolean; external 'G_Common.dll';
 function  GetFirstBitmap       (var string)            : boolean; external 'G_Common.dll';
 procedure FreeBitmapList                                        ; external 'G_Common.dll';
+//******************************************************************************
+// FileByUrl.pas
+function  GetFileByUrl(string,string)                  : boolean; external 'G_Common.dll';

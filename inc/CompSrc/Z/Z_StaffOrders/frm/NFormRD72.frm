@@ -8,6 +8,7 @@
 
 
 Org
+éäèé
 
 N_DOC
 DATA
@@ -28,7 +29,7 @@ primechanie
 
 .EndFields
 
- ^ ^ ^ 
+ ^ ^ ^ ^
 .{ NformRD72Cycle CheckEnter
 
 ^ ^ ^ ^ ^ ^ ^

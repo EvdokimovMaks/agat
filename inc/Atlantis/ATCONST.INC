@@ -465,6 +465,8 @@ CONST
        cmSetPassiveString                             = 447;
 
 CONST
+       cmInvertFilter                                 = 449;
+CONST
        cmRunFilter                                    = 450;
 CONST
        cmDiscardFilter                                = 451;
@@ -1030,6 +1032,8 @@ CONST
        cmInternalSwitch                               = 816;
 
 CONST
+       cmInternalSave                                 = 819;
+CONST
        cmWindowCreated                                = 824;
 
 CONST
@@ -1156,6 +1160,10 @@ CONST
        cmSwitchData                                   = 890;
 CONST
        cmViewLicFile                                  = 892;
+CONST
+       cmTreeExpand                                   = 893;
+CONST
+       cmTreeCollapse                                 = 894;
 CONST
        cmAlignViews                                   = 895;
 CONST
@@ -1994,7 +2002,24 @@ CONST
        cmPrintFRReport                                = 1328;
 CONST
        cmSetupLogDriverOptions                        = 1329;
-       
+CONST 
+       cmAtlLogStart                                  = 1330;
+CONST 
+       cmAtlLogStop                                   = 1331;
+CONST
+       cmAtlLogStoreSettings                          = 1332;
+CONST
+       cmAtlLogLoadSettings                           = 1333;
+CONST
+       cmAtlLogExportSettings                         = 1334;
+CONST
+       cmAtlLogImportSettings                         = 1335;
+CONST
+       cmHttpExitMsgBox                               = 1336;
+CONST
+       cmHttpSetCurrent                               = 1337;
+
+
 // !! Диапазон 2000 - 2099 прикладной, константы в него не добавлять !!
 
 
@@ -2490,6 +2515,8 @@ CONST
        scCfgServiceFunctionsTypesFilter               = 357;
 CONST
        scArmConfigSys                                 = 358;
+CONST
+       scProtocolMain                                 = 359;
 
 CONST
        scTreeReport                                   = 360;
@@ -2561,8 +2588,6 @@ CONST
        scIfaceGroupAggrSetupSelect                    = 395;
 CONST
        scbrReports                                    = 396;
-CONST
-       sctrGroups                                     = 397;
 CONST
        sctrReports                                    = 398;
 CONST
@@ -4027,3 +4052,17 @@ const
   cvfYear   = 8;
 const
   cvfToday  = 16;
+
+// SpinDateTime
+const
+  spdtMinute = 1;
+const
+  spdtSecond = 2;
+const
+  spdtHour   = 3;
+const
+  spdtDay    = 4;
+const
+  spdtMonth  = 5;
+const
+  spdtYear   = 6;

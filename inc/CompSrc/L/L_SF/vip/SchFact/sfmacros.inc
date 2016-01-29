@@ -4,8 +4,6 @@
 // Макроопределения для СФ
 //******************************************************************************
 
-#include ExtAttr.Vih
-
 #ifNdef __SFMACROS_INC
 #define __SFMACROS_INC
 
@@ -14,12 +12,12 @@
 #declare GetOKED(Table_)
   if (vSf.TuneCountry = ccKaz)
     {
-      var exAttr : iExtAttr;
-      var value  : string;
-      value := exAttr.sGetAttr(coKatSopr, #Table_.NRec, 'КОД ОКЭД');
+      var value : string;
+
+      value := sGetAttr(coKatSopr, #Table_.NRec, 'КОД ОКЭД');
 
       if (trim(value) <> '')
-         exAttr.sSetAttr(coSchFact, vSf.Sf.NRec, 'КОД ОКЭД', value);
+        sSetAttr(coSchFact, vSf.Sf.NRec, 'КОД ОКЭД', value);
     }
 #end
 

@@ -17,7 +17,7 @@ Numero: word;  // номер печатаемого экземпляра
 NameOrgPrik
 OKPOOrgPrik
 CityOrgPrik    // город собственной организации
-dPrik          // дата составления приказа в формате 'DD/MM/YYYY'
+dPrik    : date// дата составления приказа
 dPrikDay       // день даты составления приказа DD
 dPrikMonth     // месяц даты составления приказа mon
 dPrikYear      // год даты составления приказа YYYY
@@ -35,7 +35,7 @@ fioboss        // ФИО руководителя
 NRecSpPrik
 OurOrgName
 OurOrgOKPO
-dDoc
+dDoc     : date
 NoDoc
 FIO            // ФИО командируемого
 FIOAbbrev      // фамилия командируемого с инициалами
@@ -78,8 +78,8 @@ CityPrik
 v
 srok
 dney
-s
-po
+s  : date
+po : date
 purpose
 zaschet
 memo

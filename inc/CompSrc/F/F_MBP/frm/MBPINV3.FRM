@@ -111,6 +111,8 @@ begin
   if (wGetTune('Country') = ccKaz) // цифрами и прописью
     GetKopStr := GetKopStr + ' (' + Trim(DoubleToStr(Double(GetKopStr), '\f4')) + ')';
 end.
+#CommissionLinkVar
+#CommissionLinkInit(MBPInvProt)
 .var
   iFeeSigners : FeeSigners;
   Номер_МОЛ, Колич_МОЛ : word;
@@ -173,8 +175,6 @@ end.
     iFeeSigners.ClearRestriction;
   }
 end.
-#CommissionLinkVar
-#CommissionLinkInit(MBPInvProt)
 .Fields
   CommonFormHeader
   OrgName  OKPO  Podr
@@ -595,6 +595,8 @@ begin
       GetKolStr := GetKolStr + DoubleToStr(Kol, 'целых \f5');
   }
 end.
+#CommissionLinkVar
+#CommissionLinkInit(MBPInvProt)
 .var
   iFeeSigners : FeeSigners;
   Номер_МОЛ, Колич_МОЛ : word;
@@ -655,8 +657,6 @@ end.
     iFeeSigners.ClearRestriction;
   }
 end.
-#CommissionLinkVar
-#CommissionLinkInit(MBPInvProt)
 .Fields
   CommonFormHeader
   OrgName
@@ -956,6 +956,8 @@ begin
       GetStoimStr := DoubleToStr(Stoim, '\f4 целых \f5');
   }
 end.
+#CommissionLinkVar
+#CommissionLinkInit(MBPInvProt)
 .var
   iFeeSigners : FeeSigners;
   Номер_МОЛ, Колич_МОЛ : word;
@@ -1016,8 +1018,6 @@ end.
     iFeeSigners.ClearRestriction;
   }
 end.
-#CommissionLinkVar
-#CommissionLinkInit(MBPInvProt)
 .Fields
   CommonFormHeader
   OrgName

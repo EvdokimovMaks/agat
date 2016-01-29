@@ -126,3 +126,19 @@ function  FpPeriodServisCheck  (Word,Double,Comp,Date,Date)  : Word;    external
 //------------------------------------------------------------------------------
 // Функции расчета статистических величин
 #include FpStatisticAlg_EF.Inc
+//------------------------------------------------------------------------------
+// функции для работы с виртуальной памятью для Интерактивного аналитического отчета
+function  CreateXXL_datalink   (LongInt,LongInt)             : boolean; external 'G_Fin.dll';
+function  DestroyXXL_datalink                                : boolean; external 'G_Fin.dll';
+function  GetItemXXL_datalink  (LongInt,LongInt,var longint,var word,var comp)
+                                                             : boolean; external 'G_Fin.dll';
+function  SetItemXXL_datalink  (LongInt,LongInt,longint,word,comp)
+                                                             : boolean; external 'G_Fin.dll';
+
+function  CreateXXL_HIER       (LongInt,LongInt)             : boolean; external 'G_Fin.dll';
+function  DestroyXXL_HIER                                    : boolean; external 'G_Fin.dll';
+function  GetItemXXL_HIER      (LongInt,LongInt,var word,var comp,var comp,var longint)
+                                                             : boolean; external 'G_Fin.dll';
+function  SetItemXXL_HIER      (LongInt,LongInt,word,comp,comp,longint)
+                                                             : boolean; external 'G_Fin.dll';
+function  GetFirstItemXXL_HIER (comp,var LongInt)            : boolean; external 'G_Fin.dll';

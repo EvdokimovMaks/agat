@@ -173,7 +173,7 @@
   clDocumentSignature  = 1;
 
   // Версия справочника полей
-  ieVersionOfFields = '8.0.75';
+  ieVersionOfFields = '8.0.80';
 
   // флаги поля IEHEad.Reestr
   mskReestr           = 1;//01h;     // маска флага реестра
@@ -193,7 +193,7 @@
   ieUpdateDuplicates    = 3;
 
   // маркер вставленных записей
-  sInsertRecordsMarker : string[20] = 'ieInsertRecordsMarker';
+  sInsertRecordsMarker  = 'ieInsertRecordsMarker';
   sysField =2; //служебное поле
   //внешний атрибут для хранения значения группировки для накладных
   cg_GroupKatSoprByDogovor = 'GroupKatSoprByDogovor';

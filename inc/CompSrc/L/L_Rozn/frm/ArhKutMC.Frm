@@ -11,12 +11,12 @@
 .endvar
 .procedure FSRoundRub(var s:double);
 begin
- s:=FRoundRub5(s);
+ s:=FRoundRubRozn(s);
 end.
 
 .procedure FSRoundVal(var s:double);
 begin
- s:=FRoundVal5(s);
+ s:=FRoundValRozn(s);
 end.
 .fields
  начальная_дата          : date

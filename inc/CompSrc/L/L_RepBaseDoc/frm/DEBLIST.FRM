@@ -86,7 +86,7 @@
 !d4z. Фактическая просроченная сальдированная задолженность
 !     контрагента (>0) или наша (<0)        = {d45.} + {d46.}
 .fields
-  TblPeriods:LongInt    // 01
+  TblPeriods: #TSurrPtr // 01
   fdPer1  :word         // 02
   fdPer2  :word         // 03
   fdp31d  :word         // 041
@@ -344,7 +344,7 @@ StepDoc
 .linkform 'DebList01' prototype is DebList
 .group '1.Фактические задолженности (по реальным оборотам)'
 .nameinlist '01.Фактические задолженности по периодам (развернутый)'
-.var Ind:Longint
+.var Ind: TPtr;
 .endvar
 .fields
   CommonFormHeader
@@ -467,7 +467,7 @@ StepDoc
 .linkform 'DebList01P' prototype is DebList
 .group '1+.Фактические задолженности (по реальным оборотам) с послед. движением'
 .nameinlist '01+.Фактические задолженности по периодам (развернутый) c последующим движением'
-.var Ind:LongInt
+.var Ind: TPtr;
 .endvar
 .fields
   CommonFormHeader
@@ -594,7 +594,7 @@ StepDoc
 .linkform 'DebList01a' prototype is DebList
 .group '1.Фактические задолженности (по реальным оборотам)'
 .nameinlist '01a.Фактические задолженности по периодам (свернутый)'
-.var Ind:LongInt
+.var Ind: TPtr;
 .endvar
 .fields
   CommonFormHeader
@@ -691,7 +691,7 @@ StepDoc
 .linkform 'DebList01Pa' prototype is DebList
 .group '1+.Фактические задолженности (по реальным оборотам) с послед. движением'
 .nameinlist '01+a.Фактические задолженности по периодам (свернутый) c последующим движением'
-.var Ind:LongInt
+.var Ind: TPtr;
 .endvar
 .fields
   CommonFormHeader
@@ -790,7 +790,7 @@ StepDoc
 .linkform 'DebList02' prototype is DebList
 .group '1.Фактические задолженности (по реальным оборотам)'
 .nameinlist '02.Просроченные фактические задолженности по периодам (развернутый)'
-.var Ind:LongInt
+.var Ind: TPtr;
 .endvar
 .fields
   CommonFormHeader
@@ -913,7 +913,7 @@ StepDoc
 .linkform 'DebList02P' prototype is DebList
 .group '1+.Фактические задолженности (по реальным оборотам) с послед. движением'
 .nameinlist '02+.Просроченные факт. задолженности по периодам (разв.) с посл.движением'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -1039,7 +1039,7 @@ StepDoc
 .linkform 'DebList02a' prototype is DebList
 .group '1.Фактические задолженности (по реальным оборотам)'
 .nameinlist '02a.Просроченные фактические задолженности по периодам (свернутый)'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -1136,7 +1136,7 @@ StepDoc
 .linkform 'DebList02Pa' prototype is DebList
 .group '1+.Фактические задолженности (по реальным оборотам) с послед. движением'
 .nameinlist '02+a.Просроченные факт. задолженности по периодам (свер.) с послед. движением'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -1235,7 +1235,7 @@ StepDoc
 .linkform 'DebList03' prototype is DebList
 .group '2.Задолженности по оплате (относительно документа основания)'
 .nameinlist '03.Задолженности по оплате по периодам (развернутый)'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -1360,7 +1360,7 @@ StepDoc
 .linkform 'DebList03P' prototype is DebList
 .group '2+.Задолж. по оплате (относительно документа основания) с послед. движением'
 .nameinlist '03+.Задолженности по оплате по периодам (развер.) с последующим движением'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -1488,7 +1488,7 @@ StepDoc
 .linkform 'DebList03a' prototype is DebList
 .group '2.Задолженности по оплате (относительно документа основания)'
 .nameinlist '03a.Задолженности по оплате по периодам (свернутый)'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -1584,7 +1584,7 @@ StepDoc
 .linkform 'DebList03Pa' prototype is DebList
 .group '2+.Задолж. по оплате (относительно документа основания) с послед. движением'
 .nameinlist '03+a.Задолженности по оплате по периодам (свер.) с послед. движением'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -1682,7 +1682,7 @@ StepDoc
 .linkform 'DebList04' prototype is DebList
 .group '2.Задолженности по оплате (относительно документа основания)'
 .nameinlist '04.Просроченные задолженности по оплате по периодам (развернутый)'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -1800,7 +1800,7 @@ StepDoc
 .linkform 'DebList04P' prototype is DebList
 .group '2+.Задолж. по оплате (относительно документа основания) с послед. движением'
 .nameinlist '04+.Просроченные задолж. по оплате по периодам (разв.) с посл. движением'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -1921,7 +1921,7 @@ StepDoc
 .linkform 'DebList04a' prototype is DebList
 .group '2.Задолженности по оплате (относительно документа основания)'
 .nameinlist '04a.Просроченные задолженности по оплате по периодам (свернутый)'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -2017,7 +2017,7 @@ StepDoc
 .linkform 'DebList04Pa' prototype is DebList
 .group '2+.Задолж. по оплате (относительно документа основания) с послед. движением'
 .nameinlist '04+a.Просроч. задолженности по оплате по периодам (свер.) с посл. движением'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -2115,7 +2115,7 @@ StepDoc
 .linkform 'DebList05' prototype is DebList
 .group '3.Задолженности по товару (относительно документа основания)'
 .nameinlist '05.Задолженности по товару по периодам (развернутый)'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -2233,7 +2233,7 @@ StepDoc
 .linkform 'DebList05a' prototype is DebList
 .group '3.Задолженности по товару (относительно документа основания)'
 .nameinlist '05a.Задолженности по товару по периодам (свернутый)'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -2328,7 +2328,7 @@ StepDoc
 .linkform 'DebList06' prototype is DebList
 .group '3.Задолженности по товару (относительно документа основания)'
 .nameinlist '06.Просроченные задолженности по товару по периодам (развернутый)'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -2452,7 +2452,7 @@ StepDoc
 .linkform 'DebList06a' prototype is DebList
 .group '3.Задолженности по товару (относительно документа основания)'
 .nameinlist '06a.Просроченные задолженности по товару по периодам (свернутый)'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -2547,7 +2547,7 @@ StepDoc
 .linkform 'DebList98' prototype is DebList
 .group '4.Полные отчеты по документам-основаниям'
 .nameinlist '98.Самый полный отчет по задолженностям.'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -2764,7 +2764,7 @@ StepDoc
 .linkform 'DebList99' prototype is DebList
 .group '4.Полные отчеты по документам-основаниям'
 .nameinlist '99.Самый полный отчет по просроченным задолженностям.'
-.var Ind:LongInt
+.var Ind: TPtr
 .endvar
 .fields
   CommonFormHeader
@@ -2979,7 +2979,7 @@ StepDoc
 .group '1.Фактические задолженности (по реальным оборотам)'
 .nameinlist '03.Фактические задолженности по периодам (развернутый) в разрезе договоров'
 .var
-  Ind:Longint
+  Ind: TPtr
 .endvar
 .fields
   CommonFormHeader

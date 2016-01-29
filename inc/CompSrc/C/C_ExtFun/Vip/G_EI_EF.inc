@@ -50,7 +50,7 @@ function  GetEnvString         ( string )                : string;  external 'G_
 #doc
   Инициализация и возврат указателя на XMLDoc
 #end
-function XML_New                                                       : longint; external 'G_ExpImp.dll';
+function XML_New                                                       : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Загрузка XML-документа из файла
@@ -65,7 +65,7 @@ function XML_New                                                       : longint
 Результат:<br>
 true - успешно, false - ошибка
 #end
-function XML_LoadDoc      (longint, string)                            : boolean; external 'G_ExpImp.dll';
+function XML_LoadDoc      (#TPtr, string)                            : boolean; external 'G_ExpImp.dll';
 
 #doc
   Поиск первого загружаемого документа из XML-файла
@@ -82,7 +82,7 @@ function XML_LoadDoc      (longint, string)                            : boolean
 Результат:<br>
   адрес указателя на гл. узел документа
 #end
-function XML_FindFirstDoc (longint, longint, comp, comp)               : longint; external 'G_ExpImp.dll';
+function XML_FindFirstDoc (#TPtr, #TPtr, comp, comp)               : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Поиск следующего загружаемого документа из XML-файла
@@ -91,15 +91,15 @@ function XML_FindFirstDoc (longint, longint, comp, comp)               : longint
 Параметры:
 <ul>
   <li>адрес указателя на XML-документ
-  <li>ссылка на главный узел документа
   <li>адрес указателя на гл. узел док-та
+  <li>ссылка на главный узел документа
   <li>ссылка на дочерний узел документа
 </ul>
 <br>
 Результат:<br>
   адрес указателя на гл. узел документа
 #end
-function XML_FindNextDoc  (longint, longint, comp, comp)               : longint; external 'G_ExpImp.dll';
+function XML_FindNextDoc  (#TPtr, #TPtr, comp, comp)               : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Импорт  поля
@@ -116,7 +116,25 @@ function XML_FindNextDoc  (longint, longint, comp, comp)               : longint
 Результат:<br>
 Строковое значение поля
 #end
-function ImportXMLField   (longint, comp, longint, comp)               : string;  external 'G_ExpImp.dll';
+function ImportXMLField   (#TPtr, comp, #TPtr, comp)               : string;  external 'G_ExpImp.dll';
+
+#doc
+Импорт  поля
+<breaf>
+<br>
+Параметры:
+<ul>
+  <li>адрес указателя на XML-документ
+  <li>ссылка на IEHead - настройка Э/И
+  <li>адрес указателя на гл. узел док-та
+  <li>ссылка на текущее метаописание
+  <li>указатель на PMemoryStream, содержащая более 255 символов, импортируемое значение
+</ul>
+<br>
+Результат:<br>
+Строковое значение поля
+#end
+function ImportXMLFieldEx   (#TPtr, comp, #TPtr, comp, #TPtr)               : boolean;  external 'G_ExpImp.dll';
 
 #doc
 Освобождаем ссылку на XML документ
@@ -129,7 +147,7 @@ function ImportXMLField   (longint, comp, longint, comp)               : string;
 Результат:<br>
 true - успешно, false - ошибка
 #end
-function XML_Done         (longint)                                    : boolean; external 'G_ExpImp.dll';
+function XML_Done         (#TPtr)                                    : boolean; external 'G_ExpImp.dll';
 
 #doc
 Заполнение XML-документа узлами от корня до главного узла документа
@@ -144,7 +162,7 @@ function XML_Done         (longint)                                    : boolean
 <br>
 адрес указателя на гл. узел документа
 #end
-function InitXML_Doc      (longint, comp)                              : longint; external 'G_ExpImp.dll';
+function InitXML_Doc      (#TPtr, comp)                              : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание главного узла нового документа
@@ -161,7 +179,7 @@ function InitXML_Doc      (longint, comp)                              : longint
 <br>
 адрес указателя на гл. узел нового док-та
 #end
-function XML_NewNode      (longint, longint, longint ,string)          : longint; external 'G_ExpImp.dll';
+function XML_NewNode      (#TPtr, #TPtr, #TPtr ,string)          : longint; external 'G_ExpImp.dll';
 
 #doc
 Экспорт поля в XML-документ<br>
@@ -179,7 +197,25 @@ function XML_NewNode      (longint, longint, longint ,string)          : longint
 true - успешно, false - ошибка
 #end
 
-function ExportXMLField   (longint, longint, comp ,string)             : boolean; external 'G_ExpImp.dll';
+function ExportXMLField   (#TPtr, #TPtr, comp ,string)             : boolean; external 'G_ExpImp.dll';
+
+#doc
+Экспорт поля в XML-документ более 255 символов<br>
+</brief>
+<br>
+Параметры:
+<ul>
+  <li>адрес указателя на XML-документ
+  <li>адрес указателя на гл. узел док-та
+  <li>ссылка на текущее метаописание
+  <li>экспортируемое значение, указатель на PMemoryStream, содержащая более 255 символов
+  </ul>
+<br>
+Результат:<br>
+true - успешно, false - ошибка
+#end
+
+function ExportXMLFieldEx   (#TPtr, #TPtr, comp , var anytype)             : boolean; external 'G_ExpImp.dll';
 
 #doc
 Сохранение документа по указанному пути
@@ -193,11 +229,11 @@ function ExportXMLField   (longint, longint, comp ,string)             : boolean
 Результат:<br>
 true - успешно, false - ошибка
 #end
-function XML_SaveAs       (longint, longint, longint ,longint, string) : boolean; external 'G_ExpImp.dll';
+function XML_SaveAs       (#TPtr, #TPtr, #TPtr ,#TPtr, string) : boolean; external 'G_ExpImp.dll';
 
-function XML_FillMeta     (longint, comp)                              : boolean; external 'G_ExpImp.dll';
-function XML_GetRoot      (longint)                                    : longint; external 'G_ExpImp.dll';
-function XML_Release      (longint)                                    : boolean; external 'G_ExpImp.dll';
+function XML_FillMeta     (#TPtr, comp)                              : boolean; external 'G_ExpImp.dll';
+function XML_GetRoot      (#TPtr)                                    : longint; external 'G_ExpImp.dll';
+function XML_Release      (#TPtr)                                    : boolean; external 'G_ExpImp.dll';
 //------------------------------------------------------------------------------
 // XMLDOMFunc.pas
 
@@ -206,7 +242,7 @@ function XML_Release      (longint)                                    : boolean
 Результат:<br>
 адрес указателя на PMemoStream
 #end
-Function MemoryStream_Init : longint;         external 'G_ExpImp.dll';
+Function MemoryStream_Init : #TPtr;         external 'G_ExpImp.dll';
 #doc
 Освобождение ссылки на PMemoStream
 </breaf>
@@ -216,7 +252,7 @@ Function MemoryStream_Init : longint;         external 'G_ExpImp.dll';
 <li>адрес указателя на PMemoStream
 </ul>
 #end
-Function MemoryStream_Done (longint) : boolean; external 'G_ExpImp.dll';
+Function MemoryStream_Done (#TPtr) : boolean; external 'G_ExpImp.dll';
 #doc
 Добавление строки в PMemoStream
 </breaf>
@@ -229,7 +265,7 @@ Function MemoryStream_Done (longint) : boolean; external 'G_ExpImp.dll';
 Результат:<br>
 True - если успешно
 #end
-Function MemoryStream_Write(longint, string) : boolean; external 'G_ExpImp.dll';
+Function MemoryStream_Write(#TPtr, string) : boolean; external 'G_ExpImp.dll';
 #doc
 Получение строки в PMemoStream
 </breaf>
@@ -243,7 +279,7 @@ Function MemoryStream_Write(longint, string) : boolean; external 'G_ExpImp.dll';
 Результат:<br>
 True - если успешно
 #end
-Function MemoryStream_Read(longint, longint, var string) : boolean; external 'G_ExpImp.dll';
+Function MemoryStream_Read(#TPtr, longint, var anytype) : boolean; external 'G_ExpImp.dll';
 #doc
 Установка позиции в PMemoStream
 </breaf>
@@ -256,7 +292,7 @@ Function MemoryStream_Read(longint, longint, var string) : boolean; external 'G_
 Результат:<br>
 True - если успешно
 #end
-Function MemoryStream_Seek(longint, longint) : boolean; external 'G_ExpImp.dll';
+Function MemoryStream_Seek(#TPtr, longint) : boolean; external 'G_ExpImp.dll';
 #doc
 Усечение в PMemoStream
 </breaf>
@@ -268,7 +304,19 @@ Function MemoryStream_Seek(longint, longint) : boolean; external 'G_ExpImp.dll';
 Результат:<br>
 True - если успешно
 #end
-Function MemoryStream_Truncate(longint) : boolean; external 'G_ExpImp.dll';
+Function MemoryStream_Truncate(#TPtr) : boolean; external 'G_ExpImp.dll';
+#doc
+Получение позиции PMemoStream
+</breaf>
+<br>
+Параметры:
+<ul>
+<li>адрес указателя на PMemoStream
+</ul>
+Результат:<br>
+размер PMemoStream
+#end
+Function MemoryStream_GetPos(#TPtr) : longint; external 'G_ExpImp.dll';
 #doc
 Получение размера PMemoStream
 </breaf>
@@ -280,7 +328,7 @@ Function MemoryStream_Truncate(longint) : boolean; external 'G_ExpImp.dll';
 Результат:<br>
 размер PMemoStream
 #end
-Function MemoryStream_GetPos(longint) : longint; external 'G_ExpImp.dll';
+Function MemoryStream_GetSize(#TPtr) : longint; external 'G_ExpImp.dll';
 
 
 #doc
@@ -289,7 +337,7 @@ Function MemoryStream_GetPos(longint) : longint; external 'G_ExpImp.dll';
 Результат:<br>
 адрес указателя на XML-DOMDocument
 #end
-function XMLDOMDoc_New                                                     : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_New                                                     : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Загрузка DOMDocument из файла
@@ -303,7 +351,7 @@ function XMLDOMDoc_New                                                     : lon
 Результат:<br>
 True - если успешно
 #end
-function XMLDOMDoc_Load                        (longint, string)           : boolean; external 'G_ExpImp.dll';
+function XMLDOMDoc_Load                        (#TPtr, string)           : boolean; external 'G_ExpImp.dll';
 
 #doc
 Запись DOMDocument в файл
@@ -317,7 +365,7 @@ function XMLDOMDoc_Load                        (longint, string)           : boo
 Результат:<br>
 True - если успешно
 #end
-function XMLDOMDoc_Save                        (longint, string)           : boolean; external 'G_ExpImp.dll';
+function XMLDOMDoc_Save                        (#TPtr, string)           : boolean; external 'G_ExpImp.dll';
 
 #doc
 Получение корневого элемента
@@ -330,7 +378,7 @@ function XMLDOMDoc_Save                        (longint, string)           : boo
 Результат:<br>
 адрес указателя на XMLDOMElement
 #end
-function XMLDOMDoc_DocumentElement             (longint)                   : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_DocumentElement             (#TPtr)                   : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание узла "Node"
@@ -345,7 +393,7 @@ function XMLDOMDoc_DocumentElement             (longint)                   : lon
 Результат:<br>
 адрес указателя на XMLDOMNode
 #end
-function XMLDOMDoc_CreateNode                  (longint, integer, string)  : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateNode                  (#TPtr, integer, string)  : #TPtr; external 'G_ExpImp.dll';
 #doc
 Создание узла "Attribute"
 </breaf>
@@ -358,7 +406,7 @@ function XMLDOMDoc_CreateNode                  (longint, integer, string)  : lon
 Результат:<br>
 адрес указателя на XMLDOMAttribute
 #end
-function XMLDOMDoc_CreateAttribute             (longint, string)           : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateAttribute             (#TPtr, string)           : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание узла "CDataSection"
@@ -372,7 +420,7 @@ function XMLDOMDoc_CreateAttribute             (longint, string)           : lon
 Результат:<br>
 адрес указателя на XMLDOMCDataSection
 #end
-function XMLDOMDoc_CreateCDataSection          (longint, string)           : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateCDataSection          (#TPtr, string)           : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание узла "Comment"
@@ -385,7 +433,7 @@ function XMLDOMDoc_CreateCDataSection          (longint, string)           : lon
 Результат:<br>
 адрес указателя на XMLDOMComment
 #end
-function XMLDOMDoc_CreateComment               (longint, string)           : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateComment               (#TPtr, string)           : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание узла "Comment"
@@ -398,7 +446,7 @@ function XMLDOMDoc_CreateComment               (longint, string)           : lon
 Результат:<br>
 адрес указателя на XMLDOMComment
 #end
-function XMLDOMDoc_CreateCommentEx               (longint, var anytype)           : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateCommentEx               (#TPtr, var anytype)           : #TPtr; external 'G_ExpImp.dll';
 
 
 #doc
@@ -413,7 +461,7 @@ function XMLDOMDoc_CreateCommentEx               (longint, var anytype)         
 адрес указателя на XMLDOMDocumentFragment
 
 #end
-function XMLDOMDoc_CreateDocumentFragment      (longint)                   : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateDocumentFragment      (#TPtr)                   : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание узла "Element"
@@ -426,7 +474,7 @@ function XMLDOMDoc_CreateDocumentFragment      (longint)                   : lon
 Результат:<br>
 адрес указателя на XMLDOMElement
 #end
-function XMLDOMDoc_CreateElement               (longint, string)           : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateElement               (#TPtr, string)           : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание узла "EntityReference"
@@ -439,7 +487,7 @@ function XMLDOMDoc_CreateElement               (longint, string)           : lon
 Результат:<br>
 адрес указателя на XMLDOMEntityReference
 #end
-function XMLDOMDoc_CreateEntityReference       (longint, string)           : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateEntityReference       (#TPtr, string)           : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание узла "ProcessingInstruction"
@@ -453,7 +501,7 @@ function XMLDOMDoc_CreateEntityReference       (longint, string)           : lon
 Результат:<br>
 адрес указателя на XMLDOMProcessingInstruction
 #end
-function XMLDOMDoc_CreateProcessingInstruction (longint, string, string)   : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateProcessingInstruction (#TPtr, string, string)   : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание узла "TextNode"
@@ -466,7 +514,7 @@ function XMLDOMDoc_CreateProcessingInstruction (longint, string, string)   : lon
 Результат:<br>
 адрес указателя на XMLDOMTextNode
 #end
-function XMLDOMDoc_CreateTextNode              (longint, string)           : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateTextNode              (#TPtr, string)           : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Создание узла "TextNode"
@@ -479,7 +527,7 @@ function XMLDOMDoc_CreateTextNode              (longint, string)           : lon
 Результат:<br>
 адрес указателя на XMLDOMTextNode
 #end
-function XMLDOMDoc_CreateTextNodeEx            (longint, var anytype)           : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_CreateTextNodeEx            (#TPtr, var anytype)           : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Чтение NodeValue для узла "Attribute"
@@ -491,7 +539,20 @@ function XMLDOMDoc_CreateTextNodeEx            (longint, var anytype)           
 Результат:<br>
 значение атрибута
 #end
-function XMLDOMAttribute_get_NodeValue         (longint)                   : string;  external 'G_ExpImp.dll';
+function XMLDOMAttribute_get_NodeValue         (#TPtr)                   : string;  external 'G_ExpImp.dll';
+
+#doc
+Чтение NodeValue для узла "Attribute"
+</breaf>
+Параметры:
+<ul>
+<li>адрес указателя на XMLDOMAttribute
+<li>текст (более 255 символов)
+</ul>
+Результат:<br>
+True, если успешно
+#end
+function XMLDOMAttribute_get_NodeValueEx       (#TPtr, #TPtr)          : boolean;  external 'G_ExpImp.dll';
 
 #doc
 Запись NodeValue для узла "Attribute"
@@ -504,7 +565,7 @@ function XMLDOMAttribute_get_NodeValue         (longint)                   : str
 Результат:<br>
 True, если успешно
 #end
-function XMLDOMAttribute_set_NodeValue         (longint, string)           : boolean; external 'G_ExpImp.dll';
+function XMLDOMAttribute_set_NodeValue         (#TPtr, string)           : boolean; external 'G_ExpImp.dll';
 
 #doc
 Запись NodeValue для узла "Attribute" (больше 255 символов)
@@ -516,8 +577,8 @@ function XMLDOMAttribute_set_NodeValue         (longint, string)           : boo
 </ul>
 Результат:<br>
 True, если успешно
-#end                                                      
-function XMLDOMAttribute_set_NodeValueEx         (longint, var anytype)           : boolean; external 'G_ExpImp.dll';
+#end
+function XMLDOMAttribute_set_NodeValueEx         (#TPtr, var anytype)           : boolean; external 'G_ExpImp.dll';
 
 #doc
 Добавление строки в данные для узла "CDataSection"
@@ -530,7 +591,7 @@ function XMLDOMAttribute_set_NodeValueEx         (longint, var anytype)         
 Параметры:<br>
 True, если успешно
 #end
-function XMLDOMCDataSection_AppendData         (longint, string)           : boolean; external 'G_ExpImp.dll';
+function XMLDOMCDataSection_AppendData         (#TPtr, string)           : boolean; external 'G_ExpImp.dll';
 
 #doc
 Чтение Length для узла "CDataSection"
@@ -542,7 +603,7 @@ function XMLDOMCDataSection_AppendData         (longint, string)           : boo
 Параметры: <br>
 значение
 #end
-function XMLDOMCDataSection_get_Length         (longint)                   : longint; external 'G_ExpImp.dll';
+function XMLDOMCDataSection_get_Length         (#TPtr)                   : longint; external 'G_ExpImp.dll';
 
 #doc
 Чтение NodeValue для узла "CDataSection"
@@ -554,7 +615,7 @@ function XMLDOMCDataSection_get_Length         (longint)                   : lon
 Результат:<br>
 значение
 #end
-function XMLDOMCDataSection_get_NodeValue      (longint)                   : string;  external 'G_ExpImp.dll';
+function XMLDOMCDataSection_get_NodeValue      (#TPtr)                   : string;  external 'G_ExpImp.dll';
 
 #doc
 Запись NodeValue для узла "CDataSection"
@@ -567,7 +628,7 @@ function XMLDOMCDataSection_get_NodeValue      (longint)                   : str
 Результат: <br>
   True, если успешно
 #end
-function XMLDOMCDataSection_set_NodeValue      (longint, string)           : boolean; external 'G_ExpImp.dll';
+function XMLDOMCDataSection_set_NodeValue      (#TPtr, string)           : boolean; external 'G_ExpImp.dll';
 
 #doc
 Чтение подстроки из Data для узла "CDataSection"
@@ -581,7 +642,7 @@ function XMLDOMCDataSection_set_NodeValue      (longint, string)           : boo
 Результат: <br>
 значение
 #end
-function XMLDOMCDataSection_SubstringData      (longint, longint, longint) : string;  external 'G_ExpImp.dll';
+function XMLDOMCDataSection_SubstringData      (#TPtr, longint, longint) : string;  external 'G_ExpImp.dll';
 
 #doc
 Добавление атрибута к элементу
@@ -595,7 +656,7 @@ function XMLDOMCDataSection_SubstringData      (longint, longint, longint) : str
 Результат:<br>
 true - успешно, false - ошибка
 #end
-function XMLDOMElement_SetAttribute            (longint, string, string)   : boolean; external 'G_ExpImp.dll';
+function XMLDOMElement_SetAttribute            (#TPtr, string, string)   : boolean; external 'G_ExpImp.dll';
 
 #doc
 Добавление атрибута (больше 255 символов) к элементу
@@ -609,10 +670,10 @@ function XMLDOMElement_SetAttribute            (longint, string, string)   : boo
 Результат:<br>
 true - успешно, false - ошибка
 #end
-function XMLDOMElement_SetAttributeEx            (longint, string, var anytype)   : boolean; external 'G_ExpImp.dll';
+function XMLDOMElement_SetAttributeEx            (#TPtr, string, var anytype)   : boolean; external 'G_ExpImp.dll';
 
 #doc
-Текст для узла
+
 </breaf>
 Параметры:
 <ul>
@@ -620,7 +681,7 @@ function XMLDOMElement_SetAttributeEx            (longint, string, var anytype) 
 <li>значение
 </ul>
 #end
-procedure XMLDOMNode_Set_Text            (longint, var anytype); external 'G_ExpImp.dll';
+procedure XMLDOMNode_Set_Text            (#TPtr, var anytype); external 'G_ExpImp.dll';
 
 #doc
 Подвязка узла к узлу-родителю
@@ -633,7 +694,7 @@ procedure XMLDOMNode_Set_Text            (longint, var anytype); external 'G_Exp
 Результат:<br>
 адрес указателя на XMLDOMNamedNodeMap
 #end
-function XMLDOMNode_AppendChild                (longint, longint)          : longint; external 'G_ExpImp.dll';
+function XMLDOMNode_AppendChild                (#TPtr, #TPtr)          : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Чтение Attributes для узла "Node"
@@ -644,7 +705,7 @@ function XMLDOMNode_AppendChild                (longint, longint)          : lon
 Результат:<br>
 адрес указателя на XMLDOMNodeList
 #end
-function XMLDOMNode_get_Attributes             (longint)                   : longint; external 'G_ExpImp.dll';
+function XMLDOMNode_get_Attributes             (#TPtr)                   : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Чтение ChildNodes для узла "Node"
@@ -656,7 +717,7 @@ function XMLDOMNode_get_Attributes             (longint)                   : lon
 Результат:<br>
 адрес указателя на XMLDOMNodeList
 #end
-function XMLDOMNode_get_ChildNodes             (longint)                   : longint; external 'G_ExpImp.dll';
+function XMLDOMNode_get_ChildNodes             (#TPtr)                   : longint; external 'G_ExpImp.dll';
 
 #doc
 Чтение NodeType для узла "Node"
@@ -668,7 +729,7 @@ function XMLDOMNode_get_ChildNodes             (longint)                   : lon
 Результат:<br>
 значение
 #end
-function XMLDOMNode_get_NodeType               (longint)                   : integer; external 'G_ExpImp.dll';
+function XMLDOMNode_get_NodeType               (#TPtr)                   : integer; external 'G_ExpImp.dll';
 
 #doc
 Чтение NodeName для узла "Node"
@@ -680,7 +741,7 @@ function XMLDOMNode_get_NodeType               (longint)                   : int
 Результат:<br>
 значение
 #end
-function XMLDOMNode_get_NodeName               (longint)                   : string;  external 'G_ExpImp.dll';
+function XMLDOMNode_get_NodeName               (#TPtr)                   : string;  external 'G_ExpImp.dll';
 
 #doc
  Освобождение ссылки на XMLDOMNode
@@ -692,7 +753,7 @@ function XMLDOMNode_get_NodeName               (longint)                   : str
  Результат:<br>
 true - успешно, false - ошибка
 #end
-function XMLDOMNode_Release                    (longint)                   : boolean; external 'G_ExpImp.dll';
+function XMLDOMNode_Release                    (#TPtr)                   : boolean; external 'G_ExpImp.dll';
 
 #doc
 Чтение Length для узла "NamedNodeMap"
@@ -704,7 +765,7 @@ function XMLDOMNode_Release                    (longint)                   : boo
 Результат:<br>
 значение
 #end
-function XMLDOMNamedNodeMap_get_Length         (longint)                   : longint; external 'G_ExpImp.dll';
+function XMLDOMNamedNodeMap_get_Length         (#TPtr)                   : longint; external 'G_ExpImp.dll';
 
 #doc
 Чтение Item для узла "NamedNodeMap"
@@ -717,7 +778,7 @@ function XMLDOMNamedNodeMap_get_Length         (longint)                   : lon
 Результат:<br>
 адрес указателя на XMLDOMAttribute (Item[index])
 #end
-function XMLDOMNamedNodeMap_get_Item           (longint, longint)          : longint; external 'G_ExpImp.dll';
+function XMLDOMNamedNodeMap_get_Item           (#TPtr, longint)          : #TPtr; external 'G_ExpImp.dll';
 
 
 #doc
@@ -731,7 +792,7 @@ function XMLDOMNamedNodeMap_get_Item           (longint, longint)          : lon
 Результат:<br>
   значение
 #end
-function XMLDOMNodeList_get_Length             (longint)                   : longint; external 'G_ExpImp.dll';
+function XMLDOMNodeList_get_Length             (#TPtr)                   : longint; external 'G_ExpImp.dll';
 
 #doc
 Чтение Item для узла "NodeList"
@@ -744,7 +805,7 @@ function XMLDOMNodeList_get_Length             (longint)                   : lon
 Результат:<br>
   адрес указателя на XMLDOMNode (Item[index])
 #end
-function XMLDOMNodeList_get_Item               (longint, longint)          : longint; external 'G_ExpImp.dll';
+function XMLDOMNodeList_get_Item               (#TPtr, longint)          : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Чтение списка элементов по TagName
@@ -758,7 +819,7 @@ function XMLDOMNodeList_get_Item               (longint, longint)          : lon
 Результат:<br>
   адрес указателя на XMLDOMNodeList
 #end
-function XMLDOMDoc_GetElementsByTagName        (longint, string)           : longint; external 'G_ExpImp.dll';
+function XMLDOMDoc_GetElementsByTagName        (#TPtr, string)           : #TPtr; external 'G_ExpImp.dll';
 
 #doc
 Освобождение ссылки на DOMDocument
@@ -771,7 +832,7 @@ function XMLDOMDoc_GetElementsByTagName        (longint, string)           : lon
 Результат:<br>
   true - успешно, false - ошибка
 #end
-function XMLDOMDoc_Done                        (longint)                   : boolean; external 'G_ExpImp.dll';
+function XMLDOMDoc_Done                        (#TPtr)                   : boolean; external 'G_ExpImp.dll';
 
 //------------------------------------------------------------------------------
 function InitMAPIMessage : longint; external 'G_ExpImp.dll';
@@ -790,6 +851,7 @@ procedure _WritePrivateProfileString(string, string, string, string); external '
 
 function  Init_TableBufferService(var AnyType) : longint; external 'G_ExpImp.dll';
 procedure Done_TableBufferService(longint); external 'G_ExpImp.dll';
+
 function  Get_TableBuffer(longint, var AnyType) : boolean; external 'G_ExpImp.dll';
 function  Set_TableField(longint, var AnyType, word, word) : boolean; external 'G_ExpImp.dll';
 

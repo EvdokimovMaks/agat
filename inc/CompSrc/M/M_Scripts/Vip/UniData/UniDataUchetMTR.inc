@@ -26,4 +26,15 @@ const
 	rewDocConst       =110;
 	reDeleteRec   		=111;
   recObjParam       =112;
+	reInsertRecordExt =113;
+	recKau1Param      =114;
+	recKau2Param      =115;
+	recKau3Param      =116;
+	recKau4Param      =117;
+	recKau5Param      =118;
+	recKau6Param      =119;
+	recKau7Param      =120;
+	recKau8Param      =121;
+	recKau9Param      =122;
+
 	end

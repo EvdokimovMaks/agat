@@ -14,6 +14,7 @@
 
  cFil0
  cFil1
+ AktNRec
  AktNo
  k1
  kontr1
@@ -83,6 +84,7 @@ cFil1 ^
 !.end
 
 .{ PlPorLoop CheckEnter
+ AktNRec        - ^
  AktNo          - ^
  k1             - ^
  kontr1         - ^

@@ -24,6 +24,7 @@
   ToPodr      : string
   ToMol       : string
   ToMolDlg    : string
+  cSigners    : comp
 .endfields
   NRec документа         - ^
   Номер документа        - ^
@@ -36,6 +37,7 @@
   Подразделение (куда)   - ^
   МОЛ (куда)             - ^
   Должность МОЛ (куда)   - ^
+  Группа подписантов     - ^
 .{ SortSpDoc CheckEnter
 .fields
   InNRec    : comp
@@ -96,10 +98,38 @@
 
 .linkform 'Sort_MBP_01' prototype is Sort_MBP
 .NameInList 'Акт на пересортицу'
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
+  iFeeSigners : FeeSigners;
+  i, lSign : longint;
+  FIOs, Post : array [1..2] of string;
   Npp : longint;
   ItogSum : double;
 .endvar
+.begin
+  lSign := 0;
+
+  for (i := 1; i <= Count(FIOs); i++)
+  {
+    FIOs[i] := '';
+    Post[i] := '';
+  }
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSigners);
+
+  if (iFeeSigners.FeeSignersIsValid)
+    if (iFeeSigners.GetSignerFirst)
+      do
+      {
+        lSign++;
+        FIOs[lSign] := iFeeSigners.GetSignerFIO(1);
+        Post[lSign] := if (iFeeSigners.GetSignerRole <> '', iFeeSigners.GetSignerRole, iFeeSigners.GetSignerPosition(1));
+      }
+      while (iFeeSigners.GetSignerNext);
+end.
 .fields
   CommonFormHeader
   DocNom
@@ -162,6 +192,21 @@ end.
 .fields
   ItogSum
 .endfields
- Б  Итого:                                                                                                       &'#&&&&&&&&.&& Б Р
+ Б  Итого:                                                                                                       &'#&&&&&&&&.&& Б
+
+.begin
+  i := 0;
+end.
+.{While (i < lSign)
+.begin
+  i++;
+end.
+.fields
+  Post[i] + ':'
+  FIOs[i]
+.endfields
+@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.} Р
+
 .}
 .endform

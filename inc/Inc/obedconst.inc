@@ -21,3 +21,5 @@
    cgObedsTerr   = 27; // территориальный справочник
    cgObedsIsPosOs  = 28; // Использование ОС
    cgObedsIsPosNma = 29; // Использование NMA
+   cgObedStatus    = 30; // Статусы
+   CGOBEDNASTRAGENTORPRINCIPAL =35;

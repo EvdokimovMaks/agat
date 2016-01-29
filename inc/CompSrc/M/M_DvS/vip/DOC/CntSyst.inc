@@ -50,5 +50,12 @@ const
  cntFlagSortTmpGrN_Reserv    = 9;
 end
 
+const
+  cntMode_Select_SpDoc_All = 0;
+  cntMode_Select_SpDoc_Tek = 1;
+  cntMode_Select_SpDoc_Sel = 2;
+  cntMode_Select_SpDoc_Lst = 3;
+end;
+
 #endif
 

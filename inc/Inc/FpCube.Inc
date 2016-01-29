@@ -7,8 +7,8 @@
 //บ โขฅโแโขฅญญ๋ฉ : ฎงคญฅข €ซฅชแ ญคเ                                         บ
 //ศอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผ
 
-  AxisXID = 0;
-  AxisYID = 1;
+  AxisXID : word = 0;
+  AxisYID : word = 1;
 
   FpCubeType_Memory          = 0;
   FpCubeType_Ext_DB          = 1;

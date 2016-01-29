@@ -33,7 +33,8 @@ table struct  t_SpSopr
   Summa3  : double,
   Summa4  : double,
   Summa5  : double,
-  SumNDS  : double
+  SumNDS  : double,
+  SumVal  : double
 )
 with index
 (
@@ -46,41 +47,26 @@ with index
 table struct  t_KatS
 (
   cKatSopr :comp,      // ссылка на KatSopr
-  Summa1  : double,    // сумма к оплате по  KatSopr
-  Summa2  : double,
-  Summa3  : double,
-  Summa4  : double,
-  Summa5  : double,
-  pr      : word,      //0 - отриц. сумма накладной, 1 - полож. сумма накл.
-  dat     : date,      // дата накладной
+  Summa1   : TSumma,   // сумма к оплате по  KatSopr
+  Summa2   : TSumma,
+  Summa3   : TSumma,
+  Summa4   : TSumma,
+  Summa5   : TSumma,
+  cMainKS  : comp,     // ссылка на корректирующий документ
+  wType    : word,     // 1 - корректировочная накладная источник 0 - остальные
+  pr       : word,     //0 - отриц. сумма накладной, 1 - полож. сумма накл.
+  dat      : date,     // дата накладной
   prOpr    : word,     //0 - отриц. сумма накладной, 1 - полож. сумма накл, 2 без даты
-  datOpr  : date       // дата оприходования
+  datOpr   : date,     // дата оприходования
+  DistrNDE : TSumma,   // распределенная сумма в НДЕ
+  DistrVal : TSumma    // распределенная сумма в валюте
 )
 with index
 (
   t_KatS00 = cKatSopr,
   t_KatS01 = pr + dat + cKatSopr,
-  t_KatS02 = prOpr + datOpr + cKatSopr
-);
-
-table struct t_AktIdx
-(
-  cAktIdx : comp, // акт на индексацию
-  cAktSp  : comp // индексируемая позиция
-);
-
-table struct t_dolg
-(
-  dat  : date,
-  kolD : double,
-  sumD : double,
-  kolO : double,
-  sumO : double,
-  cSP  : comp
-)
-with index
-(
-  t_dolg00 = cSP
+  t_KatS02 = prOpr + datOpr + cKatSopr,
+  t_KatS03 = cMainKS + pr + dat + cKatSopr
 );
 
 #end // _DISTRSRV_GD

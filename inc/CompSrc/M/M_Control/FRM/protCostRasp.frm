@@ -17,6 +17,7 @@
  NmFantomRes
  BarKodFantomRes
  NmEiRes
+ NedelimEI
  PotrCom
  Koef
  SpisCom
@@ -50,8 +51,8 @@
 NmRes   BarKodRes  NmFantomRes   BarKodFantomRes
 ^       ^          ^             ^ 
 
-NmEiRes PotrCom
-^       ^
+NmEiRes NedelimEI  PotrCom
+^       ^          ^
 
 Koef    SpisCom
 ^       ^

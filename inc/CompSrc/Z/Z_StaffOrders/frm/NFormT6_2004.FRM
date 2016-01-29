@@ -1,14 +1,9 @@
-/*
-  ╔═════════════════════════════════════════════════════════════════════╗
-  ║      Н Т О  "T O P   S O F T"                                       ║
-  ║      Проект "КАДРЫ"                                                 ║
-  ║      Версия : 5.7, 5.8, 7.1                                         ║
-  ║      Разработал:  Мохова Ж.И.                                       ║
-  ║      Назначение:  Форма Т-6  Приказ о предоставлении отпуска        ║
-  ║      Параметры:                                                     ║
-  ║      Изменения: май 2001 - новая форма!!!                           ║
-  ╚═════════════════════════════════════════════════════════════════════╝
-*/
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 5.7 - Управление персоналом
+// Форма Т-6  Приказ о предоставлении отпуска
+//------------------------------------------------------------------------------
+
 #doc
 Форма Т-6  Приказ о предоставлении отпуска
 #end
@@ -99,12 +94,19 @@ sFoundation
 _dPeriod1
 _dPeriod2
 _wDayCount
+
 _number
 _number_rab
 _priznak1
 _priznak2
 _dBegin
 _dEnd
+
+sVacName
+dVacPeriod1
+dVacPeriod2
+wVacDayCount
+wVacDayCount_rab
 
 DopVacName1
 DopVacName2
@@ -119,6 +121,14 @@ DopVacName9
 DopVacKolDn
 _DopVacBeg
 _DopVacEnd
+
+sDopVacName
+dDopVacPeriod1
+dDopVacPeriod2
+wDopVacDayCount
+wDopVacDayCount_rab
+
+ContDocNrec : comp
 
 .EndFields
 
@@ -212,6 +222,14 @@ sFoundation  ^
 .{ t6_2004_Cycle1 CheckEnter
           ^^^
 .}
-          ^^^^^^^^^^^^^^^^^^
+          ^^^^^^
+.{ t6_2004_CycleVac CheckEnter
+          ^^^^^
+.}
+          ^^^^^^^^^^^^
+.{ t6_2004_CycleDopVac CheckEnter
+          ^^^^^
+.}
+          ^
  Р
 .endform

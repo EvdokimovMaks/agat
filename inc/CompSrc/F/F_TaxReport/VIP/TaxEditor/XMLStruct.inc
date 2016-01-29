@@ -8,27 +8,52 @@
 #define __XMLStruct_Inc__
 
 const
+  // наименования служебных атрибутов Namespace
+  lc_NamespaceAttrName_xmlns = 'xmlns:xsi';
+  lc_NamespaceAttrName_noNSL = 'xsi:noNamespaceSchemaLocation';
+
+  // пути на данные
+  lc_FileID_NodePath : string = 'Файл/ИдФайл';
+  lc_Schema_NodePath : string = 'Файл/'+lc_NamespaceAttrName_noNSL;
+
+  // Null значение
+  lc_NullValue : string = '';
+
+  // пустая дата
+  lc_dEmpty : date = Date(0, 0, 0);
+
   // типы значений
   lc_ValueTypeString = 0;  // строка
   lc_ValueTypeNumber = 1;  // число
   lc_ValueTypeDate   = 2;  // дата
 
-  // Null
-  lc_NullValue = '';
-end;
+  // длина поля Value
+  lc_ValueLength = 100;
+
+  // экспорт в XML
+  lc_ExpToXml_3XSrv_Yes = True ;  // сохранять файл на 3Х сервере
+  lc_ExpToXml_3XSrv_Not = False;  // НЕ сохранять файл на 3Х сервере
+
+  // способ модификации поля
+  lc_ModifyOwner_Def : word = 0;  // по умолчанию
+  lc_ModifyOwner_Usr : word = 1;  // пользователь
+  lc_ModifyOwner_Alg : word = 2;  // алгоритм
+
+  // признак выгружаемый
+  lc_XMapVis_Yes     : word = 0;  // выгружаемый
+  lc_XMapVis_Not     : word = 1;  // НЕ выгружаемый
+
+  // значения XMap.Prot
+  lc_XMapProt_NotUseAlg : word = 1;  // не использовать алгоритм для данного поля
+
+  // идентификатор дополнительного сегмента "длинной строки"
+  lc_XMapMultyStrSegID = '_Add';
+end; // const
 
 const
   bxCompElement = 0;
   bxSimpElement = 1;
   bxSimpAttr = 2;
-  isLog = true;
-end;
-
-const
-  cmNoRw     = 1;
-  cmNoAllRw  = 2;
-  cmYesRw    = 3;
-  cmYesAllRw = 4;
 end;
 
 const

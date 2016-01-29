@@ -47,11 +47,11 @@ Const
 end;
 
 Const
-  lc_FpCmpColTune_CulcPeriodMode        = 0;
-  lc_FpCmpColTune_ArgPeriodMode         = 1;
-  lc_FpCmpColTune_FirstValidPeriodMode  = 2;
-  lc_FpCmpColTune_DefinePeriodMode      = 3;
-  lc_FpCmpColTune_HistoryPeriodMode     = 4;
+  lc_FpCmpColTune_CulcPeriodMode       : word = 0;
+  lc_FpCmpColTune_ArgPeriodMode        : word = 1;
+  lc_FpCmpColTune_FirstValidPeriodMode : word = 2;
+  lc_FpCmpColTune_DefinePeriodMode     : word = 3;
+  lc_FpCmpColTune_HistoryPeriodMode    : word = 4;
 end;
 
 Const

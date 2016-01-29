@@ -18,8 +18,8 @@ type
     BVIEWONLY      : Boolean;         { bViewOnly                             }
     KREATELEVEL    : Boolean;         { KreateLevel                           }
     BSORTNAME      : Boolean;         { bSortName                             }
-    IBOUND         : LongInt;         { iBound                                }
     MARKERKATNAZNA : LongInt;         { MarkerKatNazna                        }
+    IBOUND         : LongInt;         { iBound                                }
     INDEXKATNAZNA  : LongInt;         { IndexKatNazna                         }
     TMPCOMP_1      : Comp;            { tmpComp_1                             }
     OLDCURROW      : SmallInt;        { oldCurRow                             }
@@ -53,13 +53,13 @@ const
     FNCOWNER=26;
     FNCSMET=24;
     FNCURFORMAT=6;
-    FNIBOUND=11;
+    FNIBOUND=12;
     FNINDEXKATNAZNA=13;
     FNKATNAZNA_CSTZATR=19;
     FNKATNAZNA_NAME=29;
     FNKATNAZNA_NREC=16;
     FNKREATELEVEL=9;
-    FNMARKERKATNAZNA=12;
+    FNMARKERKATNAZNA=11;
     FNNAZCODE=30;
     FNNEWNREC=4;
     FNNODE=3;

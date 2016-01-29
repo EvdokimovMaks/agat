@@ -37,7 +37,7 @@
 
 .{ VacanGrafCycle CheckEnter
 .fields
- Depart Post FIO TabN KolDn DatNP DatNF PRIM
+ Depart Post FIO TabN KolDn DatNP DatNF OsnDoc DatPOtp PRIM
 .endfields
 
 Подразделение: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -47,6 +47,8 @@
 КолДней: @@@@@@@@@
 НачалоПлан : @@@@@@@@@@@
 НачалоФаст : @@@@@@@@@@@
+Основание  : @@@@@@@@@@@
+Перенос    : @@@@@@@@@@@
 Примечание : @@@@@@@@@@@
 .}
 .endform

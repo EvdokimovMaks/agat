@@ -35,12 +35,12 @@ ValTar ValBase ValTar1 ValBase1
 Regim
 KontrOrPodr Kontr
 NRecSopr NSopr dSopr NSklOrder Regim1 KontrOrPodr2 Kontr3 Kontr1 NameMOL2
-BarKod TName Ed price pricev fixPrice kol : double summa summav
+cSpSopr BarKod TName Ed price pricev fixPrice kol : double summa summav
 NaklKol : double
 NaklSum NaklSumV
 KontrPlusKol  : double KontrPlusSum KontrPlusSumV
 NRecSoprRet NSoprRet dSoprRet NSklOrderRet Regim2 KontrOrPodr3 Kontr2
-BarKodRet TNameRet EdRet priceRet pricevRet fixPriceRet kolRet : double summaRet summavRet
+cSpSoprRet BarKodRet TNameRet EdRet priceRet pricevRet fixPriceRet kolRet : double summaRet summavRet
 NaklKolRet : double NaklSumRet NaklSumVRet
 KontrMinusKol : double KontrMinusSum KontrMinusSumV
 KontrTitle
@@ -62,7 +62,7 @@ TotKol : double TotSum TotSumV
 .{
 ^ ^ ^ ^ ^ ^ ^ ^ ^
 .{
-^^^^^^^^^
+^^^^^^^^^^
 .}
 ^ ^ ^
 .}
@@ -73,7 +73,7 @@ TotKol : double TotSum TotSumV
 .{
 ^ ^ ^ ^ ^ ^ ^
 .{
-^^^^^^^^^
+^^^^^^^^^^
 .}
 ^ ^ ^
 .}

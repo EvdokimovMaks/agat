@@ -70,4 +70,7 @@ const
 
   cgSaldoIn  = 1;
   cgSaldoOut = 2;
+
+  wItogAllOb  = 0;
+  wItogKorrOb = 1;
 end;

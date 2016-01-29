@@ -139,7 +139,7 @@ Npp         - номер разреза по порядку          - ^
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -163,7 +163,7 @@ Npp         - номер разреза по порядку          - ^
   ИтогоСумма
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(КонечнаяДата,'DD/MM/YYYY'));
 end.
 
 .{ CheckEnter

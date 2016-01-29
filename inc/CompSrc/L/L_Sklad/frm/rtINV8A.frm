@@ -87,7 +87,7 @@ DragM10 ^ ^ ^
 .NameInList 'Инвентаризационная опись № ИНВ-8а'
 .DEFO LANDSCAPE
 .p 60
-.Group '<<Беларусь>>'
+.group 'Country' subgroup 'Belarus'
 .Var
   TotNpp : LongInt
   PgNpp  : LongInt

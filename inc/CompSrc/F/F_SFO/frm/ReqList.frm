@@ -21,6 +21,7 @@
   PodrFr
   MolFr
   MolFrSh
+  rNRec : Comp
 
 // Выданные предметы
   Npp : Longint
@@ -34,19 +35,25 @@
   dExpl : Date
   Kol : Double
   Srok
+  Price : Double
+  Stoim : Double
+  SumIzn : Double
+  spNRec : Comp
 .endFields
 .{
   ^ ^
   ^ ^
   ^ ^ ^
   ^ ^ ^
-
+  ^
 .{ ListBySFO CheckEnter
   ^
   ^ ^ ^
   ^ ^
   ^ ^
   ^ ^ ^
+  ^ ^ ^
+  ^
 .}
 .}
 .endForm

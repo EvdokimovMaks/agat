@@ -497,7 +497,7 @@ RollSchKredKol	^
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -529,7 +529,7 @@ c0p1 c0p1n c1_p1 c1_p2 c1_p3 c1_p4 c1_p5 c1_p6
 RolledSchDeb RolledSchKred
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Р^
 ^
@@ -666,7 +666,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -698,7 +698,7 @@ c0p1 c0p1n c1_p1v c1_p2v c1_p3v c1_p4v c1_p5v c1_p6v
 RolledSchDebV RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end. Щ
  С^ Б
 ^
@@ -835,7 +835,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -866,7 +866,7 @@ c1p1 c1p1n  c2_p3 c2_p3v c2_p4 c2_p4v
 c0p1 c0p1n  c1_p3 c1_p3v c1_p4 c1_p4v
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end. Й
  Щ^ Б
 ^
@@ -1002,7 +1002,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -1034,7 +1034,7 @@ c0p1 c0p1n c1_p1 c1_p2 c1_p3 c1_p4 c1_p5 c1_p6
 RolledSchDeb RolledSchKred
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Й
  Щ^ Б
@@ -1190,7 +1190,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -1222,7 +1222,7 @@ c0p1 c0p1n c1_p1v c1_p2v c1_p3v c1_p4v c1_p5v c1_p6v
 RolledSchDebV RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Щ^ Б
@@ -1378,7 +1378,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -1409,7 +1409,7 @@ c1p1 c1p1n  c2_p3 c2_p3v c2_p4 c2_p4v
 c0p1 c0p1n  c1_p3 c1_p3v c1_p4 c1_p4v
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Щ^ Б
@@ -1546,7 +1546,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -1571,7 +1571,7 @@ c0p1 c0p1n c1_p1 c1_p2 c1_p3 c1_p4 c1_p5 c1_p6
 RolledSchDeb RolledSchKred
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  С^ Б
@@ -1693,7 +1693,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -1718,7 +1718,7 @@ c0p1 c0p1n c1_p1v c1_p2v c1_p3v c1_p4v c1_p5v c1_p6v
 RolledSchDebV RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  С^ Б
@@ -1840,7 +1840,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -1864,7 +1864,7 @@ c0p1 c0p1n c1_p5v c1_p6v c1_pfod c1_pfok  c1_pdvd  c1_pdvk
 RolledSchDebV RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  С^ Б
@@ -1988,7 +1988,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -2014,7 +2014,7 @@ c0p1 c0p1n c1_p1 c1_p1v c1_p2 c1_p2v c1_p3 c1_p3v c1_p4 c1_p4v c1_p5 c1_p5v c1_p
 RolledSchDeb RolledSchDebV RolledSchKred RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Щ^ Б
@@ -2155,7 +2155,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -2189,7 +2189,7 @@ c0p1 c0p1n c1_p1 c1_p2 c1_p3 c1_p4 c1_p5 c1_p6
 RolledSchDeb RolledSchKred
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  С^ Б
@@ -2330,7 +2330,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -2364,7 +2364,7 @@ c0p1 c0p1n c1_p1v c1_p2v c1_p3v c1_p4v c1_p5v c1_p6v
 RolledSchDebV RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  С^ Б
@@ -2505,7 +2505,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -2538,7 +2538,7 @@ c1p1 c1p1n  c2_p3 c2_p3v c2_p4 c2_p4v
 c0p1 c0p1n  c1_p3 c1_p3v c1_p4 c1_p4v
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Щ^ Б
@@ -2678,7 +2678,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -2712,7 +2712,7 @@ c0p1 c0p1n c1_p1 c1_p2 c1_p3 c1_p4 c1_p5 c1_p6
 RolledSchDeb RolledSchKred
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Щ^ Б
@@ -2873,7 +2873,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -2907,7 +2907,7 @@ c0p1 c0p1n c1_p1v c1_p2v c1_p3v c1_p4v c1_p5v c1_p6v
 RolledSchDebV RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Щ^ Б
@@ -3068,7 +3068,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -3101,7 +3101,7 @@ c1p1 c1p1n  c2_p3 c2_p3v c2_p4 c2_p4v
 c0p1 c0p1n  c1_p3 c1_p3v c1_p4 c1_p4v
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Щ^ Б
@@ -3241,7 +3241,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -3273,7 +3273,7 @@ c0p1 c0p1n c1_p1 c1_p2 c1_p3 c1_p4 c1_p5 c1_p6
 RolledSchDeb RolledSchKred
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  С^ Б
@@ -3408,7 +3408,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -3440,7 +3440,7 @@ c0p1 c0p1n c1_p1v c1_p2v c1_p3v c1_p4v c1_p5v c1_p6v
 RolledSchDebV RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  С^ Б
@@ -3575,7 +3575,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -3606,7 +3606,7 @@ c0p1 c0p1n c1_p5v c1_p6v c1_pfod c1_pfok  c1_pdvd  c1_pdvk
 RolledSchDebV RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  С^ Б
@@ -3743,7 +3743,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -3776,7 +3776,7 @@ c0p1 c0p1n c1_p1 c1_p1v c1_p2 c1_p2v c1_p3 c1_p3v c1_p4 c1_p4v c1_p5 c1_p5v c1_p
 RolledSchDeb RolledSchDebV RolledSchKred RolledSchKredV
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  С^ Б
@@ -3933,7 +3933,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -3970,7 +3970,7 @@ c1p1 c1p1n  c2_p3v c2_p3  c2_p4v c2_p4
 c0p1 c0p1n  c1_p3v c1_p3  c1_p4v c1_p4
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Щ^ Б
@@ -4109,7 +4109,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -4140,7 +4140,7 @@ c1p1 c1p1n  c2_p3  c2_p3kol  c2_p4  c2_p4kol  c2_edizm
 c0p1 c0p1n  c1_p3  c1_p3kol  c1_p4  c1_p4kol  c1_edizm
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Й
  Щ^ Б
@@ -4278,7 +4278,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -4309,7 +4309,7 @@ c1p1 c1p1n  c2_p3 c2_p3kol c2_p4 c2_p4kol c2_edizm
 c0p1 c0p1n  c1_p3 c1_p3kol c1_p4 c1_p4kol c1_edizm
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Б^
@@ -4446,7 +4446,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -4472,7 +4472,7 @@ c0p1 c0p1n c1_p1 c1_p1kol c1_p2 c1_p2kol c1_p3 c1_p3kol c1_p4 c1_p4kol c1_edizm 
 RolledSchDeb RollSchDebKol RolledSchKred RollSchKredKol 
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Б^
@@ -4614,7 +4614,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -4645,7 +4645,7 @@ c1p1 c1p1n  c2_p3v  c2_p3kol  c2_p4v  c2_p4kol c2_edizm
 c0p1 c0p1n  c1_p3v  c1_p3kol  c1_p4v  c1_p4kol c1_edizm
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Й
  С^
@@ -4783,7 +4783,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -4814,7 +4814,7 @@ c1p1 c1p1n  c2_p3v  c2_p3kol  c2_p4v  c2_p4kol c2_edizm
 c0p1 c0p1n  c1_p3v  c1_p3kol  c1_p4v  c1_p4kol c1_edizm
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Б^
@@ -4951,7 +4951,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -4977,7 +4977,7 @@ c0p1 c0p1n c1_p1v  c1_p1kol  c1_p2v  c1_p2kol  c1_p3v  c1_p3kol  c1_p4v  c1_p4ko
 RolledSchDebV RollSchDebKol RolledSchKredV RollSchKredKol 
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Щ
  Б^

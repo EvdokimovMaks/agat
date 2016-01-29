@@ -194,7 +194,7 @@
 //   iFeeSigners      - имя переменной объекта подписантов (типа FeeSigners)
 //   StreamObjectName - имя объекта потока
 //   FormName         - Имя формы
-//   23 поля 3 + 4*5
+//   38 поля 3 + 5*7
 #declare WriteFeeSignersForPlatDocs(iFeeSigners,StreamObjectName)
 {
   // Группа : boolean
@@ -209,13 +209,13 @@
     // Имя_группы, имя выбранной группы
     #StreamObjectName.write(#iFeeSigners.GetFeeSignersName);
 
-    // * Директор:
+    // Директор
     if (#iFeeSigners.RestrictFeeByRole(2, 'Direct'))
     {
       #StreamObjectName.write(#iFeeSigners.GetSignerNRec);        // Руководитель_nRec
       #StreamObjectName.write(#iFeeSigners.GetSignerFIO(7));      // Руководитель_ФИО
       #StreamObjectName.write(#iFeeSigners.GetSignerFIO(1));      // Руководитель_ФИО_полное
-      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(13));     // Руководитель_ФИО
+      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(13));     // Руководитель_ИОФ
       #StreamObjectName.write(#iFeeSigners.GetSignerTabN);        // Руководитель_Табельный_Номер
       #StreamObjectName.write(#iFeeSigners.GetSignerPosition(1)); // Руководитель_Должность
       #StreamObjectName.write(#iFeeSigners.GetSignerRole);        // Руководитель_Роль
@@ -225,7 +225,7 @@
       #StreamObjectName.skipFormat(7);
     }
 
-    // * Главный Бухгалтер:
+    // Главный Бухгалтер
     if (#iFeeSigners.RestrictFeeByRole(2, 'GlBux'))
     {
       #StreamObjectName.write(#iFeeSigners.GetSignerNRec);        // Глав.Бух_nRec
@@ -241,24 +241,24 @@
       #StreamObjectName.skipFormat(7);
     }
 
-    // * Кассир:
-    if (#iFeeSigners.RestrictFeeByRole(2, 'Kass'))
+    // Бухгалтер
+    if (#iFeeSigners.RestrictFeeByRole(2, 'Bux'))
     {
-      #StreamObjectName.write(#iFeeSigners.GetSignerNRec);        // Кассир_nRec
-      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(7));      // Кассир_ФИО
-      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(1));      // Кассир_ФИО_полное
-      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(13));      // Кассир_ИОФ
-      #StreamObjectName.write(#iFeeSigners.GetSignerTabN);        // Кассир_Табельный_Номер
-      #StreamObjectName.write(#iFeeSigners.GetSignerPosition(1)); // Кассир_Должность
-      #StreamObjectName.write(#iFeeSigners.GetSignerRole);        // Кассир_Роль
+      #StreamObjectName.write(#iFeeSigners.GetSignerNRec);        // Бух_nRec
+      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(7));      // Бух_ФИО
+      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(1));      // Бух_ФИО_полное
+      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(13));     // Бух_ИОФ
+      #StreamObjectName.write(#iFeeSigners.GetSignerTabN);        // Бух_Табельный_Номер
+      #StreamObjectName.write(#iFeeSigners.GetSignerPosition(1)); // Бух_Должность
+      #StreamObjectName.write(#iFeeSigners.GetSignerRole);        // Бух_Роль
     }
     else
     {
       #StreamObjectName.skipFormat(7);
     }
 
-    // * Ответственный:
-    if (#iFeeSigners.RestrictFeeByRole(2, 'Otvetstv'))
+    // Кассир
+    if (#iFeeSigners.RestrictFeeByRole(2, 'Kass'))
     {
       #StreamObjectName.write(#iFeeSigners.GetSignerNRec);        // Кассир_nRec
       #StreamObjectName.write(#iFeeSigners.GetSignerFIO(7));      // Кассир_ФИО
@@ -273,10 +273,28 @@
       #StreamObjectName.skipFormat(7);
     }
 
+    // Ответственный
+    if (#iFeeSigners.RestrictFeeByRole(2, 'Otvetstv'))
+    {
+      #StreamObjectName.write(#iFeeSigners.GetSignerNRec);        // Ответственный_nRec
+      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(7));      // Ответственный_ФИО
+      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(1));      // Ответственный_ФИО_полное
+      #StreamObjectName.write(#iFeeSigners.GetSignerFIO(13));     // Ответственный_ИОФ
+      #StreamObjectName.write(#iFeeSigners.GetSignerTabN);        // Ответственный_Табельный_Номер
+      #StreamObjectName.write(#iFeeSigners.GetSignerPosition(1)); // Ответственный_Должность
+      #StreamObjectName.write(#iFeeSigners.GetSignerRole);        // Ответственный_Роль
+    }
+    else
+    {
+      #StreamObjectName.skipFormat(7);
+    }
+
     #iFeeSigners.ClearRestriction
   }
   else
-    #StreamObjectName.skipFormat(30);
+  {
+    #StreamObjectName.skipFormat(37);
+  }
 }
 #end
 
@@ -294,13 +312,13 @@
     // Имя_группы, имя выбранной группы
     Form_Write(#iFeeSigners.GetFeeSignersName,'',#MyHandle);
 
-    // * Директор:
+    // Директор
     if (#iFeeSigners.RestrictFeeByRole(2, 'Direct'))
     {
       Form_Write(#iFeeSigners.GetSignerNRec       ,'',#MyHandle);        // Руководитель_nRec
       Form_Write(#iFeeSigners.GetSignerFIO(7)     ,'',#MyHandle);        // Руководитель_ФИО
       Form_Write(#iFeeSigners.GetSignerFIO(1)     ,'',#MyHandle);        // Руководитель_ФИО_полное
-      Form_Write(#iFeeSigners.GetSignerFIO(13)    ,'',#MyHandle);        // Руководитель_ФИО
+      Form_Write(#iFeeSigners.GetSignerFIO(13)    ,'',#MyHandle);        // Руководитель_ИОФ
       Form_Write(#iFeeSigners.GetSignerTabN       ,'',#MyHandle);        // Руководитель_Табельный_Номер
       Form_Write(#iFeeSigners.GetSignerPosition(1),'',#MyHandle);        // Руководитель_Должность
       Form_Write(#iFeeSigners.GetSignerRole       ,'',#MyHandle);        // Руководитель_Роль
@@ -310,7 +328,7 @@
       Form_SkipFormat(7, #MyHandle);
     }
 
-    // * Главный Бухгалтер:
+    // Главный Бухгалтер
     if (#iFeeSigners.RestrictFeeByRole(2, 'GlBux'))
     {
       Form_Write(#iFeeSigners.GetSignerNRec       ,'',#MyHandle);   // Глав.Бух_nRec
@@ -326,24 +344,24 @@
       Form_SkipFormat(7, #MyHandle);
     }
 
-    // * Кассир:
-    if (#iFeeSigners.RestrictFeeByRole(2, 'Kass'))
+    // Бухгалтер
+    if (#iFeeSigners.RestrictFeeByRole(2, 'Bux'))
     {
-      Form_Write(#iFeeSigners.GetSignerNRec       ,'',#MyHandle); // Кассир_nRec
-      Form_Write(#iFeeSigners.GetSignerFIO(7)     ,'',#MyHandle); // Кассир_ФИО
-      Form_Write(#iFeeSigners.GetSignerFIO(1)     ,'',#MyHandle); // Кассир_ФИО_полное
-      Form_Write(#iFeeSigners.GetSignerFIO(13)    ,'',#MyHandle);  // Кассир_ИОФ
-      Form_Write(#iFeeSigners.GetSignerTabN       ,'',#MyHandle); // Кассир_Табельный_Номер
-      Form_Write(#iFeeSigners.GetSignerPosition(1),'',#MyHandle); // Кассир_Должность
-      Form_Write(#iFeeSigners.GetSignerRole       ,'',#MyHandle); // Кассир_Роль
+      Form_Write(#iFeeSigners.GetSignerNRec       ,'',#MyHandle);   // Бух_nRec
+      Form_Write(#iFeeSigners.GetSignerFIO(7)     ,'',#MyHandle);   // Бух_ФИО
+      Form_Write(#iFeeSigners.GetSignerFIO(1)     ,'',#MyHandle);   // Бух_ФИО_полное
+      Form_Write(#iFeeSigners.GetSignerFIO(13)    ,'',#MyHandle);   // Бух_ИОФ
+      Form_Write(#iFeeSigners.GetSignerTabN       ,'',#MyHandle);   // Бух_Табельный_Номер
+      Form_Write(#iFeeSigners.GetSignerPosition(1),'',#MyHandle);   // Бух_Должность
+      Form_Write(#iFeeSigners.GetSignerRole       ,'',#MyHandle);   // Бух_Роль
     }
     else
     {
       Form_SkipFormat(7, #MyHandle);
     }
 
-    // * Ответственный:
-    if (#iFeeSigners.RestrictFeeByRole(2, 'Otvetstv'))
+    // Кассир
+    if (#iFeeSigners.RestrictFeeByRole(2, 'Kass'))
     {
       Form_Write(#iFeeSigners.GetSignerNRec       ,'',#MyHandle); // Кассир_nRec
       Form_Write(#iFeeSigners.GetSignerFIO(7)     ,'',#MyHandle); // Кассир_ФИО
@@ -358,10 +376,28 @@
       Form_SkipFormat(7, #MyHandle);
     }
 
+    // Ответственный
+    if (#iFeeSigners.RestrictFeeByRole(2, 'Otvetstv'))
+    {
+      Form_Write(#iFeeSigners.GetSignerNRec       ,'',#MyHandle); // Ответственный_nRec
+      Form_Write(#iFeeSigners.GetSignerFIO(7)     ,'',#MyHandle); // Ответственный_ФИО
+      Form_Write(#iFeeSigners.GetSignerFIO(1)     ,'',#MyHandle); // Ответственный_ФИО_полное
+      Form_Write(#iFeeSigners.GetSignerFIO(13)    ,'',#MyHandle); // Ответственный_ИОФ
+      Form_Write(#iFeeSigners.GetSignerTabN       ,'',#MyHandle); // Ответственный_Табельный_Номер
+      Form_Write(#iFeeSigners.GetSignerPosition(1),'',#MyHandle); // Ответственный_Должность
+      Form_Write(#iFeeSigners.GetSignerRole       ,'',#MyHandle); // Ответственный_Роль
+    }
+    else
+    {
+      Form_SkipFormat(7, #MyHandle);
+    }
+
     #iFeeSigners.ClearRestriction
   }
   else
-    Form_SkipFormat(30, #MyHandle);
+  {
+    Form_SkipFormat(37, #MyHandle);
+  }
 }
 #end
 

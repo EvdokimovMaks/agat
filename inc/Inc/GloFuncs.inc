@@ -17,6 +17,7 @@
 #include RepBarCode.vih
 #include KatOrg.vih
 #include StaticSF.vih
+#include ExtAttrClassInfo.vih
 
 Global F_KatDoc::KatDocName
      , F_KatDoc::TiDkInfo
@@ -31,4 +32,5 @@ Global F_KatDoc::KatDocName
      , C_COMMON::RepBarCode
      , L_KatOrg::KatOrg
      , L_SF::viStaticSF
+     , C_ExtClass::iExtAttrClassInfo
      ;

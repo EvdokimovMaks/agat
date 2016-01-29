@@ -25,6 +25,7 @@ end.
   Rost : String  Od1 : String  Od2 : String  Ob : String
   GUb : String  Perch : String  ISZ : String Pog : String  Ob2 : String
   GMask : String Respir : String Rukav : String
+  cSigners : Comp
   frmFlag : Boolean  spcFlag : Boolean
 .endFields
   ^ ^ ^ ^
@@ -32,6 +33,7 @@ end.
   ^ ^ ^
   ^ ^ ^ ^ ^ ^ ^ ^ ^
   ^ ^ ^
+  ^
   ^ ^
 
 .{ frmCircle checkenter
@@ -82,9 +84,31 @@ end.
 .Group 'Личные карточки учета СФО'
 .Group 'Личные карточки учета СФО (Беларусь)'
 .NameInList 'Личная карточка учета СФО'
+.declare
+#include FeeSigners.vih
+.endDeclare
 .Var
   totSum : double;
+  iFeeSigners : FeeSigners;
+  sBuh, sDirect : string;
 .endVar
+.begin
+  // Бухгалтер и руководитель
+  sBuh := sDirect := '';
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSigners);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(3, 'Бухгалтер'))
+      sBuh := iFeeSigners.GetSignerFIO(7);
+
+    if (iFeeSigners.RestrictFeeByRole(3, 'Директор'))
+      sDirect := iFeeSigners.GetSignerFIO(7);
+
+    iFeeSigners.ClearRestriction;
+  }
+end.
 .{
 .Fields
   CommonFormHeader
@@ -150,9 +174,12 @@ end.
 .}
 └───────────┴─────────────────────┴──────────┴──────────┴────────┴─────────┘
 .}
+.Fields
+  sBuh sDirect
+.endFields
 
-Начальник ОТБ                               Бухгалтер
-Инженер ОТ и ТБ                             Начальник цеха (отдела)
+Начальник ОТБ                      Бухгалтер               @@@@@@@@@@@@@@@@@@@
+Инженер ОТ и ТБ                    Начальник цеха (отдела) @@@@@@@@@@@@@@@@@@@
 
 
 .Fields
@@ -198,10 +225,32 @@ end.
 .PAPER PA4
 .ORIENT PORTRAIT
 .LL 80
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
   PrintObr : Boolean;
-  PageNumber : Longint
+  PageNumber : Longint;
+  iFeeSigners : FeeSigners;
+  sFIO, sPost : string;
 .endvar
+.begin
+  // Составитель карточки
+  sFIO := sPost := '';
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSigners);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(3, 'Составитель'))
+    {
+      sFIO := iFeeSigners.GetSignerFIO(1);
+      sPost := iFeeSigners.GetSignerPosition(1)
+    }
+
+    iFeeSigners.ClearRestriction;
+  }
+end.
 .{
 .Fields
   CommonFormHeader
@@ -274,6 +323,10 @@ end.
   if (Longint(sfSpis) = 0, '', DateToStr(sfSpis, 'DD/MM/YYYY'))
   SrokInUse
   PasNum
+  sPost
+  sFIO
+  sPost
+  sFIO
 .endFields
 ║@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@║@@@@@@@@@@│&#&&&.&&│@@@@@@@@@@@@@@@@║@@@@@@@@@@│&#&&&.&&│          ║@~@@@@@@@│@~@@@@@@@@║@~@@#@@@║@@@@@@@@@@║
 .[f1
@@ -289,8 +342,8 @@ end.
   PageNumber := PageNumber + 1;
 end.
 ╚═══════════════════════════╧══════════════╩══════════╧════════╧════════════════╩══════════╧════════╧══════════╩═════════╧══════════╩════════╩══════════╝
-Карточку заполнил _________________  _________  _____________________
-                      должность       подпись    расшифровка подписи
+Карточку заполнил  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  _________   Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                            должность           подпись              расшифровка подписи
 
                   "  "  ___________  20  г.
 .]f
@@ -316,8 +369,8 @@ end.
 ╠═══════════════════════════╪══════════════╬══════════╪════════╪════════════════╬══════════╪════════╪══════════╬═════════╪══════════╬════════╬══════════╣
 ║                           │              ║          │        │                ║          │        │          ║         │          ║        ║          ║
 ╚═══════════════════════════╧══════════════╩══════════╧════════╧════════════════╩══════════╧════════╧══════════╩═════════╧══════════╩════════╩══════════╝
-Карточку заполнил _________________  _________  _____________________
-                      должность       подпись    расшифровка подписи
+Карточку заполнил  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  _________   Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                            должность           подпись              расшифровка подписи
 
                   "  "  ___________  20  г.
 .} Ш
@@ -337,13 +390,62 @@ end.
 .PAPER PA4
 .ORIENT PORTRAIT
 .LL 80
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
   totSum : Double;
   Counter1 : Longint;
   Counter2 : Longint;
   PrintObr : Boolean;
   PrintBrk : Boolean;
+  iFeeSigners : FeeSigners;
+  sBuh, sSostav : string;
+  Nom_Utv, Kol_Utv : longint;
+  Utv_FIO, Utv_Post : array [1..2] of string;
 .endVar
+.begin
+  // Бухгалтер, составитель, согласующие лица
+  for (Kol_Utv := 1; Kol_Utv <= Count(Utv_FIO); Kol_Utv++)
+  {
+    Utv_FIO[Kol_Utv] := '';
+    Utv_Post[Kol_Utv] := '';
+  }
+
+  sBuh := sSostav := '';
+  Kol_Utv := 0;
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSigners);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(3, 'Бухгалтер'))
+      sBuh := iFeeSigners.GetSignerFIO(7);
+
+    if (iFeeSigners.RestrictFeeByRole(3, 'Составитель'))
+      sSostav := iFeeSigners.GetSignerFIO(7);
+
+    if (iFeeSigners.RestrictFeeByRole(3, 'Утверждающее лицо'))
+      if (iFeeSigners.GetSignerFirst)
+        do
+        {
+          Kol_Utv++;
+          Utv_FIO[Kol_Utv] := iFeeSigners.GetSignerFIO(7);
+          Utv_Post[Kol_Utv] := iFeeSigners.GetSignerPosition(1);
+        }
+        while (iFeeSigners.GetSignerNext);
+
+    iFeeSigners.ClearRestriction;
+  }
+
+  if (Kol_Utv = 0)
+  {
+    Kol_Utv := 3;
+    Utv_FIO[1] := Utv_FIO[2] := Utv_FIO[3] := '';
+    Utv_Post[1] := Utv_Post[2] := Utv_Post[3] := '';
+  }
+end.
 .{
 .Fields
   CommonFormHeader
@@ -442,12 +544,21 @@ end.
 end.
  └─────────────────────────────────────────────────────────────────────────────────────┴─────────────┴─────────┴──────────┴──────────┘
 
-  БСОГЛАСОВАНО Б  __________________________   ____________________    ____________________________________________
-                    должность                    подпись                      фамилия, инициалы
-              __________________________   ____________________    ____________________________________________
-                    должность                    подпись                      фамилия, инициалы
-              __________________________   ____________________    ____________________________________________
-                    должность                    подпись                      фамилия, инициалы
+.begin
+  Nom_Utv := 0;
+end.
+.{While (Nom_Utv < Kol_Utv)
+.begin
+  Nom_Utv := Nom_Utv + 1;
+end.
+.fields
+  if (Nom_Utv = 1, 'СОГЛАСОВАНО', '')
+  Utv_Post[Nom_Utv]
+  Utv_FIO[Nom_Utv]
+.endfields
+  Б@@@@@@@@@@@ Б  Д@~@@@@@@@@@@@@@@@@@@@@@@@@@ Д   ____________________     Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                     должность                   подпись                        фамилия, инициалы
+.}
 .]f
 .}
 .fields
@@ -488,12 +599,21 @@ end.
 end.
  └─────────────────────────────────────────────────────────────────────────────────────┴─────────────┴─────────┴──────────┴──────────┘
 
-  БСОГЛАСОВАНО Б  __________________________   ____________________    ____________________________________________
-                    должность                    подпись                      фамилия, инициалы
-              __________________________   ____________________    ____________________________________________
-                    должность                    подпись                      фамилия, инициалы
-              __________________________   ____________________    ____________________________________________
-                    должность                    подпись                      фамилия, инициалы
+.begin
+  Nom_Utv := 0;
+end.
+.{While (Nom_Utv < Kol_Utv)
+.begin
+  Nom_Utv := Nom_Utv + 1;
+end.
+.fields
+  if (Nom_Utv = 1, 'СОГЛАСОВАНО', '')
+  Utv_Post[Nom_Utv]
+  Utv_FIO[Nom_Utv]
+.endfields
+  Б@@@@@@@@@@@ Б  Д@~@@@@@@@@@@@@@@@@@@@@@@@@@ Д   ____________________     Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                     должность                   подпись                        фамилия, инициалы
+.}
 .]f
 .}
 .{?INTERNAL;PrintObr
@@ -511,12 +631,21 @@ end.
  ├─────────────────────────────────────────────────────────────────────────────────────┼─────────────┼─────────┼──────────┼──────────┤
  └─────────────────────────────────────────────────────────────────────────────────────┴─────────────┴─────────┴──────────┴──────────┘
 
-  БСОГЛАСОВАНО Б  __________________________   ____________________    ____________________________________________
-                    должность                    подпись                      фамилия, инициалы
-              __________________________   ____________________    ____________________________________________
-                    должность                    подпись                      фамилия, инициалы
-              __________________________   ____________________    ____________________________________________
-                    должность                    подпись                      фамилия, инициалы
+.begin
+  Nom_Utv := 0;
+end.
+.{While (Nom_Utv < Kol_Utv)
+.begin
+  Nom_Utv := Nom_Utv + 1;
+end.
+.fields
+  if (Nom_Utv = 1, 'СОГЛАСОВАНО', '')
+  Utv_Post[Nom_Utv]
+  Utv_FIO[Nom_Utv]
+.endfields
+  Б@@@@@@@@@@@ Б  Д@~@@@@@@@@@@@@@@@@@@@@@@@@@ Д   ____________________     Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                     должность                   подпись                        фамилия, инициалы
+.}
 .}
 .fields
  'true' : 's'
@@ -587,16 +716,22 @@ end.
   Counter2 := Counter2 + 1;
 end.
  └──────────────────┴──────────┴──────────┴──────┴────────┴─────────────┴──────────┴──────────┴──────┴────────┴──────────┴───────────┘
+.fields
+  sSostav
+  sBuh
+.endfields
 
-  БКарточку оформил кладовщик Б __________________________  _________________________________________________
+  БКарточку оформил кладовщик Б __________________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                      подпись                           фамилия, инициалы
-  БПроверил бухгалтер Б         __________________________  _________________________________________________
+  БПроверил бухгалтер Б         __________________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                      подпись                           фамилия, инициалы
 .]f
 .}
 .{?INTERNAL;PrintObr
 .fields
   'true' : 's'
+  sSostav
+  sBuh
 .endfields
 ^
                                                                                                         Оборотная сторона формы М-37п
@@ -622,9 +757,9 @@ end.
  │                  │          │          │      │        │             │          │          │      │        │          │           │
  └──────────────────┴──────────┴──────────┴──────┴────────┴─────────────┴──────────┴──────────┴──────┴────────┴──────────┴───────────┘
 
-  БКарточку оформил кладовщик Б __________________________  _________________________________________________
+  БКарточку оформил кладовщик Б __________________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                      подпись                           фамилия, инициалы
-  БПроверил бухгалтер Б         __________________________  _________________________________________________
+  БПроверил бухгалтер Б         __________________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                      подпись                           фамилия, инициалы
 .} Р
 .fields
@@ -642,6 +777,9 @@ end.
 .PAPER PA4
 .ORIENT PORTRAIT
 .LL 80
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
   Array_Of_Norms1 : array [1..50] of string;
   Array_Of_Norms2 : array [1..50] of string;
@@ -649,6 +787,8 @@ end.
   Array_Of_Norms4 : array [1..50] of string;
   Count_Of_Array : integer;
   Number_Of_Array : integer;
+  iFeeSigners : FeeSigners;
+  sDirect : string;
 .endvar
 .function GetNameFromFIO(sFIO : string; wNumName : word) : string;
 var
@@ -766,6 +906,19 @@ end.
 
   Number_Of_Array := 0;
   Count_Of_Array := 0;
+
+  // Руководитель подразделения
+  sDirect := '';
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSigners);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(3, 'Директор'))
+      sDirect := iFeeSigners.GetSignerFIO(7);
+
+    iFeeSigners.ClearRestriction;
+  }
 end.
 .{
 .Fields
@@ -857,6 +1010,7 @@ end.
   Array_Of_Norms4[Number_Of_Array]
   Array_Of_Norms2[Number_Of_Array]
   Array_Of_Norms3[Number_Of_Array]
+  sDirect
   'true' : 's'
 .endFields
 │@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@│&&&&&&&&&&&&&&&&&&&&&&│
@@ -872,8 +1026,8 @@ end.
 └────────────────────────────────────────────────────────────────────────────────────┴─────────────────────────┴─────────────────┴──────────────────────┘
 .}
 
-  Руководитель структурного подразделения  _________________________ (Фамилия, инициалы)
-                                                   (подпись)
+  Руководитель структурного подразделения  _________________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                                                   (подпись)                          (Фамилия, инициалы)
 
 ^
 .{
@@ -962,6 +1116,9 @@ end.
 .PAPER PA4
 .ORIENT PORTRAIT
 .LL 80
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
   Array_Of_Norms1 : array [1..50] of string;
   Array_Of_Norms2 : array [1..50] of string;
@@ -970,6 +1127,8 @@ end.
   Array_Of_Norms5 : array [1..50] of string;
   Count_Of_Array : integer;
   Number_Of_Array : integer;
+  iFeeSigners : FeeSigners;
+  sBuh, sDirect, sMOL : string;
 .endvar
 .function GetNameFromFIO(sFIO : string; wNumName : word) : string;
 var
@@ -1035,6 +1194,25 @@ end.
 
   Number_Of_Array := 0;
   Count_Of_Array := 0;
+
+  // Бухгалтер, руководитель, ответственный
+  sBuh := sDirect := sMOL := '';
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSigners);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(3, 'Бухгалтер'))
+      sBuh := iFeeSigners.GetSignerFIO(7);
+
+    if (iFeeSigners.RestrictFeeByRole(3, 'Директор'))
+      sDirect := iFeeSigners.GetSignerFIO(7);
+
+    if (iFeeSigners.RestrictFeeByRole(3, 'Ответственный'))
+      sMOL := iFeeSigners.GetSignerFIO(7);
+
+    iFeeSigners.ClearRestriction;
+  }
 end.
 .{
 .Fields
@@ -1129,6 +1307,10 @@ end.
   Array_Of_Norms3[Number_Of_Array]
   Array_Of_Norms4[Number_Of_Array]
   Array_Of_Norms5[Number_Of_Array]
+  sBuh
+  sDirect
+  sMOL
+  GetNameFromFIO(FIO, 1) + if (GetNameFromFIO(FIO, 2) = '', '', SubStr(GetNameFromFIO(FIO, 2), 1, 1) + '. ' + if (GetNameFromFIO(FIO, 3) = '', '', SubStr(GetNameFromFIO(FIO, 3), 1, 1) + '.'))
   'true' : 's'
 .endFields
 │@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@│&&&&&&&&&&&&│&&&&&&&&&&&&│
@@ -1155,19 +1337,19 @@ end.
 └─────────────────────────────────────────────────────────────────────────────────┴─────────────────────────────┴─────────────────┴────────────┴────────────┘
 .}
 
-  Главный бухгалтер (бухгалтер)                              _____________________________________________________________________
+  Главный бухгалтер (бухгалтер)                               Д&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& Д
                                                                           (личная подпись, дата, расшифровка подписи)
   Согласовано:
   специалист отдела кадров                                   _____________________________________________________________________
                                                                           (личная подпись, дата, расшифровка подписи)
-  руководитель структурного подразделения                    _____________________________________________________________________
+  руководитель структурного подразделения                     Д&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& Д
                                                                           (личная подпись, дата, расшифровка подписи)
   специалист по охране труда                                 _____________________________________________________________________
 
-  ответственное лицо за выдачу средств индивидуальной защиты _____________________________________________________________________
+  ответственное лицо за выдачу средств индивидуальной защиты  Д&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& Д
                                                                           (личная подпись, дата, расшифровка подписи)
   Ознакомлен:
-  работник                                                   _____________________________________________________________________
+  работник                                                    Д&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& Д
                                                                           (личная подпись, дата, расшифровка подписи)
 ^
 .{
@@ -1222,6 +1404,9 @@ end.
 .PAPER PA4
 .ORIENT PORTRAIT
 .LL 80
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
   Array_Of_Norms1 : array [1..50] of string;
   Array_Of_Norms2 : array [1..50] of string;
@@ -1229,6 +1414,8 @@ end.
   Array_Of_Norms4 : array [1..50] of string;
   Count_Of_Array : integer;
   Number_Of_Array : integer;
+  iFeeSigners : FeeSigners;
+  sDirect : string;
 .endvar
 .function GetNameFromFIO(sFIO : string; wNumName : word) : string;
 var
@@ -1346,6 +1533,19 @@ end.
 
   Number_Of_Array := 0;
   Count_Of_Array := 0;
+
+  // Руководитель подразделения
+  sDirect := '';
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSigners);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(3, 'Директор'))
+      sDirect := iFeeSigners.GetSignerFIO(1);
+
+    iFeeSigners.ClearRestriction;
+  }
 end.
 .{
 .Fields
@@ -1421,6 +1621,7 @@ end.
   Array_Of_Norms1[Number_Of_Array]
   Array_Of_Norms2[Number_Of_Array]
   Array_Of_Norms3[Number_Of_Array]
+  sDirect
   'true' : 's'
 .endFields
 │@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@│&&&&&&&&&&&&&&&&&&&&&&│
@@ -1437,7 +1638,7 @@ end.
 └─────────────────────────┴────────────────────────────────────────────────────────────────────────────────────┴─────────────────┴──────────────────────┘
 .}
 
-  Руководитель структурного подразделения  ____________________________________________________________________________________________
+  Руководитель структурного подразделения   Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
 ^
 .{
 .[h
@@ -1456,6 +1657,7 @@ end.
   if (Longint(sfGive) = 0, '', DateToStr(sfGive, 'DD/MM/YYYY'))
   sfGiveKol
   GivDoc
+  sDirect
 .endFields
 .{?Internal;(sfIsSOS);
 │@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@@@@@@@@@│@~@@@@@@@@│&#&&&&&&&&&&│                     │@@@@@@@@@@@@@@@@@│
@@ -1465,7 +1667,7 @@ end.
 .]f
 .}
 
-  Руководитель структурного подразделения  ____________________________________________________________________________________________ Ш
+  Руководитель структурного подразделения   Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д Ш
 
 .}
 .endForm

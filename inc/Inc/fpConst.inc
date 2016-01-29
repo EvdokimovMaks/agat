@@ -323,6 +323,8 @@
 
   FpORelObEntity                 = 85; // Управление бюджетом | Настройка | Правила передачи данных
 
+  FpAktSverkiDopFldEntity        = 86; // Сущность для интерфейса настройки отчета "Акт сверки"
+
 // идентификаторы сущностей в FP
   cgFpEntity_Budget  = 1;
   cgFpEntity_BudVar  = 2;

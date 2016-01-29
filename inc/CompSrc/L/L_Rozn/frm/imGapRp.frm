@@ -162,7 +162,7 @@ end.
 .]f
 .}
 .fields
-  DoubletoString(0, FRoundRub5(Sum))
+  DoubletoString(0, FRoundRubRozn(Sum))
 .endfields
 
  ИИмущество на сумму  З@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ П
@@ -243,7 +243,7 @@ end.
 .}
 
 .fields
-  DoubletoString(0, FRoundRub5(Sum))
+  DoubletoString(0, FRoundRubRozn(Sum))
 .endfields
  ИИмущество на сумму  З@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ П
 
@@ -322,7 +322,7 @@ end.
 .}
 
 .fields
-  DoubletoString(0, FRoundRub5(Sum))
+  DoubletoString(0, FRoundRubRozn(Sum))
 .endfields
  ИИмущество на сумму  З@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ П
 
@@ -404,7 +404,7 @@ end.
 .}
 
 .fields
-  DoubletoString(0, FRoundRub5(Sum))
+  DoubletoString(0, FRoundRubRozn(Sum))
 .endfields
  ИИмущество на сумму  З@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ П
 
@@ -486,7 +486,7 @@ end.
 .}
 
 .fields
-  DoubletoString(0, FRoundRub5(Sum))
+  DoubletoString(0, FRoundRubRozn(Sum))
 .endfields
  ИИмущество на сумму  З@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ П
 
@@ -570,7 +570,7 @@ end.
 .}
 
 .fields
-  DoubletoString(0, FRoundRub5(Sum))
+  DoubletoString(0, FRoundRubRozn(Sum))
 .endfields
  ИИмущество на сумму  З@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ П
 
@@ -654,7 +654,7 @@ end.
 .}
 
 .fields
-  DoubletoString(0, FRoundRub5(Sum))
+  DoubletoString(0, FRoundRubRozn(Sum))
 .endfields
  ИИмущество на сумму  З@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ П
 
@@ -739,7 +739,7 @@ end.
 .}
 
 .fields
-  DoubletoString(0, FRoundRub5(Sum))
+  DoubletoString(0, FRoundRubRozn(Sum))
 .endfields
  ИИмущество на сумму  З@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ П
 

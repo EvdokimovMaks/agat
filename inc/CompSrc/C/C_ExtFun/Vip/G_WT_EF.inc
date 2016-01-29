@@ -5655,6 +5655,7 @@ function WT_IsProtectedBwDates(Beginning: date, Ending: date): boolean; external
   <h3>См. также</h3>
   <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
   <code><a href="exf--WT_DGetOverworkCalculationMethod.htm">WT_DGetOverworkCalculationMethod</a></code> </br>
+  <code><a href="exf--OM_OverworkCalculationSummed.htm">OM_OverworkCalculationSummed</a></code> <br />
 #end
 function WT_GetOverworkCalculationMethod(Day: byte): byte; external #G_WorkTable;
 
@@ -5686,6 +5687,7 @@ function WT_GetOverworkCalculationMethod(Day: byte): byte; external #G_WorkTable
   <h3>См. также</h3>
   <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
   <code><a href="exf--WT_GetOverworkCalculationMethod.htm">WT_GetOverworkCalculationMethod</a></code> </br>
+  <code><a href="exf--OM_OverworkCalculationSummed.htm">OM_OverworkCalculationSummed</a></code> <br />
 #end
 function WT_DGetOverworkCalculationMethod(D: date): byte; external #G_WorkTable;
 

@@ -19,7 +19,7 @@ Const
   cgFlViewPos_GroupOfp  = 10; // по группе финансовых обязательств
   cgFlViewPos_TypePlat  = 11; // по виду платежа
   cgFlViewPos_FpBudAn   = 12; // аналитика
-  cgFlViewPos_PlatMain  = 13; // Тип платежного средства
+  cgFlViewPos_PlatMain  = 13; // платежное средство
   cgFlViewPos_Ispoln    = 14; // Исполнение
 
   // Отображение
@@ -32,11 +32,11 @@ Const
   cgFlPos_Ispoln    =  6; // наличие исполнения
   cgFlPos_TypePlat  =  7; // вид платежа
   cgFlPos_GroupOfp  =  8; // группа  ФОБ
-  cgFlPos_Persons   =  9; // куратор
 
-  cgFlPos_KatOrg    =  0; // контрагент
-  cgFlPos_FpCO      =  1; // ЦО
-  cgFlPos_FpStBud   =  2; // статья бюджета
-  cgFlPos_FpBudAn   =  3; // аналитика
-  cgFlPos_PlatMain  =  4; // платежное средство
+  cgFlPos_PlatMain  =  0; // платежное средство
+  cgFlPos_KatOrg    =  1; // контрагент
+  cgFlPos_Persons   =  2; // куратор
+  cgFlPos_FpCO      =  3; // ЦО
+  cgFlPos_FpStBud   =  4; // статья бюджета
+  cgFlPos_FpBudAn   =  5; // аналитика
 End;

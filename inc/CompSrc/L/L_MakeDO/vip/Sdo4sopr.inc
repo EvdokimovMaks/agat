@@ -57,18 +57,6 @@ With Index
 )
 ;
 
-Table Struct tmpSoprFilt
-(
-  nRec  : comp
-, dSopr : date
-, NSopr : string
-)
-With Index
-(
-  tmpSoprFilt01 = dSopr + NSopr
-)
-;
-
 //******************************************************************************
 Table STRUCT TmpDocNal "Временные налоги док."
 (

@@ -242,6 +242,7 @@
 .linkform 'AktInvDK_2' prototype is 'AktInvDK'
 .nameInList 'Акт инвентаризации расчетов с контрагентами'
 .group 'Для Беларуси'
+.Group 'Country' subGroup 'Belarus'
 .fields
   Akt_Nomer
   MyOrg
@@ -370,6 +371,7 @@
 .linkform 'AktInvDK_3' prototype is 'AktInvDK'
 .nameInList 'Акт инвентаризации расчетов с контрагентами в валюте договора'
 .group 'Для Беларуси в валюте'
+.Group 'Country' subGroup 'Belarus'
 .fields
   Akt_Nomer
   MyOrg

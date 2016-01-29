@@ -16,14 +16,18 @@
   wAbsWarningResult     : Word;
   wErrorResult          : Word;    // а здесь - о нарушении уникальности ключа при импорте
   wCantImportResult     : Word;    // результат ответа на невозможность импора
-  hMarker               : Longint;
+  hMarker               : TPtr;
   lMarker               : Longint;
 //  sCurFieldName         : String;
   wErrorsCount          : word;    // Число ошибок вставки документов в БД
 
   sImportField : string; // ДЛЯ ФОРМУЛ ИМПОРТА
 
-  hMarkerInsRecs         : Longint;    // маркер вставленных записей
+  hMarkerInsRecs         : TPtr;    // маркер вставленных записей
 
   bAddMC   : boolean;//создание МЦ
   bNeedLog : boolean;//Вывод дубликатов в лог
+
+  oExtClass: iExtClass;
+
+  wMessageError : word;

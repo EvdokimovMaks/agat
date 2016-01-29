@@ -20,13 +20,21 @@
   FIOKaz Categor ▐Ю╝Д╔АА╗О ░═╖ЮО╓
   D01 D02 D03 D04 D05 D06 D07 D08 D09 D10 D11 D12 D13 D14 D15 D16 D17 D18 D19 D20 D21 D22 D23 D24 D25 D26 D27 D28 D29 D30 D31 Days1 Days2
   H01 H02 H03 H04 H05 H06 H07 H08 H09 H10 H11 H12 H13 H14 H15 H16 H17 H18 H19 H20 H21 H22 H23 H24 H25 H26 H27 H28 H29 H30 H31 Hours1 Hours2
+  // ▐╝╛╔Б╙╗ ╓╜╔╘ ╗ Г═АК ╞╝ "╒Б╝Ю╝╛Ц А╚╝Н"
+  UseLayer2: boolean
+  L2D01 L2D02 L2D03 L2D04 L2D05 L2D06 L2D07 L2D08 L2D09 L2D10 L2D11 L2D12 L2D13 L2D14 L2D15
+  L2D16 L2D17 L2D18 L2D19 L2D20 L2D21 L2D22 L2D23 L2D24 L2D25 L2D26 L2D27 L2D28 L2D29 L2D30 L2D31
+  L2Days1 L2Days2
+  L2H01 L2H02 L2H03 L2H04 L2H05 L2H06 L2H07 L2H08 L2H09 L2H10 L2H11 L2H12 L2H13 L2H14 L2H15
+  L2H16 L2H17 L2H18 L2H19 L2H20 L2H21 L2H22 L2H23 L2H24 L2H25 L2H26 L2H27 L2H28 L2H29 L2H30 L2H31
+  L2Hours1 L2Hours2
 
   AbsenceDays1 AbsenceHours1
   AbsenceDays2 AbsenceHours2
   AbsenceDays3 AbsenceHours3
   AbsenceDays4 AbsenceHours4
 
-  WorkingDays WorkingHours OverworkHours NihgtHours
+  WorkingDays WorkingHours OverworkHours NihgtHours // :D
   EveningHours: Double
   Tarif: Double
   WorkingWeekendHours AbsenceDays Weekends
@@ -39,6 +47,14 @@
 ^ ^ ^ ^
 ^^^^^^^^^^^^^^^ ^ ^^^^^^^^^^^^^^^^ ^
 ^^^^^^^^^^^^^^^ ^ ^^^^^^^^^^^^^^^^ ^
+^
+^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
+^^
+^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
+^^
+
 ^^
 ^^
 ^^
@@ -118,7 +134,7 @@ end.
 .endfields
                                                                                                                                                                                                                                    ▀╗АБ &&
 .begin
-  LineCount := LineCount+1;
+  LineCount++;
   PageNum := PageNum + 1;
 end.
 .}
@@ -136,7 +152,7 @@ end.
 лммммнмммммммммммммммммммнммммммммммнмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьммммммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьмммьммммммнммммьмммммьмммммьммммьммммммьммнмммммммнмммьмммммммнмммммм╧
 .}
 .fields
-
+  // ▐╝╚О ╓╚О ╝╓╜╝А╚╝╘╜╝ё╝ ╒╗╓═
   Npp LogicSubStr(WorkerName, 19, true, true) LogicSubStr(Tabn, 10, true, true) AbsenceDays1 AbsenceHours1
 
   LogicSubStr(WorkerName, 19, true, true) LogicSubStr(Tabn, 10, true, true)
@@ -150,7 +166,30 @@ end.
 
   LogicSubStr(WorkerName, 19, true, true) H01 H02 H03 H04 H05 H06 H07 H08 H09 H10 H11 H12 H13 H14 H15 Hours1 H16 H17 H18 H19 H20 H21 H22 H23 H24 H25 H26 H27 H28 H29 H30 H31 Hours2
   AbsenceDays4 AbsenceHours4
+
+  // ▐╝╚О ╓╚О ╓╒ЦА╚╝╘╜╝ё╝ ╒╗╓═
+  Npp LogicSubStr(WorkerName, 19, true, true) LogicSubStr(Tabn, 10, true, true)
+  L2D01 L2D02 L2D03 L2D04 L2D05 L2D06 L2D07 L2D08 L2D09 L2D10 L2D11 L2D12 L2D13 L2D14 L2D15 L2Days1 L2D16 L2D17 L2D18 L2D19 L2D20 L2D21 L2D22 L2D23 L2D24 L2D25 L2D26 L2D27 L2D28 L2D29 L2D30 L2D31 L2Days2
+  AbsenceDays1 AbsenceHours1
+
+  LogicSubStr(WorkerName, 19, true, true) LogicSubStr(Tabn, 10, true, true)
+
+  LogicSubStr(WorkerName, 19, true, true)
+  L2H01 L2H02 L2H03 L2H04 L2H05 L2H06 L2H07 L2H08 L2H09 L2H10 L2H11 L2H12 L2H13 L2H14 L2H15 L2Hours1 L2H16 L2H17 L2H18 L2H19 L2H20 L2H21 L2H22 L2H23 L2H24 L2H25 L2H26 L2H27 L2H28 L2H29 L2H30 L2H31 L2Hours2
+  AbsenceDays2 AbsenceHours2
+
+  LogicSubStr(WorkerName, 19, true, true) WorkingDays WorkingHours OverworkHours NihgtHours WorkingWeekendHours AbsenceDays Weekends
+
+  LogicSubStr(WorkerName, 19, true, true)
+  D01 D02 D03 D04 D05 D06 D07 D08 D09 D10 D11 D12 D13 D14 D15 Days1 D16 D17 D18 D19 D20 D21 D22 D23 D24 D25 D26 D27 D28 D29 D30 D31 Days2
+  AbsenceDays3 AbsenceHours3
+
+  LogicSubStr(WorkerName, 19, true, true)
+
+  H01 H02 H03 H04 H05 H06 H07 H08 H09 H10 H11 H12 H13 H14 H15 Hours1 H16 H17 H18 H19 H20 H21 H22 H23 H24 H25 H26 H27 H28 H29 H30 H31 Hours2
+  AbsenceDays4 AbsenceHours4
 .endfields
+.{?internal; not UseLayer2;
 ╨&&&&╨@@@@@@@@@@@@@@@@@@@╨@@@@@@@@@@╨   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё      Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё      ╨    Ё     Ё     Ё    Ё      Ё  ╨       ╨@~@Ё&#~&&  ╨      ╨
 ╨    ╨@@@@@@@@@@@@@@@@@@@╨@@@@@@@@@@╨ @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё&#~&&&Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё&#~&&&╨    Ё     Ё     Ё    Ё      Ё  ╨       гдддеддддддд╤      ╨
 ╨    ╨@@@@@@@@@@@@@@@@@@@╨          ╨   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё      Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё      ╨    Ё     Ё     Ё    Ё      Ё  ╨       ╨@~@Ё&#~&&  ╨      ╨
@@ -158,6 +197,16 @@ end.
 ╨    ╨@@@@@@@@@@@@@@@@@@@╨          ╨   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё      Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё      ╨    Ё     Ё     Ё    Ё      Ё  ╨       ╨@~@Ё&#~&&  ╨      ╨
 ╨    ╨@@@@@@@@@@@@@@@@@@@╨          ╨&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&#&&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&#&&.&╨    Ё     Ё     Ё    Ё      Ё  ╨       гдддеддддддд╤      ╨
 ╨    ╨                   ╨          ╨   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё      Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё   Ё      ╨    Ё     Ё     Ё    Ё      Ё  ╨       ╨@~@Ё&#~&&  ╨      ╨
+.}
+.{?internal; UseLayer2; // ╓╒ЦЕА╚╝╘╜К╘ ╒═Ю╗═╜Б
+╨&&&&╨@@@@@@@@@@@@@@@@@@@╨@@@@@@@@@@╨ @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё&#~&&&Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё&#~&&&╨    Ё     Ё     Ё    Ё      Ё  ╨       ╨@~@Ё&#~&&  ╨      ╨
+╨    ╨@@@@@@@@@@@@@@@@@@@╨@@@@@@@@@@гдддедддедддедддедддедддедддедддедддедддедддедддедддедддедддеддддддедддедддедддедддедддедддедддедддедддедддедддедддедддедддедддедддедддддд╤    Ё     Ё     Ё    Ё      Ё  ╨       гдддеддддддд╤      ╨
+╨    ╨@@@@@@@@@@@@@@@@@@@╨          ╨&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&#&&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&#&&.&╨    Ё     Ё     Ё    Ё      Ё  ╨       ╨@~@Ё&#~&&  ╨      ╨
+╨    ╨@@@@@@@@@@@@@@@@@@@╨          гдддедддедддедддедддедддедддедддедддедддедддедддедддедддедддеддддддедддедддедддедддедддедддедддедддедддедддедддедддедддедддедддедддедддддд╤&#&&Ё&#&.&Ё&#&.&Ё&#.&Ё&#&.& Ё  ╨&#&&&& гдддеддддддд╤&#~&&&╨
+╨    ╨@@@@@@@@@@@@@@@@@@@╨          ╨ @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё&#~&&&Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё @@Ё&#~&&&╨    Ё     Ё     Ё    Ё      Ё  ╨       ╨@~@Ё&#~&&  ╨      ╨
+╨    ╨@@@@@@@@@@@@@@@@@@@╨          ╨дддедддедддедддедддедддедддедддедддедддедддедддедддедддедддеддддддедддедддедддедддедддедддедддедддедддедддедддедддедддедддедддедддедддддд╤    Ё     Ё     Ё    Ё      Ё  ╨       гдддеддддддд╤      ╨
+╨    ╨                   ╨          ╨&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&#&&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&.&Ё&#&&.&╨    Ё     Ё     Ё    Ё      Ё  ╨       ╨@~@Ё&#~&&  ╨      ╨
+.}
 .begin
   FirstLine := false;
 end.

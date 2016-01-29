@@ -3,7 +3,8 @@
 Инвентаризационно-расчетная ведомость
 #end
 .AutoForm 'Inv_Vedomost'
-.NameInList "Беларусь.Деноминация(НДС 8,26)"
+.NameInList "Беларусь. Деноминация(НДС 8,26)"
+.group 'Country' subgroup 'Belarus'
 .DEFO LANDSCAPE
 .P 60
 .Var

@@ -316,6 +316,7 @@ MX-20 (Россия)
 #end
 .LinkForm 'MX20_02' prototype is MX20
 .NameInList '2. MX-20 (Россия)'
+.group 'Country' subgroup 'Russia'
 .DEFO LANDSCAPE
 .p 55
 .Set Filler ='-'

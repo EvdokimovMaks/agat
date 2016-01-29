@@ -43,6 +43,10 @@ PassportsGivenBy
 ContractNmb
 ContractDate
 
+ADDRProp
+ADDRReg
+FIOSokr
+
 ДолжнРук
 ФиоРук
 
@@ -76,6 +80,10 @@ PassportsSer                  ^
 PassportsNmb                  ^
 PassportsGivenDate            ^
 PassportsGivenBy              ^
+
+ADDRProp                      ^
+ADDRReg                       ^
+FIOSokr                       ^
 
 ContractNmb                   ^
 ContractDate                  ^

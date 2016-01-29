@@ -9,9 +9,9 @@
 
 Const
   // значения аттрибута "соответствия":
-  lc_KatImpAttr_BudAll = 0;  // соответствия для УБ: XLS и DBF  (все соответствия строковые)
-  lc_KatImpAttr_BudRec = 1;  // соответствия для УБ: только DBF (есть соответствия по NRec)
-  lc_KatImpAttr_GalKAU = 2;  // соответствия для КАУ (только по NRec)
+  lc_KatImpAttr_BudAll : word = 0;  // соответствия для УБ: XLS и DBF  (все соответствия строковые)
+  lc_KatImpAttr_BudRec : word = 1;  // соответствия для УБ: только DBF (есть соответствия по NRec)
+  lc_KatImpAttr_GalKAU : word = 2;  // соответствия для КАУ (только по NRec)
 end;
 
 #endif//__FpKatImp_Inc__

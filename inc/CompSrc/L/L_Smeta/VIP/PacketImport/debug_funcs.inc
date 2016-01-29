@@ -31,7 +31,7 @@ exception
 
     dbgMsg += ''#13#13'Сгенерировать отладочное исключение?';
 
-    if( message( dbgMsg, Error + yesNo  ) = cmYes )
+    if( message( dbgMsg, Confirmation + yesNo  ) = cmYes )
       _raise ExDebugAssert;
   }
 }

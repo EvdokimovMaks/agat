@@ -43,6 +43,10 @@ PassportsGivenBy                        //Кем выдан
 ContractNmb                             //Номер трудового договора
 ContractDate                            //Дата трудового договора
 
+ADDRProp                                //Место прописки
+ADDRReg                                 //Место временной регистрации
+FIOSokr                                 //Фамилия с инициалами
+
 ДолжнРук
 ФиоРук
 
@@ -52,7 +56,7 @@ ContractDate                            //Дата трудового договора
 .{ NformRD50aCycle CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^
-^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^
 .}
 ^ ^
 .endform

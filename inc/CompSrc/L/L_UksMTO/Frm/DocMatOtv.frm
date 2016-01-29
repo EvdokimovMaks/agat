@@ -12,6 +12,8 @@
 .fields
 PassportsNrec   : comp
 PersonsNrec     : comp
+PersonsFullAddr
+DogMatOtv
 DocNum
 City
 DocDate
@@ -35,6 +37,8 @@ PsnFIO1
 
 PassportsNrec   ^
 PersonsNrec     ^
+PersonsFullAddr ^
+DogMatOtv       ^
 DocNum          ^
 City            ^
 DocDate         ^

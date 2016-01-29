@@ -39,6 +39,11 @@ Const
   nAlg_wGroup    = 22;// группировка
   nAlg_dDocCl    = 23;// планируемая дата погашения ФОП
   nAlg_doSummaCl = 24;// сумма ФОП
+  nAlg_wMeanType = 25;// Тип платежного средства
+  nAlg_cPlatMean = 26;// Платежное средство
+  nAlg_wPlatDoc  = 27;// Тип документа
+  nAlg_cPerson   = 28;// подотчетное лицо
+  nAlg_cGroup    = 29;// группа ФОБ
 
   // поля интерфейса групповой модификации
   cgGrPos_Descr     = 0;
@@ -62,9 +67,12 @@ Const
   cgGrPos_cPurpose  = 17;
   cgGrPos_wComment  = 18;
   cgGrPos_cNalog    = 19;
-  cgGrPos_wCurse    = 20;
-  cgGrPos_wVidPlat  = 21;
-  cgGrPos_cGroupOFP = 22;
+  cgGrPos_wMeanType = 20;
+  cgGrPos_cPlatMean = 21;
+  cgGrPos_wPlatDoc  = 22;
+  cgGrPos_wCurse    = 23;
+  cgGrPos_wVidPlat  = 24;
+  cgGrPos_cGroup    = 25;
 
   // поля интерфейса формирования ФОБ на основании ПД
   cgBySHPos_Descr     = 0;
@@ -83,7 +91,7 @@ Const
   cgBySHPos_cCurator  = 13;
   cgBySHPos_cPurpose  = 14;
   cgBySHPos_wComment  = 15;
-  cgBySHPos_cGroupOFP = 16;
+  cgBySHPos_cGroup    = 16;
   cgBySHPos_cAktSum   = 17;
 
   // parMode
@@ -133,6 +141,9 @@ Const
   wAlgDate_DocReq_dDoc_AddAgeOrg   = 36;   // дата формирования заявки + максимальный возраст задолженности по контрагенту
   wAlgDate_DocReq_dBegPl_AddAgeOrg = 37;   // первоначальная дата погашения заявки + максимальный возраст задолженности по контрагенту
   wAlgDate_AktOfp_dValCurse        = 38;   // дата курса ФОБ
+  wAlgDate_GrafKred_dDoc           = 39;   // дата ЭПГ
+  wAlgDate_GrafKred_dOpl           = 40;   // срок платежа по кредиту
+  wAlgDate_BaseDoc_dSopr_AddDayPl  = 41;   // дата накладной + количество дней отсрочки
   // DOUBLE ( 100 - 199 )
   wAlgSumma_DocReq_Summa           = 100;  // Сумма заявки
   wAlgSumma_BaseDoc_Summa          = 101;  // Сумма по ДО
@@ -155,8 +166,10 @@ Const
   wAlgSumma_DocReq_ByMaxSumma      = 119;  // Сумма заявке по максимальной сумме
   wAlgSumma_DocReq_ByReqSumma      = 120;  // Максимальная сумма заявки по сумме
   wAlgSumma_AktOfp_SumClearing     = 121;  // Сумма финансовых операций
-  // 121 свободно
   wAlgSumma_SoprHoz_toAlloc        = 122;  // сумма к распределению по ХО
+  wAlgSumma_GrafKred_Summa         = 123;  // Сумма по ЭПГ
+  wAlgSumma_BaseDoc_NoOpl          = 124;  // Остаток к исполнению по
+  wAlgSumma_DocReq_NoOpl           = 125;  // Остаток к исполнению по договору
   // COMP ( 200 - 299 )
   wAlgRef_Def_CO                   = 200;  // ЦО по умолчанию (из настройки)
   wAlgRef_Def_Person               = 201;  // Куратор по умолчанию
@@ -221,6 +234,26 @@ Const
   wAlgRef_PlPor_NamePlat4          = 260;  // назначения платежа 4
   wAlgRef_PlPor_NamePlat5          = 261;  // назначения платежа 5
   wAlgRef_PlPor_NamePlat6          = 262;  // назначения платежа 6
+  wAlgRef_GrafKred_Creditor        = 263;  // кредитор
+  wAlgRef_GrafKred_CredBank        = 264;  // банк кредитора
+  wAlgRef_GrafKred_Zaemschik       = 265;  // заемщик
+  wAlgRef_GrafKred_ZaemBank        = 266;  // банк заемщика
+  wAlgRef_GrafKred_Org             = 267;  // контрагент
+  wAlgRef_GrafKred_Bank            = 268;  // банк контрагента
+  wAlgRef_Buh_Kassa                = 269;  // Рабочая касса
+  wAlgRef_Buh_Account              = 270;  // Рабочий расчетный счет
+  wAlgRef_Buh_AccountVal           = 271;  // Рабочий валютный счет
+  wAlgRef_Fin_Kassa_Rashod         = 272;  // касса по умолчанию (расход)
+  wAlgRef_Fin_Kassa_Prihod         = 273;  // касса по умолчанию (приход)
+  wAlgRef_Fin_Account_Rashod       = 274;  // расчетный счет по умолчанию (расход)
+  wAlgRef_Fin_Account_Prihod       = 275;  // расчетный счет по умолчанию (приход)
+  wAlgRef_Fin_AccountVal_Rashod    = 276;  // валютный счет по умолчанию (расход)
+  wAlgRef_Fin_AccountVal_Prihod    = 277;  // валютный счет по умолчанию (приход)
+  wAlgRef_DocReq_PlatMean          = 278;  // платежное средство по заявке
+  wAlgRef_BaseDoc_PlatMean         = 279;  // платежное средство по ДО
+  wAlgRef_Def_Group                = 280;  // группа ФОБ по умолчанию
+  wAlgRef_Def_AktOfp_Bank          = 281;  // банк по умолчанию
+  wAlgRef_Def_DocReq_Bank          = 282;  // банк по умолчанию
   // WORD ( 300 - 399 )
   wAlgWord_Def_Vid_Avans           = 300;  // явно - аванс
   wAlgWord_Def_Vid_Fakt            = 301;  // явно - факт
@@ -258,6 +291,60 @@ Const
   wAlgWord_KatOrg                  = 333;  // по контрагенту
   wAlgWord_Dogovor                 = 334;  // по договору
   wAlgWord_PKP                     = 335;  // по ПКП
+  wAlgWord_MeanType_Kassa          = 336;  // Наличные деньги в кассе
+  wAlgWord_MeanType_Account        = 337;  // Безналичные деньги на расчетном счете
+  wAlgWord_MeanType_AccountVal     = 338;  // Безналичные деньги на валютном расчетном счете
+  wAlgWord_MeanType_Security       = 339;  // Ценные бумаги
+  wAlgWord_MeanType_Veksl          = 340;  // Векселя
+  wAlgWord_MeanType_Aviso          = 341;  // Авизо
+  wAlgWord_PlatDoc_0007            = 342;  // Приходный кассовый ордер
+  wAlgWord_PlatDoc_0008            = 343;  // Расходный кассовый ордер
+  wAlgWord_PlatDoc_0009            = 344;  // Авансовый отчет
+  wAlgWord_PlatDoc_0017            = 345;  // Валютный приходный кассовый ордер
+  wAlgWord_PlatDoc_0018            = 346;  // Валютный расходный кассовый ордер
+  wAlgWord_PlatDoc_0010            = 347;  // Бухгалтерская справка
+  wAlgWord_PlatDoc_0001            = 348;  // Собственное платежное поручение
+  wAlgWord_PlatDoc_0002            = 349;  // Стороннее платежное поручение
+  wAlgWord_PlatDoc_0003            = 350;  // Инкассовое поручение
+  wAlgWord_PlatDoc_0004            = 351;  // Собственное заявление на аккредитив
+  wAlgWord_PlatDoc_0005            = 352;  // Собственное заявление об отказе от акцепта
+  wAlgWord_PlatDoc_0006            = 353;  // Реестр чеков
+  wAlgWord_PlatDoc_0011            = 354;  // Собственное платежное требование-поручение
+  wAlgWord_PlatDoc_0030            = 355;  // Собственный реестр счетов
+  wAlgWord_PlatDoc_0032            = 356;  // Собственное платежное требование
+  wAlgWord_PlatDoc_0037            = 357;  // Налоговое платежное поручение
+  wAlgWord_PlatDoc_1004            = 358;  // Стороннее заявление на аккредитив
+  wAlgWord_PlatDoc_1005            = 359;  // Стороннее заявление об отказе от акцепта
+  wAlgWord_PlatDoc_1011            = 360;  // Стороннее платежное требование-поручение
+  wAlgWord_PlatDoc_1030            = 361;  // Сторонний реестр счетов
+  wAlgWord_PlatDoc_1032            = 362;  // Стороннее платежное требование
+  wAlgWord_PlatDoc_0027            = 363;  // Реестр распределения валюты
+  wAlgWord_PlatDoc_0031            = 364;  // Собственное валютное платежное поручение
+  wAlgWord_PlatDoc_0033            = 365;  // Стороннее валютное платежное поручение
+  wAlgWord_PlatDoc_0044            = 366;  // Собственное валютное заявление на аккредитив
+  wAlgWord_PlatDoc_1044            = 367;  // Стороннее валютное заявление на аккредитив
+  wAlgWord_PlatDoc_0021            = 368;  // Исходящее авизо
+  wAlgWord_PlatDoc_0022            = 369;  // Входящее авизо
+  wAlgWord_PlatDoc_0038            = 370;  // Исходящее налоговое авизо
+  wAlgWord_PlatDoc_0039            = 371;  // Входящее налоговое авизо
+  wAlgWord_PlatDoc_0081            = 372;  // Акт на передачу векселей
+  wAlgWord_PlatDoc_0082            = 373;  // Акт на гашение собственных векселей
+  wAlgWord_PlatDoc_0083            = 374;  // Акт на гашение сторонних векселей
+  wAlgWord_PlatDoc_0084            = 375;  // Акт на получение векселей
+  wAlgWord_PlatDoc_0085            = 376;  // Акт на передачу ценных бумаг
+  wAlgWord_PlatDoc_0086            = 377;  // Акт на гашение собственных ценных бумаг
+  wAlgWord_PlatDoc_0087            = 378;  // Акт на гашение сторонних ценных бумаг
+  wAlgWord_PlatDoc_0088            = 379;  // Акт на получение ценных бумаг
+  wAlgWord_Fin_Kassa_Rashod        = 380;  // кассовый документ по умолчанию (расход)
+  wAlgWord_Fin_Kassa_Prihod        = 381;  // кассовый документ по умолчанию (приход)
+  wAlgWord_Fin_Account_Rashod      = 382;  // документ по умолчанию (расход)
+  wAlgWord_Fin_Account_Prihod      = 383;  // документ по умолчанию (приход)
+  wAlgWord_Fin_AccountVal_Rashod   = 384;  // валютный документ по умолчанию (расход)
+  wAlgWord_Fin_AccountVal_Prihod   = 385;  // валютный документ по умолчанию (приход)
+  wAlgWord_Def_MeanType            = 386;  // тип платежного средства по умолчанию
+  wAlgWord_DocReq_MeanType         = 387;  // тип платежного средства по заявке
+  wAlgWord_DocReq_PlatDoc          = 388;  // тип документа по заявке
+  wAlgWord_BaseDoc_MeanType        = 389;  // тип платежного средства по ДО
   // шаблоны для настройки ( 400 - 499 )
   wAlgDate_Manual_Date             = 400;  // дата документа явно
   wAlgSumm_Manual_Summa            = 401;  // сумма явно
@@ -292,6 +379,8 @@ Const
   wAlgRef_Manual_Nalog             = 431;  // явно из каталога групп налогов
   wAlgDate_Manual_Curse            = 432;  // явно дата курса
   wAlgRef_Oborot_Soot_StBud        = 433;  // разноска по статьям бюджета из оборотов, через каталог соответствий
+  wAlgRef_Manual_PlatMean          = 434;  // явно платежное средство
+  wAlgRef_Manual_Group             = 435;  // явно группа ФОБ
   // настраиваемые алгоритмы
   wNumAlg_Nastr_min      = 1000;
   wNumAlg_Nastr_max      = 4999;

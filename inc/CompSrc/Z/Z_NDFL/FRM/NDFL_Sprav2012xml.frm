@@ -248,6 +248,8 @@ end.
   „ β ‚λ¤ η¨“Ά¥¤
   ¥¬‚λ¤ ­®“Ά¥¤
 .endfields
+.{ Info_DiscountSoc_Cycle_2NDFL CheckEnter
+.}
 .{ Info_Discount_Cycle_2NDFL CheckEnter
 .{?INTERNAL; (trim(®¬¥ΰ“Ά¥¤¬‚λη) <> '') or (trim(„ β ‚λ¤ η¨“Ά¥¤) <> '') or (trim(¥¬‚λ¤ ­®“Ά¥¤) <> '')
         <“Ά¥¤¬γι‚λη ®¬¥ΰ“Ά¥¤="^" „ β “Ά¥¤="^"  ”‘“Ά¥¤="^"></“Ά¥¤¬γι‚λη>
@@ -279,6 +281,8 @@ end.
          «¥ΰ¥η¨α«="^"
          «“¤¥ΰ¦‹¨θ="^"  «¥“¤¥ΰ¦="^"/>
     </‘Ά¥¤„®ε>
+.{ Info_DiscountAvPlat_Cycle_2NDFL CheckEnter
+.}
 .}
   </„®ªγ¬¥­β>
 .}

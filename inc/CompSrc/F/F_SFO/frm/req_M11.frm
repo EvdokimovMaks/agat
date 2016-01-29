@@ -58,6 +58,7 @@
   TotSum : Double
 .EndVar
 .Fields
+ 'true' : 's'
  CommonFormHeader
  dNumber  Tire  CurP
  MyOrgName
@@ -78,12 +79,6 @@
 .endFields
 .{
 #include MBP_M11R.frn
-.{?Internal;(KolDoc = True);
-.Fields
-  'true' : 's'
-.endFields
-^
-.}
 .}
 .endForm
 
@@ -100,6 +95,7 @@
   TotSum : Double
 .endvar
 .Fields
+ 'true' : 's'
  CommonFormHeader
  MyOrgName
  dNumber
@@ -122,12 +118,6 @@
 .endFields
 .{
 #include MBP_M11P.frn
-.{?Internal;(KolDoc = True);
-.Fields
-  'true' : 's'
-.endFields
-^
-.}
 .}
 .endForm
 

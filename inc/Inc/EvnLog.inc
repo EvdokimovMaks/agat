@@ -113,11 +113,13 @@
    eoAlg272   = 132;
    eoAlg134   = 134;
 	 eoAlg139   = 139;
+   eoAlg140   = 140;
 	 eoAlg145   = 145;
    eoAlg165   = 165;
    eoAlg167   = 167;
    eoAlg150   = 150;
 	 eoAlg151   = 151;
+     eoAlg154   = 154;
 	 eoAlg161   = 161;
 	 eoAlg162   = 162;
 	 eoAlg163   = 163;
@@ -127,6 +129,7 @@
    eoAlg171   = 171;
    eoAlg172   = 172;
    eoAlg180   = 180;
+   eoAlg182   = 182;
    eoAlg226   = 226;
 // для спецификаций продуктов (251..350):
    eoBOMCheck  = 251;

@@ -1,8 +1,9 @@
 //------------------------------------------------------------------------------
-//                                           (c) Є®аЇ®а жЁп ѓЂ‹ЂЉ’€ЉЂ
-// ‚ҐабЁп     : 7.12
+//                                                      (c) Є®аЇ®а жЁп ѓ « ЄвЁЄ 
+// ѓ « ЄвЁЄ  ERP 7.12 - “Їа ў«Ґ­ЁҐ ЇҐаб®­ «®¬
 // ”®а¬  ¤«п ®вЇа ўЄЁ ЇЁбм¬  б б®ЎлвЁп¬Ё бЁбвҐ¬л
 //------------------------------------------------------------------------------
+
 #doc
 ”®а¬  ¤«п ®вЇа ўЄЁ ЇЁбм¬  б б®ЎлвЁп¬Ё бЁбвҐ¬л
 #end
@@ -24,7 +25,6 @@ end.
 
 
 .LINKFORM "HTML_Event_mail" PROTOTYPE IS MailEvent_Form
-!.group "HTML_Event_mail"
 .Fields
 FIO
 TabNmb
@@ -32,28 +32,36 @@ Date_Ev
 Message
 .EndFields
 
-<STYLE></STYLE>
+<html>
+  <head>
+    <meta charset="Windows-1251" />
+    <style>
+      table { border-collapse: collapse; padding: 5px;}
+      th { background-color: silver; }
+      td, th { border: 1px solid black; }
+    </style>
+  </head>
 
-<META content="MSHTML 6.00.2600.0" name=Events></HEAD>
-<BODY>
-<TABLE width="100%" background="" border=1>
-  <TBODY>
-  <TR bgColor=gray>
-    <TD vAlign=top align=middle>
-      <H5>”€Ћ</H5></TD>
-    <TD vAlign=top align=middle>
-      <H5>’ Ў.­®¬Ґа</H5></TD>
-    <TD vAlign=top align=middle>
-      <H5>„ в </H5></TD>
-    <TD vAlign=top align=middle>
-      <H5>‘®®ЎйҐ­ЁҐ</H5></TD>
+  <body>
+    <table>
+      <tbody>
+        <tr>
+          <th>ФИО</th>
+          <th>Таб. номер</th>
+          <th>Дата</th>
+          <th>Сообщение</th>
+        </tr>
 
 .{ MailEvent_FormCycle CheckEnter
-  <TR>
-    <TD vAlign=top align=left>^ </TD>
-    <TD vAlign=top align=left>^ </TD>
-    <TD vAlign=top align=left>^ </TD>
-    <TD vAlign=top align=left>^ </TD>
+        <tr>
+          <td>^</td>
+          <td>^</td>
+          <td>^</td>
+          <td>^</td>
+        </tr>
 .}
-    </TR></TBODY></TABLE></BODY></HTML>
+      </tbody>
+    </table>
+  </body>
+</html>
 .endform

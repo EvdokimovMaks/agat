@@ -260,12 +260,12 @@ begin
      Exit;
    }
   else
-    FSRoundRub := FRoundRub5(s);   //округление как в прайс-листах
+    FSRoundRub := FRoundRubRozn(s);   //округление как в прайс-листах
 end.
 
 .Function FSRoundVal(var s:double) : double;
 begin
- FSRoundVal := FRoundVal5(s);
+ FSRoundVal := FRoundValRozn(s);
 end.
 
 !*****************************************************************************

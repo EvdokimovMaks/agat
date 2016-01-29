@@ -12,7 +12,7 @@
 .hide
 .fields
   FPodr FOrg FState FCity FD1 FD2 FStatus
-  D_doc
+  D_doc : date
   N_Doc
   State
   City

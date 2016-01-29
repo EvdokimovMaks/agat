@@ -112,6 +112,7 @@
 .linkform 'SprInvDK_2' prototype is 'SprInvDK'
 .NameInList 'Справка к акту инвентаризации расчетов с контрагентами'
 .group 'Для Беларуси'
+.Group 'Country' subGroup 'Belarus'
 .defo landscape
 .fields
   Akt_Nomer
@@ -162,6 +163,7 @@
 .linkform 'SprInvDK_3' prototype is 'SprInvDK'
 .NameInList 'Справка к акту инвентаризации расчетов с контрагентами в валюте договора'
 .group 'Для Беларуси в валюте'
+.Group 'Country' subGroup 'Belarus'
 .defo landscape
 .fields
   Akt_Nomer
@@ -227,6 +229,20 @@
   SumOrg    : Double
   SumOrg_Pr : Double
   Val_Org
+  // Новая группировка
+  Group_Name
+  Group_Sum    : double
+  Group_Sum_Pr : double
+  Group_Dat
+  Group_Val
+
+  GroupOrg_NPP
+  GroupOrg_Unn
+  GroupOrg_Name
+  GroupOrg_Sum    : double
+  GroupOrg_Sum_Pr : double
+  GroupOrg_Dat
+  GroupOrg_Val
   // Договор
   NameDogovor
   SumDogovor    : Double
@@ -266,6 +282,12 @@
 .end
 .{ CheckEnter Loop_Org
 .{ CheckEnter Loop_ValOrg
+^ ^ ^ ^ ^ ^ ^
+.}
+.{ CheckEnter Loop_ValGr
+^ ^ ^ ^ ^
+.}
+.{ CheckEnter Loop_ValGr_Org
 ^ ^ ^ ^ ^ ^ ^
 .}
 .{ CheckEnter Loop_Dogovor
@@ -356,6 +378,19 @@
   NameOrg
   SumOrg
   SumOrg_Pr
+
+  Group_Name
+  Group_Sum
+  Group_Sum_Pr
+  Group_Dat
+
+  GroupOrg_NPP
+  GroupOrg_Unn
+  GroupOrg_Name
+  GroupOrg_Sum
+  GroupOrg_Sum_Pr
+  GroupOrg_Dat
+
   NameDogovor
   SumDogovor
   SumDogovor_Pr
@@ -367,6 +402,12 @@
 .{ CheckEnter Loop_Org
 .{ CheckEnter Loop_ValOrg
  С@~@@@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&&&.&&& &'#&&&&&&&&&&&&&&.&&& С
+.}
+.{ CheckEnter Loop_ValGr
+ С@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&&&.&&& &'#&&&&&&&&&&&&&&.&&& @~@@@@@@@@@@@ С
+.}
+.{ CheckEnter Loop_ValGr_Org
+ С@~@@@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&&&.&&& &'#&&&&&&&&&&&&&&.&&& @~@@@@@@@@@@@ С
 .}
 .{ CheckEnter Loop_Dogovor
  Р                           @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&&&.&&& &'#&&&&&&&&&&&&&&.&&& @~@@@@@@@@@@@ Р
@@ -470,6 +511,19 @@ end.
   NameOrg
   SumOrg
   SumOrg_Pr
+
+  Group_Name
+  Group_Sum
+  Group_Sum_Pr
+  Group_Dat
+
+  GroupOrg_NPP
+  GroupOrg_Unn
+  GroupOrg_Name
+  GroupOrg_Sum
+  GroupOrg_Sum_Pr
+  GroupOrg_Dat
+
   NameDogovor
   SumDogovor
   SumDogovor_Pr
@@ -488,6 +542,12 @@ end.
 .{ CheckEnter Loop_Org
 .{ CheckEnter Loop_ValOrg
  Щ@~@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& Щ
+.}
+.{ CheckEnter Loop_ValGr
+ Щ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& @~@@@@@@@@@@@ Щ
+.}
+.{ CheckEnter Loop_ValGr_Org
+ Щ@~@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& @~@@@@@@@@@@@ Щ
 .}
 .{ CheckEnter Loop_Dogovor
  Ш                         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& @~@@@@@@@@@@@ Ш
@@ -591,11 +651,25 @@ end.
 .end
 .fields
   Gr_Name
+
   NPPOrg
   INNOrg
   NameOrg
   SumOrg * EdIzmSum
   SumOrg_Pr * EdIzmSum
+
+  Group_Name
+  Group_Sum * EdIzmSum
+  Group_Sum_Pr * EdIzmSum
+  Group_Dat
+
+  GroupOrg_NPP
+  GroupOrg_Unn
+  GroupOrg_Name
+  GroupOrg_Sum * EdIzmSum
+  GroupOrg_Sum_Pr * EdIzmSum
+  GroupOrg_Dat
+
   NameDogovor
   SumDogovor * EdIzmSum
   SumDogovor_Pr * EdIzmSum
@@ -615,6 +689,13 @@ end.
 .{ CheckEnter Loop_ValOrg
  Щ@~@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& Щ
 .}
+.{ CheckEnter Loop_ValGr
+ Щ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& @~@@@@@@@@@@@ Щ
+.}
+.{ CheckEnter Loop_ValGr_Org
+ Щ@~@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& @~@@@@@@@@@@@ Щ
+.}
+
 .{ CheckEnter Loop_Dogovor
  Ш                         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& @~@@@@@@@@@@@ Ш
 .{ CheckEnter Loop_Doc
@@ -718,6 +799,21 @@ end.
   SumOrg
   SumOrg_Pr
   Val_Org
+
+  Group_Name
+  Group_Sum
+  Group_Sum_Pr
+  Group_Dat
+  Group_Val
+
+  GroupOrg_NPP
+  GroupOrg_Unn
+  GroupOrg_Name
+  GroupOrg_Sum
+  GroupOrg_Sum_Pr
+  GroupOrg_Dat
+  GroupOrg_Val
+
   NameDogovor
   SumDogovor
   SumDogovor_Pr
@@ -730,6 +826,12 @@ end.
 .{ CheckEnter Loop_Org
 .{ CheckEnter Loop_ValOrg
  С@~@@@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&&&.&&& &'#&&&&&&&&&&&&&&.&&&               @~@@@ С
+.}
+.{ CheckEnter Loop_ValGr
+ С@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&&&.&&& &'#&&&&&&&&&&&&&&.&&& @~@@@@@@@@@@@ @~@@@ С
+.}
+.{ CheckEnter Loop_ValGr_Org
+ С@~@@@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&&&.&&& &'#&&&&&&&&&&&&&&.&&& @~@@@@@@@@@@@ @~@@@ С
 .}
 .{ CheckEnter Loop_Dogovor
  Р                           @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&&&.&&& &'#&&&&&&&&&&&&&&.&&& @~@@@@@@@@@@@ @~@@@ Р
@@ -832,6 +934,21 @@ end.
   SumOrg
   SumOrg_Pr
   Val_Org
+
+  Group_Name
+  Group_Sum
+  Group_Sum_Pr
+  Group_Dat
+  Group_Val
+
+  GroupOrg_NPP
+  GroupOrg_Unn
+  GroupOrg_Name
+  GroupOrg_Sum
+  GroupOrg_Sum_Pr
+  GroupOrg_Dat
+  GroupOrg_Val
+
   NameDogovor
   SumDogovor
   SumDogovor_Pr
@@ -852,6 +969,12 @@ end.
 .{ CheckEnter Loop_Org
 .{ CheckEnter Loop_ValOrg
  Щ@~@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&&               @~@@@ Щ
+.}
+.{ CheckEnter Loop_ValGr
+ Щ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& @~@@@@@@@@@@@ @~@@@ Щ
+.}
+.{ CheckEnter Loop_ValGr_Org
+ Щ@~@@@ @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& @~@@@@@@@@@@@ @~@@@ Щ
 .}
 .{ CheckEnter Loop_Dogovor
  Ш                         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'#&&&&&&&&&&&&.&& &'#&&&&&&&&&&&&&.&& @~@@@@@@@@@@@ @~@@@ Ш

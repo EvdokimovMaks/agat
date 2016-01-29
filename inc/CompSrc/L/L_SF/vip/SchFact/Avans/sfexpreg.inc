@@ -33,15 +33,16 @@ and KatSopr.NRec == AttrVal#I_.cRec
 and g_cAttr#I_   == AttrVal#I_.cAttrNam
 #end
 
-#define tuneName     UserDeskRep.RepName
+#define tuneName      UserDeskRep.RepName
 
-#define wordExpRegim UserDeskRep.ResWord[1]
-#define wordExpDoc   UserDeskRep.ResWord[2]
-#define wordDocFilt1 UserDeskRep.ResWord[3]
-#define wordDocFilt2 UserDeskRep.ResWord[4]
+#define wordExpRegim  UserDeskRep.ResWord[1]
+#define wordExpDoc    UserDeskRep.ResWord[2]
+#define wordDocFilt1  UserDeskRep.ResWord[3]
+#define wordDocFilt2  UserDeskRep.ResWord[4]
+#define wordNewTypeBK UserDeskRep.ResWord[5]
 
-#define DateDocBeg   UserDeskRep.ResDate[1]
-#define DateDocEnd   UserDeskRep.ResDate[2]
+#define DateDocBeg    UserDeskRep.ResDate[1]
+#define DateDocEnd    UserDeskRep.ResDate[2]
 
-#define compStatusIn UserDeskRep.ResComp[1]
-#define compStatusTo UserDeskRep.ResComp[2]
+#define compStatusIn  UserDeskRep.ResComp[1]
+#define compStatusTo  UserDeskRep.ResComp[2]

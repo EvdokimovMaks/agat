@@ -206,3 +206,10 @@
   csUp    = 1;
 // сортировка по убыванию
   csDown  = -1;
+
+
+// значения для функции OpenLink
+  cgOpenLinkDefault       =  0; //Браузер по умолчанию из операционной системы 
+  cgOpenLinkChromeifSetup =  1; //Браузер Chrome если нет, то Internet Explorer
+  cgOpenLinkOnlyChrome    =  2; //Только браузер Chrome
+  cgOpenLinkOnlyIE        =  3; //Только браузер Internet Explorer

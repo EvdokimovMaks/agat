@@ -63,6 +63,11 @@ usl_2
 usl_3
 usl_4
 
+OsobUslCode
+KPSCode
+PodklassUslTruda
+TerUslCode
+
 ind1
 ind2
 adr1
@@ -134,6 +139,11 @@ usl_1                    ^
 usl_2                    ^
 usl_3                    ^
 usl_4                    ^
+
+OsobUslCode              ^
+KPSCode                  ^
+PodklassUslTruda         ^
+TerUslCode               ^
 
 ind1                     ^
 ind2                     ^

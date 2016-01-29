@@ -43,7 +43,7 @@ Table STRUCT SDocBuf "Буфер для формирования шапки документа"
   cVidDog       : comp       "Ссылка на вид договора",
   Direct        : word       "0-внут операция,1 - продажа,2 - закупка", // CalPlan.DirectMC
                              // KatSopr.TipSopr=2 - Direct=1 - Отпуск товаров и услуг
-                             // KatSopr.TipSopr=1 - Direct=2 - Прием товаров и услуг
+                             // KatSopr.TipSopr=1 - Direct=2 - Прием  товаров и услуг
   DirectPlat    : word       "Направление платежей",
 !  cNoteSource   : comp       "ссылка на статус формирующего документа", // для контроля остатков
   Status        : word       "статус",
@@ -57,7 +57,7 @@ Table STRUCT SDocBuf "Буфер для формирования шапки документа"
   dForm         : date       "дата формирования", // CalPlan.dInput,Dogovor.dInput
   //dPrice        : date       "дата курса цен",
   dValCurse     : date       "Дата курса валюты",
-  ValCurse      : double     "курс валюты для вал-руб ДО",
+  ValCurse      : #TSumma    "курс валюты для вал-руб ДО",
   // если задан ValCurse, то и dValCurse ДОЛЖЕН быть корректным !!
   DopProc       : double     "доп.процент к курсу для вал-руб док-осн",
 

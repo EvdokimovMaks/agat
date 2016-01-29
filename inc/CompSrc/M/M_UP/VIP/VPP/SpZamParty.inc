@@ -26,7 +26,11 @@ const
 	cntFlag220_CopyAnlMC_for_Party   =   00010000000000000000000b;
   cntFlag220_ZamenaErrGP           =   00100000000000000000000b;
   cntFlag220_DoubleTTPossibleZam   =   01000000000000000000000b;
-  cntFlag220_Flt_Atribute_Value   =   10000000000000000000000b;
+end;
+
+const
+  cntFlag220_Flt_Atribute_Value    =   00000000000000000000001b;
+  cntFlag220_Flt_KaReason          =   00000000000000000000010b;
 end;
 
 const
@@ -147,33 +151,50 @@ const
 end;
 
 const
+	cnt220_TTNaZamenu_Flag_Use_for_Calc    = 0;
+	cnt220_TTNaZamenu_Flag_Use_for_Calc_NO = 1;
+end
+
+const
  cnt_NameMarker_ForAvtoRan_Alg23 = 'AutoRunAlg23';
  cntList_SpMnPlan_ForAvtoRan     = 'List_SpMnPlan';
 end;
 
+const
+ cnt_ZamRes_Flt_Attr_FixVal         = 0;
+ cnt_ZamRes_Flt_Attr_OtpuskKatPodr  = 1;
+ cnt_ZamRes_Flt_Attr_PriemKatPodr   = 2;
+end;
+
 const                                                    //0001001001001001b
- cnt220_CodErr_FlagUse_VarZam_Net_SpDoc_VarZam           = 0000000000000000001b;
- cnt220_CodErr_FlagUse_VarZam_Net_DelAddSpDoc_VarZam     = 0000000000000000010b;
- cnt220_CodErr_FlagUse_VarZam_Period                     = 0000000000000000100b;
- cnt220_CodErr_FlagUse_VarZam_NoteBene_State_Err         = 0000000000000001000b;
- cnt220_CodErr_FlagUse_VarZam_Equal_MCNeedZam_MCNaZam    = 0000000000000010000b;
- cnt220_CodErr_FlagUse_VarZam_UnCorrect_RspGP            = 0000000000000100000b;
- cnt220_CodErr_FlagUse_VarZam_NFind_SpDocsMC_in_VarZam   = 0000000000001000000b;
- cnt220_CodErr_FlagUse_VarZam_NFind_DelMC_in_ListNeedZam = 0000000000010000000b;
- cnt220_CodErr_FlagUse_VarZam_NFind_DelMC_in_SpDocs      = 0000000000100000000b;
- cnt220_CodErr_FlagUse_VarZam_OverLim_AktZam             = 0000000001000000000b;
- cnt220_CodErr_FlagUse_VarZam_OverLim_DO                 = 0000000010000000000b;
- cnt220_CodErr_FlagUse_VarZam_OstLim_DO_Zero             = 0000000100000000000b;
- cnt220_CodErr_FlagUse_VarZam_NeedKol_WasZam_All         = 0000001000000000000b;
- cnt220_CodErr_FlagUse_VarZam_NoFind_MC_NaZamenu         = 0000010000000000000b;
- cnt220_CodErr_FlagUse_VarZam_NFind_GP_in_Rsp            = 0000100000000000000b;
- cnt220_CodErr_FlagUse_VarZam_RoundSvOst_Zero            = 0001000000000000000b;
- cnt220_CodErr_FlagUse_VarZam_RoundKol_Zero              = 0010000000000000000b;
- cnt220_CodErr_FlagUse_VarZam_Atribute_Value             = 0100000000000000000b;
+ cnt220_CodErr_FlagUse_VarZam_Net_SpDoc_VarZam           = 00000000000000000001b;
+ cnt220_CodErr_FlagUse_VarZam_Net_DelAddSpDoc_VarZam     = 00000000000000000010b;
+ cnt220_CodErr_FlagUse_VarZam_Period                     = 00000000000000000100b;
+ cnt220_CodErr_FlagUse_VarZam_NoteBene_State_Err         = 00000000000000001000b;
+ cnt220_CodErr_FlagUse_VarZam_Equal_MCNeedZam_MCNaZam    = 00000000000000010000b;
+ cnt220_CodErr_FlagUse_VarZam_UnCorrect_RspGP            = 00000000000000100000b;
+ cnt220_CodErr_FlagUse_VarZam_NFind_SpDocsMC_in_VarZam   = 00000000000001000000b;
+ cnt220_CodErr_FlagUse_VarZam_NFind_DelMC_in_ListNeedZam = 00000000000010000000b;
+ cnt220_CodErr_FlagUse_VarZam_NFind_DelMC_in_SpDocs      = 00000000000100000000b;
+ cnt220_CodErr_FlagUse_VarZam_OverLim_AktZam             = 00000000001000000000b;
+ cnt220_CodErr_FlagUse_VarZam_OverLim_DO                 = 00000000010000000000b;
+ cnt220_CodErr_FlagUse_VarZam_OstLim_DO_Zero             = 00000000100000000000b;
+ cnt220_CodErr_FlagUse_VarZam_NeedKol_WasZam_All         = 00000001000000000000b;
+ cnt220_CodErr_FlagUse_VarZam_NoFind_MC_NaZamenu         = 00000010000000000000b;
+ cnt220_CodErr_FlagUse_VarZam_NFind_GP_in_Rsp            = 00000100000000000000b;
+ cnt220_CodErr_FlagUse_VarZam_RoundSvOst_Zero            = 00001000000000000000b;
+ cnt220_CodErr_FlagUse_VarZam_RoundKol_Zero              = 00010000000000000000b;
+ cnt220_CodErr_FlagUse_VarZam_Atribute_Value             = 00100000000000000000b;
+ cnt220_CodErr_FlagUse_VarZam_KatMC_cAnVal               = 01000000000000000000b;
+ cnt220_CodErr_FlagUse_VarZam_KaReason                   = 10000000000000000000b;
 end;
 
 const
  cntHistZam_Flags_Storno = 000000001b;
+end;
+
+const
+ cntAlg220_NameMarker_KaReason = 'Alg220_NameMarker_KaReason';
 end;
 
 #endif

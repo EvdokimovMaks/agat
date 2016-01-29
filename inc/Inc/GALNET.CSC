@@ -162,6 +162,7 @@ sciMBP1Esc        =  6953;
 sciMBP1EscIns     =  6954;
 sciMBP13EscIns    = 16992;
 sciMBP178EnEsc    =  6955;
+sciMBP178EnIns    = 16984;
 sciMBP178EscIns   = 16993;
 sciMBP1378EscIns  = 16994;
 
@@ -287,6 +288,9 @@ sci14PM           =  9038;
 sci14InsPM        =  9039;
 sci13478EnEscTreeI = 9040;
 sci178EnFiltrIns  =  9041;
+
+sci13478EscTreePlus= 9042;
+sci1478EscTreePlus = 9045;
 
 sct1347           =  7000;
 sct1347Esc        =  7001;
@@ -481,10 +485,12 @@ sci1378EscExTree_InsLevelMark = 8232;
 // Zhukovsky - для альтернативного выбора в путевых листах
 sci1Shift3Esc   = 8233;
 sci1Shift378Esc = 8234;
+// ZREPORT - для подсистемы хранения отчетности
+sci1EscZRep     = 8800;
+sci13EscZRep    = 8801;
 
 // Экспорт данных во внешнее хранилище
 scDE_TaskMan     = 30000;
 scDE_JobMan      = 30001;
 scDE_QueueManQ   = 30002;
 scDE_QueueManJ   = 30003;
-

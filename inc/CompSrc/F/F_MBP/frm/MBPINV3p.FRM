@@ -91,6 +91,8 @@ begin
   if (wGetTune('Country') = ccKaz) // цифрами и прописью
     GetKopStr := GetKopStr + ' (' + Trim(DoubleToStr(Double(GetKopStr), '\f4')) + ')';
 end.
+#CommissionLinkVar
+#CommissionLinkInit(MBPInvProtPlus)
 .var
   iFeeSigners : FeeSigners;
   Номер_МОЛ, Колич_МОЛ : word;
@@ -153,8 +155,6 @@ end.
     iFeeSigners.ClearRestriction;
   }
 end.
-#CommissionLinkVar
-#CommissionLinkInit(MBPInvProtPlus)
 .Fields
   CommonFormHeader
   OrgName
@@ -598,6 +598,8 @@ end.
   PgIzlSum, PgNedSum, PgIzlKol, PgNedKol, PgNedIzn, PgIzlIzn : Double
   MBPInfo : String
 .endVar
+#CommissionLinkVar
+#CommissionLinkInit(MBPInvProtPlus)
 .var
   Номер_МОЛ, Колич_МОЛ : word;
   Массив_МОЛ_ФИО : array[1..2] of string;
@@ -654,8 +656,6 @@ end.
     iFeeSigners.ClearRestriction;
   }
 end.
-#CommissionLinkVar
-#CommissionLinkInit(MBPInvProtPlus)
 .Fields
   CommonFormHeader
   OrgName
@@ -882,6 +882,8 @@ begin
       GetKolStr := GetKolStr + DoubleToStr(Kol, 'целых \f5');
   }
 end.
+#CommissionLinkVar
+#CommissionLinkInit(MBPInvProtPlus)
 .var
   iFeeSigners : FeeSigners;
   Номер_МОЛ, Колич_МОЛ : word;
@@ -942,8 +944,6 @@ end.
     iFeeSigners.ClearRestriction;
   }
 end.
-#CommissionLinkVar
-#CommissionLinkInit(MBPInvProtPlus)
 .Fields
   CommonFormHeader
   Nom
@@ -1244,6 +1244,8 @@ begin
       GetStoimStr := DoubleToStr(Stoim, '\f4 целых \f5');
   }
 end.
+#CommissionLinkVar
+#CommissionLinkInit(MBPInvProtPlus)
 .var
   iFeeSigners : FeeSigners;
   Номер_МОЛ, Колич_МОЛ : word;
@@ -1304,8 +1306,6 @@ end.
     iFeeSigners.ClearRestriction;
   }
 end.
-#CommissionLinkVar
-#CommissionLinkInit(MBPInvProtPlus)
 .Fields
   CommonFormHeader
   Nom

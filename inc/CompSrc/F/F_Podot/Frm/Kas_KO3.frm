@@ -567,7 +567,7 @@ if(c0valpriznak > 0, '', 'рублей')
 ! документ
 c1p1 c1p2 c1p3 c1p4 c1p5 c1p6 c1p7 c1p8 c1p9 c1p10
 
-string(SumAllPrih,10,2) string(SumAllRash,10,2)
+string(SumAllPrih,15,2) string(SumAllRash,15,2)
 .endfields
 .{FirstCycle checkenter
 .[h

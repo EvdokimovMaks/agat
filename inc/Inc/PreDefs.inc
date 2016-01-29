@@ -341,6 +341,17 @@
 
 // #define NALOG_VEKSL
 
+// для ситуаций, в которых недопустимо использование синонимов типов (определённых через type)
+#ifdef Atl60
+  #define TPtr pointer
+  #define TSurrPtr comp
+  #define TSumma decimal
+#else
+  #define TPtr longint
+  #define TSurrPtr longint
+  #define TSumma double
+#end
+
 !-------------------------------------------------------------------------------
 #end // _Predefs_inc_Included
 !-------------------------------------------------------------------------------

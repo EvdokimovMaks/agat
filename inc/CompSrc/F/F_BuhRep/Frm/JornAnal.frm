@@ -71,6 +71,8 @@
 .nameinlist 'Базовая форма JornAnal'
 .hide
 .fields
+!План счетов
+cPlanSch PlanSchName
 ! валюта, интервал и т.д.
 c0p1  c0p1n  c0p2  c0p3  c0p4  c0p5  c0p6  c0p7  c0p9
 c1f1
@@ -145,7 +147,8 @@ c10_p3 c10_p3v c10_p3bv c10_p4 c10_p4v c10_p4bv   c10_p5 c10_p5v c10_p5bv c10_p6
 ! по ведомости                                  !                                                 !                                                 !                                                    !
 c0_p3  c0_p3v  c0_p3bv  c0_p4  c0_p4v c0_p4bv     c0_p5  c0_p5v  c0_p5bv  c0_p6  c0_p6v  c0_p6bv    c0_p7  c0_p7v  c0_p7bv  c0_p8  c0_p8v  c0_p8bv    c0_p9  c0_p9v  c0_p9bv  c0_p10  c0_p10v  c0_p10bv    c0_p1  c0_p1v  c0_p1bv  c0_p2  c0_p2v  c0_p2bv
 .endfields
-
+cPlanSch - Код плана счетов ^  	
+PlanSchName - название  плана счетов  ^
 c0p1              счет   ^
 c0p1n        имя счета   ^
 c0p2    Интервал начало  ^

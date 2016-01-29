@@ -4,22 +4,23 @@ const
   reTip        = 1001;
   reDiskret    = 1002;
   rePrAvt      = 1003;
-	reNpp        = 1004;
+  reNpp        = 1004;
 
-	rePrice      = 1501;
+  rePrice      = 1501;
   reSumVal     = 1502;
   reGarant     = 1503;
   reSrPrice    = 1504;
   reSrVPrice   = 1505;
   reZPrice     = 1506;
   reZVPrice    = 1507;
-	rePriceNum   = 1508;
+  rePriceNum   = 1508;
+  reCalcKoef   = 1509;
 
   // даты
-	redForm      = 2001;
+  redForm      = 2001;
 
-	// логические
-	reOnZavPrice = 2501;
+  // логические
+  reOnZavPrice = 2501;
 
   // ссылки
   recKlPrice   = 3001;
@@ -29,10 +30,12 @@ const
   recGroupMc   = 3005;
   recParty     = 3006;
   recGrUsl     = 3007;
-	reKlPrParam  = 3008;
-	reTypeParam  = 3009;
-	reCodeVal    = 3010;
-	reObjPar     = 3011;
+  reKlPrParam  = 3008;
+  reTypeParam  = 3009;
+  reCodeVal    = 3010;
+  reObjPar     = 3011;
+  recPodr      = 3012;
+  recMol       = 3013;
 
   // наименования
   reName       = 4001;
@@ -41,28 +44,30 @@ const
   reDopHar     = 4004;
   reNParty     = 4005;
   reKod        = 4006;
+  //resNameVar   = 4007;
 
-	// ограничения и подцепки
+  // ограничения и подцепки
   reNoBound             = 5000;
   reToKlPrice           = 5001;
   reToKlPriceThing      = 5002;
   reToTipThing          = 5003;
-	reToKlPricePartyThing = 5004;
-	reToParty             = 5005;
-	reToTipcGroupMC       = 5006;
-	reToKlPricecGroupMC   = 5007;
+  reToKlPricePartyThing = 5004;
+  reToParty             = 5005;
+  reToTipcGroupMC       = 5006;
+  reToKlPricecGroupMC   = 5007;
 
-	// быстрая навигация
-	reByKlPriceNpp    = 6001;
+  // быстрая навигация
+  reByKlPriceNpp    = 6001;
 
-	// параметры
+  // параметры
   reTipParam        = 7101;
   reKlPriceParam    = 7102;
   reThingParam      = 7103;
-	rePartyParam      = 7104;
-	reGroupMCParam    = 7105;
-	reNppParam        = 7106;
-	// вставка и удаление записи
+  rePartyParam      = 7104;
+  reGroupMCParam    = 7105;
+  reNppParam        = 7106;
+
+  // вставка и удаление записи
   reDeleteCurrent   = 7107;
   reInsertRecord    = 7108;
 

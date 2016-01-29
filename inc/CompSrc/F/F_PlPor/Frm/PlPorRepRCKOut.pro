@@ -1,0 +1,65 @@
+.form 'foPlPorRepRCKOut'
+.hide
+.fields
+  Nrec
+  Tidk
+  Nodok
+  Datvip
+  Sumplat
+  Denosch2
+  NamePL
+  Tax
+  Vidoper
+  Kodnew
+  Loginname
+  PolUNN
+  PolKodPlatNDS
+  PolName
+  PlatUNN
+  PlatName
+  PolMFO
+  PolSchet
+  PlatMFO
+  PlatSchet
+  sKBK
+  sPodrRCK
+  KBKSum
+  sSroch
+  sDogName 
+  sDogSum 
+  sDogFTP  
+  PodOtchet
+.endFields
+.{
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+^
+.{ CheckKBKLoop CheckEnter
+^
+^
+^
+.}
+^
+^
+^
+^
+^
+.}
+.endForm

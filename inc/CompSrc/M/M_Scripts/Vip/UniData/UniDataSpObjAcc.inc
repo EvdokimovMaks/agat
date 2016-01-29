@@ -96,6 +96,8 @@ const
   reSpObjAccNewBlank    = 4105;
 	reSpObjAccNewWithOut  = 4106;
 
+  reSpObjAccDelNew      = 4107;
+
 
   reSpObjAccSearch        = 4201;
   reSpObjAccSearchViaBuff = 4202;
@@ -114,4 +116,3 @@ const
 
   reSpObjAccTypeForObjPos   = 6001;
 end
-

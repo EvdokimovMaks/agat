@@ -81,6 +81,7 @@
  MestGah
 
  IsLeaf : word
+ DocNRec : comp
 !.}
 
  Itogo_Sum_Doc     : double
@@ -103,7 +104,7 @@
 .end
 
 .{
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}
 
 ^ ^

@@ -12,11 +12,11 @@
 .hide
 .var
   pPlatType: word;
-!  MrkKatNalog: longint;
+!  MrkKatNalog: TPtr;
   IndexNo: longint;
 .endvar
 .fields
-  MrkKatNalog: longint
+  MrkKatNalog: #TSurrPtr
   d1: date
   d2: date
   cAkciz: comp
@@ -99,7 +99,7 @@
   MCPlatdDoc: date
   MCPlatNDoc: string
 .endfields
-  MrkKatNalog: longint ^
+  MrkKatNalog: TPtr ^
   d1: date ^
   d2: date ^
   cAkciz: comp ^

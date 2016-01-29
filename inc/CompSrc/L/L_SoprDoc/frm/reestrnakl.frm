@@ -14,6 +14,7 @@
   NumSopr
 
   OrgName
+  sPrim
 
   SumRub      : double
   SumVal      : double
@@ -27,6 +28,7 @@
 .{
 ^
 ^ ^
+^
 ^
 ^ ^
 ^
@@ -80,8 +82,8 @@ end.
 .{
 .}
 .begin
-  ItogoRub := ItogoRub + SumRub;
-  ItogoVal := ItogoVal + SumVal;
+  ItogoRub += SumRub;
+  ItogoVal += SumVal;
 end.
 .}
 .fields

@@ -126,7 +126,7 @@ SchSubName  - наименование счета/субсчета       - ^
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -145,7 +145,7 @@ SchSubName  - наименование счета/субсчета       - ^
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -217,7 +217,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -236,7 +236,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -310,7 +310,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -327,7 +327,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -400,7 +400,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -417,7 +417,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -493,7 +493,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -510,7 +510,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -584,7 +584,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -601,7 +601,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -675,7 +675,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -692,7 +692,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -767,7 +767,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -783,7 +783,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -857,7 +857,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -875,7 +875,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -948,7 +948,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -964,7 +964,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1038,7 +1038,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1056,7 +1056,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1130,7 +1130,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1147,7 +1147,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1221,7 +1221,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1239,7 +1239,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1314,7 +1314,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1332,7 +1332,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1409,7 +1409,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1426,7 +1426,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1497,7 +1497,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1514,7 +1514,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1587,7 +1587,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1605,7 +1605,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1679,7 +1679,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1696,7 +1696,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1769,7 +1769,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1786,7 +1786,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1860,7 +1860,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1877,7 +1877,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -1952,7 +1952,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1970,7 +1970,7 @@ RepUserName
   ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -2044,7 +2044,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -2061,7 +2061,7 @@ RepUserName
   ItogKolVo ItogSum
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^

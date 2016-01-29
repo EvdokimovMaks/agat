@@ -485,8 +485,8 @@ from
   , SpSopr
   , BaseDoc
   , KlVal
-  , synonym KatOrg Pol
-  , synonym KatBank BankPol
+  , KatOrg Pol
+  , KatBank BankPol
   , KatOtpEd
 where
 ((
@@ -508,30 +508,22 @@ and        SpSopr.cOtpEd == KatOtpEd.NRec
 .begin
   loKS.cKatSopr := накладная_нрек;
   if (loKS.GetFirst KatSopr = 0) then {
-    var ExAttr : iExtAttr;
-    var ExClass: iExtClass;
     var cAttrNam : comp;
     var wTypeAttr: word;
     cBaseDocNRec:=loKS.BaseDoc.NRec;
 
-    GetVipInterface(ExAttr);
-    GetVipInterface(ExClass);
-
     // ПС
-    PSINum := ExAttr.sGetAttr(coBaseDoc, cBaseDocNRec, 'Паспорт сделки (ПС)');
+    PSINum := sGetAttr(coBaseDoc, cBaseDocNRec, 'Паспорт сделки (ПС)');
 
     //форма расчетов
-    wTypeAttr := ExClass.GetClassCode(coBaseDoc, 'Форма расчетов');
+    wTypeAttr := GetClassCode(coBaseDoc, 'Форма расчетов');
     if (wTypeAttr<>0)
     {
-      FormRasc := ExClass.GetSegName(wTypeAttr, cBaseDocNRec);
+      FormRasc := GetSegName(wTypeAttr, cBaseDocNRec);
       if (Length(FormRasc) > 2) then FormRasc:=SubStr(FormRasc,1,2);
     }
     else
      FormRasc:='';
-
-    FreeVipInterface(ExAttr);
-    FreeVipInterface(ExClass);
   };
 end.
 .fields

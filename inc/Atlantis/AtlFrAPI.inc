@@ -28,14 +28,152 @@ const
   frExportGIF    = 12;
   frExportSimple = 13;
   frExportTXT    = 14;
-  frExportFP3    = 255;
+  frExportFP3    = 20;
+  frPrintParam   = 21;
+  frMailParam    = 22;
+  frEmbeddedID   = 30;
 
   // Константы типа действия над отчетом.
-  frShowReport     = 6003;
-  frExportReport   = 6004;
-  frSendMailReport = 6005;
-  frPrintReport    = 6006;
-  frDesignReport   = 6007;
-  frNewReport      = 6008;
+  frcShowReport     = 1000;
+  frcExportReport   = 1001;
+  frcSendMailReport = 1002;
+  frcPrintReport    = 1003;
+  frcDesignReport   = 1004;
+  frcPrepareReport  = 1005;
 
   frDelimeter = ';';
+  frGroupsDelimeter = ',';
+  // Замена frGroupsDelimeter на frDelimeter трудоемка и нецелесообразна, т.к. затрагивает Get_GropupCommaText и хранение списка групп в Variables отчета (необходимо будет поддерживать и старый разделитель для совместимости).
+  // На стороне Атлантиса затрагивает InitGroupList ds2fr.pas и модуль frres.pas.
+  // А также зарегистрированную для VIP функцию RunFReportByGroup.
+
+  csFRDestroy = 1;
+  csDestroyAfterClosePreview = 2;
+
+type
+  PgfrHeaderInfo = ^TgfrHeaderInfo;
+  TgfrHeaderInfo = record
+    Index       : LongInt;  // Номер по порядку
+    Width       : LongInt;  // Ширина колонки
+    Align       : LongInt;  // Выравнивание в ячейке: saLeft, saRight, saCenter
+    MemoType    : LongInt;  // Тип Мемо поля
+    TreeManager : LongInt;  // Параметры для дерева
+    AtlType     : LongInt;  // Тип данных Атлантиса
+    AutoSize    : WordBool; // Флаг "Авторасширение колонки"
+    Name        : String;   // Имя поля в DataSet-е
+    Title       : String;   // Заголовок колонки в BROWSE или TREE
+  end;
+
+  PfrxBiffExportParam = ^frxBiffExportParam;
+  frxBiffExportParam = record
+    AllPages        : WordBool;
+    Pages           : ShortString;
+    PageBreaks      : WordBool;
+    PagesPerSheet   : LongInt;
+    Picture         : WordBool;
+    DeleteEmptyRows : WordBool;
+    Formulas        : WordBool;
+    ShowDialog      : WordBool;
+    OpenAfterExport : WordBool;
+  end;
+
+  PfrxXMLExportParam = ^frxXMLExportParam;
+  frxXMLExportParam = record
+    AllPages        : WordBool;
+    Pages           : ShortString;
+    SuppressPageHeadersFooters : WordBool;
+    WYSIWYG         : WordBool;
+    PageBreaks      : WordBool;
+    Background      : WordBool;
+    SplitMode       : Byte;
+    RowsCount       : LongInt;
+    ShowDialog      : WordBool;
+    OpenAfterExport : WordBool;
+  end;
+
+  PfrxRTFExportParam = ^frxRTFExportParam;
+  frxRTFExportParam = record
+    AllPages        : WordBool;
+    Pages           : ShortString;
+    Picture         : WordBool;
+    WISYWIG         : WordBool;
+    PageBreaks      : WordBool;
+    SuppressPageHeadersFooters : WordBool;
+    HeaderFooter    : LongInt;
+    ShowDialog      : WordBool;
+    OpenAfterExport : WordBool;
+  end;
+
+  PfrxPDFExportParam = ^frxPDFExportParam;
+  frxPDFExportParam = record
+    AllPages        : WordBool;
+    Pages           : ShortString;
+    Compressed      : WordBool;
+    EmbedFonts      : WordBool;
+    HighResolution  : WordBool;
+    Outline         : WordBool;
+    Background      : WordBool;
+    Quality         : LongInt;
+    ShowDialog      : WordBool;
+    OpenAfterExport : WordBool;
+  end;
+
+  PfrxODExportParam = ^frxODExportParam;
+  frxODExportParam = record
+    AllPages        : WordBool;
+    Pages           : ShortString;
+    SuppressPageHeadersFooters : WordBool;
+    WISYWIG         : WordBool;
+    PageBreaks      : WordBool;
+    Picture         : WordBool;
+    Background      : WordBool;
+    ShowDialog      : WordBool;
+    OpenAfterExport : WordBool;
+  end;
+
+  PfrxHTMLExportParam = ^frxHTMLExportParam;
+  frxHTMLExportParam = record
+    AllPages        : WordBool;
+    Pages           : ShortString;
+    Styles          : WordBool;
+    FixedWidth      : WordBool;
+    AllInOneFolder  : WordBool;
+    MultiPage       : WordBool;
+    PageNavigator   : WordBool;
+    BackGround      : WordBool;
+    PictureType     : Byte;
+    ShowDialog      : WordBool;
+    OpenAfterExport : WordBool;
+  end;
+
+  PfrxSimpleTextExportParam = ^frxSimpleTextExportParam;
+  frxSimpleTextExportParam = record
+    AllPages        : WordBool;
+    Pages           : ShortString;
+    PageBreaks      : WordBool;
+    EmptyLines      : WordBool;
+    Frames          : WordBool;
+    OEM             : WordBool;
+    ShowDialog      : WordBool;
+    OpenAfterExport : WordBool;
+  end;
+
+  PfrxPrintParam = ^frxPrintParam;
+  frxPrintParam = record
+    AllPages    : WordBool;
+    Pages       : ShortString;
+    PrinterName : ShortString;
+    PrintToFile : WordBool;
+    FileName    : ShortString;
+    CopiesCount : LongInt;
+    Collate     : WordBool;
+    ShowDialog  : WordBool;
+  end;
+
+  PfrxSendMailParam = ^frxSendMailParam;
+  frxSendMailParam = record
+    MailTo     : ShortString;
+    Subject    : ShortString;
+    Body       : ShortString;
+    ShowDialog : WordBool;
+  end;

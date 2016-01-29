@@ -1,7 +1,7 @@
 {
  ษอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออป
  บ               ‘ซฎข เ์ : GALDICT " ซ ชโจช  9.1"                       บ
- บ     โ  แฎงค ญจ๏ 02/02/15                                             บ
+ บ     โ  แฎงค ญจ๏ 04/01/16                                             บ
  ศอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผ
 }
 
@@ -30,6 +30,7 @@ type
     OBORKREDBV     : Double;          { OBORKREDBV                            }
     SUMVALUTK      : Double;          { SUMVALUTK                             }
     DATEDOC        : Date;            { DATEDOC                               }
+    CSOPRHOZ       : Comp;            { CSOPRHOZ                              }
   end;
 const
   tiGROUPVED01           = 0;  { SUBOSSCH(M Up) + KODSPO + KEYKORR(Up) +  }

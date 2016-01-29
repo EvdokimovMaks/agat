@@ -4,15 +4,13 @@
 // Базовый объект : "Оси куба"
 //------------------------------------------------------------------------------
 
-Type TCubeSpAxis = record
-  NRec      : comp;
-  XY        : word;
-  ItemID    : LongInt;
-  isDDLeaf  : boolean;
-  SMAID     : LongInt;
-  cNode     : comp;
-  cKauNode  : comp;
-  KodGrKau  : word;
-  cMean     : comp;
-  Name      : s80;
-end;
+#ifndef __FpAxCub_Inc__
+#define __FpAxCub_Inc__
+
+Const
+  // режимы сортировки значений аналитики
+  lc_OrderAnMean_ByCode : word = 0;  // по коду
+  lc_OrderAnMean_ByName : word = 1;  // по наименованию
+end; // Const
+
+#endif//__FpAxCub_Inc__

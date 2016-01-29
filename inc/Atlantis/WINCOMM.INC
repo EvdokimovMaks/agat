@@ -171,6 +171,7 @@ const
   inNoPickButton      = $00008000;
   inNoSendPickVip     = $00010000;
   inSpinDateTime      = $00020000;
+  inEditButton        = $00040000;
   inAllButtonTypes    = inWithHistory or inPickButton or inCalc or inCalendarPick or inSpin;
 
 type

@@ -42,7 +42,7 @@
  DatNomSF3:string;
  DatNomPlSF:string;
  NomDO:string;
- KolFiltr : Word;
+ KolFiltr: Word;
  FiltTxt:string;
  KontrNameNazn:string;
  iCountry: MCOriginCountry;
@@ -50,11 +50,12 @@
  wKolKontr:word;
  wKolTip:word;
  wKolPodr:word;
+ UnnORInn:string;
 .endvar
 .fields
  AllKontr  :word    // 1
  AllTips   :word    // 2
- AllPodr   : Word
+ AllPodr   :word
  RegTips   :word    // 3
  ZeroPrint:boolean       // 00
  Zak2014:boolean
@@ -83,34 +84,35 @@
 ^^^^
 ^^^^^^^^^^^^^^^^^^^^^^^
 .begin
+ UnnORInn := sGetTune('KatOrg.FldView.UNN');
  OtEnd:=false;
  KolFiltr := 0;
  FiltTxt := 'Наложен фильтр по: ';
  if (AllKontr = 0)
  {
-   KolFiltr := KolFiltr + 1;
+   KolFiltr++;
    if (KolFiltr > 1) FiltTxt := FiltTxt + ',';
-   FiltTxt := FiltTxt + ' контрагентам';
+   FiltTxt += ' контрагентам';
  }
  if (AllTips = 0)
  {
-   KolFiltr := KolFiltr + 1;
+   KolFiltr++;
    if (KolFiltr > 1) FiltTxt := FiltTxt + ',';
-   FiltTxt := FiltTxt + ' типам записей';
+   FiltTxt += ' типам записей';
  }
  if (AllPodr = 0)
  {
-   KolFiltr := KolFiltr + 1;
+   KolFiltr++;
    if (KolFiltr > 1) FiltTxt := FiltTxt + ',';
-   FiltTxt := FiltTxt + ' подразделениям';
+   FiltTxt += ' подразделениям';
  }
  if (KolFiltr = 0)
    FiltTxt := '';
 
- wKolFilt := 0;
+ wKolFilt  := 0;
  wKolKontr := 0;
- wKolTip := 0;
- wKolPodr := 0;
+ wKolTip   := 0;
+ wKolPodr  := 0;
 end.
 .{CheckEnter FiltKontr
 .fields
@@ -118,8 +120,8 @@ end.
 .endfields
 ^
 .begin
-  wKolFilt  := wKolFilt + 1;
-  wKolKontr := wKolKontr + 1;
+  wKolFilt++;
+  wKolKontr++;
 end.
 .}
 .{CheckEnter FiltTip
@@ -128,8 +130,8 @@ end.
 .endfields
 ^
 .begin
-  wKolFilt  := wKolFilt + 1;
-  wKolTip := wKolTip + 1;
+  wKolFilt++;
+  wKolTip++;
 end.
 .}
 .{CheckEnter FiltPodr
@@ -138,8 +140,8 @@ end.
 .endfields
 ^
 .begin
-  wKolFilt  := wKolFilt + 1;
-  wKolPodr := wKolPodr + 1;
+  wKolFilt++;
+  wKolPodr++;
 end.
 .}
 .{
@@ -244,9 +246,13 @@ end.
  KontrName:string        // 06
  KontrINN:string         // 07
  KontrKPP:string         // 07a
+ cKontrOtgrSF:Comp       // контрагент по отгрузочному СФ
+ cKontrAvansSF:Comp      // контрагент по авансовому СФ
+
  KontrOKONH:string       // 08
  KontrOKPO:string        // 09
  KodOp:string
+ wDopType_KodOp : Word
  MediatorName:string
  MediatorINN_KPP:string
  KodNameVal:string
@@ -274,6 +280,8 @@ end.
 
  BaseDoc_NoDoc:string    // 21
  Nazn:string             // 22 примечание к записи
+ sNaznachKatSopr:string
+ cNaznachKatSopr:comp
  nSoprGTD                // 23 ссылка на ГТД
  GtDCountry:string       // 23a
  GTDNomer:string         // 23b
@@ -282,37 +290,37 @@ end.
  NumUpl:word
 .endfields
 0abcdefg123abcdef 4567a89101234567ab8920abcd123ab
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^ ^^^^^^^^^^ ^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^ ^^^^^^^^^^ ^^^^^^
 .begin
- ISummA:=ISummA+SummA;
- ISumVal:=ISumVal+SumVal;
- ISumValSF:=ISumValSF+SumValSF;
- ISumNDSRub:=ISumNDSRub+SumNDSRub;
- ISumm1:=ISumm1+Summ1;
- ISumm2:=ISumm2+Summ2;
- ISumm3:=ISumm3+Summ3;
- ISumm4:=ISumm4+Summ4;
- ISumm5:=ISumm5+Summ5;
- ISumm6:=ISumm6+Summ6;
- ISumm7:=ISumm7+Summ7;
- ISumm8:=ISumm8+Summ8;
- ISumm9:=ISumm9+Summ9;
- ISumm10:=ISumm10+Summ10;
- ISumm23:=ISumm23+Summ23;
- ISumIn1:=ISumIn1+SumIn1;
- ISumIn2:=ISumIn2+SumIn2;
- ISumIn3:=ISumIn3+SumIn3;
- ISumIn4:=ISumIn4+SumIn4;
+ ISummA    +=SummA;
+ ISumVal   +=SumVal;
+ ISumValSF +=SumValSF;
+ ISumNDSRub+=SumNDSRub;
+ ISumm1 +=Summ1;
+ ISumm2 +=Summ2;
+ ISumm3 +=Summ3;
+ ISumm4 +=Summ4;
+ ISumm5 +=Summ5;
+ ISumm6 +=Summ6;
+ ISumm7 +=Summ7;
+ ISumm8 +=Summ8;
+ ISumm9 +=Summ9;
+ ISumm10+=Summ10;
+ ISumm23+=Summ23;
+ ISumIn1+=SumIn1;
+ ISumIn2+=SumIn2;
+ ISumIn3+=SumIn3;
+ ISumIn4+=SumIn4;
  if (ZeroPrint)
   {
     if (Zak2014)
       DatNomSF:=LPadCh(NomSF,' ',9) + ' ' +
                 If (LongInt(DatFact)=0,'          ',
-                    DateToStr(DatFact,'DD/MM/YYYY'));
+                    DateToStr(DatFact,'DD.MM.YYYY'));
     else
-    DatNomSF:=If (LongInt(DatFact)=0,'          ',
-                  DateToStr(DatFact,'DD/MM/YYYY'))+
-                  LPadCh(NomSF,' ',9);
+      DatNomSF:=If (LongInt(DatFact)=0,'          ',
+                    DateToStr(DatFact,'DD/MM/YYYY'))+
+                    LPadCh(NomSF,' ',9);
 
     DatNomSF2:=DateToStr(DatReg,'DD/MM/YYYY')+
                if (NomSF='','',' №'+NomSF)+
@@ -330,11 +338,11 @@ end.
     if (Zak2014)
       DatNomSF:= LPadCh(Ltrim(NomSF,'0'),' ',9) + ' ' +
                  If (LongInt(DatFact)=0,'          ',
-                    DateToStr(DatFact,'DD/MM/YYYY'));
+                    DateToStr(DatFact,'DD.MM.YYYY'));
     else
-    DatNomSF:=If (LongInt(DatFact)=0,'          ',
-                  DateToStr(DatFact,'DD/MM/YYYY'))+
-                  LPadCh(Ltrim(NomSF,'0'),' ',9);
+      DatNomSF:=If (LongInt(DatFact)=0,'          ',
+                    DateToStr(DatFact,'DD/MM/YYYY'))+
+                    LPadCh(Ltrim(NomSF,'0'),' ',9);
 
     DatNomSF2:=DateToStr(DatReg,'DD/MM/YYYY')+
                if (NomSF='','',' №'+Ltrim(NomSF,'0'))+
@@ -379,8 +387,8 @@ end.
  AllSumIn3:    double            // 14a
  AllSumIn4:    double            // 14b
  AllSumm23:    double            // 14c
- AllSumm1_18:    double          // 15
- AllSumm2_18:    double          // 15a
+ AllSumm1_18:  double            // 15
+ AllSumm2_18:  double            // 15a
  AllSummNDS:   double
 .endfields
  12345678901ab234abc5a
@@ -406,6 +414,7 @@ end.
  If (RegTips=0,'Сводная книга продаж по валютам','Реестр записей (продажи) по валютам')
  DateToStr(BegDate,'DD/MM/YYYY')
  DateToStr(EndDate,'DD/MM/YYYY')
+ UnnORInn
  MyInn
  FiltTxt
 
@@ -421,7 +430,7 @@ end.
  Nds2
 .endfields
 .[h SKIP
- Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д ИНН  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
+ Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д ^  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
  Ш┌────────────────────┬──────────────────────────────────────────────┬────────────┬──────────┬──────────────┬──────────────┬──────────────┬──────────────┬─────────────┬──────────────┬──────────────┐ Ш
  Ш│        (1)         │                      (2)                     │    (3)     │   (3а)   │      (4)     │     (5а)     │     (5б)     │     (6а)     │     (6б)    │     (7)      │     (7а)     │ Ш
  Ш├────────────────────┼──────────────────────────────────────────────┼────────────┼──────────┼──────────────┼──────────────┼──────────────┼──────────────┼─────────────┼──────────────┼──────────────┤ Ш
@@ -584,6 +593,7 @@ end.
  DateToStr(BegDate,'DD/MM/YYYY')
  DateToStr(EndDate,'DD/MM/YYYY')
  Dollar
+ UnnORInn
  MyInn
  FiltTxt
 
@@ -625,7 +635,7 @@ end.
  LSIn1:=0.0;
  LSIn2:=0.0;
 end.
- Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д Валюта учета @@@@@@@@@@@@@@@@@@@@ ИНН  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
+ Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д Валюта учета @@@@@@@@@@@@@@@@@@@@ ^  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
  Ш┌────────────────────┬──────────────────────────────────────────────┬────────────┬──────────┬──────────────┬──────────────┬──────────────┬──────────────┬─────────────┬──────────────┬──────────────┐ Ш
  Ш│        (1)         │                      (2)                     │    (3)     │   (3а)   │      (4)     │     (5а)     │     (5б)     │     (6а)     │     (6б)    │     (7)      │     (7а)     │ Ш
  Ш├────────────────────┼──────────────────────────────────────────────┼────────────┼──────────┼──────────────┼──────────────┼──────────────┼──────────────┼─────────────┼──────────────┼──────────────┤ Ш
@@ -754,6 +764,7 @@ end.
  DateToStr(BegDate,'DD/MM/YYYY')
  DateToStr(EndDate,'DD/MM/YYYY')
  Dollar
+ UnnORInn
  MyInn
  FiltTxt
 
@@ -796,7 +807,7 @@ end.
  LSIn1:=0.0;
  LSIn2:=0.0;
 end.
- Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д Валюта учeта @@@@@@@@@@@@@@@@@@@@ ИНН  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
+ Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д Валюта учeта @@@@@@@@@@@@@@@@@@@@ ^  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
  Ш┌────────────────────┬──────────┬──────────────────────────────────────────────┬────────────┬──────────┬──────────────┬──────────────┬──────────────┬──────────────┬─────────────┬──────────────┬──────────────┐ Ш
  Ш│        (1)         │   (1а)   │                      (2)                     │    (3)     │   (3а)   │      (4)     │      (5а)    │     (5б)     │      (6а)    │     (6б)    │      (7)     │     (7а)     │ Ш
  Ш├────────────────────┼──────────┼──────────────────────────────────────────────┼────────────┼──────────┼──────────────┼──────────────┼──────────────┼──────────────┼─────────────┼──────────────┼──────────────┤ Ш
@@ -899,6 +910,7 @@ end.
  If (RegTips=0,'Сводная книга покупок по валютам','Реестр записей (покупки) по валютам')
  DateToStr(BegDate,'DD/MM/YYYY')
  DateToStr(EndDate,'DD/MM/YYYY')
+ UnnORInn
  MyInn
  FiltTxt
 
@@ -914,7 +926,7 @@ end.
  Nds2
 .endfields
 .[h SKIP
- Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д ИНН  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
+ Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д ^  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
  Ш┌────────────────────┬──────────┬──────────┬──────────┬───────────────────────────────────┬────────────┬──────────────┬───────────────┬──────────────┬───────────────┬─────────────┬──────────────┐ Ш
  Ш│        (1)         │    (2)   │    (3)   │   (3а)   │                     (4)           │    (5)     │     (6)      │     (7а)      │     (7б)     │      (8а)     │     (8б)    │      (9)     │ Ш
  Ш├────────────────────┼──────────┼──────────┼──────────┼───────────────────────────────────┼────────────┼──────────────┼───────────────┼──────────────┼───────────────┼─────────────┼──────────────┤ Ш
@@ -1081,6 +1093,7 @@ end.
  DateToStr(EndDate,'DD/MM/YYYY')
  Dollar
  MyInn
+ UnnORInn
  FiltTxt
 
   CommonFormHeader
@@ -1123,7 +1136,7 @@ end.
  LSIn1:=0.0;
  LSIn2:=0.0;
 end.
- Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д Валюта учета @@@@@@@@@@@@@@@@@@@@ ИНН  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
+ Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д Валюта учета @@@@@@@@@@@@@@@@@@@@ ^  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
  Ш┌────────────────────┬──────────┬──────────┬──────────┬───────────────────────────────────┬────────────┬──────────────┬───────────────┬──────────────┬───────────────┬─────────────┬──────────────┐ Ш
  Ш│        (1)         │    (2)   │    (3)   │   (3а)   │                     (4)           │    (5)     │     (6)      │     (7а)      │     (7б)     │      (8а)     │     (8б)    │      (9)     │ Ш
  Ш├────────────────────┼──────────┼──────────┼──────────┼───────────────────────────────────┼────────────┼──────────────┼───────────────┼──────────────┼───────────────┼─────────────┼──────────────┤ Ш
@@ -1224,15 +1237,15 @@ end.
 .P 60
 .defo landscape
 .var
- LSA:double
- LS1:double
- LS2:double
- LS3:double
- LS4:double
- LS5:double
- LS6:double
- LS7:double
- LS10:double
+ LSA  :double
+ LS1  :double
+ LS2  :double
+ LS3  :double
+ LS4  :double
+ LS5  :double
+ LS6  :double
+ LS7  :double
+ LS10 :double
  LSIn1:double
  LSIn2:double
 .endvar
@@ -1248,6 +1261,7 @@ end.
  DateToStr(BegDate,'DD/MM/YYYY')
  DateToStr(EndDate,'DD/MM/YYYY')
  Dollar
+ UnnORInn
  MyInn
  FiltTxt
 
@@ -1266,8 +1280,8 @@ end.
  DatNomSF
  NomDO
  If (LongInt(DatPost)=0,'',DateToStr(DatPost,'DD/MM/YYYY'))
- If (LongInt(DatOpl)=0,'',DateToStr(DatOpl,'DD/MM/YYYY'))
- If (LongInt(DatOpr)=0,'',DateToStr(DatOpr,'DD/MM/YYYY'))
+ If (LongInt(DatOpl) =0,'',DateToStr(DatOpl ,'DD/MM/YYYY'))
+ If (LongInt(DatOpr) =0,'',DateToStr(DatOpr ,'DD/MM/YYYY'))
  KontrNameNazn
  KontrInn
 
@@ -1280,33 +1294,33 @@ end.
 .endfields
 .[h OVERWRITE SKIP
 .begin
- LSA:=0.0;
- LS1:=0.0;
- LS2:=0.0;
- LS3:=0.0;
- LS4:=0.0;
- LS5:=0.0;
- LS6:=0.0;
- LS7:=0.0;
- LS10:=0.0;
+ LSA  :=0.0;
+ LS1  :=0.0;
+ LS2  :=0.0;
+ LS3  :=0.0;
+ LS4  :=0.0;
+ LS5  :=0.0;
+ LS6  :=0.0;
+ LS7  :=0.0;
+ LS10 :=0.0;
  LSIn1:=0.0;
  LSIn2:=0.0;
 end.
- Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д Валюта учета @@@@@@@@@@@@@@@@@@@@ ИНН  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
+ Р ^ за период с  Д@@@@@@@@@@ Д по  Д@@@@@@@@@@ Д Валюта учета @@@@@@@@@@@@@@@@@@@@ ^  Д@@@@@@@@@@@@@@@@@@@@ Д @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Лист  Д @np@  Д из _____ Р
  Ш┌────────────────────┬──────────┬──────────┬──────────┬──────────┬───────────────────────────────────┬────────────┬──────────────┬───────────────┬──────────────┬───────────────┬─────────────┬──────────────┐ Ш
  Ш│        (1)         │   (1а)   │    (2)   │    (3)   │   (3а)   │                     (4)           │    (5)     │      (6)     │     (7а)      │     (7б)     │      (8а)     │     (8б)    │      (9)     │ Ш
  Ш├────────────────────┼──────────┼──────────┼──────────┼──────────┼───────────────────────────────────┼────────────┼──────────────┼───────────────┼──────────────┼───────────────┼─────────────┼──────────────┤ Ш
 .]h
 .begin
- LSA:=0.0;
- LS1:=0.0;
- LS2:=0.0;
- LS3:=0.0;
- LS4:=0.0;
- LS5:=0.0;
- LS6:=0.0;
- LS7:=0.0;
- LS10:=0.0;
+ LSA  :=0.0;
+ LS1  :=0.0;
+ LS2  :=0.0;
+ LS3  :=0.0;
+ LS4  :=0.0;
+ LS5  :=0.0;
+ LS6  :=0.0;
+ LS7  :=0.0;
+ LS10 :=0.0;
  LSIn1:=0.0;
  LSIn2:=0.0;
 end.
@@ -1351,17 +1365,17 @@ end.
 .{CheckEnter BookZk
 .}
 .begin
- LSA:=LSA+SummA;
- LS1:=LS1+Summ1;
- LS2:=LS2+Summ2;
- LS3:=LS3+Summ3;
- LS4:=LS4+Summ4;
- LS5:=LS5+Summ5;
- LS6:=LS6+Summ6;
- LS7:=LS7+Summ7;
- LS10:=LS10+Summ10;
- LSIn1:=LSIn1+SumIn1;
- LSIn2:=LSIn2+SumIn2;
+ LSA  +=SummA;
+ LS1  +=Summ1;
+ LS2  +=Summ2;
+ LS3  +=Summ3;
+ LS4  +=Summ4;
+ LS5  +=Summ5;
+ LS6  +=Summ6;
+ LS7  +=Summ7;
+ LS10 +=Summ10;
+ LSIn1+=SumIn1;
+ LSIn2+=SumIn2;
 end.
  Ш│@@@@@@@@@@@@@@@@@@@@│@~@@@@@@@@│@@@@@@@@@@│@@@@@@@@@@│@@@@@@@@@@│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@~@@@@@@@@@@│&'&&&&&&&&&.&&│&'&&&&&&&&&&.&&│&'&&&&&&&&&.&&│&'&&&&&&&&&&.&&│&'&&&&&&&&.&&│&'&&&&&&&&&.&&│ Ш
 .[f
@@ -1383,13 +1397,13 @@ end.
 
 .endform
 
-#include bkprzkf0.frn  // новые для РФ (с 01.01.2001)
-#include bkprzkf18.frn // новые для РФ (с 01.01.2004)
+#include bkprzkf0.frn    // новые для РФ (с 01.01.2001)
+#include bkprzkf18.frn   // новые для РФ (с 01.01.2004)
 #include bkprzkf4020.frn // выгрузка книг для МВК
-#include bkprzkf2.frn  // новые для РФ (с 11.05.2006)
-#include bkprzkf3.frn  // новые для РФ (с 01.01.2012)
-#include bkprzkf7.frn  // новые для РФ (с 14.08.2014)
-#include bkprzkf1.frn  // для Беларуси
-#include bkprzkd.frn   // Дополнительная книга для РФ
-#include bkprzkd1.frn  // Дополнительная книга для РФ c 01.01.2012
-#include bkprzkd2.frn  // Дополнительная книга для РФ с 14.08.2014
+#include bkprzkf2.frn    // новые для РФ (с 11.05.2006)
+#include bkprzkf3.frn    // новые для РФ (с 01.01.2012)
+#include bkprzkf7.frn    // новые для РФ (с 14.08.2014)
+#include bkprzkf1.frn    // для Беларуси
+#include bkprzkd.frn     // Дополнительная книга для РФ
+#include bkprzkd1.frn    // Дополнительная книга для РФ c 01.01.2012
+#include bkprzkd2.frn    // Дополнительная книга для РФ с 14.08.2014

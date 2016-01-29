@@ -10,13 +10,13 @@
 .Set Name = 'SFO_DolgProt'
 .Hide
 .Fields
-  OrgName : String  MainBuhShort : String
+  OrgName : String  BossShort : String MainBuhShort : String
   docNrec : Comp  SprNo : String  sprDate : Date
   FIO : String  TabN : String  zvanie : String
   attDate : Date  uvDate : Date  Podr : String
-  frmFlag : Boolean  spcFlag : Boolean
+  frmFlag : Boolean  spcFlag : Boolean cSigners : Comp
 .endFields
-  ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+  ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .{ frmDlgCir checkenter
 .Fields
   frNrec : Comp  frName : String  frKod : String  frEd : String  frGiveDate : Date
@@ -506,8 +506,35 @@ end.
 .LinkFORM SFO_Attest Prototype Is SFO_DolgProt
 .Group 'Аттестат на довольствие'
 .NameInList 'Аттестат на вещевое довольствие'
+.declare
+#include FeeSigners.vih
+.endDeclare
+.var
+  iFeeSigners : FeeSigners;
+  sDirect,
+  sBuh : string;
+.endVar
+.begin
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSigners);
+  sDirect := sBuh := '';
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_Direct))
+      sDirect := iFeeSigners.GetSignerFIO(7);
+
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_GlBux))
+      sBuh := iFeeSigners.GetSignerFIO(7);
+
+    iFeeSigners.ClearRestriction;
+  }
+end.
 .Fields
-  CommonFormHeader  zvanie  FIO  DateToStr(attDate, 'DD/MM/YYYY')
+  CommonFormHeader
+  zvanie
+  FIO
+  DateToStr(attDate, 'DD/MM/YYYY')
 .endFields
  И ^
 
@@ -556,13 +583,14 @@ end.
 └─────────┴──────────────────────┴─────────┴───────┴──────────┴───────────────┴────────────────┴──────────────┘ Р
 .}
 .fields
-  MainBuhShort
+  if (sDirect = '', BossShort, sDirect)
+  if (sBuh = '', MainBuhShort, sBuh)
 .endFields
  И
   С записями в аттестате ознакомлен и согласен:
          Подпись получившего аттестат _________________________
 
-  Начальник таможни ______________  Главный бухгалтер  Д@@@@@@@@@@@@@@@@@@@@@@ Д
+  Начальник таможни  Д@@@@@@@@@@@@@@@@@@@ Д Главный бухгалтер  Д@@@@@@@@@@@@@@@@@@@ Д
 
     М.П. И
 

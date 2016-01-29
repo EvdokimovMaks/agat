@@ -14,10 +14,11 @@ const
   lc_RunFpCel_DelMode : word = 2;  // удаление значений показателей бюджета
 
   lc_VirtualRepTuneID : comp = 1;  // NRec виртуальной настройки отчета
+  lc_VirtualRepFiltID : comp = 1;  // NRec виртуального фильтра отчета
 
 
   // биты режима запуска функции: MakeRepGroup, BuildTree
-  lc_ReBuild_Bit      : word = 1;  // перестаивать заново группировку отчета
+  lc_ReBuild_Bit      : word = 1;  // перестраивать заново группировку отчета
   lc_RunWind_Bit      : word = 2;  // запускать окно настройки иерархии
 
 end; // const

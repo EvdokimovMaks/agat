@@ -91,7 +91,6 @@ end.
  TotalKolMC_9: double;
  TotalKolMC_10: double;
 .endvar
-#include mfo.frn
 .Fields
   DateToStr(„ â , 'DD mon YYYY')
   DateToStr(„ â , 'DD/MM/YYYY')
@@ -99,7 +98,8 @@ end.
     + ' €¤à¥á:' + ¬®©_€¤à¥á
     + '  ­ª:'  + ¬®©_€Š_ˆ¬ï
     + ' à/á '   + ¬®©_€Š_‘ç¥â
-    + mfo_      + ¬®©_€Š_Œä®
+    + ' ' + sGetTune('KatOrg.FldView.MFO') + ':'
+                + ¬®©_€Š_Œä®
 
   Š
   Podr_From
@@ -205,66 +205,67 @@ end.
 .{
 .fields
   PoluchatelName KodStr
-  if(KolMC_1=0, '', DoubleToStr(KolMC_1, sFormatKol))
-  if(KolMC_2=0, '', DoubleToStr(KolMC_2, sFormatKol))
-  if(KolMC_3=0, '', DoubleToStr(KolMC_3, sFormatKol))
-  if(KolMC_4=0, '', DoubleToStr(KolMC_4, sFormatKol))
-  if(KolMC_5=0, '', DoubleToStr(KolMC_5, sFormatKol))
-  if(KolMC_6=0, '', DoubleToStr(KolMC_6, sFormatKol))
-  if(KolMC_7=0, '', DoubleToStr(KolMC_7, sFormatKol))
-  if(KolMC_8=0, '', DoubleToStr(KolMC_8, sFormatKol))
-  if(KolMC_9=0, '', DoubleToStr(KolMC_9, sFormatKol))
-  if(KolMC_10=0, '', DoubleToStr(KolMC_10, sFormatKol))
+  if(KolMC_1  = 0, '', DoubleToStr(KolMC_1 , sFormatKol))
+  if(KolMC_2  = 0, '', DoubleToStr(KolMC_2 , sFormatKol))
+  if(KolMC_3  = 0, '', DoubleToStr(KolMC_3 , sFormatKol))
+  if(KolMC_4  = 0, '', DoubleToStr(KolMC_4 , sFormatKol))
+  if(KolMC_5  = 0, '', DoubleToStr(KolMC_5 , sFormatKol))
+  if(KolMC_6  = 0, '', DoubleToStr(KolMC_6 , sFormatKol))
+  if(KolMC_7  = 0, '', DoubleToStr(KolMC_7 , sFormatKol))
+  if(KolMC_8  = 0, '', DoubleToStr(KolMC_8 , sFormatKol))
+  if(KolMC_9  = 0, '', DoubleToStr(KolMC_9 , sFormatKol))
+  if(KolMC_10 = 0, '', DoubleToStr(KolMC_10, sFormatKol))
 .endfields
 .begin
- TotalKolMC_1  := TotalKolMC_1 + KolMC_1;
- TotalKolMC_2  := TotalKolMC_2 + KolMC_2;
- TotalKolMC_3  := TotalKolMC_3 + KolMC_3;
- TotalKolMC_4  := TotalKolMC_4 + KolMC_4;
- TotalKolMC_5  := TotalKolMC_5 + KolMC_5;
- TotalKolMC_6  := TotalKolMC_6 + KolMC_6;
- TotalKolMC_7  := TotalKolMC_7 + KolMC_7;
- TotalKolMC_8  := TotalKolMC_8 + KolMC_8;
- TotalKolMC_9  := TotalKolMC_9 + KolMC_9;
- TotalKolMC_10 := TotalKolMC_10 + KolMC_10;
- KodStr := KodStr + 1;
+ TotalKolMC_1  += KolMC_1;
+ TotalKolMC_2  += KolMC_2;
+ TotalKolMC_3  += KolMC_3;
+ TotalKolMC_4  += KolMC_4;
+ TotalKolMC_5  += KolMC_5;
+ TotalKolMC_6  += KolMC_6;
+ TotalKolMC_7  += KolMC_7;
+ TotalKolMC_8  += KolMC_8;
+ TotalKolMC_9  += KolMC_9;
+ TotalKolMC_10 += KolMC_10;
+
+ KodStr++;
 end.
 ÿ˜ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄ´
 ³@@@@@@@@@@@@@@@@@@@@@³&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³            ³ÿ˜
 .}
 .fields
-  if(TotalKolMC_1=0, '', DoubleToStr(TotalKolMC_1, sFormatKol))
-  if(TotalKolMC_2=0, '', DoubleToStr(TotalKolMC_2, sFormatKol))
-  if(TotalKolMC_3=0, '', DoubleToStr(TotalKolMC_3, sFormatKol))
-  if(TotalKolMC_4=0, '', DoubleToStr(TotalKolMC_4, sFormatKol))
-  if(TotalKolMC_5=0, '', DoubleToStr(TotalKolMC_5, sFormatKol))
-  if(TotalKolMC_6=0, '', DoubleToStr(TotalKolMC_6, sFormatKol))
-  if(TotalKolMC_7=0, '', DoubleToStr(TotalKolMC_7, sFormatKol))
-  if(TotalKolMC_8=0, '', DoubleToStr(TotalKolMC_8, sFormatKol))
-  if(TotalKolMC_9=0, '', DoubleToStr(TotalKolMC_9, sFormatKol))
-  if(TotalKolMC_10=0, '', DoubleToStr(TotalKolMC_10, sFormatKol))
+  if(TotalKolMC_1  = 0, '', DoubleToStr(TotalKolMC_1 , sFormatKol))
+  if(TotalKolMC_2  = 0, '', DoubleToStr(TotalKolMC_2 , sFormatKol))
+  if(TotalKolMC_3  = 0, '', DoubleToStr(TotalKolMC_3 , sFormatKol))
+  if(TotalKolMC_4  = 0, '', DoubleToStr(TotalKolMC_4 , sFormatKol))
+  if(TotalKolMC_5  = 0, '', DoubleToStr(TotalKolMC_5 , sFormatKol))
+  if(TotalKolMC_6  = 0, '', DoubleToStr(TotalKolMC_6 , sFormatKol))
+  if(TotalKolMC_7  = 0, '', DoubleToStr(TotalKolMC_7 , sFormatKol))
+  if(TotalKolMC_8  = 0, '', DoubleToStr(TotalKolMC_8 , sFormatKol))
+  if(TotalKolMC_9  = 0, '', DoubleToStr(TotalKolMC_9 , sFormatKol))
+  if(TotalKolMC_10 = 0, '', DoubleToStr(TotalKolMC_10, sFormatKol))
 
-  if(TotalKolMC_1=0, '', DoubleToStr(PriceMC_1, sFormatSum))
-  if(TotalKolMC_2=0, '', DoubleToStr(PriceMC_2, sFormatSum))
-  if(TotalKolMC_3=0, '', DoubleToStr(PriceMC_3, sFormatSum))
-  if(TotalKolMC_4=0, '', DoubleToStr(PriceMC_4, sFormatSum))
-  if(TotalKolMC_5=0, '', DoubleToStr(PriceMC_5, sFormatSum))
-  if(TotalKolMC_6=0, '', DoubleToStr(PriceMC_6, sFormatSum))
-  if(TotalKolMC_7=0, '', DoubleToStr(PriceMC_7, sFormatSum))
-  if(TotalKolMC_8=0, '', DoubleToStr(PriceMC_8, sFormatSum))
-  if(TotalKolMC_9=0, '', DoubleToStr(PriceMC_9, sFormatSum))
-  if(TotalKolMC_10=0, '', DoubleToStr(PriceMC_10, sFormatSum))
+  if(TotalKolMC_1  = 0, '', DoubleToStr(PriceMC_1 , sFormatSum))
+  if(TotalKolMC_2  = 0, '', DoubleToStr(PriceMC_2 , sFormatSum))
+  if(TotalKolMC_3  = 0, '', DoubleToStr(PriceMC_3 , sFormatSum))
+  if(TotalKolMC_4  = 0, '', DoubleToStr(PriceMC_4 , sFormatSum))
+  if(TotalKolMC_5  = 0, '', DoubleToStr(PriceMC_5 , sFormatSum))
+  if(TotalKolMC_6  = 0, '', DoubleToStr(PriceMC_6 , sFormatSum))
+  if(TotalKolMC_7  = 0, '', DoubleToStr(PriceMC_7 , sFormatSum))
+  if(TotalKolMC_8  = 0, '', DoubleToStr(PriceMC_8 , sFormatSum))
+  if(TotalKolMC_9  = 0, '', DoubleToStr(PriceMC_9 , sFormatSum))
+  if(TotalKolMC_10 = 0, '', DoubleToStr(PriceMC_10, sFormatSum))
 
-  if(TotalKolMC_1=0, '', DoubleToStr(TotalKolMC_1*PriceMC_1, sFormatSum))
-  if(TotalKolMC_2=0, '', DoubleToStr(TotalKolMC_2*PriceMC_2, sFormatSum))
-  if(TotalKolMC_3=0, '', DoubleToStr(TotalKolMC_3*PriceMC_3, sFormatSum))
-  if(TotalKolMC_4=0, '', DoubleToStr(TotalKolMC_4*PriceMC_4, sFormatSum))
-  if(TotalKolMC_5=0, '', DoubleToStr(TotalKolMC_5*PriceMC_5, sFormatSum))
-  if(TotalKolMC_6=0, '', DoubleToStr(TotalKolMC_6*PriceMC_6, sFormatSum))
-  if(TotalKolMC_7=0, '', DoubleToStr(TotalKolMC_7*PriceMC_7, sFormatSum))
-  if(TotalKolMC_8=0, '', DoubleToStr(TotalKolMC_8*PriceMC_8, sFormatSum))
-  if(TotalKolMC_9=0, '', DoubleToStr(TotalKolMC_9*PriceMC_9, sFormatSum))
-  if(TotalKolMC_10=0, '', DoubleToStr(TotalKolMC_10*PriceMC_10, sFormatSum))
+  if(TotalKolMC_1  = 0, '', DoubleToStr(TotalKolMC_1  * PriceMC_1 , sFormatSum))
+  if(TotalKolMC_2  = 0, '', DoubleToStr(TotalKolMC_2  * PriceMC_2 , sFormatSum))
+  if(TotalKolMC_3  = 0, '', DoubleToStr(TotalKolMC_3  * PriceMC_3 , sFormatSum))
+  if(TotalKolMC_4  = 0, '', DoubleToStr(TotalKolMC_4  * PriceMC_4 , sFormatSum))
+  if(TotalKolMC_5  = 0, '', DoubleToStr(TotalKolMC_5  * PriceMC_5 , sFormatSum))
+  if(TotalKolMC_6  = 0, '', DoubleToStr(TotalKolMC_6  * PriceMC_6 , sFormatSum))
+  if(TotalKolMC_7  = 0, '', DoubleToStr(TotalKolMC_7  * PriceMC_7 , sFormatSum))
+  if(TotalKolMC_8  = 0, '', DoubleToStr(TotalKolMC_8  * PriceMC_8 , sFormatSum))
+  if(TotalKolMC_9  = 0, '', DoubleToStr(TotalKolMC_9  * PriceMC_9 , sFormatSum))
+  if(TotalKolMC_10 = 0, '', DoubleToStr(TotalKolMC_10 * PriceMC_10, sFormatSum))
 .endfields
 ÿ˜ÃÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄ´
 ³                   ˆâ®£® ³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&³            ³

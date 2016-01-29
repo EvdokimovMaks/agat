@@ -5,8 +5,8 @@
 .Form 'DogPrn2'
 .Hide
 .Fields
-nRecД_С
-nRecДоговора
+nRecД_С: comp
+nRecДоговора: comp
 Номер
 ДатаС
 ДатаПо

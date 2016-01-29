@@ -315,7 +315,7 @@ procedure FreeResourceByName(String); external 'G_ZARPL.DLL';
 //возможна вставка знака переноса и вырезка найденной подстроки из исходной.
 function LogicSubStr(var String, Byte, Boolean, Boolean): String; external 'G_ZARPL.DLL';
 function SetKlndr(integer, integer, longint, word): boolean; external 'G_ZARPL.DLL';
-function SetChasf(date, double, longint, word): double; external 'G_ZARPL.DLL';
+function SetChasf(date, double, string, word): double; external 'G_ZARPL.DLL';
 function prVidInit(word, comp): boolean; external 'G_ZARPL.DLL';
 function PrVidInitialized: Boolean; external 'G_ZARPL.DLL';
 procedure DoneVx(word); external 'G_ZARPL.DLL';

@@ -30,18 +30,18 @@
  PlaceNaznIs
  NUMOFDAY1
  NUMOFDAY2
- dStart
+ dStart     : date
  DayStart
  MonthStart
  YearStart
- dEnd
+ dEnd       : date
  DayEnd
  MonthEnd
  YearEnd
  wtkm
  command
- datePrik
- datecom
+ datePrik   : date
+ datecom    : date
  numofcom
  prikazodatel_fio
  prikazodatel_dosznost 
@@ -58,10 +58,11 @@
  StateEtap     
  CityEtap      
  PrikOrgEtap   
- dStartEtap    
- dEndEtap      
+ dStartEtap : date
+ dEndEtap   : date
  TermEtap      
- KolDayEtap    
+ KolDayEtap
+ PlOrgName
  commandEtap   
  memoEtap
 ! цикл 2
@@ -116,6 +117,7 @@
  dEndEtap       ^
  TermEtap       ^
  KolDayEtap     ^
+ PlOrgName      ^
  commandEtap    ^
  memoEtap       ^
 .}
@@ -132,7 +134,7 @@
 .Group 'Командировочное удостоверение'
 .p 70
 .fields
- if (NomKU <> '', 'N '+NomKU,'')
+ NomKU
  FIO
  Chin
  OurOrgName
@@ -151,7 +153,7 @@
 
 
 
- Б                         КОМАНДИРОВОЧНОЕ УДОСТОВЕРЕНИЕ Б  Е^ Е
+ Б                         КОМАНДИРОВОЧНОЕ УДОСТОВЕРЕНИЕ №  Б  Е^ Е
 
 
               БВыдано Б    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -162,13 +164,13 @@
 
               Бкомандированному в Б @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-              БСрок командировки Б &&& дней c &&&&&&&&&& по &&&&&&&&&& гг.
+              БСрок командировки Б &&& дней c &&&&&&&&&& по &&&&&&&&&&
 
               БЦель командировки Б   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
              ────────────────────────────────────────────────────────────────
 
                          БОснование: Б приказ (распоряжение) @@@@@@@@@@@@@@@@@@@@
-                                   от &&&&&&&&&&   N @@@@@@@@@@@@@@@
+                                   от &&&&&&&&&&   № @@@@@@@@@@@@@@@
 
                   Действительно по предъявлении паспорта
 
@@ -200,7 +202,7 @@
 .}
 .}
 .{ CheckEnter KomKomSecond
- Щ  Отметки о выбытии в командировку,прибытии в пункты назначения и выбытии из них. Щ
+ Щ  Отметки о выбытии в командировку, прибытии в пункты назначения и выбытии из них. Щ
  Выбыл из __________________________        Прибыл в __________________________
 
  "   " _____________________ 20___ г.       "   " _____________________ 20___ г.
@@ -250,9 +252,9 @@
  PlaceNazn
  NUMOFDAY2
  wtkm
- if(datetostr(strtodate(dateprik,'DD/MM/YYYY'),'DD') = 'ДД', '', datetostr(strtodate(dateprik,'DD/MM/YYYY'),'DD'))
- if(datetostr(strtodate(dateprik,'DD/MM/YYYY'),'Mon') = 'Мес', '', datetostr(strtodate(dateprik,'DD/MM/YYYY'),'Mon'))
- if(substr(datetostr(strtodate(dateprik,'DD/MM/YYYY'),'YYYY'),3,2) = 'ГГ', '', substr(datetostr(strtodate(dateprik,'DD/MM/YYYY'),'YYYY'),3,2))
+ if(dateprik = date(0,0,0), '', DateToStr(dateprik, 'DD'))
+ if(dateprik = date(0,0,0), '', DateToStr(dateprik, 'Mon'))
+ if(dateprik = date(0,0,0), '', DateToStr(dateprik, 'YY'))
  numofcom
  Passport
  aBoss nBoss
@@ -315,7 +317,7 @@
 .}
 .}
 .{ CheckEnter KomKomSecond
- И     Отметки о выбытии в служебную командировку,прибытии к месту служебной командировки,
+ И     Отметки о выбытии в служебную командировку, прибытии к месту служебной командировки,
  выбытии из него и прибытии к месту постоянной работы
  Выбыл из  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д        Прибыл в _________________________________
 
@@ -440,7 +442,7 @@ aBoss nBoss
 .p 90
 .fields
 OurOrgOKPO OurOrgName
-if (NomKU <>'', NomKU, numofcom) datecom
+NomKU datecom
 FIO TabNmb
 Podr
 Chin
@@ -472,7 +474,7 @@ aBoss nBoss
 .p 70
 .fields
 OurOrgOKPO OurOrgName
-if (NomKU <>'', NomKU, numofcom) datecom
+NomKU datecom
 FIO TabNmb
 Podr
 Chin
@@ -523,7 +525,7 @@ aBoss nBoss
 .p 55
 .fields
 OurOrgName OurOrgOKPO
-if (NomKU <>'', NomKU, numofcom) dateprik
+NomKU datecom
 FIO TabNmb
 Podr
 Chin
@@ -533,7 +535,7 @@ dStartEtap
 dEndEtap      
 TermEtap      
 KolDayEtap
-OurOrgName    
+PlOrgName
 commandEtap   
 wtkmEtap
 aRukPodr  nRukPodr 

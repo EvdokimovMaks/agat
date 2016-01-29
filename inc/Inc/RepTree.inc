@@ -99,6 +99,9 @@
   cgTreeGroupTXO     = 30;  // ТХО
   cgTreeGroupStatus  = 31;  // статус
   cgTreeGroupDesGr   = 32;  // группа дескрипторов
+  cgTreeGroupCorrespondO   = 33;  // группа соответствия аналитике основного счета
+  cgTreeGroupCorrespondK   = 34;  // группа соответствия аналитике корр. счета
+  cgTreeGroupSodr    = 35;  // содержание проводки
 
   cgTreeGroupTotal   = 65000; // Итого по отчету (не должно пересекаться с кодами аналитик)
 

@@ -24,7 +24,7 @@
   N_Do        // договор
   D_Do        // дата договора
   D_vz        // дата возврата
-  Sum_Do      // сумма договора
+  Sum_Do : double // сумма договора
   cVal        // валюта
   pr_God : double // процент годовых
 
@@ -40,23 +40,6 @@
 !.}
 
 .endfields
-
-.var
-!{  CheckEnter
-  Sum_Not_Pog  : double // сумма (не погашен)
-  Sum_Not_Use  : double // сумма (не использов)
-!}
-
-!{  CheckEnter
-  tot_Sum_Polusenie  : double;
-  tot_Sum_Pog_Summa  : double;
-  tot_Sum_Pog_Prc    : double;
-  tot_Sum_Pog_Other  : double;
-  tot_Sum_Not_Pog   : double;
-  tot_Sum_KredUse    : double;
-  tot_Sum_Not_Use   : double;
-!}
-.endvar
 
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 
@@ -74,6 +57,15 @@
 .NameInList 'Финансовые операции кредита'
 .p 60
 .defo landscape
+.var
+  tot_Sum_Polusenie  : double;
+  tot_Sum_Pog_Summa  : double;
+  tot_Sum_Pog_Prc    : double;
+  tot_Sum_Pog_Other  : double;
+  tot_Sum_Not_Pog    : double;
+  tot_Sum_KredUse    : double;
+  tot_Sum_Not_Use    : double;
+.endvar
 .fields
   CommonFormHeader
 
@@ -95,17 +87,12 @@
                         Договор № ^ от @@@@@@@@@@ дата возврата @@@@@@@@@@
                         сумма &'&&&&&&&&&&&&&.&& ^ процент годовых &&&.&&&&&
 
-.Var
-  Var_Sum_DO : double
-.EndVar
 .begin
-  Var_Sum_DO := double(Sum_DO);
   tot_Sum_Polusenie  := 0.0;
   tot_Sum_Pog_Summa  := 0.0;
   tot_Sum_Pog_Prc    := 0.0;
   tot_Sum_Pog_Other  := 0.0;
   tot_Sum_KredUse    := 0.0;
-
   tot_Sum_Not_Pog  := 0.0;
   tot_Sum_Not_Use  := 0.0;
 end.
@@ -129,18 +116,18 @@ end.
  Sum_Pog_Other
  Sum_KredUse
 .endfields
-.{?Internal;isKredLine;
-.Begin
-  tot_Sum_Not_Pog   := tot_Sum_KredUse - tot_Sum_Polusenie - tot_Sum_Pog_Summa;
-  tot_Sum_Not_Use   := Var_Sum_DO + tot_Sum_Polusenie - tot_Sum_KredUse;
+.begin
+  if (isKredLine)
+  {
+    tot_Sum_Not_Pog   := tot_Sum_KredUse - tot_Sum_Polusenie - tot_Sum_Pog_Summa;
+    tot_Sum_Not_Use   := Sum_DO + tot_Sum_Polusenie - tot_Sum_KredUse;
+  }
+  else
+  {
+    tot_Sum_Not_Pog   := tot_Sum_Polusenie - tot_Sum_Pog_Summa;
+    tot_Sum_Not_Use   := tot_Sum_Polusenie - tot_Sum_KredUse;
+  }
 end.
-.}
-.{?Internal;(Not isKredLine);
-.Begin
-  tot_Sum_Not_Pog   := tot_Sum_Polusenie - tot_Sum_Pog_Summa;
-  tot_Sum_Not_Use   := tot_Sum_Polusenie - tot_Sum_KredUse;
-end.
-.}
 .{?Internal;NewPerd;
   Р Б                                                                                                                         &'#&&&&&&&&&&&&&&&&.&&                      &'#&&&&&&&&&&&&&&&&.&& Б Р
 .}
@@ -157,18 +144,18 @@ end.
 .]f
 .}
 .{ TotalSum CheckEnter
-.{?Internal;isKredLine;
 .Begin
-  tot_Sum_Not_Pog   := tot_Sum_KredUse - tot_Sum_Polusenie - tot_Sum_Pog_Summa;
-  tot_Sum_Not_Use   := Var_Sum_DO + tot_Sum_Polusenie - tot_Sum_KredUse;
+  if (isKredLine)
+  {
+    tot_Sum_Not_Pog   := tot_Sum_KredUse - tot_Sum_Polusenie - tot_Sum_Pog_Summa;
+    tot_Sum_Not_Use   := Sum_DO + tot_Sum_Polusenie - tot_Sum_KredUse;
+  }
+  else
+  {
+    tot_Sum_Not_Pog   := tot_Sum_Polusenie - tot_Sum_Pog_Summa;
+    tot_Sum_Not_Use   := tot_Sum_Polusenie - tot_Sum_KredUse;
+  }
 end.
-.}
-.{?Internal;(Not isKredLine);
-.Begin
-  tot_Sum_Not_Pog   := tot_Sum_Polusenie - tot_Sum_Pog_Summa;
-  tot_Sum_Not_Use   := tot_Sum_Polusenie - tot_Sum_KredUse;
-end.
-.}
 .fields
   tot_Sum_Polusenie
   tot_Sum_Pog_Summa

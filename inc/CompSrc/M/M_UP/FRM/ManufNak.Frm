@@ -1108,7 +1108,7 @@ field_TO NAME_TO
 field_MOL to_FIO_Mol
 field_KOGO
 
-fVal1 fVal2
+fNDE1 fNDE2
 
 if( IsValidAll(tnKatMc)
   , loSpOrder.KatMc.Name

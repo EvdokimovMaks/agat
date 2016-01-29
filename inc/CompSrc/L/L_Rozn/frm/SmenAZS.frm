@@ -690,9 +690,9 @@ end.
 .}
 
 .fields
-  DoubleToString(comp(0), FRoundRub5(Itigo_SumBeg))
-  DoubleToString(comp(0), FRoundRub5(Itigo_SumEnd))
-  DoubleToString(comp(0), FRoundRub5(Itigo_SumBeg + Itigo_SumEnd))
+  DoubleToString(comp(0), FRoundRubRozn(Itigo_SumBeg))
+  DoubleToString(comp(0), FRoundRubRozn(Itigo_SumEnd))
+  DoubleToString(comp(0), FRoundRubRozn(Itigo_SumBeg + Itigo_SumEnd))
 .endfields
  БДвижение наличных денег Б
 
@@ -761,6 +761,7 @@ end.
 Сменный отчет АЗС
 #end
 .LinkForm 'Сменный отчет' prototype is SmenAZS
+.Group 'Country' subGroup 'Belarus'
 .fields
 
 .endfields

@@ -54,16 +54,16 @@ type TFpBudEditCellInfo = record
   cPeriod     : comp;     // период показателя
   cHashAn     : comp;     // ссылка на FpValues.cHashAn
   cBudVariant : comp;     // вариант бюджета
-                         
+
   cAlgVariant : comp;     // вариант расчета формул
-                         
+
   wValMode    : word;     // режим работы с валютой
   cVal        : comp;     // ссылка на валюту
   wForecast   : word;     // режим использования прогнозного курсв
   cValVariant : comp;     // вариант прогнозного курсв
 
-  CAn         : LongInt;  // ID контейнера аналитик ячейки
-  CAnCube     : LongInt;  // ID контейнера аналитик куба
+  CAn         : TPtr;     // ID контейнера аналитик показателя (ячейки???)
+  CAnCube     : TPtr;     // ID контейнера аналитик куба
 
   Summa       : double;   // сумма показателя
 end;

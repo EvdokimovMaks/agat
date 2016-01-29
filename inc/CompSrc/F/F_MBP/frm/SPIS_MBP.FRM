@@ -93,23 +93,47 @@
 .linkform 'Spis_MBP_01' prototype is 'Spis_MBP'
 .Group 'Акт на списание МБП' // CCCP
 .NameInList 'Акт на списание (форма № МБ-8)'
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
-  Cnt : LongInt
-  TotCnt : Double
-  TotSum : Double
-  i : Longint
-  Number : Longint
-  Util_Name : array [1..2] of string
-  Util_Numb : array [1..2] of string
-  Util_Weight : array [1..2] of double
-  Util_Price  : array [1..2] of double
-  Util_Stoim  : array [1..2] of double
+  Cnt : LongInt;
+  TotCnt : Double;
+  TotSum : Double;
+  i : Longint;
+  Number : Longint;
+  Util_Name : array [1..2] of string;
+  Util_Numb : array [1..2] of string;
+  Util_Weight : array [1..2] of double;
+  Util_Price  : array [1..2] of double;
+  Util_Stoim  : array [1..2] of double;
+  iFeeSigners : FeeSigners;
+  sUtv, sPost : string;
 .endvar
 #CommissionLinkVar
+.begin
+  sUtv := sPost := '';
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSelectionCommissionNRec);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_UtvLico))
+    {
+      sUtv := iFeeSigners.GetSignerFIO(7);
+      sPost := iFeeSigners.GetSignerPosition(1)
+    }
+
+    iFeeSigners.ClearRestriction;
+  }
+end.
 .{
 #CommissionLinkInit(SpisMBPProt)
 .fields
   CommonFormHeader
+  sPost
+  sUtv
   Nom
   DateToStr(Dat,'DD')
   DateToStr(Dat,'Mon')
@@ -142,13 +166,13 @@
     Util_Stoim[i + 1] := 0;
 end.
  ^
-                                                     УТВЕРЖДАЮ:
-                                         ______________________________
-                                                   должность
-                                         ____________   _______________
-                                            подпись      И.,О.,фамилия
+ И                                                     УТВЕРЖДАЮ:
+                                          Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                                                          должность
+                                         ____________    Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                                            подпись            И.,О.,фамилия
 
-                                            "___"______________20___г.
+                                            "___"______________20___г. И
 
 
                              А К Т  №  Б@@@@@@@@@@@@@@@ Б
@@ -308,12 +332,40 @@ end.
 .Group 'Акт на списание МБП'
 .Group 'Акт на списание МБП (Россия)'
 .NameInList 'Расходный ордер'
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
-  Npp : LongInt
-  TotCnt : Double
-  TotSum : Double
+  iFeeSigners : FeeSigners;
+  i, lSign : longint;
+  FIOs, Post : array [1..2] of string;
+  Npp : LongInt;
+  TotCnt : Double;
+  TotSum : Double;
 .endvar
 #CommissionLinkVar
+.begin
+  lSign := 0;
+
+  for (i := 1; i <= Count(FIOs); i++)
+  {
+    FIOs[i] := '';
+    Post[i] := '';
+  }
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSelectionCommissionNRec);
+
+  if (iFeeSigners.FeeSignersIsValid)
+    if (iFeeSigners.GetSignerFirst)
+      do
+      {
+        lSign++;
+        FIOs[lSign] := iFeeSigners.GetSignerFIO(1);
+        Post[lSign] := if (iFeeSigners.GetSignerRole <> '', iFeeSigners.GetSignerRole, iFeeSigners.GetSignerPosition(1));
+      }
+      while (iFeeSigners.GetSignerNext);
+end.
 .{
 #CommissionLinkInit(SpisMBPProt)
 .fields
@@ -360,6 +412,20 @@ end.
   TotSum
 .endfields
  С Итого :                                                      &&&&&&&&&&&.&&                 &&&&&&&&&&&.&& С
+
+.begin
+ i := 0;
+end.
+.{While (i < lSign)
+.begin
+ i++;
+end.
+.fields
+ Post[i] + ':'
+ FIOs[i]
+.endfields
+  @@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.}
 
 .}
 .endform
@@ -369,13 +435,41 @@ end.
 .linkform 'Spis_MBP_03' prototype is 'Spis_MBP'
 .Group 'Ведомость начисления износа'
 .NameInList 'Расширенная ведомость начисления износа'
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
-  Cnt : LongInt
-  TotCnt : Double
-  TotIzn : Double
-  TotSum : Double
+  iFeeSigners : FeeSigners;
+  i, lSign : longint;
+  FIOs, Post : array [1..2] of string;
+  Cnt : longInt;
+  TotCnt : double;
+  TotIzn : double;
+  TotSum : double;
 .endvar
 #CommissionLinkVar
+.begin
+  lSign := 0;
+
+  for (i := 1; i <= Count(FIOs); i++)
+  {
+    FIOs[i] := '';
+    Post[i] := '';
+  }
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSelectionCommissionNRec);
+
+  if (iFeeSigners.FeeSignersIsValid)
+    if (iFeeSigners.GetSignerFirst)
+      do
+      {
+        lSign++;
+        FIOs[lSign] := iFeeSigners.GetSignerFIO(1);
+        Post[lSign] := if (iFeeSigners.GetSignerRole <> '', iFeeSigners.GetSignerRole, iFeeSigners.GetSignerPosition(1));
+      }
+      while (iFeeSigners.GetSignerNext);
+end.
 .{
 #CommissionLinkInit(SpisMBPProt)
 .fields
@@ -434,6 +528,20 @@ end.
   TotIzn
 .endfields
  С Итого :                                              &&&&&.&& &&&&&&&&&&&.&&                                 &&&&&&&&&&&.&& С
+
+.begin
+ i := 0;
+end.
+.{While (i < lSign)
+.begin
+ i++;
+end.
+.fields
+ Post[i] + ':'
+ FIOs[i]
+.endfields
+  @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.}
 
 .}
 .endform
@@ -443,13 +551,41 @@ end.
 .linkform 'Spis_MBP_04' prototype is 'Spis_MBP'
 .Group 'Ведомость начисления износа'
 .NameInList 'Краткая ведомость начисления износа'
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
-  Cnt : LongInt
-  TotCnt : Double
-  TotIzn : Double
-  TotSum : Double
+  iFeeSigners : FeeSigners;
+  i, lSign : longint;
+  FIOs, Post : array [1..2] of string;
+  Cnt : longint;
+  TotCnt : double;
+  TotIzn : double;
+  TotSum : double;
 .endvar
 #CommissionLinkVar
+.begin
+  lSign := 0;
+
+  for (i := 1; i <= Count(FIOs); i++)
+  {
+    FIOs[i] := '';
+    Post[i] := '';
+  }
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSelectionCommissionNRec);
+
+  if (iFeeSigners.FeeSignersIsValid)
+    if (iFeeSigners.GetSignerFirst)
+      do
+      {
+        lSign++;
+        FIOs[lSign] := iFeeSigners.GetSignerFIO(1);
+        Post[lSign] := if (iFeeSigners.GetSignerRole <> '', iFeeSigners.GetSignerRole, iFeeSigners.GetSignerPosition(1));
+      }
+      while (iFeeSigners.GetSignerNext);
+end.
 .{
 #CommissionLinkInit(SpisMBPProt)
 .fields
@@ -504,6 +640,20 @@ end.
   TotIzn
 .endfields
  С Итого :                                              &&&&&.&& &&&&&&&&&&&.&&          &&&&&&&&&&&.&& С
+
+.begin
+ i := 0;
+end.
+.{While (i < lSign)
+.begin
+ i++;
+end.
+.fields
+ Post[i] + ':'
+ FIOs[i]
+.endfields
+  @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.}
 
 .}
 .endform
@@ -516,23 +666,46 @@ end.
 .f "MBPSPAKT.OUT"
 .defo LandScape
 .p 50
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
   PageNumber : word;
   PageSeparator : boolean;
 
-  TotCnt : Double
-  TotSum : Double
-  IznSum : Double
-  StrCount : word
+  TotCnt : Double;
+  TotSum : Double;
+  IznSum : Double;
+  StrCount : word;
 
-  i : Longint
-  Number : Longint
-  Util_Name : array [1..2] of string
-  Util_Numb : array [1..2] of string
-  Util_Weight : array [1..2] of double
-  Util_Price  : array [1..2] of double
-  Util_Stoim  : array [1..2] of double
+  i : Longint;
+  Number : Longint;
+  Util_Name : array [1..2] of string;
+  Util_Numb : array [1..2] of string;
+  Util_Weight : array [1..2] of double;
+  Util_Price  : array [1..2] of double;
+  Util_Stoim  : array [1..2] of double;
+
+  iFeeSigners : FeeSigners;
+  sUtv, sPost : string;
 .endvar
+.begin
+  sUtv := sPost := '';
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSelectionCommissionNRec);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_UtvLico))
+    {
+      sUtv := iFeeSigners.GetSignerFIO(7);
+      sPost := iFeeSigners.GetSignerPosition(1)
+    }
+
+    iFeeSigners.ClearRestriction;
+  }
+end.
 .[h skip
 .{?INTERNAL; (PageSeparator)
  Ш                                                                                                                                                                                   Оборотная сторона формы № МБ-8 Ш
@@ -547,7 +720,10 @@ end.
 #CommissionLinkInit(SpisMBPProt)
 .fields
   CommonFormHeader
-  Nom  MyOrg  ОКПО
+  sPost
+  Nom
+  sUtv
+  MyOrg  ОКПО
   Podr
   DateToStr(Dat, 'DD/MM/YYYY')
   Podr
@@ -584,9 +760,9 @@ end.
                                                                                                                                                                      от 30.10.97 № 71а
 
                                                                                                                                                                                  УТВЕРЖДАЮ:
-                                                                                                                                                                              ________________
-                                                              БАКТ №  Д@@@@@@@@@@ Е                                                                                                     должность
-                                              Бна списание малоценных и быстроизнашивающихся Б                                                                               ____________   ___________________
+                                                                                                                                                                              Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                                                              БАКТ №  Д@@@@@@@@@@ Е                                                                                                       должность
+                                              Бна списание малоценных и быстроизнашивающихся Б                                                                               ____________   Д@~@@@@@@@@@@@@@@@@@@@@ Д
                                                                  Бпредметов Б                                                                                                   подпись     расшифровка подписи
 
                                                                                                                                                                    "___"______________20___г.
@@ -801,6 +977,9 @@ end.
 .PAPER PA4
 .ORIENT PORTRAIT
 .LL 80
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
   TotSum : Double
   IznSum : Double
@@ -814,9 +993,33 @@ end.
   arTabN   : array[1..2] of String;
   arPerc   : array[1..2] of Double;
   arOstSt  : array[1..2] of Double;
-  Header, NomAct, Org, OKPO, Podraz, DatAct: string
+  iFeeSigners : FeeSigners;
+  sDirect, sPost, sBuh, sMaster : string
 .endvar
 #CommissionLinkVar
+.begin
+  sDirect := sPost := sBuh := sMaster := '';
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSelectionCommissionNRec);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_Direct))
+    {
+      sDirect := iFeeSigners.GetSignerFIO(1);
+      sPost := iFeeSigners.GetSignerPosition(1)
+    }
+
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_Bux))
+      sBuh := iFeeSigners.GetSignerFIO(1);
+
+    if (iFeeSigners.RestrictFeeByRole(3, 'Исполнитель'))
+      sMaster := iFeeSigners.GetSignerFIO(1);
+
+    iFeeSigners.ClearRestriction;
+  }
+end.
 .{
 #CommissionLinkInit(SpisMBPProt)
 .begin
@@ -824,12 +1027,6 @@ end.
   KolStr2  := 0;
   KolPage  := 0;
   KolPage2 := 0;
-  Header := CommonFormHeader;
-  NomAct := Nom;
-  Org    := MyOrg;
-  OKPO   := ОКПО;
-  Podraz := Podr;
-  DatAct := DateToStr(Dat, 'DD/MM/YYYY');
 end.
 .{SpSpis CheckEnter
 .[h
@@ -841,13 +1038,13 @@ end.
   KolStr := 0;
 end.
 .fields
-  Header
-  NomAct
-  Org
-  OKPO
-  Podraz
-  DatAct
-  Podraz
+  CommonFormHeader
+  Nom
+  MyOrg
+  ОКПО
+  Podr
+  DateToStr(Dat, 'DD/MM/YYYY')
+  Podr
   SchMain
   KodMain
 .endfields
@@ -907,15 +1104,15 @@ end.
   arKolStr[KolPage] := KolStr
 end.
 .fields
-  TotSum  IznSum
+  TotSum  IznSum  sMaster
 .endfields
 └────────────────────────────────────────┴──────────────┴───┴─────────────┴──────┴──────────────┼─────────────┼─────────────┼─────────┴─────────────────┘
                                                                                           БИтого Б  │ Б&'#&&&&&&&.&& Б│ Б&'#&&&&&&&.&& Б│
  Причина выбытия _______________________________________________________________________        └─────────────┴─────────────┘
                  _______________________________________________________________________________________________________________________________________
                  _______________________________________________________________________________________________________________________________________
-  БМастер (исполнитель работ) Б   _________________     _______________________
-                                   подпись            расшифровка подписи
+  БМастер (исполнитель работ) Б   _________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                                   подпись                 расшифровка подписи
 
 .]f
 .}
@@ -960,12 +1157,18 @@ end.
  │@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@│@~@@@@@@@@│              │&'#&.&&│&'#&&&&&&.&&│         │            │           │             │
 .}
  └──────────────────────────────────────────┴───────────┴──────────┴──────────────┴───────┴────────────┴─────────┴────────────┴───────────┴─────────────┘
-  БРуководитель подразделения Б _________________  _____________  ___________________
-                                должность         подпись     расшифровка подписи
-  БКладовщик Б  _____________   ___________________
-               подпись      расшифровка подписи
-  ББухгалтер Б  _____________   ___________________
-               подпись      расшифровка подписи
+.fields
+  sPost
+  sDirect
+  MOL
+  sBuh
+.endfields
+  БРуководитель подразделения Б  Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  _____________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                                      должность               подпись               расшифровка подписи
+  БКладовщик Б  _____________    Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+               подпись                расшифровка подписи
+  ББухгалтер Б  _____________    Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+               подпись                расшифровка подписи
 
     "  " ___________20   г.
 .} Ш
@@ -978,10 +1181,38 @@ end.
 .linkForm 'MBP_Nedost' prototype is 'Spis_MBP'
 .nameInList 'Акт инвентаризации о недостаче'
 .Group 'Недостача'
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
-  totSum : Double
+  iFeeSigners : FeeSigners;
+  i, lSign : longint;
+  FIOs, Post : array [1..2] of string;
+  totSum : double;
 .endVar
 #CommissionLinkVar
+.begin
+  lSign := 0;
+
+  for (i := 1; i <= Count(FIOs); i++)
+  {
+    FIOs[i] := '';
+    Post[i] := '';
+  }
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSelectionCommissionNRec);
+
+  if (iFeeSigners.FeeSignersIsValid)
+    if (iFeeSigners.GetSignerFirst)
+      do
+      {
+        lSign++;
+        FIOs[lSign] := iFeeSigners.GetSignerFIO(1);
+        Post[lSign] := if (iFeeSigners.GetSignerRole <> '', iFeeSigners.GetSignerRole, iFeeSigners.GetSignerPosition(1));
+      }
+      while (iFeeSigners.GetSignerNext);
+end.
 .{
 #CommissionLinkInit(SpisMBPProt)
 .Fields
@@ -1023,7 +1254,21 @@ end.
   DoubleToStr(totSum, '\2p\m4') + if (Pos('ноль', DoubleToStr(totSum, '\2p5')) <> 0, '', DoubleToStr(totSum, 'целых \2p5'))
 .endFields
 Сумма по акту: &'&&&&&&&&&&.&& руб.
-     Прописью: ^ Р
+     Прописью: ^
+
+.begin
+ i := 0;
+end.
+.{While (i < lSign)
+.begin
+ i++;
+end.
+.fields
+ Post[i] + ':'
+ FIOs[i]
+.endfields
+@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.} Р
 
 .}
 .endForm
@@ -1036,12 +1281,44 @@ end.
 .f "MBPM_36p.OUT"
 .defo LandScape
 .p 50
+.declare
+#include FeeSigners.vih
+.endDeclare
 .var
-  Cnt : LongInt
-  TotCnt : Double
-  TotSum : Double
+  Cnt : LongInt;
+  TotCnt : Double;
+  TotSum : Double;
+  iFeeSigners : FeeSigners;
+  sUtv, sPost, sBuh : string;
+  sRazr, sRazrPost, MolPost : string;
 .endvar
 #CommissionLinkVar
+.begin
+  sUtv := sPost := sBuh := sRazr := sRazrPost := MolPost := '';
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSelectionCommissionNRec);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_UtvLico))
+    {
+      sUtv := iFeeSigners.GetSignerFIO(7);
+      sPost := iFeeSigners.GetSignerPosition(1)
+    }
+
+    if (iFeeSigners.RestrictFeeByRole(2, 'Allowed'))
+    {
+      sRazr := iFeeSigners.GetSignerFIO(7);
+      sRazrPost := iFeeSigners.GetSignerPosition(1)
+    }
+
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_Bux))
+      sBuh := iFeeSigners.GetSignerFIO(7);
+
+    iFeeSigners.ClearRestriction;
+  }
+end.
 .{
 #CommissionLinkInit(SpisMBPProt)
 .fields
@@ -1049,6 +1326,8 @@ end.
  MyOrg
  ОКПО
  Podr
+ sPost
+ sUtv
  Nom
  DateToStr(Dat,'DD/MM/YYYY')
 .endfields
@@ -1073,8 +1352,8 @@ end.
                                                                                                                                                                            └────────────┘
 
                                        АКТ                                                             УТВЕРЖДАЮ
-                             НА СПИСАНИЕ ИНСТРУМЕНТА                                                   _________________________  _______________  _____________________________________
-                      (ПРИСПОСОБЛЕНИЙ) И ОБМЕН ИХ НА ГОДНЫЕ                                                   должность               подпись                фамилия, инициалы
+                             НА СПИСАНИЕ ИНСТРУМЕНТА                                                    Д@~@@@@@@@@@@@@@@@@@@@@@@@ Д  _______________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                      (ПРИСПОСОБЛЕНИЙ) И ОБМЕН ИХ НА ГОДНЫЕ                                                    должность              подпись                фамилия, инициалы
                                                                                                        "____" __________________ 20____ г.
                                                                                                                                                                                Таблица 1
   ┌──────────────┬──────────────┬─────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -1154,7 +1433,7 @@ end.
                                        Итого . . . . . . . . . . . . . . . . . . . │&#&&&&│&#&&&&&&&&&.&&│      │              │      │               │       │           │             │
                                                                                    └──────┴──────────────┴──────┴──────────────┴──────┴───────────────┴───────┴───────────┴─────────────┘
 
-   БПредседатель комиссии Б:  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  ________________________   Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+   БПредседатель комиссии Б:  Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  ________________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                     должность                      подпись                        фамилия, инициалы
 .{While (Номер_члена_комиссии < Количество_членов_комиссии)
 .begin
@@ -1165,7 +1444,7 @@ end.
   Массив_Член_комиссии_Должность [Номер_члена_комиссии]
   Массив_Член_комиссии_ФИО       [Номер_члена_комиссии]
 .endfields
-    Б@@@@@@@@@@@@@@@ Б        Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  ________________________  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+    Б@@@@@@@@@@@@@@@ Б        Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  ________________________  Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                     должность                      подпись                        фамилия, инициалы
 .}
 .{?INTERNAL;(Количество_членов_комиссии = 0)
@@ -1177,22 +1456,25 @@ end.
                                     должность                      подпись                        фамилия, инициалы
 .}
 .fields
- Mol Mol
+  MolPost MolShort
+  sRazrPost sRazr
+  MolPost MolShort
+  sBuh
 .endfields
-  Негодный инструмент сдал    ___________________  ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
-                                  должность              подпись                       фамилия, инициалы
-                    принял    ___________________  ___________________  _________________________________________________
-                                  должность              подпись                       фамилия, инициалы
-            Обмен разрешил    ___________________  ___________________  _________________________________________________
-                                  должность              подпись                       фамилия, инициалы
+  Негодный инструмент сдал     Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                                        должность                  подпись                        фамилия, инициалы
+                    принял    _____________________________  ___________________  _________________________________________________
+                                        должность                  подпись                        фамилия, инициалы
+            Обмен разрешил     Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                                        должность                  подпись                        фамилия, инициалы
 
 
-  Выданный взамен пришедшего в негодность инструмент получил   ___________________  ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
-                                                                    должность              подпись                       фамилия, инициалы
+  Выданный взамен пришедшего в негодность инструмент получил    Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д  ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
+                                                                         должность                  подпись                        фамилия, инициалы
 
   Приложение: накладная на сдачу металлолома № _______________________ от  "____" __________________ 20____ г.
 
-  Проверил бухгалтер ___________________  _________________________________________________
+  Проверил бухгалтер ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                            подпись                       фамилия, инициалы Р
 
 .}
@@ -1205,6 +1487,29 @@ end.
 .Group 'Акт на списание МБП (Беларусь)'
 .f "MBPM_30p.OUT"
 .p 80
+.declare
+#include FeeSigners.vih
+.endDeclare
+.var
+  PrintObr : Boolean;
+  iFeeSigners : FeeSigners;
+  sBuh : string;
+.endvar
+#CommissionLinkVar
+.begin
+  sBuh := '';
+
+  iFeeSigners.InitFeeSigners(cgReport_MBP);
+  iFeeSigners.FindFeeSignersByNRec(cSelectionCommissionNRec);
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_Bux))
+      sBuh := iFeeSigners.GetSignerFIO(7);
+
+    iFeeSigners.ClearRestriction;
+  }
+end.
 .fields
  CommonFormHeader
  MyOrg
@@ -1215,10 +1520,6 @@ end.
  SchMain
  KodMain
 .endfields
-.var
-  PrintObr : Boolean;
-.endvar
-#CommissionLinkVar
 .{
 #CommissionLinkInit(SpisMBPProt)
 .begin
@@ -1290,7 +1591,8 @@ end.
 .]f
 .[f2
 .fields
-  Mol
+  sBuh
+  MolShort
 .endfields
 .begin
   PrintObr := False;
@@ -1302,7 +1604,7 @@ end.
                                   подпись                        фамилия, инициалы
  Начальник цеха            ___________________  _________________________________________________
                                   подпись                        фамилия, инициалы
- Бухгалтер                 ___________________  _________________________________________________
+ Бухгалтер                 ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                   подпись                        фамилия, инициалы
  Инструменты отпустил      ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                   подпись                        фамилия, инициалы
@@ -1313,7 +1615,8 @@ end.
 .}
 .{?INTERNAL;PrintObr
 .fields
-  Mol
+  sBuh
+  MolShort
 .endfields
                                                                                                       Оборотная сторона формы М-30п
  ┌──────────────────────────────────────────────┬──────────────┬────────┬────────────────┬──────────┬───────────────┬──────────────┐
@@ -1339,7 +1642,7 @@ end.
                                   подпись                        фамилия, инициалы
  Начальник цеха            ___________________  _________________________________________________
                                   подпись                        фамилия, инициалы
- Бухгалтер                 ___________________  _________________________________________________
+ Бухгалтер                 ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                   подпись                        фамилия, инициалы
  Инструменты отпустил      ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                   подпись                        фамилия, инициалы

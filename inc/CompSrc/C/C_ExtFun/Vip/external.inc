@@ -29,8 +29,11 @@
 #include ExcelFun.Inc      // RegExcel.dll & ExcelLib.dll
 #include MsWordFun.Inc     // WordLib.dll
 #include DDE_FUN.inc       // DDELIB.dll
-#include g_calc_ef.inc     // G_Zarpl.dll
-#include g_payrep_ef.inc   // G_Zarpl.dll
+#include G_Calc_EF.inc     // G_Zarpl.dll
+#include G_PayRep_EF.inc   // G_Zarpl.dll
+#define __GetKolZnakZar__
+#include G_Sredn_EF.inc    // G_SumDivide.dll
+#undef __GetKolZnakZar__
 #include G_MNF_EF.inc      // g_MNF.dll
 #include GalRTF.Inc        // GalRTF.dll
 #include G_RLFun.inc

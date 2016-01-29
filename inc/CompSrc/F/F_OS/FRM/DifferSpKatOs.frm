@@ -9,13 +9,10 @@
 .hide
 .fields
   Наименование_поля_сравнения
-
-	Заголовок
-
+  Заголовок
   nRec_ОС                       : comp
   Наименование_ОС
-
-	nRec_метода_учета             : comp
+  nRec_метода_учета             : comp
   Наименование_метода_учета
   Значение_поля_по_методу_учета
 .endfields
@@ -23,7 +20,7 @@
 
   .{.?DifSpKatOs_Symbol1; .}
   .{.?DifSpKatOs_Symbol2; ^.}
-	.{.?DifSpKatOs_Symbol3; .}
+  .{.?DifSpKatOs_Symbol3; .}
 //===========================
 .{ CheckEnter DifSpKatOs_KatOs
    ^ ^ .{.?DifSpKatOs_Value; ^ ^ ^.}

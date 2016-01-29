@@ -30,7 +30,7 @@
 .nameinlist 'Базовая форма книги проводок'
 .hide
 .fields
-c0p1 c0p2 c0p3 c0p4 c0p5 c0p6 c0p7 c0p8
+c0p1 c0p2 c0p3 c0p4 c0p5 c0p6 c0p7 c0p8 c0p9
 c1f1 c2f1
 z1 z2
 c1p0 c1p1 c1p2 c1p3 
@@ -85,6 +85,7 @@ c0p5    Начало интервала  ^
 c0p6    Конец  интервала  ^
 c0p7    Филиал корпорации  ^
 c0p8    План счетов        ^
+c0p9    BankDocF.NRec ^
 .{ CheckEnter
 .{
 c1f1 название фильтра ^

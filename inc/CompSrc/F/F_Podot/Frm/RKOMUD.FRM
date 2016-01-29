@@ -19,7 +19,7 @@
   FIO
   TabNmb
 ! информация о приказе
-  D_doc
+  D_doc      : date
   N_Doc
   NomKU
   StateEtap
@@ -28,8 +28,8 @@
   SrokEtap
   OsnovEtap
   SodergEtap
-  dStartEtap
-  dEndEtap
+  dStartEtap : date
+  dEndEtap   : date
 .endfields
 
 strFilters ^ 

@@ -11,14 +11,14 @@
 .nameinlist 'Базовая форма'
 .hide
 .fields
-  State City N_Doc D_doc
+  State City N_Doc D_doc : date
   Npp FIO Podr
   NemeRah dn Val_n Sum_dn Sum_Nr Kurs1 Sum_Nc Val_a Kurs2 Sum_a
   State_n City_n
   ValI
   SumI
   N_rko
-  D_rko
+  D_rko : date
   Val_rko
   Sum_rko
 .endfields

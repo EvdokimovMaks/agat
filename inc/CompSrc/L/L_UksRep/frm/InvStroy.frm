@@ -94,6 +94,7 @@ end.
 #end
 .LinkForm 'InvStroy1' prototype is 'InvStroy'
 .NameInList 'Инвентаризационная опись ИНВ-1'
+.Group 'Country' subGroup 'Russia'
 .DEFO LANDSCAPE
 .p 55
 .var

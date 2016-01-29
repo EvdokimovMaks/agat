@@ -2,6 +2,15 @@
 ”ฎเฌ  -4
 #end
 .set Name = 'FormM4'
+.var
+  _MC_Name
+, _MC_Kod
+   : string;
+
+  KolInRowName
+, KolInRowKod
+   : byte;
+.endvar
 .{
 .fields
 
@@ -73,8 +82,10 @@
  KAU6 KAU7 KAU8 KAU9 KAU10
  KAU3_Kod
 
+ DEI1_Kod
  DEI1_Name
  DEI1_Kol    : double
+ DEI2_Kod
  DEI2_Name
  DEI2_Kol    : double
 
@@ -93,8 +104,8 @@
  KAU6 ^ KAU7 ^ KAU8 ^ KAU9 ^ KAU10 ^
  KAU3_Kod ^
 
- DEI1_Name ^ DEI1_Kol ^
- DEI2_Name ^ DEI2_Kol ^
+ DEI1_Kod ^ DEI1_Name ^ DEI1_Kol ^
+ DEI2_Kod ^ DEI2_Name ^ DEI2_Kol ^
 .}
 .}
 .}
@@ -109,6 +120,7 @@
 #end
 .linkform '-4' prototype is 'FormM4'
 //.group 'เจๅฎคญ๋ฉ ฎเคฅเ 1'
+.group 'Country' subGroup 'Russia'
 .DEFP PA4
 .P 40
 .PAPER PA4
@@ -236,10 +248,10 @@ End.
 ฬอออออออออออออออออุออออออออออฮอออออุอออออออออออฮออออออออออออุออออออออออออฮออออออออออออออฮออออออออออออออออฮออออออออออออออฮอออออออออออออออออฮออออฮอออออออออน
 .]H
 .BEGIN
-TotKol    := TotKol + Kol_Take;
-TotSum    := TotSum + (Sum - SumNDS);
-TotNDS    := TotNDS + SumNDS;
-TotSumNDS := TotSumNDS + Sum;
+TotKol    += Kol_Take;
+TotSum    += (Sum - SumNDS);
+TotNDS    += SumNDS;
+TotSumNDS += Sum;
 bNoData   := false;
 END.
 บ@@@@@@@@@@@@@@@@@ณ@@@@@@@@@@บ@@@@@ณ@@@@@@@@@@@บ&'&&&&&&&&&&ณ&'&&&&&&&&&&บ&'&&&&&&&&&.&&บ&'&&&&&&&&&&&.&&บ&'&&&&&&&&&.&&บ&'&&&&&&&&&&&&.&&บ    บ         บ
@@ -248,10 +260,10 @@ END.
 .]F
 .[F2
 .Begin
-ItgKol    := ItgKol    + TotKol;
-ItgSum    := ItgSum    + TotSum;
-ItgNDS    := ItgNDS    + TotNDS;
-ItgSumNDS := ItgSumNDS + TotSumNDS;
+ItgKol    += TotKol;
+ItgSum    += TotSum;
+ItgNDS    += TotNDS;
+ItgSumNDS += TotSumNDS;
 End.
 ศอออออออออออออออออฯออออออออออสอออออฯอออออออออออสออออออออออออุออออออออออออฮออออออออออออออฮออออออออออออออออฮออออออออออออออฮอออออออออออออออออฮออออสอออออออออผ
 .]F
@@ -259,10 +271,10 @@ End.
 .}
 .{?INTERNAL; ( CurP = 1 )
 .Begin
-ItgKol    := ItgKol    + TotKol;
-ItgSum    := ItgSum    + TotSum;
-ItgNDS    := ItgNDS    + TotNDS;
-ItgSumNDS := ItgSumNDS + TotSumNDS;
+ItgKol    += TotKol;
+ItgSum    += TotSum;
+ItgNDS    += TotNDS;
+ItgSumNDS += TotSumNDS;
 End.
 ^
                                                                                                                            กฎเฎโญ ๏ แโฎเฎญ  ไฎเฌ๋ ü M-4
@@ -320,6 +332,7 @@ End.
 #end
 .linkform '-4 คซ๏ ญ ซจ็ญ๋ๅ เ แ็ฅโฎข' prototype is 'FormM4'
 //.group 'เจๅฎคญ๋ฉ ฎเคฅเ 1'
+.group 'Country' subGroup 'Russia'
 .DEFP PA4
 .P 40
 .PAPER PA4
@@ -405,7 +418,7 @@ TotNDS    := 0;
 TotNSP    := 0;
 TotSumNDS := 0;
 TotSumNSP := 0;
-CurDocIndex := CurDocIndex + 1;
+CurDocIndex++;
 SchMain := '';
 KodMain := '';
 RunInterface('iPrnShowSchet26SklOrd', SklOrderNrec, SchMain, '', '', '', KodMain, '');
@@ -459,12 +472,12 @@ End.
 ฬอออออออออออออออออุออออออออออฮอออออุอออออออออออฮอออออออออุอออออออออฮอออออออออออฮออออออออออออฮออออออออฮอออออออออออออฮออออฮอออออออออฮออออออออฮอออออออออออออน
 .]H
 .BEGIN
-TotKol    := TotKol + Kol_Take;
-TotSum    := TotSum + (Sum - SumNDS - SumNSP);
-TotNDS    := TotNDS + SumNDS;
-TotNSP    := TotNSP + SumNSP;
-TotSumNDS := TotSumNDS + (Sum - SumNSP);
-TotSumNSP := TotSumNSP + Sum;
+TotKol    += Kol_Take;
+TotSum    += (Sum - SumNDS - SumNSP);
+TotNDS    += SumNDS;
+TotNSP    += SumNSP;
+TotSumNDS += (Sum - SumNSP);
+TotSumNSP += Sum;
 bNoData   := false;
 END.
 บ@@@@@@@@@@@@@@@@@ณ@@@@@@@@@@บ@@@@@ณ@@@@@@@@@@@บ&'&&&&&&&ณ&'&&&&&&&บ&'&&&&&&.&&บ&'&&&&&&&.&&บ&'&&&.&&บ&'&&&&&&&&.&&บ    บ         บ&'&&&.&&บ&'&&&&&&&&.&&บ
@@ -473,12 +486,12 @@ END.
 .]F
 .[F2
 .Begin
-ItgKol    := ItgKol   + TotKol;
-ItgSum    := ItgSum   + TotSum;
-ItgNDS    := ItgNDS   + TotNDS;
-ItgNSP    := ItgNSP   + TotNSP;
-ItgSumNDS := ItgSumNDS+ TotSumNDS;
-ItgSumNSP := ItgSumNSP+ TotSumNSP;
+ItgKol    += TotKol;
+ItgSum    += TotSum;
+ItgNDS    += TotNDS;
+ItgNSP    += TotNSP;
+ItgSumNDS += TotSumNDS;
+ItgSumNSP += TotSumNSP;
 End.
 ศอออออออออออออออออฯออออออออออสอออออฯอออออออออออสอออออออออุอออออออออฮอออออออออออฮออออออออออออฮออออออออฮอออออออออออออฮออออฮอออออออออฮออออออออฮอออออออออออออน
 .]F
@@ -486,12 +499,12 @@ End.
 .}
 .{?INTERNAL; ( CurP = 1 )
 .Begin
-ItgKol    := ItgKol   + TotKol;
-ItgSum    := ItgSum   + TotSum;
-ItgNDS    := ItgNDS   + TotNDS;
-ItgNSP    := ItgNSP   + TotNSP;
-ItgSumNDS := ItgSumNDS+ TotSumNDS;
-ItgSumNSP := ItgSumNSP+ TotSumNSP;
+ItgKol    += TotKol;
+ItgSum    += TotSum;
+ItgNDS    += TotNDS;
+ItgNSP    += TotNSP;
+ItgSumNDS += TotSumNDS;
+ItgSumNSP += TotSumNSP;
 End.
 ^
                                                                                                                            กฎเฎโญ ๏ แโฎเฎญ  ไฎเฌ๋ ü M-4

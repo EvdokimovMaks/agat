@@ -1,7 +1,7 @@
 {
  ษอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออป
  บ               ‘ซฎข เ์ : GALDICT " ซ ชโจช  9.1"                       บ
- บ     โ  แฎงค ญจ๏ 16/05/14                                             บ
+ บ     โ  แฎงค ญจ๏ 02/12/15                                             บ
  ศอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผ
 }
 
@@ -12,6 +12,7 @@ type
   tROLLOBOR = record   { - ROLLOBOR }
     TIDK           : Word;            { TIDK                                  }
     TIDKGAL        : Word;            { TIDKGAL                               }
+    OBNREC         : Comp;            { OBNREC                                }
     CPLANSSCH      : Comp;            { CPLANSSCH                             }
     DESCR          : String[20];      { DESCR                                 }
     DESGR          : String[4];       { DESGR                                 }
@@ -26,6 +27,8 @@ type
     KAUKS          : array [1..6] of Comp;{ KAUKS                             }
     KODSPK         : Comp;            { KODSPK                                }
     DATOB          : Date;            { DATOB                                 }
+    VIDOB          : Word;            { VIDOB                                 }
+    ROLLTYPE       : Word;            { ROLLTYPE                              }
     SUMOB          : Double;          { SUMOB                                 }
     SUMVALUT       : Double;          { SUMVALUT                              }
     KODVALUT       : Comp;            { KODVALUT                              }

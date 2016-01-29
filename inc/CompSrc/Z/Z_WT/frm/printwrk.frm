@@ -126,7 +126,8 @@
 end.
 #end
 
-#declare ProcessAbsences
+// ColWidth - Ë®‡®≠† ™Æ´Æ≠™® · ≠•Ô¢™†¨®
+#declare ProcessAbsences(ColWidth)
 .var
   WorkerName:       string;
   WorkerPostName:   string;
@@ -178,26 +179,31 @@ end.
 end.
 .{ PrintWrk_Absences checkenter
 .begin
-  HeaderStr1 := if (HeaderStr1 = '', Pad('∫', 6), HeaderStr1 + Pad('≥', 6));
-  HeaderStr3 := if (HeaderStr3 = '', '◊ƒƒƒƒƒ', HeaderStr3 + '¬ƒƒƒƒƒ');
-  HeaderStr4 := if (HeaderStr4 = '', Center(AbsenceNotation, 5), HeaderStr4 + '≥' + Center(AbsenceNotation, 5));
-  HeaderStr5 := if (HeaderStr5 = '', 'ŒÕÕÕÕÕ', HeaderStr5 + 'ÿÕÕÕÕÕ');
-  AbsenceStr1 := if (AbsenceStr1 = '', Pad('∫', 6), AbsenceStr1 + Pad('≥', 6));
-  AbsenceStr2 := if (AbsenceStr2 = '', PadCh('Œ', 'Õ', 6), AbsenceStr2 + PadCh('ÿ', 'Õ', 6));
-  SumStr1 := if (SumStr1 = '', PadCh('◊', 'ƒ', 6), SumStr1 + PadCh('≈', 'ƒ', 6));
-  SumStr2 := if (SumStr2 = '', PadCh(' ', 'Õ', 6), SumStr2 + PadCh('œ', 'Õ', 6));
+  HeaderStr1 := if (HeaderStr1 = '', Pad('∫', #ColWidth + 1), HeaderStr1 + Pad('≥', #ColWidth + 1));
+  HeaderStr3 := if (HeaderStr3 = '', PadCh('◊', 'ƒ', #ColWidth + 1), HeaderStr3 + PadCh('¬', 'ƒ', #ColWidth + 1));
+  HeaderStr4 := if (HeaderStr4 = '', Center(AbsenceNotation, #ColWidth), HeaderStr4 + '≥' + Center(AbsenceNotation, #ColWidth));
+  HeaderStr5 := if (HeaderStr5 = '', PadCh('Œ', 'Õ', #ColWidth + 1), HeaderStr5 + PadCh('ÿ', 'Õ', #ColWidth + 1));
+  AbsenceStr1 := if (AbsenceStr1 = '', Pad('∫', #ColWidth + 1), AbsenceStr1 + Pad('≥', #ColWidth + 1));
+  AbsenceStr2 := if (AbsenceStr2 = '', PadCh('Œ', 'Õ', #ColWidth + 1), AbsenceStr2 + PadCh('ÿ', 'Õ', #ColWidth + 1));
+  SumStr1 := if (SumStr1 = '', PadCh('◊', 'ƒ', #ColWidth + 1), SumStr1 + PadCh('≈', 'ƒ', #ColWidth + 1));
+  SumStr2 := if (SumStr2 = '', PadCh(' ', 'Õ', #ColWidth + 1), SumStr2 + PadCh('œ', 'Õ', #ColWidth + 1));
   Inc(AbsenceCount);
 end.
 .}
 .begin
-  if AbsenceCount > 0
+  if (AbsenceCount > 0)
   {
     HeaderStr4 := HeaderStr4 + '∫';
-    if AbsenceCount = 1
-      HeaderStr2 := '∫' + 'ç•Ô¢.';
+    if ((AbsenceCount = 1) and (#ColWidth < 6))
+    {
+      if (#ColWidth >= 5) // ‚.•. =
+        HeaderStr2 := '∫' + Center('ç•Ô¢.', #ColWidth);
+      else
+        HeaderStr2 := '∫' + Center('ç/ü', #ColWidth);
+    }
     else
-      HeaderStr2 := '∫' + Center('ç•Ô¢™®', AbsenceCount * 6 - 1);
-    HeaderStr0 := PadCh('À', 'Õ', AbsenceCount * 6);
+      HeaderStr2 := '∫' + Center('ç•Ô¢™®', AbsenceCount * (#ColWidth + 1) - 1);
+    HeaderStr0 := PadCh('À', 'Õ', AbsenceCount * (#ColWidth + 1));
   }
 end.
 #end
@@ -234,7 +240,7 @@ end.
 
                            ˇÅíÄÅÖãú ìóÖíÄ êÄÅéóÖÉé ÇêÖåÖçà
                                   ß†  ^  &&&& £ˇÅ.
-#ProcessAbsences
+#ProcessAbsences(3)
 .{ //main cycle
 .{ PrintWrk_Header checkenter
 .{?internal; (LineCount + 16 > LinesPerPage)
@@ -301,9 +307,9 @@ end.
 .begin
   var Data: string;
   if AbsenceData = 0
-    Data := Pad('', 5);
+    Data := Pad('', 3);
   else
-    Data := LPad(string(AbsenceData), 5);
+    Data := LPad(string(AbsenceData), 3);
   AbsenceStr0 := if (AbsenceStr0 = '', '∫' + Data, AbsenceStr0 + '≥' + Data);
 end.
 .}
@@ -351,9 +357,9 @@ end.
 .begin
   var Sum: string;
   if AbsenceSum = 0
-    Sum := Pad('', 5);
+    Sum := Pad('', 3);
   else
-    Sum := LPad(string(AbsenceSum), 5);
+    Sum := LPad(string(AbsenceSum), 3);
   SumStr0 := if (SumStr0 = '', ' ' + Sum, SumStr0 + ' ' + Sum);
 end.
 .}
@@ -426,7 +432,7 @@ end.
 
                            ˇÅíÄÅÖãú ìóÖíÄ êÄÅéóÖÉé ÇêÖåÖçà
                                   ß†  ^  &&&& £.ˇÅ
-#ProcessAbsences
+#ProcessAbsences(5)
 .{ //main cycle
 .{ PrintWrk_Header checkenter
 .{?internal; (LineCount + 16 > LinesPerPage)
@@ -611,7 +617,7 @@ end.
 
                            ˇÅíÄÅÖãú ìóÖíÄ êÄÅéóÖÉé ÇêÖåÖçà
                                   ß†  ^  &&&& £.ˇÅ
-#ProcessAbsences
+#ProcessAbsences(5)
 .{ //main cycle
 .{ PrintWrk_Header checkenter
 .{?internal; (LineCount + 16 > LinesPerPage)
@@ -787,7 +793,7 @@ end.
 
                            ˇÅíÄÅÖãú ìóÖíÄ êÄÅéóÖÉé ÇêÖåÖçà
                                   ß†  ^  &&&& £.ˇÅ
-#ProcessAbsences
+#ProcessAbsences(5)
 .{ //main cycle
 .{ PrintWrk_Header checkenter
 .{?internal; (LineCount + 16 > LinesPerPage)
@@ -972,7 +978,7 @@ end.
 
                            ˇÅíÄÅÖãú ìóÖíÄ êÄÅéóÖÉé ÇêÖåÖçà
                                   ß†  ^  &&&& £.ˇÅ
-#ProcessAbsences
+#ProcessAbsences(5)
 .{ //main cycle
 .{ PrintWrk_Header checkenter
 .{?internal; (LineCount + 16 > LinesPerPage)

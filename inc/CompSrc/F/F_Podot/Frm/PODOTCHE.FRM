@@ -50,7 +50,7 @@ ItgDoc2 ^
 .endform
 !==============================================================================
 .linkform 'Podotchet_01' prototype is 'Podotchet'
-.nameinlist '1. Подотчетные лица, сальдо и документы по ним'
+.nameinlist 'Подотчетные лица, сальдо и документы по ним'
 .fields
 CommonFormHeader
 c0p1
@@ -90,7 +90,7 @@ ItgDoc1 ItgVal ItgSum1 ItgSum2 ItgSum3 ItgDoc2
 .endform
 !==============================================================================
 .linkform 'Podotchet_02' prototype is 'Podotchet'
-.nameinlist '2. Подотчетные лица'
+.nameinlist 'Подотчетные лица'
 .fields
 CommonFormHeader
 c1p2 c1p3 c1p4 c1p5 c1p10 c1p6 c1p7 c1p8 c1p9
@@ -120,7 +120,7 @@ ItgVal ItgSum1 ItgSum2 ItgSum3
 .endform
 !==============================================================================
 .linkform 'Podotchet_03' prototype is 'Podotchet'
-.nameinlist '3. Документы по подотчетным лицам'
+.nameinlist 'Документы по подотчетным лицам'
 .fields
 CommonFormHeader
 c0p1
@@ -151,7 +151,7 @@ c2p1 c2p3 c2p2 c2p7 c2p4 c2p5 c2p6
 .endform
 !==============================================================================
 .linkform 'Podotchet_04' prototype is 'Podotchet'
-.nameinlist '4. Текущее сальдо по подотчетным лицам'
+.nameinlist 'Текущее сальдо по подотчетным лицам'
 .fields
 CommonFormHeader
 c1p2 c1p3 c1p4 c1p10 c1p9

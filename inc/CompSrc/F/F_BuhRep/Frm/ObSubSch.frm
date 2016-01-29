@@ -222,7 +222,7 @@ VedDeltaSaldoKred   дельта между расчетным и фактическим по кредиту  ^
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -240,7 +240,9 @@ SumSchSaldoInRollDeb SumSchSaldoInRollKred
 SumSchSaldoOutRollDeb SumSchSaldoOutRollKred
 SumVedSaldoVhodDeb  SumVedSaldoVhodKred  SumVedOborDeb  SumVedOborKred  SumVedSaldoIshDeb  SumVedSaldoIshKred
 .endfields
-.begin MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune); end.
+.begin
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
+end.
  Ш^
 ^
 
@@ -317,7 +319,7 @@ FrmUserName
 .nonextheader
 .var
 MyOrg :string;
-iKatOrg : KatOrg;
+oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -336,7 +338,7 @@ SumSchSaldoOutRollDebVal SumSchSaldoOutRollKredVal
 SumVedSaldoVhodDebVal  SumVedSaldoVhodKredVal  SumVedOborDebVal  SumVedOborKredVal  SumVedSaldoIshDebVal  SumVedSaldoIshKredVal
 .endfields
 .begin
-MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -414,7 +416,7 @@ FrmUserName
 .nonextheader
 .var
 MyOrg :string;
-iKatOrg : KatOrg;
+oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -437,7 +439,7 @@ SumVedSaldoVhodDeb  SumVedSaldoVhodDebVal SumVedSaldoVhodKred  SumVedSaldoVhodKr
 SumVedSaldoIshDeb   SumVedSaldoIshDebVal  SumVedSaldoIshKred   SumVedSaldoIshKredVal
 .endfields
 .begin
-MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(EndDate,'DD/MM/YYYY'));
 end.
  Р^
 ^

@@ -1,14 +1,15 @@
 //******************************************************************************
+
+var SignersCount: longint;
+
 Datastream fr_prndata
 (
-  [TTNPrimaryList] wGetTune('Doc.SD.PrnNakl.TTNPrimaryList');
+  [TTNPrimaryList]  wGetTune('Doc.SD.PrnNakl.TTNPrimaryList');
   [DopOtpRaz]      boGetTune('DOC.SD.PRNNAKL.OTPRAZTTN');
   [isNumNakl]      boGetTune('Doc.SD.PrnNakl.NumNakl');
-  [isNumOsnOtp]    wGetTune('Doc.SD.PrnNakl.OsnOtp') <> 0;
-  [isMassaZero]    sGetTune('Doc.SD.AbbrField.MassaZero');
-  [nu_gruz]        sGetTune('Doc.SD.AbbrField.Gruz');
-  [SelfAdrTorg12]  wGetTune('Doc.SD.PrnNakl.SelfAdrTorg12');
-  [AdrTorg12]      wGetTune('Doc.SD.PrnNakl.AdrTorg12');
+  [isNumOsnOtp]     wGetTune('Doc.SD.PrnNakl.OsnOtp') <> 0;
+  [isMassaZero]     sGetTune('Doc.SD.AbbrField.MassaZero');
+  [nu_gruz]         sGetTune('Doc.SD.AbbrField.Gruz');
 
   //округления
   Table fr_rounds
@@ -16,6 +17,7 @@ Datastream fr_prndata
     [rCena_Pr            ] fr_rounds.rCena_Pr;
     [rCena_PrR           ] fr_rounds.rCena_PrR;
     [rCena_PrV           ] fr_rounds.rCena_PrV;
+    [rCena_PrU           ] fr_rounds.rCena_PrU;
     [rKol_Pr             ] fr_rounds.rKol_Pr;
     [rMassa_Pr           ] fr_rounds.rMassa_Pr;
     [rMassa_Tn           ] fr_rounds.rMassa_Tn;
@@ -92,7 +94,7 @@ Datastream fr_prndata
     [tsel_buy_tovar      ] fr_dochead.Class_CelPriobr;     // Цель_приобретения
     [schetfact_nrec      ] fr_dochead.SchFact_NRec;        // СчФакт_НРек
     [schetfact_nom       ] fr_dochead.SchFact_Num;         // СчФакт_Номер
-    [schetfact_date      ] oPrnSoprFun.GetSchFactDate(fr_dochead.SchFact_NRec);  //Дата счфактуры
+    [schetfact_date      ] oPrnSoprFun.GetSchFactDate(fr_dochead.KatSoprNRec);  //Дата счфактуры
     [osnovanie           ] fr_dochead.BaseDoc_NoDoc;       // Основание
     [osnovanie_date      ] fr_dochead.BaseDoc_DDoc;        // Основание_Дата
     [naznachenie         ] fr_dochead.KatNazna_Name;       // Назначение
@@ -216,17 +218,15 @@ Datastream fr_prndata
     [SpSymbol           ] fr_dochead.SpSymbol;             // спецсимвол
 
 ! Поля для форм ТТН-1 и ТН-2
-    [avtopredpTTN       ] oPrnSoprFun.GetAvtoPr(fr_dochead.Attr_AutoName, fr_dochead.Attr_MyAuto,
-                                                             grotp.KatOrg_Name, grpol.KatOrg_Name);
+    [avtopredpTTN       ] oPrnSoprFun.GetAvtoPr(fr_dochead.Attr_AutoName, fr_dochead.Attr_MyAuto, grotp.KatOrg_Name, grpol.KatOrg_Name);
 
-    [osnOtpTTN          ] oPrnSoprFun.GetOsnovOtp(fr_dochead.Dogovor_dDoc, fr_dochead.BaseDoc_DDoc,
-                                                  fr_dochead.Dogovor_NoDoc, fr_dochead.BaseDoc_NoDoc,
+    [osnOtpTTN          ] oPrnSoprFun.GetOsnovOtp(fr_dochead.Dogovor_dDoc, fr_dochead.BaseDoc_DDoc, fr_dochead.Dogovor_NoDoc, fr_dochead.BaseDoc_NoDoc,
                                                   fr_dochead.Class_OsnOtp, fr_dochead.Class_CelPriobr);
 
     [osnOtpName         ] oPrnSoprFun.GetOsnovName(fr_dochead.Dogovor_NoDoc, fr_dochead.NZakaz_NoDoc, fr_dochead.BaseDoc_NoDoc);
-    [osnOtpNum          ] oPrnSoprFun.GetOsnovNum(fr_dochead.Dogovor_NoDoc, fr_dochead.NZakaz_NoDoc, fr_dochead.BaseDoc_NoDoc);
+    [osnOtpNum          ] oPrnSoprFun.GetOsnovNum (fr_dochead.Dogovor_NoDoc, fr_dochead.NZakaz_NoDoc, fr_dochead.BaseDoc_NoDoc);
     [osnOtpDate         ] oPrnSoprFun.GetOsnovDate(fr_dochead.Dogovor_NoDoc, fr_dochead.NZakaz_NoDoc, fr_dochead.BaseDoc_NoDoc,
-                                                       fr_dochead.Dogovor_dDoc, fr_dochead.NZakaz_DDoc, fr_dochead.BaseDoc_DDoc);
+                                                    fr_dochead.Dogovor_dDoc, fr_dochead.NZakaz_DDoc , fr_dochead.BaseDoc_DDoc);
 
     [wRoundMass2Str     ] oPrnSoprFun.GetwRoundMass2Str;
     [wRoundMass2StrTTN  ] oPrnSoprFun.GetwRoundMass2StrTTN;
@@ -238,25 +238,25 @@ Datastream fr_prndata
     [NumAndDateDoverTTN ] oPrnSoprFun.GetNumAndDateDover(fr_dochead.KatSopr_nDover, fr_dochead.KatSopr_dDover);
     [DoverOrgTTN        ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 6, 0);
 
-    [AllDocTTN          ] oPrnSoprFun.GetAllDoc(fr_dochead.AllDoc1, fr_dochead.AllDoc2, fr_dochead.AllDoc3, fr_dochead.AllDoc4,
-                                                fr_dochead.AllDoc5, fr_dochead.AllCert1, fr_dochead.AllCert2, fr_dochead.AllCert3,
+    [AllDocTTN          ] oPrnSoprFun.GetAllDoc(fr_dochead.AllDoc1 , fr_dochead.AllDoc2 , fr_dochead.AllDoc3  , fr_dochead.AllDoc4,
+                                                fr_dochead.AllDoc5 , fr_dochead.AllCert1, fr_dochead.AllCert2 , fr_dochead.AllCert3,
                                                 fr_dochead.AllCert4, fr_dochead.AllCert5, fr_dochead.PriceList, sPrice);
 
     [val_rub             ] oPrnSoprFun.GetVal_rub(fr_dochead.KatSopr_cVal);
     [val_kop             ] oPrnSoprFun.GetVal_kop(fr_dochead.KatSopr_cVal);
-    [nvagon              ] oPrnSoprFun.GetVagon(fr_dochead.KatSoprNRec, 0);
+    [nvagon              ] oPrnSoprFun.GetVagon  (fr_dochead.KatSoprNRec, 0);
     [prGrpol             ] oPrnSoprFun.GetPrGrpol(fr_dochead.KatSoprNRec);
-    [nplomba             ] oPrnSoprFun.GetPlomba(fr_dochead.KatSoprNRec);
+    [nplomba             ] oPrnSoprFun.GetPlomba (fr_dochead.KatSoprNRec);
     [isSumOtpEd          ] oPrnSoprFun.IsSumOtpEd(fr_dochead.KatSoprNRec);
 ! Поля для универсального передаточного документа
 //продавец
     [SchFactPostName     ] oPrnSoprFun.GetOrgFullName(oPrnSoprFun.GetSchFactOrgNRec(fr_dochead.SchFact_NRec, 0), 8, 0, fr_dochead.KatSopr_dSopr);
     [SchFactPostAddr     ] oPrnSoprFun.GetSchFactOrgAddr(fr_dochead.SchFact_NRec, 0);
-    [SchFactPostUNN      ] oPrnSoprFun.GetSchFactOrgUNN(fr_dochead.SchFact_NRec, 0);
+    [SchFactPostUNN      ] oPrnSoprFun.GetSchFactOrgUNN (fr_dochead.SchFact_NRec, 0);
 //покупатель
     [SchFactPoluchName   ] oPrnSoprFun.GetOrgFullName(oPrnSoprFun.GetSchFactOrgNRec(fr_dochead.SchFact_NRec, 1), 8, 0, fr_dochead.KatSopr_dSopr);
     [SchFactPoluchAddr   ] oPrnSoprFun.GetSchFactOrgAddr(fr_dochead.SchFact_NRec, 1);
-    [SchFactPoluchUNN    ] oPrnSoprFun.GetSchFactOrgUNN(fr_dochead.SchFact_NRec, 1);
+    [SchFactPoluchUNN    ] oPrnSoprFun.GetSchFactOrgUNN (fr_dochead.SchFact_NRec, 1);
 //грузоотправитель
     [SchFactGrotpName    ] oPrnSoprFun.GetOrgFullName(oPrnSoprFun.GetSchFactOrgNRec(fr_dochead.SchFact_NRec, 2), 8, 0, fr_dochead.KatSopr_dSopr);
     [SchFactGrotpAddr    ] oPrnSoprFun.GetSchFactOrgAddr(fr_dochead.SchFact_NRec, 2);
@@ -266,9 +266,12 @@ Datastream fr_prndata
     [SchFactGrpolAddr    ] oPrnSoprFun.GetSchFactOrgAddr(fr_dochead.SchFact_NRec, 3);
 //гл. бухгалтер
     [GlBuhName           ] oPrnSoprFun.GetGlBuhName(fr_dochead.KatSoprNRec, fr_dochead.GBuhName);
-    [val_name            ] if (oPrnSoprFun.GetValName(fr_dochead.KatSopr_cVal)= '', sGetTune('NDE.NAMERUBL'),oPrnSoprFun.GetValName(fr_dochead.KatSopr_cVal));
-    [val_kod             ] if (oPrnSoprFun.GetValCode(fr_dochead.KatSopr_cVal)= '', sGetTune('NDE.RUBLISO'), oPrnSoprFun.GetValCode(fr_dochead.KatSopr_cVal));
+    [val_name            ] if (oPrnSoprFun.GetValName(fr_dochead.KatSopr_cVal) = '', sGetTune('NDE.NAMERUBL'), oPrnSoprFun.GetValName(fr_dochead.KatSopr_cVal));
+    [val_kod             ] if (oPrnSoprFun.GetValCode(fr_dochead.KatSopr_cVal) = '', sGetTune('NDE.RUBLISO') , oPrnSoprFun.GetValCode(fr_dochead.KatSopr_cVal));
     [PlatSch             ] oPrnSoprFun.FindPlat(fr_dochead.SchFact_NRec);
+//номер счета-фактуры для корректировочного УПД
+    [SchNom              ] oPrnSoprFun.GetSchFactNum (fr_dochead.KatSoprNRec);
+    [SchDate             ] oPrnSoprFun.GetSchFactDate(fr_dochead.KatSoprNRec);
   )
   ;
 
@@ -423,27 +426,23 @@ Datastream fr_prndata
     [kolFTTN              ]  DoubleToStr(fr_docspecif.KolF, Kol_Pr);
 
     [priceMC              ]  oPrnSoprFun.GetSPriceMC(spec_nrec, 1, fr_dochead.KatSopr_cVal, fr_docspecif.PrMc, fr_docspecif.CNacSN, fr_docspecif.CNacBN,
-                                                                                                      fr_docspecif.CNakSN, fr_docspecif.CNakBN);
+                                                                                                               fr_docspecif.CNakSN, fr_docspecif.CNakBN);
 
     [priceMCVal           ]  oPrnSoprFun.GetSPriceMC(spec_nrec, 2, fr_dochead.KatSopr_cVal, fr_docspecif.PrMc, fr_docspecif.CNacSN, fr_docspecif.CNacBN,
-                                                                                                      fr_docspecif.CNakSN, fr_docspecif.CNakBN);
+                                                                                                               fr_docspecif.CNakSN, fr_docspecif.CNakBN);
 
     [priceMCwof           ]  oPrnSoprFun.GetDPriceMC(spec_nrec, 1, fr_docspecif.PrMc, fr_docspecif.CNacSNUth, fr_docspecif.CNacBN, fr_docspecif.CNakSN, fr_docspecif.CNakBN);
-
     [priceMCValwof        ]  oPrnSoprFun.GetDPriceMC(spec_nrec, 2, fr_docspecif.PrMc, fr_docspecif.CNacSNUth, fr_docspecif.CNacBN, fr_docspecif.CNakSN, fr_docspecif.CNakBN);
 
     [SummaMc              ]  oPrnSoprFun.GetSSummaMC(1, fr_docspecif.PrMc, fr_docspecif.StNacSN0, fr_docspecif.StNacBN0, fr_docspecif.StNakSN, fr_docspecif.StNakBN);
-
     [SummaMcVal           ]  oPrnSoprFun.GetSSummaMC(2, fr_docspecif.PrMc, fr_docspecif.StNacSN0, fr_docspecif.StNacBN0, fr_docspecif.StNakSN, fr_docspecif.StNakBN);
-
     [SummaMcwof           ]  oPrnSoprFun.GetDSummaMC(1, fr_docspecif.PrMc, fr_docspecif.StNacSN0, fr_docspecif.StNacBN0, fr_docspecif.StNakSN, fr_docspecif.StNakBN);
-
     [SummaMcValwof        ]  oPrnSoprFun.GetDSummaMC(2, fr_docspecif.PrMc, fr_docspecif.StNacSN0, fr_docspecif.StNacBN0, fr_docspecif.StNakSN, fr_docspecif.StNakBN);
 
     [StavkaNal            ]  oPrnSoprFun.GetStavkaNal(fr_docspecif.PrNDS, fr_docspecif.StNDS);
 
-    [SumNds               ]  oPrnSoprFun.GetSumNds(1,  PrNDS, fr_docspecif.StNDSNac0, fr_docspecif.StNDSNak);
-    [SumNdsVal            ]  oPrnSoprFun.GetSumNds(2,  PrNDS, fr_docspecif.StNDSNac0, fr_docspecif.StNDSNak);
+    [SumNds               ]  oPrnSoprFun.GetSumNds (1, PrNDS, fr_docspecif.StNDSNac0, fr_docspecif.StNDSNak);
+    [SumNdsVal            ]  oPrnSoprFun.GetSumNds (2, PrNDS, fr_docspecif.StNDSNac0, fr_docspecif.StNDSNak);
     [SumNdswof            ]  oPrnSoprFun.GetDSumNds(1, PrNDS, fr_docspecif.StNDSNac0, fr_docspecif.StNDSNak);
     [SumNdsValwof         ]  oPrnSoprFun.GetDSumNds(2, PrNDS, fr_docspecif.StNDSNac0, fr_docspecif.StNDSNak);
 
@@ -451,19 +450,19 @@ Datastream fr_prndata
     [SummaMcSNdsVal       ]  oPrnSoprFun.GetSSummaMCsNDS(2, fr_docspecif.StNacSN0, fr_docspecif.StNakSN);
     [SummaMcSNdswof       ]  oPrnSoprFun.GetDSummaMCsNDS(1, fr_docspecif.StNacSN0, fr_docspecif.StNakSN);
     [SummaMcSNdsValwof    ]  oPrnSoprFun.GetDSummaMCsNDS(2, fr_docspecif.StNacSN0, fr_docspecif.StNakSN);
-    [KolGrMTTN            ]  oPrnSoprFun.GetKolGrM(fr_docspecif.PrMc, fr_docspecif.GrMKol, fr_docspecif.KolF);
-    [KolGrMTTNwof         ]  oPrnSoprFun.GetDKolGrM(fr_docspecif.PrMc, fr_docspecif.GrMKol, fr_docspecif.KolF);
-    [MassaBrTTN           ]  oPrnSoprFun.GetMassaBr(fr_docspecif.PrMc, fr_docspecif.KolVes);
-    [MassaBrTTNDouble     ]  oPrnSoprFun.GetMassaBr(fr_docspecif.PrMc, fr_docspecif.KolVes);
-    [MassaBrTTNwof        ]  oPrnSoprFun.GetDMassaBr(fr_docspecif.PrMc, fr_docspecif.KolVes);
-    [MassaNettoTTN        ]  oPrnSoprFun.GetMassaBr(fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
-    [MassaNettoTTNDouble  ]  oPrnSoprFun.GetMassaBr(fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
-    [MassaNettoTTNwof     ]  oPrnSoprFun.GetDMassaBr(fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
-    [MassaBrTTN1          ]  oPrnSoprFun.GetMassaBrTTN(fr_docspecif.PrMc, fr_docspecif.KolVes);
-    [MassaBrTTN1Double    ]  oPrnSoprFun.GetMassaBrTTN(fr_docspecif.PrMc, fr_docspecif.KolVes);
+    [KolGrMTTN            ]  oPrnSoprFun.GetKolGrM     (fr_docspecif.PrMc, fr_docspecif.GrMKol, fr_docspecif.KolF);
+    [KolGrMTTNwof         ]  oPrnSoprFun.GetDKolGrM    (fr_docspecif.PrMc, fr_docspecif.GrMKol, fr_docspecif.KolF);
+    [MassaBrTTN           ]  oPrnSoprFun.GetMassaBr    (fr_docspecif.PrMc, fr_docspecif.KolVes);
+    [MassaBrTTNDouble     ]  oPrnSoprFun.GetMassaBr    (fr_docspecif.PrMc, fr_docspecif.KolVes);
+    [MassaBrTTNwof        ]  oPrnSoprFun.GetDMassaBr   (fr_docspecif.PrMc, fr_docspecif.KolVes);
+    [MassaNettoTTN        ]  oPrnSoprFun.GetMassaBr    (fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
+    [MassaNettoTTNDouble  ]  oPrnSoprFun.GetMassaBr    (fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
+    [MassaNettoTTNwof     ]  oPrnSoprFun.GetDMassaBr   (fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
+    [MassaBrTTN1          ]  oPrnSoprFun.GetMassaBrTTN (fr_docspecif.PrMc, fr_docspecif.KolVes);
+    [MassaBrTTN1Double    ]  oPrnSoprFun.GetMassaBrTTN (fr_docspecif.PrMc, fr_docspecif.KolVes);
     [MassaBrTTN1wof       ]  oPrnSoprFun.GetDMassaBrTTN(fr_docspecif.PrMc, fr_docspecif.KolVes);
-    [MassaNettoTTN1       ]  oPrnSoprFun.GetMassaBrTTN(fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
-    [MassaNettoTTN1Double ]  oPrnSoprFun.GetMassaBrTTN(fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
+    [MassaNettoTTN1       ]  oPrnSoprFun.GetMassaBrTTN (fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
+    [MassaNettoTTN1Double ]  oPrnSoprFun.GetMassaBrTTN (fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
     [MassaNettoTTN1wof    ]  oPrnSoprFun.GetDMassaBrTTN(fr_docspecif.PrMc, fr_docspecif.MassaMC * fr_docspecif.KolUth);
 
     [UthEdKod             ]  oPrnSoprFun.GetUthEdKod (fr_docspecif.SpSoprNRec);
@@ -481,6 +480,51 @@ Datastream fr_prndata
     [PrnSoprGTD1          ]  oPrnSoprFun.PrnSoprGTD(PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 0);  //код страны товара
     [PrnSoprGTD2          ]  oPrnSoprFun.PrnSoprGTD(PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 1);  //страна товара
     [PrnSoprGTD3          ]  oPrnSoprFun.PrnSoprGTD(PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 2);  //номер таможенной декларации
+! Поля для соглашения и корректировочного документа ПИР 102.137440
+    [KDKolOld             ] DoubleToStr(oPrnSoprFun.GetKDKolOld  (fr_docspecif.SpSoprNRec), Kol_Pr);
+    [KDKolNew             ] DoubleToStr(oPrnSoprFun.GetKDKolNew  (fr_docspecif.SpSoprNRec), Kol_Pr);
+    [KDPriceOld           ] DoubleToStr(oPrnSoprFun.GetKDPriceOld(fr_docspecif.SpSoprNRec), Kol_Pr);
+    [KDPriceNew           ] DoubleToStr(oPrnSoprFun.GetKDPriceNew(fr_docspecif.SpSoprNRec), Kol_Pr);
+    [KDSummaOldBN         ] DoubleToStr(oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec), Cena_Pr);
+    [KDSummaNewBN         ] DoubleToStr(oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec), Cena_Pr);
+    [KDSumma1BN           ] DoubleToStr(if ((oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec)
+                                           - oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec)
+                                           - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec)
+                                           + oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec)) < 0,
+                                             Abs(oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec)
+                                           - oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec)
+                                           - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec)
+                                           + oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec)), 0), Cena_Pr);
+    [KDSumma2BN           ] DoubleToStr(if ((oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec)
+                                           - oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec)
+                                           - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec)
+                                           + oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec)) > 0,
+                                             oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec)
+                                           - oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec)
+                                           - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec)
+                                           + oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec), 0), Cena_Pr);
+
+    [KDAkcizOld           ] if (oPrnSoprFun.GetKDPriceOld(fr_docspecif.SpSoprNRec) <> 0, if (fr_docspecif.CExciseNak <> 0, DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr), 'Без акциза'), '-');
+    [KDAkcizNew           ] if (oPrnSoprFun.GetKDPriceNew(fr_docspecif.SpSoprNRec) <> 0, if (fr_docspecif.CExciseNak <> 0, DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr), 'Без акциза'), '-');
+    [KDAkciz1             ] if (oPrnSoprFun.GetKDPriceOld(fr_docspecif.SpSoprNRec) <> 0, if (fr_docspecif.CExciseNak <> 0, DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr), 'Без акциза'), '-');
+    [KDAkciz2             ] if (oPrnSoprFun.GetKDPriceNew(fr_docspecif.SpSoprNRec) <> 0, if (fr_docspecif.CExciseNak <> 0, DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr), 'Без акциза'), '-');
+
+    [KDNalogStOld         ] if (fr_docspecif.StNDS = 0, sGetTune('Doc.SD.AbbrField.NDSStZero'), DoubleToStr(fr_docspecif.StNDS, NDS_St));
+    [KDNalogStNew         ] if (fr_docspecif.StNDS = 0, sGetTune('Doc.SD.AbbrField.NDSStZero'), DoubleToStr(fr_docspecif.StNDS, NDS_St));
+
+    [KDNalogOld           ] DoubleToStr(oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec), Cena_Pr);
+    [KDNalogNew           ] DoubleToStr(oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec), Cena_Pr);
+    [KDNalog1             ] DoubleToStr(if ((oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec)) < 0,
+                                             Abs(oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec)), 0), Cena_Pr);
+    [KDNalog2             ] DoubleToStr(if ((oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec)) > 0,
+                                             oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec), 0), Cena_Pr);
+
+    [KDSummaOld           ] DoubleToStr(oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec), Cena_Pr);
+    [KDSummaNew           ] DoubleToStr(oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec), Cena_Pr);
+    [KDSumma1             ] DoubleToStr(if ((oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec)) < 0,
+                                             Abs (oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec)), 0), Cena_Pr);
+    [KDSumma2             ] DoubleToStr(if ((oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec)) > 0,
+                                             oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec), 0), Cena_Pr);
 
   );
 
@@ -780,13 +824,13 @@ Datastream fr_prndata
     [ur_addr         ] post.KatOrg_UrAddr;     // организация_ЮрАдрес
 ! Поля для форм ТТН-1 и ТН-2
 ! Поле OrgName для вывода наименования
-    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy(fr_dochead.KatSoprNRec, 0);
-    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 0, 1) + ' ' + oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 0, 2);
+    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy  (fr_dochead.KatSoprNRec, 0);
+    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 0, 0);
     [OrgTTNBelAddr   ] oPrnSoprFun.GetOrgTTNBelAddr(post.KatOrg_Name, post.KatOrg_Addr, '', '', '', '', 0);
-    [OrgFields       ] oPrnSoprFun.GetOrgFields(post.KatOrg_Name, post.KatOrg_UNN, post.KatOrg_Addr, post.KatOrg_TEL);
-    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr(post.KatOrg_Name, post.KatOrg_UNN, post.KatOrg_Addr, post.KatOrg_UrAddr, post.KatOrg_TEL);
-    [OrgFields12     ] oPrnSoprFun.GetOrgFields12(fr_dochead.KatSoprNRec, post.KatOrg_Name, post.KatOrg_UNN, post.KatOrg_KODPLAT , post.KatOrg_Addr, post.KatOrg_UrAddr, post.KatOrg_TEL, 3);
-    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(post.KatB_Name, post.KatB_Schet1, post.KatB_MFO1, post.KatB_Schet2, post.KatB_MFO2);
+    [OrgFields       ] oPrnSoprFun.GetOrgFields    (post.KatState_KOD, post.KatOrg_Name, post.KatOrg_UNN, post.KatOrg_Addr, post.KatOrg_TEL);
+    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (post.KatState_KOD, post.KatOrg_Name, post.KatOrg_UNN, post.KatOrg_Addr, post.KatOrg_UrAddr, post.KatOrg_TEL);
+    [OrgFields12     ] oPrnSoprFun.GetOrgFields12(fr_dochead.KatSoprNRec, post.KatOrg_Name, post.KatOrg_UNN, post.KatOrg_KODPLAT, post.KatOrg_Addr, post.KatOrg_UrAddr, post.KatOrg_TEL, 3);
+    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(post.KatState_KOD, post.KatB_Name  , post.KatB_Schet1, post.KatB_MFO1, post.KatB_Schet2, post.KatB_MFO2);
 
   )
   ;
@@ -834,13 +878,13 @@ Datastream fr_prndata
     [ur_addr         ] grotp.KatOrg_UrAddr;     // организация_ЮрАдрес
 ! Поля для форм ТТН-1 и ТН-2
 ! Поле OrgName для вывода наименования
-    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy(fr_dochead.KatSoprNRec, 1);
-    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 1, 1) + ' ' + oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 1, 2);
-    [OrgTTNBelAddr   ] oPrnSoprFun.TTNBelSelfAddr(fr_dochead.KatSoprNRec, grotp.KatOrg_Name, grotp.KatOrg_UrAddr, grotp.KatOrg_Addr, '', '', '', '', 0, 1);
-    [OrgFields       ] oPrnSoprFun.GetOrgFields(grotp.KatOrg_Name, grotp.KatOrg_UNN, grotp.KatOrg_Addr, grotp.KatOrg_TEL);
-    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr(grotp.KatOrg_Name, grotp.KatOrg_UNN, grotp.KatOrg_Addr, grotp.KatOrg_UrAddr, grotp.KatOrg_TEL);
+    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy  (fr_dochead.KatSoprNRec, 1);
+    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 1, 0);
+    [OrgTTNBelAddr   ] oPrnSoprFun.TTNBelAddr(fr_dochead.KatSoprNRec, grotp.KatOrg_Name, grotp.KatOrg_UrAddr, grotp.KatOrg_Addr, '', '', '', '', 0, 1);
+    [OrgFields       ] oPrnSoprFun.GetOrgFields    (grotp.KatState_KOD, grotp.KatOrg_Name, grotp.KatOrg_UNN, grotp.KatOrg_Addr, grotp.KatOrg_TEL);
+    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (grotp.KatState_KOD, grotp.KatOrg_Name, grotp.KatOrg_UNN, grotp.KatOrg_Addr, grotp.KatOrg_UrAddr, grotp.KatOrg_TEL);
     [OrgFields12     ] oPrnSoprFun.GetOrgFields12(fr_dochead.KatSoprNRec, grotp.KatOrg_Name, grotp.KatOrg_UNN, grotp.KatOrg_KODPLAT, grotp.KatOrg_Addr, grotp.KatOrg_UrAddr, grotp.KatOrg_TEL, 1);
-    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(grotp.KatB_Name, grotp.KatB_Schet1, grotp.KatB_MFO1, grotp.KatB_Schet2, grotp.KatB_MFO2);
+    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(grotp.KatState_KOD, grotp.KatB_Name  , grotp.KatB_Schet1, grotp.KatB_MFO1, grotp.KatB_Schet2, grotp.KatB_MFO2);
   )
   ;
 
@@ -888,13 +932,13 @@ Datastream fr_prndata
     [ur_addr         ] grpol.KatOrg_UrAddr;     // организация_ЮрАдрес
 ! Поля для форм ТТН-1 и ТН-2
 ! Поле OrgName для вывода наименования
-    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy(fr_dochead.KatSoprNRec, 2);
-    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 2, 1) + ' ' + oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 2, 2);
+    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy  (fr_dochead.KatSoprNRec, 2);
+    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 2, 0);
     [OrgTTNBelAddr   ] oPrnSoprFun.TTNBelAddr(fr_dochead.KatSoprNRec, grpol.KatOrg_Name, grpol.KatOrg_UrAddr, grpol.KatOrg_Addr, '', '', '', '', 0, 2);
-    [OrgFields       ] oPrnSoprFun.GetOrgFields(grpol.KatOrg_Name, grpol.KatOrg_UNN, if ( boGetTune('Doc.SD.PrnNakl.AdrPunktRazgr'), if(fr_docTTN.PunktRAddr='' or fr_docTTN.PunktRName='', grpol.KatOrg_Addr, fr_docTTN.PunktRAddr), grpol.KatOrg_Addr), grpol.KatOrg_TEL);
-    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr(grpol.KatOrg_Name, grpol.KatOrg_UNN, grpol.KatOrg_Addr, grpol.KatOrg_UrAddr, grpol.KatOrg_TEL);
+    [OrgFields       ] oPrnSoprFun.GetOrgFields    (grpol.KatState_KOD, grpol.KatOrg_Name, grpol.KatOrg_UNN, if ( boGetTune('Doc.SD.PrnNakl.AdrPunktRazgr'), if(fr_docTTN.PunktRAddr='' or fr_docTTN.PunktRName='', grpol.KatOrg_Addr, fr_docTTN.PunktRAddr), grpol.KatOrg_Addr), grpol.KatOrg_TEL);
+    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (grpol.KatState_KOD, grpol.KatOrg_Name, grpol.KatOrg_UNN, grpol.KatOrg_Addr, grpol.KatOrg_UrAddr, grpol.KatOrg_TEL);
     [OrgFields12     ] oPrnSoprFun.GetOrgFields12(fr_dochead.KatSoprNRec, grpol.KatOrg_Name, grpol.KatOrg_UNN, grpol.KatOrg_KODPLAT, if ( boGetTune('Doc.SD.PrnNakl.AdrPunktRazgr'), if(fr_docTTN.PunktRAddr='' or fr_docTTN.PunktRName='', grpol.KatOrg_Addr, fr_docTTN.PunktRAddr), grpol.KatOrg_Addr), grpol.KatOrg_UrAddr, grpol.KatOrg_TEL, 2);
-    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(grpol.KatB_Name, grpol.KatB_Schet1, grpol.KatB_MFO1, grpol.KatB_Schet2, grpol.KatB_MFO2);
+    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(grpol.KatState_KOD, grpol.KatB_Name  , grpol.KatB_Schet1, grpol.KatB_MFO1, grpol.KatB_Schet2, grpol.KatB_MFO2);
     [OrgAddr         ] oPrnSoprFun.GetAddr(fr_docTTN.PunktRAddr, fr_docTTN.PunktRName, grpol.KatOrg_Addr);
   )
   ;
@@ -943,12 +987,12 @@ Datastream fr_prndata
     [ur_addr         ] poluch.KatOrg_UrAddr;     // организация_ЮрАдрес
 ! Поля для форм ТТН-1 и ТН-2
 ! Поле OrgName для вывода наименования
-    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy(fr_dochead.KatSoprNRec, 3);
-    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 3, 1) + ' ' + oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 3, 2);
+    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy  (fr_dochead.KatSoprNRec, 3);
+    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 3, 0);
     [OrgTTNBelAddr   ] oPrnSoprFun.GetOrgTTNBelAddr(poluch.KatOrg_Name, poluch.KatOrg_Addr, '', '', '', '', 0);
-    [OrgFields       ] oPrnSoprFun.GetOrgFields(poluch.KatOrg_Name, poluch.KatOrg_UNN, poluch.KatOrg_Addr, poluch.KatOrg_TEL);
-    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr(poluch.KatOrg_Name, poluch.KatOrg_UNN, poluch.KatOrg_Addr, poluch.KatOrg_UrAddr, poluch.KatOrg_TEL);
-    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(poluch.KatB_Name, poluch.KatB_Schet1, poluch.KatB_MFO1, poluch.KatB_Schet2, poluch.KatB_MFO2);
+    [OrgFields       ] oPrnSoprFun.GetOrgFields    (poluch.KatState_KOD, poluch.KatOrg_Name, poluch.KatOrg_UNN, poluch.KatOrg_Addr, poluch.KatOrg_TEL);
+    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (poluch.KatState_KOD, poluch.KatOrg_Name, poluch.KatOrg_UNN, poluch.KatOrg_Addr, poluch.KatOrg_UrAddr, poluch.KatOrg_TEL);
+    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(poluch.KatState_KOD, poluch.KatB_Name  , poluch.KatB_Schet1, poluch.KatB_MFO1, poluch.KatB_Schet2, poluch.KatB_MFO2);
   )
   ;
 
@@ -996,13 +1040,13 @@ Datastream fr_prndata
     [ur_addr         ] platel.KatOrg_UrAddr;     // организация_ЮрАдрес
 ! Поля для форм ТТН-1 и ТН-2
 ! Поле OrgName для вывода наименования
-    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy(fr_dochead.KatSoprNRec, 4);
-    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 4, 1) + ' ' + oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 4, 2);
+    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy  (fr_dochead.KatSoprNRec, 4);
+    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 4, 0);
     [OrgTTNBelAddr   ] oPrnSoprFun.GetOrgTTNBelAddr(platel.KatOrg_Name, platel.KatOrg_Addr, '', '', '', '', 0);
-    [OrgFields       ] oPrnSoprFun.GetOrgFields(platel.KatOrg_Name, platel.KatOrg_UNN, platel.KatOrg_Addr, platel.KatOrg_TEL);
-    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr(platel.KatOrg_Name, platel.KatOrg_UNN, platel.KatOrg_Addr, platel.KatOrg_UrAddr, platel.KatOrg_TEL);
+    [OrgFields       ] oPrnSoprFun.GetOrgFields    (platel.KatState_KOD, platel.KatOrg_Name, platel.KatOrg_UNN, platel.KatOrg_Addr, platel.KatOrg_TEL);
+    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (platel.KatState_KOD, platel.KatOrg_Name, platel.KatOrg_UNN, platel.KatOrg_Addr, platel.KatOrg_UrAddr, platel.KatOrg_TEL);
     [OrgFields12     ] oPrnSoprFun.GetOrgFields12(fr_dochead.KatSoprNRec, platel.KatOrg_Name, platel.KatOrg_UNN, platel.KatOrg_KODPLAT, platel.KatOrg_Addr, platel.KatOrg_UrAddr, platel.KatOrg_TEL, 3);
-    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(platel.KatB_Name, platel.KatB_Schet1, platel.KatB_MFO1, platel.KatB_Schet2, platel.KatB_MFO2);
+    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(platel.KatState_KOD, platel.KatB_Name  , platel.KatB_Schet1, platel.KatB_MFO1, platel.KatB_Schet2, platel.KatB_MFO2);
   )
   ;
 
@@ -1050,12 +1094,12 @@ Datastream fr_prndata
     [ur_addr         ] ZakPlat.KatOrg_UrAddr;     // организация_ЮрАдрес
 ! Поля для форм ТТН-1 и ТН-2
 ! Поле OrgName для вывода наименования
-    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy(fr_dochead.KatSoprNRec, 5);
-    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 5, 1) + ' ' + oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 5, 2);
-    [OrgTTNBelAddr   ] oPrnSoprFun.TTNBelPlatAddr(fr_dochead.KatSoprNRec, ZakPlat.KatOrg_Name, ZakPlat.KatOrg_UrAddr, ZakPlat.KatOrg_Addr, '', '', '', '', 0, 5);
-    [OrgFields       ] oPrnSoprFun.GetOrgFields    (ZakPlat.KatOrg_Name, ZakPlat.KatOrg_UNN, ZakPlat.KatOrg_Addr, ZakPlat.KatOrg_TEL);
-    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (ZakPlat.KatOrg_Name, ZakPlat.KatOrg_UNN, ZakPlat.KatOrg_Addr, ZakPlat.KatOrg_UrAddr, ZakPlat.KatOrg_TEL);
-    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(ZakPlat.KatB_Name, ZakPlat.KatB_Schet1, ZakPlat.KatB_MFO1, ZakPlat.KatB_Schet2, ZakPlat.KatB_MFO2);
+    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy  (fr_dochead.KatSoprNRec, 5);
+    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 5, 0);
+    [OrgTTNBelAddr   ] oPrnSoprFun.TTNBelAddr(fr_dochead.KatSoprNRec, ZakPlat.KatOrg_Name, ZakPlat.KatOrg_UrAddr, ZakPlat.KatOrg_Addr, '', '', '', '', 0, 5);
+    [OrgFields       ] oPrnSoprFun.GetOrgFields    (ZakPlat.KatState_KOD, ZakPlat.KatOrg_Name, ZakPlat.KatOrg_UNN, ZakPlat.KatOrg_Addr, ZakPlat.KatOrg_TEL);
+    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (ZakPlat.KatState_KOD, ZakPlat.KatOrg_Name, ZakPlat.KatOrg_UNN, ZakPlat.KatOrg_Addr, ZakPlat.KatOrg_UrAddr, ZakPlat.KatOrg_TEL);
+    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(ZakPlat.KatState_KOD, ZakPlat.KatB_Name  , ZakPlat.KatB_Schet1, ZakPlat.KatB_MFO1, ZakPlat.KatB_Schet2, ZakPlat.KatB_MFO2);
   )
   ;
 
@@ -1103,13 +1147,13 @@ Datastream fr_prndata
     [ur_addr         ] avtopr.KatOrg_UrAddr;     // организация_ЮрАдрес
 ! Поля для форм ТТН-1 и ТН-2
 ! Поле OrgName для вывода наименования
-    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy(fr_dochead.KatSoprNRec, 7);
-    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 7, 1) + ' ' + oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 7, 2);
+    [CodeRwy         ] oPrnSoprFun.WriteCodeRwy  (fr_dochead.KatSoprNRec, 7);
+    [OrgName         ] oPrnSoprFun.GetOrgFullName(fr_dochead.KatSoprNRec, 7, 0);
     [OrgUrAddr       ] oPrnSoprFun.WriteAvtoPrJurAddr(fr_dochead.KatSoprNRec);
     [OrgTTNBelAddr   ] oPrnSoprFun.GetOrgTTNBelAddr(avtopr.KatOrg_Name, avtopr.KatOrg_Addr, '', '', '', '', 0);
-    [OrgFields       ] oPrnSoprFun.GetOrgFields(avtopr.KatOrg_Name, avtopr.KatOrg_UNN, avtopr.KatOrg_Addr, avtopr.KatOrg_TEL);
-    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr(avtopr.KatOrg_Name, avtopr.KatOrg_UNN, avtopr.KatOrg_Addr, avtopr.KatOrg_UrAddr, avtopr.KatOrg_TEL);
-    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(avtopr.KatB_Name, avtopr.KatB_Schet1, avtopr.KatB_MFO1, avtopr.KatB_Schet2, avtopr.KatB_MFO2);
+    [OrgFields       ] oPrnSoprFun.GetOrgFields    (avtopr.KatState_KOD, avtopr.KatOrg_Name, avtopr.KatOrg_UNN, avtopr.KatOrg_Addr, avtopr.KatOrg_TEL);
+    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (avtopr.KatState_KOD, avtopr.KatOrg_Name, avtopr.KatOrg_UNN, avtopr.KatOrg_Addr, avtopr.KatOrg_UrAddr, avtopr.KatOrg_TEL);
+    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(avtopr.KatState_KOD, avtopr.KatB_Name  , avtopr.KatB_Schet1, avtopr.KatB_MFO1, avtopr.KatB_Schet2, avtopr.KatB_MFO2);
   )
   ;
 
@@ -1157,9 +1201,9 @@ Datastream fr_prndata
 ! Поля для форм ТТН-1 и ТН-2
 ! Поле OrgName для вывода наименования
     [OrgTTNBelAddr   ] oPrnSoprFun.GetOrgTTNBelAddr(punktR.KatOrg_Name, punktR.KatOrg_Addr, '', '', '', '', 0);
-    [OrgFields       ] oPrnSoprFun.GetOrgFields(punktR.KatOrg_Name, punktR.KatOrg_UNN, punktR.KatOrg_Addr, punktR.KatOrg_TEL);
-    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr(punktR.KatOrg_Name, punktR.KatOrg_UNN, punktR.KatOrg_Addr, punktR.KatOrg_UrAddr, punktR.KatOrg_TEL);
-    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(punktR.KatB_Name, punktR.KatB_Schet1, punktR.KatB_MFO1, punktR.KatB_Schet2, punktR.KatB_MFO2);
+    [OrgFields       ] oPrnSoprFun.GetOrgFields    (punktR.KatState_KOD, punktR.KatOrg_Name, punktR.KatOrg_UNN, punktR.KatOrg_Addr, punktR.KatOrg_TEL);
+    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (punktR.KatState_KOD, punktR.KatOrg_Name, punktR.KatOrg_UNN, punktR.KatOrg_Addr, punktR.KatOrg_UrAddr, punktR.KatOrg_TEL);
+    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(punktR.KatState_KOD, punktR.KatB_Name  , punktR.KatB_Schet1, punktR.KatB_MFO1, punktR.KatB_Schet2, punktR.KatB_MFO2);
   )
   ;
 
@@ -1208,9 +1252,9 @@ Datastream fr_prndata
 ! Поля для форм ТТН-1 и ТН-2
 ! Поле OrgName для вывода наименования
     [OrgTTNBelAddr   ] oPrnSoprFun.GetOrgTTNBelAddr(punktP.KatOrg_Name, punktP.KatOrg_Addr, '', '', '', '', 0);
-    [OrgFields       ] oPrnSoprFun.GetOrgFields(punktP.KatOrg_Name, punktP.KatOrg_UNN, punktP.KatOrg_Addr, punktP.KatOrg_TEL);
-    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr(punktP.KatOrg_Name, punktP.KatOrg_UNN, punktP.KatOrg_Addr, punktP.KatOrg_UrAddr, punktP.KatOrg_TEL);
-    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(punktP.KatB_Name, punktP.KatB_Schet1, punktP.KatB_MFO1, punktP.KatB_Schet2, punktP.KatB_MFO2);
+    [OrgFields       ] oPrnSoprFun.GetOrgFields    (punktP.KatState_KOD, punktP.KatOrg_Name, punktP.KatOrg_UNN, punktP.KatOrg_Addr, punktP.KatOrg_TEL);
+    [OrgFieldsUr     ] oPrnSoprFun.GetOrgFieldsUr  (punktP.KatState_KOD, punktP.KatOrg_Name, punktP.KatOrg_UNN, punktP.KatOrg_Addr, punktP.KatOrg_UrAddr, punktP.KatOrg_TEL);
+    [OrgFieldsBank   ] oPrnSoprFun.GetOrgFieldsBank(punktP.KatState_KOD, punktP.KatB_Name  , punktP.KatB_Schet1, punktP.KatB_MFO1, punktP.KatB_Schet2, punktP.KatB_MFO2);
   )
   ;
 
@@ -1303,11 +1347,70 @@ Datastream fr_prndata
     [AttrVal10       ] ExtAttrKatParty.AttrVal[10]; // атр10_прт
   )
   ;
+
+  DataSet Signers
+  (
+    [FIO1 ] sFIO1;
+    [Post1] sPost1;
+    [FIO2 ] sFIO2;
+    [Post2] sPost2;
+    [FIO3 ] sFIO3;
+    [Post3] sPost3;
+    [FIO4 ] sFIO4;
+    [Post4] sPost4;
+    [FIO5 ] sFIO5;
+    [Post5] sPost5;
+    [FIO6 ] sFIO6;
+    [Post6] sPost6;
+  )
+  ;
 )
+
   handleEvent table fr_dochead
+
     cmOnProcess:
     {
       oPrnSoprFun.InitForNakl(fr_dochead.bNalProd, fr_dochead.bFixGrMC);
+    }
+
+  end;
+
+  handleEvent dataset Signers
+
+    cmPreProcess:
+    {
+      SignersCount := 0;
+    }
+
+    cmOnProcess:
+    {
+      if (SignersCount++ = 0)
+      {
+        ContinueDataset;
+      }
+    }
+
+    cmOnClick:
+    {
+    /*
+      Из формы на FR приходит событие - запрос на подписантов.
+      ExprFieldValue содержит номер формы (wForm)
+    */
+      if not boGetTune('Doc.RunSign')
+        Exit;
+
+      var wForm : word;
+
+      _noExcept wForm := word(ExprFieldValue);
+
+      if ( wForm = 0 )
+        Exit;
+
+      var накладная_нрек: comp;
+
+      накладная_нрек := fr_dochead.KatSoprNRec;
+
+      #include GetPersSign.vpp
     }
 
   end;

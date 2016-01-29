@@ -504,7 +504,8 @@ if pora {
 #end
 .linkform 'ListInvVed_RUR' prototype is 'ListInvVed'
 .group 'Бланки'
-.nameInList 'Форма N ИНВ-3 по ОКУД'
+.group 'Country' subgroup 'Russia'
+.nameInList 'Форма № ИНВ-3 по ОКУД'
 .create view invlog
   as select
     KatOrg.Name, KatOrg.OKPO

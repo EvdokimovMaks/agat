@@ -8,6 +8,7 @@
 
 
 Org
+éäèé
 
 N_DOC
 DATA
@@ -24,7 +25,7 @@ rukDoljnost
 rukFio
 .EndFields
 
-^ ^ ^ 
+^ ^ ^ ^
 .{ NformRD72aCycle CheckEnter
 
 ^ ^ ^ ^ ^ ^ ^

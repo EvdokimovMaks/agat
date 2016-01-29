@@ -22,20 +22,28 @@ Const
   cgFlViewPos_Dogovor  = 12; // Договор
   cgFlViewPos_BaseDoc  = 13; // ДО
   cgFlViewPos_KatStroy = 14; // Объект строительства
+  // позиции в фильтре RESWORD[15]
+  cgFlViewPos_Descr    =  0; // дескриптор
+  cgFlViewPos_DesGr    =  1; // группа дескрипторов
+  cgFlViewPos_PlatMain =  2; // платежное средство
   // Отображение
-  cgFlPos_DateForm     =  0; // Дата формирования
-  cgFlPos_PlanDate     =  1; // планируемый период оплаты
-  cgFlPos_FobDate      =  2; // Планируемая дата погашения
-  cgFlPos_KatDoc       =  3; // тип заявки
-  cgFlPos_Status       =  4; // статус
-  cgFlPos_Prior        =  5; // приоритет
-  cgFlPos_Modul        =  6; // модуль
-  cgFlPos_Persons      =  7; // куратор
-  cgFlPos_KatOrg       =  8; // контрагент
-  cgFlPos_BaseDoc      =  9; // ДО
-  cgFlPos_Dogovor      = 10; // Договор
-  cgFlPos_KatStroy     = 11; // Объект строительства
-  cgFlPos_FpCO         = 12; // ЦО
-  cgFlPos_FpStBud      = 13; // статья бюджета
-  cgFlPos_FpBudAn      = 14; // Аналитика
+  cgFlPos_Descr        =  0; // дескриптор
+  cgFlPos_DesGr        =  1; // группа дескрипторов
+  cgFlPos_DateForm     =  2; // Дата формирования
+  cgFlPos_PlanDate     =  3; // планируемый период оплаты
+  cgFlPos_FobDate      =  4; // Планируемая дата погашения
+  cgFlPos_KatDoc       =  5; // тип заявки
+  cgFlPos_Status       =  6; // статус
+  cgFlPos_Prior        =  7; // приоритет
+  cgFlPos_Modul        =  8; // модуль
+
+  cgFlPos_PlatMain     =  0; // платежное средство
+  cgFlPos_KatOrg       =  1; // контрагент
+  cgFlPos_BaseDoc      =  2; // ДО
+  cgFlPos_Dogovor      =  3; // Договор
+  cgFlPos_KatStroy     =  4; // Объект строительства
+  cgFlPos_Persons      =  5; // куратор
+  cgFlPos_FpCO         =  6; // ЦО
+  cgFlPos_FpStBud      =  7; // статья бюджета
+  cgFlPos_FpBudAn      =  8; // Аналитика
 End;

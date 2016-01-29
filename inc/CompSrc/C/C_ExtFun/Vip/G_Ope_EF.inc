@@ -32,7 +32,9 @@ Function ImportSDHandler (Word,Comp,String)      : String;  external 'G_Oper.dll
 Function GetBT       (String,String)             : Double;  external 'G_Oper.dll';
 Function GetBLink    (String,String)             : String;  external 'G_Oper.dll';
 Function GetBTN      (String,Word)               : Double;  external 'G_Oper.dll';
+Function GetBTN_UpDown (String,Word,Boolean)     : String;  external 'G_Oper.dll';
 Function GetPDN      (String,String,String,Word) : Double;  external 'G_Oper.dll';
+Function GetIndexPlat(String,Comp)               : Double;  external 'G_Oper.dll';
 Function GetDateType (LongInt)                   : Word;    external 'G_Oper.dll';
 function isOrgInGroup (comp,string)              : word;    external 'G_Oper.dll';
 function getValPokaz  (comp,string)              : double;  external 'G_Oper.dll';
@@ -40,6 +42,7 @@ function getBasePokaz (comp,string)              : double;  external 'G_Oper.dll
 function getValPokazByProb  (comp,string)        : double;  external 'G_Oper.dll';
 function SpDoc_Info   (comp,word)                : double;  external 'G_Oper.dll';
 function SaveValNac   (comp,comp,double)         : word;    external 'G_Oper.dll';
+Function ValRateByISO (String,String)            : double;  external 'G_Oper.dll';
 //------------------------------------------------------------------------------
 // DebPas.pas
 function DebPas_Exec                : boolean; external 'G_Oper.dll';
@@ -53,4 +56,3 @@ function  ClcUsl_InitEx(boolean) : boolean; external 'G_Oper.dll';
 function  ClcUsl_Count (word,word,comp,comp): boolean; external 'G_Oper.dll';
 procedure ClcUsl_Done; external 'G_Oper.dll';
 //------------------------------------------------------------------------------
-

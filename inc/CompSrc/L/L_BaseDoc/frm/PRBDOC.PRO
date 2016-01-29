@@ -124,7 +124,7 @@
   innpost KodPlatNDS_post KodNDS_post_NotSF tippost OKPOpost okonhpost citypost
   grpost nRecGrOtp:comp gradpost grSFAdrPostOtp grSFAdrJurOtp grtelpost inngrpost tipgrpost
   grotbank grpostbankadr grotmfo1 grotmfo2 grotschet1 grotschet2
-  HeadOrg pol bpol bpol2 polbankadr rspol mpol rspol2 mpol2 adpol SFAdrPostPol SFAdrJurPol telpol
+  nRecHeadOrg:comp HeadOrg pol bpol bpol2 polbankadr rspol mpol rspol2 mpol2 adpol SFAdrPostPol SFAdrJurPol telpol
   innpol KodPlatNDS_pol KodNDS_pol_NotSF tippol OKPOpol okonhpol citypol
 
   Bank_Korr BankHead_Korr BankAdr_Korr Schet1_Korr MFO1_Korr Schet2_Korr MFO2_Korr
@@ -198,7 +198,7 @@ post ^ nRecMy ^ bpost ^ bpost2 ^ postbankadr ^ rspost ^ mpost ^ rspost2 ^ mpost2
 innpost ^ KODPLATNDS_post ^ KodNDS_post_NotSF ^ tippost ^ OKPOpost ^ okonhpost ^ citypost^
 grpost ^ nRecGrOtp ^ gradpost ^ grSFAdrPostOtp ^ grSFAdrJurOtp ^ grtelpost ^ inngrpost ^ tipgrpost ^
 grotbank ^ grpostbankadr ^ grotmfo1 ^ grotmfo2 ^ grotschet1 ^ grotschet2 ^
-HeadOrg ^ pol ^ bpol ^ bpol2 ^ polbankadr ^ rspol ^ mpol ^ rspol2 ^ mpol2 ^ adpol ^ SFAdrPostPol ^ SFAdrJurPol ^ telpol ^
+nRecHeadOrg ^ HeadOrg ^ pol ^ bpol ^ bpol2 ^ polbankadr ^ rspol ^ mpol ^ rspol2 ^ mpol2 ^ adpol ^ SFAdrPostPol ^ SFAdrJurPol ^ telpol ^
 innpol ^ KODPLATNDS_pol ^ KodNDS_pol_NotSF ^ tippol ^ OKPOpol ^ okonhpol ^ citypol ^
 Bank_Korr ^ BankHead_Korr ^ BankAdr_Korr ^ Schet1_Korr ^ MFO1_Korr ^ Schet2_Korr ^ MFO2_Korr ^
 dogo ^ addogo ^ SFAdrPostdogo ^ SFAdrJurdogo ^ teldogo ^ inndogo ^ KodPlatNDS_dogo ^ tipdogo ^ OKPOdogo ^ okonhdogo ^ citydogo ^

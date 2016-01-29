@@ -30,10 +30,11 @@ end.
   УНП
   Tel_Org
   m_Month
+  sAddrPodr
 .endfields
   ^ ^ ^ ^ ^ // sOrganName  sPodr  OsnVid Адрес Email
   ^ ^ ^ ^   // месяц  год  ОКПО  ОКОНХ
-  ^ ^ ^ ^   // ОКЮЛП  УНП  Tel_Org m_Month
+  ^ ^ ^ ^ ^ // ОКЮЛП  УНП  Tel_Org m_Month
 !---------------------------------------------------------------------------
 ! Раздел I
 .fields

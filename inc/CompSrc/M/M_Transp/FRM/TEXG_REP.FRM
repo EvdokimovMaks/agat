@@ -33,7 +33,9 @@
   OstOut Poluch Vozvr OstIn
   RasNorm RasFakt Ekonom NOEkonom EkonomSt   NOEkonomSt
   GosNomDoc GarNomDoc AvtoDay AvtoDayInRep TimeAll TimeRep MotoTime  RasFaktInKG NormInKG Price
-  Stoim NameMaravt
+  Stoim
+  Pered StoimPered
+  NameMaravt
   ProbegWrk  KolEz TimeSpec NormaLinNrm :double NormaSpObr:double NormaOneEz :double
   NormaKoffNgsm2:double NormaDopMas:double NormaSpWrk:double NormaUnLoad:double NormaWrkDrv:double NormaNlprobeg :double
   RasProbeg  Lst_Gruztn  Gsm_Gruztn  Lst_ProbegAll
@@ -53,7 +55,7 @@
   OstOutItg PoluchItg VozvrItg OstInItg
   RasNormItg RasFaktItg EkonomItg NOEkonomItg EkonomStItg NOEkonomStItg
   AvtoDayItg AvtoDayInRepItg TimeAllItg TimeRepItg MotoTimeItg RasFaktInKGItg NormInKGItg PriceItg
-  StoimItg
+  StoimItg PeredItg StoimPeredItg
   ProbegWrkItg  KolEzItg TimeSpecItg NormaLinNrmItg:double NormaSpObrItg:double NormaOneEzItg:double
   NormaKoffNgsm2Itg:double NormaDopMasItg:double NormaSpWrkItg:double NormaUnLoadItg:double NormaWrkDrvItg:double
   NormaNlprobegItg:double
@@ -84,7 +86,7 @@
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
-^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^
 .}
 .{ CheckEnter TotalAnalGSM
@@ -92,7 +94,7 @@
 ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
-^ ^ ^ ^ ^ ^ ^ ^ ^  ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^  ^ ^ ^ ^ ^
 .}
 .}
 .endform

@@ -19,17 +19,17 @@
 !.list ''
 .Create view PrintSC_Order
 from
-   KatSopr                    (ReadOnly)
-  ,SpSopr                     (ReadOnly)
-  ,KatOrg                     (ReadOnly)
-  ,KatPodr                    (ReadOnly)
-  ,KatMC                      (ReadOnly)
-  ,KatOtpEd                   (ReadOnly)
-  ,SklOrder                   (ReadOnly)
-  ,SpOrder                    (ReadOnly)
-  ,MarPunkt                   (ReadOnly)
-  ,synonym KatOrg OrgTo       (ReadOnly)
-  ,synonym KatOrg OrgFrom     (ReadOnly)
+   KatSopr            (ReadOnly)
+  ,SpSopr             (ReadOnly)
+  ,KatOrg             (ReadOnly)
+  ,KatPodr            (ReadOnly)
+  ,KatMC              (ReadOnly)
+  ,KatOtpEd           (ReadOnly)
+  ,SklOrder           (ReadOnly)
+  ,SpOrder            (ReadOnly)
+  ,MarPunkt           (ReadOnly)
+  ,KatOrg OrgTo       (ReadOnly)
+  ,KatOrg OrgFrom     (ReadOnly)
 where
   ((
       pSklOrderRec         ==  SklOrder.nRec     and

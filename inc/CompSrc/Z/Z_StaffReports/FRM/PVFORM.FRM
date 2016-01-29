@@ -37,8 +37,9 @@
  nStruct
  Post
  FactVred
+ OsnVysl
 .endfields
-^^^^^
+^^^^^^
 .}
 .}
 .endform

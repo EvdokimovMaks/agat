@@ -185,6 +185,7 @@
 .linkform 'AllPlats_3_1' prototype is 'ALLPLATS'
 .NameInList 'Баланс расчетов с контрагентами в НДЕ и валюте'
 .group '1. Итоговый баланс взаиморасчетов с контрагентами (Казахстан)'
+.Group 'Country' subGroup 'Kazakhstan'
 .defo landscape
 .create view loCursVal
 var cRecVal : comp;

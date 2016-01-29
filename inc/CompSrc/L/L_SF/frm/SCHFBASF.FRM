@@ -54,9 +54,11 @@
   Main_Buh     : String   //  15е гл. бухгалтер
   IP_FIO       : String   //  Индивидуальный предприниматель, ФИО
   IP_Info      : String   //  Индивидуальный предприниматель, реквизиты
+  MemoIP_Info  : String   //  Вывод дополнительной подписи
+  isFootnote   : Boolean  //  Вывод дополнительной подписи
 .endfields
      1234567890123aab45678
- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 // фильтр по дате
 .if SetDateRange
@@ -69,21 +71,21 @@
 .end
 .fields
 //атрибуты собственной организации, для заголовка, а не СФ.
-  pMyOrgName    :string   //  19
-  pMyOrgAddr    :string   //  20
-  pMyOrgTel     :string   //  21
-  pMyOrgSchet   :string   //  22
-  pMyOrgBank    :string   //  23
-  pMyOrgGorod   :string   //  24
-  pMyOrgINN     :string   //  25
-  pMyOrgOKONH   :string   //  26
-  pMyOrgOKPO    :string   //  27
-  pMyOrgBankRemark:string //  28   добавлено 18/09/97  13:03
-  pMyOrgBankAddr:string   //  29
-  pMyOrgBankMFO:string    //  30
-  pMyOrgBankRKC:string    //  31
-  pMyOrgBankSchRKC:string //  32
-  pMyOrgBankSchPlatDoc:string // 33
+  pMyOrgName          :string //  19
+  pMyOrgAddr          :string //  20
+  pMyOrgTel           :string //  21
+  pMyOrgSchet         :string //  22
+  pMyOrgBank          :string //  23
+  pMyOrgGorod         :string //  24
+  pMyOrgINN           :string //  25
+  pMyOrgOKONH         :string //  26
+  pMyOrgOKPO          :string //  27
+  pMyOrgBankRemark    :string //  28   добавлено 18/09/97  13:03
+  pMyOrgBankAddr      :string //  29
+  pMyOrgBankMFO       :string //  30
+  pMyOrgBankRKC       :string //  31
+  pMyOrgBankSchRKC    :string //  32
+  pMyOrgBankSchPlatDoc:string //  33
 .endfields
 123456789012345
 ^^^^^^^^^^^^^^^
@@ -92,7 +94,7 @@
 // параметры группировки
 .if HeaderGroup
 .fields
- NameGroup: string        // название
+ NameGroup : string       // название
  KontrGroup: boolean      // значение параметра груп-ки
 .endfields
 12
@@ -102,6 +104,7 @@
 .fields
  nSchfact         : Comp         //   0 nrec СФ
  skipInReestr     : Boolean      //   0a не печатать в реестре
+ wPrStav          : word         //   Признак рассчетности ставки НДС.
  // Стандартный СФ. Для корректировочного СФ - информация об исходном СФ.
  dFact            : Date         //   1 дата составления СФ
  dPost            : Date         //   2 дата получения СФ
@@ -138,7 +141,7 @@
  Tara          :double       //   9a сумма по таре
  Tara_NDS      :double       //   9b сумма по таре с НДС
  //
- dblSaleTax    :double       //   9c налог с продаж
+ dblSaleTax    :double       //  9c  налог с продаж
  S1            :double       //  10  без НДС 20%
  S2            :double       //  11  НДС 20%
  S3            :double       //  12  Итого по 20%
@@ -179,8 +182,9 @@
   MyOrgBankSchRKC:string //  32
   MyOrgBankSchPlatDoc:string // 33
 //атрибуты организации-контрагента
-  OrgNRec     : Comp          // NRec организации
-  Org_Up_NRec : Comp          // NRec головной организации
+  OrgUnnORInn   :string
+  OrgNRec       :Comp         // NRec организации
+  Org_Up_NRec   :Comp         // NRec головной организации
   OrgName       :string       //  22
   OrgAddr       :string       //  23
   PostAddr      :string       //  Почтовый адрес
@@ -214,8 +218,8 @@
  SimvolV       :string    //  10
  ISO           :string
 .endfields
-0a1234          56abcd*89abc012345abc6a78901 9012345a67890123 2345678a90123456 12345678890
-^^^^^^ ^^^^^^^^ ^^^^^^^^^^*^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^ ^^^^^^^^^
+0a1234           56abcd*89abc012345abc6a78901 9012345a67890123 2345678a90123456 12345678890
+^^^^^^^ ^^^^^^^^ ^^^^^^^^^^*^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^ ^^^^^^^^^
 .if Dopol
 .fields
   Nazn         :string    //  5 назначение из СФ
@@ -328,6 +332,7 @@
   SpSumNoNDS   :double       //   1 без НДС
   SpNDS        :double       //   2 НДС
   SpPerc       :double       //   3 ставка
+  sSpPerc      :string       //   3 ставка в виде строки
   SpAkciz      :double       //   4 акциз
   SpDrNal      :double       //   5 прочие налоги
   SpSaleTax    :double       //   5a налог с продаж
@@ -355,7 +360,7 @@
 .endfields
   a  аб      1
 01123334567890 12345ab6        12345ab6
-^^^^^^^^^^^^^^ ^^^^^^^^ ^^^ ^^ ^^^^^^^^ ^
+^^^^^^^^^^^^^^ ^^^^^^^^ ^^^ ^^ ^^^^^^^^ ^^
 #ifdef _RoundInDoc_
 ^ цена без ндс неокругленная
 ^ цена без ндс неокругленная для корректировочного СФ

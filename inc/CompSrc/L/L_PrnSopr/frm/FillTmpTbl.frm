@@ -1063,7 +1063,7 @@ end.
 ! Атрибуты SpSopr
   ClearAdvRecord(recAttr);
   recAttr.KatSoprNRec         := 0;
-  recAttr.SpSoprNRec          := recSpec.SpSoprNRec ;
+  recAttr.SpSoprNRec          := recSpec.SpSoprNRec;
   recAttr.wTable              := coSpSopr;
   recAttr.AttrVal[1]          := атр1_спц;
   recAttr.AttrVal[2]          := атр2_спц;
@@ -1083,7 +1083,7 @@ end.
 ! Атрибуты KatMc
   ClearAdvRecord(recAttr);
   recAttr.KatSoprNRec         := 0;
-  recAttr.SpSoprNRec          := recSpec.SpSoprNRec ;
+  recAttr.SpSoprNRec          := recSpec.SpSoprNRec;
   recAttr.wTable              := coKatMc;
   recAttr.AttrVal[1]          := атр1_МЦ;
   recAttr.AttrVal[2]          := атр2_МЦ;
@@ -1449,6 +1449,6 @@ end.
 .}
 .}
 .begin
-  RunInterFace('PrnTovnForFastRep');
+  RunInterface('PrnTovnForFastRep');
 end.
 .endform

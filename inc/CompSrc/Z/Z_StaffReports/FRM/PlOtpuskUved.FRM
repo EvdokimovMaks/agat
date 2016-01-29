@@ -4,6 +4,7 @@
 .form PlOtpuskUved
 .hide
 .fields
+!.{ PF_CyclePsn CheckEnter
 Наименование_организации
 Дата_отчета
 ВС_ФИО
@@ -17,7 +18,6 @@
 Подразделение
 PlanOtpuskNrec : comp
 Рабочий_Год
-DetPlanOtpuskNrec : comp
 заголовок
 Вид_отпуска
 Продолжительность
@@ -25,6 +25,7 @@ DetPlanOtpuskNrec : comp
 Запятая
 ДатаОтпуска
 .endfields
+.{ PF_CyclePsn CheckEnter
 Наименование_организации     ^
 Дата_отчета                  ^
 ВС_ФИО                       ^
@@ -39,7 +40,6 @@ DetPlanOtpuskNrec : comp
 PlanOtpuskNrec               ^
 Рабочий_Год                  ^
 .{horizontal margin PlOtpuskUvedCycle CheckEnter
-DetPlanOtpuskNrec            ^
 заголовок                    ^
 Вид_отпуска                  ^
 Продолжительность            ^
@@ -47,4 +47,5 @@ DetPlanOtpuskNrec            ^
 Запятая                      ^
 .}
 ДатаОтпуска                  ^
+.}
 .endform

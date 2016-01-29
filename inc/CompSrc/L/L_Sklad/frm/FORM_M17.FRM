@@ -83,6 +83,7 @@ NRec ^, Дополнительное наименование МЦ ^ Наименование материала ^
 .Linkform 'Form_M17_Txt' Prototype is 'Form_M17'
 .NameInList 'Карточка учета материалов М-17'
 .Group 'М-17'
+.Group 'Country' subGroup 'Russia'
 .P 51
 .DEFP PA4
 .Defo Landscape

@@ -10,6 +10,13 @@
 .group 'Внутреннее перемещение'
 .group 'Внутреннее перемещение. ВСМН.'
 .hide
+.var
+  unn_, mfo_: string;
+.endvar
+.begin
+  unn_ := ' ' + sGetTune('KatOrg.FldView.UNN') + ':';
+  mfo_ := ' ' + sGetTune('KatOrg.FldView.MFO') + ':';
+end.
 .fields
   Операция
   Поставщик                                            // 01
@@ -129,6 +136,7 @@
   КодОборудования                                      // 15
   НаименованиеОС                                       // 16
   ЕдИзм                                                // 17
+  КодЕдИзм                                             // 17'
   Количество                                 : double  // 18
   Износ                                      : double  // 20
   СуммаИзноса                                : double  // 21
@@ -285,6 +293,7 @@
   КодОборудования                            - ^
   НаименованиеОС                             - ^
   ЕдИзм                                      - ^
+  КодЕдИзм                                   - ^   
   Количество                                 - ^
   Износ                                      - ^
   СуммаИзноса                                - ^
@@ -406,7 +415,6 @@ If (Операция = 51, 'Общая корректировка', 'Сумма износа')
 .LL 80
 .ORIENT LANDSCAPE
 .LL 51
-#include mfo.frn
 .{ OsOperObjLoop
 .fields
 НомерНакладной
@@ -515,7 +523,6 @@ double(0)
   KolItog, MassaBrItog, MassaNetItog, Sum1Itog, Sum2Itog,Sum3Itog :Double;
   KolItog0, MassaBrItog0, MassaNetItog0, Sum1Itog0, Sum2Itog0,Sum3Itog0 :Double;
 .endvar
-#include mfo.frn
 .{ OsOperObjLoop
 .fields
   CommonFormHeader
@@ -730,7 +737,6 @@ end.
 .group 'Накладные'
 .hide
 .NameInList 'ТОВАРНАЯ НАКЛАДНАЯ в тыс.руб.'
-#include mfo.frn
 .var
   Total_Количество : double;
 .endvar
@@ -842,7 +848,6 @@ end.
 .NameInList 'ТОВАРНАЯ НАКЛАДНАЯ в руб.'
 .group 'Накладные'
 .hide
-#include mfo.frn
 .var
   Total_Количество : double;
 .endvar
@@ -951,7 +956,6 @@ end.
 .NameInList 'ТОВАРНО-ТРАНСПОРТНАЯ НАКЛАДНАЯ'
 .group 'Накладные'
 .hide
-#include mfo.frn
  Ш
 
 .{ OsOperObjLoop

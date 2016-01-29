@@ -177,6 +177,9 @@ function dnP_I(integer, Longint): Double; external 'G_ZARPL.DLL';
 function dnP(Longint): Double; external 'G_ZARPL.DLL';
 function chP(Longint): Double; external 'G_ZARPL.DLL';
 function Proc_Stag: Double; external 'G_ZARPL.DLL';
+function Proc_StagByDay(byte): Double; external 'G_ZARPL.DLL';
+function Proc_StagByDate(byte, byte, integer): Double; external 'G_ZARPL.DLL';
+function Proc_StagByPeriod(byte, byte, integer, byte, byte, integer): Double; external 'G_ZARPL.DLL';
 function Proc_StagS: Double; external 'G_ZARPL.DLL';
 function Proc_Stag13: Double; external 'G_ZARPL.DLL';
 function SumAlgNo(word): Double; external 'G_ZARPL.DLL';
@@ -203,8 +206,10 @@ function LSC_tiATTR(String): Time; external 'G_ZARPL.DLL';
 function Post_KOD: string; external 'G_ZARPL.DLL';
 function MOTIV_UV: string; external 'G_ZARPL.DLL';
 function InitStav: boolean; external 'G_ZARPL.DLL';
+function InitStavSV: boolean; external 'G_ZARPL.DLL';
 procedure DoneStav; external 'G_ZARPL.DLL';
 function Get_Nalog(word, double, Date, var double, word): Double; external 'G_ZARPL.DLL';
+function Get_NalogSV(word, double, Date, var double, word): Double; external 'G_ZARPL.DLL';
 function InitReGetSV(Date): boolean; external 'G_ZARPL.DLL';
 function InitReGetESN: boolean; external 'G_ZARPL.DLL';
 procedure DoneReGetESN; external 'G_ZARPL.DLL';
@@ -309,7 +314,7 @@ procedure FreeResourceByName(String); external 'G_ZARPL.DLL';
 //возможна вставка знака переноса и вырезка найденной подстроки из исходной.
 function LogicSubStr(var String, Byte, Boolean, Boolean): String; external 'G_ZARPL.DLL';
 function SetKlndr(integer, integer, longint, word): boolean; external 'G_ZARPL.DLL';
-function SetChasf(date, double, longint, word): double; external 'G_ZARPL.DLL';
+function SetChasf(date, double, string, word): double; external 'G_ZARPL.DLL';
 function prVidInit(word, comp): boolean; external 'G_ZARPL.DLL';
 function PrVidInitialized: Boolean; external 'G_ZARPL.DLL';
 procedure DoneVx(word); external 'G_ZARPL.DLL';
@@ -560,3 +565,6 @@ procedure ReCalcInit(boPrizn: boolean); external 'G_ZARPL.DLL';
   флаг корректировки предварительного просмотра
 #end
 function IsUCH_KOR: Boolean; external 'G_ZARPL.DLL';
+
+//------------------------------------------------------------------------------
+function CalcChildAverageSum(comp, word): double; external 'G_ZARPL.DLL';

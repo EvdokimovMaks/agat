@@ -146,6 +146,10 @@ nRec_Tobot : comp
 KatDrag_NRec : Comp
 Драгмет_код
 Драгмет_наим
+
+Процент_ДМ : Double
+Лигатурная_масса : Double
+
 СпособОпред : Word
 KatDrag_cPodr : Comp
 KatDrag_IsLeaf : Word
@@ -203,7 +207,9 @@ Tail_TempDescr_CRecKat   : comp // номер записи в таблице по которой построена г
 .}
 .}
 .{ CheckEnter NameOS5
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^
+^ ^
+^ ^ ^ ^ ^ ^ ^
 .}
 .{ CheckEnter ItogOS5
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^

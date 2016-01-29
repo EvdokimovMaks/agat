@@ -17,7 +17,7 @@
  NameOrg CurDate
 
  Compon_NRec
- aAvtoNom aAvtoGNom VidAgr KatOrg_Izg aNum aDateOn aStatus aTipComp aPodrKomp aMarkaTC
+ aAvtoNom aAvtoGNom VidAgr KatOrg_Izg Date_Izg aNum aDateOn aStatus aTipComp aPodrKomp aMarkaTC
  aProbegn : double aProbegF: double aDateOff aStatusO
  Ist dIst
  aProbegGar : double aProbegExpl :double aMotoAll:double aMotoSr:double aMotoGar:double  aMotoExpl:double
@@ -50,7 +50,7 @@
 .[h OverWrite
 .]h
 ^
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^  ^
 ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^

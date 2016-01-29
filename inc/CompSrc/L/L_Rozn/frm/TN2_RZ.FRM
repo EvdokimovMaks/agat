@@ -280,7 +280,7 @@ cтавка_НДС                      &&&.&& %
   DoubleToStr(SumUch, Cena_Pr)
   DoubleToStr(aKol, Kol_Pr)
 
-  DoubleToString(comp(0), FRoundRub5(SumUch))
+  DoubleToString(comp(0), FRoundRubRozn(SumUch))
   всего_наименований
 .endfields
 
@@ -381,7 +381,7 @@ end.
   DoubleToStr(SumUch, Cena_Pr)
   СимНак
 
-  DoubleToString(comp(0), FRoundRub5(SumUch))
+  DoubleToString(comp(0), FRoundRubRozn(SumUch))
 .endfields
  ^
 
@@ -670,8 +670,8 @@ end.
 .}
 
 .fields
-  DoubleToString(0, FRoundRub5(Itigo_SumHDC0))
-  DoubleToString(0, FRoundRub5(Itigo_Sum0 + Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_Sum0 + Itigo_SumHDC0))
 
   DoubleToStr(NomPp, '4\n')
 
@@ -955,8 +955,8 @@ end.
 .}
 
 .fields
-  DoubleToString(0, FRoundRub5(Itigo_SumHDC0))
-  DoubleToString(0, FRoundRub5(Itigo_Sum0 + Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_Sum0 + Itigo_SumHDC0))
 
   DoubleToStr(NomPp, '4\n')
 
@@ -1343,8 +1343,8 @@ end.
 .fields
   'true' : 's'
 
-  DoubleToString(0, FRoundRub5(Itigo_SumHDC0))
-  DoubleToString(0, FRoundRub5(Itigo_Sum0 + Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_Sum0 + Itigo_SumHDC0))
 
   if(номер_доверенности <> '', номер_доверенности, '_________________')
   if(LongInt(дата_доверенности) <> LongInt(0),
@@ -1667,8 +1667,8 @@ end.
 .}
 
 .fields
-  DoubleToString(0, FRoundRub5(Itigo_SumHDC0))
-  DoubleToString(0, FRoundRub5(Itigo_Sum0 + Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_Sum0 + Itigo_SumHDC0))
 
   DoubleToStr(NomPp, '4\n')
 
@@ -1952,8 +1952,8 @@ end.
 .fields
   'true' : 's'
 
-  DoubleToString(0, FRoundRub5(Itigo_SumHDC0))
-  DoubleToString(0, FRoundRub5(Itigo_Sum0 + Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_Sum0 + Itigo_SumHDC0))
 
   if(номер_доверенности <> '', номер_доверенности, '_________________')
   if(LongInt(дата_доверенности) <> LongInt(0),
@@ -2276,8 +2276,8 @@ end.
 .}
 
 .fields
-  DoubleToString(0, FRoundRub5(Itigo_SumHDC0))
-  DoubleToString(0, FRoundRub5(Itigo_Sum0 + Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_SumHDC0))
+  DoubleToString(0, FRoundRubRozn(Itigo_Sum0 + Itigo_SumHDC0))
 
   DoubleToStr(NomPp, '4\n')
 

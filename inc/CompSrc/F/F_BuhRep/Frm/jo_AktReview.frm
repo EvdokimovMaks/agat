@@ -79,7 +79,7 @@
 .defo portrait
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
   Myorg
@@ -96,7 +96,7 @@
   СобственнаяОрганизация ДругаяОрганизация
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', КонечнаяДата);
 end.
 
 .{

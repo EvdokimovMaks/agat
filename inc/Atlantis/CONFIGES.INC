@@ -293,6 +293,7 @@ const
    pkIgnoreNewConstants   = 'Ic';
   isEmptyBlockWarnings    = 'EmptyBlockWarnings';
   isFuncAsProcWarnings    = 'FuncAsProcWarnings';
+  isInitVarWarnings       = 'InitVarWarnings';
 
 // список параметров секции csLot
   isOutPutName            = 'OutputFileName';
@@ -535,6 +536,10 @@ const
   isSuppressOR_Expansion = 'SuppressOR_Expansion';
   isODBC_DSN              = 'ODBC_DSN';
   isNoOrderScanSeverity = 'NoOrderScanSeverity'; // 'none'('0') 'filial'('1') 'filialWarning'('2') 'alwaysWarning'('3')
+  isValidateOraCache = 'ValidateOraCache';
+  isBCPBufferInMemory = 'BCPBufferInMemory';
+  isMaxCursorCount = 'OpenCursorsLimit';
+  isPeakCursorsCountReport = 'PeakCursorsCountReport';
 
 // Список параметров секции csInternal
 // Эти параметры регистрируются только в процессе работы программы.
@@ -617,6 +622,7 @@ const
 // список параметров секции csKey
   isSharedPath            = 'SharedPath';
   isCheckPeriod           = 'CheckPeriod';
+  isTransportType         = 'TransportType';
 
 // список параметров секции csLicense
   isLicFileName           = 'LicFileName';

@@ -17,7 +17,7 @@ if (trim(#str_) = '', '-', #str_)
 #end
 .linkform 'PRBDOCR_0' prototype is 'PRBDOCR'
 .NameInList 'Счет СТАНДАРТНЫЙ - А4'
-.group 'Продажа'
+.group 'Устаревшие формы (продажа)'
 .FIELDS
   CommonFormHeader
   nomer ddoc
@@ -138,7 +138,7 @@ if (trim(#str_) = '', '-', #str_)
 #end
 .linkform 'PRBDOCR_1' prototype is 'PRBDOCR'
 .NameInList 'Протокол согласования цен с ценой изготов.и % наценки ПОЛНЫЙ - А4L'
-.group 'Продажа'
+.group 'Устаревшие формы (продажа)'
 .DEFO LANDSCAPE
 .P 50
 .var

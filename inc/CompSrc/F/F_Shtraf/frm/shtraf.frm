@@ -15,17 +15,17 @@
 dat ValOtch SimvValOtch NDE SimvNDE
 cStr1 cStr2 cStr3 cStr4 cStr5
 norg
-ndo VidDo DatKursValDo KursValDo SumDo SimvValDo NameValDo SumValOtchDo
+DoRef ndo VidDo DatKursValDo KursValDo SumDo SimvValDo NameValDo SumValOtchDo
 bdDo edDo
 nstep SumStep
 bdStep edStep opldStep
 NameShtraf Peny1 KolDn Peny2
 PenyFix : Double KoefRefin : Double
 Neust MaxShtraf
-ndok datdok datdo sumdok sumdokBV
+dokkind dokRef ndok datdok datdo sumdok sumdokBV
 bdRef edRef rRef1 rRef2 rRef3 rRef4 sShtraf
 SumPoNakl
-DatDocSopr SumValDoSopr SumNDESopr SumValRepSopr SumValOperSopr NaznPlatSopr
+KindSopr RefSopr DatDocSopr SumValDoSopr SumNDESopr SumValRepSopr SumValOperSopr NaznPlatSopr
 SumTotValDoSopr SumTotValNDESopr
 OplSvDog OplSvDogV OplPrDog OplPrDogV NeustDog NeustDogV PenyDog PenyDogV
 RefinDog RefinDogV VsegoDog VsegoDogV
@@ -49,6 +49,7 @@ cStr1 cStr2 cStr3 cStr4 cStr5  - строки названий частей формы ^ ^ ^ ^ ^
 .{ byOrgan  checkenter
 norg         Организация            ^
 .{ byDO  checkenter
+DoRef                               ^
 ndo          Договор (имя)          ^
 VidDo                               ^
 .if IsValDo
@@ -81,6 +82,8 @@ Neust        Неустойка  ^
 MaxShtraf    Макс. проц. штрафа ^
 .{ byNakl  checkenter
 .if IsDoc
+dokkind      тип документа ^
+dokRef       nRec  ттн или платежа ^
 ndok         № ттн или платежа ^
 datdok       Дата документа ^
 datdo        Оплатить (отгрузить) до ^
@@ -104,7 +107,9 @@ SumPoNakl     Всего штрафа по накладной ^
 .}
 .if OkSoprDoc
 .{ bySoprDoc checkenter
-DatDocSopr  ^
+KindSopr        ^
+RefSopr         ^
+DatDocSopr      ^
 SumValDoSopr    ^
 SumNDESopr      ^
 SumValRepSopr   ^
@@ -114,7 +119,7 @@ NaznPlatSopr    ^
 SumTotValDoSopr ^
 SumTotValNDESopr^
 .else
- Нет сопроводительнхы документов
+ Нет сопроводительных документов
 .end
 OplSvDog       ^
 OplSvDogV      ^

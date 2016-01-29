@@ -8,7 +8,7 @@
  บ โขฅโแโขฅญญ๋ฉ : ใเกฅญชฎ เจฉ ข ญฎขจ็ (YURI)                             บ
  ศอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผ
 */
-#include predefs.inc
+//#include predefs.inc
 .Set name = 'servnakl'
 #define _NAK510
 #include mnf_serv.frn

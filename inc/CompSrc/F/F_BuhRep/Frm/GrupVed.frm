@@ -126,7 +126,7 @@ SumSchCursK кредит(валюта на курс)^
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -142,7 +142,7 @@ c2_p1 c2_p2
 c1_p1 c1_p2
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -213,7 +213,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -228,7 +228,7 @@ c2_p1v c2_p2v
 c1_p1v c1_p2v
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Ш^
 ^
@@ -298,7 +298,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -314,7 +314,7 @@ c2_p1 c2_p1v c2_p2 c2_p2v
 c1_p1 c1_p1v c1_p2 c1_p2v
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Р^
 ^
@@ -387,7 +387,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  iKatOrg : KatOrg;
+  oHistory : iOldHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -405,7 +405,7 @@ c1_p1  SumSchValD  SumSchCursD  c1_p2 SumSchValK   SumSchCursK
 
 .endfields
 .begin
-  MyOrg := iKatOrg.GetKatOrgName(coGetTune('Myorg'), koOnTune);
+  MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
 end.
  Р^
 ^

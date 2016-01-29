@@ -26,6 +26,7 @@
 
   AnalitikName
 
+  LayerCount
   D1  D2  D3  D4  D5  D6  D7  D8  D9  D10 D11 D12 D13 D14 D15
   ฏฅเข_ฏฎซ_คญจ
   VidOpl1 ฎเเแ็ฅโ1 Day1 Chas1 VidOpl2 ฎเเแ็ฅโ2 Day2 Chas2 KodNejavki1 DayNejavok1 ChasNejavok1 KodNejavki2 DayNejavok2 ChasNejavok2
@@ -47,6 +48,16 @@
   Ch28 Ch29 Ch30 Ch31
   ขโฎเ_ฏฎซ_็ แ๋
   VidOpl7 ฎเเแ็ฅโ7 Day7 Chas7 VidOpl8 ฎเเแ็ฅโ8 Day8 Chas8 KodNejavki7 DayNejavok7 ChasNejavok7 KodNejavki8 DayNejavok8 ChasNejavok8
+
+  // คญจ/็ แ๋ ขโฎเฎฃฎ แซฎ๏:
+  L2D1 L2D2 L2D3 L2D4 L2D5 L2D6 L2D7 L2D8 L2D9 L2D10 L2D11 L2D12 L2D13 L2D14 L2D15
+  L2ฏฅเข_ฏฎซ_คญจ L2ฌฅแ๏ๆ_คญจ
+  L2Ch1 L2Ch2 L2Ch3 L2Ch4 L2Ch5 L2Ch6 L2Ch7 L2Ch8 L2Ch9 L2Ch10 L2Ch11 L2Ch12 L2Ch13 L2Ch14 L2Ch15
+  L2ฏฅเข_ฏฎซ_็ แ๋
+  L2D16 L2D17 L2D18 L2D19 L2D20 L2D21 L2D22 L2D23 L2D24 L2D25 L2D26 L2D27 L2D28 L2D29 L2D30 L2D31
+  L2ขโฎเ_ฏฎซ_คญจ L2ฌฅแ๏ๆ_็ แ๋
+  L2Ch16 L2Ch17 L2Ch18 L2Ch19 L2Ch20 L2Ch21 L2Ch22 L2Ch23 L2Ch24 L2Ch25 L2Ch26 L2Ch27 L2Ch28 L2Ch29 L2Ch30 L2Ch31
+  L2ขโฎเ_ฏฎซ_็ แ๋
 .endfields
 .if Show_Analitik
 .else
@@ -59,12 +70,17 @@
 .{
  ^
 .{
+ ^
  ^^^^^^^^^^^^^^^  ^ ^^^^^^^^ ^^^^^^
  ^^ ^^ ^^^^^^^^^^^^^^^^^  ^ ^^^^^^^^ ^^^^^^
  ^ ^
  ^^^^^^^^^^^^^^^^ ^ ^^^^^^^^ ^^^^^^
  ^ ^
  ^^^^^^^^^^^^^^^^ ^ ^^^^^^^^ ^^^^^^
+ ^^^^^^^^^^^^^^^ ^^
+ ^^^^^^^^^^^^^^^ ^
+ ^^^^^^^^^^^^^^^^ ^^
+ ^^^^^^^^^^^^^^^^ ^
 .}
 .}
 .{ checkenter FirstPage
@@ -81,30 +97,33 @@
 .var
   FirstLine: boolean;
   AnFirstLine: boolean;
-  LineCount: integer;
+  LineCount: integer; // €ชโใ ซ์ญฎฅ ชฎซจ็ฅแโขฎ ไ ชโจ็ฅแชจ ญ ฏฅ็ โ ญญ๋ๅ แโเฎช
+  FutureLineCount: integer; // ฏฅเฅฌฅญญ ๏ คซ๏ ฏเฎฃญฎง  ชฎซ-ข  แโเฎช, ็โฎก๋ ญฅ ฃ คจโ์ ฏเ๏ฌฎ ข LineCount, ช ช โใโ เ ญ์่ฅ ก๋ซฎ
   LinesPerPage: integer;
   lShow_Analitik: boolean;
 .endvar
 .fields
 ! CommonFormHeader
- Pred
- Podr
- PeriodBeginning PeriodEnding
+  Pred
+  Podr
+  PeriodBeginning PeriodEnding
 
- Day_1 Day_2 Day_3 Day_4 Day_5 Day_6 Day_7 Day_8 Day_9 Day_10 Day_11 Day_12 Day_13 Day_14 Day_15
- Day_16 Day_17 Day_18 Day_19 Day_20 Day_21 Day_22 Day_23 Day_24 Day_25 Day_26 Day_27 Day_28 Day_29 Day_30 Day_31
+  Day_1 Day_2 Day_3 Day_4 Day_5 Day_6 Day_7 Day_8 Day_9 Day_10 Day_11 Day_12 Day_13 Day_14 Day_15
+  Day_16 Day_17 Day_18 Day_19 Day_20 Day_21 Day_22 Day_23 Day_24 Day_25 Day_26 Day_27 Day_28 Day_29 Day_30 Day_31
 
- AnalitikName
+  AnalitikName
 
- D1  D2  D3  D4  D5  D6  D7  D8  D9  D10 D11 D12 D13 D14 D15
- ฏฅเข_ฏฎซ_คญจ
- VidOpl1 ฎเเแ็ฅโ1 Day1 Time2StrDef(Double(Chas1)) VidOpl2 ฎเเแ็ฅโ2 Day2 Time2StrDef(Double(Chas2)) KodNejavki1 DayNejavok1 KodNejavki2 DayNejavok2
- Npp
- LogicSubStr(GetSurnameWithInitials(FIO), 22, false, false)
- TabN
- ฌฅแ๏ๆ_คญจ
+  // ----- ’ กซจ็ช  ฏฎ่ซ :
+  // “ 1/2
+  D1  D2  D3  D4  D5  D6  D7  D8  D9  D10 D11 D12 D13 D14 D15
+  ฏฅเข_ฏฎซ_คญจ
+  VidOpl1 ฎเเแ็ฅโ1 Day1 Time2StrDef(Double(Chas1)) VidOpl2 ฎเเแ็ฅโ2 Day2 Time2StrDef(Double(Chas2)) KodNejavki1 DayNejavok1 KodNejavki2 DayNejavok2
+  Npp
+  LogicSubStr(GetSurnameWithInitials(FIO), 22, false, false)
+  TabN
+  ฌฅแ๏ๆ_คญจ
 
-  // ฎโเ กฎโ ญญ๋ฅ ็ แ๋
+  // — แ๋ 1/2
   Time2StrDef(Double(Ch1)) Time2StrDef(Double(Ch2)) Time2StrDef(Double(Ch3)) Time2StrDef(Double(Ch4))
   Time2StrDef(Double(Ch5)) Time2StrDef(Double(Ch6)) Time2StrDef(Double(Ch7)) Time2StrDef(Double(Ch8))
   Time2StrDef(Double(Ch9)) Time2StrDef(Double(Ch10)) Time2StrDef(Double(Ch11)) Time2StrDef(Double(Ch12))
@@ -112,16 +131,18 @@
 
   Time2StrDef(Double(ฏฅเข_ฏฎซ_็ แ๋))
 
- VidOpl3 ฎเเแ็ฅโ3 Day3 Time2StrDef(Double(Chas3)) VidOpl4 ฎเเแ็ฅโ4 Day4 Time2StrDef(Double(Chas4)) KodNejavki3 DayNejavok3 KodNejavki4 DayNejavok4
- LogicSubStr(Dolg, 22, true, true)
- LogicSubStr(Dolg, 22, true, true)
- D16  D17  D18  D19  D20  D21  D22  D23  D24  D25  D26  D27  D28  D29  D30  D31
- ขโฎเ_ฏฎซ_คญจ
- VidOpl5 ฎเเแ็ฅโ5 Day5 Time2StrDef(Double(Chas5)) VidOpl6 ฎเเแ็ฅโ6 Day6 Time2StrDef(Double(Chas6)) KodNejavki5 DayNejavok5 KodNejavki6 DayNejavok6
- LogicSubStr(Dolg, 22, true, true)
+  VidOpl3 ฎเเแ็ฅโ3 Day3 Time2StrDef(Double(Chas3)) VidOpl4 ฎเเแ็ฅโ4 Day4 Time2StrDef(Double(Chas4)) KodNejavki3 DayNejavok3 KodNejavki4 DayNejavok4
+  LogicSubStr(Dolg, 22, true, true)
+  LogicSubStr(Dolg, 22, true, true)
+
+  // “ 2/2
+  D16  D17  D18  D19  D20  D21  D22  D23  D24  D25  D26  D27  D28  D29  D30  D31
+  ขโฎเ_ฏฎซ_คญจ
+  VidOpl5 ฎเเแ็ฅโ5 Day5 Time2StrDef(Double(Chas5)) VidOpl6 ฎเเแ็ฅโ6 Day6 Time2StrDef(Double(Chas6)) KodNejavki5 DayNejavok5 KodNejavki6 DayNejavok6
+  LogicSubStr(Dolg, 22, true, true)
 
   Time2StrDef(Double(ฌฅแ๏ๆ_็ แ๋))
-
+  // — แ๋ 2/2
   Time2StrDef(Double(Ch16)) Time2StrDef(Double(Ch17)) Time2StrDef(Double(Ch18)) Time2StrDef(Double(Ch19))
   Time2StrDef(Double(Ch20)) Time2StrDef(Double(Ch21)) Time2StrDef(Double(Ch22)) Time2StrDef(Double(Ch23))
   Time2StrDef(Double(Ch24)) Time2StrDef(Double(Ch25)) Time2StrDef(Double(Ch26)) Time2StrDef(Double(Ch27))
@@ -130,7 +151,71 @@
   Time2StrDef(Double(ขโฎเ_ฏฎซ_็ แ๋))
 
   vidOpl7 ฎเเแ็ฅโ7 Day7 Time2StrDef(Double(Chas7)) VidOpl8 ฎเเแ็ฅโ8 Day8 Time2StrDef(Double(Chas8)) KodNejavki7 DayNejavok7 KodNejavki8 DayNejavok8
+  //-----
+  // ’ กซจ็ช  - ขแ๑. ’ฅฏฅเ์ คซ๏ คขใๅแซฎฉญฎฃฎ ข เจ ญโ  ฎโฎกเ ฆฅญจ๏ โ กซจ็ช  ฏฎ่ซ :
+  // ‘ญ ็ ซ  ค ญญ๋ฅ ขโฎเฎฃฎ แซฎ๏, ฏฎโฎฌ - ฏฅเขฎฃฎ.
+  // “ 1/2
+  L2D1 L2D2 L2D3 L2D4 L2D5 L2D6 L2D7 L2D8 L2D9 L2D10 L2D11 L2D12 L2D13 L2D14 L2D15
+  L2ฏฅเข_ฏฎซ_คญจ
+  VidOpl1 ฎเเแ็ฅโ1 Day1 Time2StrDef(Double(Chas1)) VidOpl2 ฎเเแ็ฅโ2 Day2 Time2StrDef(Double(Chas2)) KodNejavki1 DayNejavok1 KodNejavki2 DayNejavok2
+  Npp
+  LogicSubStr(GetSurnameWithInitials(FIO), 22, false, false)
+  TabN
 
+  // — แ๋ 1/2
+  Time2StrDef(Double(L2Ch1)) Time2StrDef(Double(L2Ch2)) Time2StrDef(Double(L2Ch3)) Time2StrDef(Double(L2Ch4))
+  Time2StrDef(Double(L2Ch5)) Time2StrDef(Double(L2Ch6)) Time2StrDef(Double(L2Ch7)) Time2StrDef(Double(L2Ch8))
+  Time2StrDef(Double(L2Ch9)) Time2StrDef(Double(L2Ch10)) Time2StrDef(Double(L2Ch11)) Time2StrDef(Double(L2Ch12))
+  Time2StrDef(Double(L2Ch13)) Time2StrDef(Double(L2Ch14)) Time2StrDef(Double(L2Ch15))
+
+  Time2StrDef(Double(L2ฏฅเข_ฏฎซ_็ แ๋))
+
+  VidOpl3 ฎเเแ็ฅโ3 Day3 Time2StrDef(Double(Chas3)) VidOpl4 ฎเเแ็ฅโ4 Day4 Time2StrDef(Double(Chas4)) KodNejavki3 DayNejavok3 KodNejavki4 DayNejavok4
+  LogicSubStr(Dolg, 22, true, true)
+  LogicSubStr(Dolg, 22, true, true)
+
+  // “ 2/2
+  L2D16 L2D17 L2D18 L2D19 L2D20 L2D21 L2D22 L2D23 L2D24 L2D25 L2D26 L2D27 L2D28 L2D29 L2D30 L2D31
+  L2ขโฎเ_ฏฎซ_คญจ
+  VidOpl5 ฎเเแ็ฅโ5 Day5 Time2StrDef(Double(Chas5)) VidOpl6 ฎเเแ็ฅโ6 Day6 Time2StrDef(Double(Chas6)) KodNejavki5 DayNejavok5 KodNejavki6 DayNejavok6
+  LogicSubStr(Dolg, 22, true, true)
+  ฌฅแ๏ๆ_คญจ
+
+  // — แ๋ 2/2
+  Time2StrDef(Double(L2Ch16)) Time2StrDef(Double(L2Ch17)) Time2StrDef(Double(L2Ch18)) Time2StrDef(Double(L2Ch19))
+  Time2StrDef(Double(L2Ch20)) Time2StrDef(Double(L2Ch21)) Time2StrDef(Double(L2Ch22)) Time2StrDef(Double(L2Ch23))
+  Time2StrDef(Double(L2Ch24)) Time2StrDef(Double(L2Ch25)) Time2StrDef(Double(L2Ch26)) Time2StrDef(Double(L2Ch27))
+  Time2StrDef(Double(L2Ch28)) Time2StrDef(Double(L2Ch29)) Time2StrDef(Double(L2Ch30)) Time2StrDef(Double(L2Ch31))
+
+  Time2StrDef(Double(L2ขโฎเ_ฏฎซ_็ แ๋))
+
+  vidOpl7 ฎเเแ็ฅโ7 Day7 Time2StrDef(Double(Chas7)) VidOpl8 ฎเเแ็ฅโ8 Day8 Time2StrDef(Double(Chas8)) KodNejavki7 DayNejavok7 KodNejavki8 DayNejavok8
+
+  //  ญญ๋ฅ ฏฅเขฎฃฎ แซฎ๏.   ํโฎโ เ ง กใคฅโ ฏฎ็จ้ฅ, ฏฎโฎฌใ ็โฎ ญฅ ญใฆญฎ ขแโ ขซ๏โ์ เ งญฎแชใ จ ฏเฎ็ใ๎ ฅเใญคใ
+  // “ 1/2
+  D1  D2  D3  D4  D5  D6  D7  D8  D9  D10  D11  D12  D13  D14  D15
+  ฏฅเข_ฏฎซ_คญจ
+  Time2StrDef(Double(ฌฅแ๏ๆ_็ แ๋))
+
+  // — แ๋ 1/2
+  Time2StrDef(Double(Ch1)) Time2StrDef(Double(Ch2)) Time2StrDef(Double(Ch3)) Time2StrDef(Double(Ch4))
+  Time2StrDef(Double(Ch5)) Time2StrDef(Double(Ch6)) Time2StrDef(Double(Ch7)) Time2StrDef(Double(Ch8))
+  Time2StrDef(Double(Ch9)) Time2StrDef(Double(Ch10)) Time2StrDef(Double(Ch11)) Time2StrDef(Double(Ch12))
+  Time2StrDef(Double(Ch13)) Time2StrDef(Double(Ch14)) Time2StrDef(Double(Ch15))
+
+  Time2StrDef(Double(ฏฅเข_ฏฎซ_็ แ๋))
+
+  // “ 2/2
+  D16  D17  D18  D19  D20  D21  D22  D23  D24  D25  D26  D27  D28  D29  D30  D31
+  ขโฎเ_ฏฎซ_คญจ
+
+  // — แ๋ 2/2
+  Time2StrDef(Double(Ch16)) Time2StrDef(Double(Ch17)) Time2StrDef(Double(Ch18)) Time2StrDef(Double(Ch19))
+  Time2StrDef(Double(Ch20)) Time2StrDef(Double(Ch21)) Time2StrDef(Double(Ch22)) Time2StrDef(Double(Ch23))
+  Time2StrDef(Double(Ch24)) Time2StrDef(Double(Ch25)) Time2StrDef(Double(Ch26)) Time2StrDef(Double(Ch27))
+  Time2StrDef(Double(Ch28)) Time2StrDef(Double(Ch29)) Time2StrDef(Double(Ch30)) Time2StrDef(Double(Ch31))
+
+  Time2StrDef(Double(ขโฎเ_ฏฎซ_็ แ๋))
 .endfields
 .if Show_Analitik
 .begin
@@ -194,19 +279,25 @@ end.
 .{
 ÿ.{?internal; lShow_Analitik;
 .begin
-  //คฎซฆญ๋ ใฌฅแโจโแ๏ จฌ๏  ญ ซจโจชจ จ ๅฎโ๏ ก๋ ฎคจญ โ กฅซ์ญ๋ฉ ญฎฌฅเ
-  LineCount := LineCount + if (FirstLine, 9, 10);
+  // ฎซฆญ๋ ใฌฅแโจโ์แ๏ จฌ๏  ญ ซจโจชจ จ ๅฎโ๏ ก๋ ฎคจญ โ กฅซ์ญ๋ฉ ็ฅซฎขฅช
+  FutureLineCount := LineCount + (if (LayerCount = 2, 15, 7) + if (FirstLine, 2, 3));
 end.
-.{?internal;(LineCount > LinesPerPage - 1);
+.{?internal;(FutureLineCount > LinesPerPage - 1);
+! …แซจ ญฅ ขฌฅ้ ฅฌแ๏, ฏฎ-เ งญฎฌใ ฏฅ็ โ โ์ ญจฆญ๎๎ ฃเ ญจๆใ ญ คฎกญฎ
+.{?internal; FirstLine; // แเ งใ ฆฅ ญฅ ขฌฅแโจซจแ์: ญใ ก๋ข ฅโ โ ช.
+ÿศอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผÿ
+.}
+.{?internal; not FirstLine;
 ÿศอออออสออออออออออออออออออออออสออออออออออสอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออสออออออฯออออออสออออออฯอออออออออฯอออออออออออฯออออออฯอออออออออฯอออออออออออสอออออฯออออออฯอออออฯออออออผÿ
+.}
 .begin
-  LineCount := LineCount - if (FirstLine, 9, 10) + 1;
+  LineCount++; // ํโฎ ง  แ็๑โ โฎซ์ชฎ ็โฎ ญ ฏฅ็ โ ญญฎฉ ญจฆญฅฉ ฃเ ญจๆ๋
 end.
 .{ while (LineCount < LinesPerPage)
 !ง กจข ฅฌ ฏใแโ๋ฌจ แโเฎช ฌจ คฎ ชฎญๆ  แโเ ญจๆ๋
 
 .begin
-  LineCount := LineCount + 1;
+  LineCount++;
 end.
 .}
 ÿษอออออหออออออออออออออออออออออหออออออออออหอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออหออออออัออออออหออออออัอออออออออัอออออออออออัออออออัอออออออออัอออออออออออหอออออัออออออัอออออัออออออป
@@ -214,35 +305,35 @@ end.
 ฬอออออสออออออออออออออออออออออสออออออออออสอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออสออออออฯออออออสออออออฯอออออออออฯอออออออออออฯออออออฯอออออออออฯอออออออออออสอออออฯออออออฯอออออฯออออออน
 ÿ.begin
   FirstLine := true;
-  LineCount := 10;
+  LineCount := 3; // ญใ ่ ฏฎ็ชใ โฎ ใฆฅ ฏฎ ซ๎กฎฌใ ญ ฏฅ็ โ ซจ
 end.
 .}
-.{?internal;not FirstLine;
+.{?internal; not FirstLine;
 ÿฬอออออสออออออออออออออออออออออสออออออออออสอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออสออออออฯออออออสออออออฯอออออออออฯอออออออออออฯออออออฯอออออออออฯอออออออออออสอออออฯออออออฯอออออฯออออออน
 ÿ.}
 ÿบ €ญ ซจโจช : @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ บÿ
 ÿฬอออออหออออออออออออออออออออออหออออออออออหอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออหออออออัออออออหออออออัอออออออออัอออออออออออัออออออัอออออออออัอออออออออออหอออออัออออออัอออออัออออออนÿ
 .begin
   AnFirstLine := True;
-  //ขฎแแโ ญฎขจฌ แ็ฅโ็จช ง  ข๋็ฅโฎฌ  ญ ซจโจชจ
-  LineCount := LineCount - if (FirstLine, 7, 8);
+  LineCount += if (FirstLine, 2, 3);
 end.
-.}ÿ
-.{
+.}ÿ  //?internal lShow_Analitik
+.{ // ฎก๋็ญ๋ฉ ํโฎโ แ ฌ๋ฉ, ข โ.็. กฅง  ญ ซจโจชจ
 .begin
-  //แ ใ็ฅโฎฌ เ งคฅซจโฅซ์ญฎฉ ซจญจจ ฌฅฆคใ ค ญญ๋ฌจ ฏฎ คขใฌ โ กฅซ์ญ๋ฌ ญฎฌฅเ ฌ (FirstLine = false), จซจ กฅง
-  LineCount := LineCount + if (FirstLine, 7, 8);
+  // ‘ชฎซ์ชฎ กใคฅโ แโเฎช, ชฎฃค  ญ ฏฅ็ โ ฅฌ ขแ๑ ฏฎ ค ญญฎฌใ ็ฅซฎขฅชใ.
+  FutureLineCount := LineCount + if (LayerCount = 2, 15, 7)
+                     + if ((not FirstLine) and (not AnFirstLine), 1, 0);
 end.
-.{?internal;(LineCount > LinesPerPage - 1);
+.{?internal;(FutureLineCount > LinesPerPage - 1);
 ศอออออสออออออออออออออออออออออสออออออออออสอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออฯอออออสออออออฯออออออสออออออฯอออออออออฯอออออออออออฯออออออฯอออออออออฯอออออออออออสอออออฯออออออฯอออออฯออออออผ
 .begin
-  LineCount := LineCount - if (FirstLine, 7, 8) + 1;
+  LineCount++; // +1 ง  แ็๑โ โฎซ์ชฎ ็โฎ ญ ฏฅ็ โ ญญฎฉ.
 end.
 .{ while (LineCount < LinesPerPage)
 !ง กจข ฅฌ ฏใแโ๋ฌจ แโเฎช ฌจ คฎ ชฎญๆ  แโเ ญจๆ๋
 
 .begin
-  LineCount := LineCount + 1;
+  LineCount++;
 end.
 .}
 ษอออออหออออออออออออออออออออออหออออออออออหอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออหออออออัออออออหออออออัอออออออออัอออออออออออัออออออัอออออออออัอออออออออออหอออออัออออออัอออออัออออออป
@@ -250,12 +341,16 @@ end.
 ฬอออออฮออออออออออออออออออออออฮออออออออออฮอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออัอออออฮออออออุออออออฮออออออุอออออออออุอออออออออออุออออออุอออออออออุอออออออออออฮอออออุออออออุอออออุออออออน
 .begin
   FirstLine := true;
-  LineCount := 10;
+  LineCount := 3;
 end.
 .}
-.{?internal;(not FirstLine) ÿand (not AnFirstLine)ÿ;
+.{?internal;(not FirstLine) ÿand (not AnFirstLine)ÿ; // ็โฎ งคฅแ์ "" คฅซ ฅโ?!
 ฬอออออฮออออออออออออออออออออออฮออออออออออฮอออออุอออออุอออออุอออออุอออออุอออออุอออออุอออออุอออออุอออออุอออออุอออออุอออออุอออออุอออออุอออออฮออออออุออออออฮออออออุอออออออออุอออออออออออุออออออุอออออออออุอออออออออออฮอออออุออออออุอออออุออออออน
+.begin
+  LineCount++; // แ็๑โ็จช, ฎ็จขจคญฎ, ใ่ชจญ ญ เ ้จข ฅโ
+end.
 .}
+.{?internal; (LayerCount <> 2);
 บ     บ                      บ          บ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ  •  บ&&&&&&ณ      บ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&ณ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&บ@~@@@ณ &&&& ณ@~@@@ณ &&&& บ
 บ&&&&&บ@@@@@@@@@@@@@@@@@@@@@@บ&&&&&&&&&&วฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤืฤฤฤฤฤฤด&&&&&&วฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           รฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           บฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤฤถ
 บ     บ                      บ          บ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ  •  บ&&&&&&ณ      บ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&ณ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&บ@~@@@ณ &&&& ณ@~@@@ณ &&&& บ
@@ -264,8 +359,32 @@ end.
 บ     บ@@@@@@@@@@@@@@@@@@@@@@บ          วฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤืฤฤฤฤฤฤด&&&&&&วฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           รฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           บฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤฤถ
 บ     บ                      บ          บ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&บ&&&&&&ณ      บ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&ณ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&บ@~@@@ณ &&&& ณ@~@@@ณ &&&& บ
 .begin
+  LineCount += 7; // โฎ - ข๋แฎโ . …๑ ญฅขฎงกเ ญญฎ จแช โ์ ฏฎ จแๅฎคญจชใ.
+end.
+.}
+.{?internal; (LayerCount = 2);
+บ     บ                      บ          บ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ  •  บ&&&&&&ณ      บ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&ณ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&บ@~@@@ณ &&&& ณ@~@@@ณ &&&& บ
+บ&&&&&บ@@@@@@@@@@@@@@@@@@@@@@บ&&&&&&&&&&วฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤืฤฤฤฤฤฤด      วฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           รฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           บฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤฤถ
+บ     บ                      บ          บ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ  •  บ&&&&&&ณ      บ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&ณ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&บ@~@@@ณ &&&& ณ@~@@@ณ &&&& บ
+บ     บ@@@@@@@@@@@@@@@@@@@@@@บ          วฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤืฤฤฤฤฤฤลฤฤฤฤฤฤวฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤฤฤถฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤฤถ
+บ     บ@@@@@@@@@@@@@@@@@@@@@@บ          บ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@บ&&&&&&ณ      บ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&ณ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&บ@~@@@ณ &&&& ณ@~@@@ณ &&&& บ
+บ     บ@@@@@@@@@@@@@@@@@@@@@@บ          วฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤืฤฤฤฤฤฤด&&&&&&วฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           รฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           บฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤฤถ
+บ     บ                      บ          บ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&บ&&&&&&ณ      บ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&ณ@@@@@@ณ@@@@@@@@@ณ&&& &&&&&&&บ@~@@@ณ &&&& ณ@~@@@ณ &&&& บ
+บ     บ                      บ          วฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤืฤฤฤฤฤฤลฤฤฤฤฤฤวฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤฤฤถฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤฤถ
+บ     บ                      บ          บ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ  •  บ&&&&&&ณ      บ      ณ         ณ           ณ      ณ         ณ           บ     ณ      ณ     ณ      บ
+บ     บ                      บ          วฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤืฤฤฤฤฤฤด&&&&&&วฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           รฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           บฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤฤถ
+บ     บ                      บ          บ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ  •  บ&&&&&&ณ      บ      ณ         ณ           ณ      ณ         ณ           บ     ณ      ณ     ณ      บ
+บ     บ                      บ          วฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤืฤฤฤฤฤฤลฤฤฤฤฤฤวฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤฤฤถฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤฤถ
+บ     บ                      บ          บ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@ณ@~@@@บ&&&&&&ณ      บ      ณ         ณ           ณ      ณ         ณ           บ     ณ      ณ     ณ      บ
+บ     บ                      บ          วฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤืฤฤฤฤฤฤด      วฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           รฤฤฤฤฤฤลฤฤฤฤฤฤฤฤฤด           บฤฤฤฤฤลฤฤฤฤฤฤลฤฤฤฤฤลฤฤฤฤฤฤถ
+บ     บ                      บ          บ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&ณ&&&&&บ&&&&&&ณ      บ      ณ         ณ           ณ      ณ         ณ           บ     ณ      ณ     ณ      บ
+.begin
+  LineCount += 15; // โฎ - ข๋แฎโ . …๑ ญฅขฎงกเ ญญฎ จแช โ์ ฏฎ จแๅฎคญจชใ.
+end.
+.}
+.begin
   FirstLine := false;
-  ÿAnFirstLine := false;ÿ
+  ÿAnFirstLine := false;ÿ // ็โฎ งคฅแ์ "" คฅซ ฅโ?!
 end.
 .}
 .}
@@ -279,12 +398,15 @@ end.
                                                                                   คฎซฆญฎแโ์   ฏฎคฏจแ์   เ แ่จไเฎขช  ฏฎคฏจแจÿ
 .begin
   LineCount := if((LineCount + 8) > LinesPerPage, LineCount + 8 - LinesPerPage, LineCount + 8);
+  // €ขโฎเ ๅฎโฅซ แช ง โ์, ็โฎ ข แซใ็ ฅ เ งเ๋ข  แโเ ญจๆ๋ ขฎ ขเฅฌ๏ ฏฅ็ โ ญจ๏ ํโฎฉ ๅเฅญจ
+  // LineCount แโ ญฅโ แฎคฅเฆ โ์ ขฌฅญ๏ฅฌฎฅ ชฎซ-ขฎ แโเฎช, ข๋ซฅง่จๅ ญ  แซฅคใ๎้ใ๎ แโเ ญจๆใ.
+  // (ซจญ, คซ๏ ชฎฃฎ ฏเจคใฌ ซจ ฎฏฅเ ๆจ๎ ฎแโ โช  ฎโ คฅซฅญจ๏? 7/| ๋ ฏฎฃเฎฌฌจแโ๋ จซจ ชโฎ?)
 end.
 .{ while (LineCount < LinesPerPage)
 !ง กจข ฅฌ ฏใแโ๋ฌจ แโเฎช ฌจ คฎ ชฎญๆ  แโเ ญจๆ๋
 
 .begin
-  LineCount := LineCount + 1;
+  LineCount++;
 end.
 .}
 .{ checkenter FirstPage
