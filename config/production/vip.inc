@@ -12,6 +12,9 @@
   FullLoginName=On
   ForceRights=ON
 
+[Vip]
+  DefaultEnv=GalNet
+
 [login]
   username=argumentnores
   password=argument

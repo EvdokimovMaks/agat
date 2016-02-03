@@ -3,12 +3,12 @@
   CheckPeriod=0
 
 [Database]
-  DataBaseName=TEACH910
+  DataBaseName=galpatch
   DataBaseDriver=MS70DRV.DLL
   CheckRepository=Off
 
 [SQLDriver]
-  SQLServer=ncacn_ip_tcp:GALSRV9[1997]
+  SQLServer=ncacn_ip_tcp:galtest[1997]
   FullLoginName=On
   ForceRights=ON
 
@@ -16,6 +16,8 @@
   username=argumentnores
   password=argument
 
+[Vip]
+  DefaultEnv=GalNet_OAV
 
 [licparam]
   LicFileName='%ConfigDir%%ConfigSubDir%\vip.lic'

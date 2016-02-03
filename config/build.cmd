@@ -7,6 +7,7 @@ call %ConfigDir%%ConfigSubDir%\sets.cmd
 set tmp=%TmpDir%tmp
 set log=%TmpDir%Build.%2.log
 if exist %log% del /F %log%
+if exist %TmpDir%*.res del /F %TmpDir%*.res
 
 for /f "delims=" %%x in (version) do set Build=%%x
 
