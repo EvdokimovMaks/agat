@@ -18,12 +18,18 @@ alter interface VSCHETB;
     Function DoBaseDocDelete(DelSoprDoc : boolean; bPack: boolean = FALSE): word;
   end;
 
+  extendformats scspstep;
+
   var
     cDogovor_old, cAppDogovor_old, cCalPlan_old: comp;
     mw_ea: iExtAttr;
     cidHelper: AGAT::ContractIDHelper;
 
   create view
+  var
+    rzdTax: double;
+    rzdTax18: double;
+    rzdTax10: double;
   as select cidHelper.GetContractID(GetContractIDKey_ByKatstroy, specmtr.cobj) (fieldname=ContractID)
   from attrval mwav_naznpl
   where ((1102 == mwav_naznpl.wtable and basedoc.nrec == mwav_naznpl.crec and ATTRNAM_NAZNPL == mwav_naznpl.cattrnam))
@@ -81,6 +87,124 @@ alter interface VSCHETB;
     }
     result := _c;
   }
+
+//#region Расчет налогов по билетам РЖД
+
+  procedure RZDRecalc;
+  {
+    set rzdTax18 := round( (spstep.summa-11*rzdTax)/(118/18-11) , 6);
+    set rzdTax10 := rzdTax - rzdTax18;
+  }
+
+  procedure RZDRefresh;
+  {
+    RZDRecalc;
+    rescanpanel(#spstep);
+  }
+
+  procedure RZDAddTax(grnalNrec: comp; percent: double; sum: double);
+  {
+    clearbuffer (#spdocnal);
+    spdocnal.cspdoc    := spstep.nrec;
+    spdocnal.cdoc      := basedoc.nrec;
+    spdocnal.tipdoc    := 1101;
+    spdocnal.cgrnal    := grnalNrec;
+    spdocnal.cnalog    := 2;
+    spdocnal.nalog     := percent;
+    spdocnal.sumnal    := sum;
+    spdocnal.cval      := 0;
+    spdocnal.sumval    := sum;
+    spdocnal.summa     := sum;
+    spdocnal.corg      := basedoc.corg;
+    spdocnal.valcurse  := 1;
+    spdocnal.croscurse := 1;
+    spdocnal.iscustom  := 6;
+    insert current spdocnal;
+  }
+
+  procedure RZDSetTaxes;
+  {
+    var grnalNrec: comp;
+    if rzdTax10 = 0 and rzdTax18 != 0
+      grnalNrec := 4001A6F2CE900165h //НДС 18%
+    else if rzdTax10 != 0 and rzdTax18 = 0
+      grnalNrec := 4001A573A6E5F4D3h //НДС 10%
+    else
+      grnalNrec := 0001000000000006h; //НДС10,18
+
+    spstep.nds       := rzdTax;
+    spstep.cgrnal    := grnalNrec;
+    spstep.manualtax := 1;
+    update current spstep;
+
+    delete all spdocnal where ((spstep.nrec == spdocnal.cspdoc));
+
+    if rzdTax10 != 0 RZDAddTax(grnalNrec, 10, rzdTax10);
+    if rzdTax18 != 0 RZDAddTax(grnalNrec, 18, rzdTax18);
+
+  }
+
+  window wGetRZDTaxSum 'Введите сумму налогов по билету', doAccept, escClose;
+  show (,,45,8);
+  screen scRZDTaxCalc;
+  fields
+    spstep.summa: ['[|-]3666`666`666`666.88'], left, skip;
+    rzdTax      : ['[|-]3666`666`666`666.88'], noprotect;
+    rzdTax10    : ['[|-]3666`666`666`666.88'], left, skip;
+    rzdTax18    : ['[|-]3666`666`666`666.88'], left, skip;
+  buttons
+    cmRZDRecalc;
+    cmRZDSetTaxes, default;
+    cmCancel;
+<<
+
+  `Сумма по позиции`.@@@@@@@@@@@@@@@@@@@@
+  `Сумма налогов`   .@@@@@@@@@@@@@@@@@@@@
+  `Налог 10%:`      .@@@@@@@@@@@@@@@@@@@@
+  `Налог 18%:`      .@@@@@@@@@@@@@@@@@@@@
+
+<. Пересчет .> <.Установить .> <. Отмена .>
+>>
+  end;
+  handleevent
+    cmInit: { rzdTax := spstep.nds; RZDRefresh;  }
+    cmCheckField: { RZDRefresh }
+    cmRZDRecalc: { RZDRefresh }
+    cmRZDSetTaxes: { RZDRefresh; putcommand(cmDefault); }
+  end;
+  end; //window wGetRZDTaxSum
+
+  window wspstep;
+    Panel p1;
+    Table SpStep;
+
+    screen scspstep;
+    buttons
+      cmCalcTaxesRZD;
+<<
+
+
+
+
+
+
+
+                                                                               <. Расчет налогов по билетам .>
+>>
+    end; //screen
+
+    end; //panel
+
+    handleevent
+      cmCalcTaxesRZD:  {
+        if (runwindowmodal(wGetRZDTaxSum) = cmDefault and rzdTax10 >=0 and rzdTax18 >= 0) RZDSetTaxes;
+        rescanpanel(#spstep);
+        rereadrecord(#spdocnal);
+      }
+    end;
+  end;
+
+//#endregion
 
   window wdopattr;
     tableevent table basedoc;
