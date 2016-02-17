@@ -1,0 +1,453 @@
+#component "AGAT"
+interface ImportBudget 'Импорт бюджетов', DoAccept, EscClose;
+  show (,,50,9);
+
+  table struct tNotFound (
+    Name: string
+  ) with index (
+    i01 = Name
+  );
+
+  var
+    _fileName: string;
+    _colName: longint;
+    _colCode: longint;
+    _colVal: array[1..12] of longint;
+    _rowFirst: longint;
+    _budgetFormNrec: comp;
+
+  create view
+  var
+    brValNrec: comp;
+  as select *
+  from tImportBudgetVal, tImportBudgetVal brVal, katpodr, tNotFound
+  where ((
+    _budgetFormNrec == fptform.nrec and
+    brValNrec == brVal.cnode
+  ));
+
+  create view vSearchBudgetVal
+  var
+    budgetValNodeNrec: comp;
+    budgetValName: string;
+  as select *
+  from tImportBudgetVal, tImportBudgetVal tParentBudgetVal
+  where ((
+    budgetValNodeNrec == tImportBudgetVal.cNode and
+    20                == tImportBudgetVal.kodgrkau and
+    budgetValName     == tImportBudgetVal.Name and
+    budgetValNodeNrec == tParentBudgetVal.nrec
+  ));
+
+  create view vSearchBudgetValByCode
+  var
+    budgetValCode: string;
+  as select *
+  from tImportBudgetVal
+  where ((
+    20            == tImportBudgetVal.kodGrKau and
+    budgetValCode == tImportBudgetVal.code
+  ));
+
+  procedure addMsg(var destMsg: string; addingMsg: string);
+  {
+    if (destMsg != '')
+      destMsg += chr(13);
+    destMsg += addingMsg;
+  }
+
+  window wInfo 'Просмотр данных для импорта', doAccept, escClose;
+
+    screen sctop;
+      show(,,,4);
+      buttons
+        cmProceedImport, default;
+        cmCancel;
+<<
+
+                                                                                 <. Продолжить .> <. Отмена .>
+>>
+    end;
+
+    tree trInfo;
+      show (,5,,15);
+      table brVal;
+      fields
+        brVal.Name 'Наименование': [30], protect;
+        brVal.Code 'Код': [10], protect;
+        brVal.val[1] 'Январь': [10], protect;
+        brVal.val[2] 'Февраль': [10], protect;
+        brVal.val[3] 'Март': [10], protect;
+        brVal.val[4] 'Апрель': [10], protect;
+        brVal.val[5] 'Май': [10], protect;
+        brVal.val[6] 'Июнь': [10], protect;
+        brVal.val[7] 'Июль': [10], protect;
+        brVal.val[8] 'Август': [10], protect;
+        brVal.val[9] 'Сентябрь': [10], protect;
+        brVal.val[10] 'Октябрь': [10], protect;
+        brVal.val[11] 'Ноябрь': [10], protect;
+        brVal.val[12] 'Декабрь': [10], protect;
+    end;
+
+    browse brInfo;
+      show(,16,,);
+      table tNotFound;
+      fields
+        tNotFound.Name 'Не найдено': [100], protect;
+    end;
+
+    TableEvent table brVal
+      cmTreeNodeType:
+      {
+        if (IsValid(#brVal))
+          TreeSetNodeType(trInfo,if(TreeNodeIsOpen(trInfo),ntfOpen,ntfClose))
+        else
+          TreeSetNodeType(trInfo,ntfText);
+      }
+      cmTreeTop  : brValNrec := comp(0)
+      cmTreeDown : brValNrec := brVal.nrec;
+      cmTreeUp   : brValNrec := brVal.cNode;
+      cmTreeNeedOwner : TreeJumpToRecord(trInfo,brVal.cnode);
+    end; // TableEvent
+
+    handleevent
+      cmCancel:
+      {
+        delete all tImportBudgetVal;
+        CloseWindow(wInfo);
+      }
+      cmProceedImport:
+      {
+        CloseWindow(wInfo);
+      }
+    end;
+  end; //window
+
+  function SearchBudgetVal(parentNodeNrec: comp; searchingName: string; var buf: BudgetValType): boolean;
+  {
+    result := false;
+    vSearchBudgetVal.budgetValNodeNrec := parentNodeNrec;
+    vSearchBudgetVal.budgetValName := searchingName;
+    if vSearchBudgetVal.getfirst tImportBudgetVal = tsOk
+    {
+      buf := vSearchBudgetVal.tImportBudgetVal.buffer;
+      result := true;
+    }
+    else
+    {
+      if (vSearchBudgetVal.getfirst tParentBudgetVal = tsOk)
+        result := SearchBudgetVal(vSearchBudgetVal.tParentBudgetVal.cNode, searchingName, buf);
+    }
+  }
+
+  function SearchBudgetValByCode(searchingCode: string; var buf: BudgetValType): boolean;
+  {
+    result := false;
+    if (searchingCode = '') exit;
+    vSearchBudgetValByCode.budgetValCode := searchingCode;
+    if (vSearchBudgetValByCode.getfirst tImportBudgetVal = tsOk)
+    {
+      result := true;
+      buf := vSearchBudgetValByCode.tImportBudgetVal.buffer;
+    }
+  }
+
+  function ImportBudget(var msg: string): boolean;
+  {
+    result := false;
+    msg := '';
+
+    if (getfirst fptform != tsOk)
+    {
+      addMsg(msg, 'Не указана бюджетная форма');
+      exit;
+    }
+
+    delete all tImportBudgetVal;
+    delete all tNotFound;
+
+    insert tImportBudgetVal (nrec, cnode, kodgrkau, crec, name, code, isleaf)
+    select fpspaxtf.nrec, fpspaxtf.cnode, fpspaxtf.kodgrkau, fpstbud.nrec, if(fpspaxtf.name!='',fpspaxtf.name,fpstbud.name), fpstbud.code, fpspaxtf.isleaf
+    from fpaxtf, fpspaxtf, fpstbud
+    where ((
+      _budgetFormNrec  /== fpaxtf.cmain and
+      1                /== fpaxtf.WAXISXY and
+      fpaxtf.nrec      /== fpspaxtf.cmain and (fpspaxtf.kodgrkau=20) and
+      fpspaxtf.cmean   /== fpstbud.nrec
+    ));
+
+    if(recordsintable(#tImportBudgetVal) = 0)
+    {
+      addMsg(msg, 'Не найдены статьи бюджетной формы');
+      exit;
+    }
+
+    var x1,y1,x2,y2,y: longint;
+    var i: integer;
+    var s, sName, sCode: string;
+    var currentBudgetVal: BudgetValType;
+    var foundBudgetVal: boolean;
+
+    if not xlOpenNewExcel(false) exit;
+    if not xlOpenWorkBook(_fileName) exit;
+    xlDisplayAlerts(false);
+    if not xlGetUsedRange(y1, x1, y2, x2) exit;
+    if not xlReadMatrixFromExcel(_rowFirst, 1, y2, x2) exit;
+
+    for(y:=0;y<=y2-_rowFirst+1;y++)
+    {
+      xlReadFromMatrix(y,_colName,s); sName := trim(s);
+      xlReadFromMatrix(y,_colCode,s); sCode := trim(s);
+
+      if (sName='') continue;
+
+      foundBudgetVal := SearchBudgetValByCode(sCode, currentBudgetVal);
+      if (not foundBudgetVal)
+        foundBudgetVal := SearchBudgetVal(currentBudgetVal.Nrec, sName, currentBudgetVal)
+
+      if (foundBudgetVal)
+      {
+        if getfirst tImportBudgetVal where ((currentBudgetVal.nrec == tImportBudgetVal.Nrec )) = tsOk
+        {
+          for(i:=1; i<=12; i++)
+          {
+            xlReadFromMatrix(y,_colVal[i],s);
+            s := replace(trim(s),',','.');
+            tImportBudgetVal.val[i] := double(s);
+          }
+          update current tImportBudgetVal;
+          currentBudgetVal := tImportBudgetVal.buffer;
+        }
+      }
+      else
+      {
+        clearbuffer(#tImportBudgetVal);
+        tImportBudgetVal.cnode := currentBudgetVal.Nrec;
+        tImportBudgetVal.name := sName;
+        if (getfirst katpodr where ((sName == katpodr.name)) = tsOk) and (currentBudgetVal.nrec != 0)
+        {
+          tImportBudgetVal.kodgrkau := 2;
+          tImportBudgetVal.crec := katpodr.nrec;
+          tImportBudgetVal.name := katpodr.name;
+          for(i:=1; i<=12; i++)
+          {
+            xlReadFromMatrix(y,_colVal[i],s);
+            s := replace(trim(s),',','.');
+            tImportBudgetVal.val[i] := double(s);
+          }
+          insert current tImportBudgetVal;
+        }
+        else
+        {
+          if (currentBudgetVal.IsLeaf = 1)
+          {
+            tImportBudgetVal.kodgrkau := 2;
+            tImportBudgetVal.name := tImportBudgetVal.name + ' -> Прочие';
+            insert current tImportBudgetVal;
+          }
+          insert tNotFound set Name := sName+' ('+sCode+')';
+        }
+      }
+    }
+
+    xlFreeMatrix;
+    xlCloseWorkBook(0);
+    xlKillExcel;
+
+    runwindowmodal(winfo);
+    closeinterface(cmDefault);
+
+    result := true;
+  }
+
+  window wconfig 'Настройки', doaccept, escclose;
+    show(,,35,16);
+
+    screen scconfig;
+      fields
+        _colName: noprotect;
+        _colCode: noprotect;
+        [colVal1]  _colVal[1] : noprotect;  [colVal2]  _colVal[2] : noprotect;
+        [colVal3]  _colVal[3] : noprotect;  [colVal4]  _colVal[4] : noprotect;
+        [colVal5]  _colVal[5] : noprotect;  [colVal6]  _colVal[6] : noprotect;
+        [colVal7]  _colVal[7] : noprotect;  [colVal8]  _colVal[8] : noprotect;
+        [colVal9]  _colVal[9] : noprotect;  [colVal10] _colVal[10]: noprotect;
+        [colVal11] _colVal[11]: noprotect;  [colVal12] _colVal[12]: noprotect;
+        _rowFirst: noprotect;
+<<
+
+ Номера столбцов
+
+`Наименование статьи` .@@@@@
+`Код статьи`          .@@@@@
+
+`Январь`   .@@@@@ `Февраль` .@@@@@
+`Март`     .@@@@@ `Апрель`  .@@@@@
+`Май`      .@@@@@ `Июнь`    .@@@@@
+`Июль`     .@@@@@ `Август`  .@@@@@
+`Сентябрь` .@@@@@ `Октябрь` .@@@@@
+`Ноябрь`   .@@@@@ `Декабрь` .@@@@@
+
+ Номера строк
+
+`Первая строка с данными` .@@@@@
+>>
+    end;
+
+    handleevent
+    end;
+  end;
+
+  screen scMain;
+    fields
+      [SelectedBudgetForm]
+        if(getfirst fptform = tsOk, fptform.name, 'Укажите бюджетную форму, в которую осуществляется импорт'):
+          protect, pickbutton;
+      _fileName: noprotect, pickbutton;
+    buttons
+      cmConf;
+      cmDoOk, default;
+      cmCancel;
+<<
+
+`Типовая форма:`
+ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+`Путь к файлу:`
+ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+   <. Настройки .> <. Продолжить .> <. Отмена .>
+>>
+  end;
+
+  procedure SetBudgetForm(aNrec: comp);
+  {
+    set _budgetFormNrec := aNrec;
+  }
+
+  procedure InitInterface;
+  {
+    var c: comp; c := 0;
+    if not ReadMyDsk(c, 'BudgetImport_BudgetFormNrec', false) c := 0;
+    if not ReadMyDsk(_fileName, 'BudgetImport_FileName', false) _fileName := '';
+    if not ReadMyDsk(_colName, 'BudgetImport_colName', false) _colName := 2;
+    if not ReadMyDsk(_colCode, 'BudgetImport_colCode', false) _colCode := 3;
+    if not ReadMyDsk(_colVal[1], 'BudgetImport_colVal1', false) _colVal[1] := 7;
+    if not ReadMyDsk(_colVal[2], 'BudgetImport_colVal2', false) _colVal[2] := 8;
+    if not ReadMyDsk(_colVal[3], 'BudgetImport_colVal3', false) _colVal[3] := 9;
+    if not ReadMyDsk(_colVal[4], 'BudgetImport_colVal4', false) _colVal[4] := 11;
+    if not ReadMyDsk(_colVal[5], 'BudgetImport_colVal5', false) _colVal[5] := 12;
+    if not ReadMyDsk(_colVal[6], 'BudgetImport_colVal6', false) _colVal[6] := 13;
+    if not ReadMyDsk(_colVal[7], 'BudgetImport_colVal7', false) _colVal[7] := 15;
+    if not ReadMyDsk(_colVal[8], 'BudgetImport_colVal8', false) _colVal[8] := 16;
+    if not ReadMyDsk(_colVal[9], 'BudgetImport_colVal9', false) _colVal[9] := 17;
+    if not ReadMyDsk(_colVal[10], 'BudgetImport_colVal10', false) _colVal[10] := 19;
+    if not ReadMyDsk(_colVal[11], 'BudgetImport_colVal11', false) _colVal[11] := 20;
+    if not ReadMyDsk(_colVal[12], 'BudgetImport_colVal12', false) _colVal[12] := 21;
+    if not ReadMyDsk(_rowFirst, 'BudgetImport_rowFirst', false) _rowFirst := 7;
+    SetBudgetForm(c);
+    RereadRecord;
+  }
+
+  procedure DoneInterface;
+  {
+    SaveMyDsk(_budgetFormNrec, 'BudgetImport_BudgetFormNrec');
+    SaveMyDsk(_fileName,  'BudgetImport_FileName');
+    SaveMyDsk(_colCode,   'BudgetImport_colCode');
+    SaveMyDsk(_colName,   'BudgetImport_colName');
+    SaveMyDsk(_colVal[1], 'BudgetImport_colVal1');
+    SaveMyDsk(_colVal[2], 'BudgetImport_colVal2');
+    SaveMyDsk(_colVal[3], 'BudgetImport_colVal3');
+    SaveMyDsk(_colVal[4], 'BudgetImport_colVal4');
+    SaveMyDsk(_colVal[5], 'BudgetImport_colVal5');
+    SaveMyDsk(_colVal[6], 'BudgetImport_colVal6');
+    SaveMyDsk(_colVal[7], 'BudgetImport_colVal7');
+    SaveMyDsk(_colVal[8], 'BudgetImport_colVal8');
+    SaveMyDsk(_colVal[9], 'BudgetImport_colVal9');
+    SaveMyDsk(_colVal[10], 'BudgetImport_colVal10');
+    SaveMyDsk(_colVal[11], 'BudgetImport_colVal11');
+    SaveMyDsk(_colVal[12], 'BudgetImport_colVal12');
+    SaveMyDsk(_rowFirst, 'BudgetImport_rowFirst');
+  }
+
+  function PickBudgetForm: boolean;
+  {
+    result := false;
+    var c: comp; c := _budgetFormNrec;
+    if (runinterface(F_FPBUDGET::GETAVAILABLELIST, 1, '', 0, 0, 0, c) != cmDefault)
+      exit;
+    SetBudgetForm(c);
+    result := true;
+  }
+
+  function PickFileName: boolean;
+  {
+    result := false;
+    var s: string;
+    s := GetFileName('*.xls;*.xlsx;*.xlsm', 'Выбор файла для импорта');
+    if (s = '')
+      exit;
+    _fileName := s;
+    result := true;
+  }
+
+  function IsDataValid(var msg: string): boolean;
+  {
+    result := true;
+    msg :='';
+    if (getfirst fptform != tsOk)
+    {
+      result := false;
+      addMsg(msg, 'Укажите бюджетную форму');
+    }
+    if (not ExistFile(_fileName))
+    {
+      result := false;
+      addMsg(msg, 'Файл не найден');
+    }
+  }
+
+  handleevent
+    cmExprFieldChanged:
+    {
+      case curfield of
+        #colVal1 : _colVal[1]  := ExprFieldValue;
+        #colVal2 : _colVal[2]  := ExprFieldValue;
+        #colVal3 : _colVal[3]  := ExprFieldValue;
+        #colVal4 : _colVal[4]  := ExprFieldValue;
+        #colVal5 : _colVal[5]  := ExprFieldValue;
+        #colVal6 : _colVal[6]  := ExprFieldValue;
+        #colVal7 : _colVal[7]  := ExprFieldValue;
+        #colVal8 : _colVal[8]  := ExprFieldValue;
+        #colVal9 : _colVal[9]  := ExprFieldValue;
+        #colVal10: _colVal[10] := ExprFieldValue;
+        #colVal11: _colVal[11] := ExprFieldValue;
+        #colVal12: _colVal[12] := ExprFieldValue;
+      end;
+    }
+    cmDoOk: {
+      var msg: string;
+      if(IsDataValid(msg))
+      {
+        if (not ImportBudget(msg))
+          message(msg);
+      }
+      else
+        message(msg, Error);
+    }
+    cmConf: runwindowmodal(wConfig);
+    cmInit: InitInterface;
+    cmDone: DoneInterface;
+    cmPick:
+    {
+      case curfield of
+        #SelectedBudgetForm:
+          if (PickBudgetForm)
+            RereadRecord;
+        #_fileName:
+          if (PickFileName)
+            RereadRecord;
+      end;
+    }
+  end;
+end.

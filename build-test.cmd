@@ -4,8 +4,11 @@ deploy-test
 cd ../alter
 build-test
 deploy-test
+cd ../budget
+build-test
+deploy-test
 cd ../buh
-buil-test
+build-test
 deploy-test
 cd ../cws
 build-test

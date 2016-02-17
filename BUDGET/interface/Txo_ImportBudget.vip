@@ -1,0 +1,90 @@
+#include TxoApi.vih
+#component "AGAT"
+
+VipInterface TXO_ImportBudget Implements ObjTxoIdentPlugin;
+
+interface TXO_ImportBudget;
+
+var
+  MainPeriodNrec: comp;
+
+create view
+as select *
+from tImportBudgetVal, fpperiod, tImportBudgetVal tImportBudgetVal20, tImportBudgetVal tImportBudgetVal2020, tImportBudgetVal tImportBudgetVal2
+where ((
+  20 == tImportBudgetVal20.kodgrkau and
+  tImportBudgetVal20.nrec == tImportBudgetVal2020.cNode and (tImportBudgetVal2020.kodgrkau=20) and
+  tImportBudgetVal20.nrec == tImportBudgetVal2.cNode and (tImportBudgetVal2.kodgrkau=2)
+));
+
+function ObjTxoIdentPlugin.GetInfo : string;
+{
+  result := 'Импорт бюджетов из Excel-файла';
+}
+function ObjTxoIdentPlugin.ParamMaster : string;
+{
+  result := '';
+}
+
+procedure ObjTxoIdentPlugin.StoreCycles(hTxo : longint; buf : TTxoApiInfoDoc);
+{
+
+  MainPeriodNrec := coGetTune('UPRFIN.FP.BASETPP');
+
+  delete all tImportBudgetVal;
+
+  runinterface(ImportBudget);
+
+  var i: integer;
+  var d: date;
+  var y: word;
+
+  y := year(buf.Datob);
+
+  _loop tImportBudgetVal20
+  {
+    if getfirst tImportBudgetVal2020 = tsOk continue;
+
+    if getfirst tImportBudgetVal2 = tsOk
+    {
+      _loop tImportBudgetVal2
+      {
+        for(i:=1;i<=12;i++)
+        {
+          if (abs(tImportBudgetVal2.val[i]) < 0.01) continue;
+          d := date(1,i,y);
+          TxoBodyClear   (hTxo);
+          if getfirst fpperiod where ((MainPeriodNrec == fpperiod.cmain and d >>= fpperiod.dbeg and (d <= fpperiod.dend and fpperiod.isleaf = 1) )) = tsOk
+          {
+            TxoBodyAddKau  (hTxo, 160, 21, fpperiod.nrec);
+          }
+          TxoBodyAddKau  (hTxo, 160, 2, tImportBudgetVal2.crec);
+          TxoBodyAddKau  (hTxo, 160, 20, tImportBudgetVal20.crec);
+          TxoBodySetSum  (hTxo, tImportBudgetVal2.val[i], 0, 0);
+          TxoDebugMsg    (hTxo, '', 'Статья '+string(tImportBudgetVal20.crec,0,0)+' "'+tImportBudgetVal20.Name+'". Подразделение '+string(tImportBudgetVal2.crec,0,0)+' "'+tImportBudgetVal2.name+'". Месяц '+i+'. Сумма '+tImportBudgetVal2.val[i]);
+          TxoBodyInsert(hTxo);
+        }
+      }
+    }
+    else
+    {
+      for(i:=1;i<=12;i++)
+      {
+        if (abs(tImportBudgetVal20.val[i]) < 0.01) continue;
+        d := date(1,i,y);
+        TxoBodyClear   (hTxo);
+        if getfirst fpperiod where ((MainPeriodNrec == fpperiod.cmain and d >>= fpperiod.dbeg and (d <= fpperiod.dend and fpperiod.isleaf = 1) )) = tsOk
+        {
+          TxoBodyAddKau  (hTxo, 160, 21, fpperiod.nrec);
+        }
+        TxoBodyAddKau  (hTxo, 160, 20, tImportBudgetVal20.crec);
+        TxoBodySetSum  (hTxo, tImportBudgetVal20.val[i], 0, 0);
+        TxoDebugMsg    (hTxo, '', 'Статья '+string(tImportBudgetVal20.crec,0,0)+' "'+tImportBudgetVal20.Name+'".  Месяц '+i+'. Сумма '+tImportBudgetVal2.val[i]);
+        TxoBodyInsert(hTxo);
+      }
+    }
+  }
+
+  delete all tImportBudgetVal;
+}
+end.
