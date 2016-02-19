@@ -13,17 +13,17 @@ where ((
   if v.getfirst mnplan = tsok
   {
     case v.mnplan.cwayaccou of
-      0001000000000033h: runinterface(AGAT::ReportRKMForm1D, comp(_MNREC), 'РКМ Форма 1 ПРОТОКОЛ ЦЕНЫ');
-      000100000000022Ch: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10620, 'РКМ Форма 2 ПЛАНОВАЯ КАЛЬКУЛЯЦИЯ');
-      0001000000000125h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), 'РКМ Форма 4 Материалы');
-      0001000000000188h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), 'РКМ Форма 5 Полуфабрикаты');
-      0001000000000191h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), 'РКМ Форма 6 ПКИ');
-      00010000000001EBh: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10618, 'РКМ Форма 8 ОБЩЕПРОИЗВОДСТВЕННЫЕ РАСХОДЫ');
-      00010000000001D2h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10495, 'РКМ Форма 9 ОБЩЕХОЗЯЙСТВЕННЫЕ РАСХОДЫ');
-      0001000000000223h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10619, 'РКМ Форма 10 СПЕЦИАЛЬНЫЕ ЗАТРАТЫ');
-      00010000000001F3h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10497, 'РКМ Форма 14 СВЕДЕНИЯ ОБ ОБЪЕМАХ РЕАЛИЗАЦИИ ПРОДУКЦИИ');
-      0001000000000172h: runinterface(AGAT::ReportRKMForm8D, comp(_MNREC), 'РКМ Форма 7 РАСШИФРОВКА ЗП И ТРУДОЗАТРАТ', 1);
-      0001000000000235h: runinterface(AGAT::ReportRKMForm14D, comp(_MNREC), 10642, 'РКМ Форма 14Д ПРОЧИЕ ПРОИЗВОДСТВЕННЫЕ ЗАТРАТЫ КРАТКАЯ');
+      0001000000000033h: runinterface(AGAT::ReportRKMForm1D, comp(_MNREC), '') //'РКМ Форма 1 ПРОТОКОЛ ЦЕНЫ');
+      000100000000022Ch: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10620, '') //'РКМ Форма 2 ПЛАНОВАЯ КАЛЬКУЛЯЦИЯ');
+      0001000000000125h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), '') //'РКМ Форма 4 Материалы');
+      0001000000000188h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), '') //'РКМ Форма 5 Полуфабрикаты');
+      0001000000000191h: runinterface(AGAT::ReportRKMForm3, comp(_MNREC), '') //'РКМ Форма 6 ПКИ');
+      00010000000001EBh: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10618, '') //'РКМ Форма 8 ОБЩЕПРОИЗВОДСТВЕННЫЕ РАСХОДЫ');
+      00010000000001D2h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10495, '') //'РКМ Форма 9 ОБЩЕХОЗЯЙСТВЕННЫЕ РАСХОДЫ');
+      0001000000000223h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10619, '') //'РКМ Форма 10 СПЕЦИАЛЬНЫЕ ЗАТРАТЫ');
+      00010000000001F3h: runinterface(AGAT::ReportRKMForm10D, comp(_MNREC), 10497, '') //'РКМ Форма 14 СВЕДЕНИЯ ОБ ОБЪЕМАХ РЕАЛИЗАЦИИ ПРОДУКЦИИ');
+      0001000000000172h: runinterface(AGAT::ReportRKMForm8D, comp(_MNREC), '',1) //'РКМ Форма 7 РАСШИФРОВКА ЗП И ТРУДОЗАТРАТ', 1);
+      0001000000000235h: runinterface(AGAT::ReportRKMForm14D, comp(_MNREC), 10642, '') //'РКМ Форма 14Д ПРОЧИЕ ПРОИЗВОДСТВЕННЫЕ ЗАТРАТЫ КРАТКАЯ');
     else
     {
       var s: string;
