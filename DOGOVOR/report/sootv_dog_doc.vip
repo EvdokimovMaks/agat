@@ -1,0 +1,289 @@
+#include Query.vih
+#component "AGAT"
+interface agat_sootv_dog_doc 'Реестр документов с не привязанными ПКП',doaccept,escclose;
+  show at (,,34,11);
+  var
+    pXL: XLSRepBuilder;
+    sXLSFileName, sXLTFileName: string;
+    vidrep: word;
+    d1, d2: date;
+  create view v1
+  var
+    _vidsopr: word;
+  as select *
+  from katsopr ks, dogovor d, calplan cp
+  where ((
+    _vidsopr    == ks.vidsopr and (d1 <= ks.dsopr and d2 >= ks.dsopr and ks.ccalplan = 0) and
+    if(ks.cappdogovor>0,ks.cappdogovor,ks.cdogovor) /== d.nrec and
+    d.nrec      == cp.cdogovor and
+    0           << cp.directmc
+  ))
+  ;
+  create view v2
+  var
+    _viddoc: word;
+  as select *
+  from basedoc bd, dogovor d, calplan cp
+  where ((
+    _viddoc     == bd.viddoc and (d1 <= bd.ddoc and d2 >= bd.ddoc and bd.ccalplan = 0) and
+    if(bd.cappdogovor>0,bd.cappdogovor,bd.cdogovor) /== d.nrec and
+    d.nrec      == cp.cdogovor and
+    0           << cp.directmc
+  ))
+  ;
+
+  /*
+  create view v3
+  var
+    _direct: word;
+  as select *
+  from basefin bf, soprhoz sh, dogovor d, calplan cp, plpor, katbank b
+  where ((
+    _direct     == bf.direct and (d1 <= bf.ddoc and d2 >= bf.ddoc) and
+    bf.csoprhoz /== sh.nrec and (bf.ccalplan = 0 or sh.cfinplan = 0) and
+    if(bf.cappdogovor>0,bf.cappdogovor,bf.cdogovor) /== d.nrec and
+    d.nrec      == cp.cdogovor and
+    0           << cp.directplat and
+    bf.cplpor   == plpor.nrec
+  ))
+  ;
+  */
+
+  screen scmain;
+  fields
+    d1: noprotect;
+    d2: noprotect;
+    vidrep: noprotect;
+  buttons
+    cmDoOk, default;
+<<
+
+  Период формирования отчета
+ `с`.@@@@@@@@@@ `по`.@@@@@@@@@@
+
+  Вид отчета
+  (.) Накладные`
+  (.) ДО`
+  (.) Платежи`
+
+        <. Сформировать .>
+>>
+  end;
+  procedure print_tbl1(__vidsopr: word); {
+    v1._vidsopr := __vidsopr;
+    v1._loop ks { //цикл по накладным
+      if v1.getfirst d = tsOk { //если к накладной привязан договор и ПКП не привязан
+        if v1.getfirst cp = tsOk {  //если у этого договора есть товарный ПКП
+          pXL.ClearTblBuffer;
+          pXL.SetTblStringFldValue('ddoc'   , datetostr(v1.ks.dsopr,'DD.MM.YYYY'));
+          pXL.SetTblStringFldValue('nodoc'  , v1.ks.nsopr);
+          pXL.SetTblStringFldValue('org'    , if(getanykau(0,1,v1.ks.corg), givenanname(1), ''));
+          pXL.SetTblNumberFldValue('summa'  , v1.ks.summa);
+          pXL.SetTblStringFldValue('nodog'  , v1.d.nodoc);
+          pXL.SetTblStringFldValue('ddog'   , datetostr(v1.d.ddoc, 'DD.MM.YYYY'));
+          pXL.InsTblRow;
+        }
+      }
+    }
+  }
+  procedure print_tbl2(__viddoc: word); {
+    v2._viddoc := __viddoc;
+    v2._loop bd { //цикл по ДО
+      if v2.getfirst d = tsOk { //если к ДО привязан договор и ПКП не привязан
+        if v2.getfirst cp = tsOk {  //если у этого договора есть товарный ПКП
+          pXL.ClearTblBuffer;
+          pXL.SetTblStringFldValue('ddoc'   , datetostr(v2.bd.ddoc,'DD.MM.YYYY'));
+          pXL.SetTblStringFldValue('nodoc'  , v2.bd.nodoc);
+          pXL.SetTblStringFldValue('org'    , if(getanykau(0,1,v2.bd.corg), givenanname(1), ''));
+          pXL.SetTblNumberFldValue('summa'  , v2.bd.summa);
+          pXL.SetTblStringFldValue('nodog'  , v2.d.nodoc);
+          pXL.SetTblStringFldValue('ddog'   , datetostr(v2.d.ddoc, 'DD.MM.YYYY'));
+          pXL.InsTblRow;
+        }
+      }
+    }
+  }
+
+  sql query qplat =
+    select dog.ddoc as ddog, appdog.ddoc as dappdog,
+           case when dog.nodoc is null then '' else dog.nodoc+' -> ' end + coalesce(appdog.nodoc,'') as nodog,
+           bf.ddoc as ddoc,
+           bf.nodoc as nodoc,
+           coalesce(o.name,'')+' '+coalesce(b.name,'') as org,
+           bf.summa as summa
+    from basefin bf
+    join soprhoz sh on sh.nrec = bf.csoprhoz and sh.cfinplan=#comp(0)
+    join plpor on plpor.nrec = bf.cplpor
+    left join dogovor dog on dog.nrec = bf.cdogovor
+    left join dogovor appdog on appdog.nrec = bf.cappdogovor
+    join (select cdogovor, count(*) as cnt
+          from calplan
+          where cdogovor <> #comp(0) and directplat > 0
+          group by cdogovor
+         ) finplan on finplan.cdogovor = coalesce(appdog.nrec,coalesce(dog.nrec,#comp(0))) and finplan.cnt > 0
+    left join katorg o on bf.corg = o.nrec
+    left join katbank b on b.nrec = case when plpor.direct=0 then plpor.cbankpol else plpor.cbankplat end
+    where bf.direct = :direct and bf.ddoc between :d1 and :d2
+  ;
+
+  /*
+  procedure print_tbl3(__direct: word); {
+    var _bank: string;
+    v3._direct := __direct;
+    v3._loop bf { //цикл по платежам
+      if v3.getfirst d = tsOk { //если к платежу привязан договор и ПКП не привязан
+        if v3.getfirst cp = tsOk {  //если у этого договора есть финансовый ПКП
+          pXL.ClearTblBuffer;
+          pXL.SetTblStringFldValue('ddoc'   , datetostr(v3.bf.ddoc,'DD.MM.YYYY'));
+          pXL.SetTblStringFldValue('nodoc'  , v3.bf.nodoc);
+          _bank := '';
+          if v3.getfirst plpor = tsOk {
+            case v3.plpor.direct of
+              0: if (v3.getfirst b where ((v3.plpor.cbankpol  == b.nrec)) = tsOk) _bank := v3.b.name;
+              1: if (v3.getfirst b where ((v3.plpor.cbankplat == b.nrec)) = tsOk) _bank := v3.b.name;
+            end;
+          }
+          pXL.SetTblStringFldValue('org'    , _bank + if(_bank<>'', '; ', '') + if(getanykau(0,1,v3.bf.corg), givenanname(1), ''));
+          pXL.SetTblNumberFldValue('summa'  , v3.bf.summa);
+          pXL.SetTblStringFldValue('nodog'  , v3.d.nodoc);
+          pXL.SetTblStringFldValue('ddog'   , datetostr(v3.d.ddoc, 'DD.MM.YYYY'));
+          pXL.InsTblRow;
+        }
+      }
+    }
+  }
+  */
+  procedure print_tbl3(__direct: word); {
+    var q: IQuery;
+    q := queryManager.createQuery(qplat);
+    q.setParam('direct', __direct);
+    q.setParam('d1', d1);
+    q.setParam('d2', d2);
+
+    var rs: IResultSet;
+    rs := q.getResultSet;
+
+    var d: date;
+
+    if rs != nullref
+      if rs.getFirst = tsOk do
+      {
+        pXL.ClearTblBuffer;
+          pXL.SetTblStringFldValue('ddoc'   , datetostr(rs.row.Val('ddoc'), 'DD.MM.YYYY'));
+          pXL.SetTblStringFldValue('nodoc'  , rs.row.Val('nodoc'));
+          pXL.SetTblStringFldValue('org'    , rs.row.Val('org'));
+          pXL.SetTblNumberFldValue('summa'  , rs.row.Val('summa'));
+          pXL.SetTblStringFldValue('nodog'  , rs.row.Val('nodog'));
+          d := rs.row.Val('ddog');
+          if d = 0 d := rs.row.Val('dappdog');
+          pXL.SetTblStringFldValue('ddog'   , datetostr(d, 'DD.MM.YYYY'));
+          pXL.InsTblRow;
+      } while rs.getNext = tsOk
+  }
+
+  procedure print_tbl_razdel(s: string); {
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('nodoc', s);
+    pXL.InsTblRow;
+    SetVisualHeader('Формирование отчета'#13''+s);
+  }
+  procedure printrep(isCreateXLT : boolean); {
+    if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                    else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+    pXL.CreateVar(sXLSFileName);
+    pXL.SetStringVar('d1',  datetostr(d1,'DD.MM.YYYY'));
+    pXL.SetStringVar('d2',  datetostr(d2,'DD.MM.YYYY'));
+    case vidrep of
+      0: pXL.SetStringVar('hdr', 'Реестр накладных без товарных ПКП');
+      1: pXL.SetStringVar('hdr', 'Реестр ДО без товарных ПКП');
+      2: pXL.SetStringVar('hdr', 'Реестр платежей без финансовых ПКП');
+    end;
+    pXL.PublishVar;
+    pXL.CreateTbls(sXLSFileName);
+    pXL.CreateTbl('Main');
+    pXL.CreateTblFld('ddoc'   );
+    pXL.CreateTblFld('nodoc'  );
+    pXL.CreateTblFld('org'    );
+    pXL.CreateTblFld('summa'  );
+    pXL.CreateTblFld('nodog'  );
+    pXL.CreateTblFld('ddog'   );
+    if (not isCreateXLT) {
+      case vidrep of
+        0: {
+          print_tbl_razdel('Накладные на закупку');
+          print_tbl1(101);
+          print_tbl_razdel('Акты на получение услуг');
+          print_tbl1(111);
+          print_tbl_razdel('Накладные на реализацию');
+          print_tbl1(201);
+          print_tbl_razdel('Акты на реализацию услуг');
+          print_tbl1(211);
+        }
+        1: {
+          print_tbl_razdel('ДО на закупку');
+          print_tbl2(101);
+          print_tbl_razdel('ДО на предоплату закупок');
+          print_tbl2(111);
+          print_tbl_razdel('ДО на продажу');
+          print_tbl2(201);
+          print_tbl_razdel('ДО на предоплату продаж');
+          print_tbl2(211);
+        }
+        2: {
+          print_tbl_razdel('Сторонние платежи');
+          print_tbl3(1);
+          print_tbl_razdel('Собственные платежи');
+          print_tbl3(2);
+        }
+      end;
+    }
+    pXL.PublishTbl('Main');
+    pXL.LoadReport(sXLSFileName);
+    pXL.DisConnectExcel;
+  }
+  handleevent
+    cmDoOk: {
+      StartNewVisual(vtRotateVisual, vfThread + vfTimer, 'Формирование отчета', 0);
+      printrep(false);
+      StopVisual('', 0);
+    }
+    cminit: {
+      sXLTFileName := TranslatePath('%StartPath%xls\agat_sootv_dog_doc.xlt');
+      if not readmydsk (d1, 'agat_sopr_ree_d1', false) then d1 := date(1,month(cur_date),year(cur_date));
+      if not readmydsk (d2, 'agat_sopr_ree_d2', false) then d2 := date(last_day(cur_date),month(cur_date),year(cur_date));
+    }
+    cmdone: {
+      savemydsk(d1, 'agat_sopr_ree_d1');
+      savemydsk(d2, 'agat_sopr_ree_d2');
+    }
+  end;
+end.
+
+VipInterface UserReport_agat_sootv_dog_doc Implements IUserReport licensed(free);
+Interface UserReport_agat_sootv_dog_doc;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::agat_sootv_dog_doc);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Реестр документов с непривязанными ПКП';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := 'DOGOVOR';
+  end;
+end.
