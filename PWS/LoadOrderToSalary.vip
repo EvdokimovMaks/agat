@@ -1,43 +1,349 @@
 #component "AGAT"
 
 #include SvodVedZPSdel.vih
+#define sum_format '\2p[|-]366`666`666`666`666.88'
+#define time_format '\2p[|-]366`666`666`666`666.888'
+
+interface GetLoadOrderToSalary 'Выбор наряда для загрузки в модуль ЗП' doaccept, escclose;
+
+const
+  SDEL_NREC = 00010000000000F7h;
+end;
+
+var
+  MNPLNRC: comp;
+
+create view
+as select *
+from mnplan
+where ((
+  SDEL_NREC == mnplan.CWAYACCOU
+));
+
+parameters MNPLNRC;
+
+browse br1
+table mnplan;
+fields
+  mnplan.number 'Номер'           : [5], protect;
+  mnplan.name   'Сдельные наряды' : [20], protect;
+  mnplan.descr  'Дескриптор'      : [5], protect;
+end;
+
+handleevent
+cminit:
+{
+  if getfirst mnplan != tsOk { message('Не найдены сдельные наряды.'); exit; };
+}
+cmDefault:
+{
+  MNPLNRC := mnplan.nrec; //GetCompParameter()
+  RunInterface(LoadOrderToSalary, MNPLNRC);
+}
+end;
+end.
 
 interface LoadOrderToSalary 'Загрузка нарядов из модуля Планирования производства в модуль ЗП';
 var
   MnplanNrec: comp;
   SV: AGAT::SvodVedZPSdel;
+  nameofpws: string;
 parameters MnplanNrec;
 
 table struct tCHELS
 (
-  Nrec : comp,
-  TabnN : string
+  Nrec        : comp,
+  PersNrec    : comp,
+  OrderN      : comp,
+  TabnN       : string[20],
+  Name        : string,
+  KodWork     : string[10],
+  Noper       : string[10],
+  TimePerOrd  : double,           // суммарное время на заказ
+  Kolvo       : double,
+  Rascen      : double,
+  NormTime    : double,
+  Summa       : double,
+  Proc        : double,
+  SummaPr     : double,
+  SummPrem    : double,
+  Koldn       : double,
+  FactTime    : double,
+  Datan       : date,
+  Datok       : date,
+  Koldngr     : double,
+  PlanTime    : double,
+  Podr        : string[50],
+  Brigade     : string[50],
+  Account     : string[5],
+  SubAccount  : string[5],
+  Namkaud     : string[100],
+  TXO         : string[50],
+  Params      : string[50],
+  PaymentKind : string[50],
+  BonusKind   : string,
+  Category    : string[50],
+  Post        : string[50]
+) with index (
+  i01 = Nrec (unique, surrogate),
+  i02 = PersNrec + OrderN
 );
 
+table struct tDOPL
+(
+  Nrec       : comp,
+  ChelsNrec  : comp,
+  Code       : word,
+  NameDopl   : string,
+  Percent    : double,
+  Days       : double,
+  Hours      : double,
+  Summa      : double,
+  ByPayment  : double,
+  Account    : string,
+  SubAccount : string,
+  KAY        : string,
+  TXO        : string,
+  Parameter  : string
+) with index (
+  i01 = Nrec (unique, surrogate),
+  i02 = ChelsNrec
+);
+
+table struct tKAU
+(
+  Nrec          : comp,
+  ChelsNrec     : comp,
+  Analitika     : string,
+  AnalitikalObj : string
+) with index (
+  i01 = Nrec (unique, surrogate),
+  i02 = ChelsNrec
+);
+
+create view
+as select *
+from tCHELS, tDOPL, tKAU
+where ((
+ tCHELS.Nrec == tDOPL.ChelsNrec and
+ tCHELS.Nrec == tKAU.ChelsNrec
+));
+
+create view vLS
+var _lsnrec: comp;
+as select *
+from lschet, catalogs
+where ((
+  _lsnrec         == lschet.nrec and
+  lschet.CAPPOINT == catalogs.nrec
+));
+
+create view vPodr
+var _persnrec: comp;
+as select *
+from persons, katpodr
+where ((
+  _persnrec      == persons.nrec and
+  persons.galdep == katpodr.nrec
+));
+
+create view vKAU
+var _ckaunrec: comp;
+as select *
+from spkau
+where ((
+  _ckaunrec == spkau.nrec
+));
+
 screen sc1;
-buttons
-  cmShow;
+show(,,,2);
+fields
+  nameofpws, protect;
 
 <<
-
-          <. ОК .>
+                             .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 >>
 end;
 
-handleevent
-cmShow:
-{
-  SV.addpws(0001000000000D39h, 1, 4);   // это nrec MNPLAN'a (т.е. нашего сдельного наряда)
-  insert sys_nar set nmnem = '';   // запись в кратер
-  _loop pwsPerson
-  {
-    insert prnaryad set tabn = pwsPerson.PersonCode;
-  }
-  RunInterface(Z_MP::SYS_NAR);
-  RunInterface(Z_MP::PRNARYAD1);
+browse br1;
+show(,3,,15);
+table tCHELS;
+fields
+  tCHELS.TabnN       'Таб'#13'№'         : [3];
+  tCHELS.Name        'ФИО'               : [10];
+  tCHELS.KodWork     'Код'#13'раб'       : [2];
+  tCHELS.Noper       '№'#13'опер'        : [2];
+  tCHELS.Kolvo       'Кол-во'            : [2];
+  tCHELS.Rascen      'Расц-ка'           : [2];
+  tCHELS.NormTime    'Норма'#13'врем'    : [3, #sum_format];
+  tCHELS.Summa       'Оплата'#13'по нар' : [3, #sum_format];
+  tCHELS.Proc        '%'#13'премии'      : [2];
+  tCHELS.SummaPr     '%'#13'пониж'       : [2];
+  tCHELS.SummPrem    'Премия'            : [3, #sum_format];
+  tCHELS.Koldn       'Дни'#13'факт'      : [3];
+  tCHELS.FactTime    'Часы'#13'факт'     : [3, #sum_format];
+  tCHELS.Datan       'Начало'            : [4];
+  tCHELS.Datok       'Окончание'         : [4];
+  tCHELS.Koldngr     'Дни'#13'план'      : [3];
+  tCHELS.PlanTime    'Часы'#13'план'     : [3, #sum_format];
+  tCHELS.Podr        'Подразделение'     : [5];
+  tCHELS.Brigade     'Бригада'           : [5];
+  tCHELS.Account     'Счет'              : [4], [list 0 '20', 1 'Г', 2 '26'];
+  tCHELS.SubAccount  'Субсчет'           : [4], [list 0 '03', 1 'Ф', 2 '01'];
+  tCHELS.Namkaud     'Аналитика'         : [10];
+//  [AnalName] if(getanykau(0, 40, tCHELS.OrderN),givenanname(1),'') 'Аналитика' : [10];
+  tCHELS.TXO         'ТХО'               : [6];
+  tCHELS.Params      'Параметр'          : [6];
+  tCHELS.PaymentKind 'Вид'#13'оплаты'    : [6];
+  tCHELS.BonusKind   'Вид'#13'премии'    : [10];
+  tCHELS.Category    'Категория'         : [4];
+  tCHELS.Post        'Должность'         : [5];
+end;
 
-  message('Zzz...');
+browse br2;
+show(,16,,18);
+table tDOPL;
+fields
+  tDOPL.Code       'Код'                        : [3];
+  tDOPL.NameDopl   'Наименование'#13'оплаты'    : [15];
+  tDOPL.Percent    '%'                          : [2];
+  tDOPL.Days       'Дни'                        : [3];
+  tDOPL.Hours      'Часы'                       : [3];
+  tDOPL.Summa      'Сумма'                      : [4, #sum_format];
+  tDOPL.ByPayment  'К выплате'                  : [5, #sum_format];
+  tDOPL.Account    'Счет'                       : [4];
+  tDOPL.SubAccount 'Субсчет'                    : [4];
+  tDOPL.KAY        'КАУ'                        : [10];
+  tDOPL.TXO        'Хозяйственная'#13'операция' : [10];
+  tDOPL.Parameter  'Параметр'#13'выбора'        : [5];
+end;
+
+browse br3;
+show(,19,,);
+table tKAU;
+fields
+  tKAU.Analitika     'Аналитика'                   : [10];
+  tKAU.AnalitikalObj 'Объект аналитического учёта' : [10];
+end;
+
+handleevent
+cmInit:
+{
+  delete all tCHELS;
+  delete all tDOPL;
+  delete all tKAU;
+  SV.addpws(MnplanNrec, 1, 4);   // это nrec MNPLAN'a (т.е. нашего сдельного наряда)  ex., 281474976714182
+  nameofpws := pws.Name;
+  _loop pwsWork
+  {
+    if getfirst pwsPerson where ((pwswork.pwsPersonNrec == pwsPerson.Nrec)) = tsOk
+    {
+      if getfirst tCHELS where ((pwsPerson.PersonNrec == tCHELS.PersNrec and pwswork.KatstroyNrec == tCHELS.OrderN)) != tsOk   // группировка по ФИО и заказу
+      {
+        clearbuffer(#tCHELS);
+
+        tCHELS.PersNrec := pwsPerson.PersonNrec;
+        tCHELS.OrderN := pwsWork.KatstroyNrec;
+        tCHELS.TabnN := pwsPerson.PersonCode;
+        tCHELS.Name := GetSurnameWithInitials(pwsPerson.PersonName);
+        tCHELS.NormTime := pwsPerson.BalanceHoursPlan;
+        tCHELS.Proc := pwsPerson.BonusPercent;
+        tCHELS.FactTime := pwsPerson.BalanceHoursFact;
+        tCHELS.PlanTime := pwsPerson.BalanceHoursPlan;
+        tCHELS.Datan := pws.StartDate;
+        tCHELS.Datok := pws.EndDate;
+        tCHELS.PaymentKind := pwsPerson.PayModel;
+        tCHELS.Account := pwsWork.Kind;
+        tCHELS.SubAccount := pwsWork.Kind;
+
+        vLS._lsnrec := pwsPerson.LSchetNrec;
+        if vLS.getfirst lschet = tsOk
+          if vLS.getfirst catalogs = tsOk { };
+        tCHELS.Post := vLS.catalogs.name;
+
+        vPodr._persnrec := pwsPerson.PersonNrec;
+        if vPodr.getfirst persons = tsOk
+          if vPodr.getfirst katpodr = tsOk { };
+        tCHELS.Podr := vPodr.katpodr.name;
+
+        insert current tCHELS;
+
+        var j: word;
+        for (j := 1; j <= 4; j++)
+        {
+          tKAU.ChelsNrec := tCHELS.Nrec;
+          case j of
+            1: tKAU.Analitika := 'Объекты строительства';
+            2: tKAU.Analitika := '2013 Статьи затрат';
+            3: tKAU.Analitika := 'Подгруппа персонала';
+            4: tKAU.Analitika := 'Категории';
+          end;
+/*          vLS._lsnrec := pwsPerson.LSchetNrec;
+          if vLS.getfirst lschet = tsOk { };
+          tKAU.AnalitikalObj := if(getanykau(0, 40,  vLS.lschet.ckaud[j]),givenanname(1),'');    */
+          vLS._lsnrec := pwsPerson.LSchetNrec;
+          if vLS.getfirst lschet = tsOk { };
+          vKAU._ckaunrec := vLS.lschet.ckaud[j];
+          if vKAU.getfirst spkau = tsOk { };
+          tKAU.AnalitikalObj := vKAU.spkau.code + ' ' + vKAU.spkau.name;
+          tCHELS.Namkaud := tCHELS.Namkaud + vKAU.spkau.code + ' ' + vKAU.spkau.name + '\';
+          insert current tKAU;
+        }
+
+        if pwsPerson.BonusValue <> 0
+        {
+          clearbuffer(#tDOPL);
+          tDOPL.ChelsNrec := tCHELS.Nrec;
+          tDOPL.NameDopl  := 'Месячная премия';
+          tDOPL.Percent   := pwsPerson.BonusPercent;
+          tDOPL.Summa     := pwsPerson.BonusValue;
+          insert current tDOPL;
+        }
+        if pwsPerson.BonusHzrdValue <> 0
+        {
+          tDOPL.ChelsNrec := tCHELS.Nrec;
+          tDOPL.NameDopl  := 'Премия за вредность';
+          tDOPL.Percent   := pwsPerson.BonusHzrdPercent;
+          tDOPL.Summa     := pwsPerson.BonusHzrdValue;
+          insert current tDOPL;
+        }
+        if pwsPerson.BonusOtherValue <> 0
+        {
+          tDOPL.ChelsNrec := tCHELS.Nrec;
+          tDOPL.NameDopl  := 'Дополнительная надбавка';
+          tDOPL.Percent   := 0;
+          tDOPL.Summa     := pwsPerson.BonusOtherValue;
+          insert current tDOPL;
+        }
+        if pwsPerson.BonusQuarValue <> 0
+        {
+          tDOPL.ChelsNrec := tCHELS.Nrec;
+          tDOPL.NameDopl  := 'Квартальная премия';
+          tDOPL.Percent   := pwsPerson.BonusQuarPercent;
+          tDOPL.Summa     := pwsPerson.BonusQuarValue;
+          insert current tDOPL;
+        }
+        if pwsPerson.BonusYearValue <> 0
+        {
+          tDOPL.ChelsNrec := tCHELS.Nrec;
+          tDOPL.NameDopl  := 'Годовая премия';
+          tDOPL.Percent   := pwsPerson.BonusYearPercent;
+          tDOPL.Summa := pwsPerson.BonusYearValue;
+          insert current tDOPL;
+        }
+      }
+
+      tCHELS.TimePerOrd := tCHELS.TimePerOrd + pwsWork.AvgHours;
+      tCHELS.SummPrem := pwsPerson.BonusValue * tCHELS.TimePerOrd / pwsPerson.BalanceHoursFact;
+      tCHELS.Summa := pwsPerson.PaymentValue * tCHELS.TimePerOrd / pwsPerson.BalanceHoursFact;
+
+      update current tCHELS;
+    }
+  }
+  RereadRecord(#tCHELS);
+  RereadRecord(#tDOPL);
+  RereadRecord(#tKAU);
 }
 end;
 
