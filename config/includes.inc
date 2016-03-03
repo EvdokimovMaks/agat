@@ -22,6 +22,7 @@
 /i:"../BUH/report"
 /i:"../COMMON/ContractID"
 /i:"../COMMON/HashTable"
+/i:"../COMMON/HierMnplan"
 /i:"../COMMON/JSLib"
 /i:"../COMMON/KatstroyHelper"
 /i:"../COMMON/Model"
