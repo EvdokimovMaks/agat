@@ -9,6 +9,7 @@
 
 const
   DOPTBL_PWSWORK = comp(-10);
+  WORK_HOURS = 7.33;
 end;
 
 interface SvodVedZPSdel;
@@ -100,11 +101,34 @@ table struct tProdTarg (
   i02 = PersProdNrec
 );
 
+table struct tWorksByOrder (
+  Nrec          : comp,
+  OrderN        : comp,         // заказ
+  Kind          : word,         // ВИД ( ГФ, 26/1 или другое)
+  NormHrTotal   : double,       // отработано нормо - часов
+  NormHrNaryad  : double,       // в т.ч. по наряд - заказу
+  PplHrTotal    : double,       // отработанные чел/час всего
+  Sdelno        : double,       // сдельно
+  PayByTime     : double,       // повременно
+  Bonus         : double,       // премия ( месячная )
+  BonusKvart    : double,       // премия квартальная
+  BonusYear     : double,       // премия годовая
+  DoplVred      : double,       // Доплата за вредность сдельщикам
+  DoplVredTime  : double,       // доплата за вредность повременщикам
+  PrDoplVred    : double,       // премия за доплату за вредность
+  DoplMezhRazr  : double,       // доплата за межразрядную разницу
+  PersonalBonus : double,       // персональная надбавка / надбавка за высокую квалификацию
+  Total         : double
+) with index (
+  i01 = Nrec (unique, surrogate),
+  i02 = Kind + OrderN
+);
+
 create view
 as select *
 from pws brpws, pwsPerson brPerson, klsisopl pwsPersonPayModel, klrejim pwsPersonWorkMode,
      lschet pwsPersonLschet, tSums pwsPersonSums, pwsWork brWork, katstroy pwsWorkKatstroy, tSortedMarks,
-     pws, pwsPerson, pwsWork, tSums, tPersWorks, tProdTarg
+     pws, pwsPerson, pwsWork, tSums, tPersWorks, tPersProdTarg, tProdTarg, tWorksByOrder (i02)
 where ((
   brpws.nrec          == brPerson.pwsNrec and
 
@@ -227,6 +251,32 @@ datastream dsRepOkl
 )
 end;
 
+datastream dsRepVed
+(
+  [RepDate]  'за ' + locase(GetRepMonth) + ' ' + GetRepYear;
+  [RepPodr]  ' Цеха ' + GetRepPodr;
+  table tWorksByOrder
+  (
+    [OrderN]        if(getanykau(0, 40, tWorksByOrder.OrderN),givenanname(1),'');
+    [Kind]          tWorksByOrder.Kind;
+    [NormHrTotal]   tWorksByOrder.NormHrTotal;
+    [NormHrNaryad]  tWorksByOrder.NormHrNaryad;
+    [PplHrTotal]    tWorksByOrder.PplHrTotal;
+    [Sdelno]        tWorksByOrder.Sdelno;
+    [PayByTime]     tWorksByOrder.PayByTime;
+    [Bonus]         tWorksByOrder.Bonus;
+    [BonusKvart]    tWorksByOrder.BonusKvart;
+    [BonusYear]     tWorksByOrder.BonusYear;
+    [DoplVred]      tWorksByOrder.DoplVred;
+    [DoplVredTime]  tWorksByOrder.DoplVredTime;
+    [PrDoplVred]    tWorksByOrder.PrDoplVred;
+    [DoplMezhRazr]  tWorksByOrder.DoplMezhRazr;
+    [PersonalBonus] tWorksByOrder.PersonalBonus;
+    [Total]         tWorksByOrder.Total;
+  );
+)
+end;
+
 function GetPayModelName: string;
 {
   if getfirst pwsPersonPayModel = tsOk
@@ -251,134 +301,6 @@ function BetweenGrades(PRSN_GR: word; WRK_GR: word): word;
   else
     result := 0;
 }
-
-browse br1;
-show(,,,3);
-table brpws;
-fields
-  brpws.Number      'Номер'        : [20], protect;
-  brpws.Name        'Наименование' : [80], protect;
-  brpws.StartDate   'Дата начала'  : [15], protect;
-  brpws.EndDate     'Дата конца'   : [15], protect;
-end;
-
-browse br2;
-show(,4,,8);
-table brPerson;
-fields
-  {font={color=if(foundmarker(lpsnMarker, brPerson.Nrec), 5,0)}};
-  if(foundmarker(lpsnMarker, brPerson.Nrec), 'V', '')      : [3] , noautosize, skip;
-  brPerson.PersonName        ' '#13'ФИО'                   : [40], protect, pickbutton;
-  brPerson.PersonCode        ' '#13'Таб.№'                 : [20], protect, pickbutton;
-  GetPayModelName             'Система'#13'оплаты'         : [5], protect;
-  GetWorkModeName             'Режим'#13'работы'           : [5], protect;
-  brPerson.Grade             ' '#13'Разряд'                : [4], noprotect;
-  brPerson.BalanceHoursPlan  'Фонд'#13'времени'            : [10, #sum_format], noprotect;
-  brPerson.BalanceHoursFact  'Отработано'#13'по факту'     : [10, #sum_format], noprotect;
-  if(brPerson.PayModel<>20, doubletostr(brPerson.SalaryPlan, #sum_format), '') 'Оклад'#13'плановый': [10], protect;
-  if(brPerson.PayModel<>20, doubletostr(brPerson.SalaryFact, #sum_format), '') 'Оклад'#13'фактический': [10], protect;
-  brPerson.WorkedHoursFull   'Отработано'#13'всего часов'  : [10, #sum_format], protect;
-  brPerson.RatePercent       '% выполнения'#13'нормы'      : [8 , #sum_format], protect;
-  brPerson.PaymentValue      'Сумма'#13'заработка'         : [10, #sum_format], protect;
-  brPerson.BonusPercent      'Процент'#13'премии'          : [10, #sum_format], noprotect;
-  brPerson.BonusValue        'Сумма'#13'премии'            : [10, #sum_format], protect;
-  brPerson.QualifPayValue    'Сумма'#13'межразр. надбавки' : [10, #sum_format], protect;
-  brPerson.HazardPayValue    'Сумма'#13'надб. за вредность': [10, #sum_format], protect;
-  brPerson.BonusHzrdPercent  'Процент'#13'прем. за вредн.' : [10, #sum_format], noprotect;
-  brPerson.BonusHzrdValue    'Сумма'#13'прем. за вредн.'   : [10, #sum_format], noprotect;
-  brPerson.BonusOtherValue   'Сумма'#13'доп. надбавка'     : [10, #sum_format], noprotect;
-  brPerson.BonusQuarPercent  'Процент'#13'кварт. премии'   : [10, #sum_format], noprotect;
-  brPerson.BonusQuarValue    'Сумма'#13'кварт. премии'     : [10, #sum_format], protect;
-  brPerson.BonusYearPercent  'Процент'#13'год. премии'     : [10, #sum_format], noprotect;
-  brPerson.BonusYearValue    'Сумма'#13'год. премии'       : [10, #sum_format], protect;
-end;
-
-browse br3;
-show(,9,,13);
-table brWork;
-fields
-  {font={color=if(foundmarker(lwrkMarker, brWork.Nrec), 5,0)}};
-  if(foundmarker(lwrkMarker, brWork.Nrec), 'V', '')      : [3] , noautosize, skip;
-  brWork.Number                    'Номер'#13'наряда'              : [10] , noprotect;
-  brWork.JobCreationDate           'Дата'#13'выдачи задания'       : [10] , noprotect;
-  brWork.JobFinishDate             'Дата'#13'выполнения задания'   : [10] , noprotect;
-  brWork.Kind                      ' '#13'Вид'                     : [10] , [list 0 '20.03', 1 'Гар. рем.', 2 '26.01'];
-  [KatstroyName] if(getanykau(0, 40, brWork.KatstroyNrec),givenanname(1),'') ' '#13'Заказ': [10] , protect, pickbutton, quickChoice;
-  brWork.KatmarshCode              'Работа'#13'код'                : [6]  , noprotect, pickbutton;
-  brWork.KatmarshName              'Работа'#13'наименование'       : [20] , noprotect, pickbutton;
-  brWork.MarshspCode               'Операция'#13'код'              : [6]  , noprotect, pickbutton;
-  brWork.MarshspName               'Операция'#13'наименование'     : [20] , noprotect, pickbutton;
-  brWork.Grade                     'Разряд'#13'работы'             : [6]  , noprotect;
-  brWork.Qty                       'Количество'#13'работ'          : [8]  , noprotect;
-  brWork.PieceHours                'Время'#13'штучное'             : [8,#time_format], noprotect;
-  brWork.PrepareHours              'Время'#13'подг./закл.'         : [8,#time_format], noprotect;
-  brWork.StdHours                  'Время'#13'с уч. подг./закл.'   : [8,#time_format], protect;
-  brWork.FullHours                 'Время'#13'на партию'           : [8,#time_format], protect;
-  brWork.AvgHours                  'Время'#13'усредненное'         : [8,#time_format], protect;
-  brWork.Koeff                     ' '#13'Коэффициент'             : [8,#time_format], noprotect;
-  brWork.Price                     'Расценка'#13'на 1 шт'          : [8,#time_format], protect;
-  brWork.Tarif                     'Тар. ставка'#13'разряда работы': [8,#sum_format], protect;
-  brWork.PaymentValue              'Сумма'#13'Заработка'           : [8,#sum_format], protect;
-  brWork.HazardPayPercent          '% надбавки'#13'за вредность'   : [8,#sum_format], noprotect;
-  brWork.HazardPayValue            'Надбавка'#13'за вредность'     : [8,#sum_format], protect;
-  brWork.QualifPayPercent          'Межразр.'#13'% надбавки'       : [8,#sum_format], noprotect;
-  brWork.QualifPayValue            'Межразр.'#13'сумма'            : [8,#sum_format], protect;
-end;
-/*
-browse brZdel;
-show(,14,,);
-table tPersWorks;
-fields
-  tPersWorks.TabNmb      'Табельный'#13'№'                   : [5];
-  [OrderName] if(getanykau(0, 40, tPersWorks.OrderN),givenanname(1),'') 'Заказ' : [8];
-  tPersWorks.FIO         'Ф.И.О.'                            : [20];
-  tPersWorks.Prfssn      'Профессия'                         : [10];
-  tPersWorks.Grade       'Разряд'                            : [4];
-  tPersWorks.WorkMode    'Часовая'#13'ставка'                : [6, #sum_format];
-  tPersWorks.PreSum      'Начислено по'#13'сдельному наряду' : [5, #sum_format];
-  tPersWorks.PrPerSdN    'Премия по'#13'сдельному наряду %'  : [2, #sum_format];
-  tPersWorks.PrSumSdN    'Премия по'#13'сдельному наряду'    : [5, #sum_format];
-  tPersWorks.NormHrTotal 'Отработано'#13'нормо/часов'        : [5, #sum_format];
-  tPersWorks.PplHrTotal  'Всего'                             : [5, #sum_format];
-  tPersWorks.PplHrVred   'Во'#13'вредных условиях'           : [5, #sum_format];
-  tPersWorks.PplHr2      'Межразр 2'                         : [3, #sum_format];
-  tPersWorks.PplHr3      'Межразр 3'                         : [3, #sum_format];
-  tPersWorks.PplHr4      'Межразр 4'                         : [3, #sum_format];
-  tPersWorks.PplHr5      'Межразр 5'                         : [3, #sum_format];
-  tPersWorks.DoplPerVred 'Доплата за'#13'вредность %'        : [2, #sum_format];
-  tPersWorks.DoplSumVred 'Доплата за'#13'вредность'          : [5, #sum_format];
-  tPersWorks.PrPerVred   'Премия за'#13'вред %'              : [2, #sum_format];
-  tPersWorks.PrSumVred   'Премия за'#13'вред'                : [5, #sum_format];
-  tPersWorks.Per2mezh    '% 2'                               : [2, #sum_format];
-  tPersWorks.Per3mezh    '% 3'                               : [2, #sum_format];
-  tPersWorks.Per4mezh    '% 4'                               : [2, #sum_format];
-  tPersWorks.Per5mezh    '% 5'                               : [2, #sum_format];
-  tPersWorks.Sum2mezh    'Сумма'#13'2'                       : [3, #sum_format];
-  tPersWorks.Sum3mezh    'Сумма'#13'3'                       : [3, #sum_format];
-  tPersWorks.Sum4mezh    'Сумма'#13'4'                       : [3, #sum_format];
-  tPersWorks.Sum5mezh    'Сумма'#13'5'                       : [3, #sum_format];
-  tPersWorks.TotalCost   'ЗП'#13'всего'                      : [10, #sum_format];
-end;
-*/
-browse brOkl;
-show(,14,,);
-table tProdTarg;
-fields
-  tProdTarg.GetJobDate  'Дата выдачи'#13'задания' : [5, #time_format];
-  tProdTarg.Number      'Наряд'                   : [5];
-  if(getanykau(0, 40, tProdTarg.OrderN),givenanname(1),'') 'Заказ' : [10];
-  tProdTarg.DetailName  'Наименование'#13'детали' : [10];
-  tProdTarg.OperNmb     '№'#13'операции'          : [5];
-  tProdTarg.SketchNmb   '№'#13'чертежа'           : [5];
-  tProdTarg.QTY         'Кол-во'                  : [3];
-  tProdTarg.JobName     'Наименование'#13'работы' : [10];
-  tProdTarg.FinishPlan  'Срок'#13'план'           : [5, #time_format];
-  tProdTarg.FinishFact  'Срок'#13'факт'           : [5, #time_format];
-  tProdTarg.AVGHOURS    'Отработ.'#13'время'      : [5, #sum_format];
-  tProdTarg.QtyGood     'Годн.'                   : [3];
-  tProdTarg.FULLHOURS   'Трудоем-'#13'кость'      : [5, #sum_format];
-  tProdTarg.PerVred     'Вредность'               : [3];
-end;
 
 function LoadPersWorks: boolean;
   {
@@ -476,9 +398,24 @@ function LoadProdTarget: boolean;
       tProdTarg.SketchNmb  := pwsWork.KatmarshCode;
       tProdTarg.QTY        := pwsWork.Qty;
       tProdTarg.JobName    := pwsWork.MarshSpName;
-      tProdTarg.FinishPlan := pwsWork.JobFinishDate;
-      tProdTarg.FinishFact := pwsWork.JobFinishDate;
-      tProdTarg.AVGHOURS   := pwsWork.AvgHours;
+      tProdTarg.AVGHOURS   := pwsWork.AvgHours;         // отработано времени (часов)
+//    модуль для расчета даты сдачи работ
+      var cnt, weekND: longint;
+      var dayz: double;
+      var datty: date;
+      if recordsintable(#tProdTarg) = 0 then
+      {
+        dayz := 0;
+        datty := tProdTarg.GetJobDate;
+      }
+      else datty := Add_Day(datty, cnt);
+      cnt := 0;
+      dayz := (dayz + tProdTarg.AVGHOURS) / WORK_HOURS;
+      cnt := trunc(dayz);
+      tProdTarg.FinishPlan := add_day(datty, cnt);
+      tProdTarg.FinishFact := tProdTarg.FinishPlan;
+      dayz := (dayz - cnt) * WORK_HOURS;
+//    конец модуля дат
       tProdTarg.QtyGood    := pwsWork.Qty;
       tProdTarg.FULLHOURS  := pwsWork.FullHours;
       tProdTarg.PerVred    := pwsWork.HazardPayPercent;
@@ -488,15 +425,50 @@ function LoadProdTarget: boolean;
   result := true;
 }
 
-function MainLoad: boolean;
+function LoadWorksByOrder: boolean;
 {
-  delete all pws;
-  delete all pwsPerson;
-  delete all pwsWork;
-  pwsDR.LoadPwsByMnplanNrec(281474976714041);
-  pwsDR.LoadPwsByMnplanNrec(281474976714044);
-  // load data to tPersWorks
-//  if not LoadPersWorks(281474976710658) { message('Что-то пошло не так :(') };
+  result := false;
+
+  _loop pwsWork
+  {
+    if getfirst pwsPerson where ((pwsWork.pwsPersonNrec == pwsPerson.Nrec and (pwsPerson.PayModel = 20 or pwsPerson.PayModel = 30))) = tsOk
+    {
+      clearbuffer(#tWorksByOrder);
+
+      if getfirst tWorksByOrder where ((pwsWork.Kind == tWorksByOrder.Kind and pwswork.KatstroyNrec == tWorksByOrder.OrderN)) != tsOk
+      {
+        tWorksByOrder.OrderN := pwsWork.KatstroyNrec;
+        tWorksByOrder.Kind := pwsWork.Kind;
+        insert current tWorksByOrder;
+      }
+
+      tWorksByOrder.NormHrTotal := tWorksByOrder.NormHrTotal + pwsWork.FullHours;            // отработано всего часов
+  //    tWorksByOrder.NormHrNaryad := tWorksByOrder.NormHrTotal;                               // отработано в том числе по нар-зак
+      tWorksByOrder.PplHrTotal := tWorksByOrder.PplHrTotal + pwsWork.AvgHours;               // отработано человеко/часов
+
+      if pwsPerson.PayModel = 20  // сдельщики (в Галактике сдельщики)
+      {
+        tWorksByOrder.Sdelno := tWorksByOrder.Sdelno + pwsWork.PaymentValue;
+        tWorksByOrder.DoplVred := tWorksByOrder.DoplVred + pwsWork.HazardPayValue;
+      }
+      if pwsPerson.PayModel = 30  // повременщики (в Галактике окладники)
+      {
+        tWorksByOrder.PayByTime := tWorksByOrder.PayByTime + pwsWork.PaymentValue;
+        tWorksByOrder.DoplVredTime := tWorksByOrder.DoplVredTime + pwsWork.HazardPayValue;
+      }
+
+      tWorksByOrder.Bonus := tWorksByOrder.Bonus + pwsWork.FullHours / pwsPerson.WorkedHoursFull * pwsPerson.BonusValue;                // премия месячная
+      tWorksByOrder.BonusKvart := tWorksByOrder.BonusKvart + pwsWork.FullHours / pwsPerson.WorkedHoursFull * pwsPerson.BonusQuarValue;  // премия квартальная
+      tWorksByOrder.BonusYear := tWorksByOrder.BonusYear + pwsWork.FullHours / pwsPerson.WorkedHoursFull * pwsPerson.BonusYearValue;    // премия годовая
+      tWorksByOrder.PrDoplVred := pwsPerson.BonusHzrdPercent / 100 * tWorksByOrder.DoplVred;                                            // премия за вредность
+      tWorksByOrder.DoplMezhRazr := tWorksByOrder.DoplMezhRazr + pwsWork.QualifPayValue;                                                // доплата за межразрядку
+      tWorksByOrder.PersonalBonus := tWorksByOrder.PersonalBonus + pwsWork.FullHours / pwsPerson.WorkedHoursFull * pwsPerson.BonusOtherValue; // доп надбавка
+      tWorksByOrder.Total := tWorksByOrder.Sdelno + tWorksByOrder.PayByTime + tWorksByOrder.Bonus + tWorksByOrder.BonusKvart + tWorksByOrder.BonusYear + tWorksByOrder.DoplVred + tWorksByOrder.DoplVredTime + tWorksByOrder.PrDoplVred + tWorksByOrder.DoplMezhRazr + tWorksByOrder.PersonalBonus;
+
+      update current tWorksByOrder;
+    }
+  }
+  result := true;
 }
 
 procedure ClearTPW;
@@ -510,7 +482,12 @@ procedure ClearPT;
   delete all tPersProdTarg;
 }
 
-procedure addpws(MNPLNRC: comp; cnt: longint);
+procedure ClearWBO;
+{
+  delete all tWorksByOrder;
+}
+
+procedure addpws(MNPLNRC: comp; cnt: longint; WhatLoad: byte);
 {
   delete all pws;
   delete all pwsPerson;
@@ -518,35 +495,91 @@ procedure addpws(MNPLNRC: comp; cnt: longint);
   var i: longint;
   for (i:=0; i<cnt; i++)
     pwsDR.LoadPwsByMnplanNrec(MNPLNRC);
-  LoadPersWorks;
+  case WhatLoad of
+    1: LoadPersWorks;
+    2: LoadProdTarget;
+    3: LoadWorksByOrder;
+  end;
 }
 
-procedure addpwsOkl(MNPLNRC: comp; cnt: longint);
+procedure printreport(WhatRep: byte);
 {
-  delete all pws;
-  delete all pwsPerson;
-  delete all pwsWork;
-  var i: longint;
-  for (i:=0; i<cnt; i++)
-    pwsDR.LoadPwsByMnplanNrec(MNPLNRC);
-  LoadProdTarget;
+  case WhatRep of
+    1: RunFReport(dsRep, '', true);
+    2: RunFReport(dsRepOkl, '', true);
+    3: RunFReport(dsRepVed, '', true);
+  end;
 }
-
-procedure printreport;
-{
-  RunFReport(dsRep, '', true);
-}
-
-procedure printreportOkl;
-{
-  RunFReport(dsRepOkl, '', true);
-//  RunInterface(AGAT::SvodVedZPSdel);
-}
-
-handleevent
-cminit:
-{
-  Message('$$$ ~ Have a good day! ~ $$$');
-}
-end;
 end.
+
+.LinkForm 'SvodVedNah' Prototype is 'MNPLAN'
+.NameInList '(Отчет для цехов) Сводная ведомость начисленной заработной платы рабочим сдельщикам по основным заказам'
+.f "NUL"
+.{CheckEnter MNPLAN_LOOP1
+.begin
+  runinterface(AGAT::SelectNaryad);
+end.
+.{CheckEnter SPMNPL_LOOP1
+.}
+.{CheckEnter OBJACCT_IN_LOOP
+.{CheckEnter SPOBJACC_IN_LOOP
+.{CheckEnter SPOBJACC_CURIN_LOOP
+.}
+.}
+.}
+.{CheckEnter OBJACCT_OUT_LOOP
+.{CheckEnter SPOBJACC_CUROUT_LOOP
+.{CheckEnter SPOBJACC_OUT_LOOP
+.}
+.}
+.}
+.}
+.endform
+
+.LinkForm 'ProdZadan' Prototype is 'MNPLAN'
+.NameInList '(Отчет для цехов) Производственные задания рабочим окладникам'
+.f "NUL"
+.{CheckEnter MNPLAN_LOOP1
+.begin
+  runinterface(AGAT::MakeProdTarg);
+end.
+.{CheckEnter SPMNPL_LOOP1
+.}
+.{CheckEnter OBJACCT_IN_LOOP
+.{CheckEnter SPOBJACC_IN_LOOP
+.{CheckEnter SPOBJACC_CURIN_LOOP
+.}
+.}
+.}
+.{CheckEnter OBJACCT_OUT_LOOP
+.{CheckEnter SPOBJACC_CUROUT_LOOP
+.{CheckEnter SPOBJACC_OUT_LOOP
+.}
+.}
+.}
+.}
+.endform
+
+.LinkForm 'VedomRaspred' Prototype is 'MNPLAN'
+.NameInList '(Отчет для цехов) Ведомость распределения основной заработной платы по заказам'
+.f "NUL"
+.{CheckEnter MNPLAN_LOOP1
+.begin
+  runinterface(AGAT::VedRaspOsnZP);
+end.
+.{CheckEnter SPMNPL_LOOP1
+.}
+.{CheckEnter OBJACCT_IN_LOOP
+.{CheckEnter SPOBJACC_IN_LOOP
+.{CheckEnter SPOBJACC_CURIN_LOOP
+.}
+.}
+.}
+.{CheckEnter OBJACCT_OUT_LOOP
+.{CheckEnter SPOBJACC_CUROUT_LOOP
+.{CheckEnter SPOBJACC_OUT_LOOP
+.}
+.}
+.}
+.}
+.endform
