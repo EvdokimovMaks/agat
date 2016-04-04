@@ -72,8 +72,11 @@ var
   _savedSpmnplanNrec: comp;
   _baseYear  : word;
 
+function GetCoeffBgColor: longint; forward;
+
 create view
-as select *
+(CoeffBgColor)
+as select GetCoeffBgColor
 from tRKMParts t, tRKMParts tParent, katmc tmc, katusl tusl, groupmc tgroupmc, groupusl tgroupusl, katotped totped, katotped totped1,
      katmc, katusl, spsopr, tRKMParts, tRKMParts tRKMParts1, spwayac, fpperiod, spmnplan, spmnpl, valspmnp, mnanal, pick, katotped
 where ((
@@ -178,6 +181,7 @@ function GetTotalQtyName: string;
                  doubletostr(round(sumQty,3), '[|-]3666666666666.888') + ' (' +
                  doubletostr(round(t.TotalQty - sumQty,3), '[|-]3666666666666.888') + ')';
 }
+
 function GetTotalQtyColor: longint;
 {
   var sumQty: double;
@@ -187,6 +191,12 @@ function GetTotalQtyColor: longint;
   else result := 0;
 }
 
+function IsSetObjDeflGrNrec: boolean; { result := t.ObjDeflGrNrec != 0; }
+
+function GetCoeffBgColor: longint;
+{
+  if IsSetObjDeflGrNrec result := 0 else result := 17;
+}
 //#endregion -------------------------------------------------------------------------------------------------
 
 //#region Процедуры Pick--------------------------------------------------------------------------------------
@@ -340,7 +350,7 @@ fields
                  t.Norm          'Норма'#13'на единицу' : [8,3], noprotect;
                  t.ParentQty     'Кол-во'#13'единиц'    : [8,3], noprotect;
   [TotalQtyName] GetTotalQtyName 'Норма'#13'всего'      : [14], noprotect, {font={backcolor=GetTotalQtyColor;}};
-                 t.BaseCoeff     'Базовый'#13'индекс'   : [8,3], noprotect;
+                 t.BaseCoeff     'Базовый'#13'индекс'   : [8,3], noprotect, {font={backcolor=CoeffBgColor;}};
                  t.BasePrice     'Базовый'#13'цена'     : [8,2], noprotect;
                  t.BaseSum       'Базовый'#13'затраты'  : [8,2], noprotect;
 end;
@@ -348,21 +358,23 @@ end;
 
 //#region Процедуры для модификации таблицы в дереве----------------------------------------------------------
 
+function sumRound(d: double): double; { result := round(d,2); }
+function qtyRound(d: double): double; { result := round(d,3); }
 
 procedure ProcessRKMPartsRecord(var buf: ttrkmparts);
 {
-  buf.TotalQty  := buf.Norm * buf.ParentQty;
+  buf.TotalQty  := qtyRound(buf.Norm * buf.ParentQty);
   if (buf.BaseCoeff) <= 0 buf.BaseCoeff := 1;
-  buf.BasePrice := buf.SpsoprPrice * buf.BaseCoeff;
-  buf.BaseSum   := buf.BasePrice * buf.TotalQty;
+  buf.BasePrice := sumRound(buf.SpsoprPrice * buf.BaseCoeff);
+  buf.BaseSum   := sumRound(buf.BasePrice * buf.TotalQty);
 
   buf.TotalSum := 0;
   var i: byte;
   for(i:=1;i<=_yearcount;i++)
   {
     if buf.Coeff[i] <= 0 buf.Coeff[i] := 1;
-    buf.Price[i] := buf.BasePrice * buf.Coeff[i];
-    buf.Sum[i] := buf.Price[i] * buf.Qty[i];
+    buf.Price[i] := sumRound(buf.BasePrice * buf.Coeff[i]);
+    buf.Sum[i] := sumRound(buf.Price[i] * buf.Qty[i]);
     buf.TotalSum += buf.Sum[i];
   }
 }
@@ -378,30 +390,42 @@ procedure ProcessChildNodes(parentBuf: ttrkmparts);
 {
   var i: byte;
   var buf: ttrkmparts;
-  var oeDiskred: boolean;
   var restQty: double;
+  var precision: integer;
+  var lastNotZeroQtyYear: integer;
   _loop tRKMParts where ((parentBuf.Nrec == tRKMParts.ParentNrec))
   {
     buf := ttrkmparts(tRKMParts.buffer);
     buf.ParentQty := parentBuf.TotalQty;
-    buf.TotalQty := buf.Norm * buf.ParentQty;
+    buf.TotalQty := qtyRound(buf.Norm * buf.ParentQty);
     buf.TotalSum := 0;
-    oeDiskred := isOtpEdDiskret(buf.ObjOtpedNrec);
+    precision := if(isOtpEdDiskret(buf.ObjOtpedNrec), 0, 3);
     restQty := 0;
+    lastNotZeroQtyYear := 0;
     for(i:=1;i<=_yearcount;i++)
     {
-      buf.Qty[i] := (parentBuf.Qty[i] / parentBuf.TotalQty) * buf.TotalQty + restQty;
-      if (oeDiskred)
-      {
-        restQty := buf.Qty[i];
-        buf.Qty[i] := trunc(buf.Qty[i]);
-        restQty := restQty - buf.Qty[i];
-      }
+      buf.Qty[i] := round((parentBuf.Qty[i] / parentBuf.TotalQty) * buf.TotalQty + restQty, 8);
+
+      restQty := buf.Qty[i];
+      buf.Qty[i] := trunc(restQty, precision);
+      restQty := restQty - buf.Qty[i];
+
+      if (buf.Qty[i]!=0) lastNotZeroQtyYear := i;
+
       if buf.Coeff[i] <= 0 buf.Coeff[i] := 1;
       buf.Price[i] := buf.SpsoprPrice * buf.Coeff[i];
       buf.Sum[i] := buf.Price[i] * buf.Qty[i];
       buf.TotalSum += buf.Sum[i];
     }
+
+    if (lastNotZeroQtyYear!=0 and restQty!=0)
+    {
+      buf.TotalSum -= buf.Sum[lastNotZeroQtyYear];
+      buf.Qty[lastNotZeroQtyYear] += round(restQty,precision);
+      buf.Sum[lastNotZeroQtyYear] := buf.Price[lastNotZeroQtyYear] * buf.Qty[lastNotZeroQtyYear];
+      buf.TotalSum += buf.Sum[lastNotZeroQtyYear];
+    }
+
     pushpos(#tRKMParts);
     ProcessChildNodes(buf);
     poppos(#tRKMParts);
@@ -656,7 +680,7 @@ handleevent
 end;
 
 //#region Вспомогательные функции для динамического формирования столбцов в дереве----------------------------
-procedure AddTreeColumn(aName: string; aTitle: string);
+function AddTreeColumn(aName: string; aTitle: string; points: integer = 2): longint;
 {
   var l: longint;
   cfsCreateObject('TreeColumn', 'tr1', aName, false, l);
@@ -664,15 +688,19 @@ procedure AddTreeColumn(aName: string; aTitle: string);
   cfsSetProp(l, 'FieldName', aName);
   cfsSetProp(l, 'DefaultWidth', word(12));
   cfsSetProp(l, 'Size_X', 70);
-  cfsSetProp(l, 'Points', 2);
+  cfsSetProp(l, 'Points', points);
+  result := l;
 }
 
 procedure AddTreeYearColumns(aYear: word; aNum: byte);
 {
-  AddTreeColumn('t.Qty['+aNum+']'  , aYear+''#13'Норма');
-  AddTreeColumn('t.Coeff['+aNum+']', aYear+''#13'Коэффициент');
-  AddTreeColumn('t.Price['+aNum+']', aYear+''#13'Цена');
-  AddTreeColumn('t.Sum['+aNum+']', aYear+''#13'Затраты');
+  var l: longint;
+  l := AddTreeColumn('t.Qty['+aNum+']'  , aYear+''#13'Норма', 3);
+  cfsSetProp(l, 'FontBackColor', '9');
+  l := AddTreeColumn('t.Coeff['+aNum+']', aYear+''#13'Коэффициент', 3);
+  cfsSetProp(l, 'FontBackColor', 'CoeffBgColor');
+  AddTreeColumn('t.Price['+aNum+']', aYear+''#13'Цена', 2);
+  AddTreeColumn('t.Sum['+aNum+']', aYear+''#13'Затраты', 2);
 }
 
 procedure deleteTreeYearColumns(aNum: byte);
