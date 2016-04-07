@@ -1,0 +1,84 @@
+#component "AGAT"
+
+interface ReportGroupByPodr 'Отчёт по подразделениям в реестрах', doaccept, escclose;
+
+var
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+  inputsbban: comp;
+  SbbanName: string;
+
+parameters inputsbban;
+
+sql query qGetSumByPodr =
+  select sbban.name as RSTRName, katpodr.name as Podr, sum(spplban.sumopl) as SummaOpl, sum(SPPLBAN.SUMOPL-SPPLBAN.SBOR) as TotalSum
+  from sbban
+  join spplban on spplban.csbban = sbban.nrec
+  join katpodr on katpodr.nrec = spplban.cpodr
+  where sbban.nrec = :inputsbban
+  group by sbban.name, katpodr.name
+;
+
+procedure printrep(isCreateXLT : boolean);
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+
+//  pXL.CreateVar(sXLSFileName);
+//  pXL.SetStringVar('testvar',  SbbanName);
+//  pXL.PublishVar;
+
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('RSTRName');
+  pXL.CreateTblFld('Podr');
+  pXL.CreateTblFld('SummaOpl');
+  pXL.CreateTblFld('TotalSum');
+
+  if (not isCreateXLT)
+  {
+    // выполняем запросы, что-то происходит =>
+    var q: IQuery;
+    q := queryManager.createQuery(qGetSumByPodr);
+    q.setParam('inputsbban', inputsbban);
+
+    var rs: IResultSet;
+    rs := q.getResultSet;
+
+    if rs != nullref
+      if rs.getFirst = tsOk do
+      {
+        pXL.ClearTblBuffer;
+        pXL.SetTblStringFldValue('RSTRName' , rs.row.Val('RSTRName'));
+        pXL.SetTblStringFldValue('Podr'     , rs.row.Val('Podr'));
+        pXL.SetTblNumberFldValue('SummaOpl' , rs.row.Val('SummaOpl'));
+        pXL.SetTblStringFldValue('TotalSum' , rs.row.Val('TotalSum'));
+        pXL.InsTblRow;
+        SbbanName := rs.row.Val('RSTRName');
+      }
+      while rs.getNext = tsOk
+      // перестаём выполнять запрос
+  }
+
+  pXL.PublishTbl('Main');
+
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('testvar',  SbbanName);
+  pXL.PublishVar;
+
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+handleevent
+cminit:
+{
+  sXLTFileName := TranslatePath('%StartPath%xls\agat_report_group_by_podr.xlt');
+  StartNewVisual(vtRotateVisual, vfThread + vfTimer, 'Формирование отчета', 0);
+  //printrep(true);  // создаём шаблон
+  printrep(false); // заполняем отчёт
+  StopVisual('', 0);
+}
+end;
+
+end.
