@@ -1,6 +1,8 @@
 .linkform 'ReportGroupByPodr' prototype is 'REESBVIP'
-.nameinlist '(new) Реестры на выплату по заказам в разрезе подразделений'
+.nameinlist '(АГАТ) Реестры на выплату по заказам в разрезе подразделений'
 .group 'Реестры по перечислению в сбербанк'
+
+.f "nul"
 
 .{
 .{
