@@ -2,6 +2,9 @@
 #component "AGAT"
 interface agat_sootv_dog_doc 'Реестр документов с не привязанными ПКП',doaccept,escclose;
   show at (,,34,11);
+  const
+    ATTRNAM_NREC = 000100000000008Bh; // Nrec атрибута "Готов к согласованию"
+  end;
   var
     pXL: XLSRepBuilder;
     sXLSFileName, sXLTFileName: string;
@@ -23,12 +26,16 @@ interface agat_sootv_dog_doc 'Реестр документов с не привязанными ПКП',doaccept,
   var
     _viddoc: word;
   as select *
-  from basedoc bd, dogovor d, calplan cp
+  from basedoc bd, attrval av, dogovor d, calplan cp
   where ((
-    _viddoc     == bd.viddoc and (d1 <= bd.ddoc and d2 >= bd.ddoc and bd.ccalplan = 0) and
+    _viddoc                                          == bd.viddoc and
+    (d1 <= bd.ddoc and d2 >= bd.ddoc and bd.ccalplan = 0) and
+    1102                                             == av.wtable and
+    bd.nrec                                          == av.crec and
+    ATTRNAM_NREC                                     == av.cattrnam and
     if(bd.cappdogovor>0,bd.cappdogovor,bd.cdogovor) /== d.nrec and
-    d.nrec      == cp.cdogovor and
-    0           << cp.directmc
+    d.nrec                                           == cp.cdogovor and
+    0                                                << cp.directmc
   ))
   ;
 
@@ -98,6 +105,8 @@ interface agat_sootv_dog_doc 'Реестр документов с не привязанными ПКП',doaccept,
           pXL.SetTblNumberFldValue('summa'  , v2.bd.summa);
           pXL.SetTblStringFldValue('nodog'  , v2.d.nodoc);
           pXL.SetTblStringFldValue('ddog'   , datetostr(v2.d.ddoc, 'DD.MM.YYYY'));
+          if v2.getfirst av = tsOk pXL.SetTblStringFldValue('agreed' , v2.av.vstring)
+                              else pXL.SetTblStringFldValue('agreed' , '');
           pXL.InsTblRow;
         }
       }
@@ -105,7 +114,8 @@ interface agat_sootv_dog_doc 'Реестр документов с не привязанными ПКП',doaccept,
   }
 
   sql query qplat =
-    select dog.ddoc as ddog, appdog.ddoc as dappdog,
+    select dog.ddoc as ddog,
+           appdog.ddoc as dappdog,
            case when dog.nodoc is null then '' else dog.nodoc+' -> ' end + coalesce(appdog.nodoc,'') as nodog,
            bf.ddoc as ddoc,
            bf.nodoc as nodoc,
@@ -123,7 +133,8 @@ interface agat_sootv_dog_doc 'Реестр документов с не привязанными ПКП',doaccept,
          ) finplan on finplan.cdogovor = coalesce(appdog.nrec,coalesce(dog.nrec,#comp(0))) and finplan.cnt > 0
     left join katorg o on bf.corg = o.nrec
     left join katbank b on b.nrec = case when plpor.direct=0 then plpor.cbankpol else plpor.cbankplat end
-    where bf.direct = :direct and bf.ddoc between :d1 and :d2
+    left join basedoc bd on bd.nrec = bf.CBASEDOC
+    where bf.direct = :direct and bf.ddoc between :d1 and :d2 and coalesce(bd.total, 0) <> coalesce(appdog.summa, coalesce(dog.summa, 0))
   ;
 
   /*
@@ -207,6 +218,7 @@ interface agat_sootv_dog_doc 'Реестр документов с не привязанными ПКП',doaccept,
     pXL.CreateTblFld('summa'  );
     pXL.CreateTblFld('nodog'  );
     pXL.CreateTblFld('ddog'   );
+    pXL.CreateTblFld('agreed' );
     if (not isCreateXLT) {
       case vidrep of
         0: {
