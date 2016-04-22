@@ -21,6 +21,8 @@
 /i:"../BUH/interface"
 /i:"../BUH/report"
 /i:"../COMMON/ContractID"
+/i:"../COMMON/ExternalQuery"
+/i:"../COMMON/GlobalGoods"
 /i:"../COMMON/HashTable"
 /i:"../COMMON/HierMnplan"
 /i:"../COMMON/JSLib"
