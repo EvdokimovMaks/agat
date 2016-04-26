@@ -1287,6 +1287,7 @@
 /i:"../inc/CompSrc/Z/Z_Zar/inc"
 /i:"../inc/CompSrc/Z/Z_Zar/vip"
 /i:"../inc/CompSrc/Z/Z_ZarNastr/Vip"
+/i:"../inc/Directum"
 /i:"../inc/Inc/ADM"
 /i:"../inc/Inc/ASUP"
 /i:"../PLANOMTO/AgatKartStorage"
