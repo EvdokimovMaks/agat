@@ -13,25 +13,25 @@ const
   mtMarkBitmap = 3;
 
   // Константы типа экспорта.
-  frExportBIFF   = 0;
-  frExportXML    = 1;
-  frExportRTF    = 2;
-  frExportPDF    = 3;
-  frExportODS    = 4;
-  frExportODT    = 5;
-  frExportHTML   = 6;
-  frExportCSV    = 7;
-  frExportDBF    = 8;
-  frExportBMP    = 9;
-  frExportJPEG   = 10;
-  frExportTIFF   = 11;
-  frExportGIF    = 12;
-  frExportSimple = 13;
-  frExportTXT    = 14;
-  frExportFP3    = 20;
-  frPrintParam   = 21;
-  frMailParam    = 22;
-  frEmbeddedID   = 30;
+  frExportBIFF       = 0;
+  frExportXML        = 1;
+  frExportRTF        = 2;
+  frExportPDF        = 3;
+  frExportODS        = 4;
+  frExportODT        = 5;
+  frExportHTML       = 6;
+  frExportCSV        = 7;
+  frExportDBF        = 8;
+  frExportBMP        = 9;
+  frExportJPEG       = 10;
+  frExportTIFF       = 11;
+  frExportGIF        = 12;
+  frExportSimpleText = 13;
+  frExportTXT        = 14;
+  frExportFP3        = 20;
+  frPrintParam       = 21;
+  frMailParam        = 22;
+  frEmbeddedID       = 30;
 
   // Константы типа действия над отчетом.
   frcShowReport     = 1000;
@@ -41,7 +41,7 @@ const
   frcDesignReport   = 1004;
   frcPrepareReport  = 1005;
 
-  frDelimeter = ';';
+  frDelimeter = WideChar($2605);
   frGroupsDelimeter = ',';
   // Замена frGroupsDelimeter на frDelimeter трудоемка и нецелесообразна, т.к. затрагивает Get_GropupCommaText и хранение списка групп в Variables отчета (необходимо будет поддерживать и старый разделитель для совместимости).
   // На стороне Атлантиса затрагивает InitGroupList ds2fr.pas и модуль frres.pas.
@@ -62,11 +62,11 @@ type
     AutoSize    : WordBool; // Флаг "Авторасширение колонки"
     Name        : String;   // Имя поля в DataSet-е
     Title       : String;   // Заголовок колонки в BROWSE или TREE
+    ViewFormat  : String;   // Формат отображения данных колонки
   end;
 
   PfrxBiffExportParam = ^frxBiffExportParam;
   frxBiffExportParam = record
-    AllPages        : WordBool;
     Pages           : ShortString;
     PageBreaks      : WordBool;
     PagesPerSheet   : LongInt;
@@ -79,7 +79,6 @@ type
 
   PfrxXMLExportParam = ^frxXMLExportParam;
   frxXMLExportParam = record
-    AllPages        : WordBool;
     Pages           : ShortString;
     SuppressPageHeadersFooters : WordBool;
     WYSIWYG         : WordBool;
@@ -93,7 +92,6 @@ type
 
   PfrxRTFExportParam = ^frxRTFExportParam;
   frxRTFExportParam = record
-    AllPages        : WordBool;
     Pages           : ShortString;
     Picture         : WordBool;
     WISYWIG         : WordBool;
@@ -106,7 +104,6 @@ type
 
   PfrxPDFExportParam = ^frxPDFExportParam;
   frxPDFExportParam = record
-    AllPages        : WordBool;
     Pages           : ShortString;
     Compressed      : WordBool;
     EmbedFonts      : WordBool;
@@ -120,12 +117,10 @@ type
 
   PfrxODExportParam = ^frxODExportParam;
   frxODExportParam = record
-    AllPages        : WordBool;
     Pages           : ShortString;
     SuppressPageHeadersFooters : WordBool;
     WISYWIG         : WordBool;
     PageBreaks      : WordBool;
-    Picture         : WordBool;
     Background      : WordBool;
     ShowDialog      : WordBool;
     OpenAfterExport : WordBool;
@@ -133,14 +128,13 @@ type
 
   PfrxHTMLExportParam = ^frxHTMLExportParam;
   frxHTMLExportParam = record
-    AllPages        : WordBool;
     Pages           : ShortString;
     Styles          : WordBool;
     FixedWidth      : WordBool;
     AllInOneFolder  : WordBool;
     MultiPage       : WordBool;
     PageNavigator   : WordBool;
-    BackGround      : WordBool;
+    Background      : WordBool;
     PictureType     : Byte;
     ShowDialog      : WordBool;
     OpenAfterExport : WordBool;
@@ -148,7 +142,6 @@ type
 
   PfrxSimpleTextExportParam = ^frxSimpleTextExportParam;
   frxSimpleTextExportParam = record
-    AllPages        : WordBool;
     Pages           : ShortString;
     PageBreaks      : WordBool;
     EmptyLines      : WordBool;
@@ -160,7 +153,6 @@ type
 
   PfrxPrintParam = ^frxPrintParam;
   frxPrintParam = record
-    AllPages    : WordBool;
     Pages       : ShortString;
     PrinterName : ShortString;
     PrintToFile : WordBool;

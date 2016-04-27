@@ -540,6 +540,7 @@ const
   isBCPBufferInMemory = 'BCPBufferInMemory';
   isMaxCursorCount = 'OpenCursorsLimit';
   isPeakCursorsCountReport = 'PeakCursorsCountReport';
+  isSequentialAlterTableLimit = 'SequentialAlterTableLimit';
 
 // Список параметров секции csInternal
 // Эти параметры регистрируются только в процессе работы программы.
