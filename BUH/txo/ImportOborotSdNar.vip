@@ -1,0 +1,257 @@
+#component "AGAT"
+interface ImportOborotSdNar 'Импорт проводок по сдельным нарядам из excel-файла', escclose, doaccept;
+show(,,60,14);
+
+sql query qKatstroy =
+select nrec, substring(name, 1, instr(' ', name+' ', 1)-1)
+from katstroy
+;
+
+table struct tKatstroy (
+  Nrec: comp,
+  Name: string[20]
+) with index (
+  i01 = Name
+);
+
+var
+  _fileName    : string;
+  _katpodrCode : string;
+  _katstroyCode: string;
+  _spkauKodgr  : word;
+  _spkauCode   : string;
+  iGetkau      : Getkau;
+
+create view
+as select *
+from katpodr, tKatstroy tks, spkau,
+     tImpSdNar, tKatstroy
+where ((
+  _katpodrCode  == katpodr.kod    and
+  _katstroyCode == tks.Name       and
+  _spkauKodgr   == spkau.kodgrkau and
+  _spkauCode    == spkau.code
+));
+
+window wData 'Данные для импорта', escclose, doaccept;
+
+browse br1;
+show(,,,19);
+table tImpSdNar;
+fields
+  tImpSdNar.KatpodrCode   'Excel'#13'Подразделение': [5], protect;
+  tImpSdNar.KatstroyCode  'Excel'#13'Заказ'        : [10], protect;
+  tImpSdNar.CostitemCode  'Excel'#13'Статья'       : [10], protect;
+  tImpSdNar.SubgroupCode  'Excel'#13'Подгруппа'    : [5], protect;
+  tImpSdNar.CategoryCode  'Excel'#13'Категория'    : [5], protect;
+  [KatpodrFld]  if(getanykau(0, 2     , tImpSdNar.KatpodrNrec  ), givenanname(1), '') 'Галактика'#13'Подразделение': [5], protect, pickbutton;
+  [KatstroyFld] if(getanykau(0, 40    , tImpSdNar.KatstroyNrec ), givenanname(1), '') 'Галактика'#13'Заказ'        : [10], protect, pickbutton;
+  [CostitemFld] if(getanykau(0, 10016 , tImpSdNar.CostitemNrec ), givenanname(1), '') 'Галактика'#13'Статья'       : [10], protect, pickbutton;
+  [SubgroupFld] if(getanykau(0, 10057 , tImpSdNar.SubgroupNrec ), givenanname(1), '') 'Галактика'#13'Подгруппа'    : [5], protect, pickbutton;
+  [CategoryFld] if(getanykau(0, 10036 , tImpSdNar.CategoryNrec ), givenanname(1), '') 'Галактика'#13'Категория'    : [5], protect, pickbutton;
+  tImpSdNar.Value 'Сумма': [8,2], noprotect;
+end;
+
+screen sc2;
+show(,20,,) fixed_y;
+buttons
+  cmProceed, default;
+<<
+ <. Продолжить .>
+>>
+end;
+
+tableevent table tImpSdNar;
+cmUpdateRecord: update current tImpSdNar;
+end;
+
+function PickKau(aKauKodgr: word; var aKauNrec: comp): boolean;
+{
+  result := false;
+  var c: comp;
+  c := aKauNrec;
+  if iGetkau.GetCodeKau(1, aKauKodgr, c) > 0
+  {
+    result := true;
+    aKauNrec := c;
+  }
+}
+
+handleevent
+cmDefault:
+{
+  var foundZero: boolean;
+  foundZero := false;
+  _loop tImpSdNar
+  {
+    if tImpSdNar.KatpodrNrec=0 or tImpSdNar.KatstroyNrec=0 or tImpSdNar.CostitemNrec=0 or tImpSdNar.SubgroupNrec=0 or tImpSdNar.CategoryNrec=0
+    {
+      foundZero := true;
+      break;
+    }
+  }
+  if foundZero
+    if message('Найдена строка с неопределенным полем. Продолжить?', YesNo) != cmYes
+    {
+      rereadrecord;
+      Stop;
+      exit;
+    }
+  closewindowex(wData, cmDefault);
+}
+cmProceed:
+{
+  putcommand(cmDefault);
+}
+cmPick:
+{
+  var _modified: boolean;
+  _modified := false;
+
+  case curfield of
+    #KatpodrFld : _modified := PickKau(2    , tImpSdNar.KatpodrNrec);
+    #KatstroyFld: _modified := PickKau(40   , tImpSdNar.KatstroyNrec);
+    #CostitemFld: _modified := PickKau(10016, tImpSdNar.CostitemNrec);
+    #SubgroupFld: _modified := PickKau(10057, tImpSdNar.SubgroupNrec);
+    #CategoryFld: _modified := PickKau(10036, tImpSdNar.CategoryNrec);
+  end;
+  if _modified
+  {
+    SetModified(true);
+    rescanpanel(#tImpSdNar);
+  }
+}
+end;
+
+end; //window wData
+
+screen sc1;
+fields
+  _fileName: noprotect, pickbutton;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Путь к excel-файлу`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ Структура файла:
+  - Данные начинаются со второй строки. Первая строка - заголовок
+  - 1 столбец - код подразделения
+  - 2 столбец - номер заказа
+  - 3 столбец - код статьи
+  - 4 столбец - код подгруппы персонала
+  - 5 столбец - код категории
+  - 6 столбец - сумма
+
+                             <. Продолжить .> <. Отмена .>
+>>
+end;
+
+function LoadData: boolean;
+{
+  result := false;
+  var y: longint;
+  var s: string;
+
+  if not xlOpenExcel(false)
+  {
+    message('Ошибка открытия Excel', error);
+    exit;
+  }
+  if not  xlOpenWorkBook(_fileName)
+  {
+    message('Ошибка открытия книги Excel', error);
+    exit;
+  }
+
+  y := 2;
+  xlGetCellValue(y, 1, s);
+  while trim(s) <> ''
+  {
+    clearbuffer(#tImpSdNar);
+    //подразделение
+    tImpSdNar.KatpodrCode := trim(s);
+    //заказ
+    xlGetCellValue(y, 2, s);
+    tImpSdNar.KatstroyCode := trim(s);
+    //статья 10016
+    xlGetCellValue(y, 3, s);
+    tImpSdNar.CostitemCode := trim(s);
+    //подгруппа 10057
+    xlGetCellValue(y, 4, s);
+    tImpSdNar.SubgroupCode := trim(s);
+    //категория 10036
+    xlGetCellValue(y, 5, s);
+    tImpSdNar.CategoryCode := trim(s);
+    //сумма
+    xlGetCellValue(y, 6, s);
+    tImpSdNar.Value := double(replace(trim(s),',','.'));
+    //нрек подразделения по коду
+    _katpodrCode := tImpSdNar.KatpodrCode;
+    if getfirst katpodr = tsOk tImpSdNar.KatpodrNrec := katpodr.nrec;
+    //нрек заказа по номеру
+    _katstroyCode := tImpSdNar.KatstroyCode;
+    if getfirst tks = tsOk tImpSdNar.KatstroyNrec := tks.nrec;
+    //нрек статьи по коду
+    _spkauKodgr := 10016;
+    _spkauCode := tImpSdNar.CostitemCode;
+    if getfirst spkau = tsOk tImpSdNar.CostitemNrec := spkau.nrec;
+    //нрек подгруппы по коду
+    _spkauKodgr := 10057;
+    _spkauCode := tImpSdNar.SubgroupCode;
+    if getfirst spkau = tsOk tImpSdNar.SubgroupNrec := spkau.nrec;
+    //нрек категории по коду
+    _spkauKodgr := 10036;
+    _spkauCode := tImpSdNar.CategoryCode;
+    if getfirst spkau = tsOk tImpSdNar.CategoryNrec := spkau.nrec;
+
+    insert current tImpSdNar;
+
+    y++;
+    xlGetCellValue(y, 1, s);
+  }
+  xlCloseWorkBook(0);
+  xlKillExcel;
+
+  result := true;
+}
+
+handleevent
+cmDoOk:
+{
+  delete all tImpSdNar;
+  if (not LoadData)
+  {
+    message('Ошибка чтения данных. Проверьте, открывается ли файл в Excel.', error);
+    exit;
+  }
+  closeinterface(runwindowmodal(wData));
+}
+cmPick:
+{
+  case curfield of
+    #_fileName:
+    {
+      var s: string;
+      s := GetFileName('*.xls*', 'Excel-файл для импорта');
+      if (s!='') _fileName := s;
+      rereadrecord;
+    }
+  end;
+}
+cminit:
+{
+  //инициализируем таблицу с номерами заказов
+  delete all tKatstroy;
+  sqlSelectInto(qKatstroy, #tKatstroy);
+
+  readmydsk(_fileName, 'ImportOborotSdNar_fileName', false);
+}
+cmdone:
+{
+  savemydsk(_fileName, 'ImportOborotSdNar_fileName');
+}
+end;
+
+end.

@@ -1,0 +1,350 @@
+#component "AGAT"
+interface agat_dog_ree 'Агат. Реестр соответствия заказов этапам договоров' show at (,,42,11);
+  table struct tdog (
+    nrec   : comp,
+    cparent: comp,
+    ddoc   : date,
+    dbeg   : date,
+    dend   : date,
+    nodoc  : string[40],
+    nodocex: string[40],
+    name   : string[255],
+    kontrag: string[150],
+    kurpodr: string[150],
+    status : string[80],
+    czakaz : comp,
+    zakaz  : string[200],
+    zstatus: string[80],
+    dvvdog : date,
+    dvvzak : date,
+    summa  : double,
+    level  : byte
+  ) with index (
+    i01 = cparent + ddoc + nodoc,
+    i02 = level + cparent + ddoc + nodoc
+  );
+  table struct tviddog (
+    crec: comp,
+    lvl: word
+  ) with index (
+    i00 = crec,
+    i01 = lvl + crec
+  );
+  var
+    pXL: XLSRepBuilder;
+    sXLSFileName, sXLTFileName: string;
+    ea: iExtAttr;
+    iGetKau: GetKau;
+    drep: date;
+    flag: byte;
+  create view
+  as select *
+  from tdog, tdog tdog2, statlog, tviddog;
+
+  function GetVidDogFilterName: string;
+  {
+    var _cnt: longint;
+    _cnt := recordsintable(#tVidDog);
+    case _cnt of
+      0: result := 'Все';
+      1: result := 'Выбрано: 1 "'+if(getanykau(0,67,if(getfirst tviddog = tsOk, tviddog.cRec, 0)), givenanname(1),'')+'"';
+    else
+      result := 'Выбрано: ' + _cnt;
+    end;
+  }
+
+  screen scmain;
+  fields
+    drep: noprotect;
+    flag: noprotect;
+    [sVidDog] GetVidDogFilterName: protect, pickbutton;
+  buttons
+    cmdook, default;
+<<
+
+  `Дата отчета ` .@@@@@@@@@@
+
+   Вид отчета
+` ` (.) По всем договорам              `
+` ` (.) По договорам с неустановленными заказами `
+
+  `Виды договоров` .@@@@@@@@@@@@@@@@@@@
+
+                     <. Сформировать .>
+>>
+  end;
+
+  procedure FillCalPlan; {
+    insert tdog (nrec, cparent, ddoc, dbeg, dend, nodoc, nodocex, name, status, czakaz, zakaz, zstatus, dvvdog, summa, level)
+    select cp.nrec, if(cp.ccalplan=0,cp.cdogovor,cp.ccalplan),
+           cp.dinput, cp.dfrom, cp.dto, cp.nodoc,
+           if(spd.prmc=1, mc.name, usl.name),
+           ea.mGetAttr(1702, cp.nrec, 'НИОКР. Наименование этапа'),
+           note.name, ks.nrec, ks.name, ksnote.name, cp.dfrom, spd.summa, 250
+    from tdog tdog1, calplan cp, katnotes note,
+         spdocs spd, specmtr sm, katstroy ks, katnotes ksnote,
+         katmc mc, katusl usl
+    where ((
+      tdog1.nrec     /== cp.cdogovor   and
+      1              /== cp.directmc   and (cp.status < 3) and
+      cp.cnote        == note.nrec     and
+      403            /== spd.tidk      and
+      cp.nrec        /== spd.cdoc      and
+      281474976710657 == sm.csaldtune  and
+      1723            == sm.cotable    and
+      spd.nrec        == sm.cspec      and
+      sm.cobj         == ks.nrec       and
+      ks.cnote        == ksnote.nrec   and
+      spd.cmcusl      == mc.nrec       and
+      spd.cmcusl      == usl.nrec
+    ));
+    _loop tdog where ((250 == tdog.level and (tdog.czakaz>0) )) {
+      if getfirst statlog where (( 451 == statlog.doctype and tdog.czakaz == statlog.cdoc )) = tsOk {
+        update current tdog set tdog.dvvzak := statlog.doper;
+      }
+    }
+  }
+
+  procedure FillDog(_lvl: byte = 1); {
+    //var reccnt: longint;
+    //reccnt := recordsintable(tntdog);
+    if getfirst tdog where ((_lvl == tdog.level)) = tsOk
+    {
+      insert tdog (nrec, cparent, ddoc, dbeg, dend, nodoc, nodocex, kontrag, kurpodr, status, summa, level)
+      select d.nrec, if(tdog1.cparent=0, tdog1.nrec, tdog1.cparent),
+             d.ddoc, d.dbeg, d.dend, d.nodoc, d.nodoc_ext, o.name, p.name, n.name, d.summa, _lvl+1
+      from tdog tdog1, dogovor d, tviddog,  katorg o, katnotes n, katpodr p
+      where ((
+        _lvl       /== tdog1.level  and
+        tdog1.nrec /== d.cdogovor   and (d.status < 3 ) and    //and d.direct = 1
+        //3           >> d.status     and
+        d.cviddog  /== tviddog.crec and
+        d.corg      == o.nrec       and
+        d.cnote     == n.nrec       and
+        d.ccurpodr  == p.nrec
+      ));
+    //if reccnt < recordsintable(tntdog) {
+      FillDog(_lvl+1);
+    }
+  }
+
+  procedure FillVidDog(_lvl: byte = 1);
+  {
+    if getfirst tviddog where ((_lvl == tviddog.lvl)) = tsOk
+    {
+      insert tviddog (crec, lvl)
+      select katvidd.nrec, (lvl+1)
+      from tviddog tviddog1, katvidd
+      where ((
+        _lvl /== tviddog1.lvl and
+        tviddog1.crec /== katvidd.cowner
+      ));
+      FillVidDog(_lvl+1);
+    }
+  }
+
+  function frmt_date(_d: date): string; {
+    result := if(_d = 0, '', strtodate(_d,'DD.MM.YYYY'));
+  }
+
+  procedure printbyparent(_cparent: comp); {
+    _loop tdog where ((_cparent /== tdog.cparent and (tdog.nrec > 0) )) {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('nrec'   , tdog.nrec);
+      pXL.SetTblStringFldValue('cparent', tdog.cparent);
+      pXL.SetTblDateFldValue  ('ddoc'   , tdog.ddoc);
+      pXL.SetTblDateFldValue  ('dbeg'   , tdog.dbeg);
+      pXL.SetTblDateFldValue  ('dend'   , tdog.dend);
+      if tdog.level = 2 {
+        pXL.SetTblStringFldValue('nodoc1' , tdog.nodoc);
+        pXL.SetTblStringFldValue('koldn'  , '');
+        pXL.SetTblNumberFldValue('level'  , 1);
+      } else if tdog.level < 250 {
+        pXL.SetTblStringFldValue('nodoc2' , tdog.nodoc);
+        pXL.SetTblStringFldValue('koldn'  , '');
+        pXL.SetTblNumberFldValue('level'  , 2);
+      } else {
+        pXL.SetTblStringFldValue('nodoc3' , tdog.nodoc);
+        if tdog.dvvzak > 0 {
+          pXL.SetTblNumberFldValue('koldn'  , calcdaysbetweendates(tdog.dvvdog, tdog.dvvzak, false)-1);
+        } else {
+          pXL.SetTblNumberFldValue('koldn'  , calcdaysbetweendates(tdog.dvvdog, drep, false)-1);
+        }
+        pXL.SetTblNumberFldValue('level'  , 3);
+      }
+      pXL.SetTblStringFldValue('nodocex', tdog.nodocex);
+      pXL.SetTblStringFldValue('name'   , tdog.name);
+      pXL.SetTblStringFldValue('kontrag', tdog.kontrag);
+      pXL.SetTblStringFldValue('kurpodr', tdog.kurpodr);
+      pXL.SetTblStringFldValue('status' , tdog.status );
+      pXL.SetTblStringFldValue('zakaz'  , tdog.zakaz  );
+      pXL.SetTblStringFldValue('zstatus', tdog.zstatus);
+      pXL.SetTblDateFldValue  ('dvvdog' , tdog.dvvdog );
+      pXL.SetTblDateFldValue  ('dvvzak' , tdog.dvvzak );
+      pXL.SetTblNumberFldValue('summa'  , tdog.summa  );
+      pXL.InsTblRow;
+      if getfirst tdog2 where ((tdog.nrec /== tdog2.cparent)) = tsOk {
+        pushpos(#tdog);
+        printbyparent(tdog.nrec);
+        poppos(#tdog);
+      }
+    }
+  }
+
+  procedure delete_empty_dogovor; {
+    delete all tdog where ((250 /== tdog.level and (tdog.czakaz <> 0) ));
+    var _cnt: longint;
+    do {
+      _cnt := recordsintable(#tdog);
+      _loop tdog where ((250 >> tdog.level)) {
+        if getfirst tdog2 where ((tdog.nrec == tdog2.cparent)) <> tsOk {
+          delete current tdog;
+        }
+      }
+    } while _cnt <> recordsintable(#tdog);
+  }
+
+  procedure printrep(isCreateXLT : boolean); {
+    if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                    else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+    pXL.CreateVar(sXLSFileName);
+    pXL.SetStringVar('hdr', 'Реестр соответствия заказов этапам договоров на '+datetostr(drep, 'DD.MM.YYYY'));
+    pXL.PublishVar;
+    pXL.CreateTbls(sXLSFileName);
+    pXL.CreateTbl('Main');
+    pXL.CreateTblFld('nrec'   );
+    pXL.CreateTblFld('cparent');
+    pXL.CreateTblFld('ddoc'   );
+    pXL.CreateTblFld('dbeg'   );
+    pXL.CreateTblFld('dend'   );
+    pXL.CreateTblFld('nodoc1' );
+    pXL.CreateTblFld('nodoc2' );
+    pXL.CreateTblFld('nodoc3' );
+    pXL.CreateTblFld('nodocex');
+    pXL.CreateTblFld('name');
+    pXL.CreateTblFld('kontrag');
+    pXL.CreateTblFld('kurpodr');
+    pXL.CreateTblFld('status' );
+    pXL.CreateTblFld('zakaz'  );
+    pXL.CreateTblFld('zstatus');
+    pXL.CreateTblFld('dvvdog' );
+    pXL.CreateTblFld('dvvzak' );
+    pXL.CreateTblFld('summa'  );
+    pXL.CreateTblFld('level'  );
+    pXL.CreateTblFld('koldn'  );
+    if (not isCreateXLT) {
+      pushpos(#tdog);
+      printbyparent(0);
+      poppos(#tdog);
+    }
+    pXL.PublishTbl('Main');
+    pXL.LoadReport(sXLSFileName);
+    pXL.DisConnectExcel;
+  }
+
+  handleevent
+    cmpick:
+    {
+      case curfield of
+        #sVidDog:
+        {
+          var _l, _cnt, _i: longint;
+          var _c: comp;
+          _cnt := iGetKau.GetCodeKau(2, 67, _c);
+          if _cnt > 0
+          {
+            delete all tVidDog;
+            _l := InitMarker(iGetKau.GetMarkerName(67), 8, 100, 10, false);
+            for (_i := 0; GetMarker(_l, _i, _c); _i += 1)
+              insert tVidDog set tVidDog.cRec := _c;
+            DoneMarker(_l, iGetKau.GetMarkerName(67));
+            rereadrecord;
+          }
+        }
+      end;
+    }
+    cmdelonprotect:
+    {
+      case curfield of
+        #sVidDog:
+        {
+          delete all tVidDog;
+          rereadrecord;
+        }
+      end;
+    }
+    cminit: {
+      sXLTFileName := TranslatePath('%StartPath%xls\agat_dog_ree.xlt');
+      drep := cur_date;
+      if not readmydsk(flag, 'agat_dog_ree_flag', false) then flag := 0;
+      var _l, _i: longint;
+      var _c: comp;
+      _l := initmarker('agat_dog_ree_marker', 8, 100, 10, false);
+      for (_i:=0; GetMarker(_l, _i, _c); _i += 1)
+        insert tVidDog set tVidDog.cRec := _c;
+      rereadrecord;
+      donemarker(_l, '');
+    }
+    cmdook: {
+      StartNewVisual(vtRotateVisual, vfThread + vfTimer, 'Формирование отчета', 0);
+
+      //delete all tviddog;
+      //insert tviddog set tviddog.lvl := 1, tviddog.crec := 000100000000001Eh;
+      //FillVidDog;
+      if getfirst tVidDog <> tsOk
+        insert tVidDog (cRec) select katvidd.nrec from katvidd;
+
+      delete all tdog;
+      insert tdog set tdog.level := 1, tdog.nrec := 0;
+      FillDog;
+      FillCalPlan;
+
+      if flag = 1 {
+        delete_empty_dogovor;
+      }
+
+      PrintRep(false);
+      StopVisual('',0);
+    }
+    cmdone: {
+      savemydsk(flag, 'agat_dog_ree_flag');
+      var _l: longint;
+      _l := initmarker('', 8, 100, 10, false);
+      _loop tVidDog
+        insertmarker(_l, tVidDog.cRec);
+      DoneMarker(_l, 'agat_dog_ree_marker');
+    }
+  end;
+end.
+
+VipInterface UserReport_agat_dog_ree Implements IUserReport licensed(free);
+Interface UserReport_AGAT_DOG_REE;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::agat_dog_ree);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Реестр соответствия заказов этапам договоров';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'DOGOVOR';
+    end;
+  end;
+end.

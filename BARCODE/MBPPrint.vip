@@ -1,0 +1,560 @@
+#component "QR_BARCODE"
+interface SelectMBP 'Печать этикеток МПЗ' escclose, doaccept;
+
+sql query qmbp =
+select katmbp.nrec,
+       katmbp.nnumber,
+       katmbp.name,
+       mbpin.nrec,
+       mbpin.dateeksp,
+       katpodr.nrec,
+       katpodr.name,
+       katpodr.kod,
+       katmol.nrec,
+       katmol.name,
+       mbpin.kolfact,
+       coalesce(avBarcode.vstring, ''),
+       coalesce(spkPlace.nrec, #comp(0)),
+       coalesce(spkPlace.name, '')
+from katmbp
+join mbpin on katmbp.nrec = mbpin.cmbp
+join katpodr on mbpin.cpodr = katpodr.nrec
+join katmol on mbpin.cmol = katmol.nrec
+left join attrval avBarcode on 2001 = avBarcode.wtable and mbpin.nrec = avBarcode.crec and #comp(0001000000000068h) = avBarcode.cAttrNam
+left join attrval avPlace on 2001 = avPlace.wtable and mbpin.nrec = avPlace.crec and #comp(0001000000000069h) = avPlace.cAttrNam
+left join spkau spkPlace on coalesce(avPlace.vcomp,#comp(0)) = spkPlace.nrec
+where mbpin.kolfact > 0
+;
+
+table struct tmbpin (
+  KatmbpNrec : comp,
+  KatmbpCode : string[20],
+  KatmbpName : string,
+  MbpinNrec  : comp,
+  DateEksp   : date,
+  KatpodrNrec: comp,
+  KatpodrName: string[150],
+  KatpodrCode: string[20],
+  KatmolNrec : comp,
+  KatmolName : string[80],
+  Qty        : double,
+  Barcode    : string,
+  PlaceNrec  : comp,
+  PlaceName  : string[120]
+) with index (
+  i01 = KatmbpName + KatpodrName + KatmolName
+);
+
+table struct tmkatelements (
+  nrec     : comp,
+  os_nrec  : comp,
+  os_innum : string,
+  os_barkod: string,
+  mol_name : string,
+  podr_kod : string,
+  podr_name: string,
+  os_name  : string,
+  os_datek : date,
+  os_place : string,
+  t_count  : double
+) with index (
+  i00 = nrec (unique, surrogate),
+  i01 = os_nrec
+);
+
+var
+  lMarkerPodr : longint;
+  lMarkerMol  : longint;
+  lMarkerPlace: longint;
+  lMarkerMbpin: longint;
+  lMarkerMain : longint;
+  iGetKAU     : GetKAU;
+  ea          : iExtAttr;
+
+create view
+as select *
+from tmbpin, katpodr, katmol, spkau, tmkatelements
+;
+
+datastream Stream1 (
+  table tmkatelements (
+    [os_innum]   os_innum;
+    [os_barkod]  os_barkod;
+    [mol_name]   mol_name;
+    [podr_kod]   podr_kod;
+    [podr_name]  podr_name;
+    [os_name]    os_name;
+    [os_datek]   os_datek;
+    [os_place]   os_place;
+  );
+)
+end;
+
+
+//------------------------------------------------------------------------------------------------------------
+//Выбор МБП
+//------------------------------------------------------------------------------------------------------------
+
+procedure FillFilterTableWithMarker(aKind: word; lMarker: longint);
+{
+  sqlExecDirect('delete tfilter where kind = '+aKind);
+  var i, cnt: longint;
+  var c: comp;
+
+  cnt := GetMarkerCount(lMarker);
+  for(i := 0; i < cnt; i++)
+  {
+    if GetMarker(lMarker, i, c)
+    {
+      sqlExecDirect('insert tfilter (kind, crec) values ('+aKind+',#comp('+c+') )');
+    }
+  }
+
+
+}
+
+procedure PrepareTmpTables;
+{
+  sqlCreateTmpTable('table tfilter (kind: word, crec: comp) with index (i01 = kind + crec);', ctmNormal);
+  sqlExecDirect('delete tfilter');
+}
+
+procedure DropTmpTables;
+{
+  sqlDropTmpTable('tfilter');
+}
+
+procedure FillMBPTables;
+{
+  delete all tmbpin;
+  var s: longint;
+
+  sqlAddStr(s, qmbp);
+  if (GetMarkerCount(lMarkerPodr) > 0)
+  {
+    FillFilterTableWithMarker(1, lMarkerPodr);
+    sqlAddStr(s, 'and Katpodr.Nrec in (select crec from tfilter where kind = 1)');
+  }
+  if (GetMarkerCount(lMarkerMol) > 0)
+  {
+    FillFilterTableWithMarker(2, lMarkerMol);
+    sqlAddStr(s, 'and Katmol.Nrec in (select crec from tfilter where kind = 2)');
+  }
+  if (GetMarkerCount(lMarkerPlace) > 0)
+  {
+    FillFilterTableWithMarker(3, lMarkerPlace);
+    sqlAddStr(s, 'and coalesce(SpkPlace.Nrec, #comp(0)) in (select crec from tfilter where kind = 3)');
+  }
+  sqlSelectInto(s, #tmbpin);
+}
+
+function GetPodrFilterName: string;
+{
+  var cnt: longint;
+  cnt := GetMarkerCount(lMarkerPodr);
+  case cnt of
+    0: result := 'Все подразделения';
+    1:
+    {
+      result := '';
+      var c: comp;
+      if (GetMarker(lMarkerPodr, 0, c))
+        if getfirst katpodr where ((c == katpodr.nrec)) = tsOk
+          result := katpodr.name;
+    }
+  else
+    result := 'Выбрано подразделений: '+cnt;
+  end;
+}
+
+function GetMolFilterName: string;
+{
+  var cnt: longint;
+  cnt := GetMarkerCount(lMarkerMol);
+  case cnt of
+    0: result := 'Все МОЛ';
+    1:
+    {
+      result := '';
+      var c: comp;
+      if (GetMarker(lMarkerMol, 0, c))
+        if getfirst katmol where ((c == katmol.nrec)) = tsOk
+          result := katmol.name;
+    }
+  else
+    result := 'Выбрано МОЛ: '+cnt;
+  end;
+}
+
+function GetPlaceFilterName: string;
+{
+  var cnt: longint;
+  cnt := GetMarkerCount(lMarkerPlace);
+  case cnt of
+    0: result := 'Все места хранения';
+    1:
+    {
+      result := '';
+      var c: comp;
+      if (GetMarker(lMarkerPlace, 0, c))
+        if getfirst spkau where ((c == spkau.Nrec)) = tsOk
+          result := spkau.Name;
+    }
+  else
+    result := 'Выбрано мест хранения: '+cnt;
+  end;
+}
+
+function PickKAU(aKodgrKau: word; lMarker: longint): boolean;
+{
+  result := false;
+  if iGetKau.GetCodeKAU(2, aKodgrKau, 0) > 0
+  {
+    var l: longint;
+    l := initmarker(iGetKAU.GetMarkerName(aKodgrKau), 8, 10, 100);
+    AddMarker(lMarker, l);
+    donemarker(l, '');
+    result := true;
+  }
+}
+
+procedure SelectPodr;
+{
+  if PickKAU(2, lMarkerPodr)
+    FillMBPTables;
+}
+
+procedure SelectMol;
+{
+  if PickKAU(60, lMarkerMOL)
+    FillMBPTables;
+}
+
+procedure SelectPlace;
+{
+  if PickKAU(10004, lMarkerPlace)
+    FillMBPTables;
+}
+
+procedure ClearPodrFilter;
+{
+  clearmarker(lMarkerPodr);
+  FillMBPTables;
+}
+
+procedure ClearMolFilter;
+{
+  clearmarker(lMarkerMol);
+  FillMBPTables;
+}
+
+procedure ClearPlaceFilter;
+{
+  clearmarker(lMarkerPlace);
+  FillMBPTables;
+}
+
+window wSelectMBP 'Выбор приходов МБП', escclose, doaccept;
+
+screen sc1;
+show(,,,3) fixed_y;
+fields
+  [PodrFilterName]  GetPodrFilterName : protect, pickbutton;
+  [MolFilterName]   GetMolFilterName  : protect, pickbutton;
+  [PlaceFilterName] GetPlaceFilterName: protect, pickbutton;
+<<
+
+`Подразделения:`.@@@@@@@@@@@@@@@@@@@@@@`МОЛ:`.@@@@@@@@@@@@@@@@@@@@@@`Места хранения`.@@@@@@@@@@@@@@@@@@@@@@
+>>
+end;
+
+browse br1 (,,sci1EnIns);
+show (,4,,);
+table tmbpin;
+fields
+  {font={color=if(foundmarker(lMarkerMbpin, tmbpin.MbpinNrec), 5, 0)}};
+  if(foundmarker(lMarkerMbpin, tmbpin.MbpinNrec), '√', '') '': [2], skip, noautosize;
+  tmbpin.KatmbpName  'Наименование'   : [20], protect;
+  tmbpin.KatmbpCode  'Код'            : [10], protect;
+  tmbpin.KatpodrName 'Подразделение'  : [20], protect;
+  tmbpin.KatmolName  'МОЛ'            : [20], protect;
+  tmbpin.Barcode     'Штрихкод'       : [15], protect;
+  tmbpin.PlaceName   'Место хранения' : [20], protect;
+  tmbpin.Qty         'Остаток'        : [5] , protect;
+end;
+
+handleevent
+cmDoMarkUnMark:
+{
+  if foundmarker(lMarkerMbpin, tmbpin.MbpinNrec)
+    deletemarker(lMarkerMbpin, tmbpin.MbpinNrec)
+  else
+    insertmarker(lMarkerMbpin, tmbpin.MbpinNrec);
+  redrawcurrentandgo(br1, true);
+}
+cmSelAll:
+{
+  pushpos(#tmbpin);
+  clearmarker(lMarkerMbpin);
+  StartNewVisual(vtRotateVisual, vfBreak+vfTimer, 'Пометка', 0);
+  _loop tmbpin
+  {
+    insertmarker(lMarkerMbpin, tmbpin.MbpinNrec);
+    if (not NextVisual) break;
+  }
+  StopVisual('',0);
+  poppos(#tmbpin);
+  rescanpanel(#tmbpin);
+}
+cmUnSelAll:
+{
+  clearmarker(lMarkerMbpin);
+  rescanpanel(#tmbpin);
+}
+cmPick:
+{
+  case curfield of
+    #PodrFilterName : SelectPodr;
+    #MolFilterName  : SelectMol;
+    #PlaceFilterName: SelectPlace;
+  end;
+  rereadrecord;
+}
+cminit:
+{
+  lMarkerPodr  := initmarker('', 8, 10, 100, false);
+  lMarkerMol   := initmarker('', 8, 10, 100, false);
+  lMarkerPlace := initmarker('', 8, 10, 100, false);
+  FillMBPTables;
+  rereadrecord(#tmbpin);
+}
+cmDone:
+{
+  donemarker(lMarkerPodr ,'');
+  donemarker(lMarkerMol  ,'');
+  donemarker(lMarkerPlace,'');
+}
+end;
+
+end; //window
+
+handleevent
+cmDelOnProtect:
+{
+  case curfield of
+    #PodrFilterName : ClearPodrFilter;
+    #MolFilterName  : ClearMolFilter;
+    #PlaceFilterName: ClearPlaceFilter;
+  end;
+  rereadrecord;
+}
+end;
+
+//------------------------------------------------------------------------------------------------------------
+//Основной интерфейс
+//------------------------------------------------------------------------------------------------------------
+
+screen scmain;
+show(,,,4) fixed_y;
+buttons
+  cmAdd, default;
+  cmPrint;
+  cmSetBarkod;
+<<
+
+<.    Добавить    .> <.    Печать    .> <.    Установить штрихкоды .>
+
+>>
+end;
+
+browse brmain (,,sci178InsPM);
+show(,5,,);
+table tmkatelements;
+fields
+  {font={color=if(foundmarker(lMarkerMain, tmkatelements.nrec), 5, 0)}};
+  if(foundmarker(lMarkerMain, tmkatelements.nrec), '√', '') '': [2], skip, noautosize;
+  tmkatelements.os_barkod 'Штрихкод'      : [10], protect;
+  tmkatelements.os_innum  'Инв.номер МБП' : [10], protect;
+  tmkatelements.os_name   'Наименование'  : [30], protect;
+  tmkatelements.os_place  'Место хранения': [10], protect;
+  tmkatelements.t_count   'Кол-во'        : [8] , protect;
+  tmkatelements.podr_name 'Подразделение' : [10], protect;
+  tmkatelements.mol_name  'МОЛ'           : [10], protect;
+end;
+
+procedure PickMbpin;
+{
+  lMarkerMbpin := initmarker('', 8, 10, 100, false);
+  if runwindowmodal(wSelectMBP) = cmDefault
+  {
+    if getmarkercount(lMarkerMbpin) = 0
+      insertmarker(lMarkerMbpin, tmbpin.MbpinNrec);
+    _loop tmbpin where foundmarker(lMarkerMbpin, tmbpin.MbpinNrec)
+    {
+      if getfirst tmkatelements where ((tmbpin.MbpinNrec == tmkatelements.os_nrec)) != tsOk
+      {
+        clearbuffer(#tmkatelements);
+        tmkatelements.os_nrec   := tmbpin.MbpinNrec;
+        tmkatelements.os_datek  := tmbpin.DateEksp;
+        tmkatelements.os_innum  := tmbpin.KatmbpCode;
+        tmkatelements.os_barkod := tmbpin.Barcode;
+        tmkatelements.mol_name  := tmbpin.KatmolName;
+        tmkatelements.podr_kod  := tmbpin.KatpodrCode;
+        tmkatelements.podr_name := tmbpin.KatpodrName;
+        tmkatelements.os_name   := tmbpin.KatmbpName;
+        tmkatelements.os_place  := tmbpin.PlaceName;
+        tmkatelements.t_count   := tmbpin.Qty;
+        insert current tmkatelements;
+      }
+    }
+  }
+  donemarker(lMarkerMbpin,'');
+}
+
+tableevent table tmkatelements;
+cmInsert:
+{
+  PickMbpin;
+  rereadrecord(#tmkatelements);
+  Stop;
+}
+
+cmDelete:
+{
+  if getmarkercount(lMarkerMain) = 0
+  {
+    if message('Удалить текущую запись?', yesno) = cmYes
+      delete current tmkatelements;
+  }
+  else
+  {
+    if message('Удалить помеченные записи?', yesno) = cmYes
+    {
+      pushpos(#tmkatelements);
+      delete tmkatelements where foundmarker(lMarkerMain, tmkatelements.nrec);
+      poppos(#tmkatelements);
+      clearmarker(lMarkerMain);
+    }
+  }
+  rereadrecord(#tmkatelements);
+  Stop;
+}
+end;
+
+handleevent
+
+cmPrint:
+{
+  RunFReport(Stream1, '', true)
+}
+
+cmSetBarkod:
+{
+  var cnt: longint;
+  cnt := getmarkercount(lMarkerMain);
+  if cnt=0
+  {
+    if tmkatelements.os_barkod != ''
+    {
+      message('Штрихкод для текущей карточки уже установлен', warning);
+      exit;
+    }
+    if message('Установить штрихкод для текущей карточки?', yesno) = cmYes
+      insertmarker(lMarkerMain, tmkatelements.nrec)
+    else
+      exit;
+  }
+  else
+  {
+    if message('Установить штрихкоды для помеченных карточек?', YesNo) != cmYes exit;
+  }
+
+  var stmt: longint;
+  var d: double;
+  var s: string;
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, 'select max(cast(vstring as double)) from attrval where #comp(0001000000000068h) = cAttrNam');
+  sqlBindCol(stmt, 1, d);
+  sqlExecute(stmt);
+  if sqlFetch(stmt) != tsOk
+  {
+    message('Ошибка определения последнего назначенного штрихкода', error);
+    exit;
+  }
+  sqlFreeStmt(stmt);
+
+  s := string(d,0,0);
+
+  if ( getfirst tmkatelements where (foundmarker(lMarkerMain, tmkatelements.nrec) and tmkatelements.os_barkod='') ) = tsOk
+  {
+    do
+    {
+      s := nextnumstr(s);
+      if not ea.sSetAttrID(2001, tmkatelements.os_nrec, 0001000000000068h, s)
+      {
+        message('Ошибка установки штрихкода для '+tmkatelements.os_name, error);
+        exit;
+      }
+      update current tmkatelements set tmkatelements.os_barkod := s;
+    } while ( getnext tmkatelements where (foundmarker(lMarkerMain, tmkatelements.nrec) and tmkatelements.os_barkod='') ) = tsOk
+  }
+  else
+  {
+    message('У всех помеченных карточек штрихкод уже установлен', warning);
+  }
+  if cnt = 0
+    clearmarker(lMarkerMain);
+  rereadrecord(#tmkatelements);
+}
+
+cmDoMarkUnMark:
+{
+  if foundmarker(lMarkerMain, tmkatelements.nrec)
+    deletemarker(lMarkerMain, tmkatelements.nrec)
+  else
+    insertmarker(lMarkerMain, tmkatelements.nrec);
+  redrawcurrentandgo(brmain, true);
+}
+
+cmSelAll:
+{
+  pushpos(#tmkatelements);
+  clearmarker(lMarkerMain);
+  StartNewVisual(vtRotateVisual, vfBreak+vfTimer, 'Пометка', 0);
+  _loop tmkatelements
+  {
+    insertmarker(lMarkerMain, tmkatelements.nrec);
+    if (not NextVisual) break;
+  }
+  StopVisual('',0);
+  poppos(#tmkatelements);
+  rescanpanel(#tmkatelements);
+}
+
+cmUnSelAll:
+{
+  clearmarker(lMarkerMain);
+  rescanpanel(#tmkatelements);
+}
+
+cmAdd:
+{
+  PickMbpin;
+  rescanpanel(#tmkatelements);
+}
+
+cminit:
+{
+  lMarkerMain := initmarker('', 8, 10, 100);
+  PrepareTmpTables;
+}
+
+cmDone:
+{
+  donemarker(lMarkerMain, '');
+  DropTmpTables;
+}
+
+end; //handleevent
+
+end.

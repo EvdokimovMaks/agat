@@ -1,0 +1,132 @@
+#include SrDnZar.vih
+#include Contexts.vih
+
+#component "AGAT"
+
+interface iSrDnZarOld;
+
+table struct tsdz (
+  year: word,
+  month: word,
+  summa: double
+) with index (
+  i01 = year + month
+);
+
+var
+  CS: IContextSession;
+
+create view
+as select *
+from tsdz;
+
+function GetSrDnZar(lschetNRec: comp; aDate: date; showreport: boolean = false): double;
+{
+  var s: longint;
+  var month1, year1, month2, year2: word;
+  var _sum, _days, _days1, _days2, _fullsum, _fulldays, _resSum: double;
+  var fname, _s: string;
+  var i, _cnt: integer;
+  var _n: byte;
+
+  aDate := sub_months(date(1,month(aDate),year(aDate)), 1);
+  month2 := month(aDate);
+  year2  := year(aDate);
+  aDate := sub_months(aDate, 11);
+  month1 := month(aDate);
+  year1  := year(aDate);
+
+  if (showreport)
+  {
+    fname := CreateTmpFileName;
+    logstrtofile(fname, ' áç¥â áà¥¤­¥¤­¥¢­®£® § à ¡®âª  ¤«ï «¨æ¥¢®£® áç¥â  '+string(LSchetNRec,0,0));
+    logstrtofile(fname, '');
+    logstrtofile(fname, 'ÄÄÄÄÄÂÄÄÄÂÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÄÄÄ');
+    logstrtofile(fname, 'ƒ®¤  ³Œ¥á³‡ à ¡®â®ª          ³„­.®âà ¡ ³„­.¢ ¬¥á ³„­.¯® áà¥¤­.');
+    logstrtofile(fname, 'ÄÄÄÄÄÅÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄ');
+  }
+  sqladdstr(s, 'select so.yearn, so.mesn,');
+  sqladdstr(s, '  sum(');
+  sqladdstr(s, '    case');
+  sqladdstr(s, '      when vo.vhvo[17]=''+''');
+  sqladdstr(s, '      then');
+  sqladdstr(s, '        case so.mesn');
+  sqladdstr(s, '          when 1  then ar.kof1[1]');
+  sqladdstr(s, '          when 2  then ar.kof1[2]');
+  sqladdstr(s, '          when 3  then ar.kof1[3]');
+  sqladdstr(s, '          when 4  then ar.kof1[4]');
+  sqladdstr(s, '          when 5  then ar.kof1[5]');
+  sqladdstr(s, '          when 6  then ar.kof1[6]');
+  sqladdstr(s, '          when 7  then ar.kof1[7]');
+  sqladdstr(s, '          when 8  then ar.kof1[8]');
+  sqladdstr(s, '          when 9  then ar.kof1[9]');
+  sqladdstr(s, '          when 10 then ar.kof1[10]');
+  sqladdstr(s, '          when 11 then ar.kof1[11]');
+  sqladdstr(s, '          when 12 then ar.kof1[12]');
+  sqladdstr(s, '        end');
+  sqladdstr(s, '      else 1');
+  sqladdstr(s, '    end');
+  sqladdstr(s, '    * so.summa');
+  sqladdstr(s, '  ) as summa');
+  sqladdstr(s, '  from sumvidop so');
+  sqladdstr(s, '  join klvidopl vo on so.vidopl = vo.vidopl and vo.vhvo[13]=''+''');
+  sqladdstr(s, '  join archrates ar on so.clsch = ar.clsch and so.yearn = ar.year');
+  sqladdstr(s, '  where so.clsch = #comp('+LSchetNRec+') and');
+  sqladdstr(s, '        (so.mesn + so.yearn * 12) between '+(month1+year1*12)+' and '+(month2+year2*12));
+  sqladdstr(s, '  group by so.yearn, so.mesn');
+  delete all tsdz;
+  sqlSelectInto(s, #tsdz);
+
+  _fullsum := 0;
+  _fulldays := 0;
+  _loop tsdz
+  {
+    _days := 0;
+    ResetWorkingTable;
+    if LoadWorkingTable(LSchetNRec, tsdz.month, tsdz.year) = 0
+    {
+      _days := double(WT_GetDays(12, 1));
+      if WT_LoadMonthlyAbsences = 0
+      {
+        _cnt := WT_GetMonthlyAbsenceCount;
+        for(i:=0;i<_cnt;inc(i))
+        {
+          if WT_GetMonthlyAbsenceAttribute(i, 1, _s)
+            if (_s='‚')
+              if WT_GetMonthlyAbsenceAttribute(i, 4, _n)
+                _days += _n;
+        }
+      }
+    } //LoadWorkingTable
+    _days1    := last_day(date(1, tsdz.month, tsdz.year));
+    _days2    := _days * 29.3 / _days1;
+    _fulldays += _days2;
+    _fullsum  += tsdz.summa;
+    if (showreport) logstrtofile(fname,lpad(tsdz.year,5)+'³'+
+                                       lpad(tsdz.month,3)+'³'+
+                                       lpad(doubletostr(tsdz.summa,'[|-]3666666666666.88'),19)+'³'+
+                                       lpad(_days,9) +'³'+
+                                       lpad(_days1,9) +'³'+
+                                       lpad(_days2,9)
+                                );
+  }
+
+  _resSum := round(_fullsum/_fulldays,2);
+  if (showreport)
+  {
+    logstrtofile(fname, 'ÄÄÄÄÄÁÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄ');
+    logstrtofile(fname,lpad(doubletostr(_fullsum,'[|-]3666666666666.88'),29) + '³' + lpad(_fulldays, 29));
+    logstrtofile(fname, 'ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ');
+    logstrtofile(fname,_fullsum+' / '+_fulldays+' = '+ doubletostr(_resSum,'[|-]3666666666666.88'));
+    ProcessText(fname, vfEscable+vfNewTitle, 'à®â®ª®« à áç¥â  áà¥¤­¥¤­¥¢­®£® § à ¡®âª ');
+  }
+  result := _resSum;
+}
+
+constructor init;
+{
+  var CL: ContextList;
+  result := CL.Add(CS, 'WorkingTable');
+}
+
+end.

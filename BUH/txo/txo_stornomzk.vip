@@ -1,0 +1,375 @@
+#include TxoApi.vih
+#component "AGAT"
+VipInterface Txo_AgatStornoMZK Implements ObjTxoIdentPlugin;
+
+Interface Txo_AgatStornoMZK;
+
+table struct tt (
+  subsch: string[20],
+  cKatStroy: comp,
+  cKatMC: comp,
+  sum: double
+) with index (
+  i01 = subsch + cKatStroy + cKatMC,
+  i02 = cKatStroy + cKatMC
+);
+
+table struct tKatStroy (
+  cKatStroy: comp
+) with index (
+  i01 = cKatStroy (unique)
+);
+
+table struct tsald (
+  subsch: string[20],
+  cKatStroy: comp,
+  cKatPodr: comp,
+  PodrKod: string[21],
+  cStZatr: comp,
+  Summa: double
+) with index (
+  i01 = subsch + cKatStroy + cKatPodr + cStZatr
+);
+
+
+var
+  _cSopr: comp;
+  ea: iExtAttr;
+  plsch_code: string[3];
+create view
+as select *
+from katsopr ks, spsopr sps, specmtr sm,
+     tt, tt tt00, tsald, tKatStroy, planssch
+where ((
+  _cSopr          == ks.nrec       and
+  _cSopr          == sps.csopr     and
+  281474976710657 == sm.csaldtune  and
+  1110            == sm.cotable    and
+  sps.nrec        == sm.cspec      and
+
+  0               == tt00.cKatStroy and
+  0               == tt00.cKatMC
+));
+
+function GetInfo : string;
+{
+  result := 'Агат. Сдача изделий на склад МЗК';
+}
+
+function ParamMaster : string;
+{
+  result := '';
+}
+
+function ParseStringWithSums(_s: string; _cKatStroy: comp; _cKatMC: comp; _sum: double; var _msgstr: string): boolean;
+{
+  result := true;
+  _msgstr := '';
+
+  _s := trim(_s);
+  if _s[length(_s)] <> ';'
+    _s := _s + ';';
+
+  var _total: double;
+  _total := 0;
+
+  var s1: string;
+  s1 := substr(_s, 1, pos(';', _s)-1);
+  while s1 <> ''
+  {
+    clearbuffer(#tt);
+    tt.subsch    := substr(s1, 1, pos('=', s1) - 1);
+    tt.cKatMC    := _cKatMC;
+    tt.cKatStroy := _cKatStroy;
+    tt.sum       := double(replace(trim(substr(s1, pos('=', s1)+1, 255)),',','.'));
+    insert current tt;
+    _total       += tt.sum;
+    _s := trim(substr(_s, pos(';', _s)+1, 255));
+    s1 := substr(_s, 1, pos(';', _s)-1);
+  }
+  if (abs(round(_sum,2) - round(_total,2))>0.01)
+  {
+    _msgstr := 'Не совпадает сумма в документе с суммой в структуре цены. В документе: '+_sum+', в структуре цены: '+_total;
+    result := false;
+  }
+}
+
+procedure StoreCycles(hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  _cSopr := buf.cSoprDoc;
+  if getfirst planssch where ((buf.cPlansSch == planssch.nrec)) = tsOk
+    plsch_code := planssch.code
+  else
+  {
+    TxoDebugMsg(hTxo, 'Ошибка', 'Не определен план счетов. NRec: '+buf.cPlansSch+'. Обработка прервана');
+    exit;
+  }
+
+  //парсим структуру цены для позиций накладной, записываем в tt
+  TxoDebugMsg(hTxo, 'Сообщение', 'Определение структуры цены по позициям накладной');
+  delete all tt;
+  var StringsInRows: boolean;
+  var s: string;
+  var msgstr: string;
+  StringsInRows := true;
+  _loop sps
+  {
+    if sps.cmcusl = 0
+    {
+      TxoDebugMsg(hTxo, 'Ошибка', 'Строка '+sps.npp+': не указана МЦ. Обработка прервана');
+      exit;
+    }
+    s := trim(ea.mGetAttr(1110, sps.nrec, 'Структура цены'));
+    if getfirst sm = tsOk
+    {
+      if sm.cobj = 0
+      {
+        TxoDebugMsg(hTxo, 'Ошибка', 'Строка '+sps.npp+': не указан заказ. Обработка прервана');
+        exit;
+      }
+      if not (s <> '' and ParseStringWithSums(s, sm.cobj, sps.cmcusl, round(sps.price*sps.kolfact,2), msgstr))
+      {
+        StringsInRows := false;
+        if (s = '')
+          TxoDebugMsg(hTxo, 'Сообщение', 'Строка '+sps.npp+': Для позиции накладной не указана структура цены')
+        else
+          TxoDebugMsg(hTxo, 'Сообщение', 'Строка '+sps.npp+': '+msgstr);
+        break;
+      }
+    }
+    else
+    {
+      TxoDebugMsg(hTxo, 'Ошибка', 'Строка '+sps.npp+': не указан объект целевого учета. Обработка прервана');
+      exit;
+    }
+  }
+
+  //если парсинг для позиций прошел с ошибками - парсим заголовок накладной, записываем в tt
+  if (not StringsInRows) and (getfirst ks = tsOk)
+  {
+    TxoDebugMsg(hTxo, 'Сообщение', 'Не удалось определить структуру цены по строкам');
+    TxoDebugMsg(hTxo, 'Сообщение', 'Определение структуры цены по заголовку накладной');
+    delete all tt;
+    s := trim(ea.sGetAttr(1109, ks.nrec, 'Сводная структура цены'));
+    TxoDebugMsg(hTxo, 'Сообщение', s);
+    if s <> '' and ParseStringWithSums(s, 0, 0, ks.summa, msgstr)
+    {
+      //если структура цены по накладной распарсена - распределяем суммы по позициям
+      _loop tt00
+      {
+        _loop sps
+        {
+          //проверяем, заполнена ли МЦ
+          if sps.cmcusl = 0
+          {
+            TxoDebugMsg(hTxo, 'Ошибка', 'Строка '+sps.npp+': не указана МЦ. Обработка прервана');
+            exit;
+          }
+          //проверяем, есть ли к позиции накладной объект цу
+          if getfirst sm = tsOk
+          {
+            //проверяем заполнены ли у позиции заказ и подразделение
+            if sm.cobj = 0
+            {
+              TxoDebugMsg(hTxo, 'Ошибка', 'Строка '+sps.npp+': не указан заказ. Обработка прервана');
+              exit;
+            }
+            //создаем или апдейтим в tt строку с долей суммы по заказу и подразделению
+            if getfirst tt where ((tt00.subsch == tt.subsch and sm.cobj == tt.cKatStroy and sps.cmcusl == tt.cKatMC)) <> tsOk
+            {
+              insert tt set tt.subsch    := tt00.subsch,
+                            tt.cKatStroy := sm.cobj,
+                            tt.cKatMC    := sps.cmcusl,
+                            tt.sum       := tt00.sum * if(ks.summa>0, sps.price*sps.kolfact/ks.summa, 0);
+            }
+            else
+            {
+              update current tt set tt.sum := tt.sum + tt00.sum * if(ks.summa>0, sps.price*sps.kolfact/ks.summa, 0);
+            }
+          }
+          else //если к позиции накладной нет объекта цу
+          {
+            TxoDebugMsg(hTxo, 'Ошибка', 'Строка '+sps.npp+': не указан объект целевого учета. Обработка прервана');
+            exit;
+          }
+        } //_loop sps
+      } //_loop tt00
+      //удаляем из tt строки для распределения
+      delete all tt where ((0 == tt.cKatStroy and 0 == tt.cKatMC));
+    }
+    else // если парсинг строки из заголовка накладной прошел неудачно
+    {
+      TxoDebugMsg(hTxo, 'Ошибка', msgstr);
+      TxoDebugMsg(hTxo, 'Ошибка', 'Ошибка разбора структуры цены. Обработка прервана');
+      exit;
+    }
+  }
+
+  //выборка не повторяющихся заказов из структуры цены
+  delete all tKatStroy;
+  _loop tt
+  {
+    if getfirst tKatStroy where ((tt.cKatStroy == tKatStroy.cKatStroy)) <> tsOk
+      insert tKatStroy set tKatStroy.cKatStroy := tt.cKatStroy;
+  }
+
+  //расчет сальдо на 20 счете по заказам из tt
+  delete all tSald;
+  var qStmt, sStmt: longint;
+  qStmt := sqlAllocStmt;
+  sqlBindParam(qStmt, 1, plsch_code+'20');
+  sqlBindParam(qStmt, 2, ks.dsopr);
+  sqlBindParam(qStmt, 4, plsch_code+'20');
+  sqlBindParam(qStmt, 5, ks.dsopr);
+  _loop tKatStroy
+  {
+    sqlAddStr(sStmt, 'select gro.subsch, gro.ckatstroy, gro.ckatpodr, katpodr.kod as podrkod, gro.cstzatr, sum(gro.summa) as summa                       ');
+    sqlAddStr(sStmt, 'from (                                                                                                                             ');
+    sqlAddStr(sStmt, '      select o1.subossch as subsch, o1.kodspo as ckatpodr, o1.kauos[1] as cKatStroy, o1.kauos[2] as cStZatr, sum(o1.sumob) as summa');
+    sqlAddStr(sStmt, '      from oborot o1                                                                                                               ');
+    sqlAddStr(sStmt, '      where o1.scheto=? and o1.datob < ? and o1.kauos[1] = ?                                                                       ');
+    sqlAddStr(sStmt, '      group by o1.subossch, o1.kodspo, o1.kauos[1], o1.kauos[2]                                                                    ');
+    sqlAddStr(sStmt, '      union                                                                                                                        ');
+    sqlAddStr(sStmt, '      select o2.subschk, o2.kodspk, o2.kauks[1], o2.kauks[2], sum(o2.sumob)*(-1)                                                   ');
+    sqlAddStr(sStmt, '      from oborot o2                                                                                                               ');
+    sqlAddStr(sStmt, '      where o2.schetk=? and o2.datob < ? and o2.kauks[1] = ?                                                                       ');
+    sqlAddStr(sStmt, '      group by o2.subschk, o2.kodspk, o2.kauks[1], o2.kauks[2]                                                                     ');
+    sqlAddStr(sStmt, '      ) as gro                                                                                                                     ');
+    sqlAddStr(sStmt, 'left join katpodr on gro.ckatpodr = katpodr.nrec                                                                                   ');
+    sqlAddStr(sStmt, 'group by gro.subsch, gro.ckatpodr, katpodr.kod, gro.ckatstroy, gro.cstzatr                                                         ');
+    sqlBindParam(qStmt, 3, tKatStroy.cKatStroy);
+    sqlBindParam(qStmt, 6, tKatStroy.cKatStroy);
+    sqlExecStmt (qStmt, sStmt);
+    sqlFetchInto(qStmt, #tSald);
+  }
+  sqlFreeStmt(qStmt);
+
+  //выводим инфу для отладки
+  TxoDebugMsg(hTxo, '--', '-----------------------Структура цены------------------------');
+  TxoDebugMsg(hTxo, 'tt', 'Субсчет|Сумма     |МЦ                  |Заказ               |');
+  _loop tt
+  {
+    TxoDebugMsg(hTxo, 'tt',
+                      pad(substr(tt.subsch,1,7),7)+'|'+
+                      pad(substr(tt.sum,1,10),10)+'|'+
+                      pad(substr(if(getanykau(0, 4, tt.cKatMC),givenanname(1),''),1,20),20)+'|'+
+                      pad(substr(if(getanykau(0, 40, tt.ckatstroy),givenanname(1),''),1,20),20)+'|');
+  }
+  TxoDebugMsg(hTxo, 'tSald', '--------------------------------------------Сальдо');
+  TxoDebugMsg(hTxo, 'tSald', 'Субсчет|Сумма     |Подразделение       |Статья затрат       |Заказ           |');
+  _loop tSald
+  {
+    TxoDebugMsg(hTxo, 'tSald',
+                      pad(substr(tSald.subsch,1,7),7)+'|'+
+                      pad(substr(tSald.summa,1,10),10)+'|'+
+                      pad(substr(if(getanykau(0, 2, tSald.ckatpodr),givenanname(1),''),1,20),20)+'|'+
+                      pad(substr(if(getanykau(0, 10016, tSald.cStZatr),givenanname(1),''),1,20),20)+'|'+
+                      pad(substr(if(getanykau(0, 40, tSald.ckatstroy),givenanname(1),''),1,16),16)+'|');
+  }
+
+  TxoAllowRecallStoreCycles(hTxo);
+
+  //определяем субсчета для второго алгоритма
+  var sch07: array [1..1] of string[20];
+  var i: integer;
+  sch07[1] := '07'; sch07[2] := '071'; sch07[3] := '072'; sch07[4] := '073'; sch07[5] := '074'; sch07[6] := '075'; sch07[7] := '076';
+
+  //распределяем суммы из структуры цены
+  var korsch: string;
+  var sum_zakaz_07, _sum: double;
+  _loop tt
+  {
+    //определяем корсчет
+    case tt.subsch of
+      '02': korsch := plsch_code+'10';
+      '03': korsch := plsch_code+'70';
+      '04': korsch := plsch_code+'70';
+      '05': korsch := plsch_code+'69';
+      '06': korsch := plsch_code+'69';
+      '07': korsch := plsch_code+'2600';
+      '08': korsch := plsch_code+'10';
+      '10': korsch := plsch_code+'96';
+      '18': korsch := plsch_code+'70';
+    else
+      korsch := plsch_code+'10';
+    end;
+    //определяем алгоритм распределения по субсчету
+    case tt.subsch of
+      '02', '03', '04', '05', '06', '08', '10', '18':        //первый алгоритм
+      {
+        //вычисляем общее сальдо по разрезу субсчет/заказ по подразделениям, код которых начинается на 07
+        sum_zakaz_07 := 0;
+        _loop tSald where ((tt.subsch == tSald.subsch and tt.cKatStroy == tSald.cKatStroy and (substr(tSald.PodrKod,1,2)='07') ))
+        {
+          sum_zakaz_07 += tSald.Summa;
+        }
+        if sum_zakaz_07 = 0 continue;
+        //распределяем
+        _loop tSald where ((tt.subsch == tSald.subsch and tt.cKatStroy == tSald.cKatStroy and (substr(tSald.PodrKod,1,2)='07') ))
+        {
+          TxoBodyClear   (hTxo);
+          TxoBodyAddKau  (hTxo, 0  , 2    , tSald.cKatPodr);
+          TxoBodyAddKau  (hTxo, 160, 2    , tSald.cKatPodr);
+          TxoBodyAddKau  (hTxo, 0  , 4    , tt.cKatMC);
+          TxoBodyAddKau  (hTxo, 0  , 40   , tt.cKatStroy);
+          TxoBodyAddKau  (hTxo, 0  , 10016, tSald.cStZatr);
+          TxoBodyAddSchet(hTxo, 0  , plsch_code+'20', tSald.subsch);
+          TxoBodyAddSchet(hTxo, 160, plsch_code+'20', tSald.subsch);
+          TxoBodyAddSchet(hTxo, 161, korsch         , '');
+          _sum := tt.Sum * tSald.Summa / sum_zakaz_07;
+          TxoBodySetSum(hTxo, _sum * (-1), 0, 0);
+          TxoBodyInsert(hTxo);
+
+          TxoBodyClear(hTxo);
+          TxoBodyAddKau  (hTxo, 0  , 2, 400042697BEC1711h);
+          TxoBodyAddKau  (hTxo, 160, 2, 400042697BEC1711h);
+          TxoBodyAddSchet(hTxo, 0  , plsch_code+'10', '02104');
+          TxoBodyAddSchet(hTxo, 160, plsch_code+'10', '02104');
+          TxoBodyAddSchet(hTxo, 161, korsch         , '');
+          TxoBodySetSum(hTxo, _sum, 0, 0);
+          TxoBodyInsert(hTxo);
+        }
+      }
+      '07':  //второй алгоритм
+      {
+        for (i := 1; i <= count(sch07); inc(i))
+        {
+          sum_zakaz_07 := 0;
+          _loop tSald where (( sch07[i] == tSald.subsch and  tt.cKatStroy == tSald.cKatStroy))
+          {
+            sum_zakaz_07 += tSald.Summa;
+          }
+          if sum_zakaz_07 = 0 continue;
+          //распределяем
+          _loop tSald where (( sch07[i] == tSald.subsch and  tt.cKatStroy == tSald.cKatStroy))
+          {
+            TxoBodyClear   (hTxo);
+            TxoBodyAddKau  (hTxo, 0  , 2    , tSald.cKatPodr);
+            TxoBodyAddKau  (hTxo, 160, 2    , tSald.cKatPodr);
+            TxoBodyAddKau  (hTxo, 161, 2    , tSald.cKatPodr);
+            TxoBodyAddKau  (hTxo, 0  , 4    , tt.cKatMC);
+            TxoBodyAddKau  (hTxo, 0  , 40   , tt.cKatStroy);
+            TxoBodyAddKau  (hTxo, 0  , 10016, tSald.cStZatr);
+            TxoBodyAddSchet(hTxo, 0  , plsch_code+'20', tSald.subsch);
+            TxoBodyAddSchet(hTxo, 160, plsch_code+'20', tSald.subsch);
+            TxoBodyAddSchet(hTxo, 161, korsch         , '');
+            _sum := tt.Sum * tSald.Summa / sum_zakaz_07;
+            TxoBodySetSum(hTxo, _sum * (-1), 0, 0);
+            TxoBodyInsert(hTxo);
+
+            TxoBodyClear(hTxo);
+            TxoBodyAddKau  (hTxo, 0  , 2, 400042697BEC1711h);
+            TxoBodyAddKau  (hTxo, 160, 2, 400042697BEC1711h);
+            TxoBodyAddKau  (hTxo, 161, 2, tSald.cKatPodr);
+            TxoBodyAddSchet(hTxo, 0  , plsch_code+'10', '02104');
+            TxoBodyAddSchet(hTxo, 160, plsch_code+'10', '02104');
+            TxoBodyAddSchet(hTxo, 161, korsch         , '');
+            TxoBodySetSum(hTxo, _sum, 0, 0);
+            TxoBodyInsert(hTxo);
+          }
+        } //for
+      } //case 07
+    end;
+  }
+}
+end.

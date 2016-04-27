@@ -1,0 +1,114 @@
+#include TriggerFunctions.vih
+
+interface TriggerFunctions;
+
+create view
+as select *
+from indent, statlog;
+
+create view vu
+var
+  _nrec: comp;
+as select *
+from x$users u
+where ((
+  _nrec == u.atl_nrec
+));
+
+create view vug
+var
+  _userNrec: comp;
+  _groupNrec: comp;
+as select *
+from groupusers
+where ((
+  _userNrec == groupusers.usercode and
+  _groupNrec == groupusers.groupcode
+));
+
+create view vIndent
+var
+  _indentNrec: comp;
+as select *
+from indent
+where (( _indentNrec == indent.nrec ));
+
+function UserInGroup(aUserNrec: comp; aGroupNrec: comp): boolean;
+{
+  vug._userNrec := aUserNrec;
+  vug._groupNrec := aGroupNrec;
+  result := vug.getfirst groupusers = tsOk;
+}
+
+function GetUserFullName: string;
+{
+  vu._nrec := userid;
+  if vu.getfirst fastfirstrow u = tsOk
+    result := vu.u.xu$fullname
+  else
+    result := sgettune('USER.FIO')
+}
+
+procedure setIndentState(indentNrec: comp; newState: word; newStateNrec: comp);
+{
+  if getfirst fastfirstrow indent where ((indentNrec == indent.nrec)) = tsOk
+  {
+    if (indent.state != newState or indent.cState != newStateNrec)
+    {
+      indent.state := newState;
+      indent.cstate := newStateNrec;
+      update current indent;
+    }
+  }
+}
+
+function getIndentState(indentNrec: comp): comp;
+{
+  result := 0;
+  if getfirst fastfirstrow indent where ((indentNrec == indent.nrec)) = tsOk
+  {
+    result := indent.cstate;
+  }
+}
+
+procedure SaveHistory(aDocType: word; aDocNrec: comp; aNewValue: comp);
+{
+
+  var oldValue: comp;
+  if getlast statlog where ((aDocType == statlog.DocType and aDocNrec == statlog.cDoc)) = tsOk
+  {
+    oldValue := statlog.cnewnote;
+  }
+  else
+  {
+    oldValue := 0;
+  }
+
+  clearbuffer(#statlog);
+  statlog.DocType := aDocType;
+  statlog.cDoc := aDocNrec;
+  statlog.cOldNote := oldValue;
+  statlog.cNewNote := aNewValue;
+  statlog.Descr    := sGetTune('USER.DESCR');
+  statlog.Desgr    := sGetTune('USER.DESGR');
+  statlog.dOper    := GetServerDate;
+  statlog.TimeOper := GetServerTime;
+  insert current statlog;
+}
+
+procedure SaveIndentVizaHistroy(IndentNrec: comp; IndentKauIndex: byte; IndentNewKauValue: comp);
+{
+  if (IndentKauIndex < 1 or IndentKauIndex > 10) exit;
+  vIndent._indentNrec := IndentNrec;
+  if vIndent.getfirst indent = tsOk
+  {
+    var indentOldKauValue: comp;
+    indentOldKauValue := vIndent.indent.cValKau[IndentKauIndex];
+    if indentOldKauValue <> IndentNewKauValue
+    {
+      SaveHistory(STATLOG_TIPDOC_INDENT+IndentKauIndex, IndentNrec, IndentNewKauValue);
+    }
+  }
+}
+
+end.

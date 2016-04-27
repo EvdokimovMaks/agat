@@ -1,0 +1,177 @@
+#include SrDnZar.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface iSrDnZar;
+
+sql query qPaid =
+select sum( case
+              when vo.vhvo[17]='+'
+              then
+                case so.mesn
+                  when 1  then ar.kof1[1]
+                  when 2  then ar.kof1[2]
+                  when 3  then ar.kof1[3]
+                  when 4  then ar.kof1[4]
+                  when 5  then ar.kof1[5]
+                  when 6  then ar.kof1[6]
+                  when 7  then ar.kof1[7]
+                  when 8  then ar.kof1[8]
+                  when 9  then ar.kof1[9]
+                  when 10 then ar.kof1[10]
+                  when 11 then ar.kof1[11]
+                  when 12 then ar.kof1[12]
+                end
+              else 1
+            end * so.summa
+          ) as summa
+from sumvidop so
+join klvidopl vo on so.vidopl = vo.vidopl and vo.vhvo[13]='+'
+join archrates ar on so.clsch = ar.clsch and so.yearn = ar.year
+where so.clsch = :LschetNrec and so.mesn = :MesN and so.yearn = :YearN
+;
+
+table struct tCalc (
+  year       : word,
+  month      : word,
+  daysWorked : double,
+  daysBalance: double,
+  daysAvg    : double,
+  paid       : double
+) with index (
+  i01 = year + month
+);
+
+create view
+var
+  _lschetNrec: comp;
+  _mesn: word;
+  _yearn: word;
+as select *
+from lschet, lstab, tCalc
+where ((
+  _lschetNrec == lschet.nrec and
+  _lschetNrec == lstab.clschet and
+  _yearn      == lstab.yearn and
+  _mesn       == lstab.mesn
+));
+
+create view vRep
+var
+  _lschetNrec: comp;
+  _totalPaid: double;
+  _totalDaysAvg: double;
+  _srdnzar: double;
+as select *
+from lschet, persons, tCalc
+where ((
+  _lschetNrec    == lschet.nrec and
+  lschet.tperson == persons.nrec
+));
+
+datastream dsRep auto (vRep);
+
+function GetDaysWorked(lschetNrec: comp; yearn: word; mesn: word): double;
+{
+  var r: double; r := 0;
+
+  _lschetNrec := lschetNrec;
+  _mesn  := mesn;
+  _yearn := yearn;
+
+  if (getfirst lstab = tsOk)
+  {
+
+    r := lstab.dayf;
+
+    var i: byte;
+    for (i := 1; i <= 31; i++)
+    {
+      if (lstab.days[i] = '‚') r += 1;
+    }
+
+  }
+
+  result := r;
+}
+
+function GetPaid(lschetNrec: comp; yearn: word; mesn: word): double;
+{
+  var q: IQuery;
+  q := queryManager.createQuery(qPaid);
+  q.setParam('LschetNrec', lschetNrec);
+  q.setParam('YearN', yearn);
+  q.setParam('MesN', mesn);
+  result := double(q.getResultValue);
+}
+
+function GetSrDnZar(lschetNRec: comp; aDate: date; showreport: boolean = false): double;
+{
+  result := 0;
+
+  _lschetNrec := lschetNrec;
+  if getfirst lschet != tsOk exit;
+
+  delete all tCalc;
+
+  var cnt: byte;
+  cnt := 0;
+
+  var d: date;
+  d := date(1, month(aDate), year(aDate));
+
+  var totalDaysAvg: double;
+  totalDaysAvg := 0;
+
+  var totalPaid: double;
+  totalPaid := 0;
+
+  do
+  {
+    d := sub_months(d,1);
+
+    clearbuffer(#tCalc);
+
+    tCalc.daysWorked := GetDaysWorked( lschetNrec, year(d), month(d) );
+
+    if (tCalc.daysWorked > 0)
+    {
+      tCalc.paid := GetPaid(_lschetNrec, year(d), month(d));
+
+      if (tCalc.paid > 0)
+      {
+        tCalc.year := year(d);
+        tCalc.month := month(d);
+        tCalc.daysBalance := last_day(d);
+        tCalc.daysAvg := tCalc.daysWorked * 29.3 / tCalc.daysBalance;
+        insert current tCalc;
+
+        totalDaysAvg += tCalc.daysAvg;
+        totalPaid += tCalc.paid;
+        cnt++;
+      }
+
+    }
+
+  } while ( cnt < 12 and lschet.datpos < date(last_day(d), month(d), year(d)) );
+
+  var sum: double;
+  if totalDaysAvg != 0
+    sum := totalPaid / totalDaysAvg
+  else
+    sum := 0;
+
+  if showreport
+  {
+    vRep._lschetNrec := lschetNrec;
+    vRep._totalPaid := totalPaid;
+    vRep._totalDaysAvg := totalDaysAvg;
+    vRep._srdnzar := sum;
+    RunFReport(dsRep, 'SrDnZar', true);
+  }
+
+  result := sum;
+}
+
+end.

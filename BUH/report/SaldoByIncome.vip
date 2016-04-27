@@ -1,0 +1,557 @@
+#component "AGAT"
+interface SaldoByIncome 'Остатки по приходам', escclose, doaccept;
+show(,,33,5);
+
+table struct tmc (
+  KatmcNrec: comp,
+  KatstroyNrec: comp,
+  Qty: double,
+  SpsoprNrec: comp
+) with index (
+  i01 = KatmcNrec + KatstroyNrec
+);
+
+table struct tmcDates (
+  KatmcNrec: comp,
+  DFrom: date
+) with index (
+  i01 = KatmcNrec
+);
+
+table struct tAllMoves (
+  KatmcNrec: comp,
+  DMove: date,
+  Qty: double
+) with index (
+  i01 = KatmcNrec + DMove
+);
+
+table struct tSopr (
+  Nrec: comp,
+  DSopr: date,
+  NSopr: string[40],
+  OrgName: string[150]
+) with index (
+  i00 = Nrec (unique),
+  i01 = DSopr + NSopr
+);
+
+table struct tMove (
+  Direction: byte,
+  OrderDate: date,
+  SpsoprNrec: comp,
+  KatsoprNrec: comp,
+  KatmcNrec: comp,
+  KatstroyNrec: comp,
+  Qty: double,
+  Price: double
+) with index (
+  i00 = SpsoprNrec,
+  i01 = Direction + KatmcNrec + KatstroyNrec + OrderDate,
+  i02 = Direction + KatmcNrec + OrderDate,
+  i03 = Direction + KatsoprNrec
+);
+
+table struct tDistr (
+  SpsoprNrec: comp,
+  KatsoprNrec: comp,
+  KatmcNrec: comp,
+  KatstroyNrec: comp,
+  Qty: double,
+  Price: double,
+  Sum: double,
+  SumNDS: double,
+  OutSpsoprNrec: comp,
+  OutPrice: double,
+  OutSum: double,
+  OutSumNDS: double
+) with index (
+  i01 = KatsoprNrec
+);
+
+table struct tLink (
+  nrec: comp,
+  InSpsoprNrec: comp,
+  OutSpsoprNrec: comp,
+  Qty: double
+) with index (
+  i01 = nrec (unique, surrogate),
+  i02 = InSpsoprNrec + OutSpsoprNrec
+);
+
+sql query qmc =
+  insert tmc(KatmcNrec, KatstroyNrec, Qty, SpsoprNrec)
+  select spo.cmc, kstr.nrec, sum(spo.kol), sps.nrec
+  from katsopr ks
+  join spsopr sps on ks.nrec = sps.csopr
+  join sporder spo on sps.nrec = spo.cspsopr and 1 = spo.vidorder
+  join specmtr spm on 1112 = spm.cotable and #comp(0001000000000001h) = spm.csaldtune and spo.nrec = spm.cspec
+  join katstroy kstr on spm.cobj = kstr.nrec and instr('без ндс',lower(kstr.name),1) > 0
+  where ks.vidsopr = 501 and ks.dsopr between ? and ?
+  group by spo.cmc, kstr.nrec, sps.nrec
+;
+
+sql query qmove =
+  select spo.vidorder as Direction,
+         spo.dord as OrderDate,
+         sps.nrec as SpsoprNrec,
+         sps.csopr as KatsoprNrec,
+         spo.cmc as KatmcNrec,
+         spm.cobj as KatstroyNrec,
+         spo.kol as Qty,
+         spo.srprice as Price
+  from (select distinct KatmcNrec, DFrom from tmcDates) tmcDates1
+  join sporder spo on 0 = spo.sp and
+                      tmcDates1.KatmcNrec = spo.cmc and
+                      spo.dord > tmcDates1.DFrom and
+                      spo.dord <= (case when spo.vidorder = 1 then ? else ? end)
+  join specmtr spm on 1112 = spm.cotable and #comp(0001000000000001h) = spm.csaldtune and spo.nrec = spm.cspec
+  join katstroy kstr on spm.cobj = kstr.nrec and instr('без ндс',lower(kstr.name),1) > 0
+  join spsopr sps on spo.cspsopr = sps.nrec and sps.vidsopr in (101, 201, 204, 206, 501)
+  join katsopr ks on sps.csopr = ks.nrec
+;
+
+create view
+as select *
+from tmc, tmcDates, tAllMoves, tmove, tsopr, tDistr,
+     tmove tInMove, tLink tInOutLink, tmove tLinkedOutMove, tmove tOutMove, tmove tOutMove1,
+     tsopr brsopr(i01), tDistr brDistr
+where ((
+  0 == tInMove.Direction and
+  tInMove.SpsoprNrec       == tInOutLink.InSpsoprNrec and
+  tInOutLink.OutSpsoprNrec == tLinkedOutMove.SpsoprNrec and
+
+  1                        == tOutMove.Direction and
+  tInMove.KatmcNrec        == tOutMove.KatmcNrec and
+  tInMove.KatstroyNrec     == tOutMove.KatstroyNrec and
+  tInMove.OrderDate       <<= tOutMove.OrderDate and (tOutMove.Qty > 0) and
+
+  1                        == tOutMove1.Direction and
+  tInMove.KatmcNrec        == tOutMove1.KatmcNrec and
+  tInMove.OrderDate       <<= tOutMove1.OrderDate and (tOutMove1.Qty > 0) and
+
+  brsopr.nrec              == brDistr.KatsoprNrec
+))
+;
+
+//Вьюха используется для определения цен и сумм в tDistr
+create view vp
+as select *
+from tDistr, spsopr spsin, katsopr ksin, sporder spoout, katmc mc
+where ((
+  tDistr.SpsoprNrec    == spsin.nrec and
+  tDistr.KatsoprNrec   == ksin.nrec and
+  tDistr.OutSpsoprNrec == spoout.cspsopr and
+  1                    == spoout.vidorder and
+  tDistr.KatmcNrec     == mc.nrec
+));
+
+var
+  _dbeg, _dend: date;
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+
+screen scmain;
+fields
+  _dbeg: noprotect;
+  _dend: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+ Дата с .@@@@@@@@@ по .@@@@@@@@@
+
+   <. Продолжить .> <. Отмена .>
+>>
+end;
+
+procedure prepRep;
+{
+  var stmt: longint;
+  var rslt: integer;
+  //отбор матценностей из накладных на отпуск в производство в разрезе заказов
+  delete all tmc;
+  stmt := sqlAllocStmt();
+  sqlPrepare(stmt, qmc);
+  sqlBindParam(stmt, 1, _dbeg);
+  sqlBindParam(stmt, 2, _dend);
+  rslt := sqlExecute(stmt);
+  sqlFreeStmt(stmt);
+
+  if (rslt != tsOk)
+  {
+    message('Ошибка в запросе выбора МЦ из накладных на отпуск в производство. Код ошибки: '+rslt);
+    exit;
+  }
+
+  sqlSelectInto('select * from tmc', #tmc);
+
+  //для каждой мц определяем последнюю дату нулевого остатка на предприятии
+  //отбираем мц
+  delete all tmcDates;
+  sqlSelectInto('select distinct tmc.KatmcNrec, 0 from tmc', #tmcDates);
+
+  //сначала отбираем все движения по мц
+  delete all tallmoves;
+  insert tallmoves(KatmcNrec, DMove, Qty)
+  select tmcDates.KatmcNrec, spo.dord, if(spo.vidorder = 1, (-1), 1) * spo.kol
+  from tmcDates, sporder spo
+  where ((
+    0 /== spo.sp and
+    tmcDates.KatmcNrec /== spo.cmc and (spo.dord < _dbeg)
+  ));
+
+  //считаем даты
+  var _saldo: double;
+  _loop tmcDates
+  {
+    _saldo := 0;
+    _loop tallmoves where ((tmcDates.KatmcNrec == tallmoves.KatmcNrec))
+    {
+      _saldo += tallmoves.Qty;
+      if (_saldo >= 0 and _saldo < 0.01 and tallmoves.DMove > tmcDates.DFrom)
+        tmcDates.DFrom := tallmoves.DMove;
+    }
+    update current tmcDates;
+  }
+
+  //закидываем рассчитанные значения во временную sql таблицу для дальнейшего использования в запросах
+  var _tmcDates_katmcNrec: comp;
+  var _tmcDates_DFrom: date;
+  stmt := sqlAllocStmt();
+  sqlPrepare(stmt, 'insert tmcDates (KatmcNrec, DFrom) values (?, ?)');
+  sqlBindParam(stmt, 1, _tmcDates_katmcNrec)
+  sqlBindParam(stmt, 2, _tmcDates_DFrom);
+  _loop tmcDates
+  {
+    _tmcDates_katmcNrec := tmcDates.KatmcNrec;
+    _tmcDates_DFrom := tmcDates.DFrom;
+    rslt := sqlExecute(stmt);
+    if (rslt != tsOk)
+    {
+      message('Ошибка при заполнении таблицы с датами: '+rslt);
+      exit;
+    }
+  }
+  sqlFreeStmt(stmt);
+
+  //выбираем движения мц в разрезе заказов
+  delete all tmove;
+  stmt := sqlAllocStmt();
+  sqlPrepare(stmt, qmove);
+  sqlBindParam(stmt, 1, _dbeg);
+  sqlBindParam(stmt, 2, _dend);
+  rslt := sqlExecute(stmt);
+  if (rslt != tsOk)
+  {
+    message('Ошибка в запросе выбора движений МЦ. Код ошибки: '+rslt);
+    exit;
+  }
+  sqlFetchIntoByName(stmt, #tMove);
+  sqlFreeStmt(stmt);
+
+  //вычисляем остатки по приходам
+  _loop tInMove
+  {
+    //сначала расходуем мц с приходов, по которым заказы совпадают
+    while tInMove.Qty > 0 and getfirst tOutMove = tsOk
+    {
+      if (tInMove.Qty >= tOutMove.Qty)
+      {
+        insert tInOutLink set tInOutLink.InSpsoprNrec  := tInMove.SpsoprNrec,
+                              tInOutLink.OutSpsoprNrec := tOutMove.SpsoprNrec,
+                              tInOutLink.Qty           := tOutMove.Qty;
+        update current tInMove set tInMove.Qty := tInMove.Qty - tOutMove.Qty;
+        update current tOutMove set tOutMove.Qty := 0;
+      }
+      else
+      {
+        insert tInOutLink set tInOutLink.InSpsoprNrec  := tInMove.SpsoprNrec,
+                              tInOutLink.OutSpsoprNrec := tOutMove.SpsoprNrec,
+                              tInOutLink.Qty           := tInMove.Qty;
+        update current tOutMove set tOutMove.Qty := tOutMove.Qty - tInMove.Qty;
+        update current tInMove set tInMove.Qty := 0;
+      }
+    }
+    //затем расходуем мц с приходов, по оставшимся заказам
+    while tInMove.Qty > 0 and getfirst tOutMove1 = tsOk
+    {
+      if (tInMove.Qty >= tOutMove1.Qty)
+      {
+        insert tInOutLink set tInOutLink.InSpsoprNrec  := tInMove.SpsoprNrec,
+                              tInOutLink.OutSpsoprNrec := tOutMove1.SpsoprNrec,
+                              tInOutLink.Qty           := tOutMove1.Qty;
+        update current tInMove set tInMove.Qty := tInMove.Qty - tOutMove1.Qty;
+        update current tOutMove1 set tOutMove1.Qty := 0;
+      }
+      else
+      {
+        insert tInOutLink set tInOutLink.InSpsoprNrec  := tInMove.SpsoprNrec,
+                              tInOutLink.OutSpsoprNrec := tOutMove1.SpsoprNrec,
+                              tInOutLink.Qty           := tInMove.Qty;
+        update current tOutMove1 set tOutMove1.Qty := tOutMove1.Qty - tInMove.Qty;
+        update current tInMove set tInMove.Qty := 0;
+      }
+    }
+
+  }
+
+  //распределяем отпущенные за период матценности по приходам
+  delete all tDistr;
+  var _qty: double;
+  //опять сначала распределяем по позициям, в которых заказы совпадают
+  _loop tmc
+  {
+    while (tmc.Qty > 0 and getfirst tMove where ((0 == tMove.Direction and tmc.KatmcNrec == tMove.KatmcNrec and tmc.KatstroyNrec == tMove.KatstroyNrec and (tMove.Qty > 0) )) = tsOk)
+    {
+      if (tmc.Qty >= tMove.Qty)
+        _qty := tMove.Qty
+      else
+        _qty := tmc.Qty;
+      update current tmc set tmc.Qty := tmc.Qty - _qty;
+      update current tMove set tMove.Qty := tMove.Qty - _qty;
+      insert tDistr set tDistr.SpsoprNrec := tMove.SpsoprNrec,
+                        tDistr.KatsoprNrec := tMove.KatsoprNrec,
+                        tDistr.KatmcNrec := tMove.KatmcNrec,
+                        tDistr.KatstroyNrec := tMove.KatstroyNrec,
+                        tDistr.Qty := _qty,
+                        tDistr.OutSpsoprNrec := tmc.SpsoprNrec;
+    }
+  }
+  //а затем по любым заказам, на которых есть остаток
+  _loop tmc
+  {
+    while (tmc.Qty > 0 and getfirst tMove where ((0 == tMove.Direction and tmc.KatmcNrec == tMove.KatmcNrec and (tMove.Qty > 0) )) = tsOk)
+    {
+      if (tmc.Qty >= tMove.Qty)
+        _qty := tMove.Qty
+      else
+        _qty := tmc.Qty;
+      update current tmc set tmc.Qty := tmc.Qty - _qty;
+      update current tMove set tMove.Qty := tMove.Qty - _qty;
+      insert tDistr set tDistr.SpsoprNrec := tMove.SpsoprNrec,
+                        tDistr.KatsoprNrec := tMove.KatsoprNrec,
+                        tDistr.KatmcNrec := tMove.KatmcNrec,
+                        tDistr.KatstroyNrec := tMove.KatstroyNrec,
+                        tDistr.Qty := _qty,
+                        tDistr.OutSpsoprNrec := tmc.SpsoprNrec;
+    }
+  }
+
+  //рассчитываем суммы в tDistr
+  var ndsPercent: integer;
+  vp._loop tDistr
+  {
+    if vp.getfirst spsin != tsOk continue;
+    if vp.getfirst ksin != tsOk continue;
+
+    if vp.getfirst mc != tsOk continue;
+    vp.tDistr.Price := if(vp.spsin.kolfact > 0,  (vp.spsin.price * vp.spsin.kolfact - if(vp.ksin.vhodnal=1, vp.spsin.sumnds, 0)) / vp.spsin.kolfact, 0);
+    vp.tDistr.Sum := vp.tDistr.Price * vp.tDistr.Qty;
+    vp.tDistr.SumNDS := if(vp.spsin.kolfact > 0, vp.spsin.sumnds / vp.spsin.kolfact, 0) * vp.tDistr.Qty;
+    if (vp.tDistr.OutSpsoprNrec != 0) and (vp.getfirst spoout = tsOk)
+    {
+      vp.tDistr.OutPrice := vp.spoout.srprice;
+      vp.tDistr.OutSum := vp.tDistr.Qty * vp.tDistr.OutPrice;
+      ndsPercent := integer(substr(vp.mc.barkod,1,2));
+      if ndsPercent = 0 ndsPercent := 18;
+      vp.tDistr.OutSumNds := vp.tDistr.OutSum * ndsPercent / 100;
+    }
+    vp.update current tDistr;
+  }
+
+  //заполняем группировку
+  delete all tSopr;
+  insert tSopr (Nrec, DSopr, NSopr, OrgName)
+  select katsopr.nrec, katsopr.dsopr, katsopr.nsopr, katorg.name
+  from tDistr, katsopr, katorg
+  where ((
+    tDistr.KatsoprNrec == katsopr.nrec and
+    katsopr.corg       == katorg.nrec
+  ))
+  ignore_errors(tsDuplicateKey);
+}
+
+procedure PrintReport(isCreateXLT : boolean);
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('dbeg', datetostr(_dbeg,'DD.MM.YYYY'));
+  pXL.SetStringVar('dend', datetostr(_dend,'DD.MM.YYYY'));
+  pXL.PublishVar;
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Дата');
+  pXL.CreateTblFld('Номер');
+  pXL.CreateTblFld('Организация');
+  pXL.CreateTblFld('Матценность');
+  pXL.CreateTblFld('Заказ');
+  pXL.CreateTblFld('Остаток');
+  pXL.CreateTblFld('ПриходЦена');
+  pXL.CreateTblFld('ПриходСумма');
+  pXL.CreateTblFld('ПриходНДС');
+  pXL.CreateTblFld('ОтпускЦена');
+  pXL.CreateTblFld('ОтпускСумма');
+  pXL.CreateTblFld('ОтпускНДС');
+
+  if (not isCreateXLT)
+  {
+    _loop brsopr
+    {
+      _loop brDistr
+      {
+        pXL.ClearTblBuffer;
+        pXL.SetTblStringFldValue('Дата', brsopr.dsopr);
+        pXL.SetTblStringFldValue('Номер', brsopr.nsopr);
+        pXL.SetTblStringFldValue('Организация', brsopr.OrgName);
+        pXL.SetTblStringFldValue('Матценность', if(GetAnyKAU(0, 4 , brDistr.KatmcNrec), GivenAnName(1), ''));
+        pXL.SetTblStringFldValue('Заказ', if(GetAnyKAU(0, 40, brDistr.KatstroyNrec), GivenAnName(1), ''));
+        pXL.SetTblNumberFldValue('Остаток', brDistr.Qty);
+        pXL.SetTblNumberFldValue('ПриходЦена', brDistr.Price);
+        pXL.SetTblNumberFldValue('ПриходСумма', brDistr.Sum);
+        pXL.SetTblNumberFldValue('ПриходНДС', brDistr.SumNDS);
+        pXL.SetTblNumberFldValue('ОтпускЦена', brDistr.OutPrice);
+        pXL.SetTblNumberFldValue('ОтпускСумма', brDistr.OutSum);
+        pXL.SetTblNumberFldValue('ОтпускНДС', brDistr.OutSumNDS);
+        pXL.InsTblRow;
+      }
+    }
+  }
+
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+window winfo 'Данные';
+  browse brmc;
+  show(,,,5);
+  table tmc;
+  fields
+    if(GetAnyKAU(0, 4 , tmc.KatmcNrec), GivenAnName(1), '') 'Матценность': [30], protect;
+    if(GetAnyKAU(0, 40, tmc.KatstroyNrec), GivenAnName(1), '') 'Заказ': [30], protect;
+    tmc.SpsoprNrec 'SpsoprNrec': [10], protect;
+  end;
+  browse brincome;
+  show(,6,90,);
+  table tInMove;
+  fields
+    if(GetAnyKAU(0, 80, tInMove.KatsoprNrec), GivenAnName(1), '') 'Накладная': [30], protect;
+    if(GetAnyKAU(0, 4 , tInMove.KatmcNrec), GivenAnName(1), '') 'Матценность': [30], protect;
+    if(GetAnyKAU(0, 40, tInMove.KatstroyNrec), GivenAnName(1), '') 'Заказ': [30], protect;
+    tInMove.Qty 'Количество': [10], protect;
+  end;
+  browse brlinkedoutcome;
+  show(91,6,,);
+  table tInOutLink;
+  fields
+    if(GetAnyKAU(0, 80, tLinkedOutMove.KatsoprNrec), GivenAnName(1), '') 'Накладная': [30], protect;
+    if(GetAnyKAU(0, 4 , tLinkedOutMove.KatmcNrec), GivenAnName(1), '') 'Матценность': [30], protect;
+    if(GetAnyKAU(0, 40, tLinkedOutMove.KatstroyNrec), GivenAnName(1), '') 'Заказ': [30], protect;
+    tLinkedOutMove.Qty 'Количество': [10], protect;
+  end;
+end;
+
+window wrslt 'Остатки по приходным накладным';
+  browse brtop (,,sci14Esc);
+  show(,,,10);
+  table brsopr;
+  fields
+    brsopr.dsopr 'Дата': [10], protect;
+    brsopr.nsopr 'Номер': [10], protect;
+    brsopr.orgname 'Организация': [40], protect;
+  end;
+  browse brbot;
+  show(,11,,);
+  table brDistr;
+  fields
+    if(GetAnyKAU(0, 4 , brDistr.KatmcNrec), GivenAnName(1), '') 'Матценность': [30], protect;
+    if(GetAnyKAU(0, 40, brDistr.KatstroyNrec), GivenAnName(1), '') 'Заказ': [30], protect;
+    brDistr.Qty       'Остаток': [10,4], protect;
+    brDistr.Price     'ПриходЦена'   : [10,2], protect;
+    brDistr.Sum       'ПриходСумма'  : [10,2], protect;
+    brDistr.SumNDS    'ПриходНДС'    : [10,2], protect;
+    brDistr.OutPrice  'РасходЦена'   : [10,2], protect;
+    brDistr.OutSum    'РасходСумма'  : [10,2], protect;
+    brDistr.OutSumNDS 'РасходНДС'    : [10,2], protect;
+  end;
+  handleevent
+    cmEdit:
+    {
+      runinterfacenomodal(L_SOPRDOC::SOPRDOCB, 101, brsopr.nrec);
+    }
+    cmPrintDoc:
+    {
+      PrintReport(false);
+    }
+  end;
+end;
+
+handleevent
+
+  cmdook:
+  {
+    startnewvisual(vtRotateVisual, vfTimer, 'Выборка данных', 0);
+    sqlCreateTmpTable('table tmc (KatmcNrec: comp, KatstroyNrec: comp, Qty: double, SpsoprNrec: comp) with index (i01=KatmcNrec+KatstroyNrec+SpsoprNrec);', ctmNormal);
+    sqlCreateTmpTable('table tmcDates (KatmcNrec: comp, DFrom: date) with index (i01=KatmcNrec);', ctmNormal);
+    prepRep();
+    sqlDropTmpTable('tmc');
+    sqlDropTmpTable('tmcDates');
+    stopvisual('',0);
+    runwindow(wrslt);
+    //runwindow(winfo);
+  }
+
+  cminit:
+  {
+    if (not readmydsk(_dbeg, 'SaldoByIncome_dbeg', false)) _dbeg := date(1, month(cur_date), year(cur_date));
+    if (not readmydsk(_dend, 'SaldoByIncome_dend', false)) _dend := date(last_day(cur_date), month(cur_date), year(cur_date));
+    sXLTFileName := TranslatePath('%StartPath%xls\SaldoByIncome.xlt');
+  }
+
+  cmdone:
+  {
+    savemydsk(_dbeg, 'SaldoByIncome_dbeg');
+    savemydsk(_dend, 'SaldoByIncome_dend');
+  }
+
+end;
+
+end.
+
+VipInterface UserReport_SaldoByIncome Implements IUserReport licensed(free);
+Interface UserReport_SaldoByIncome;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::SaldoByIncome);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат.Остатки по приходным накладным';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1)
+      GetGroupName := ''
+    else
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'BUY';
+    end;
+  end;
+end.

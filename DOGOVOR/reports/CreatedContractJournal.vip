@@ -1,0 +1,305 @@
+#component "AGAT"
+
+const
+  cmOpenAllGroups  = 9944;
+  cmCloseAllGroups = 9945;
+  cmOpenDogovor    = 9946;
+  cmPrintReport    = 9947;
+end;
+
+interface CreatedContractJournal 'Журнал учета заключенных доходных договоров Общества', doaccept, escclose;
+show(,,40,5);
+
+sql query q1 =
+select distinct d.nrec, d.cdogovor,
+                o.name, d.nodoc, d.ddoc, coalesce(ks.name,''),
+                coalesce(attrdog.otv_my_fio,''), coalesce(attrdog.subject1,''),
+                coalesce(attrdog.subject2,''), coalesce(attrdog.subject3,''), d.summa, coalesce(bd.summa,0), sl.doper
+from dogovor d
+join (select sl.doctype as doctype, sl.cdoc as cdoc, min(sl.doper) as doper
+      from statlog sl
+      join katnotes n1 on sl.coldnote = n1.nrec and n1.status = 0
+      join katnotes n2 on sl.cnewnote = n2.nrec and ( n2.status = 1 or n2.nrec = #comp(00010000000000A9h) ) //оформляемый проект или любой исполняемый
+      where sl.doctype in (400,401) and sl.doper between ? and ?
+      group by sl.doctype, sl.cdoc
+     ) sld on d.tidk = sld.doctype and d.nrec = sld.cdoc
+join statlog sl on sld.doctype = sl.doctype and sld.cdoc = sl.cdoc and sld.doper = sl.doper
+join katnotes n1 on sl.coldnote = n1.nrec and n1.status = 0
+join katnotes n2 on sl.cnewnote = n2.nrec and ( n2.status = 1 or n2.nrec = #comp(00010000000000A9h) ) //оформляемый проект или любой исполняемый
+join katorg o on d.corg = o.nrec
+left join attrdog on d.nrec = attrdog.cdogovor
+left join attrval avz on 1707 = avz.wtable and d.nrec = avz.crec and #comp(00010000000000ABh) = avz.cattrnam //атрибут - заказ
+left join katstroy ks on avz.vcomp = ks.nrec
+left join (select cdogovor, cappdogovor, sum(total) as summa
+           from basedoc
+           group by cdogovor, cappdogovor
+          ) bd on case when d.tidk=400 then d.nrec else d.cdogovor end = bd.cdogovor and
+                  case when d.tidk=400 then #comp(0) else d.nrec end = bd.cappdogovor
+where d.direct = 1 and d.status <> 3;
+
+table struct tt (
+  DogovorNrec    : comp,
+  ParentNrec     : comp,
+  KatorgName     : string,
+  Nodoc          : string[40],
+  Ddoc           : date,
+  KatstroyName   : string,
+  CuratorName    : string,
+  Subject1       : string,
+  Subject2       : string,
+  Subject3       : string,
+  Sum            : double,
+  BdSum          : double,
+  Dinput         : date
+) with index (
+  i01 = ParentNrec + Nodoc,
+  i02 = DogovorNrec
+);
+
+var
+  _repStartDate: date;
+  _repEndDate: date;
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+
+
+create view
+var
+  _parentNrec: comp;
+as select *
+from tt, tt tt1, dogovor, katorg, attrdog, attrval, katstroy, tt brtt
+where ((
+  _parentNrec == brtt.ParentNrec
+));
+
+procedure printReport(isCreateXlt: boolean);
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('repStartDate', if(_repStartDate>0,datetostr(_repStartDate, 'DD.MM.YYYY'),'') );
+  pXL.SetStringVar('repEndDate', if(_repEndDate>0,datetostr(_repEndDate, 'DD.MM.YYYY'),'') );
+  pXL.PublishVar;
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('npp'   );
+  pXL.CreateTblFld('KatorgName');
+  pXL.CreateTblFld('Nodoc');
+  pXL.CreateTblFld('ddoc');
+  pXL.CreateTblFld('KatstroyName');
+  pXL.CreateTblFld('Sum');
+  pXL.CreateTblFld('CuratorName');
+  if (not isCreateXLT) {
+    var npp: integer; npp := 0;
+    _loop tt where (( 0 == tt.ParentNrec))
+    {
+      npp++;
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('npp', npp);
+      pXL.SetTblStringFldValue('KatorgName', tt.KatorgName);
+      pXL.SetTblStringFldValue('Nodoc', tt.Nodoc);
+      pXL.SetTblStringFldValue('ddoc', if(tt.ddoc<>0,datetostr(tt.ddoc, 'DD.MM.YYYY'),''));
+      pXL.SetTblStringFldValue('KatstroyName', tt.KatstroyName);
+      pXL.SetTblNumberFldValue('Sum', tt.sum);
+      pXL.SetTblStringFldValue('CuratorName', tt.CuratorName);
+      pXL.InsTblRow;
+    }
+  }
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+window wdata 'Журнал учета заключенных доходных договоров Общества';
+tree trMain;
+table brtt;
+fields
+  brtt.nodoc 'Номер': [30], protect;
+  brtt.ddoc  'Дата': [10], protect;
+  brtt.katorgname 'Контрагент': [30], protect;
+  brtt.KatstroyName 'Заказ': [15], protect;
+  brtt.Sum 'Сумма': [10,'\2p[|-]366`666`666`666`666.88'], protect;
+  brtt.BdSum 'Счета на сумму': [10,'\2p[|-]366`666`666`666`666.88'], protect;
+  brtt.CuratorName 'Куратор': [30], protect;
+  brtt.Subject1+' '+brtt.Subject2+' '+brtt.Subject3 'Предмет договора': [50], protect;
+  brtt.DInput 'Дата ввода': [10], protect;
+end;
+
+tableevent table brtt;
+  cmTreeTop:
+    _parentNrec := 0;
+
+  cmTreeUp:
+    _parentNrec := brtt.ParentNrec;
+
+  cmTreeDown:
+    _parentNrec := brtt.DogovorNrec;
+
+  cmTreeNodeType:
+  {
+    if TreeIsTerminal(trMain)
+        TreeSetNodeType(trMain, ntfText);
+  }
+
+  cmTreeNeedOwner:
+    TreeJumpToRecord(trMain, brtt.ParentNrec);
+end;
+handleevent
+cmPrintReport:
+{
+  printReport(false);
+}
+cmOpenDogovor:
+{
+  runinterfacenomodal(l_dogovor::dogovor, 0, 0, 0, 0, brtt.ParentNrec, brtt.DogovorNrec);
+}
+cmOpenAllGroups:
+{
+  TreePushPos(trMain);
+  TreeGetFirst(trMain);
+  do {
+    if(TreeLevel(trmain)<1) TreeOpenNode(trMain);
+  } while TreeGetNext(trMain);
+  TreePopPos(trMain);
+  rereadrecord;
+}
+cmCloseAllGroups:
+{
+  TreeCloseAllOpenedNode(trMain);
+  rereadrecord;
+}
+cmHotkeys:
+{
+  PutHotCommand(RunMenu('mnuAGAT_CreatedContractJournal'));
+}
+end;
+end; //windo wdata
+
+screen scmain;
+fields
+  _repStartDate: noprotect;
+  _repEndDate: noprotect;
+buttons
+  cmdook, default;
+  cmcancel;
+<<
+
+`Период с `.@@@@@@@@@@ `по`.@@@@@@@@@@
+
+         <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+cmdook:
+{
+  var stmt: longint;
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, q1);
+  sqlBindParam(stmt, 1, _repStartDate);
+  sqlBindParam(stmt, 2, _repEndDate);
+  if (sqlExecute(stmt) = 0)
+  {
+    delete all tt;
+    sqlFetchInto(stmt, #tt);
+    //Добавляем договора верхнего уровня, которые не создали за период, но нужны для правильного отображения дерева
+    _loop tt
+    {
+      if (tt.ParentNrec = 0) or (getfirst tt1 where ((tt.ParentNrec == tt1.DogovorNrec)) = tsOk) continue;
+      clearbuffer(#tt1);
+      tt1.DogovorNrec := tt.ParentNrec;
+      if getfirst dogovor where ((tt.ParentNrec == dogovor.nrec)) = tsOk
+      {
+        if getfirst katorg where ((dogovor.corg == katorg.nrec)) = tsOk
+          tt1.KatorgName := katorg.name;
+
+        tt1.Nodoc := dogovor.nodoc;
+        tt1.Ddoc := dogovor.ddoc;
+
+        if getfirst attrval where ((1707 == attrval.wtable and dogovor.nrec == attrval.crec and 00010000000000ABh == attrval.cattrnam)) = tsOk
+          if getfirst katstroy where ((attrval.vcomp == katstroy.nrec)) = tsOk
+            tt1.KatstroyName   := katstroy.name;
+
+        if getfirst attrdog where ((dogovor.nrec == attrdog.cdogovor)) = tsOk
+        {
+          tt1.CuratorName := attrdog.otv_my_fio;
+          tt1.Subject1    := attrdog.subject1;
+          tt1.Subject2    := attrdog.subject2;
+          tt1.Subject3    := attrdog.subject3;
+        }
+
+        tt1.Sum := dogovor.summa;
+      }
+      insert current tt1;
+    }
+    //раскрываем все папки
+    TreePushPos(trMain);
+    TreeGetFirst(trMain);
+    do {
+      if(TreeLevel(trmain)<1) TreeOpenNode(trMain);
+    } while TreeGetNext(trMain);
+    TreePopPos(trMain);
+
+    rereadrecord(#brtt);
+    runwindow(wdata);
+  }
+  else
+  {
+    message('Ошибка выполнения запроса выборки договоров', error);
+  }
+  sqlFreeStmt(stmt);
+}
+cminit:
+{
+  sXLTFileName := TranslatePath('%StartPath%xls\agat_createdcontractjournal.xlt');
+  if not readmydsk(_repStartDate, 'CreatedContractJournal_repStartDate', false) _repStartDate := date(1, month(cur_date), year(cur_date));
+  if not readmydsk(_repEndDate  , 'CreatedContractJournal_repEndDate'  , false) _repEndDate := cur_date;
+}
+cmdone:
+{
+  savemydsk(_repStartDate, 'CreatedContractJournal_repStartDate');
+  savemydsk(_repEndDate  , 'CreatedContractJournal_repEndDate'  );
+}
+end;
+
+end.
+
+VipInterface UserReport_CreatedContractJournal Implements IUserReport licensed(free);
+Interface UserReport_CreatedContractJournal;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::CreatedContractJournal);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Журнал учета заключенных доходных договоров';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    Level := 0;
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    Ind := 0;
+    VisibleInModule := 'DOGOVOR';
+  end;
+end.
+
+
+mnuAGAT_CreatedContractJournal menu
+{
+- 'Раскрыть все папки', cmOpenAllGroups, , , , , sci1Esc;
+- 'Свернуть все папки', cmCloseAllGroups, , , , , sci1Esc;
+- 'Открыть договор', cmOpenDogovor, , , , , sci1Esc;
+- 'Сформировать отчет в Excel', cmPrintReport, , , , , sci1Esc;
+}

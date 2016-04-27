@@ -1,0 +1,219 @@
+#include TxoApi.vih
+#component "AGAT"
+VipInterface Txo_AgatSaldo Implements ObjTxoIdentPlugin;
+
+Interface Txo_AgatSaldo;
+
+table struct tSald (
+  schet: string[20],
+  subsch: string[20],
+  kau1: comp,
+  kau2: comp,
+  kau3: comp,
+  kau4: comp,
+  kau5: comp,
+  kau6: comp,
+  podr  : comp,
+  summa : double
+);
+
+
+var
+  qStmt, sStmt: longint;
+  ParamIndex: integer;
+  GroupIndex: integer;
+
+create view
+as select *
+from planssch, buhschet, tSald
+;
+
+function GetInfo : string;
+{
+  result := '€£ â. ‘ «ì¤® ¯® áç¥âã ­  ¤ âã ¢ à §à¥§¥  ­ «¨â¨ª';
+}
+
+function ParamMaster : string;
+{
+  result := '';
+}
+
+procedure MySqlAddStr(_s: string);
+{
+  SqlAddStr(sStmt, _s);
+}
+
+procedure AddWhereCompField(_fieldname: string; _param: string);
+{
+  if (_param<>'-' and _param<>'+')
+  {
+    MySqlAddStr('    and '+_fieldname+'=#comp('+comp(_param)+')');
+  }
+}
+
+procedure AddWhereStringField(_fieldname: string; _param: string);
+{
+  if (_param<>'-' and _param<>'+')
+  {
+    MySqlAddStr('    and '+_fieldname+'='''+_param+'''');
+  }
+}
+
+procedure AddGroupField(_fieldname: string; _param: string);
+{
+  if (_param<>'-')
+  {
+    MySqlAddStr(if(GroupIndex=0, '    group by ', '    , ') + _fieldname);
+    inc(GroupIndex);
+  }
+}
+
+
+procedure StoreCycles(hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  var ParamCount, i: integer;
+  var ParamName, ParamValue: string;
+  var KauParam: array [1..6] of string;
+  var SchParam, SubSchParam, PodrParam, PlanSchParam: string;
+  var DateParam: date;
+
+  KauParam[1] := '-'; KauParam[2] := '-'; KauParam[3] := '-';
+  KauParam[4] := '-'; KauParam[5] := '-'; KauParam[6] := '-';
+  SchParam    := '-';
+  SubSchParam := '-';
+  PodrParam   := '-';
+  DateParam   := buf.datob;
+
+  if getfirst planssch where ((buf.cPlansSch == planssch.nrec)) = tsOk
+    PlanSchParam := planssch.code;
+
+  ParamCount := TxoParamCount(hTxo);
+  for (i := 1; i <= ParamCount; inc(i))
+  {
+    ParamName := UpCase(TxoParamName(hTxo, i));
+    ParamValue := TxoParamValue(hTxo, i);
+    case ParamName of
+      'Š€“1': KauParam[1] := ParamValue;
+      'Š€“2': KauParam[2] := ParamValue;
+      'Š€“3': KauParam[3] := ParamValue;
+      'Š€“4': KauParam[4] := ParamValue;
+      'Š€“5': KauParam[5] := ParamValue;
+      'Š€“6': KauParam[6] := ParamValue;
+      '‘—…’': SchParam    := ParamValue;
+      '‘“‘—…’': SubSchParam := ParamValue;
+      'Ž„': PodrParam   := ParamValue;
+      '‹‘—': PlanSchParam:= ParamValue;
+      '„€’€': DateParam   := strtodate(replace(ParamValue,'.','/'),'DD/MM/YYYY');
+    end;
+  }
+
+  delete all tsald;
+
+  ParamIndex := 0;
+  GroupIndex := 0;
+  qStmt := sqlAllocStmt;
+
+  MySqlAddStr('select gro.schet, gro.subsch, gro.kau1, gro.kau2, gro.kau3, gro.kau4, gro.kau5, gro.kau6, ');
+  MySqlAddStr('       gro.podr, sum(gro.summa) as summa');
+  MySqlAddStr('from');
+  MySqlAddStr('  (select');
+  MySqlAddStr('     '+if(SchParam   ='-', ''''''      , 'o1.scheto'  )+' as schet,');
+  MySqlAddStr('     '+if(SubSchParam='-', ''''''      , 'o1.subossch')+' as subsch,');
+  MySqlAddStr('     '+if(KauParam[1]='-', 'Null', 'o1.kauos[1]')+' as kau1,');
+  MySqlAddStr('     '+if(KauParam[2]='-', 'Null', 'o1.kauos[2]')+' as kau2,');
+  MySqlAddStr('     '+if(KauParam[3]='-', 'Null', 'o1.kauos[3]')+' as kau3,');
+  MySqlAddStr('     '+if(KauParam[4]='-', 'Null', 'o1.kauos[4]')+' as kau4,');
+  MySqlAddStr('     '+if(KauParam[5]='-', 'Null', 'o1.kauos[5]')+' as kau5,');
+  MySqlAddStr('     '+if(KauParam[6]='-', 'Null', 'o1.kauos[6]')+' as kau6,');
+  MySqlAddStr('     '+if(PodrParam  ='-', 'Null', 'o1.kodspo'  )+' as podr,');
+  MySqlAddStr('     sum(o1.sumob) as summa');
+  MySqlAddStr('   from oborot o1');
+  MySqlAddStr('   where o1.datob<=#date('+datetostr(DateParam,'DD,MM,YYYY')+')');
+
+  AddWhereStringField('o1.scheto'  , PlanSchParam+SchParam);
+  AddWhereStringField('o1.subossch', SubSchParam);
+  AddWhereCompField('o1.kauos[1]', KauParam[1]);
+  AddWhereCompField('o1.kauos[2]', KauParam[2]);
+  AddWhereCompField('o1.kauos[3]', KauParam[3]);
+  AddWhereCompField('o1.kauos[4]', KauParam[4]);
+  AddWhereCompField('o1.kauos[5]', KauParam[5]);
+  AddWhereCompField('o1.kauos[6]', KauParam[6]);
+  AddWhereCompField('o1.kodspo'  , PodrParam);
+
+  AddGroupField('o1.scheto'  , SchParam);
+  AddGroupField('o1.subossch', SubSchParam);
+  AddGroupField('o1.kauos[1]', KauParam[1]);
+  AddGroupField('o1.kauos[2]', KauParam[2]);
+  AddGroupField('o1.kauos[3]', KauParam[3]);
+  AddGroupField('o1.kauos[4]', KauParam[4]);
+  AddGroupField('o1.kauos[5]', KauParam[5]);
+  AddGroupField('o1.kauos[6]', KauParam[6]);
+  AddGroupField('o1.kodspo'  , PodrParam);
+
+  MySqlAddStr('  union');
+
+  MySqlAddStr('  select');
+  MySqlAddStr('     '+if(SchParam   ='-', '''''', 'o2.schetk'  )+',');
+  MySqlAddStr('     '+if(SubSchParam='-', '''''', 'o2.subschk')+',');
+  MySqlAddStr('     '+if(KauParam[1]='-', 'Null', 'o2.kauks[1]')+',');
+  MySqlAddStr('     '+if(KauParam[2]='-', 'Null', 'o2.kauks[2]')+',');
+  MySqlAddStr('     '+if(KauParam[3]='-', 'Null', 'o2.kauks[3]')+',');
+  MySqlAddStr('     '+if(KauParam[4]='-', 'Null', 'o2.kauks[4]')+',');
+  MySqlAddStr('     '+if(KauParam[5]='-', 'Null', 'o2.kauks[5]')+',');
+  MySqlAddStr('     '+if(KauParam[6]='-', 'Null', 'o2.kauks[6]')+',');
+  MySqlAddStr('     '+if(PodrParam  ='-', 'Null', 'o2.kodspk'  )+',');
+  MySqlAddStr('     sum(o2.sumob*(-1))');
+  MySqlAddStr('   from oborot o2');
+  MySqlAddStr('   where o2.datob<=#date('+datetostr(DateParam,'DD,MM,YYYY')+')');
+
+  AddWhereStringField('o2.schetk'  , PlanSchParam+SchParam);
+  AddWhereStringField('o2.subschk' , SubSchParam);
+  AddWhereCompField('o2.kauks[1]', KauParam[1]);
+  AddWhereCompField('o2.kauks[2]', KauParam[2]);
+  AddWhereCompField('o2.kauks[3]', KauParam[3]);
+  AddWhereCompField('o2.kauks[4]', KauParam[4]);
+  AddWhereCompField('o2.kauks[5]', KauParam[5]);
+  AddWhereCompField('o2.kauks[6]', KauParam[6]);
+  AddWhereCompField('o2.kodspk'  , PodrParam);
+
+  GroupIndex := 0;
+  AddGroupField('o2.schetk'  , SchParam);
+  AddGroupField('o2.subschk' , SubSchParam);
+  AddGroupField('o2.kauks[1]', KauParam[1]);
+  AddGroupField('o2.kauks[2]', KauParam[2]);
+  AddGroupField('o2.kauks[3]', KauParam[3]);
+  AddGroupField('o2.kauks[4]', KauParam[4]);
+  AddGroupField('o2.kauks[5]', KauParam[5]);
+  AddGroupField('o2.kauks[6]', KauParam[6]);
+  AddGroupField('o2.kodspk'  , PodrParam);
+
+
+  MySqlAddStr('  ) as gro');
+  MySqlAddStr('  group by gro.schet, gro.subsch, gro.kau1, gro.kau2, gro.kau3, gro.kau4, gro.kau5, gro.kau6, gro.podr');
+
+  sqlExecStmt (qStmt, sStmt);
+  sqlFetchInto(qStmt, #tSald);
+  sqlFreeStmt(qStmt);
+
+  TxoAllowRecallStoreCycles(hTxo);
+
+  _loop tSald
+  {
+    if getfirst buhschet where ((tSald.schet == buhschet.schet and tSald.subsch == buhschet.subsch)) = tsOk
+    {
+      TxoBodyClear   (hTxo);
+      TxoBodyAddKau  (hTxo, 0  , buhschet.kodtable[1], tSald.kau1)
+      TxoBodyAddKau  (hTxo, 0  , buhschet.kodtable[2], tSald.kau2);
+      TxoBodyAddKau  (hTxo, 0  , buhschet.kodtable[3], tSald.kau3);
+      TxoBodyAddKau  (hTxo, 0  , buhschet.kodtable[4], tSald.kau4);
+      TxoBodyAddKau  (hTxo, 0  , buhschet.kodtable[5], tSald.kau5);
+      TxoBodyAddKau  (hTxo, 0  , buhschet.kodtable[6], tSald.kau6);
+      TxoBodyAddKau  (hTxo, 0  , 2                   , tSald.Podr);
+      TxoBodyAddSchet(hTxo, 0, tSald.schet, tSald.subsch);
+      TxoBodySetSum  (hTxo, tSald.summa, 0, 0);
+      TxoBodyInsert  (hTxo);
+    }
+  }
+}
+
+end.

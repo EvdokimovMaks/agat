@@ -1,0 +1,253 @@
+#include Query.vih
+
+#component "AGAT"
+
+interface TokarevaReport 'Отчет о ходе выполнения и финансирования поставок продукции военного и специального назначения', escClose, DoAccept;
+show(,,32,6);
+
+const
+  KIND_DIRECT = 1;
+  KIND_INDIRECT = 2;
+end;
+
+table struct t (
+  Subject1    : string,
+  Subject2    : string,
+  Subject3    : string,
+  Customer    : string,
+  Number      : string[100],
+  DateFrom    : date,
+  Kind        : byte,
+  Unit        : string[3],
+  ContractQty : double,
+  ContractSum : double,
+  DeliveredQty: double,
+  DeliveredSum: double,
+  PaidSum     : double
+) with index (
+  i01 = Kind + Number + DateFrom
+);
+
+sql query q1 =
+select coalesce(attrdog.subject1,'') as Subject1,
+       coalesce(attrdog.subject2,'') as Subject2,
+       coalesce(attrdog.subject3,'') as Subject3,
+       coalesce(katorg.name,'') as Customer,
+       d.nodoc as Number,
+       d.ddoc as DateFrom,
+       case when ( ( d.corg in ( #comp(0001000000000EAAh), #comp(00010000000020E1h), #comp(00010000000018C5h) ) or grPryamoy.nrec is not null ) and (esgk.nrec is null) ) then 1 else 2 end as Kind,
+       case when ds.cviddog = #comp(000100000000002Fh) then 'шт' else 'усл' end as Unit,
+       coalesce(tplan.qty,0) as ContractQty,
+       coalesce(tplan.summa,0) as ContractSum,
+       coalesce(tfact1.qty,0) as DeliveredQty,
+       coalesce(tfact2.summa,0) as DeliveredSum,
+       coalesce(tfact3.summa,0) as PaidSum
+
+from dogovor d
+
+join attrval avpp on 1707 = avpp.wtable and d.nrec = avpp.crec and #comp(00010000000000B1h) = avpp.cattrnam and avpp.vcomp = #comp(0001000000000509h)  //принадлежность продукции "Спецтехника"
+
+left join exclassval evgk on 179 = evgk.classcode and 1707 = evgk.wtable and d.nrec = evgk.crec               //Госконтракт
+left join exclassseg esgk on coalesce(evgk.cclassseg, #comp(0)) = esgk.nrec
+
+left join spgrsch grPryamoy on #comp(0001000000000007h) = grPryamoy.cgroupsch and 1 = grPryamoy.wlist and d.nrec = grPryamoy.cbasedoc
+
+left join spgrsch grKosv on #comp(0001000000000008h) = grKosv.cgroupsch and 1 = grKosv.wlist and d.nrec = grKosv.cbasedoc
+
+left join (select dogovor.cdogovor, dogovor.nrec, dogovor.corg
+           from dogovor
+           left join attrval avistfin on 1707 = avistfin.wtable and dogovor.nrec = avistfin.crec and #comp(00010000000000AEh) = avistfin.cattrnam         //00010000000000AEh - атрибут Источник финансирования
+           where dogovor.cdogovor <> #comp(0) and dogovor.status <> 3 and coalesce(avistfin.vcomp,#comp(4001531397BBD6BBh)) = #comp(4001531397BBD6BBh)    //4001531397BBD6BBh - Госбюджет
+          ) d1 on d.nrec = d1.cdogovor
+
+join dogovor ds on coalesce(d1.nrec, d.nrec) = ds.nrec
+
+left join attrdog on d.nrec = attrdog.cdogovor
+
+left join katorg on ds.corg = katorg.nrec
+
+left join (select cp.cdogovor, count(*) as qty, sum(cp.summaspec) as summa
+           from calplan cp
+           where cp.directmc = 1 and cp.dto between :StartDate and :EndDate
+           group by cp.cdogovor
+          ) tplan on ds.nrec = tplan.cdogovor
+
+left join (select cp.cdogovor, count(*) as qty
+           from calplan cp
+           //join (select ccalplan, sum(summa) as summa
+           //      from katsopr
+           //      where vidsopr in (201,211) and ccalplan <> #comp(0) and dopr <= :EndDate
+           //      group by ccalplan
+           //     ) sopr on cp.nrec = sopr.ccalplan and sopr.summa >= cp.summaspec
+           join (select ccalplan, max(dopr) as dopr
+                 from katsopr
+                 where vidsopr in (201,211) and ccalplan <> #comp(0)
+                 group by ccalplan
+                ) sopr on cp.nrec = sopr.ccalplan and sopr.dopr between 1 and :EndDate
+           where cp.directmc = 1 and cp.dto between :StartDate and :EndDate and cp.status = 4
+           group by cp.cdogovor
+          ) tfact1 on ds.nrec = tfact1.cdogovor
+
+left join (select cp.cdogovor, sum(ks.summa) as summa
+           from calplan cp
+           join katsopr ks on cp.nrec = ks.ccalplan and ks.vidsopr in (201,211) and ks.dopr between :StartDate and :EndDate
+           where cp.directmc=1 and cp.dto between :StartDate and :EndDate
+           group by cp.cdogovor
+          ) tfact2 on ds.nrec = tfact2.cdogovor
+
+left join (select cdogovor, cappdogovor, sum(basefin.summa) as summa
+           from basefin
+           where cdogovor <> #comp(0) and direct = 1 and ddoc between :StartDate and :EndDate
+           group by cdogovor, cappdogovor
+          ) tfact3 on d.nrec = tfact3.cdogovor and coalesce(d1.nrec,#comp(0)) = tfact3.cappdogovor
+
+where //( d.corg in ( #comp(0001000000000EAAh), #comp(00010000000020E1h), #comp(00010000000018C5h) ) or  //контрагенты МО, РособоронЭкспорт, МинпромТорг
+      //esgk.nrec is not null or
+      //grPryamoy.nrec is not null or
+      //grKosv.nrec is not null ) and
+
+      d.cdogovor = #comp(0) and
+      d.status <> 3 and
+      (coalesce(tplan.qty,0)    <> 0 or
+       coalesce(tplan.summa,0)  <> 0 or
+       coalesce(tfact1.qty,0)   <> 0 or
+       coalesce(tfact2.summa,0) <> 0 or
+       coalesce(tfact3.summa,0) <> 0
+      )
+;
+
+var
+  _repStartDate: date;
+  _repEndDate: date;
+
+create view
+as select *
+from t;
+
+create view vRep
+var
+  RepStartDate: date;
+  RepEndDate: date;
+  RepYear: word;
+as select *
+from t tDirect, t tIndirect
+where ((
+  KIND_DIRECT   == tDirect.Kind and
+  KIND_INDIRECT == tIndirect.Kind
+));
+
+datastream repstream auto(vRep);
+
+screen scmain;
+fields
+  _repStartDate: noprotect;
+  _repEndDate: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+ Период формирования отчета:
+`с`.@@@@@@@@@@ `по`.@@@@@@@@@@
+
+ <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+cmDoOk:
+{
+  var q: IQuery;
+  q := queryManager.CreateQuery(q1);
+  if q = NullRef
+  {
+    message('Ошибка формирования запроса', error);
+    exit;
+  }
+  q.setParam('StartDate', _repStartDate);
+  q.setParam('EndDate', _repEndDate);
+  var rs: IResultSet;
+  rs := q.getResultSet;
+  if (rs = NullRef)
+  {
+    message('Ошибка выполнения запроса', error);
+    exit;
+  }
+  if (rs.getFirst = tsOk)
+  {
+    delete all t;
+    do
+    {
+      clearbuffer(#t);
+      t.Subject1     := rs.row.val('Subject1');
+      t.Subject2     := rs.row.val('Subject2');
+      t.Subject3     := rs.row.val('Subject3');
+      t.Customer     := rs.row.val('Customer');
+      t.Number       := rs.row.val('Number');
+      t.DateFrom     := rs.row.val('DateFrom');
+      t.Kind         := rs.row.val('Kind');
+      t.Unit         := rs.row.val('Unit');
+      t.ContractQty  := rs.row.val('ContractQty');
+      t.ContractSum  := rs.row.val('ContractSum');
+      t.DeliveredQty := rs.row.val('DeliveredQty');
+      t.DeliveredSum := rs.row.val('DeliveredSum');
+      t.PaidSum      := rs.row.val('PaidSum');
+      insert current t;
+    } while rs.getNext = tsOk;
+
+    vRep.RepStartDate := _repStartDate;
+    vRep.RepEndDate   := _repEndDate;
+    vRep.RepYear      := year(_repEndDate);
+    runfreport(repstream, '', true);
+  }
+  else
+    message('Данные не найдены', warning);
+}
+
+cmInit:
+{
+  if not (readmydsk(_repStartDate, 'TokarevaReport_repStartDate', false)) _repStartDate := date(1,1,year(cur_date));
+  if not (readmydsk(_repEndDate  , 'TokarevaReport_repEndDate'  , false)) _repEndDate   := date(31,12,year(cur_date));
+}
+
+cmDone:
+{
+  savemydsk(_repStartDate, 'TokarevaReport_repStartDate');
+  savemydsk(_repEndDate  , 'TokarevaReport_repEndDate');
+}
+
+end;
+
+end.
+
+VipInterface UserReport_TokarevaReport Implements IUserReport licensed(free);
+Interface UserReport_TokarevaReport;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::TokarevaReport);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Отчет о ходе выполнения и финансирования поставок продукции военного и специального назначения';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'DOGOVOR';
+    end;
+  end;
+end.
