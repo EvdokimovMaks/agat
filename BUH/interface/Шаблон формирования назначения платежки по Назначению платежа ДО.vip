@@ -1,0 +1,94 @@
+#include PPMacros.vih
+#Component "F_Template"
+VipInterface PPM_AGATNaznPl implements ObjPPMacros licensed(free);
+interface PPM_AGATNaznPl;
+var
+  strind: integer;
+  ea: iextattr;
+create view
+var
+  curTiDkUser : word;
+  curSoprDoc  : comp;
+as select *
+from SoprHoz, StepDoc, BaseDoc
+where ((
+      CurTiDkUser      == SoprHoz.TipDoc
+  and CurSoprDoc       == SoprHoz.cSoprDoc
+  and SoprHoz.cStepDoc == StepDoc.Nrec
+  and StepDoc.cBaseDoc == BaseDoc.Nrec
+));
+Function GetInfo: string;
+{
+  GetInfo := 'Агат. "Назначение платежа" из ДО. Параметры: [НС:НомерСтроки]. Разбивает длинную строку назначения на подстроки по 100 символов';
+}
+window wParam 'Параметры макроса "Назначение платежа"' escclose, doaccept;
+  show (,,24,3);
+  screen scParam;
+  fields
+    strind: noprotect, spinbutton[1, 1, 3];
+<<
+
+  Номер строки: .@@@@@
+>>
+  end;
+end;
+Function ParamMaster: string;
+{
+  if (strind=0) strind := 1;
+  if (RunWindowModal(wParam) = cmDefault)
+    result := '[НС:'+strind+']';
+}
+Procedure ParamParser(PpmServer: ObjPPTemplate; var Err: string);
+{
+  strind := 1;
+  var i: word;
+  for(i := 1; i <= PPmServer.ParamCount; i := i + 1)
+  {
+    case UpCase(PPMServer.ParamName(i)) of
+      'НС', 'HC': strind := PPMServer.ParamValue(i);
+    else
+    {
+      Err := PPMServer.ParamName(i);
+      exit;
+    }
+    end;
+  }
+}
+Function Culc(TiDkGal, TiDkUser: word; cSoprDoc: comp; PpmServer: ObjPPTemplate;
+              isSyntaxCheck: boolean; var ErrDescr: string): string;
+{
+  TiDkGal       := TiDkGal;
+  isSyntaxCheck := isSyntaxCheck;
+
+  CurTiDkUser := TiDkUser;
+  CurSoprDoc  := cSoprDoc;
+  ParamParser(PpmServer, ErrDescr);
+  var s, snds: string;
+  s := '';
+  snds := '';
+  _loop SoprHoz
+  {
+    if (GetFirst StepDoc = tsOk)
+      if (GetFirst BaseDoc = tsOk)
+      {
+        s := ea.sGetAttr(1102, BaseDoc.nRec, 'Назначение платежа');
+        if (BaseDoc.NDS > 0)
+        {
+          var i: integer;
+          i := length(s) - 3;
+          while (i > 0 and upcase(substr(s,i,3))<>'НДС') { i--; }
+          if (i > 0) s := trim(substr(s,1,i-1));
+          snds := 'НДС ' + doubletostr(if(basedoc.total > 0, round(basedoc.nds*soprhoz.summa/basedoc.total,2), 0),'[|-]3666666666666-88 руб.');
+        }
+        else
+        {
+          var i: integer;
+          i := pos('НДС не облагается', s);
+          if (i>0) s := trim(substr(s,1,i-1));
+          snds := 'НДС не облагается';
+        }
+      }
+  }
+  result := if(strind<=3, groupwrap(s, strind, 100), if(strind=4, snds, ''));
+}
+end.

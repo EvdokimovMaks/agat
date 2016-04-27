@@ -1,0 +1,340 @@
+#include TxoApi.vih
+#component "AGAT"
+
+VipInterface TXO_plpor_fact Implements ObjTxoIdentPlugin;
+
+interface TXO_plpor_fact;
+
+sql query q1 =
+  select bd.nrec, st.nrec, sh.corg, plp.nrec, sh.summa
+  from soprhoz sh
+  join plpor plp on sh.csoprdoc = plp.nrec
+  join stepdoc sd on sh.cstepdoc = sd.nrec
+  join basedoc bd on sd.cbasedoc = bd.nrec
+  join attrval av on 9015 = av.wtable and plp.nrec = av.crec and #comp(0001000000000090h) = av.cattrnam   //статья ДДС
+  join spkau spk on av.vcomp = spk.nrec
+  join fpstbud st on spk.code = st.abbr
+  where sh.nrec = ?;
+
+sql query q2 =
+  select specmtr.cobj, specmtr.ckau[2], sum(spstep.summa + case when basedoc.vhodnal = 1 then 0 else spstep.nds end), 0, 0
+  from basedoc
+  join stepdoc on basedoc.nrec = stepdoc.cbasedoc
+  join spstep on stepdoc.nrec = spstep.cstepdoc
+  join specmtr on 1104 = specmtr.cotable and #comp(0001000000000001h) = specmtr.csaldtune and spstep.nrec = specmtr.cspec
+  where basedoc.nrec = ?
+  group by specmtr.cobj, specmtr.ckau[2];
+
+table struct t2 (
+  katstroyNrec: comp,
+  katpodrNrec: comp,
+  summa: double,
+  distrBeforeSum: double,
+  distrSum: double
+) with index (
+  i01 = katstroyNrec + katpodrNrec
+);
+
+table struct undefinedPlpor (
+  plporNrec: comp,
+  basefinNrec: comp,
+  katstroyNrec: comp,
+  summa: double
+);
+
+var
+  iGetKau: getkau;
+
+create view
+var
+  stbudNrec  : comp;
+  katorgNrec : comp;
+  plporNrec  : comp;
+  basedocNrec: comp;
+  summa      : double;
+as select *
+from basefin bf, oborot o, t2, t2 t22, undefinedPlpor
+where ((
+  basedocNrec == bf.cbasedoc and (bf.cplpor <> plporNrec) and
+  bf.csoprhoz == o.csoprhoz and (o.scheto = '851' or o.schetk = '851')
+))
+;
+
+function sumDistributed: double;
+{
+  var d: double;
+  d := 0;
+  _loop t22
+  {
+    d += t22.distrSum;
+  }
+  result := d;
+}
+
+function sumDO: double;
+{
+  var d: double;
+  d := 0;
+  _loop t22
+  {
+    d += t22.summa - t22.distrbeforesum;
+  }
+  result := d;
+}
+
+procedure autodistribute;
+{
+  update t2 set t2.distrSum := 0;
+  var d: double;
+  d := summa;
+  if ( getfirst t2 where (abs(d - (t2.summa - t2.distrBeforeSum)) < 0.01) ) = tsOk
+  {
+    update current t2 set t2.distrSum := d;
+  }
+  else
+  {
+    var sd: double;
+    sd := sumDO;
+    _loop t2
+    {
+      update current t2 set t2.distrSum := (t2.summa - t2.distrBeforeSum) * d / if(sd > 0, sd, 1);
+    }
+  }
+}
+
+window wdistr 'Распределение сумм платежа по заказам ДО' doaccept, escclose;
+
+  screen scmain (,,sci14Esc);
+  show(,,,11) fixed_y;
+  fields
+    if(getanykau(0,20  ,stbudNrec)  , givenanname(1),''): protect;
+    if(getanykau(0,1   ,katorgNrec) , givenanname(1),''): protect;
+    [plporname] if(getanykau(0,5019,plporNrec)  , givenanname(1),''): protect;
+    [basedocname] if(getanykau(0,6   ,basedocNrec), givenanname(1),''): protect;
+    summa: [,'\2p[|-]3 666`666`666`666.88'], protect;
+    sumDO: [,'\2p[|-]3 666`666`666`666.88'], protect;
+    sumDistributed: [,'\2p[|-]3 666`666`666`666.88'], protect;
+    summa - sumDistributed: [,'\2p[|-]3 666`666`666`666.88'], protect;
+  buttons
+    cmDoOk, default;
+    cmAutoDistribute;
+    cmClearDistr;
+<<
+
+ Статья: .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Организация: .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ Платежное поручение: .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ ДО: .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ Сумма для распределения: .@@@@@@@@@@  Нераспределенный ранее остаток по ДО: .@@@@@@@@@@
+ Сумма распределена: .@@@@@@@@@@ Осталось распределить: .@@@@@@@@@@
+
+ <. Продолжить .> <. Распределить автоматически .> <. Очистить распределение .>
+
+ Заказы и подразделения счета для распределения:
+>>
+  end;
+
+  browse brt2 (,,sci14Esc);
+  show(,12,,17);
+  table t2;
+  fields
+    if(getanykau(0,40,t2.katstroyNrec), givenanname(1),'') ' '#13'Заказ': [30], protect;
+    if(getanykau(0,2 ,t2.katpodrNrec), givenanname(1),'') ' '#13'Подразделение': [30], protect;
+    t2.summa 'Сумма'#13'по ДО': [10,2], protect;
+    t2.distrBeforeSum 'Распределено'#13'ранее': [12,2], protect;
+    t2.distrSum ' '#13'Распределено': [12,2], noprotect, pickbutton;
+  end;
+
+  screen sc2;
+  show(,18,,18) fixed_y;
+<<
+ Платежи с неопределенными и отличными с ДО заказами:
+>>
+  end;
+
+  browse brundefined (,,sci14Esc);
+  show(,19,,) fixed_y;
+  table undefinedPlpor;
+  fields
+    [undefPlporName] if(getanykau(0,5019,undefinedPlpor.plporNrec)   , givenanname(1),'') 'Платежное поручение': [40], protect;
+    if(getanykau(0,40  ,undefinedPlpor.katstroyNrec), givenanname(1),'') 'Заказ':[30], protect;
+    undefinedPlpor.summa 'Сумма платежа': [10,2], protect;
+  end;
+
+  tableevent table t2;
+    cmUpdateRecord:
+    {
+      update current t2;
+      rereadrecord;
+      rescanpanel(scmain);
+    }
+  end;
+
+  handleevent
+    cmDoOk:
+    {
+      putcommand(cmDefault);
+    }
+    cmAutoDistribute:
+    {
+      autodistribute;
+      rereadrecord;
+      rescanpanel(scmain);
+      rereadrecord(#t2);
+    }
+    cmClearDistr:
+    {
+      update t2 set t2.distrSum := 0;
+      rereadrecord;
+      rescanpanel(scmain);
+      rereadrecord(#t2);
+    }
+    cmPick:
+    {
+      case curfield of
+        #t2.distrSum:
+        {
+          var d: double;
+          d := summa - sumDistributed;
+          update current t2 set t2.distrSum := if(t2.summa > d, d, t2.summa);
+          rereadrecord;
+          rescanpanel(scmain);
+        }
+      end;
+    }
+    cmEdit:
+    {
+      case curfield of
+        #plporName: { puthotcommand(cmEdit); iGetKau.GetCodeKAU(1, 5019, plporNrec); }
+        #basedocName: { puthotcommand(cmEdit); iGetKau.GetCodeKAU(1, 6, basedocNrec); }
+        #undefPlporName: { puthotcommand(cmEdit); iGetKau.GetCodeKAU(1, 5019, undefinedPlpor.plporNrec); }
+      end;
+    }
+    cmInit:
+    {
+      autodistribute;
+      rereadrecord;
+      rescanpanel(scmain);
+      rereadrecord(#t2);
+    }
+  end;
+end;
+
+function ObjTxoIdentPlugin.GetInfo : string;
+{
+  result := 'Агат. ТФО. Платежные поручения. Факт';
+}
+function ObjTxoIdentPlugin.ParamMaster : string;
+{
+  result := '';
+}
+procedure ObjTxoIdentPlugin.StoreCycles(hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  var stmt: longint;
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, q1);
+  sqlBindParam(stmt, 1, buf.cSoprHoz);
+  sqlBindCol(stmt, 1, basedocNrec);
+  sqlBindCol(stmt, 2, stBudNrec);
+  sqlBindCol(stmt, 3, KatOrgNrec);
+  sqlBindCol(stmt, 4, plporNrec);
+  sqlBindCol(stmt, 5, summa);
+  if (sqlExecute(stmt) != tsOk)
+  {
+    TxoDebugMsg(hTxo, 'q1', 'Ошибка выполнения запроса');
+    exit;
+  }
+  if (sqlFetch(stmt) != tsOk)
+  {
+    TxoDebugMsg(hTxo, 'q1', 'Запрос вернул 0 записей');
+    exit;
+  }
+  sqlFreeStmt(stmt);
+  //вычисляем суммы по до в разрезе заказов и подразделений, на которые будет выполняться распределение
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, q2);
+  sqlBindParam(stmt, 1, basedocNrec);
+  if (sqlExecute(stmt) != tsOk)
+  {
+    TxoDebugMsg(hTxo, 'q2', 'Ошибка выполнения запроса');
+    exit;
+  }
+  sqlFetchInto(stmt, #t2);
+  sqlFreeStmt(stmt);
+  //вычисляем ранее оплаченные суммы
+  var i: integer;
+  var sumFound: double;
+  var oKatstroyNrec: comp;
+  _loop bf
+  {
+    sumFound := 0;
+    _loop o
+    {
+      oKatstroyNrec := 0;
+
+      for(i:=1;i<=6;i++)
+      {
+        if (o.tblos[i] = 40)
+        {
+          oKatstroyNrec := o.kauos[i];
+          break;
+        }
+        else if (o.tblks[i] = 40)
+        {
+          oKatstroyNrec := o.kauks[i];
+          break;
+        }
+      }
+
+      if (oKatstroyNrec != 0)
+      {
+        sumFound += o.sumob;
+        if (getfirst t2 where ((oKatstroyNrec == t2.katstroyNrec)) = tsOk)
+        {
+          update current t2 set t2.distrBeforeSum := t2.distrBeforeSum + o.sumob;
+        }
+        else
+        {
+          insert undefinedPlpor set undefinedPlpor.plporNrec := bf.cplpor,
+                                    undefinedPlpor.basefinNrec := bf.nrec,
+                                    undefinedPlpor.katstroyNrec := oKatstroyNrec,
+                                    undefinedPlpor.summa := o.sumob;
+        }
+      }
+
+    }
+
+    if (bf.summa - sumFound >= 0.01)
+    {
+        insert undefinedPlpor set undefinedPlpor.plporNrec := bf.cplpor,
+                                  undefinedPlpor.basefinNrec := bf.nrec,
+                                  undefinedPlpor.katstroyNrec := 0,
+                                  undefinedPlpor.summa := bf.summa - sumFound;
+    }
+
+  } //loop bf
+
+  if (abs(sumDO - summa) < 0.01)
+  {
+    update t2 set t2.distrSum := t2.summa - t2.distrBeforeSum;
+  }
+  else
+  {
+    if runwindowmodal(wdistr) != cmDefault
+    {
+      TxoDebugMsg(hTxo, '', 'Отменено ручное распределение. Проводки не формируются');
+      exit;
+    }
+  }
+
+  _loop t2
+  {
+    TxoBodyClear   (hTxo);
+    TxoBodyAddKau  (hTxo, 0, 2, t2.katpodrNrec);
+    TxoBodyAddKau  (hTxo, 0, 20, stbudNrec);
+    TxoBodyAddKau  (hTxo, 0, 40, t2.katstroyNrec);
+    TxoBodySetSum  (hTxo, t2.distrSum, 0, 0);
+    TxoBodyInsert(hTxo);
+  }
+}
+end.

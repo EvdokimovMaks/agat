@@ -1,0 +1,141 @@
+#include VacationSaldo.vih
+#include SrDnZar.vih
+#include globalifc.vih
+
+#component ""
+extensionpoint epappinit;
+
+handler with replace agat_RegisterGlobFunctions on extensionpoint epappinit
+action {
+  registerglobalifc('agatglobalifc');
+  result := true;
+}
+
+interface agatglobalifc;
+
+  const
+    ATTRNAM_NZAK_DOGOVOR = '00010000000000ABh';
+    SALDTUNE_DEFAULT     = '0001000000000001h';
+    WTABLE_SPDOCS        = 1723;
+  end;
+
+  var
+    _vacationSaldo: UTILS::iVacationSaldo;
+    _srDnZar: AGAT::iSrDnZar;
+    _srDnZarOld: AGAT::iSrDnZarOld;
+
+  create view
+  as select *
+  from dogovor dog, attrval av, specmtr sm, katsopr ks, spsopr ss, lschet;
+
+  create view v
+  var
+    curKatStroy: comp;
+  as select *
+  from specmtr sm, spdocs spd, calplan cp, dogovor d
+  where ((
+    SALDTUNE_DEFAULT /== sm.csaldtune and
+    WTABLE_SPDOCS    /== sm.cotable and
+    curKatStroy      /== sm.cobj and
+    sm.cspec         /== spd.nrec and
+    spd.cdoc         /== cp.nrec and
+    cp.cdogovor      /== d.nrec
+  )) and (spd.tidk = 403) and (cp.directmc = 1) and (d.status <> 3);
+
+  function GetTopDogovor(_c: comp): comp; {
+    result := 0;
+    if getfirst dog where ((_c == dog.nrec)) = tsOk {
+      do {
+        _c := dog.cdogovor;
+        result := dog.nrec;
+      } while (_c > 0) and (getfirst dog where ((_c == dog.nrec)) = tsOk );
+    }
+  }
+
+  function GetDogovorByKatStroy(KatStroyNRec: comp): comp; {
+    result := 0;
+    //если заказ = все заказы / прочие заказы - возвращаем 0
+    if (KatStroyNRec=40016481D4887A20h or KatstroyNrec=4001CAABCBB03047h or KatstroyNrec=400101CD65EDBD15h)
+      exit;
+    v.curKatStroy := KatStroyNRec;
+    if v.getfirst viewTable = tsOk
+    {
+      result := GetTopDogovor(v.d.nrec);
+    }
+    else if getfirst av where (( ATTRNAM_NZAK_DOGOVOR == av.cattrnam and (av.vcomp = KatStroyNRec) )) = tsOk
+    {
+      result := GetTopDogovor(av.crec);
+    }
+  }
+
+  function GetKatsoprByNum(typedoc:word;numdoc:string): comp; {
+    var found: boolean;
+    result := 0;
+    found := false;
+    if getfirst ks where ((typedoc==ks.vidsopr and (trim(numdoc)=trim(ks.nsopr)) )) = tsOk {
+            found  := true;
+            result := ks.nrec;
+          }
+  }
+
+  function GetSumStructPart(_SumStruct: string; _SubSch:string): double;
+  {
+    _SumStruct := replace(_SumStruct,' ','') + ';';
+    _SubSch := replace(_SubSch,' ','');
+    if pos(_SubSch+'=', _SumStruct) > 0
+    {
+      _SumStruct := substr(_SumStruct, pos(_SubSch+'=', _SumStruct)+length(_SubSch)+1, 255);
+      result := double(substr(_SumStruct, 1, pos(';',_SumStruct) - 1));
+    }
+    else
+      result := 0;
+  }
+
+  function GetSrDnZar(lschetNrec: comp; aDate: date; showreport: boolean): double;
+  {
+    result := _srdnzarOld.GetSrDnZar(lschetNrec, aDate, showreport);
+  }
+
+  function GetSrDnZar2(lschetNrec: comp; aDate: date; showreport: boolean): double;
+  {
+    result := _srdnzar.GetSrDnZar(lschetNrec, aDate, showreport);
+  }
+
+  function GetLSchetByPerson(PersonNRec: comp; WorkingOnDate: date): comp;
+  {
+    if getfirst lschet where ((PersonNRec == lschet.tperson and (lschet.datuv=0 or lschet.datuv > WorkingOnDate) )) = tsOk
+      result := lschet.nrec
+    else
+      result := 0;
+  }
+
+  function GetUksByCsopr(KsNrec:comp): comp;
+  {
+    var found: boolean;
+    result := 0;
+    found := false;
+    _loop ss where ((KsNRec == ss.cSopr))
+    {
+      if getfirst sm where ((1110 == sm.cotable and ss.nrec == sm.cspec)) = tsOk
+      {
+        result := sm.cobj;
+        break;
+      }
+    }
+  }
+
+  function GetVacSaldoByPerson(aPersonNrec: comp; aDate: date): double;
+  {
+    result := _vacationSaldo.GetByPersonOnDate(aPersonNrec, aDate);
+  }
+
+  function GetVacSaldoByLschet(aLschetNrec: comp; aDate: date): double;
+  {
+    result := _vacationSaldo.GetByLschetOnDate(aLschetNrec, aDate);
+  }
+
+  function GetVacDaysBetweenDates(aPersonsNrec: comp; aStartDate: date; aEndDate: date): double;
+  {
+    result := _vacationSaldo.GetVacationDaysBetweenDates(aPersonsNrec, aStartDate, aEndDate);
+  }
+end.

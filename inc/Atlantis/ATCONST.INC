@@ -2018,6 +2018,8 @@ CONST
        cmHttpExitMsgBox                               = 1336;
 CONST
        cmHttpSetCurrent                               = 1337;
+CONST
+       cmFreeOlapObj                                  = 1338;
 
 
 // !! Диапазон 2000 - 2099 прикладной, константы в него не добавлять !!

@@ -60,6 +60,7 @@
   mofAlwaysShowHScroll   = $00080000; // Всегда показывать горизонтальный  ScrollBar #grib#
   mofManualHScroll       = $00100000; // Ручная навигация по колонкам #grib#pir102.25544
   mofBrowserImage        = $00200000; // Image в броузере
+  mofQSearchPosChanged   = $00400000; // посылать cmPositionChanged и cmIdle из под быстрого поиска
 
   // для деревьев $FF000000
   mofWideOffset          = $01000000; // широкий отступ для каждого уровня (x2)
@@ -172,6 +173,7 @@ const
   inNoSendPickVip     = $00010000;
   inSpinDateTime      = $00020000;
   inEditButton        = $00040000;
+  inCustomButton      = $00080000;
   inAllButtonTypes    = inWithHistory or inPickButton or inCalc or inCalendarPick or inSpin;
 
 type

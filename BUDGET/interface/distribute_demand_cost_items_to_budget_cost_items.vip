@@ -1,0 +1,459 @@
+#include InsFpOb.Vih
+
+#component "AGAT"
+
+interface DistrDemandToBudget 'Распределение статей заявок по статьям бюджетов', escclose, doaccept;
+show (,,58,14);
+
+const
+  REG_UPR_UCH_NREC = 0001000000000004h;  //нрек регистра учета "Управленческий учет"
+                                         //нужен для проверки, не выбрал ли пользователь бухгалтерский регистр учета
+end;
+
+table struct tt (
+  nrec: comp
+) with index (
+  i01 = nrec (unique)
+);
+
+table struct tcorr (                     //таблица соответствий статей - подразделений заявок и статей - ЦФО бюджетов
+  nrec         : comp,
+  demandCINrec : comp,
+  demandDepNrec: comp,
+  budgetCINrec : comp,
+  budgetCFRNrec: comp
+) with index (
+  i00 = nrec (unique, surrogate),
+  i01 = demandCINrec + demandDepNrec
+);
+
+table struct tobor (                     //таблица финопераций, которые необходимо создать
+  fpoborotNrec: comp,
+  CINrec      : comp,
+  CFRNrec     : comp,
+  depNrec     : comp,
+  perNrec     : comp,
+  descr       : string,
+  sum         : double,
+  qty         : double
+) with index (
+  i01 = fpOborotNrec
+);
+
+var
+  dateStart, dateEnd: date;    //даты начала и окончания периода анализа финопераций. вводится пользователем в настройках
+  excelFileName     : string;  //путь к файлу соответствий статей и подразделений заявок статьям и ЦФО бюджетов. вводится пользователем в настройках
+  regNrec           : comp;    //нрек регистра учета для анализа финопераций. вводится пользователем в настройках
+  regCode           : word;    //код регистра учета для анализа финопераций. вводится пользователем в настройках
+  colDemandCI       : longint; //номер столбца с nrec статьи заявки в файле соответствий
+  colDep            : longint; //номер столбца с кодами подразделений в файле соответствий
+  colBudgetCI       : longint; //номер столбца с кодами статей бюджетов в файле соответствий
+  colCFR            : longint; //номер столбца с наименованиями ЦФО в файле соответствий
+  insOb             : vInsertFpOborot; //интерфейс для вставки финопераций
+
+create view
+var
+  currentPlporNrec: comp;   //нрек бухсправки для заполнения. вводится пользователем в настройках
+as select *
+from plpor, soprhoz, planssch currentPlanssch,
+     basefin, planssch, tcorr, tobor, tt, fpoborot
+where ((
+
+  currentPlporNrec == plpor.nrec and
+
+  plpor.tidk       == soprhoz.tipdoc and
+  plpor.nrec       == soprhoz.csoprdoc and
+
+  regNrec          == currentPlanssch.nrec
+
+));
+
+create view vst
+var
+  fpstbudNrec: comp;
+  fpstbudAbbr: string[21];
+as select *
+from fpstbud fpstbudByNrec, fpstbud fpstbudByAbbr
+where ((
+  fpstbudNrec == fpstbudByNrec.nrec and
+  0           == fpstbudByAbbr.cmain and
+  fpstbudAbbr == fpstbudByAbbr.abbr
+));
+
+create view vdep
+var
+  depCode: string;
+as select *
+from katpodr katpodrByCode
+where ((
+  depCode == katpodrByCode.kod
+));
+
+create view vCFR
+var
+  fpcoName: string;
+as select *
+from fpco fpcoByName
+where ((
+  0        == fpcoByName.cmain and
+  fpcoName == fpcoByName.name
+));
+
+create view vCorr
+var
+  CostItemNrec  : comp;
+  DepartmentNrec: comp;
+as select *
+from tcorr
+where ((
+  CostItemNrec   == tcorr.demandCINrec and
+  DepartmentNrec == tcorr.demandDepNrec
+));
+
+screen scMain;
+fields
+  dateStart: noprotect;
+  dateEnd  : noprotect;
+  [reg] if(getfirst currentPlanssch = tsOk, currentPlanssch.name, ''): protect, pickbutton;
+  [currentPlpor] if(getanykau(0, 5019, currentPlporNrec),givenanname(1),''): protect, pickbutton;
+  excelFileName: noprotect, pickbutton;
+  colDemandCI: noprotect;
+  colBudgetCI: noprotect;
+  colDep: noprotect;
+  colCFR: noprotect;
+buttons
+  cmViewCorrTable;
+  cmDoOk, default;
+<<
+
+  `Дата с`       .@@@@@@@@@@ `по` .@@@@@@@@@@
+  `Регистр учета`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  `Бухсправка`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+  `Путь к файлу с соответствиями статей, подразделений и ЦФО`
+   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ <. Просмотр .>
+
+   Номера столбцов в файле соответствий:
+  `Nrec статьи заявки` .@@@@  `Код статьи бюджета` .@@@@
+  `Коды подразделений` .@@@@  `ЦФО бюджета       ` .@@@@
+
+                                         <. Продолжить .>
+>>
+end;
+
+window wCorrTable 'Таблица соответствия статей/подразделений заявок и статей/цфо бюджетов';
+browse brCorrTable;
+  table tcorr;
+  fields
+    if(getanykau(0, 20, tcorr.demandCINrec) ,givenanname(1),'') 'Заявка - статья': [10], protect;
+    if(getanykau(0, 2 , tcorr.demandDepNrec),givenanname(1),'') 'Заявка - подразделение': [10], protect;
+    if(getanykau(0, 20, tcorr.budgetCINrec) ,givenanname(1),'') 'Бюджет - статья': [10], protect;
+    if(getanykau(0, 22, tcorr.budgetCFRNrec),givenanname(1),'') 'Бюджет - центр ответственности': [10], protect;
+end;
+end;
+
+function initPlpor: boolean;
+{
+  result := false;
+  if getfirst plpor <> tsOk exit;
+  if getfirst soprhoz <> tsOk
+  {
+    clearbuffer(#soprhoz);
+    soprhoz.datob    := plpor.datob;
+    soprhoz.tidkgal  := plpor.tidkgal;
+    soprhoz.nodoc    := '000001';
+    soprhoz.descr    := plpor.descr;
+    soprhoz.desgr    := plpor.desgr;
+    soprhoz.direct   := 1;
+    soprhoz.vhsumhoz := '+';
+    soprhoz.modedoc  := 1024;
+    insert current soprhoz;
+    clearbuffer(#basefin);
+    basefin.tipdoc   := soprhoz.tipdoc;
+    basefin.tidkgal  := soprhoz.tidkgal;
+    basefin.csoprdoc := plpor.nrec;
+    basefin.cplpor   := plpor.nrec;
+    basefin.nodoc    := soprhoz.nodoc;
+    basefin.descr    := soprhoz.descr;
+    basefin.desgr    := soprhoz.desgr;
+    basefin.ddoc     := soprhoz.datob;
+    basefin.direct   := soprhoz.direct;
+    basefin.csoprhoz := soprhoz.nrec;
+    insert current basefin;
+  }
+  result := true;
+}
+
+function getDepNrecByCode(_code: string): comp;
+{
+  result := 0;
+  if _code = '' exit;
+  vdep.depCode := _code;
+  if (vdep.getfirst katpodrByCode = tsOk)
+    result := vdep.katpodrByCode.nrec;
+}
+
+function getCIByAbbr(_abbr: string): comp;
+{
+  result := 0;
+  if _abbr = '' exit;
+  vst.fpstbudAbbr := _abbr;
+  if vst.getfirst fpstbudByAbbr = tsOk
+    result := vst.fpstbudByAbbr.nrec;
+}
+
+function getCFRByName(_name: string): comp;
+{
+  result := 0;
+  if _name = '' exit;
+  vCFR.fpcoName := _name;
+  if vCFR.getfirst fpcoByName = tsOk
+    result := vCFR.fpcoByName.nrec;
+}
+
+function getCorrNrec(_CINrec: comp; _DepNrec: comp): comp;
+{
+  result := 0;
+  vCorr.CostItemNrec   := _CINrec;
+  vCorr.DepartmentNrec := _DepNrec;
+  if (vCorr.getfirst tcorr = tsOk)
+    result := vCorr.tcorr.nrec
+  else
+  {
+    vCorr.DepartmentNrec := 0;
+    if (vCorr.getfirst tcorr = tsOk)
+      result := vCorr.tcorr.nrec;
+  }
+}
+
+function readCorrespondTable(fname: string): boolean;
+var
+  y, x1, y1, x2, y2: longint;
+  s, sdep: string;
+  _demandCINrec: comp;
+{
+  result := false;
+  if not xlOpenNewExcel(false) exit;
+  if not xlOpenWorkBook(fname) exit;
+  xlDisplayAlerts(false);
+  if not xlGetUsedRange(y1, x1, y2, x2) exit;
+  if not xlReadMatrixFromExcel(y1, x1, y2, x2) exit;
+  for (y := 0; y <= y2-y1; y++)
+  {
+    if not xlReadFromMatrix(y, colDemandCI, s) exit;
+    if (comp(s) = 0) continue;
+
+    _demandCINrec := comp(s);
+    if (_demandCINrec = 0) continue;
+
+    vst.fpstbudNrec := _demandCINrec;
+    if (vst.getfirst fpstbudByNrec <> tsOk) continue;
+
+    if not xlReadFromMatrix(y, colDep, sdep) exit;
+    sdep := replace(sdep,' ','') + ';';
+
+    while pos(';', sdep) > 0
+    {
+      clearbuffer(#tcorr);
+
+      tcorr.demandCINrec := _demandCINrec;
+
+      tcorr.demandDepNrec := getDepNrecByCode(substr(sdep, 1, pos(';', sdep)-1));
+
+      if not xlReadFromMatrix(y, colBudgetCI, s) exit;
+      tcorr.budgetCINrec := getCIByAbbr(s);
+
+      if not xlReadFromMatrix(y, colCFR, s) exit;
+      tcorr.budgetCFRNrec := getCFRByName(s);
+
+      insert current tcorr;
+
+      sdep := substr(sdep, pos(';', sdep)+1, 255);
+    }
+  }
+  xlFreeMatrix;
+  xlCloseWorkBook(0);
+  xlKillExcel;
+  result := true;
+}
+
+procedure createOborot;
+{
+  delete all tt;
+  insert tt(nrec)
+  select demandCINrec from tcorr
+  ignore_errors(tsDuplicateKey);
+
+  delete all tobor;
+  insert tobor ( fpoborotNrec,CINrec,CFRNrec,depNrec,perNrec,sum,qty,descr )
+  select fpoborot.nrec,
+         tcorr.budgetCINrec,
+         tcorr.budgetCFRNrec,
+         fpoborot.candoc[1],
+         fpoborot.cperiod,
+         fpoborot.summa,
+         fpoborot.kol,
+         fpoborot.name
+  from tt, fpoborot, fpperiod per, tcorr
+  where ((
+    regNrec                                          /== fpoborot.cplanssch and
+    tt.nrec                                          /== fpoborot.cstbud and
+    fpoborot.cperiod                                 /== per.nrec and (per.dbeg <= dateEnd and per.dend >= dateStart) and
+    getCorrNrec(fpoborot.cstbud, fpoborot.candoc[1]) /== tcorr.nrec
+  ));
+
+  var fpoborotNrec: comp;
+  _loop tobor
+  {
+    fpoborotNrec := insOb.InsBySoprHoz(soprhoz.nrec, regCode, tobor.CFRNrec, tobor.CINrec, tobor.perNrec, tobor.depNrec, 0, tobor.sum);
+    update fpoborot where ((fpoborotNrec == fpoborot.nrec)) set fpoborot.kol := tobor.qty,
+                                                                fpoborot.name := tobor.descr;
+    if not NextVisual break;
+  }
+}
+
+handleevent
+cmViewCorrTable:
+{
+  delete all tcorr;
+  if readCorrespondTable(excelFileName)
+    runwindowmodal(wCorrTable)
+  else
+    message('Ошибка чтения файла соответствий');
+}
+cmDoOk:
+{
+  if not existfile(excelfilename)
+  {
+    message('Excel-файл не найден');
+    exit;
+  }
+  if currentPlporNrec = 0
+  {
+    message('Укажите бухсправку для заполнения');
+    exit;
+  }
+  if getfirst currentPlanssch <> tsOk
+  {
+    message('Укажите регистр учета');
+    exit
+  }
+  if initPlpor
+  {
+    startnewvisual(vtRotateVisual, vfBreak+vfTimer, 'Формирование финопераций',0);
+    delete all tcorr;
+    if readCorrespondTable(excelFileName)
+      createOborot;
+    stopvisual('',0);
+    message('Формирование завершено');
+  }
+  else
+  {
+    message('Ошибка формирования хозоперации к бухсправке');
+  }
+}
+cmPick:
+{
+  case curfield of
+    #reg:
+    {
+      var _c: comp; _c := regNrec;
+      var _w: word; _w := regCode;
+      runinterface(F_PLANSSCH::KatReg,1,0,_w,_c);
+      if getfirst planssch where ((_c == planssch.nrec and (planssch.cnode=REG_UPR_UCH_NREC) )) = tsOk
+      {
+        regNrec := _c;
+        regCode := _w;
+        rereadrecord;
+      }
+      else
+      {
+        message('Не выбран регистр управленческого учета');
+      }
+    }
+    #currentPlpor:
+    {
+      var _c: comp;
+      _c := currentPlporNrec;
+      if runinterface(F_PLPOR::G_PlPor, 0, 0, 10, 10, 0, 0, _c) = cmDefault
+        currentPlporNrec := _c;
+      rereadrecord;
+    }
+    #excelFileName:
+    {
+      var s: string;
+      s := getFileName('*.xl*','Выберите файл с соответствиями статей и подразделений заявок статьям и ЦФО бюджетов');
+      if s <> '' excelFileName := s;
+      rereadrecord;
+    }
+  end;
+}
+cminit:
+{
+  if not readmydsk(regNrec, 'DistrDemandToBudget_regNrec', false)
+  {
+    if getfirst planssch where ((0 == planssch.sysnum and REG_UPR_UCH_NREC == planssch.cnode)) = tsOk
+    {
+      regNrec := planssch.nrec;
+      regCode := currentPlanssch.kodreg;
+    }
+  }
+  else if getfirst currentPlanssch = tsOk
+    regCode := currentPlanssch.kodreg;
+  if not readmydsk(dateStart, 'DistrDemandToBudget_dateStart', false) dateStart := date(1,1,year(cur_date)+1);
+  if not readmydsk(dateEnd, 'DistrDemandToBudget_dateEnd', false) dateEnd := date(31,12,year(cur_date)+1);
+  readmydsk(currentPlporNrec, 'DistrDemandToBudget_currentPlporNrec', false);
+  if not readmydsk(excelFileName, 'DistrDemandToBudget_excelFileName', false) excelFileName := translatepath('%startpath%xls\Таблица соответствия статей заявок и бюджетов.xlsx');
+  if not readmydsk(colDemandCI, 'DistrDemandToBudget_colDemandCI', false) colDemandCI := 1;
+  if not readmydsk(colBudgetCI, 'DistrDemandToBudget_colBudgetCI', false) colBudgetCI := 4;
+  if not readmydsk(colDep     , 'DistrDemandToBudget_colDep'     , false) colDep      := 3;
+  if not readmydsk(colCFR     , 'DistrDemandToBudget_colCFR'     , false) colCFR      := 5;
+}
+cmdone:
+{
+  savemydsk(regNrec, 'DistrDemandToBudget_regNrec');
+  savemydsk(dateStart, 'DistrDemandToBudget_dateStart');
+  savemydsk(dateEnd, 'DistrDemandToBudget_dateEnd');
+  savemydsk(currentPlporNrec, 'DistrDemandToBudget_currentPlporNrec');
+  savemydsk(excelFileName, 'DistrDemandToBudget_excelFileName');
+  savemydsk(colDemandCI, 'DistrDemandToBudget_colDemandCI');
+  savemydsk(colBudgetCI, 'DistrDemandToBudget_colBudgetCI');
+  savemydsk(colDep     , 'DistrDemandToBudget_colDep');
+  savemydsk(colCFR     , 'DistrDemandToBudget_colCFR');
+}
+end;
+
+end.
+
+VipInterface UserReport_DistrDemandToBudget Implements IUserReport licensed(free);
+Interface UserReport_DistrDemandToBudget;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::DistrDemandToBudget);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Распределение статей заявок по статьям бюджетов';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    Level := 0;
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'SFP';
+    end;
+  end;
+end.

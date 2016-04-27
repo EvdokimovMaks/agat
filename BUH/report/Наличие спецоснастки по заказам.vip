@@ -1,0 +1,248 @@
+#component "AGAT"
+interface mbp_nal_zakaz 'Наличие спецоснастки по заказам', escclose, doaccept;
+show at (,,48,10);
+
+var
+  iGetKAU: GetKAU;
+  sZak: string;
+  lZak: longint;
+  dRep: date;
+  fExpl: byte;
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+  isCreateXLT: boolean;
+
+screen scmain;
+  fields
+    dRep: noprotect;
+    fExpl: noprotect;
+    sZak: protect, pickbutton;
+  buttons
+    cmdook, default;
+<<
+
+  Дата отчета:     .@@@@@@@@@@
+
+  Местонахождение: [.] В эксплуатации`
+                   [.] На складе`
+
+  Заказ:           .@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                              <. Продолжить .>
+>>
+end;
+
+procedure FillPickTableFromMarker(_filter: word; _l: longint); {
+  var i, cnt, stmt: longint;
+  var _c: comp;
+  var errcode: integer;
+  cnt := getmarkercount(_l);
+  if (cnt = 0) exit;
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, 'INSERT INTO mbpfltr (filter, crec) VALUES (?, ?)');
+  for ( i := 0; i < cnt; i++) {
+    getmarker(_l, i, _c);
+    if (_c = 0) continue;
+    sqlBindParam(stmt, 1, _filter);
+    sqlBindParam(stmt, 2, _c);
+    errcode := sqlExecute(stmt);
+    if errcode <> 0 {
+      message('Ошибка при добавлении записей во временную таблицу. Код ошибки: '+errcode);
+      exit;
+    }
+  }
+  sqlFreeStmt(stmt);
+}
+
+
+handleevent
+  cmdook:
+  {
+    startnewvisual(vtRotateVisual, vfTimer, 'Подготовка запроса', 0);
+    var s, s1, stmt: longint;
+    sqlAddStr(s1, 'table mbpfltr (       ');
+    sqlAddStr(s1, ' filter : word,       ');
+    sqlAddStr(s1, ' crec   : comp        ');
+    sqlAddStr(s1, ') with index (        ');
+    sqlAddStr(s1, '  i01 = filter + crec ');
+    sqlAddStr(s1, ');');
+    sqlCreateTmpTable(s1, ctmNormal);
+    FillPickTableFromMarker(1, lZak);
+    if (fExpl = 0) fExpl := 1;
+
+    sqlAddStr(s, '');
+    sqlAddStr(s, 'select m.name, m.nnumber, m.kodgr, mi.din, p.name, p.kod, mol.name, coalesce(ks.name,''Не указан''), mi.tpercent, sum(mi.kolfact) as kol, sum(mi.sumfact) as sum, sum(mi.sumisnf) as isn');
+    sqlAddStr(s, 'from mbpin mi');
+    sqlAddStr(s, 'left join katmbp m on (mi.cmbp = m.nrec)');
+    if (getmarkercount(lZak) = 0)
+      sqlAddStr(s, 'left join attrval av on (av.wtable=2001 and av.cattrnam=#comp(000100000000010Ah) and av.crec=mi.nrec)')
+    else
+      sqlAddStr(s, 'join attrval av on (av.wtable=2001 and av.cattrnam=#comp(000100000000010Ah) and av.crec=mi.nrec and av.vcomp in (select mbpfltr.crec from mbpfltr where mbpfltr.filter=1))');
+    sqlAddStr(s, 'left join katstroy ks on (coalesce(av.vcomp,#comp(0))=ks.nrec)');
+    sqlAddStr(s, 'left join katpodr p on (mi.cpodr = p.nrec)');
+    sqlAddStr(s, 'left join katmol mol on (mi.cmol = mol.nrec)');
+    sqlAddStr(s, 'where (mi.kolfact > 0');
+    if (fExpl = 1)
+      sqlAddStr(s, ' and mi.inekspl = 1')
+    else if (fExpl = 2)
+      sqlAddStr(s, ' and mi.inekspl = 0');
+    sqlAddStr(s, ' and mi.din <= #date('+datetostr(dRep,'DD,MM,YYYY')+'))');
+    sqlAddStr(s, 'group by m.name, m.nnumber, coalesce(ks.name,''Не указан''), m.kodgr, mi.din, p.name, p.kod, mol.name, mi.tpercent');
+
+    var a: array[1..12] of string;
+    var _d: date;
+
+    stmt := sqlAllocStmt;
+    sqlBindCol(stmt,  1, a[ 1]);
+    sqlBindCol(stmt,  2, a[ 2]);
+    sqlBindCol(stmt,  3, a[ 3]);
+    sqlBindCol(stmt,  4, _d);
+    sqlBindCol(stmt,  5, a[ 5]);
+    sqlBindCol(stmt,  6, a[ 6]);
+    sqlBindCol(stmt,  7, a[ 7]);
+    sqlBindCol(stmt,  8, a[ 8]);
+    sqlBindCol(stmt,  9, a[ 9]);
+    sqlBindCol(stmt, 10, a[10]);
+    sqlBindCol(stmt, 11, a[11]);
+    sqlBindCol(stmt, 12, a[12]);
+
+    if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                    else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+    pXL.CreateVar(sXLSFileName);
+    pXL.SetStringVar('drep', datetostr(dRep, 'DD.MM.YYYY'));
+    pXL.PublishVar;
+
+    pXL.CreateTbls(sXLSFileName);
+    pXL.CreateTbl('Main');
+    pXL.CreateTblFld('Наименование');
+    pXL.CreateTblFld('Код');
+    pXL.CreateTblFld('КодГруппы');
+    pXL.CreateTblFld('ДатаПоступления');
+    pXL.CreateTblFld('ПодразделениеНаименование');
+    pXL.CreateTblFld('ПодразделениеКод');
+    pXL.CreateTblFld('МОЛ');
+    pXL.CreateTblFld('Заказ');
+    pXL.CreateTblFld('ИзносПроцент');
+    pXL.CreateTblFld('Количество');
+    pXL.CreateTblFld('Сумма');
+    pXL.CreateTblFld('ИзносСумма');
+
+    setvisualheader('Выполнение запроса');
+    sqlExecStmt(stmt, s);
+    setvisualheader('Передача данных в Excel');
+    while sqlFetch(stmt) = tsOk do
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('Наименование'             , a[ 1]);
+      pXL.SetTblStringFldValue('Код'                      , a[ 2]);
+      pXL.SetTblStringFldValue('КодГруппы'                , a[ 3]);
+      pXL.SetTblStringFldValue('ДатаПоступления'          , datetostr(_d, 'DD.MM.YYYY'));
+      pXL.SetTblStringFldValue('ПодразделениеНаименование', a[ 5]);
+      pXL.SetTblStringFldValue('ПодразделениеКод'         , a[ 6]);
+      pXL.SetTblStringFldValue('МОЛ'                      , a[ 7]);
+      pXL.SetTblStringFldValue('Заказ'                    , if(a[8]<>'Не указан', substr(a[8],1,pos(' ', a[8])-1), 'Не указан'));
+      pXL.SetTblNumberFldValue('ИзносПроцент'             , a[ 9]);
+      pXL.SetTblNumberFldValue('Количество'               , a[10]);
+      pXL.SetTblNumberFldValue('Сумма'                    , a[11]);
+      pXL.SetTblNumberFldValue('ИзносСумма'               , a[12]);
+      pXL.InsTblRow;
+    }
+    pXL.PublishTbl('Main');
+    pXL.LoadReport(sXLSFileName);
+    pXL.DisConnectExcel;
+    sqlFreeStmt(stmt);
+    stopvisual('', 0);
+  }
+  cmpick:
+  {
+    case curfield of
+      #sZak:
+      {
+        var _c: comp;
+        var _cnt: longint;
+        _cnt := iGetKAU.GetCodeKAU(2,40, _c);
+        if _c <> 0
+        {
+          donemarker(lZak, '');
+          lZak := initmarker(iGetKAU.GetMarkerName(40), 8, 100, 10, false);
+          if _cnt = 1
+            sZak := if(getanykau(0, 40, _c),givenanname(1),'')
+          else if _cnt > 1
+            sZak := 'Выбрано записей: '+_cnt
+          else
+            sZak := 'Все заказы';
+        }
+        rereadrecord;
+      }
+    end;
+  }
+  cmdelonprotect:
+  {
+    case curfield of
+      #sZak:
+      {
+        clearmarker(lZak);
+        sZak := 'Все заказы';
+        rereadrecord;
+      }
+    end;
+  }
+  cminit:
+  {
+    lZak := initmarker('mbp_nal_zakaz_lzak', 8, 100, 10, false);
+    var _cnt: longint;
+    var _c: comp;
+    _cnt := getmarkercount(lZak);
+    if _cnt = 1
+    {
+      GetMarker(lZak, 0, _c);
+      sZak := if(getanykau(0, 40, _c),givenanname(1),'')
+    }
+    else if _cnt > 1
+      sZak := 'Выбрано записей: '+_cnt
+    else
+      sZak := 'Все заказы';
+    dRep := cur_date;
+    if not readmydsk(fExpl, 'mbp_nal_zakaz_fExpl', false) fExpl := 1;
+    sXLTFileName := TranslatePath('%StartPath%xls\agat_mbp_nalich.xlt');
+    isCreateXLT := false;
+  }
+  cmdone:
+  {
+    donemarker(lZak, 'mbp_nal_zakaz_lzak');
+    savemydsk(fExpl, 'mbp_nal_zakaz_fExpl');
+  }
+end;
+
+end.
+
+VipInterface UserReport_mbp_nal_zakaz Implements IUserReport licensed(free);
+Interface UserReport_mbp_nal_zakaz;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::mbp_nal_zakaz);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Наличие спецоснастки по заказам';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    Level := 0;
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    Ind := 0;
+    VisibleInModule := 'MBP';
+  end;
+end.

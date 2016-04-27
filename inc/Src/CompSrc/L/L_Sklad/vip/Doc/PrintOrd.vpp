@@ -1,0 +1,393 @@
+//******************************************************************************
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Логистика
+// Печать складского ордера
+//******************************************************************************
+
+//******************************************************************************
+
+var PrintVariant : boolean;
+
+Function PrintMoneyV(sum: double; kolpos: byte; simval: string): string;
+{
+  PrintMoneyV := '';
+
+  var sFormat: string;  sFormat := '88';
+  var kolZn  : byte;    kolZn   := 2;
+
+  if wGetTune('Round.Order') <> 0
+    {
+      kolZn   := f_GetNZnaks(doGetTune('Round.OrderVal'));
+      sFormat := LPadCh(sFormat, '8', kolZn);
+    }
+
+  sFormat := '[|-]3666`666`666`666`666' + '.' +sFormat;
+  sum := Round(sum, kolZn);
+
+  PrintMoneyV := LPad(DoubleToStr(sum, sFormat), kolpos-4)+
+                 LPad(SubStr(simval, 1, 3), 3);
+}
+
+//******************************************************************************
+
+Function PrintMoney (sum: double; kolpos: byte): string; // для рублевых цен
+{
+  PrintMoney := '';
+
+  var sFormat: string;  sFormat := '88';
+  var kolZn  : byte;    kolZn   := 2;
+
+  if wGetTune('Round.Order') <> 0
+    {
+      kolZn   := f_GetNZnaks(doGetTune('Round.OrderRub'));
+      sFormat := LPadCh(sFormat, '8', kolZn);
+    }
+
+  sFormat := '[|-]3666`666`666`666`666' + '.' +sFormat;
+  sum := Round(sum, kolZn);
+
+  PrintMoney := LPad(DoubleToStr(sum, sFormat), kolpos);
+}
+
+Function if01(_d:double):double;
+{
+  if01 := if ( abs(_d) < GetPresision_forKol, 1, _d) ;
+}
+
+//******************************************************************************
+Procedure PrintPrint;
+var Sum, SumV: double;
+    CountsPos, countpart: word;
+    OldMC: comp;
+    SumPR, SumPV, SumK: double;
+    First: boolean;
+    CountTov: integer;
+    dopName : string;
+{
+  FPrintOrder.Write(SklOrder.NRec);
+  FPrintOrder.Write(if (SklOrder.VidOrder = 0, 'ПРИХОДНЫЙ', 'РАСХОДНЫЙ'));
+  if (FPrintOrder.Error)
+    {
+      FPrintOrder.AbortForm;
+      Exit;
+    }
+
+  Sum := 0;
+  SumV := 0;
+  countspos := 0;
+
+  FPrintOrder.Write(SklOrder.NOrder);
+  FPrintOrder.Write(Sklorder.dOrd);
+
+  if (SklOrder.cSopr <> 0) AND IsValid(#KatSopr)
+    {
+      FPrintOrder.PutEventById(feTrue, fcSklOrder01);
+      FPrintOrder.Write(KatSopr.nSopr);
+      if (SklOrder.TipOrd = 1) //с контрагентом
+        {
+          PushPos(#KatOrg);
+          FPrintOrder.PutEventById(feTrue, fcSklOrder02);
+
+          if GetFirst KatOrg where ((KatSopr.cOrgBase == KatOrg.NRec)) = tsOk
+            FPrintOrder.Write(KatOrg.Name)
+          else
+            FPrintOrder.Write('');
+
+          PopPos(#KatOrg);
+        }
+    }
+
+  FPrintOrder.Write(KatPodr.Name);
+  FPrintOrder.Write(KatMol.Name);
+  FPrintOrder.Write(if(isValid(#KatMol),oSDfuns.Get_MOL_Post(KatMol.NRec), ''));
+
+  PushPos(#KatOrg);
+  ResetBounds(#KatOrg);
+
+  if (GetFirst KatOrg where ((coGetTune('MyOrg') == KatOrg.NRec)) = tsOk)
+    FPrintOrder.Write(KatOrg.Addr); // MyAddr
+  else
+    FPrintOrder.SkipFormat(1);
+
+  if (SklOrder.cSopr <> 0)
+    FPrintOrder.Write(
+      if ( (GetFirst NPunkts where((TTNDoc.cPunktR == NPunkts.NRec)) = tsOk)
+         , NPunkts.NPaddr
+         , if ( (GetFirst KatOrg where ((KatSopr.cOrgBase == KatOrg.NRec)) = tsOk), KatOrg.Addr, '' )
+         )
+    ); // AddrRK адрес пункта разгрузки контрагентов
+  else
+    FPrintOrder.SkipFormat(1);
+
+  SetBounds(#KatOrg);
+  PopPos(#KatOrg);
+  PushPos(#SpOrder);
+
+  OldMC := 0;
+
+  FPrintOrder.Write(oValFunc.GetValSymbol(0));
+  FPrintOrder.Write('валюте');
+  FPrintOrder.Write(if(isValid(#AttrValP), AttrValP.vString, ''));
+
+  First := TRUE;
+  SumPR := 0;
+  SumPV := 0;
+  CountTov := 0;
+  dopName := '';
+  InitMCInfo(sub_day(SklOrder.dOrd,1)) ;
+  var DoocKol, DoocPriceUp, DoocPriceUpV, DoocSumUp, DoocSumUpV,
+      DoocPriceAfter, DoocPriceAfterV, DoocSumAfter, DoocSumAfterV : double;
+  _LOOP SpOrder
+    {
+      if ((OldMC <> SpOrder.cMC) and (not printVariant)) or ((printVariant) and (dopName <> if(Trim(SpOrder.sNameVar) = '', KatMC.Name, SpOrder.sNameVar)))
+        {
+          if (NOT First)
+            FPrintOrder.PutEvent(feBreak)
+          else
+            First := FALSE;
+
+          CountTov := CountTov + 1;
+          FPrintOrder.Write(CountTov);
+          FPrintOrder.Write(KatMC.Barkod);
+
+          //если необходимо печатать вариант имени МЦ, выбираем его
+          if (printVariant)
+          {
+            dopName := if (Trim(SpOrder.sNameVar) = '', KatMC.Name, SpOrder.sNameVar);
+            FPrintOrder.Write(DopName);
+          }
+          else
+            FPrintOrder.Write(KatMC.Name);
+
+          FPrintOrder.Write(KatMC.TNVED);
+
+          if (GetFirst klReshr where ((KatMC.cResHr == klResHr.NRec)) = tsOk)
+            FPrintOrder.Write(klResHr.Name)
+          else
+            FPrintOrder.SkipFormat(1);
+
+          FPrintOrder.Write(KatEd.Name);
+          FPrintOrder.Write(KatMC.kGroupMC);
+          FPrintOrder.Write(KatMC.SizeX);
+          FPrintOrder.Write(KatMC.SizeY);
+          FPrintOrder.Write(KatMC.SizeZ);
+          FPrintOrder.Write(SpOrder.kol * KatMC.Massa); // McVes масса в кг за учетную единицу
+
+          OldMC := SpORder.cMC;
+          SumPr := 0;
+          SumPV := 0;
+          SumK := 0;
+          countpart := 0;
+        }
+
+      FPrintOrder.Write(SpOrder.NRec);
+      FPrintOrder.Write(KatParty.NRec);
+      FPrintOrder.Write(KatParty.Name);
+      FPrintOrder.Write(SpOrder.kol, bGetTune('Round.KolSign'));
+      if (SpOrder.rSrPrice = 0)
+        SpOrder.rSrPrice := SpOrder.SrPrice;
+
+      FPrintOrder.Write(PrintMoney(SpOrder.rSrPrice, 15));
+      if (SpOrder.rVPrice = 0)
+        SpOrder.rVPrice := SpOrder.VPrice;
+
+      FPrintOrder.Write(PrintMoneyV(SpOrder.rVPrice, 17, if (SpOrder.cVal = 0, '???', KlVal.SimVolV)));
+
+      if (isDoocen)
+        {
+          SkladProizv(SpOrder.SP);
+          DoocKol   := NalT ( sub_day(SpOrder.dOrd,1),
+                       SpOrder.cMC,
+                       if (SpOrder.ccPodr=0,comp(-1),SpOrder.ccPodr),
+                       if (SpOrder.ccMol =0,comp(-1),SpOrder.ccMol ),
+                       if (SpOrder.cParty=0,comp(-1),SpOrder.cParty)
+                       ) ;
+
+          ReInitMcInfo ( sub_day(SpOrder.dOrd, 1) ) ;
+          StepMCInfo ( SpOrder.cMC, comp(0),
+                       if (SpOrder.ccPodr=0,comp(-1),SpOrder.ccPodr),
+                       if (SpOrder.ccMol =0,comp(-1),SpOrder.ccMol ),
+                       if (SpOrder.cParty=0,comp(-1),SpOrder.cParty)
+                      ) ;
+
+          DoocPriceUp   := AveragePrice ;
+          DoocPriceUpV  := AverageVPrice ;
+          DoocSumUp     := DoocPriceUp * if01(DoocKol) ;
+          DoocSumUpV    := DoocPriceUpV * if01(DoocKol);
+
+          DoocSumAfter   := DoocSumUp + SpOrder.srPrice ;
+          DoocPriceAfter := DoocSumAfter / if01(DoocKol) ;
+          DoocSumAfterV  := DoocSumUpV + SpOrder.VPrice ;
+          DoocPriceAfterV := DoocSumAfterV / if01(DoocKol) ;
+
+          FPrintOrder.Write(DoocKol, bGetTune('Round.KolSign'));
+          FPrintOrder.Write(PrintMoney(DoocPriceUp, 15));
+          FPrintOrder.Write(PrintMoney(DoocSumUp, 15));
+          FPrintOrder.Write(PrintMoney(DoocPriceUpV, 15));
+          FPrintOrder.Write(PrintMoney(DoocSumUpV, 15));
+          FPrintOrder.Write(PrintMoney(DoocPriceAfter, 15));
+          FPrintOrder.Write(PrintMoney(DoocSumAfter, 15));
+          FPrintOrder.Write(PrintMoney(DoocPriceAfterV, 15));
+          FPrintOrder.Write(PrintMoney(DoocSumAfterV, 15));
+
+          FPrintOrder.Write(PrintMoney(SpOrder.srPrice, 15));
+          FPrintOrder.Write( PrintMoneyV(SpOrder.VPrice, 17, if (SpOrder.cVal = 0, '???', KlVal.SimVolV)));
+          Sum   := Sum   + SpOrder.srPrice;
+          SumV  := SumV  + SpOrder.VPrice;
+          SumPr := SumPr + SpOrder.srPrice;
+          SumPv := SumPv + SpOrder.VPrice;
+        }
+      else
+        {
+          FPrintOrder.SkipFormat(9);
+          FPrintOrder.Write(PrintMoney(SpOrder.srPrice * SpOrder.kol, 15));
+          FPrintOrder.Write( PrintMoneyV(SpOrder.VPrice * SpOrder.kol, 20, if (SpOrder.cVal = 0, '???', KlVal.SimVolV)));
+          Sum   := Sum   + SpOrder.kol * SpOrder.srPrice;
+          Sumv  := Sumv  + SpOrder.kol * SpOrder.vPrice;
+          SumPr := SumPr + SpOrder.kol * SpOrder.srPrice;
+          SumPV := SumPV + SpOrder.kol * SpOrder.vPrice;
+        }
+
+      SumK := SumK + SpOrder.Kol;
+      FPrintOrder.Write(SumK, bGetTune('Round.KolSign'));
+      FPRintOrder.Write(PrintMoney(SumPr, 17));
+      FPrintOrder.Write( PrintMoneyV(SumPV , 20, if (SpOrder.cVal = 0, '???', KlVal.SimVolV)));
+      CountsPos := CountsPos + 1;
+      countpart := countpart + 1;
+      FPRintOrder.Write(countpart);
+
+    }
+
+  DoneMCInfo;
+  FPrintOrder.PutEvent(feBreak);
+  FPrintOrder.PutEvent(feBreak);
+  FPrintOrder.Write(PrintMoney(Sum, 17));
+  FPrintOrder.Write( PrintMoneyV(SumV , 16, SimValutOrd));
+  FPrintORder.Write(CountsPos);
+}
+//------------------------------------------------------------------------------
+Procedure PrintDocument;
+var
+  isPrnVariantMc : boolean;
+{
+  #ifnDef _PrnOrder_vih
+  if not isPrDoc
+    if (CurTable <> #SklOrder)
+      Exit;
+
+  if (NOT IsValid(#SpOrder))
+    {
+      Message('Складской ордер не заполнен...', CancelButton);
+      Exit;
+    }
+  #end
+
+  isPrnVariantMc := (wGetTune ('Sklad.PrnVarianrCard') > 0);
+
+  var defNameMC : word;
+  printVariant  := False;
+  //проверка, надо ли печатать дополнительные наименования
+  if isPrnVariantMc then
+    if (RunInterface('PrnVariatMcSklOrder', SklOrder.NRec, defNameMC, False) <> cmCancel) then
+      printVariant := true;
+
+  OrdScan; // пересчет суммы по ордеру в валюте
+
+  if ( SklOrder.VidOrder = 0 )
+    FPrintOrder.SetGroup('Складской ордер'#1'Штерн цемент');
+  else
+    if ( ( 4 <= SklOrder.TipOrd) AND ( 7 >= SklOrder.TipOrd) )
+      FPrintOrder.SetGroup('Складской ордер (дооценка)');
+    else
+      FPrintOrder.SetGroup('Складской ордер');
+
+  if FPrintOrder.Error
+    {
+      FPrintOrder.AbortForm;
+      exit;
+    }
+
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm, 'Подготовка документа к печати: ', 1);
+
+  #ifnDef _PrnOrder_vih
+  if not isPrDoc
+  {
+    if (GetFirst Pick where ((64125 == Pick.wList)) <> tsOk) or ( SklOrder.VidOrder = 1 )
+      PrintPrint;
+    else
+    {
+      _Loop Pick where ((64125 == Pick.wList))
+      {
+        if GetFirst SklOrder where ((Pick.cRec == SklOrder.nRec)) <> tsOk
+          Continue;
+
+         // ордера без спецификации не печатаем
+        if (GetFirst SpOrder <> tsOk)
+           Continue;
+
+        if (NOT NextVisual)
+        {
+          FPrintOrder.AbortForm;
+          PopPos(#SpOrder);
+          StopVisual('', 0);
+          Exit;
+        }
+
+        PrintPrint;
+      }
+    }
+  }
+  else  // пакетная печать
+   _loop SklOrder
+     {
+       // ордера без спецификации не печатаем
+       if (GetFirst SpOrder <> tsOk)
+         Continue;
+
+      if (NOT NextVisual)
+        {
+          FPrintOrder.AbortForm;
+          PopPos(#SpOrder);
+          StopVisual('', 0);
+          Exit;
+        }
+
+       PrintPrint;
+    }
+  #else
+   _loop SklOrder
+     {
+       // ордера без спецификации не печатаем
+       if (GetFirst SpOrder <> tsOk)
+         Continue;
+
+      if (NOT NextVisual)
+        {
+          FPrintOrder.AbortForm;
+          PopPos(#SpOrder);
+          StopVisual('', 0);
+          Exit;
+        }
+
+       PrintPrint;
+    }
+  #end
+  FPrintOrder.PutEvent(feBreak);
+
+  StopVisual('', 0);
+
+  Delete Pick where ((64125 == Pick.wList));
+
+  PopPos(#SpOrder);
+
+  if (NOT FPrintOrder.Error)
+  #ifnDef _PrnOrder_vih
+    FPrintOrder.ShowFile(if (SklOrder.vidorder = 0, 'Приходный', 'Расходный') + ' складской ордер')
+  #else
+    FPrintOrder.ShowFile('Складской ордер')
+  #end
+  else
+    FPrintOrder.AbortForm;
+}
+
+//******************************************************************************

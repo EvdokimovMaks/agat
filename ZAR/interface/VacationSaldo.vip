@@ -1,0 +1,205 @@
+#include Query.vih
+#include VacationSaldo.vih
+
+#component "UTILS"
+
+interface iVacationSaldo;
+
+sql query qSaldo =
+select wp.dperbeg,
+       wp.dperend,
+       pv.wtypevac,
+       pv.wdaycount,
+       coalesce(v.duration,0) as duration
+from persons p
+join workperiod wp on p.nrec = wp.cperson and wp.dperbeg <= :SaldoDate
+join putvacation pv on wp.nrec = (case when pv.cwpremain = #comp(0) then pv.cworkperiod else pv.cwpremain end)
+left join (select cputvac, sum(duration) as duration
+           from vacations
+           where factyearbeg <= :SaldoDate
+           group by cputvac
+          ) v on pv.nrec = v.cputvac
+where p.nrec = :PersonsNrec
+;
+
+sql query qVacations =
+select sum(v.duration) as duration
+from persons p
+join workperiod wp on p.nrec = wp.cperson
+join putvacation pv on wp.nrec = (case when pv.cwpremain = #comp(0) then pv.cworkperiod else pv.cwpremain end)
+join vacations v on pv.nrec = v.cputvac and v.factyearbeg between :dbeg and :dend
+where p.nrec = :PersonsNrec;
+
+var q: IQuery;
+var rs: IResultSet;
+
+create view
+var
+  _personsNrec: comp;
+as select *
+from persons, lschet, factotpusk
+where ((
+  _personsNrec == persons.nrec and
+  _personsNrec == factotpusk.person and
+  2            == factotpusk.vactype
+));
+
+/*
+function PeriodStartDate(d: date): date;
+{
+  if ( day(d) > (last_day(d) / 2) )
+  {
+    d := Add_Months(d, 1);
+    result := date(1, month(d), year(d));
+  }
+  else
+  {
+    result := d;
+  }
+}
+
+function PeriodEndDate(d: date): date;
+{
+  if ( day(d) < (last_day(d) / 2) )
+  {
+    d := Sub_Months(d, 1);
+    result := date(last_day(d), month(d), year(d));
+  }
+  else
+  {
+    result := d;
+  }
+}
+*/
+
+function PeriodMonths(dBeg: date; dEnd: date): word;
+{
+  //один месяц прибавляем когда дата окончания - последний день месяца ( т.к. Months_Between(01.01.2015, 31.12.2015) = 11 а не 12 )
+  result := Months_Between(dBeg, dEnd) + if( last_day(dEnd) = day(dEnd), 1, 0);
+}
+
+function GetDekretMonths(dBeg: date; dEnd: date): word;
+{
+  var d1, d2: date;
+  var cnt: word; cnt := 0;
+  _loop factotpusk
+  {
+    if (factotpusk.factyearbeg <= dEnd and factotpusk.factyearend >= dBeg)   //если декретный отпуск пересекается с периодом
+    {                                                                       //считаем кол-во месяцев декрета, попадающих в период
+      d1 := if(dBeg > factotpusk.factyearbeg, dBeg, factotpusk.factyearbeg);
+      d2 := if(dEnd < factotpusk.factyearend, dEnd, factotpusk.factyearend);
+      cnt += PeriodMonths(d1,d2);
+    }
+  }
+  result := cnt;
+}
+
+function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
+{
+  result := 0;
+
+  _personsNrec := aPersonsNrec;
+  if getfirst fastfirstrow persons  != tsOk
+  {
+    message('iVacationSaldo: Сотрудник не найден. Nrec = ' + aPersonsNrec, error);
+    exit;
+  }
+
+  if persons.disdate != 0 and persons.disdate <= aDate exit;
+
+  q := queryManager.CreateQuery(qSaldo);
+  q.setParam('SaldoDate', aDate);
+  q.setParam('PersonsNrec', aPersonsNrec);
+  rs := q.getResultSet;
+
+  if (rs = nullRef)
+  {
+    message('iVacationSaldo: Ошибка выполнения запроса расчета сальдо: ' + q.errorCode +
+            ''#13'Сотрудник: ' + if(getanykau(1,3,aPersonsNrec),givenanname(1),aPersonsNrec) + ', Дата:' + aDate, error);
+    exit;
+  }
+
+  var cnt: double; cnt := 0;
+  var typeVac: word;              //тип полагающегося отпуска: 0 - отпуск, 1 - остаток
+  var dayCount: double;           //количество дней полагающегося отпуска
+
+  if (rs.getFirst = tsOk)
+    do
+    {
+
+      //тип полагающегося отпуска
+      typeVac := rs.row.val('wtypevac');
+
+      //количество дней полагающегося отпуска
+      dayCount := rs.row.val('wdaycount');
+
+      //если тип полагающегося отпуска = "остаток"
+      if (typeVac = 1)
+      {
+        //добавляем к расчетному сальдо полагающееся количество полностью
+        cnt += dayCount;
+      }
+      else //если тип полагающегося отпуска = "отпуск"
+      {
+        //рабочий период - дата начала
+        var wpDbeg: date;
+        wpDbeg := rs.row.val('dperbeg');
+
+        //рабочий период - дата окончания
+        var wpDend: date;
+        wpDend := rs.row.val('dperend');
+
+        //количество полагающихся дней отпуска на месяц рабочего периода
+        var daysPerMonth: double;
+        daysPerMonth := dayCount / PeriodMonths(wpDbeg, wpDend);
+
+        //даты начала и окончания расчетного периода
+        var d1, d2: date;
+        //дата начала расчетного периода равна дате начала рабочего периода
+        d1 := wpDbeg;
+        //дата окончания расчетного периода равна дате окончания расчетного периода или дате расчета сальдо,
+        //если дата окончания расчетного периода больше даты расчета сальдо
+        d2 := if(wpDend <= aDate, wpDend, aDate);
+
+        //количество месяцев в расчетном периоде
+        var monthsCount: word;
+        monthsCount := PeriodMonths(d1, d2);
+
+        //количество декретных месяцев в расчетном периоде
+        var dekretMonths: word;
+        dekretMonths := GetDekretMonths(d1, d2);
+
+        //добавляем к расчетному сальдо количество дней за недекретные месяцы
+        cnt += (monthsCount - dekretMonths) * daysPerMonth;
+      }
+
+      cnt -= double(rs.row.val('duration'));
+
+    } while (rs.getNext = tsOk)
+
+  result := cnt;
+
+}
+
+function GetByLschetOnDate(aLschetNrec: comp; aDate: date): double;
+{
+  result := 0;
+  if getfirst lschet where (( aLschetNrec == lschet.nrec )) = tsOk
+    result := GetByPersonOnDate(lschet.tperson, aDate);
+}
+
+function GetVacationDaysBetweenDates(aPersonsNrec: comp; aStartDate: date; aEndDate: date): double;
+{
+  var cnt: double; cnt := 0;
+
+  var q: iQuery;
+  q := queryManager.CreateQuery(qVacations);
+  q.setParam('dbeg', aStartDate);
+  q.setParam('dend', aEndDate);
+  q.setParam('PersonsNrec', aPersonsNrec);
+  cnt := q.getResultValue;
+
+  result := cnt;
+}
+
+end.

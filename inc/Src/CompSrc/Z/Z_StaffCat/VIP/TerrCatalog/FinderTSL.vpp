@@ -1,0 +1,235 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика ERP 8.1 - Управление персоналом
+// Интерфейсы организации поиска в Справочниках АТД
+//------------------------------------------------------------------------------
+
+VipInterface FINDER#TABLENAME#SEARCHFIELD#LINKFIELD
+  implements
+    IEventOpenSearch,
+    ISearchRunner
+  licensed(free);
+
+Interface FINDER#TABLENAME#SEARCHFIELD#LINKFIELD 'Поиск' EscClose;
+  Show at (,, 52, 4);
+Create view X
+var
+  SearchString: string;
+  SearchAgain:  word;
+  Found: boolean;
+  FindNext: boolean;
+  FindNextObject: boolean;
+  // узел просмотра
+  TempNode, CurOwnerNode, OwnerNode: comp;
+  // код таблицы узла
+  TempCode, CurOwnerCode, OwnerCode: word;
+As from
+  #TABLENAME (readonly)
+Where
+((
+  // ограничим поиск подчиненным уровнем для ускорения поиска
+  OwnerNode == #TABLENAME.#LINKFIELD
+))
+
+bounds BySearchString = SearchString <<= #TABLENAME.#SEARCHFIELD (noindex);
+
+//------------------------------------------------------------------------------
+// обновление заголовка окна поиска
+//------------------------------------------------------------------------------
+procedure UpdateTitle;
+{
+  if BoundActive(tbBySearchString)
+    PopBounds(tbBySearchString);
+
+  var Title: string;
+  Title := DataEntity(#TABLENAME.#LINKFIELD, co#TABLENAME);
+
+  if Length(Trim(Title)) > 0
+    SetTitle(Title);
+  else
+    SetTitle('Поиск');
+}
+
+//------------------------------------------------------------------------------
+// запускалка поиска
+//------------------------------------------------------------------------------
+public procedure ISearchRunner.Run(Entity: comp; Code: word);
+{
+  OwnerCode := Code;
+  set OwnerNode := Entity;
+  RunWindowModal(wnMainWindow);
+}
+
+TableEvent
+  table #TABLENAME;
+
+cmCheckField:
+  if (CurField = #SearchString)
+  {
+    FindNext := true;
+    set SearchAgain := 0;
+  }
+
+End;
+
+Screen FinderScreenString 'Поиск' (,, sci1EscPg);
+  Table #TABLENAME;
+Fields
+  [FoundStr] if (SearchAgain = 1, if (Found, 'найдена', 'не найдена'), ''):
+    {font = {color = if (not Found, ColorNotOk, 0)}}, skip;
+  SearchString ('Строка поиска. [ <Enter> - поиск; <PgUp>,<PgDn> - навигация ]'): noprotect;
+Buttons
+  cmPgUp,,, 'Переход на вышестоящий уровень';
+  cmOk, default,, 'Поиск следующего на текущем уровне';
+  cmPgDn,,, 'Переход на нижестоящий уровень';
+  cmCancel,,, 'Закрыть';
+<<
+  Строка поиска .@@@@@@@@@@
+  .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    <. Выше .> <. Поиск .> <. Ниже .> <. Отмена .>
+>>
+End; // screen FinderScreen
+
+HandleEvent
+
+cmInit:
+{
+  set SearchAgain := 0;
+  UpdateTitle;
+}
+
+cmPgUp:
+{
+  // снимем ограничение чтобы правильно спозиционироваться в дальнейшем
+  if BoundActive(tbBySearchString)
+    PopBounds(tbBySearchString);
+
+  // передавать будем во временных переменных
+  TempCode := OwnerCode;
+  TempNode := OwnerNode;
+  // если возможен переход на вышестоящий
+  if GetLinkKey(TempNode, TempCode)
+  {
+    if ((TempNode <> OwnerNode) or (TempNode <> OwnerCode))
+    {
+      // предварительно сохраним данные прежнего владельца
+      CurOwnerCode := OwnerCode;
+      CurOwnerNode := OwnerNode;
+      // передернем логическую таблицу под нового владельца
+      OwnerCode := TempCode;
+      set OwnerNode := TempNode;
+      // в новых подцепках позиционируемся на предыдущем владельце
+      if getfirst #TABLENAME where ((CurOwnerNode == #TABLENAME.NREC)) = tsOk
+      {
+      }
+      // считаем, что новый поиск
+      FindNext := true;
+      set SearchAgain := 0;
+      UpdateTitle;
+    }
+  }
+}
+
+cmPgDn:
+{
+  // снимем ограничение чтобы правильно спозиционироваться в дальнейшем
+  if BoundActive(tbBySearchString)
+    PopBounds(tbBySearchString);
+
+  // передавать будем во временных переменных
+  TempCode := co#TABLENAME;
+  TempNode := #TABLENAME.NREC;
+  //если возможен переход на нижестоящий и произошло изменение данных
+  if GetOwnKey(TempNode, TempCode)
+  {
+    if ((TempNode <> OwnerNode) or (TempCode <> OwnerCode))
+    {
+      // предварительно сохраним данные о себе
+      CurOwnerCode := co#TABLENAME;
+      CurOwnerNode := #TABLENAME.NREC;
+      // передернем логическую таблицу под нового владельца
+      OwnerCode := CurOwnerCode;
+      set OwnerNode := CurOwnerNode;
+      // в новых подцепках надо спозиционироваться на переданной записи
+      if getfirst #TABLENAME where ((TempNode == #TABLENAME.NREC)) = tsOk
+      {
+        // считаем, что новый поиск
+        FindNext := true;
+        set SearchAgain := 0;
+        UpdateTitle;
+      }
+    }
+  }
+}
+
+cmOk:
+{
+  StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfScreenBottom, 'Подготовка данных...', 1);
+  _try
+  {
+    if not BoundActive(tbBySearchString)
+      AddBounds(tbBySearchString);
+
+    NextVisual;
+
+    Found := false;
+
+    RestartVisual( 'Поиск...', 1);
+
+    // проверим наличие на текущем уровне поиска
+    do
+    {
+      NextVisual;
+      // если строку поиска не модифицировали
+      if FindNext
+      {
+        FindNextObject := false;
+        if (SearchAgain = 0)
+        {
+          if GetFirstIn(-1, 0) <> 0
+            break;
+        }
+        else
+        {
+          if GetNextIn(-1, 0) <> 0
+            break;
+        }
+        SearchAgain := 1;
+      }
+
+      if (Upcase(SearchString) <> Upcase(SubStr(string(#TABLENAME.#SEARCHFIELD), 1, length(SearchString))))
+        continue;
+
+      NextVisual;
+
+      if (FindNextObject)
+        Found := GoToNext(#TABLENAME.NREC, co#TABLENAME);
+      else
+        Found := GoToFirst(#TABLENAME.NREC, co#TABLENAME);
+
+      FindNext := not Found;
+
+      if (Found)
+      {
+        FindNextObject := true;
+        break;
+      }
+    }
+    while not Found;
+  }
+  _except
+    on ExUserBreak: {};
+  _finally
+  {
+    StopVisual('', 0);
+  }
+  //для перерисовки
+  set Found := Found;
+
+  if (not Found)
+    Message('Данных по условию "' + SearchString + '" на текущем уровне не найдено.', Information);
+}
+
+End; // HandleEvent window FindWindow
+
+End.

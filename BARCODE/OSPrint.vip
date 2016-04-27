@@ -1,0 +1,146 @@
+#component "QR_BARCODE"
+
+interface SELECTKATOS 'Печать этикеток ОС';
+  table struct tmkatelements (
+    nrec     : comp,
+    os_nrec  : comp,
+    os_innum : string,
+    os_barkod: string,
+    mol_name : string,
+    podr_kod : string,
+    podr_name: string,
+    os_name  : string,
+    os_datek : date,
+    os_place : string
+  ) with index (
+    i00 = nrec (unique, surrogate),
+    i01 = os_nrec
+  );
+
+  var
+    iGetKAU: GetKAU;
+
+  create view
+  as select *
+  from tmkatelements;
+
+  create view v
+  var
+    _nrec: comp;
+  as select *
+  from katos, kaureff, spkau, katmol, katpodr
+  where ((
+    _nrec        == katos.nrec and
+    3000         == kaureff.cotable and
+    _nrec        == kaureff.crec and
+    10004        == kaureff.wkau and
+    kaureff.ckau == spkau.nrec and
+    katos.cmol   == katmol.nrec and
+    katos.cpodr  == katpodr.nrec
+  ));
+
+  datastream Stream1 (
+    table tmkatelements (
+      [os_innum]   os_innum;
+      [os_barkod]  os_barkod;
+      [mol_name]   mol_name;
+      [podr_kod]   podr_kod;
+      [podr_name]  podr_name;
+      [os_name]    os_name;
+      [os_datek]   os_datek;
+      [os_place]   os_place;
+    );
+  )
+  end;
+
+  screen screen1;
+  show (,,,3);
+  buttons
+    cmAdd, default;
+    cmPrint;
+<<
+
+ <.     Добавить     .>     <.     Печать     .>
+>>
+  end;
+
+  browse browse1;
+  show (,4,,);
+  table tmkatelements;
+  fields
+    {font={color=if(tmkatelements.os_barkod='', 2, 0);}};
+    tmkatelements.os_barkod 'Штрих-код': [16], protect;
+    tmkatelements.os_innum  'Инв-номер': [11], protect;
+    tmkatelements.os_name   'Наименование': [36], protect;
+    tmkatelements.os_place  'Место хранения': [21], protect;
+    tmkatelements.os_datek  'Ввод в экспл.': [11], protect;
+    tmkatelements.podr_name 'Подразделение': [11], protect;
+    tmkatelements.mol_name  'МОЛ': [11], protect;
+  end;
+
+  procedure addRecords;
+  {
+    if(iGetKAU.GetCodeKAU(2, 15, 0) > 0)
+    {
+      var markerName: string;
+      markerName := iGetKAU.GetMarkerName(15);
+      var l: longint;
+      l := initmarker(markerName, 8, 10, 100, false);
+      var cnt: longint;
+      cnt := getmarkercount(l);
+      var i: longint;
+      for(i := 0; i < cnt; i++)
+      {
+        var osNrec: comp;
+        if (getMarker(l, i, osNrec))
+        {
+          if (getfirst tmkatelements where ((osNrec == tmkatelements.os_nrec)) != tsOk)
+          {
+            v._nrec := osNrec;
+            if v.getfirst viewTable = tsOk
+            {
+              clearbuffer(#tmkatelements);
+              tmkatelements.os_nrec   := v.katos.nrec;
+              tmkatelements.os_innum  := v.katos.innum;
+              tmkatelements.os_barkod := v.katos.dopinnum;
+              tmkatelements.mol_name  := v.katmol.name;
+              tmkatelements.podr_kod  := v.katpodr.kod;
+              tmkatelements.podr_name := v.katpodr.name;
+              tmkatelements.os_name   := v.katos.nameos;
+              tmkatelements.os_datek  := v.katos.datek;
+              tmkatelements.os_place  := v.spkau.name;
+              insert current tmkatelements;
+            }
+          } //  if (getfirst tmkatelements
+        } //if (getMarker
+      } //for(
+      donemarker(l, '');
+    }
+  }
+
+  handleevent
+    cmInsert:
+    {
+      addRecords;
+      if getlast tmkatelements = tsOk {}
+      rereadrecord(#tmkatelements);
+      Stop;
+    }
+    cmDelete:
+    {
+      if (message('Удалить?', yesNo) = cmYes)
+        delete current tmkatelements;
+      rereadrecord;
+    }
+    cmAdd:
+    {
+      addRecords;
+      if getlast tmkatelements = tsOk {}
+      rereadrecord(#tmkatelements);
+    }
+    cmPrint:
+    {
+      RunFReport(Stream1, '', true)
+    }
+  end;
+end.

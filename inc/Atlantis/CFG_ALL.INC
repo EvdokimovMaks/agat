@@ -252,6 +252,7 @@ const cfcHelpFile           = 35;
 const cfcEmbIntConfKeeper   = 36;
 const cfcEICKeeperItem      = 37;
 const cfcMenuSeparator      = 38;
+const cfcInputButton        = 39;
 
 //=============================================================================
 // Флаги объектов

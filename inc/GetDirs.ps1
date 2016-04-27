@@ -1,0 +1,1 @@
+(gci -Recurse|?{$_.PSIsContainer}|Resolve-Path -Relative)|ForEach{[Regex]::Replace($_,'^\.\\','/i:"..\')}|%{$_+'"'}|Out-File -FilePath dirs.txt -Encoding ascii

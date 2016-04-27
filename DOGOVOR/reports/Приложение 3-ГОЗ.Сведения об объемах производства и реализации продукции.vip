@@ -1,0 +1,874 @@
+#component "AGAT"
+interface Forma3GOZ 'Приложение 3-ГОЗ.Сведения об объемах производства и реализации продукции';
+show at (,,31,5);
+
+sql query sqlKatStroy =
+  insert ks (cKatStroy)
+  select distinct katstroy.nrec
+  from dogovor d
+  join attrval avPrPr on avPrPr.wTable=1707 and avPrPr.cRec=d.nrec and avPrPr.cattrnam=#comp(281474976710833) and avPrPr.vComp=#comp(281474976711945)
+  left join attrval on attrval.wtable=1707 and attrval.crec = d.nrec and attrval.cattrnam=#comp(281474976710830)
+  join calplan cp on cp.cdogovor=d.nrec and cp.directmc=1
+  join spdocs spd on spd.tidk=403 and spd.cdoc=cp.nrec
+  join specmtr sm on #comp(0001000000000001h) = sm.csaldtune and 1723 = sm.cotable and spd.nrec = sm.cspec and sm.cobj<>#comp(0)
+  join katstroy on sm.cobj=katstroy.nrec
+  where d.status<>3 and coalesce(attrval.vcomp,#comp(0)) <> #comp(4001AB188D71B97Ah);
+
+sql query sqlCostItemsFact1 =
+  insert tt (type, wYear, wCostItem, Summa)
+  //1. Объем выручки
+  select 2, o9001.year, 10, (o9001.summa-coalesce(o9003.summa,0))/1000
+  from (select year(datetime(datob,0)) as year, sum(sumob) as summa
+        from oborot
+        where datob between ? and ? and schetk='890' and subschk = '01'
+        group by year(datetime(datob,0)) ) o9001
+  left join (select year(datetime(datob,0)) as year, sum(sumob) as summa
+             from oborot
+             where datob between ? and ? and scheto='890' and subossch = '03'
+             group by year(datetime(datob,0)) ) o9003 on o9001.year = o9003.year
+  union all
+  select 4, o9001.year, 10, (o9001.summa-coalesce(o9003.summa,0))/1000
+  from (select year(datetime(datob,0)) as year, sum(sumob) as summa
+        from oborot
+        where datob between ? and ? and schetk='890' and subschk = '01' and kauks[2] in (select cKatStroy from ks)
+        group by year(datetime(datob,0)) ) o9001
+  left join (select year(datetime(datob,0)) as year, sum(sumob) as summa
+             from oborot
+             where datob between ? and ? and scheto='890' and subossch = '03' and kauos[2] in (select cKatStroy from ks)
+             group by year(datetime(datob,0)) ) o9003 on o9001.year = o9003.year
+  //3. Выпуск ГП
+  union all
+  select 2, o9001.year, 30, (o9001.summa-coalesce(o9003.summa,0))/1000
+  from (select year(datetime(datob,0)) as year, sum(sumob) as summa
+        from oborot
+        join spkau on kauks[1] = spkau.nrec and spkau.code not in ('08','09','10','11','13')
+        where datob between ? and ? and schetk='890' and subschk = '01'
+        group by year(datetime(datob,0)) ) o9001
+  left join (select year(datetime(datob,0)) as year, sum(sumob) as summa
+             from oborot
+             join spkau on kauos[1] = spkau.nrec and spkau.code not in ('08','09','10','11','13')
+             where datob between ? and ? and scheto='890' and subossch = '03'
+             group by year(datetime(datob,0)) ) o9003 on o9001.year = o9003.year
+  union all
+  select 4, o9001.year, 30, (o9001.summa-coalesce(o9003.summa,0))/1000
+  from (select year(datetime(datob,0)) as year, sum(sumob) as summa
+        from oborot
+        join spkau on kauks[1] = spkau.nrec and spkau.code not in ('08','09','10','11','13')
+        where datob between ? and ? and schetk='890' and subschk = '01' and kauks[2] in (select cKatStroy from ks)
+        group by year(datetime(datob,0)) ) o9001
+  left join (select year(datetime(datob,0)) as year, sum(sumob) as summa
+             from oborot
+             join spkau on kauos[1] = spkau.nrec and spkau.code not in ('08','09','10','11','13')
+             where datob between ? and ? and scheto='890' and subossch = '03' and kauos[2] in (select cKatStroy from ks)
+             group by year(datetime(datob,0)) ) o9003 on o9001.year = o9003.year
+  //5. Объем отгруженной продукции
+  union all
+  select 2, year(datetime(datob,0)), 50, sum(sumob/1000)
+  from oborot
+  where datob between ? and ? and scheto='890' and schetk in ('843','845')
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 50, sum(sumob/1000)
+  from oborot
+  where datob between ? and ? and scheto='890' and schetk in ('843','845') and kauos[2] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //7. Финансовый результат
+  union all
+  select 2, o.yearob, 70, sum(o.sumob/1000)
+  from (select year(datetime(datob,0)) as yearob, sum(sumob * (-1)) as sumob
+        from oborot
+        where datob between ? and ? and scheto='890' and subossch in ('02','03')
+        group by year(datetime(datob,0))
+        union all
+        select year(datetime(datob,0)), sum(sumob)
+        from oborot
+        where datob between ? and ? and schetk='890' and subschk = '01'
+        group by year(datetime(datob,0)) ) o
+  group by o.yearob
+  union all
+  select 4, o.yearob, 70, sum(o.sumob/1000)
+  from (select year(datetime(datob,0)) as yearob, sum(sumob * (-1)) as sumob
+        from oborot
+        where datob between ? and ? and scheto='890' and subossch in ('02','03') and kauos[2] in (select cKatStroy from ks)
+        group by year(datetime(datob,0))
+        union all
+        select year(datetime(datob,0)), sum(sumob)
+        from oborot
+        where datob between ? and ? and schetk='890' and subschk = '01' and kauks[2] in (select cKatStroy from ks)
+        group by year(datetime(datob,0)) ) o
+  group by o.yearob
+  //9. Себестоимость продукции
+  union all
+  select 2, year(datetime(datob,0)), 90, sum(sumob/1000)
+  from oborot
+  where datob between ? and ? and scheto='890' and subossch='02'
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 90, sum(sumob/1000)
+  from oborot
+  where datob between ? and ? and scheto='890' and subossch='02' and kauos[2] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //10.Собственные затраты предприятия
+  union all
+  select 2, year(datetime(o.datob,0)), 100, sum(sumob/1000)
+  from oborot o
+  join spkau on o.kauks[2] = spkau.nrec and spkau.code not in ('20010800','20010801','20010802')
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820') and o.subschk not in ('08')
+  group by year(datetime(o.datob,0))
+  union all
+  select 4, year(datetime(o.datob,0)), 100, sum(sumob/1000)
+  from oborot o
+  join spkau on o.kauks[2] = spkau.nrec and spkau.code not in ('20010800','20010801','20010802')
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820') and o.subschk not in ('08') and o.kauks[1] in (select cKatStroy from ks)
+  group by year(datetime(o.datob,0))
+  //12. Услуги сторонних организаций
+  union all
+  select 2, year(datetime(o.datob,0)), 120, sum(sumob/1000)
+  from oborot o
+  join spkau on o.kauks[2] = spkau.nrec and spkau.code = '20100101'
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820')
+  group by year(datetime(o.datob,0))
+  union all
+  select 4, year(datetime(o.datob,0)), 120, sum(sumob/1000)
+  from oborot o
+  join spkau on o.kauks[2] = spkau.nrec and spkau.code = '20100101'
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820') and o.kauks[1] in (select cKatStroy from ks)
+  group by year(datetime(o.datob,0))
+  //13. Затраты на материалы
+  union all
+  select 2, year(datetime(o.datob,0)), 130, sum(o.sumob/1000)
+  from oborot o
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820') and o.subschk in ('01','02')
+  group by year(datetime(o.datob,0))
+  union all
+  select 4, year(datetime(o.datob,0)), 130, sum(o.sumob/1000)
+  from oborot o
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820') and o.subschk in ('01','02') and o.kauks[1] in (select cKatStroy from ks)
+  group by year(datetime(o.datob,0))
+  //14. Работы и услуги производственного характера сторонних организаций
+  union all
+  select 2, year(datetime(o.datob,0)), 140, sum(sumob/1000)
+  from oborot o
+  join spkau on o.kauks[2] = spkau.nrec and spkau.code in ('20010800','20010801','20010802')
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820')
+  group by year(datetime(o.datob,0))
+  union all
+  select 4, year(datetime(o.datob,0)), 140, sum(sumob/1000)
+  from oborot o
+  join spkau on o.kauks[2] = spkau.nrec and spkau.code in ('20010800','20010801','20010802')
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820') and o.kauks[1] in (select cKatStroy from ks)
+  group by year(datetime(o.datob,0))
+  //15. Стоимость нормочаса основных рабочих (ПТП)
+  union all
+  select 2, obor.year, 150, (obor.summa / tab.chas)
+  from (select year(datetime(o.datob,0)) as year, sum(o.sumob) as summa
+        from oborot o
+        join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','230101','260101','290101','440101','080201')
+        where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+              and kauos[3] = #comp(0001000000000B04h)
+        group by year(datetime(o.datob,0))
+       ) obor
+  join (select lstab.yearn as year, sum(lstab.chasf) as chas
+        from lstab
+        join lschet ls on lstab.clschet = ls.nrec
+        where ((lstab.mesn + lstab.yearn * 12) between ? and ?) and ls.kateg in (1,10,20)
+        group by lstab.yearn
+       ) tab on obor.year = tab.year
+  //16. Технологическая трудоемкость производственной программы
+  union all
+  select 2, year(datetime(per.dbeg,0)), 160, sum(valspmnp.kol+valspmnp.price)
+  from mnplan mp
+  join fpperiod per on mp.canval1 = per.nrec and per.dbeg between ? and ?
+  join spmnplan smp on mp.nrec = smp.cmnplan
+  join spmnpl on smp.nrec = spmnpl.cspmnplan and 22 = spmnpl.wKolAn and
+                 21 = spmnpl.wKodGr4 and per.nRec = spmnpl.cAnVal4 and
+                 10029 = spmnpl.wKodGr5 and #comp(00010000000008AEh) = spmnpl.cAnVal5
+  join valspmnp on spmnpl.nRec = valspmnp.cSpMnPl
+  group by year(datetime(per.dbeg,0))
+  union all
+  select 4, year(datetime(per.dbeg,0)), 160, sum(valspmnp.kol+valspmnp.price)
+  from mnplan mp
+  join fpperiod per on mp.canval1 = per.nrec and per.dbeg between ? and ?
+  join spmnplan smp on mp.nrec = smp.cmnplan and smp.canval1 in (select cKatStroy from ks)
+  join spmnpl on smp.nrec = spmnpl.cspmnplan and 22 = spmnpl.wKolAn and
+                 21 = spmnpl.wKodGr4 and per.nRec = spmnpl.cAnVal4 and
+                 10029 = spmnpl.wKodGr5 and #comp(00010000000008AEh) = spmnpl.cAnVal5
+  join valspmnp on spmnpl.nRec = valspmnp.cSpMnPl
+  group by year(datetime(per.dbeg,0))
+  //22. Общехозяйственные расходы
+  union all
+  select 2, year(datetime(o.datob,0)), 220, sum(o.sumob/1000)
+  from oborot o
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820') and o.subschk in ('07','071','072','073','074','075','076')
+  group by year(datetime(o.datob,0))
+  union all
+  select 4, year(datetime(o.datob,0)), 220, sum(o.sumob/1000)
+  from oborot o
+  where o.datob between ? and ? and ((o.scheto='890' and o.subossch='02') or o.scheto = '840') and
+        o.schetk in ('820') and o.subschk in ('07','071','072','073','074','075','076') and
+        o.kauks[1] in (select cKatStroy from ks)
+  group by year(datetime(o.datob,0))
+  //23. База распределения общехозяйственных расходов
+  union all
+  select 2, year(datetime(o.datob,0)), 230, sum(o.sumob/1000)
+  from oborot o
+  where o.datob between ? and ? and o.scheto='826'
+  group by year(datetime(o.datob,0))
+  //27. Основная заработная плата работников предприятия всего:
+  union all
+  select 2, year(datetime(datob,0)), 270, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','260101','290101','440101','080201')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] in (#comp(0001000000000B04h),#comp(0001000000000B05h),#comp(0001000000000B06h))
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 270, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','260101','290101','440101','080201')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] in (#comp(0001000000000B04h),#comp(0001000000000B05h),#comp(0001000000000B06h))
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //272. Основная заработная плата основных производственных работников
+  union all
+  select 2, year(datetime(datob,0)), 272, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','260101','290101','440101','080201')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B04h)
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 272, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','260101','290101','440101','080201')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B04h)
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //273. Основная заработная плата вспомогательных работников
+  union all
+  select 2, year(datetime(datob,0)), 273, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','260101','290101','440101','080201')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B05h)
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 273, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','260101','290101','440101','080201')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B05h)
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //274. Основная заработная плата работников АУП
+  union all
+  select 2, year(datetime(datob,0)), 274, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','260101','290101','440101','080201')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B06h)
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 274, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','260101','290101','440101','080201')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B06h)
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //28. Дополнительная заработная плата работников предприятия всего:
+  union all
+  select 2, year(datetime(datob,0)), 280, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200202','260102','290102','440102','080202')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] in (#comp(0001000000000B04h),#comp(0001000000000B05h),#comp(0001000000000B06h))
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 280, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200202','260102','290102','440102','080202')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] in (#comp(0001000000000B04h),#comp(0001000000000B05h),#comp(0001000000000B06h))
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //282. Дополнительная заработная плата основных производственных работников:
+  union all
+  select 2, year(datetime(datob,0)), 282, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200202','260102','290102','440102','080202')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B04h)
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 282, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200202','260102','290102','440102','080202')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B04h)
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //283. Дополнительная заработная плата вспомогательных работников:
+  union all
+  select 2, year(datetime(datob,0)), 283, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200202','260102','290102','440102','080202')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B05h)
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 283, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200202','260102','290102','440102','080202')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B05h)
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //284. Дополнительная заработная плата работников АУП:
+  union all
+  select 2, year(datetime(datob,0)), 284, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200202','260102','290102','440102','080202')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B06h)
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 284, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200202','260102','290102','440102','080202')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        and kauos[3] = #comp(0001000000000B06h)
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //29. Страховые взносы:
+  union all
+  select 2, year(datetime(datob,0)), 290, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200301','260201','290201','440201','080301')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        //and case when scheto='823' then kauos[4] else kauos[3] end in (#comp(0001000000000B04h),#comp(0001000000000B05h),#comp(0001000000000B06h))
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 290, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200301','260201','290201','440201','080301')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        //and case when scheto='823' then kauos[4] else kauos[3] end in (#comp(0001000000000B04h),#comp(0001000000000B05h),#comp(0001000000000B06h))
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //30. Профриск
+  union all
+  select 2, year(datetime(datob,0)), 300, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and spk2.code in ('20030201','26020201','29020201','44020201','08031001')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        //and case when scheto='823' then kauos[4] else kauos[3] end in (#comp(0001000000000B04h),#comp(0001000000000B05h),#comp(0001000000000B06h))
+  group by year(datetime(datob,0))
+  union all
+  select 4, year(datetime(datob,0)), 300, sum(sumob/1000)
+  from oborot o
+  join spkau spk2 on o.kauos[2] = spk2.nrec and spk2.code in ('20030201','26020201','29020201','44020201','08031001')
+  where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        //and case when scheto='823' then kauos[4] else kauos[3] end in (#comp(0001000000000B04h),#comp(0001000000000B05h),#comp(0001000000000B06h))
+        and kauos[1] in (select cKatStroy from ks)
+  group by year(datetime(datob,0))
+  //31. Среднемесячная основная заработная плата основного производственного работника
+  union all
+  select 2, obor.year, 310, case when tab.cnt > 0 then obor.summa / tab.cnt else 0 end
+  from (select year(datetime(o.datob,0)) as year, sum(o.sumob) as summa
+        from oborot o
+        join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200201','260101','290101','440101','080201')
+        where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+              and case when scheto='823' then kauos[4] else kauos[3] end = #comp(0001000000000B04h)
+        group by year(datetime(o.datob,0))
+       ) obor
+  join (select lstab.yearn as year, count(*) as cnt
+        from lstab
+        join lschet ls on lstab.clschet = ls.nrec
+        where ((lstab.mesn + lstab.yearn * 12) between ? and ?) and ls.kateg in (1,10,20) and lstab.chasf > 0
+        group by lstab.yearn
+       ) tab on obor.year = tab.year
+  //32. Среднемесячная дополнительная заработная плата основного производственного работника
+  union all
+  select 2, obor.year, 320, case when tab.cnt > 0 then obor.summa / tab.cnt else 0 end
+  from (select year(datetime(o.datob,0)) as year, sum(o.sumob) as summa
+        from oborot o
+        join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,6) in ('200202','260102','290102','440102','080202')
+        where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+              and kauos[3] = #comp(0001000000000B04h)
+        group by year(datetime(o.datob,0))
+       ) obor
+  join (select lstab.yearn as year, count(*) as cnt
+        from lstab
+        join lschet ls on lstab.clschet = ls.nrec
+        where ((lstab.mesn + lstab.yearn * 12) between ? and ?) and ls.kateg in (1,10,20) and lstab.chasf > 0
+        group by lstab.yearn
+       ) tab on obor.year = tab.year
+  //33. Среднемесячная  заработная плата  работника
+  union all
+  select 2, obor.year, 330, case when tab.cnt > 0 then obor.summa / tab.cnt else 0 end
+  from (select year(datetime(o.datob,0)) as year, sum(o.sumob) as summa
+        from oborot o
+        join spkau spk2 on o.kauos[2] = spk2.nrec and substring(spk2.code,1,4) in ('2002','2601','2901','4401','0802')
+        where (datob between ? and ?) and scheto in ('820','826','829','844','808') and schetk <> '8100'
+        group by year(datetime(o.datob,0))
+       ) obor
+  join (select lstab.yearn as year, count(*) as cnt
+        from lstab
+        join lschet ls on lstab.clschet = ls.nrec
+        where ((lstab.mesn + lstab.yearn * 12) between ? and ?) and lstab.chasf > 0
+        group by lstab.yearn
+       ) tab on obor.year = tab.year
+
+  ;
+
+sql query sqlCostItemsFact2 =
+  insert tt (type, wYear, wCostItem, Summa)
+  //2. Объем выручки
+  select 2, tt4.wYear, 20, case when tt2.summa <> 0 then tt4.summa / tt2.summa * 100 else 0 end
+  from tt tt4
+  join tt tt2 on tt2.type = 2 and tt2.wCostItem = tt4.wCostItem and tt2.wYear = tt4.wYear
+  where tt4.type = 4 and tt4.wCostItem = 10
+  //3. Выпуск ГП (равен 1)
+  //union all
+  //select tt.type, tt.wYear, 30, tt.Summa
+  //from tt
+  //where tt.wCostItem = 10
+  //5. Объем отгруженной продукции (равен 1)
+  //union all
+  //select tt.type, tt.wYear, 50, tt.Summa
+  //from tt
+  //where tt.wCostItem = 10
+  //8. Уровень рентабельности
+  union all
+  select tt10.type, tt10.wYear, 80, tt70.summa / tt10.summa * 100
+  from tt tt10
+  join tt tt70 on tt70.type = tt10.type and tt70.wYear = tt10.wYear and tt70.wCostItem = 70
+  where tt10.wCostItem = 10 and tt10.Summa <> 0
+  //11. Доля собственных затрат от полной себестоимости
+  union all
+  select tt90.type, tt90.wYear, 110, tt100.summa / tt90.summa * 100
+  from tt tt90
+  join tt tt100 on tt100.type = tt90.type and tt100.wYear = tt90.wYear and tt100.wCostItem = 100
+  where tt90.wCostItem = 90 and tt90.Summa <> 0
+  //24.
+  union all
+  select tt220.type, tt230.wYear, 240, tt220.summa / tt230.summa * 100
+  from tt tt230
+  join tt tt220 on tt220.wYear = tt230.wYear and tt220.wCostItem = 220
+  where tt230.wCostItem = 230 and tt230.Summa <> 0
+
+;
+
+sql query sqlCostItemsFact3 =
+  insert tt (type, wYear, wCostItem, Summa)
+  //4. Объем незавершенного производства вся сумма
+  select 2, ?, 40, sum(t.summa/1000)
+  from (select sum(sums * case when viob=1 then 1 else (-1) end) as Summa
+        from saldmoun
+        where datesal = ? and scheto='820'
+        union all
+        select sum(sumob)
+        from oborot
+        where datob between ? and ? and scheto = '820'
+        union all
+        select sum(sumob*(-1))
+        from oborot
+        where datob between ? and ? and schetk = '820'
+       ) t;
+
+sql query sqlCostItemsFact4 =
+  insert tt (type, wYear, wCostItem, Summa)
+  //4. Объем незавершенного производства сумма по ГОЗ
+  select 4, ?, 40, sum(t.summa/1000)
+  from (select sum(sums * case when viob=1 then 1 else (-1) end) as Summa
+        from saldmoun
+        where datesal = ? and scheto='820' and kauos[1] in (select cKatStroy from ks)
+        union all
+        select sum(sumob)
+        from oborot
+        where datob between ? and ? and scheto = '820' and kauos[1] in (select cKatStroy from ks)
+        union all
+        select sum(sumob*(-1))
+        from oborot
+        where datob between ? and ? and schetk = '820' and kauks[1] in (select cKatStroy from ks)
+       ) t
+;
+
+table struct tCostItem (  //Статьи
+  wCostItem: word,
+  Name     : string,
+  EdIzm    : string[20]
+) with index (
+  i01 = wCostItem
+);
+
+table struct tYear (
+  wYear: longint
+) with index (
+  i01 = wYear
+);
+
+table struct tt (        //Плановые и фактические суммы с разбивкой по годам, статьям
+  type     : byte,       //1 - план в целом, 2 - факт в целом, 3 - план по ГОЗ, 4 - факт по ГОЗ
+  wYear    : word,
+  wCostItem: word,
+  Summa    : double
+) with index (
+  i01 = type + wCostItem + wYear
+);
+
+var
+  wYearRep1, wYearRep2: word;
+  dRep1, dRep2: date;
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+
+create view
+as select *
+from
+  tt, tYear, tCostItem,
+  tCostItem brCostItem, tYear brYear, tt brtt1, tt brtt2, tt brtt3, tt brtt4
+where ((
+  1                    == brtt1.type and
+  brCostItem.wCostItem == brtt1.wCostItem and
+  brYear.wYear         == brtt1.wYear and
+  2                    == brtt2.type and
+  brCostItem.wCostItem == brtt2.wCostItem and
+  brYear.wYear         == brtt2.wYear and
+  3                    == brtt3.type and
+  brCostItem.wCostItem == brtt3.wCostItem and
+  brYear.wYear         == brtt3.wYear and
+  4                    == brtt4.type and
+  brCostItem.wCostItem == brtt4.wCostItem and
+  brYear.wYear         == brtt4.wYear
+));
+
+procedure filltables;
+var
+  stmt, s: longint;
+  i: integer;
+{
+  //временная таблица для сумм
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table tt (type: byte, wYear: word, wCostItem: word, Summa: double);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlExecDirect('DELETE FROM tt');
+  //временная таблица для заказов
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table ks (cKatStroy:comp);');
+  sqlCreateTmpTable(s, ctmNormal);
+  sqlExecDirect('DELETE FROM ks');
+  //заполняем временную таблицу с заказами
+  sqlExecDirect(sqlKatStroy);
+  //заполняем временную таблицу фактическими суммами
+  stmt := sqlAllocStmt;
+
+  sqlPrepare(stmt, sqlCostItemsFact1);
+
+  i := 0;
+  while i < 48
+  {
+    i++; sqlBindParam(stmt, i, dRep1);
+    i++; sqlBindParam(stmt, i, dRep2);
+  }
+  //15
+  i++; sqlBindParam(stmt, i, dRep1);
+  i++; sqlBindParam(stmt, i, dRep2);
+  i++; sqlBindParam(stmt, i, 1 +wYearRep1*12);
+  i++; sqlBindParam(stmt, i, 12+wYearRep2*12);
+
+  while i < 102
+  {
+    i++; sqlBindParam(stmt, i, dRep1);
+    i++; sqlBindParam(stmt, i, dRep2);
+  }
+  //31
+  i++; sqlBindParam(stmt, i, dRep1);
+  i++; sqlBindParam(stmt, i, dRep2);
+  i++; sqlBindParam(stmt, i, 1 +wYearRep1*12);
+  i++; sqlBindParam(stmt, i, 12+wYearRep2*12);
+
+  //32
+  i++; sqlBindParam(stmt, i, dRep1);
+  i++; sqlBindParam(stmt, i, dRep2);
+  i++; sqlBindParam(stmt, i, 1 +wYearRep1*12);
+  i++; sqlBindParam(stmt, i, 12+wYearRep2*12);
+
+  //33
+  i++; sqlBindParam(stmt, i, dRep1);
+  i++; sqlBindParam(stmt, i, dRep2);
+  i++; sqlBindParam(stmt, i, 1 +wYearRep1*12);
+  i++; sqlBindParam(stmt, i, 12+wYearRep2*12);
+
+  sqlExecute(stmt);
+
+  sqlPrepare(stmt, sqlCostItemsFact2);
+  sqlExecute(stmt);
+
+  for(i := wYearRep1; i <= wYearRep2; i++)
+  {
+    sqlPrepare(stmt, sqlCostItemsFact3);
+    sqlBindParam(stmt, 1, i);
+    sqlBindParam(stmt, 2, date(1,1,i));
+    sqlBindParam(stmt, 3, date(1,1,i));
+    sqlBindParam(stmt, 4, date(31,12,i));
+    sqlBindParam(stmt, 5, date(1,1,i));
+    sqlBindParam(stmt, 6, date(31,12,i));
+    sqlExecute(stmt);
+
+    sqlPrepare(stmt, sqlCostItemsFact4);
+    sqlBindParam(stmt, 1, i);
+    sqlBindParam(stmt, 2, date(1,1,i));
+    sqlBindParam(stmt, 3, date(1,1,i));
+    sqlBindParam(stmt, 4, date(31,12,i));
+    sqlBindParam(stmt, 5, date(1,1,i));
+    sqlBindParam(stmt, 6, date(31,12,i));
+    sqlExecute(stmt);
+  }
+  sqlFreeStmt(stmt);
+
+  //заполняем логическую таблицу tt данными из временной таблицы tt
+  delete all tt;
+  sqlSelectInto('select * from tt', #tt);
+  //дропаем временные таблицы
+  sqlDropTmpTable('tt');
+  sqlDropTmpTable('ks');
+  //заполняем таблицу с годами
+  delete all tYear;
+  for (i:=wYearRep1; i<=wYearRep2; i++)
+  {
+    insert tYear set tYear.wYear := i;
+  }
+}
+
+procedure PrintRep(isCreateXLT : boolean);
+var
+  _year, i: integer;
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetNumberVar('ГодНач', wYearRep1);
+  pXL.SetStringVar('ГодКон', wYearRep2);
+  i := 0;
+  for(_year:=wYearRep1;_year<=wYearRep2;_year++)
+  {
+    i++;
+    pXL.SetStringVar('HdrOne_'+i, 'Отчет за '+_year+' год');
+    pXL.SetStringVar('HdrTwo_'+i, 'в целом по предприятию');
+    pXL.SetStringVar('HdrThree_'+i, 'план');
+    i++;
+    pXL.SetStringVar('HdrOne_'+i, '');
+    pXL.SetStringVar('HdrTwo_'+i, '');
+    pXL.SetStringVar('HdrThree_'+i, 'факт');
+    i++;
+    pXL.SetStringVar('HdrOne_'+i, '');
+    pXL.SetStringVar('HdrTwo_'+i, 'в т.ч. по контрактам ГОЗ');
+    pXL.SetStringVar('HdrThree_'+i, 'план');
+    i++;
+    pXL.SetStringVar('HdrOne_'+i, '');
+    pXL.SetStringVar('HdrTwo_'+i, '');
+    pXL.SetStringVar('HdrThree_'+i, 'факт');
+  }
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Код');
+  pXL.CreateTblFld('ЕдИзм');
+  pXL.CreateTblFld('Наименование');
+
+  i := 0;
+  for(_year:=wYearRep1;_year<=wYearRep2;_year++)
+  {
+    i++; pXL.CreateTblFld('Колонка_'+i);
+    i++; pXL.CreateTblFld('Колонка_'+i);
+    i++; pXL.CreateTblFld('Колонка_'+i);
+    i++; pXL.CreateTblFld('Колонка_'+i);
+  }
+
+  if not isCreateXLT
+  {
+    _loop brCostItem
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Код', brCostItem.wCostItem);
+      pXL.SetTblStringFldValue('ЕдИзм', brCostItem.EdIzm);
+      pXL.SetTblStringFldValue('Наименование', brCostItem.name);
+      i := 0;
+      _loop brYear
+      {
+        i++; if getfirst brtt1 = tsOk pXL.SetTblNumberFldValue('Колонка_'+i, brtt1.Summa);
+        i++; if getfirst brtt2 = tsOk pXL.SetTblNumberFldValue('Колонка_'+i, brtt2.Summa);
+        i++; if getfirst brtt3 = tsOk pXL.SetTblNumberFldValue('Колонка_'+i, brtt3.Summa);
+        i++; if getfirst brtt4 = tsOk pXL.SetTblNumberFldValue('Колонка_'+i, brtt4.Summa);
+      }
+      pXL.InsTblRow;
+    }
+  }
+
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+window wInfo 'Результаты расчета';
+
+browse brYear;
+show (,,10,);
+table brYear;
+fields
+  brYear.wYear 'Год': protect;
+end;
+
+browse brCostItem;
+show(11,,,);
+table brCostItem;
+fields
+  brCostItem.wCostItem ' '#13'№': [5] , protect;
+  brCostItem.Name ' '#13'Статья': [20] , protect;
+  if(getfirst brtt1 = tsOk, brtt1.Summa, '')  'Все'#13'План'  : [8], protect;
+  if(getfirst brtt2 = tsOk, brtt2.Summa, '')  'Все'#13'Факт'  : [8], protect;
+  if(getfirst brtt3 = tsOk, brtt3.Summa, '')  'ГОЗ'#13'План'  : [8], protect;
+  if(getfirst brtt4 = tsOk, brtt4.Summa, '')  'ГОЗ'#13'Факт'  : [8], protect;
+end;
+
+end; //window
+
+screen scmain;
+fields
+  wYearRep1: noprotect, spinbutton [1, 2014, 2100];
+  wYearRep2: noprotect, spinbutton [1, 2014, 2100];
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+ `Год с` .@@@@@@ `по` .@@@@@@
+
+ <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+cmDoOk:
+{
+  StartNewVisual(vtRotateVisual, vfThread + vfTimer, 'Выборка данных', 0);
+  if (wYearRep1 > wYearRep2) wYearRep2 := wYearRep1;
+  dRep1 := date(1 ,1 ,wYearRep1);
+  dRep2 := date(31,12,wYearRep2);
+  filltables;
+  SetVisualHeader('Вывод в Excel');
+  PrintRep(false);
+  StopVisual('',0);
+  //runwindow(winfo);
+}
+
+cminit:
+{
+  sXLTFileName := TranslatePath('%StartPath%xls\Forma3GOZ.xlt');
+  if not readmydsk(wYearRep1, 'Forma3GOZ_wYearRep1', false) wYearRep1 := year(cur_date);
+  if not readmydsk(wYearRep2, 'Forma3GOZ_wYearRep2', false) wYearRep2 := wYearRep1;
+
+  delete all tCostItem;
+  insert tCostItem set wCostItem := 10 , EdIzm := 'тыс. руб.', name := 'Объем выручки (нетто) от реализации продукции (без НДС)';
+  insert tCostItem set wCostItem := 20 , EdIzm := '%'        , name := 'в том числе по ГОЗ';
+  insert tCostItem set wCostItem := 30 , EdIzm := 'тыс. руб.', name := 'Выпуск готовой продукции (товаров. работ, услуг) в текущем году';
+  insert tCostItem set wCostItem := 40 , EdIzm := 'тыс. руб.', name := 'Объем незавершенного производства';
+  insert tCostItem set wCostItem := 50 , EdIzm := 'тыс. руб.', name := 'Объем отгруженной продукции (товаров. работ, услуг) в текущем году';
+  insert tCostItem set wCostItem := 60 , EdIzm := 'тыс. руб.', name := 'Объем продукции, произведенной и используемой подразделениями предприятия';
+  insert tCostItem set wCostItem := 70 , EdIzm := 'тыс. руб.', name := 'Финансовый результат (+ прибыль/- убыток) от реализации продукции';
+  insert tCostItem set wCostItem := 80 , EdIzm := '%'        , name := 'Уровень рентабельности';
+  insert tCostItem set wCostItem := 90 , EdIzm := 'тыс. руб.', name := 'Себестоимость продукции';
+  insert tCostItem set wCostItem := 100, EdIzm := 'тыс. руб.', name := 'Собственные затраты предприятия*';
+  insert tCostItem set wCostItem := 110, EdIzm := '%'        , name := 'Доля собственных затрат предприятия от полной себестоимость продукции';
+  insert tCostItem set wCostItem := 120, EdIzm := 'тыс. руб.', name := 'Услуги сторонних организаций';
+  insert tCostItem set wCostItem := 130, EdIzm := 'тыс. руб.', name := 'Затраты на материалы всего (за вычетом возвратных отходов)';
+  insert tCostItem set wCostItem := 140, EdIzm := 'тыс. руб.', name := 'Работы и услуги производственного характера (сторонних организаций и предприятий)';
+  insert tCostItem set wCostItem := 150, EdIzm := 'руб.'     , name := 'Стоимость н/часа основных производственных рабочих (работников по НИОКР)';
+  insert tCostItem set wCostItem := 160, EdIzm := 'н/час'    , name := 'Технологическая трудоемкость производственной программы организации';
+  insert tCostItem set wCostItem := 170, EdIzm := 'н/час на 1 раб.', name := 'Производительность труда (отношение объема выпуска продукции к среднесписочной численности работников)';
+  insert tCostItem set wCostItem := 180, EdIzm := '%'        , name := 'Индекс изменения производительности труда';
+  insert tCostItem set wCostItem := 190, EdIzm := 'тыс. руб.', name := 'Общепроизводственные расходы';
+  insert tCostItem set wCostItem := 200, EdIzm := 'тыс. руб.', name := 'База распределения общепроизводственных расходов (в соответствии с принятой на предприятии учетной политикой)';
+  insert tCostItem set wCostItem := 210, EdIzm := '%'        , name := 'Уровень общепроизводственных расходов';
+  insert tCostItem set wCostItem := 220, EdIzm := 'тыс. руб.', name := 'Общехозяйственные расходы';
+  insert tCostItem set wCostItem := 230, EdIzm := 'тыс. руб.', name := 'База распределения общехозяйственных расходов (в соответствии с принятой на предприятии учетной политикой)';
+  insert tCostItem set wCostItem := 240, EdIzm := '%'        , name := 'Уровень общехозяйственных расходов';
+  insert tCostItem set wCostItem := 250, EdIzm := 'чел.'     , name := 'Среднесписочная численность работников предприятия';
+  insert tCostItem set wCostItem := 260, EdIzm := 'чел.'     , name := 'Среднесписочная численность основных производственных рабочих';
+  insert tCostItem set wCostItem := 270, EdIzm := 'тыс. руб.', name := 'Основная заработная плата работников предприятия, всего:';
+  insert tCostItem set wCostItem := 271, EdIzm := ''         , name := 'в том числе:';
+  insert tCostItem set wCostItem := 272, EdIzm := 'тыс. руб.', name := 'основных производственных работников';
+  insert tCostItem set wCostItem := 273, EdIzm := 'тыс. руб.', name := 'вспомогательных работников';
+  insert tCostItem set wCostItem := 274, EdIzm := 'тыс. руб.', name := 'АУП';
+  insert tCostItem set wCostItem := 280, EdIzm := 'тыс. руб.', name := 'Дополнительная заработная плата работников предприятия, всего:';
+  insert tCostItem set wCostItem := 281, EdIzm := ''         , name := 'в том числе:';
+  insert tCostItem set wCostItem := 282, EdIzm := 'тыс. руб.', name := 'основных производственных работников';
+  insert tCostItem set wCostItem := 283, EdIzm := 'тыс. руб.', name := 'вспомогательных работников';
+  insert tCostItem set wCostItem := 284, EdIzm := 'тыс. руб.', name := 'АУП';
+  insert tCostItem set wCostItem := 290, EdIzm := 'тыс. руб.', name := 'Страховые взносы на обязательное пенсионное страхование в Пенсионный фонд Российской Федерации, на обязательное медицинское страхование в Федеральный фонд обязательного медицинского страхования и территориальные фонды обязательного медицинского страхования';
+  insert tCostItem set wCostItem := 300, EdIzm := 'тыс. руб.', name := 'Взносы по обязательному социальному страхованию от несчастных случаев на производстве и профессиональных заболеваний';
+  insert tCostItem set wCostItem := 310, EdIzm := 'руб.'     , name := 'Среднемесячная основная заработная плата одного основного производственного рабочего (работника по НИОКР)';
+  insert tCostItem set wCostItem := 320, EdIzm := 'руб.'     , name := 'Среднемесячная дополнительная заработная плата одного основного производственного рабочего (работника по НИОКР)';
+  insert tCostItem set wCostItem := 330, EdIzm := 'руб.'     , name := 'Среднемесячная заработная плата одного работника предприятия';
+  insert tCostItem set wCostItem := 340, EdIzm := 'тыс. руб.', name := 'Среднемесячная заработная плата по региону';
+  insert tCostItem set wCostItem := 350, EdIzm := 'тыс. руб.', name := 'Среднемесячная заработная плата по отрасли';
+}
+cmDone:
+{
+  savemydsk(wYearRep1, 'Forma3GOZ_wYearRep1');
+  savemydsk(wYearRep2, 'Forma3GOZ_wYearRep2');
+}
+end;
+
+end.
+
+
+VipInterface UserReport_Forma3GOZ Implements IUserReport licensed(free);
+Interface UserReport_Forma3GOZ;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::Forma3GOZ);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Приложение 3-ГОЗ.Сведения об объемах производства и реализации продукции';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1)
+      GetGroupName := 'Отчеты ГОЗ'
+    else
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'DOGOVOR';
+    end;
+  end;
+end.
