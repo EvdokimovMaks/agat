@@ -1,5 +1,6 @@
 #include GlobalGoods.vih
 #include ExternalQuery.vih
+#include GlobalMatchManager.vih
 
 #component "AGAT"
 
@@ -10,6 +11,9 @@ const
   MatchDirection_SearchGalaxy = 2;
   MatchDirection_DontSearch   = 0;
 end;
+
+var
+  _gmm:GlobalMatchManager;
 
 table struct tMatches (
   katmcNrec   : comp,
@@ -57,10 +61,35 @@ window wMatches 'Установка соответствий МЦ Галактика ERP и Global ERP', escclose
 browse brmain;
   table brMatches;
   fields
-    brMatches.KatmcName   'Галактика МЦ': [50], protect;
+    brMatches.KatmcName   'Галактика МЦ': [50], protect, PickButton;
     _ei.GetAktOtpEdAbbr(brMatches.katmcNrec,1) 'Ед.изм.': [10], protect;
-    brMatches.GoodsName   'Global МЦ': [50], protect;
+    brMatches.GoodsName   'Global МЦ': [50], protect, PickButton;
     brMatches.MeasureName 'Ед.изм.': [10], protect;
+end;
+handleevent
+cmPick:
+{
+  if CurField = #brMatches.KatmcName then
+  {
+    message('Тут Галактика');
+    if brMatches.GoodsName = '' then
+    {
+      message('You shall not pass! Ибо Глобал пустой');
+      exit;
+    }
+    RunInterface(L_MCU::KATMC);
+  }
+  if CurField = #brMatches.GoodsName
+  {
+    message('А здесь у нас Глобал');
+    if brMatches.KatmcName = '' then
+    {
+      message('You shall not pass! Ибо Галактика пуста');
+      exit;
+    }
+    RunInterface(AGAT::GLOBALGOODSSELECTOR);
+  }
+}
 end;
 end;
 
@@ -87,21 +116,8 @@ function getMatchesDirection(aKatmcNrec: comp; aGoodsId: comp): byte;
 
 function SearchGalaxy(buf: tMatchesBuffer): tMatchesBuffer;
 {
-  var t: IExternalQueryText;
-  t := _externalQueryTextFactory.
-       CreateText('select mc.f$nrec as katmcNrec,').
-       AddString ('       mc.f$cgroupmc as groupmcNrec,').
-       AddString ('       mc.f$ctype as typemcNrec,').
-       AddString ('       mc.f$name as katmcName,').
-       AddString ('       mc.f$barkod as katmcBarcode').
-       AddString ('from openquery ('+getLinkedServerName+', '' ').
-       AddString ('     select SIDEXTERNALOBJ as KatmcNrec').
-       AddString ('     from BTK.AGT_OBJMAPPING mapping').
-       AddString ('     where mapping.idobjmappingtype = 24746150001 and mapping.idrefclass = 17372001 and mapping.IDREFOBJ='+string(buf.goodsId)).
-       AddString ('     '') gl').
-       AddString ('join t$katmc mc on mc.f$nrec = dbo.toComp(gl.KatmcNrec)');
   var rs: IResultSet;
-  rs := _externalQuery.GetResultSet(t);
+  rs := _gmm.FindByRefObjId(buf.goodsId);
   buf.matchesFound := rs.Count;
   if rs.getFirst = tsOk
   {
@@ -116,18 +132,8 @@ function SearchGalaxy(buf: tMatchesBuffer): tMatchesBuffer;
 
 function SearchGlobal(buf: tMatchesBuffer): tMatchesBuffer;
 {
-  var t: IExternalQueryText;
-  t := _externalQueryTextFactory.
-       CreateText('select goodsId, goodsName, measureId, measureName').
-       AddString ('from openquery ('+getLinkedServerName+', '' ').
-       AddString ('select goods.ID as goodsId, goods.SHEADLINE# as goodsName, goods.IdMeasureItem as measureId, measure.sShortName as measureName').
-       AddString ('from BTK.AGT_OBJMAPPING mapping').
-       AddString ('join BTK.BS_GOODS goods on mapping.IDREFOBJ = goods.ID').
-       AddString ('left join BTK.MSR_MEASUREITEMMAP measure on measure.idboobj#=goods.IdMeasureItem').
-       AddString ('where mapping.idobjmappingtype = 24746150001 and mapping.idrefclass = 17372001 and mapping.SIDEXTERNALOBJ='+string(buf.katmcNrec)).
-       AddString (' '') ');
   var rs: IResultSet;
-  rs := _externalQuery.GetResultSet(t);
+  rs := _gmm.FindByExternalObjId(buf.katmcNrec);
   buf.matchesFound := rs.Count;
   if rs.getFirst = tsOk
   {
@@ -169,17 +175,42 @@ function SearchMatches(aGlobalGoodsCollection: IGlobalGoodsCollection): boolean;
       vAdd.tMatches.measureName  := aGlobalGoodsCollection.MeasureName;
       vAdd.tMatches.direction    := getMatchesDirection(vAdd._katmcNrec, vAdd._goodsId);
 
-      case vAdd.tMatches.direction of
-        MatchDirection_SearchGalaxy: vAdd.tMatches.buffer := SearchGalaxy(tMatchesBuffer(vAdd.tMatches.buffer));
-        MatchDirection_SearchGlobal: vAdd.tMatches.buffer := SearchGlobal(tMatchesBuffer(vAdd.tMatches.buffer));
-      end;
-
       if (vAdd.tMatches.goodsId = 0 or vAdd.tMatches.katmcNrec = 0) result := false;
 
       vAdd.insert current tMatches;
     }
   } while (aGlobalGoodsCollection.GetNext = tsOk);
 
+  var rs: IResultSet;
+  _loop tMatches
+  {
+    case tMatches.direction of
+      MatchDirection_SearchGalaxy: {
+        rs := _gmm.FindByRefObjId(tMatches.goodsId);
+        tMatches.matchesFound := rs.Count;
+        if rs.getFirst = tsOk
+        {
+          tMatches.katmcNrec    := rs.row.Val('katmcNrec');
+          tMatches.groupmcNrec  := rs.row.Val('groupmcNrec');
+          tMatches.typemcNrec   := rs.row.Val('typemcNrec');
+          tMatches.katmcName    := rs.row.Val('katmcName');
+          tMatches.katmcBarcode := rs.row.Val('katmcBarcode');
+        }
+      }
+      MatchDirection_SearchGlobal: {
+        rs := _gmm.FindByExternalObjId(tMatches.katmcNrec);
+        tMatches.matchesFound := rs.Count;
+        if rs.getFirst = tsOk
+        {
+          tMatches.goodsId     := rs.row.Val('goodsId');
+          tMatches.goodsName   := rs.row.Val('goodsName');
+          tMatches.measureId   := rs.row.Val('measureId');
+          tMatches.measureName := rs.row.Val('measureName');
+        }
+      }
+    end;
+    update current tMatches;
+  }
 }
 
 function ShowUI: longint;
