@@ -47,15 +47,19 @@ end.
 
 interface LoadOrderToSalary 'Загрузка нарядов из модуля Планирования производства в модуль ЗП';
 const
-  CKAU_2601 = 00010000000009D9h; // 26010101 Должностной оклад
-  CKAU_2602 = 00010000000009DAh; // 26010102 Премия ежемесячная
-  CKAU_2001 = 000100000000095Ah; // 20020101 Должностной оклад
-  CKAU_2002 = 000100000000095Bh; // 20020102 Премия ежемесячная
-  CKAU_2008 = 0001000000000961h; // Прочие выплаты по ОЗП: 20020108
-  CKAU_2607 = 00010000000009DFh; // Прочие выплаты по ОЗП: 26010107
-  CKAU_2003 = 000100000000095Ch; // Премия квартальная: 20020103
-  CKAU_2004 = 000100000000095Dh; // Премия годовая: 20020104
+  ST_26010101 = 00010000000009D9h; // 26010101 Должностной оклад
+  ST_26010102 = 00010000000009DAh; // 26010102 Премия ежемесячная
+  ST_20020101 = 000100000000095Ah; // 20020101 Должностной оклад
+  ST_20020102 = 000100000000095Bh; // 20020102 Премия ежемесячная
+  ST_20020108 = 0001000000000961h; // Прочие выплаты по ОЗП: 20020108
+  ST_26010107 = 00010000000009DFh; // Прочие выплаты по ОЗП: 26010107
+  ST_20020103 = 000100000000095Ch; // Премия квартальная: 20020103
+  ST_20020104 = 000100000000095Dh; // Премия годовая: 20020104
 end;
+
+type TPrnaryadBuffer = record as table prnaryad;
+type TNardopBuffer   = record as table nardop;
+
 var
   MnplanNrec: comp;
   SV: AGAT::SvodVedZPSdel;
@@ -113,6 +117,81 @@ where ((
 _vidcode == klvidopl.vidoplp
 ));
 
+function GetVidoplSyscodeByUsercode(aVidoplUserCode: word): word;     //вернуть системный код видопла по пользовательскому коду
+{
+  vVIDOPL._vidcode := aVidoplUserCode;
+  if vVIDOPL.getfirst klvidopl = tsOk
+    result := vVIDOPL.klvidopl.vidopl
+  else
+    result := aVidoplUserCode;
+}
+
+procedure InsertPrnaryad(buf: TPrnaryad);
+{
+  if getfirst PRNARYAD where (( buf.MNREC    == PRNARYAD.MNREC    and
+                                buf.CLSCH    == PRNARYAD.CLSCH    and
+                                buf.VIDOPL   == PRNARYAD.VIDOPL   and
+                                (buf.CSCHETD  = PRNARYAD.CSCHETD  and
+                                 buf.CSUBSCHD = PRNARYAD.CSUBSCHD and
+                                 buf.CKAUD[1] = PRNARYAD.CKAUD[1] and
+                                 buf.CKAUD[2] = PRNARYAD.CKAUD[2] and
+                                 buf.CKAUD[3] = PRNARYAD.CKAUD[3] and
+                                 buf.CKAUD[4] = PRNARYAD.CKAUD[4]) )) != tsOk
+  {
+    PRNARYAD.Buffer := buf;
+    insert current PRNARYAD;
+  }
+}
+
+procedure InsertOrSumNardop(buf: TNardopBuffer);
+{
+  if getfirst NARDOP where ((buf.TZP      == NARDOP.TZP and
+                             buf.MNREC    == NARDOP.MNREC and
+                             buf.VIDOPL   == NARDOP.VIDOPL and
+                             (buf.CSCHETD  = NARDOP.CSCHETD  and
+                              buf.CSUBSCHD = NARDOP.CSUBSCHD and
+                              buf.CKAUD[1] = NARDOP.CKAUD[1] and
+                              buf.CKAUD[2] = NARDOP.CKAUD[2] and
+                              buf.CKAUD[3] = NARDOP.CKAUD[3] and
+                              buf.CKAUD[4] = NARDOP.CKAUD[4]) )) != tsOk
+  {
+    NARDOP.buffer := buf;
+    insert current NARDOP;
+  }
+  else
+  {
+    NARDOP.SUMDOP += buf.SUMDOP;
+    update current NARDOP;
+  }
+}
+
+procedure InitNardopBuffer(var buf: TNardopBuffer);
+{
+  ClearAdvRecord(buf);
+  buf.TZP      := 1;
+  buf.MNREC    := PRNARYAD.Nrec;
+  buf.CSCHETD  := PRNARYAD.cschetd;
+  buf.CSUBSCHD := PRNARYAD.csubschd;
+  buf.tbld[1]  := PRNARYAD.tbld[1];
+  buf.tbld[2]  := PRNARYAD.tbld[2];
+  buf.tbld[3]  := PRNARYAD.tbld[3];
+  buf.tbld[4]  := PRNARYAD.tbld[4];
+  buf.tbld[5]  := PRNARYAD.tbld[5];
+  buf.tbld[6]  := PRNARYAD.tbld[6];
+  var i,j: byte;
+  for(i:=1;i<=6;i++) {
+    if (buf.tbld[i]!=40) {
+      for(j:=1;j<=6;j++)
+        if buf.tbld[i] = vLS.lschet.tbld[j] {
+          buf.ckaud[i] := vLS.lschet.ckaud[j];
+          break;
+        }
+    }
+    else
+      buf.ckaud[i] := pwsWork.KatstroyNrec;
+  }
+}
+
 handleevent
 cmInit:
 {
@@ -143,208 +222,171 @@ cmInit:
   {
     if getfirst pwsPerson where ((pwswork.pwsPersonNrec == pwsPerson.Nrec)) = tsOk     // работы по человеку
     {
-      if getfirst PRNARYAD where ((pwsPerson.PersonCode == PRNARYAD.tabn and (PRNARYAD.CKAUD[1] = pwswork.KatstroyNrec and PRNARYAD.mnrec = SYS_NAR.nrec))) != tsOk   // группировка по ФИО и заказу (надо ли ещё по виду?)
-      {
-        ClearBuffer(#PRNARYAD);
-        PRNARYAD.TPERSON := pwsPerson.PersonNrec;
-        PRNARYAD.mnrec := SYS_NAR.nrec;
-        PRNARYAD.CLSCH := pwsPerson.LSchetNrec;
-        PRNARYAD.tabn := pwsPerson.PersonCode;
-        PRNARYAD.datan := pws.StartDate;
-        PRNARYAD.datok := pws.EndDate;
-        PRNARYAD.MES := Month(SYS_NAR.datan);
 
-        vLS._lsnrec := pwsPerson.LSchetNrec;
-        if vLS.getfirst lschet = tsOk { };
+      vLS._lsnrec := pwsPerson.LSchetNrec;
+      if vLS.getfirst lschet != tsOk continue;
 
-        PRNARYAD.cpodr := vLS.lschet.CAPPOINT;
-        PRNARYAD.filialno := vLS.lschet.kateg;
-        PRNARYAD.cexoz := vLS.lschet.cex;
-
-        case pwsWork.Kind of       // распределение основных выплат в зависимости от вида работ
-          0: {                                      // 20.03
-               PRNARYAD.cschetd := '20';
-               PRNARYAD.csubschd := '03';
-               PRNARYAD.tbld[1] := 40; // объекты строительства
-               PRNARYAD.tbld[2] := 10016; // статьи затрат
-               PRNARYAD.tbld[3] := vLS.lschet.tbld[3];
-               PRNARYAD.tbld[4] := vLS.lschet.tbld[4];
-               PRNARYAD.CKAUD[1] := pwsWork.KatstroyNrec;
-               PRNARYAD.CKAUD[2] := CKAU_2001;
-               PRNARYAD.CKAUD[3] := vLS.lschet.CKAUD[3];
-               PRNARYAD.CKAUD[4] := vLS.lschet.CKAUD[4];
-               if vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 1 or vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 2 then    // Сдельная оплата (тсс-1 или тсс-2)
-               {
-                 vVIDOPL._vidcode := 100;
-                 if vVIDOPL.getfirst klvidopl = tsOk { };
-                 PRNARYAD.vidopl := vVIDOPL.klvidopl.vidopl;
-               }
-               if vLS.lschet.sisopl = 40 then                                     // оклад
-               {
-                 vVIDOPL._vidcode := 102;
-                 if vVIDOPL.getfirst klvidopl = tsOk { };
-                 PRNARYAD.vidopl := vVIDOPL.klvidopl.vidopl;
-               }
-               if vLS.lschet.sisopl = 30 then                                     // повременная оплата
-               {
-                 vVIDOPL._vidcode := 101;
-                 if vVIDOPL.getfirst klvidopl = tsOk { };
-                 PRNARYAD.vidopl := vVIDOPL.klvidopl.vidopl;
-               }
-             }
-          1: {                                      // 96.02 Гарантийный ремонт
-               PRNARYAD.cschetd := '96';
-               PRNARYAD.csubschd := '02';
-               PRNARYAD.tbld[1] := 1; // организации
-               PRNARYAD.tbld[2] := 40; // объекты строительства
-               PRNARYAD.tbld[3] := 14; // договоры
-               PRNARYAD.tbld[4] := 158; // 2005. Виды задолженности
-               if vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 1 or vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 2 then    // Сдельная оплата (тсс-1 или тсс-2)
-               {
-                 vVIDOPL._vidcode := 100;
-                 if vVIDOPL.getfirst klvidopl = tsOk { };
-                 PRNARYAD.vidopl := vVIDOPL.klvidopl.vidopl;
-               }
-               if vLS.lschet.sisopl = 40 then                                     // оклад
-               {
-                 vVIDOPL._vidcode := 102;
-                 if vVIDOPL.getfirst klvidopl = tsOk { };
-                 PRNARYAD.vidopl := vVIDOPL.klvidopl.vidopl;
-               }
-               if vLS.lschet.sisopl = 30 then
-               {
-                 vVIDOPL._vidcode := 101;
-                 if vVIDOPL.getfirst klvidopl = tsOk { };
-                 PRNARYAD.vidopl := vVIDOPL.klvidopl.vidopl;
-               }
-               PRNARYAD.CKAUD[2] := pwsWork.KatstroyNrec;        // объект строительства (+)
-             }
-          2: {                                      // 26.01
-               PRNARYAD.cschetd := '26';
-               PRNARYAD.csubschd := '01';
-               PRNARYAD.tbld[1] := 40; // объекты строительства
-               PRNARYAD.tbld[2] := 10016; // статьи затрат
-               PRNARYAD.tbld[3] := vLS.lschet.tbld[3];
-               PRNARYAD.tbld[4] := vLS.lschet.tbld[4];
-               PRNARYAD.CKAUD[1] := pwsWork.KatstroyNrec;        // объект строительства (+)
-               PRNARYAD.CKAUD[2] := CKAU_2601;                   // 26010101 Должностной оклад
-               PRNARYAD.CKAUD[3] := vLS.lschet.CKAUD[3];         // из лицевого счета
-               PRNARYAD.CKAUD[4] := vLS.lschet.CKAUD[4];         // из лицевого счета
-             }
-        end;
-
-        if pwsPerson.BonusValue <> 0      // заполнение vidprem ("Вид премии")
-        {
-          if vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 1 or vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 2 then   // премия с кодом 110
-            PRNARYAD.vidprem := 2;
-          if vLS.lschet.sisopl = 40 then                                                                                 // премия с кодом 109
-            PRNARYAD.vidprem := 205;
-          if vLS.lschet.sisopl = 30 then                                                                                 // премия с кодом 108
-            PRNARYAD.vidprem := 211;
+      //Заполнение буфера строки наряда
+      var PrnaryadBuffer: TPrnaryadBuffer;
+      ClearAdvRecord(PrnaryadBuffer);
+      PrnaryadBuffer.TPERSON  := pwsPerson.PersonNrec;
+      PrnaryadBuffer.mnrec    := SYS_NAR.nrec;
+      PrnaryadBuffer.CLSCH    := pwsPerson.LSchetNrec;
+      PrnaryadBuffer.tabn     := pwsPerson.PersonCode;
+      PrnaryadBuffer.datan    := pws.StartDate;
+      PrnaryadBuffer.datok    := pws.EndDate;
+      PrnaryadBuffer.MES      := Month(SYS_NAR.datan);
+      PrnaryadBuffer.cpodr    := vLS.lschet.CAPPOINT;
+      PrnaryadBuffer.filialno := vLS.lschet.kateg;
+      PrnaryadBuffer.cexoz    := vLS.lschet.cex;
+      case vLS.lschet.sisopl of
+        20: PrnaryadBuffer.vidopl := GetVidoplSyscodeByUsercode(100); // Сдельная оплата (тсс-1 или тсс-2)
+        30: PrnaryadBuffer.vidopl := GetVidoplSyscodeByUsercode(101); // повременная оплата
+        40: PrnaryadBuffer.vidopl := GetVidoplSyscodeByUsercode(102); // оклад
+      end;
+      case pwsWork.Kind of       // распределение основных выплат в зависимости от вида работ
+        0: {                                      // 20.03
+          PrnaryadBuffer.cschetd  := '20';
+          PrnaryadBuffer.csubschd := '03';
+          PrnaryadBuffer.tbld[1]  := 40; // объекты строительства
+          PrnaryadBuffer.tbld[2]  := 10016; // статьи затрат
+          PrnaryadBuffer.tbld[3]  := vLS.lschet.tbld[3];
+          PrnaryadBuffer.tbld[4]  := vLS.lschet.tbld[4];
+          PrnaryadBuffer.CKAUD[1] := pwsWork.KatstroyNrec;
+          PrnaryadBuffer.CKAUD[2] := CKAU_2001;
+          PrnaryadBuffer.CKAUD[3] := vLS.lschet.CKAUD[3];
+          PrnaryadBuffer.CKAUD[4] := vLS.lschet.CKAUD[4];
         }
+        1: {                                      // 96.02 Гарантийный ремонт
+          PrnaryadBuffer.cschetd  := '96';
+          PrnaryadBuffer.csubschd := '02';
+          PrnaryadBuffer.tbld[1]  := 1; // организации
+          PrnaryadBuffer.tbld[2]  := 40; // объекты строительства
+          PrnaryadBuffer.tbld[3]  := 14; // договоры
+          PrnaryadBuffer.tbld[4]  := 158; // 2005. Виды задолженности
+          PrnaryadBuffer.CKAUD[2] := pwsWork.KatstroyNrec;        // объект строительства (+)
+        }
+        2: {                                      // 26.01
+          PrnaryadBuffer.cschetd  := '26';
+          PrnaryadBuffer.csubschd := '01';
+          PrnaryadBuffer.tbld[1]  := 40; // объекты строительства
+          PrnaryadBuffer.tbld[2]  := 10016; // статьи затрат
+          PrnaryadBuffer.tbld[3]  := vLS.lschet.tbld[3];
+          PrnaryadBuffer.tbld[4]  := vLS.lschet.tbld[4];
+          PrnaryadBuffer.CKAUD[1] := pwsWork.KatstroyNrec;        // объект строительства (+)
+          PrnaryadBuffer.CKAUD[2] := CKAU_2601;                   // 26010101 Должностной оклад
+          PrnaryadBuffer.CKAUD[3] := vLS.lschet.CKAUD[3];         // из лицевого счета
+          PrnaryadBuffer.CKAUD[4] := vLS.lschet.CKAUD[4];         // из лицевого счета
+        }
+      end;
+      //if pwsPerson.BonusValue <> 0      // заполнение vidprem ("Вид премии")
+      //{
+      //  case vLS.lschet.sisopl of
+      //    20: PrnaryadBuffer.vidprem := 2;   // Сдельная оплата (тсс-1 или тсс-2) премия с кодом 110
+      //    30: PrnaryadBuffer.vidprem := 211; // повременная оплата премия с кодом 108
+      //    40: PrnaryadBuffer.vidprem := 205; // оклад премия с кодом 109
+      //  end;
+      //}
+      InsertPrnaryad(PrnaryadBuffer);       //добавляем новый наряд или позиционируем PRNARYAD на существующий, соответствующий буферу
 
-        insert current PRNARYAD;
-      }
+                                            //надбавки, добавляемые общей суммой
 
       if pwsWork.HazardPayValue <> 0        // надбавка за вредность (+)
       {
-        if getfirst NARDOP where ((1 == NARDOP.tzp and PRNARYAD.nrec == NARDOP.mnrec and (NARDOP.vidopl = 16 or NARDOP.vidopl = 19))) != tsOk then
-        {
-          ClearBuffer(#NARDOP);
-          NARDOP.MNREC := PRNARYAD.Nrec;
-          NARDOP.CSCHETD := PRNARYAD.cschetd;
-          NARDOP.CSUBSCHD := PRNARYAD.csubschd;
-          NARDOP.SUMDOP := pwsWork.QualifPayValue;
-          NARDOP.proc := pwsWork.QualifPayPercent;
-
-          if vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 1 or vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 2 then   // сдельно
-            vVIDOPL._vidcode := 120
-          else  // оклад или повременно
-            vVIDOPL._vidcode := 121;
-          if vVIDOPL.getfirst klvidopl = tsOk { };
-          NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-
-          case pwsWork.Kind of
-          0: {
-               NARDOP.tbld[1] := 40; // объекты строительства
-               NARDOP.tbld[2] := 10016; // статьи затрат
-               NARDOP.tbld[3] := vLS.lschet.tbld[3];
-               NARDOP.tbld[4] := vLS.lschet.tbld[4];
-               NARDOP.CKAUD[1] := pwsWork.KatstroyNrec;
-               NARDOP.CKAUD[2] := CKAU_2008;
-               NARDOP.CKAUD[3] := vLS.lschet.CKAUD[3];
-               NARDOP.CKAUD[4] := vLS.lschet.CKAUD[4];
-             }
-          1: {
-               NARDOP.tbld[1] := 1; // организации
-               NARDOP.tbld[2] := 40; // объекты строительства
-               NARDOP.tbld[3] := 14; // договоры
-               NARDOP.tbld[4] := 158; // 2005. Виды задолженности
-               NARDOP.CKAUD[2] := pwsWork.KatstroyNrec;
-             }
-          end;
-
-          insert current NARDOP;
-        }
-        else
-        {
-          NARDOP.SUMDOP := NARDOP.SUMDOP + pwsWork.HazardPayValue;
-          update current NARDOP;
-        }
+        var NardopBuffer: TNardopBuffer;
+        InitNardopBuffer(NardopBuffer);
+        NardopBuffer.SUMDOP     := pwsWork.HazardPayValue;
+        NardopBuffer.PROC       := pwsWork.HazardPayPercent;
+        NardopBuffer.VIDOPL     := if(vLS.lschet.sisopl = 20, GetVidoplSyscodeByUsercode(120), GetVidoplSyscodeByUsercode(121));
+        if pwsWork.Kind = 0
+          NardopBuffer.CKAUD[2] := CKAU_2008;
+        InsertOrSumNardop(NardopBuffer);
       }
 
       if pwsWork.QualifPayValue <> 0        // межразрядная сумма (+)
       {
-        if getfirst NARDOP where ((1 == NARDOP.tzp and PRNARYAD.nrec == NARDOP.mnrec and (NARDOP.vidopl = 17))) != tsOk then
-        {
-          ClearBuffer(#NARDOP);
-          NARDOP.MNREC := PRNARYAD.Nrec;
-          NARDOP.CSCHETD := PRNARYAD.cschetd;
-          NARDOP.CSUBSCHD := PRNARYAD.csubschd;
-          vVIDOPL._vidcode := 118;
-          if vVIDOPL.getfirst klvidopl = tsOk { };
-          NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-          NARDOP.SUMDOP := pwsWork.QualifPayValue;
-          NARDOP.proc := pwsWork.QualifPayPercent;
+        var NardopBuffer: TNardopBuffer;
+        InitNardopBuffer(NardopBuffer);
+        NardopBuffer.SUMDOP     := pwsWork.QualifPayValue;
+        NardopBuffer.PROC       := pwsWork.QualifPayPercent;
+        NardopBuffer.VIDOPL     := GetVidoplSyscodeByUsercode(118);
+        if pwsWork.Kind = 0
+          NardopBuffer.CKAUD[2] := CKAU_2008;
+        InsertOrSumNardop(NardopBuffer);
+      } //межразрядная сумма
 
-          case pwsWork.Kind of
-          0: {
-               NARDOP.tbld[1] := 40; // объекты строительства
-               NARDOP.tbld[2] := 10016; // статьи затрат
-               NARDOP.tbld[3] := vLS.lschet.tbld[3];
-               NARDOP.tbld[4] := vLS.lschet.tbld[4];
-               NARDOP.CKAUD[1] := pwsWork.KatstroyNrec;
-               NARDOP.CKAUD[2] := CKAU_2008;
-               NARDOP.CKAUD[3] := vLS.lschet.CKAUD[3];
-               NARDOP.CKAUD[4] := vLS.lschet.CKAUD[4];
-             }
-          1: {
-               NARDOP.tbld[1] := 1; // организации
-               NARDOP.tbld[2] := 40; // объекты строительства
-               NARDOP.tbld[3] := 14; // договоры
-               NARDOP.tbld[4] := 158; // 2005. Виды задолженности
-               NARDOP.CKAUD[2] := pwsWork.KatstroyNrec;
-             }
-          end;
+      if pwsPerson.BonusValue <> 0          // сумма премии (+)
+      {
+        var NardopBuffer: TNardopBuffer;
+        InitNardopBuffer(NardopBuffer);
+        NardopBuffer.SUMDOP   := pwsPerson.BonusValue;
+        NardopBuffer.PROC     := pwsPerson.BonusPercent;
+        case vLS.lschet.sisopl of
+          20: NardopBuffer.VIDOPL := GetVidoplSyscodeByUsercode(110);  //сдельно
+          30: NardopBuffer.VIDOPL := GetVidoplSyscodeByUsercode(109);  //повременно
+        else  NardopBuffer.VIDOPL := GetVidoplSyscodeByUsercode(108);  //оклад
+        end;
+        case pwsWork.Kind of       // распределение суммы премий в зависимости от вида работ
+          0: NardopBuffer.CKAUD[2] := CKAU_2002;
+          2: NardopBuffer.CKAUD[2] := CKAU_2602;                   // 26010101 Должностн
+        end;
+        InsertOrSumNardop(NardopBuffer);
+      } // сумма премии
 
-          insert current NARDOP;
-        }
-        else
-        {
-          NARDOP.SUMDOP := NARDOP.SUMDOP + pwsWork.QualifPayValue;
-          update current NARDOP;
-        }
+      if pwsPerson.BonusHzrdValue <> 0      // сумма премии за вредность (+)
+      {
+        var NardopBuffer: TNardopBuffer;
+        ClearAdvRecord(NardopBuffer);
+        NardopBuffer.SUMDOP   := pwsPerson.BonusHzrdValue;
+        NardopBuffer.PROC     := pwsPerson.BonusHzrdPercent;
+        NardopBuffer.VIDOPL   := GetVidoplSyscodeByUsercode(111);
+        if vLS.lschet.sisopl = 20 and pwsWork.Kind = 0
+          NardopBuffer.CKAUD[2] := CKAU_2008;
+        InsertOrSumNardop(NardopBuffer);
       }
 
-      PRNARYAD.CHASF := PRNARYAD.CHASF + pwsWork.AvgHours;                                          // часы по факту
-      PRNARYAD.KOLDN := trunc(PRNARYAD.CHASF / 8);
-      PRNARYAD.CHASGR := pwsPerson.BalanceHoursPlan * PRNARYAD.CHASF / pwsPerson.BalanceHoursFact;  // часы по плану
-      PRNARYAD.SUMMPREM := pwsPerson.BonusValue * PRNARYAD.CHASF / pwsPerson.BalanceHoursFact;
-      PRNARYAD.SUMMA := pwsPerson.PaymentValue * PRNARYAD.CHASF / pwsPerson.BalanceHoursFact;
+      if pwsPerson.BonusQuarValue <> 0      // квартальная премия (+)
+      {
+        var NardopBuffer: TNardopBuffer;
+        ClearAdvRecord(NardopBuffer);
+        NardopBuffer.TZP      := 1;
+        NardopBuffer.MNREC    := PrnaryadBuffer.Nrec;
+        NardopBuffer.CSCHETD  := PrnaryadBuffer.cschetd;
+        NardopBuffer.CSUBSCHD := PrnaryadBuffer.csubschd;
+        NardopBuffer.VIDOPL   := GetVidoplSyscodeByUsercode(107);
+        NardopBuffer.SUMDOP   := pwsPerson.BonusQuarValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
+        NardopBuffer.PROC     := pwsPerson.BonusQuarPercent;
+        case pwsWork.Kind of
+          0: { // 20.03
+            NardopBuffer.tbld[1]  := 40;    // объекты строительства
+            NardopBuffer.tbld[2]  := 10016; // статьи затрат
+            NardopBuffer.tbld[3]  := vLS.lschet.tbld[3];
+            NardopBuffer.tbld[4]  := vLS.lschet.tbld[4];
+            NardopBuffer.CKAUD[1] := pwsWork.KatstroyNrec;
+            NardopBuffer.CKAUD[2] := CKAU_2003;
+            NardopBuffer.CKAUD[3] := vLS.lschet.CKAUD[3];
+            NardopBuffer.CKAUD[4] := vLS.lschet.CKAUD[4];
+          }
+          1: {
+            NardopBuffer.tbld[1]  := 1;   // организации
+            NardopBuffer.tbld[2]  := 40;  // объекты строительства
+            NardopBuffer.tbld[3]  := 14;  // договоры
+            NardopBuffer.tbld[4]  := 158; // 2005. Виды задолженности
+            NardopBuffer.CKAUD[2] := pwsWork.KatstroyNrec;
+          }
+        end;
+        InsertOrSumNardop(NardopBuffer);
+      }
 
+
+      PRNARYAD.CHASF    := PRNARYAD.CHASF + pwsWork.AvgHours;                                          // часы по факту
+      PRNARYAD.KOLDN    := trunc(PRNARYAD.CHASF / 8);
+      PRNARYAD.CHASGR   := pwsPerson.BalanceHoursPlan * PRNARYAD.CHASF / pwsPerson.BalanceHoursFact;  // часы по плану
+      PRNARYAD.SUMMPREM := pwsPerson.BonusValue * PRNARYAD.CHASF / pwsPerson.BalanceHoursFact;
+      PRNARYAD.SUMMA    := pwsPerson.PaymentValue * PRNARYAD.CHASF / pwsPerson.BalanceHoursFact;
       update current PRNARYAD;
-    }
-  }
+    } //if getfirst pwsPerson
+  } //_loop pwsWork
 
   _loop pwsWork                  // цикл для разбивки доплат по заказам
   {
@@ -352,181 +394,8 @@ cmInit:
     { // строки спецификации бух. наряда разбиты по людям и заказам (объектам строительства)
       if getfirst PRNARYAD where ((pwsPerson.PersonCode == PRNARYAD.tabn and (PRNARYAD.CKAUD[1] = pwswork.KatstroyNrec and PRNARYAD.mnrec = SYS_NAR.nrec))) = tsOk then
       {
-        if pwsPerson.BonusValue <> 0                       // сумма премии (+)
-        {
-          if getfirst NARDOP where ((1 == NARDOP.tzp and PRNARYAD.nrec == NARDOP.mnrec and (NARDOP.vidopl = 2 or NARDOP.vidopl = 205 or NARDOP.vidopl = 211))) != tsOk
-          {
-            case pwsWork.Kind of       // распределение суммы премий в зависимости от вида работ
-            0: {                                      // 20.03
-                 ClearBuffer(#NARDOP);
-                 NARDOP.MNREC := PRNARYAD.Nrec;
-                 NARDOP.CSCHETD := PRNARYAD.cschetd;
-                 NARDOP.CSUBSCHD := PRNARYAD.csubschd;
-                 NARDOP.tbld[1] := 40; // объекты строительства
-                 NARDOP.tbld[2] := 10016; // статьи затрат
-                 NARDOP.tbld[3] := vLS.lschet.tbld[3];
-                 NARDOP.tbld[4] := vLS.lschet.tbld[4];
-                 NARDOP.CKAUD[1] := pwsWork.KatstroyNrec;
-                 NARDOP.CKAUD[2] := CKAU_2002;
-                 NARDOP.CKAUD[3] := vLS.lschet.CKAUD[3];
-                 NARDOP.CKAUD[4] := vLS.lschet.CKAUD[4];
-                 if vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 1 or vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 2 then    // Сдельная оплата (тсс-1 или тсс-2)
-                 {
-                   vVIDOPL._vidcode := 110;
-                   if vVIDOPL.getfirst klvidopl = tsOk { };
-                   NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-                   NARDOP.SUMDOP := pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-                   NARDOP.proc := pwsPerson.BonusPercent;
-                 }
-                 if vLS.lschet.sisopl = 40 then                                     // оклад
-                 {
-                   vVIDOPL._vidcode := 108;
-                   if vVIDOPL.getfirst klvidopl = tsOk { };
-                   NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-                   NARDOP.SUMDOP := pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-                   NARDOP.proc := pwsPerson.BonusPercent;
-                 }
-                 if vLS.lschet.sisopl = 30 then                                     // повременная оплата
-                 {
-                   vVIDOPL._vidcode := 109;
-                   if vVIDOPL.getfirst klvidopl = tsOk { };
-                   NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-                   NARDOP.SUMDOP := pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-                   NARDOP.proc := pwsPerson.BonusPercent;
-                 }
-                 insert current NARDOP;
-               }
-            1: {                                      // 96.02 Гарантийный ремонт
-                 ClearBuffer(#NARDOP);
-                 NARDOP.MNREC := PRNARYAD.Nrec;
-                 NARDOP.CSCHETD := PRNARYAD.cschetd;
-                 NARDOP.CSUBSCHD := PRNARYAD.csubschd;
-                 NARDOP.tbld[1] := 1; // организации
-                 NARDOP.tbld[2] := 40; // объекты строительства
-                 NARDOP.tbld[3] := 14; // договоры
-                 NARDOP.tbld[4] := 158; // 2005. Виды задолженности
-                 NARDOP.CKAUD[2] := pwsWork.KatstroyNrec;        // объект строительства (+)
-                 if vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 1 or vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 2 then    // Сдельная оплата (тсс-1 или тсс-2)
-                 {
-                   vVIDOPL._vidcode := 110;
-                   if vVIDOPL.getfirst klvidopl = tsOk { };
-                   NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-                   NARDOP.SUMDOP := pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-                   NARDOP.proc := pwsPerson.BonusPercent;
-                 }
-                 if vLS.lschet.sisopl = 40 then                                     // оклад
-                 {
-                   vVIDOPL._vidcode := 108;
-                   if vVIDOPL.getfirst klvidopl = tsOk { };
-                   NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-                   NARDOP.SUMDOP := pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-                   NARDOP.proc := pwsPerson.BonusPercent;
-                 }
-                 if vLS.lschet.sisopl = 30 then                                     // повременная оплата
-                 {
-                   vVIDOPL._vidcode := 109;
-                   if vVIDOPL.getfirst klvidopl = tsOk { };
-                   NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-                   NARDOP.SUMDOP := pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-                   NARDOP.proc := pwsPerson.BonusPercent;
-                 }
-                 insert current NARDOP;
-               }
-            2: {                                      // 26.01
-                 ClearBuffer(#NARDOP);
-                 NARDOP.MNREC := PRNARYAD.Nrec;
-                 NARDOP.CSCHETD := PRNARYAD.cschetd;
-                 NARDOP.CSUBSCHD := PRNARYAD.csubschd;
-                 NARDOP.tbld[1] := 40; // объекты строительства
-                 NARDOP.tbld[2] := 10016; // статьи затрат
-                 NARDOP.tbld[3] := vLS.lschet.tbld[3];
-                 NARDOP.tbld[4] := vLS.lschet.tbld[4];
-                 NARDOP.CKAUD[1] := pwsWork.KatstroyNrec;        // объект строительст
-                 NARDOP.CKAUD[2] := CKAU_2602;                   // 26010101 Должностн
-                 NARDOP.CKAUD[3] := vLS.lschet.CKAUD[3];         // из лицевого счета
-                 NARDOP.CKAUD[4] := vLS.lschet.CKAUD[4];         // из лицевого счета
 
-                 if vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 1 or vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 2 then    // Сдельная оплата (тсс-1 или тсс-2)
-                 {
-                   vVIDOPL._vidcode := 110;
-                   if vVIDOPL.getfirst klvidopl = tsOk { };
-                   NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-                   NARDOP.SUMDOP := pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-                   NARDOP.proc := pwsPerson.BonusPercent;
-                 }
-                 if vLS.lschet.sisopl = 40 then                                     // оклад
-                 {
-                   vVIDOPL._vidcode := 108;
-                   if vVIDOPL.getfirst klvidopl = tsOk { };
-                   NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-                   NARDOP.SUMDOP := pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-                   NARDOP.proc := pwsPerson.BonusPercent;
-                 }
-                 if vLS.lschet.sisopl = 30 then                                     // повременная оплата
-                 {
-                   vVIDOPL._vidcode := 109;
-                   if vVIDOPL.getfirst klvidopl = tsOk { };
-                   NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-                   NARDOP.SUMDOP := pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-                   NARDOP.proc := pwsPerson.BonusPercent;
-                 }
-                 insert current NARDOP;
-               }
-            end;
-          }
-          else
-          {
-            NARDOP.SUMDOP += pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-            update current NARDOP;
-          }
-        }
-
-        if pwsPerson.BonusHzrdValue <> 0                   // сумма премии за вредность (+)
-        {
-          if getfirst NARDOP where ((1 == NARDOP.tzp and PRNARYAD.nrec == NARDOP.mnrec and (NARDOP.vidopl = 3))) != tsOk then
-          {
-            ClearBuffer(#NARDOP);
-            NARDOP.MNREC := PRNARYAD.Nrec;
-            NARDOP.CSCHETD := PRNARYAD.cschetd;
-            NARDOP.CSUBSCHD := PRNARYAD.csubschd;
-            vVIDOPL._vidcode := 111;
-            if vVIDOPL.getfirst klvidopl = tsOk { };
-            NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-            NARDOP.SUMDOP := pwsPerson.BonusHzrdValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-            NARDOP.proc := pwsPerson.BonusHzrdPercent;
-
-            if vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 1 or vLS.lschet.sisopl = 20 and vLS.lschet.codtar = 2 then    // только для Сдельная оплата (тсс-1 или тсс-2)
-            {
-              if pwsWork.Kind = 0  // 20.03
-              {
-                NARDOP.tbld[1] := 40; // объекты строительства
-                NARDOP.tbld[2] := 10016; // статьи затрат
-                NARDOP.tbld[3] := vLS.lschet.tbld[3];
-                NARDOP.tbld[4] := vLS.lschet.tbld[4];
-                NARDOP.CKAUD[1] := pwsWork.KatstroyNrec;
-                NARDOP.CKAUD[2] := CKAU_2008;
-                NARDOP.CKAUD[3] := vLS.lschet.CKAUD[3];
-                NARDOP.CKAUD[4] := vLS.lschet.CKAUD[4];
-              }
-              if pwsWork.Kind = 1
-              {
-                NARDOP.tbld[1] := 1; // организации
-                NARDOP.tbld[2] := 40; // объекты строительства
-                NARDOP.tbld[3] := 14; // договоры
-                NARDOP.tbld[4] := 158; // 2005. Виды задолженности
-                NARDOP.CKAUD[2] := pwsWork.KatstroyNrec;
-              }
-            }
-            insert current NARDOP;
-          }
-          else
-          {
-            NARDOP.sumdop += pwsPerson.BonusHzrdValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-            update current NARDOP;
-          }
-        }
-
-        if pwsPerson.BonusOtherValue <> 0                  // доп надбавки (+)
+        if pwsPerson.BonusOther20Value <> 0                  // доп надбавки 20 (+)
         {
           if getfirst NARDOP where ((1 == NARDOP.tzp and PRNARYAD.nrec == NARDOP.mnrec and (NARDOP.vidopl = 46 or NARDOP.vidopl = 23))) != tsOk then
           {
@@ -562,48 +431,6 @@ cmInit:
           }
         }
 
-        if pwsPerson.BonusQuarValue <> 0                  // квартальная премия (+)
-        {
-          if getfirst NARDOP where ((1 == NARDOP.tzp and PRNARYAD.nrec == NARDOP.mnrec and (NARDOP.vidopl = 240))) != tsOk then
-          {
-            ClearBuffer(#NARDOP);
-            NARDOP.MNREC := PRNARYAD.Nrec;
-            NARDOP.CSCHETD := PRNARYAD.cschetd;
-            NARDOP.CSUBSCHD := PRNARYAD.csubschd;
-            vVIDOPL._vidcode := 107;
-            if vVIDOPL.getfirst klvidopl = tsOk { };
-            NARDOP.VIDOPL := vVIDOPL.klvidopl.vidopl;
-            NARDOP.SUMDOP := pwsPerson.BonusOtherValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-            NARDOP.proc := pwsPerson.BonusQuarPercent;
-
-            if pwsWork.Kind = 0  // 20.03
-            {
-              NARDOP.tbld[1] := 40; // объекты строительства
-              NARDOP.tbld[2] := 10016; // статьи затрат
-              NARDOP.tbld[3] := vLS.lschet.tbld[3];
-              NARDOP.tbld[4] := vLS.lschet.tbld[4];
-              NARDOP.CKAUD[1] := pwsWork.KatstroyNrec;
-              NARDOP.CKAUD[2] := CKAU_2003;
-              NARDOP.CKAUD[3] := vLS.lschet.CKAUD[3];
-              NARDOP.CKAUD[4] := vLS.lschet.CKAUD[4];
-            }
-            if pwsWork.Kind = 1
-            {
-              PRNARYAD.tbld[1] := 1; // организации
-              PRNARYAD.tbld[2] := 40; // объекты строительства
-              PRNARYAD.tbld[3] := 14; // договоры
-              PRNARYAD.tbld[4] := 158; // 2005. Виды задолженности
-              NARDOP.CKAUD[2] := pwsWork.KatstroyNrec;
-            }
-
-            insert current NARDOP;
-          }
-          else
-          {
-            NARDOP.SUMDOP += pwsPerson.BonusOtherValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact;
-            update current NARDOP;
-          }
-        }
 
         if pwsPerson.BonusYearValue <> 0                  // годовая премия (+)
         {
