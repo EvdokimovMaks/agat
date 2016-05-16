@@ -46,20 +46,57 @@ end;
 end.
 
 interface LoadOrderToSalary 'Загрузка нарядов из модуля Планирования производства в модуль ЗП';
+
+table struct tRules (
+  workKind : word,
+  payModel : word,
+  fldKind  : word,
+  code     : word,
+  value    : variant
+) with index (
+  i01 = workKind + payModel + fldKind + code
+);
+
 const
-  ST_26010101 = 00010000000009D9h; // 26010101 Должностной оклад
-  ST_26010102 = 00010000000009DAh; // 26010102 Премия ежемесячная
-  ST_20020101 = 000100000000095Ah; // 20020101 Должностной оклад
-  ST_20020102 = 000100000000095Bh; // 20020102 Премия ежемесячная
-  ST_20020108 = 0001000000000961h; // Прочие выплаты по ОЗП: 20020108
-  ST_26010107 = 00010000000009DFh; // Прочие выплаты по ОЗП: 26010107
-  ST_20020103 = 000100000000095Ch; // Премия квартальная: 20020103
-  ST_20020104 = 000100000000095Dh; // Премия годовая: 20020104
-  ST_9102012201 = 0001000000000B57h; //2005. Виды прочих доходов/расходов - Прочие расходы, не имеющие разницы при отражении в бухгалтерском и налоговом учете
+  workkind_00           = 0;
+  workkind_20           = 1;
+  workkind_96           = 2;
+  workkind_26           = 3;
+  workkind_91           = 4;
+
+  paymodel_sdeln         = 20;
+  paymodel_povr          = 30;
+  paymodel_oklad         = 40;
+
+  fld_prnaryad           = 0;
+  fld_Bonus              = 1;
+  fld_HazardPayValue     = 2;
+  fld_QualifPayValue     = 3;
+  fld_BonusValue         = 4;
+  fld_BonusHzrdValue     = 5;
+  fld_BonusQuarValue     = 6;
+  fld_BonusYearValue     = 7;
+  fld_BonusQualif20Value = 8;
+  fld_BonusQualif26Value = 9;
+  fld_BonusCombineValue  = 10;
+
+  rulecode_vidopl   = -1;
+  rulecode_schet    = -2;
+
+  kaucode_buhstz    = 10016; //2013 Статьи затрат
+  kaucode_vidzad    = 0; //2005 Виды задолженности
+  kaucode_vidprr    = 0; //2005 Виды прочих расходов
 end;
 
 type TPrnaryadBuffer = record as table prnaryad;
 type TNardopBuffer   = record as table nardop;
+type TZarAnBuffer = record
+  cschetd : string[20];
+  csubschd: string[20];
+  ckaud   : array[1..6] of comp;
+  tbld    : array[1..6] of word;
+  vidopl  : word;
+end;
 
 var
   MnplanNrec: comp;
@@ -69,7 +106,7 @@ parameters MnplanNrec;
 
 create view
 as select *
-from SYS_NAR, PRNARYAD, NARDOP
+from SYS_NAR, PRNARYAD, NARDOP, tRules, buhschet
 where ((
  SYS_NAR.Nrec  == PRNARYAD.Mnrec and
  1             == NARDOP.TZP and
@@ -166,6 +203,204 @@ procedure InsertOrSumNardop(buf: TNardopBuffer);
   }
 }
 
+//#region Rules
+
+procedure ClearRules; { delete all tRules; }
+
+procedure AddRule(aworkKind: word; apayModel: word; afldKind: word; acode: word; avalue: variant);
+{
+  if getfirst tRules where ((aworkKind == tRules.workKind and
+                             aPayModel == tRules.PayModel and
+                             aFldKind  == tRules.FldKind and
+                             aCode     == tRules.code)) != tsOk
+  {
+    insert tRules set workKind := aworkKind,
+                      payModel := aPayModel,
+                      fldKind  := aFldKind,
+                      code     := aCode,
+                      value    := aValue;
+  }
+  else
+    update current tRules set value := aValue;
+}
+
+function RuleExists(aworkKind: word; apayModel: word; afldKind: word; acode: word): boolean;
+{
+  result := getfirst tRules where ((aworkKind == tRules.workKind and
+                                    aPayModel == tRules.PayModel and
+                                    aFldKind  == tRules.FldKind and
+                                    aCode     == tRules.code)) = tsOk;
+}
+
+function GetRuleValue(aworkKind: word; apayModel: word; afldKind: word; acode: word): variant;
+{
+  if getfirst tRules where ((aworkKind == tRules.workKind and
+                             aPayModel == tRules.PayModel and
+                             aFldKind  == tRules.FldKind and
+                             aCode     == tRules.code)) = tsOk
+    result := tRules.value
+  else
+    result := '';
+}
+
+procedure AddRuleVidoplSchet(aworkKind: word; apayModel: word; afldKind: word; aVidopl: word; aSchet: string);
+{
+  AddRule(aworkKind, apayModel, afldKind, rulecode_vidopl, aVidopl);
+  AddRule(aworkKind, apayModel, afldKind, rulecode_schet , aSchet);
+}
+
+procedure AddRuleVidoplSchetAn(aworkKind: word; apayModel: word; afldKind: word;
+                               aVidopl: word; aSchet: string; aKauCode: word; aKauValue: variant);
+{
+  AddRuleVidoplSchet(aworkKind, apayModel, afldKind, aVidopl, aSchet);
+  AddRule(aworkKind, apayModel, afldKind, aKauCode, aKauValue);
+}
+
+procedure InitRules;
+{
+  //Сумма заработка
+  AddRuleVidoplSchetAn(workkind_20, paymodel_sdeln, fld_prnaryad, 100, '20.03', kaucode_buhstz, '20020101');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_povr , fld_prnaryad, 101, '20.03', kaucode_buhstz, '20020101');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_oklad, fld_prnaryad, 102, '20.03', kaucode_buhstz, '20020101');
+
+  AddRuleVidoplSchet  (workkind_96, paymodel_sdeln, fld_prnaryad, 100, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_povr , fld_prnaryad, 101, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_oklad, fld_prnaryad, 102, '96.02');
+
+  AddRuleVidoplSchetAn(workkind_26, paymodel_sdeln, fld_prnaryad, 100, '26.01', kaucode_buhstz, '26010101');
+  AddRuleVidoplSchetAn(workkind_26, paymodel_povr , fld_prnaryad, 101, '26.01', kaucode_buhstz, '26010101');
+  AddRuleVidoplSchetAn(workkind_26, paymodel_oklad, fld_prnaryad, 102, '26.01', kaucode_buhstz, '26010101');
+  //разве на 26 нужен заказ?
+
+  AddRuleVidoplSchetAn(workkind_91, paymodel_sdeln, fld_prnaryad, 100, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_povr , fld_prnaryad, 101, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_oklad, fld_prnaryad, 102, '91.12', kaucode_vidprr, '9102012201');
+
+  //Премия
+  AddRuleVidoplSchetAn(workkind_20, paymodel_sdeln, fld_Bonus, 110, '20.03', kaucode_buhstz, '20020102');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_povr , fld_Bonus, 108, '20.03', kaucode_buhstz, '20020102');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_oklad, fld_Bonus, 109, '20.03', kaucode_buhstz, '20020102');
+
+  AddRuleVidoplSchet  (workkind_96, paymodel_sdeln, fld_Bonus, 110, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_povr , fld_Bonus, 108, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_oklad, fld_Bonus, 109, '96.02');
+
+  AddRuleVidoplSchetAn(workkind_26, paymodel_sdeln, fld_Bonus, 110, '26.01', kaucode_buhstz, '26010102');
+  AddRuleVidoplSchetAn(workkind_26, paymodel_povr , fld_Bonus, 108, '26.01', kaucode_buhstz, '26010102');
+  AddRuleVidoplSchetAn(workkind_26, paymodel_oklad, fld_Bonus, 109, '26.01', kaucode_buhstz, '26010102');
+
+  AddRuleVidoplSchetAn(workkind_91, paymodel_sdeln, fld_Bonus, 110, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_povr , fld_Bonus, 108, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_oklad, fld_Bonus, 109, '91.12', kaucode_vidprr, '9102012201');
+
+  //Сумма межразр. надбавки
+  AddRuleVidoplSchetAn(workkind_20, paymodel_sdeln, fld_QualifPayValue, 118, '20.03', kaucode_buhstz, '20020108');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_povr , fld_QualifPayValue, 118, '20.03', kaucode_buhstz, '20020108');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_oklad, fld_QualifPayValue, 118, '20.03', kaucode_buhstz, '20020108');
+
+  AddRuleVidoplSchet  (workkind_96, paymodel_sdeln, fld_QualifPayValue, 118, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_povr , fld_QualifPayValue, 118, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_oklad, fld_QualifPayValue, 118, '96.02');
+
+  AddRuleVidoplSchetAn(workkind_91, paymodel_sdeln, fld_QualifPayValue, 118, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_povr , fld_QualifPayValue, 118, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_oklad, fld_QualifPayValue, 118, '91.12', kaucode_vidprr, '9102012201');
+
+  //Сумма надб. за вредность
+  AddRuleVidoplSchetAn(workkind_20, paymodel_sdeln, fld_HazardPayValue, 120, '20.03', kaucode_buhstz, '20020108');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_povr , fld_HazardPayValue, 121, '20.03', kaucode_buhstz, '20020108');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_oklad, fld_HazardPayValue, 121, '20.03', kaucode_buhstz, '20020108');
+
+  AddRuleVidoplSchet  (workkind_96, paymodel_sdeln, fld_HazardPayValue, 120, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_povr , fld_HazardPayValue, 121, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_oklad, fld_HazardPayValue, 121, '96.02');
+
+  AddRuleVidoplSchetAn(workkind_91, paymodel_sdeln, fld_HazardPayValue, 120, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_povr , fld_HazardPayValue, 121, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_oklad, fld_HazardPayValue, 121, '91.12', kaucode_vidprr, '9102012201');
+
+  //Сумма премия за вредность
+  AddRuleVidoplSchetAn(workkind_20, paymodel_sdeln, fld_BonusHzrdValue, 111, '20.03', kaucode_buhstz, '20020108');
+
+  AddRuleVidoplSchet  (workkind_96, paymodel_sdeln, fld_BonusHzrdValue, 111, '96.02');
+
+  AddRuleVidoplSchetAn(workkind_91, paymodel_sdeln, fld_BonusHzrdValue, 111, '91.12', kaucode_vidprr, '9102012201');
+
+  //Персон. надбав. из ФЗП за высок. квалиф. 20 счет
+  AddRuleVidoplSchetAn(workkind_20, paymodel_sdeln, fld_BonusQualif20Value, 138, '20.03', kaucode_buhstz, '20020108');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_povr , fld_BonusQualif20Value, 138, '20.03', kaucode_buhstz, '20020108');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_oklad, fld_BonusQualif20Value, 138, '20.03', kaucode_buhstz, '20020108');
+
+  //Персон. надбав. из ФЗП за высок. квалиф. 26 счет
+  AddRuleVidoplSchetAn(workkind_00, paymodel_sdeln, fld_BonusQualif26Value, 138, '26.01', kaucode_buhstz, '26010107');
+  AddRuleVidoplSchetAn(workkind_00, paymodel_povr , fld_BonusQualif26Value, 138, '26.01', kaucode_buhstz, '26010107');
+  AddRuleVidoplSchetAn(workkind_00, paymodel_oklad, fld_BonusQualif26Value, 138, '26.01', kaucode_buhstz, '26010107');
+
+  //Доплата за Совмещ. проф. и расширение зон 26 счет
+  AddRuleVidoplSchetAn(workkind_00, paymodel_sdeln, fld_BonusCombineValue, 117, '26.01', kaucode_buhstz, '26010107');
+  AddRuleVidoplSchetAn(workkind_00, paymodel_povr , fld_BonusCombineValue, 117, '26.01', kaucode_buhstz, '26010107');
+  AddRuleVidoplSchetAn(workkind_00, paymodel_oklad, fld_BonusCombineValue, 117, '26.01', kaucode_buhstz, '26010107');
+
+  //Сумма кварт. премии
+  AddRuleVidoplSchetAn(workkind_20, paymodel_sdeln, fld_BonusQuarValue, 107, '20.03', kaucode_buhstz, '20020103');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_povr , fld_BonusQuarValue, 107, '20.03', kaucode_buhstz, '20020103');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_oklad, fld_BonusQuarValue, 107, '20.03', kaucode_buhstz, '20020103');
+
+  AddRuleVidoplSchet  (workkind_96, paymodel_sdeln, fld_BonusQuarValue, 107, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_povr , fld_BonusQuarValue, 107, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_oklad, fld_BonusQuarValue, 107, '96.02');
+
+  AddRuleVidoplSchetAn(workkind_91, paymodel_sdeln, fld_BonusQuarValue, 107, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_povr , fld_BonusQuarValue, 107, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_oklad, fld_BonusQuarValue, 107, '91.12', kaucode_vidprr, '9102012201');
+
+  //Сумма год. премии
+  AddRuleVidoplSchetAn(workkind_20, paymodel_sdeln, fld_BonusYearValue, 114, '20.03', kaucode_buhstz, '20020103');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_povr , fld_BonusYearValue, 114, '20.03', kaucode_buhstz, '20020103');
+  AddRuleVidoplSchetAn(workkind_20, paymodel_oklad, fld_BonusYearValue, 114, '20.03', kaucode_buhstz, '20020103');
+
+  AddRuleVidoplSchet  (workkind_96, paymodel_sdeln, fld_BonusYearValue, 114, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_povr , fld_BonusYearValue, 114, '96.02');
+  AddRuleVidoplSchet  (workkind_96, paymodel_oklad, fld_BonusYearValue, 114, '96.02');
+
+  AddRuleVidoplSchetAn(workkind_91, paymodel_sdeln, fld_BonusYearValue, 114, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_povr , fld_BonusYearValue, 114, '91.12', kaucode_vidprr, '9102012201');
+  AddRuleVidoplSchetAn(workkind_91, paymodel_oklad, fld_BonusYearValue, 114, '91.12', kaucode_vidprr, '9102012201');
+}
+//#endregion
+
+procedure InitAnZarBuffer(aWorkKind: word; aPaymodel: word; aFldKind: word; var buf: TZarAnBuffer);
+{
+  //установка счета
+  var aSchet: string;
+  aSchet := string(GetRuleValue(aWorkKind, aPaymodel, aFldKind, rulecode_schet));
+  var k: integer;
+  k := pos('.',aSchet+'.');
+  buf.cschetd  := substr(aSchet, 1, k-1);
+  buf.csubschd := substr(aSchet, k+1, 20);
+  //установка кау счета
+  if getfirst buhschet where (('8'+buf.cschetd == buhschet.schet and buf.csubsch == buhschet.subsch)) = tsOk
+  {
+    var i,j: byte;
+    for(i:=1;i<=6;i++)
+    {
+      buf.tbld[i] := buhschet.kodtable[i];
+      if RuleExists(aWorkKind, aPaymodel, aFldKind, buf.tbld[i])
+        buf.ckaud[i] := GetSpKauByCode(string(GetRuleValue(aWorkKind, aPaymodel, aFldKind, buf.tbld[i])));
+      else
+      {
+        if buf.tbld[i] = 40
+          buf.ckaud[i] := pwsWork.KatstroyNrec
+        else
+          for(j:=1;j<=6;j++) if (buf.tbld[i] = vLS.lschet.tbld[j]) { buf.ckaud[i] := vLS.lschet.ckaud[j]; break; }
+      }
+    }
+  }
+  //Установка вида оплаты
+  if RuleExists(aWorkKind, aPaymodel, aFldKind, rulecode_vidopl)
+    buf.vidopl := word(GetRuleCode(aWorkKind, aPaymodel, aFldKind, rulecode_vidopl));
+}
+
 procedure InitNardopBuffer(var buf: TNardopBuffer);
 {
   ClearAdvRecord(buf);
@@ -197,9 +432,8 @@ handleevent
 cmInit:
 {
   ClearBuffer(#SYS_NAR);
-  ClearBuffer(#PRNARYAD);
-  ClearBuffer(#NARDOP);
   SV.addpws(MnplanNrec, 1, 4);   // это nrec MNPLAN'a (т.е. нашего сдельного наряда)
+
   var CNT_NAR: integer;
   CNT_NAR := 0;
   _loop SYS_NAR
@@ -207,25 +441,26 @@ cmInit:
     CNT_NAR++;
   }
   CNT_NAR := CNT_NAR + 1;
-  insert SYS_NAR set SYS_NAR.NMNEM := 'Наряд №'+CNT_NAR;
 
-  SYS_NAR.MNREC := CNT_NAR;
-  sys_nar.cex := pws.PodrNrec;
-  sys_nar.filialno := 1;
-  sys_nar.choice := 2;
-  SYS_NAR.datan := pws.StartDate;
-  SYS_NAR.datok := pws.EndDate;
-
-  SYS_NAR.SUMMANAR := 0;
+  clearbuffer(#SYS_NAR);
+  SYS_NAR.NMNEM     := 'Наряд №'+CNT_NAR;
+  SYS_NAR.MNREC     := CNT_NAR;
+  SYS_NAR.cex       := pws.PodrNrec;
+  SYS_NAR.filialno  := 1;
+  SYS_NAR.choice    := 2;
+  SYS_NAR.datan     := pws.StartDate;
+  SYS_NAR.datok     := pws.EndDate;
+  SYS_NAR.SUMMANAR  := 0;
   SYS_NAR.SUMMAPREM := 0;
+  insert current SYS_NAR;
 
-  _loop pwsWork                  // цикл для загрузки данных
+  _loop pwsPerson
   {
-    if getfirst pwsPerson where ((pwswork.pwsPersonNrec == pwsPerson.Nrec)) = tsOk     // работы по человеку
-    {
+    vLS._lsnrec := pwsPerson.LSchetNrec;
+    if vLS.getfirst lschet != tsOk continue;
 
-      vLS._lsnrec := pwsPerson.LSchetNrec;
-      if vLS.getfirst lschet != tsOk continue;
+    _loop pwsWork where ((pwsPerson.Nrec == pwswork.pwsPersonNrec)) = tsOk     // работы по человеку
+    {
 
       //Заполнение буфера строки наряда
       var PrnaryadBuffer: TPrnaryadBuffer;
@@ -240,54 +475,17 @@ cmInit:
       PrnaryadBuffer.cpodr    := vLS.lschet.CAPPOINT;
       PrnaryadBuffer.filialno := vLS.lschet.kateg;
       PrnaryadBuffer.cexoz    := vLS.lschet.cex;
-      case vLS.lschet.sisopl of
-        20: PrnaryadBuffer.vidopl := GetVidoplSyscodeByUsercode(100); // Сдельная оплата (тсс-1 или тсс-2)
-        30: PrnaryadBuffer.vidopl := GetVidoplSyscodeByUsercode(101); // повременная оплата
-        40: PrnaryadBuffer.vidopl := GetVidoplSyscodeByUsercode(102); // оклад
-      end;
-      case pwsWork.Kind of       // распределение основных выплат в зависимости от вида работ
-        0: {                                      // 20.03
-          PrnaryadBuffer.cschetd  := '20';
-          PrnaryadBuffer.csubschd := '03';
-          PrnaryadBuffer.tbld[1]  := 40; // объекты строительства
-          PrnaryadBuffer.tbld[2]  := 10016; // статьи затрат
-          PrnaryadBuffer.tbld[3]  := vLS.lschet.tbld[3];
-          PrnaryadBuffer.tbld[4]  := vLS.lschet.tbld[4];
-          PrnaryadBuffer.CKAUD[1] := pwsWork.KatstroyNrec;
-          PrnaryadBuffer.CKAUD[2] := CKAU_2001;
-          PrnaryadBuffer.CKAUD[3] := vLS.lschet.CKAUD[3];
-          PrnaryadBuffer.CKAUD[4] := vLS.lschet.CKAUD[4];
-        }
-        1: {                                      // 96.02 Гарантийный ремонт
-          PrnaryadBuffer.cschetd  := '96';
-          PrnaryadBuffer.csubschd := '02';
-          PrnaryadBuffer.tbld[1]  := 1; // организации
-          PrnaryadBuffer.tbld[2]  := 40; // объекты строительства
-          PrnaryadBuffer.tbld[3]  := 14; // договоры
-          PrnaryadBuffer.tbld[4]  := 158; // 2005. Виды задолженности
-          PrnaryadBuffer.CKAUD[2] := pwsWork.KatstroyNrec;        // объект строительства (+)
-        }
-        2: {                                      // 26.01
-          PrnaryadBuffer.cschetd  := '26';
-          PrnaryadBuffer.csubschd := '01';
-          PrnaryadBuffer.tbld[1]  := 40; // объекты строительства
-          PrnaryadBuffer.tbld[2]  := 10016; // статьи затрат
-          PrnaryadBuffer.tbld[3]  := vLS.lschet.tbld[3];
-          PrnaryadBuffer.tbld[4]  := vLS.lschet.tbld[4];
-          PrnaryadBuffer.CKAUD[1] := pwsWork.KatstroyNrec;        // объект строительства (+)
-          PrnaryadBuffer.CKAUD[2] := CKAU_2601;                   // 26010101 Должностной оклад
-          PrnaryadBuffer.CKAUD[3] := vLS.lschet.CKAUD[3];         // из лицевого счета
-          PrnaryadBuffer.CKAUD[4] := vLS.lschet.CKAUD[4];         // из лицевого счета
-        }
-      end;
-      //if pwsPerson.BonusValue <> 0      // заполнение vidprem ("Вид премии")
-      //{
-      //  case vLS.lschet.sisopl of
-      //    20: PrnaryadBuffer.vidprem := 2;   // Сдельная оплата (тсс-1 или тсс-2) премия с кодом 110
-      //    30: PrnaryadBuffer.vidprem := 211; // повременная оплата премия с кодом 108
-      //    40: PrnaryadBuffer.vidprem := 205; // оклад премия с кодом 109
-      //  end;
-      //}
+
+      var anBuffer: TZarAnBuffer;
+      InitAnZarBuffer(pwsWork.Kind, pwsPerson.PayModel, fld_prnaryad, anBuffer);
+      PrnaryadBuffer.vidopl   := anBuffer.vidopl;
+      PrnaryadBuffer.cschetd  := anBuffer.cschetd;
+      PrnaryadBuffer.csubschd := anBuffer.csubschd;
+      var i: byte;
+      for(i:=1;i<=6;i++) {
+        PrnaryadBuffer.tbld[i]  := anBuffer.tbld[i];
+        PrnaryadBuffer.ckaud[i] := anBuffer.ckaud[i];
+      }
       InsertPrnaryad(PrnaryadBuffer);       //добавляем новый наряд или позиционируем PRNARYAD на существующий, соответствующий буферу
 
                                             //надбавки, добавляемые общей суммой
