@@ -1,0 +1,333 @@
+#include Query.vih
+#include SrDnZar.vih
+#include TitledocHelper.vih
+#include ComFiltr.vih
+
+#component "AGAT"
+
+interface PlanVacationsForPersonsWithSums 'Реестр сотрудников с запланированными отпусками за период', escClose, doAccept;
+show(,,80,14);
+
+sql query qSelect =
+select coalesce(ls.nrec,#comp(0)) as clschet,
+       p.nrec as cperson,
+       plno.nrec as cplanotpusk,
+       cast(p.tabnmb as string) as tabnmb,
+       p.fio,
+       p.department as cdepartment,
+       coalesce(catdep.name, '') as department,
+       plno.planyearbeg,
+       plno.planyearend,
+       plno.duration,
+       plno.workyearbeg,
+       plno.workyearend,
+       coalesce(td.cnt,0) as doccnt,
+       coalesce(td6.nrec,#comp(0)) as docnrec,
+       coalesce(td6.docnmb, '') as docnmb,
+       coalesce(td6.docdate, 0) as docdate,
+       coalesce(td6.wstatus, 0) as docstatus
+from planotpusk plno
+join persons p on p.nrec = plno.person
+left join (select cd.cnew5 as cplanotpusk, count(td.nrec) as cnt, max(td.nrec) as ctitledoc
+           from contdoc cd
+           join partdoc pd on pd.nrec = cd.cpart
+           join titledoc td on td.nrec = pd.cdoc
+           where cd.typeoper=6 and cd.seqnmb=1
+           group by cd.cnew5
+          ) td on td.cplanotpusk = plno.nrec
+left join (select tperson, max(nrec) as nrec
+           from lschet
+           where datuv=0 or datuv>:startDate
+           group by tperson
+          ) ls on ls.tperson=p.nrec
+left join titledoc td6 on td6.nrec = coalesce(td.ctitledoc,#comp(0))
+left join catalogs catdep on catdep.nrec = p.department
+where plno.vactype=1 and plno.planyearbeg between :startDate and :endDate
+order by p.tabnmb
+;
+
+table struct t (
+  clschet    : comp,
+  cperson    : comp,
+  cdepartment: comp,
+  department : string,
+  cplanotpusk: comp,
+  tabnmb     : string[10],
+  fio        : string,
+  planyearbeg: date,
+  planyearend: date,
+  duration   : double,
+  srdnzar    : double,
+  summa      : double,
+  workyearbeg: date,
+  workyearend: date,
+  doccnt     : byte,
+  docnrec    : comp,
+  docnmb     : string[20],
+  docdate    : date,
+  docstatus  : word
+) with index (
+  i01 = fio
+);
+
+var
+  _d1: date;
+  _d2: date;
+  _srDnZar: iSrDnZar;
+  _titledocHelper: TitledocHelper;
+  _cf: CommonFiltr new;
+
+create view
+as select *
+from t, t brt, contdoc, partdoc, titledoc
+where ((
+  brt.cperson   == contdoc.person and
+  6             == contdoc.typeoper and
+  1             == contdoc.seqnmb and (contdoc.cnew5=brt.cplanotpusk) and
+  contdoc.cpart == partdoc.nrec and
+  partdoc.cdoc  == titledoc.nrec
+))
+;
+
+screen sc1;
+show at (,,,3);
+fields
+  _d1: noprotect;
+  _d2: noprotect;
+<<
+
+  `Период с` .@@@@@@@@@@ `по` .@@@@@@@@@@
+
+>>
+end;
+
+embedded sc2 interface _cf;
+show at (,4,,10);
+end;
+
+screen sc3;
+show at (,11,,13);
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+                                      <.    Продолжить    .> <.    Отмена    .>
+>>
+end;
+
+function getPeriodView(aStartDate: date; aEndDate: date): string;
+{
+  result := datetostr(aStartDate,'DD.MM.YYYY')+' - '+datetostr(aEndDate,'DD.MM.YYYY');
+}
+
+function getPlanPeriodView: string;
+{
+  result := getPeriodView(brt.planyearbeg, brt.planyearend);
+}
+
+function getWorkPeriodView: string;
+{
+  result := getPeriodView(brt.workyearbeg, brt.workyearend);
+}
+
+function getDocNmbView(aDocNmb: string): string;
+{
+  result := if(trim(aDocNmb)='','<Без номера>',aDocNmb);
+}
+
+function getDocDateView(aDocDate: date; aPrefix:string=' от '): string;
+{
+  result := if(aDocDate=0, '', aPrefix+datetostr(aDocDate,'DD.MM.YYYY'));
+}
+
+function getDocStatusView(aDocStatus: word): string;
+{
+  result := if(aDocStatus=0,'не утвержден','утвержден');
+}
+
+function getDocView: string;
+{
+  case brt.doccnt of
+    0: result := '';
+    1: result := getDocNmbView(brt.docnmb)+getDocDateView(brt.docdate);
+  else
+    result := 'Кол-во приказов: '+brt.doccnt;
+  end;
+}
+
+function getDocZakazView(aDocNrec: comp): string;
+{
+  if aDocNrec = 0
+    result := ''
+  else
+    result := _titledocHelper.getContdocExtAttrZakazVString(aDocNrec);
+}
+
+function getDocRSView(aDocNrec: comp): string;
+{
+  if aDocNrec = 0
+    result := ''
+  else
+    result := _titledocHelper.getContdocExtAttrRSVString(aDocNrec);
+}
+
+function getFontBackColorByDocStatus(aDocStatus: word): byte;
+{
+  result := if(aDocStatus=1, 78, 67);
+}
+
+function getBRTFontBackColor: byte;
+{
+  result := if(brt.doccnt=1, getFontBackColorByDocStatus(brt.docstatus), if(brt.doccnt=0, 0, 61));
+}
+
+procedure ShowDoc(aDocNrec: comp);
+{
+  if aDocNrec != 0
+    runinterfacenomodal(Z_STAFFORDERS::ORDERSLIST, aDocNrec);
+}
+
+window wData 'Реестр сотрудников с запланированными отпусками за период', escClose;
+
+  browse brData (,,sci14Esc);
+  show(,,,18);
+  table brt;
+  fields
+    brt.tabnmb 'Таб. №': [10], protect;
+    brt.fio 'ФИО': [20], protect;
+    brt.department 'Подразделение': [20], protect;
+    [planPeriodView] getPlanPeriodView 'Период отпуска': [20], protect;
+    brt.duration 'Длительность': [7], protect, browsesum;
+    brt.srdnzar 'Ср.дн.зп': [,'[|-]3666`666`666`666.88'], protect;
+    brt.summa 'Сумма': [,'[|-]3666`666`666`666.88'], protect, browsesum;
+    getWorkPeriodView 'Рабочий период сотрудника': [20], protect;
+    getDocView 'Приказ': [20], protect, editButton, {font={backColor=getBRTFontBackColor}};
+    if(brt.doccnt>1,'см. нижнюю панель',getDocZakazView(brt.docNrec)) 'Заказ': [10], protect;
+    if(brt.doccnt>1,'см. нижнюю панель',getDocRSView(brt.docNrec)) 'Расчетный счет': [10], protect;
+  end;
+
+  browse brDoc (,,sci14Esc);
+  show (,19,,) fixed_y;
+  table contdoc;
+  fields
+    getDocNmbView(titledoc.docnmb) 'Приказ - Номер': [20], protect;
+    getDocDateView(titledoc.docdate,'') 'Дата': [10], protect;
+    getDocStatusView(titledoc.wstatus) 'Статус': [10], protect, {font={backColor=getFontBackColorByDocStatus(titledoc.wstatus)}};
+    titledoc.doctext 'Краткое содержание': [30], protect;
+    getDocZakazView(titledoc.nrec) 'Заказ': [20], protect;
+    getDocRSView(titledoc.nrec)'Расчетный счет': [30], protect;
+  end;
+
+  handleevent
+  cmEdit:
+  {
+    case curtable of
+      #brt: ShowDoc(brt.docnrec);
+      #contdoc: ShowDoc(titledoc.nrec);
+    end;
+  }
+  cminit:
+  {
+    rereadrecord(#brt);
+  }
+  end;
+
+end;
+
+procedure ShowUI;
+{
+  SetWindowTitle(wData, 'Реестр сотрудников с запланированными отпусками за период с '+datetostr(_d1,'DD.MM.YYYY')+' по '+datetostr(_d2,'DD.MM.YYYY'));
+  runwindow(wData);
+}
+
+function prepareData: boolean;
+{
+  var q: IQuery;
+  q := queryManager.createQuery(qSelect);
+  q.setParam('startDate', _d1);
+  q.setParam('endDate', _d2);
+  if q.Execute.errorCode = tsOk
+  {
+    startnewvisual(vtRotateVisual, vfTimer, 'Формирование реестра', 0);
+    delete all t;
+    result := sqlCopyInto(q, #t, true) = tsOk;
+
+    var l: longint;
+    l := _cf.GetPersonsMarker;
+    if getmarkercount(l) > 0
+    delete all t where not foundmarker(l, t.cperson);
+
+    stopvisual('',0);
+
+    var cnt: longint; cnt := recordsintable(#t);
+    startnewvisual(vtIndicatorVisual, vfBreak+vfTimer, 'Формирование реестра'#13'Расчет среднедневного заработка'#13'', cnt);
+    _loop t
+    {
+      setvisualheader('Формирование реестра'#13'Расчет среднедневного заработка'#13''+t.fio);
+      t.srdnzar := _srDnZar.GetSrDnZar(t.clschet, t.planyearbeg);
+      t.summa := t.srdnzar * t.duration;
+      update current t;
+      if not nextvisual
+        break;
+    }
+    stopvisual('',0);
+  }
+  else
+    result := false;
+}
+
+handleevent
+cmDoOk:
+{
+  _cf.EndSelect;
+  if prepareData
+    showUI;
+}
+cmInit:
+{
+  if not readmydsk(_d2, 'PlanVacationsForPersonsWithSums_d2', false) _d2 := cur_date;
+  if not readmydsk(_d1, 'PlanVacationsForPersonsWithSums_d1', false) _d1 := sub_day(_d2, 15);
+  _cf.ObjInit;
+}
+cmDone:
+{
+  savemydsk(_d1, 'PlanVacationsForPersonsWithSums_d1');
+  savemydsk(_d2, 'PlanVacationsForPersonsWithSums_d2');
+}
+end;
+
+end.
+
+VipInterface UserReport_PlanVacForPersonsWithSums Implements IUserReport licensed(free);
+Interface UserReport_PlanVacForPersonsWithSums;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::PlanVacationsForPersonsWithSums);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Реестр сотрудников с запланированными отпусками за период';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'MenuZarp';
+      2 : VisibleInModule := 'STAFFMAINMENU';
+    end;
+  end;
+end.
