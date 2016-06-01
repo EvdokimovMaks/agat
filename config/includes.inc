@@ -16,6 +16,7 @@
 /i:"../ZAR" 
 /i:"../ALTER/alter" 
 /i:"../ALTER/cnf" 
+/i:"../ALTER/helpers" 
 /i:"../ALTER/triggers" 
 /i:"../ALTER/xlt" 
 /i:"../BARCODE/Cleverence" 
