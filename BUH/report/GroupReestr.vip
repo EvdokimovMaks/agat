@@ -1,0 +1,349 @@
+#component "AGAT"
+
+interface SelectSbban 'Реестры на выплату по заказам в разрезе подразделений'; // Интерфейс формирования печати реестров
+show(,,37,6);
+const
+  MARK_NAME = 'SBBNMarker';
+end;
+var
+  sbbanstring: string;
+  M, L: longint;
+  BNNrec: comp;
+
+create view vSBBN
+as select *
+from sbban
+where ((
+  BNNrec == sbban.nrec
+));
+
+procedure SetStrSbban;
+{
+  case GetMarkerCount(M) of
+    0: sbbanstring := 'Выберите реестры';
+    1: {
+         GetMarker(M, 0, BNNrec);
+         if vSBBN.getfirst sbban = tsOk { };
+         sbbanstring := vSBBN.sbban.name;
+       }
+    else sbbanstring := 'Выбрано ' + GetMarkerCount(M) + ' реестров';
+  end;
+}
+
+screen sc;
+fields
+  sbbanstring: protect, pickbutton;
+buttons
+  cmPrintos;
+  cmCancel;
+<<
+
+   Реестры .@@@@@@@@@@@@@@@@@@@@@
+
+  <. Печать .>        <. Отмена .>
+
+>>
+end;
+
+handleevent
+cminit:
+{
+  BNNrec := 0;
+  M := InitMarker(MARK_NAME, sizeof(comp), 100, 10);
+  SetStrSbban;
+}
+cmpick:
+{
+  if curfield = #sbbanstring then
+  {
+    L := 0;
+    DoneMarker(M, MARK_NAME);
+    if RunInterface(Sbbany, L) = cmDefault
+      M := L
+    else
+      M := InitMarker(MARK_NAME, sizeof(comp), 100, 10);
+    SetStrSbban;
+  }
+}
+cmPrintos:
+{
+  if GetMarkerCount(M) = 0 then
+  {
+    message('Не выбраны реестры');
+    exit;
+  }
+  RunInterface(AGAT::ReportGroupByPodr, M);
+}
+cmCancel:
+{
+  exit;
+}
+cmDelOnProtect:
+{
+  ClearMarker(M);
+  sbbanstring := 'Выберите реестры';
+  ReReadRecord;
+}
+end;
+end.
+
+interface Sbbany 'Выбор реестров' doaccept, escclose; // Интерфейс выбора реестров
+show(,,100,20);
+var
+  MRKR: longint;
+
+create view
+as select *
+from sbban;
+
+parameters MRKR;
+
+browse br1 (,, scAtlTreeMark)
+table sbban;
+fields
+  if(FoundMarker(MRKR, NREC), 'v', ' ') ''  : [1], skip;
+  sbban.name     'Наименование'#13'реестра' : [25], protect;
+  sbban.lastuser 'Номер'#13'реестра'        : [5], protect;
+  sbban.dform    'Дата'#13'формирования'    : [5], protect;
+  sbban.summa    'Перечисляемая'#13'сумма'  : [7], protect;
+end;
+
+handleevent
+cminit:
+{
+  if getfirst sbban != tsOk { message('Не найдены реестры.'); exit; };
+  if MRKR = 0 then
+    MRKR := InitMarker('SBBNMarker', sizeof(comp), 100, 10);
+}
+cmMarkRec:
+{
+  InvertMarker(MRKR, NREC);
+  RedrawCurrentAndGo(#sbban, true);
+}
+cmMarkAll:
+{
+  PushPos(#sbban);
+  if GetFirst sbban = tsOk do
+    InsertMarker(MRKR, NREC);
+  while GetNext sbban = tsOk;
+  PopPos(#sbban);
+  RescanPanel(#sbban);
+}
+cmUnmarkAll:
+{
+  ClearMarker(MRKR);
+  RescanPanel(#sbban);
+}
+cmDefault:
+{
+  if GetMarkerCount(MRKR) = 0 then
+    InvertMarker(MRKR, NREC);
+}
+cmCancel:
+{
+  ClearMarker(MRKR);
+}
+end;
+end.
+
+VipInterface UserReport_SBBN implements IUserReport Licensed(free);
+Interface UserReport_SBBN;
+  create view;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::SelectSbban);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := '(АГАТ) Реестры на выплату по заказам в разрезе подразделений';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'MENUZARP';
+    end;
+  }
+end.
+
+// то что ниже надо адаптировать под маркер parameters MARKEL !!!!
+interface ReportGroupByPodr 'Отчёт по подразделениям в реестрах', doaccept, escclose;
+
+var
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+  inputsbban: comp;
+  SbbanName: string;
+  MRKR: longint;
+
+parameters MRKR;
+
+table struct tSumTmp
+(
+  nrec      : comp,
+  RSTRName  : string,
+  vidud     : integer,
+  Podr      : string,
+  SummaOpl  : double,
+  TotalSum  : double,
+  OrderName : string
+) with index (
+  i01 = RSTRName + Podr + OrderName
+);
+
+create view
+as select *
+from tSumTmp;
+
+sql query qGetSumByPodr =
+  select sb.name as RSTRName,
+         sb.vidud as vidud,
+         kp.name as Podr,
+         sum(sp.sumopl) as SummaOpl,
+         sum(SP.SUMOPL-SP.SBOR) as TotalSum
+  from sbban sb
+  join spplban sp on sp.csbban = sb.nrec
+  join lschet ls on ls.nrec = sp.clsch
+  join katpodr kp on kp.nrec = ls.cex
+  where sb.nrec = :inputsbban
+  group by sb.name, sb.vidud, kp.name
+;
+
+/* browse brownse
+table tSumTmp;
+fields
+  tSumTmp.RSTRName  'Наименование'#13'реестра' : [25], protect;
+  tSumTmp.vidud     'Вид'#13'удержания'        : [5], protect;
+  tSumTmp.Podr      'Подразделение'            : [5], protect;
+  tSumTmp.SummaOpl  'Перечисляемая'#13'сумма'  : [7], protect;
+  tSumTmp.TotalSum  'Выплачиваемая'#13'сумма'  : [7], protect;
+  tSumTmp.OrderName 'Заказ'                    : [5], protect;
+end; */
+
+procedure printrep(isCreateXLT : boolean);
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('RSTRName');
+  pXL.CreateTblFld('vidud');
+  pXL.CreateTblFld('Podr');
+  pXL.CreateTblFld('SummaOpl');
+  pXL.CreateTblFld('TotalSum');
+  pXL.CreateTblFld('OrderName');
+
+  if (not isCreateXLT)
+  {
+    _loop tSumTmp
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('RSTRName' , tSumTmp.RSTRName);
+      pXL.SetTblStringFldValue('vidud'    , tSumTmp.vidud);
+      pXL.SetTblStringFldValue('Podr'     , tSumTmp.Podr);
+      pXL.SetTblNumberFldValue('SummaOpl' , tSumTmp.SummaOpl);
+      pXL.SetTblStringFldValue('TotalSum' , tSumTmp.TotalSum);
+      pXL.SetTblStringFldValue('OrderName' , tSumTmp.OrderName);
+      pXL.InsTblRow;
+    }
+  }
+  pXL.PublishTbl('Main');
+
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('testvar', '');
+  pXL.SetStringVar('order', '');
+  pXL.PublishVar;
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+procedure SetSumTmpTable;
+{
+  var q: IQuery;
+  q := queryManager.createQuery(qGetSumByPodr);
+  q.setParam('inputsbban', inputsbban);
+
+  var rs: IResultSet;
+  rs := q.getResultSet;
+
+  if rs != nullref
+    if rs.getFirst = tsOk do
+    {
+      ClearBuffer(#tSumTmp);
+
+      tSumTmp.RSTRName := rs.row.Val('RSTRName');
+      tSumTmp.vidud := rs.row.Val('vidud');
+      tSumTmp.Podr := rs.row.Val('Podr');
+      tSumTmp.SummaOpl := rs.row.Val('SummaOpl');
+      tSumTmp.TotalSum := rs.row.Val('TotalSum');
+      if instr('заказ', LoCase(tSumTmp.RSTRName)) <> 0 then
+           tSumTmp.OrderName := SubStr(tSumTmp.RSTRName, (instr('заказ', LoCase(tSumTmp.RSTRName)) + 6), 255)
+      else tSumTmp.OrderName := '';
+      insert current tSumTmp;
+    }
+    while rs.getNext = tsOk
+}
+
+handleevent
+cminit:
+{
+  sXLTFileName := TranslatePath('%StartPath%xls\agat_report_group_by_podr.xlt');
+  StartNewVisual(vtRotateVisual, vfThread + vfTimer, 'Формирование отчета', 0);
+  //printrep(true);  // создаём шаблон
+  var i: integer;
+  for (i := 0; i < GetMarkerCount(MRKR); i++)
+  {
+    GetMarker(MRKR, i, inputsbban);
+    SetSumTmpTable;
+  }
+  ReReadRecord(#tSumTmp);
+  printrep(false);
+
+/*  Set sXLSFileName := pXL.CreateReport(sXLTFileName, True);
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('RSTRName');
+  pXL.CreateTblFld('vidud');
+  pXL.CreateTblFld('Podr');
+  pXL.CreateTblFld('SummaOpl');
+  pXL.CreateTblFld('TotalSum');
+  var i: integer;
+  for (i := 0; i < GetMarkerCount(MRKR); i++)
+  {
+    GetMarker(MRKR, i, inputsbban);
+    tSumTmp.RSTRName :=
+
+    printrep(false); // заполняем отчёт
+  }
+  var OrderName: string;
+  if instr('заказ', locase(SbbanName)) <> 0 then
+    OrderName := SubStr(SbbanName, (instr('заказ', LoCase(SbbanName)) + 6), 255)
+  else OrderName := '';
+  pXL.PublishTbl('Main');
+
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('testvar',  SbbanName);
+  pXL.SetStringVar('order',  OrderName);
+  pXL.PublishVar;
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;              */
+
+  StopVisual('', 0);
+}
+end;
+
+end.

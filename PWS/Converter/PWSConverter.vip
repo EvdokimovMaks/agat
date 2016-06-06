@@ -1,0 +1,300 @@
+#component "AGAT"
+
+#include pwsDataRepository.vih
+#include pwsConverter.vih
+
+#define sum_format '\2p[|-]366`666`666`666`666.88'
+#define time_format '\2p[|-]366`666`666`666`666.888'
+
+interface PWSConverter;
+
+type TprnaryadBuffer = record as table prnaryad;
+type TNardopBuffer   = record as table nardop;
+type TZarAnBuffer    = record
+  cSchetD : string[20];
+  cSubschD: string[20];
+  cKaud   : array[1..6] of comp;
+  tbld    : array[1..6] of word;
+  vidopl  : word;
+end;
+
+var
+  _mnplanNrec : comp;
+  _rules      : IPWSConverterRules;
+  _pwsDR      : IPWSDataRepository;
+
+parameters _mnplanNrec;
+
+create view
+as select *
+from sys_nar, prnaryad, NARDOP,
+     sys_nar sys_nar01 (sys_nar01),
+     buhschet, pws, pwsperson, pwswork;
+
+create view vLS
+var _lsnrec: comp;
+as select *
+from lschet, catalogs
+where ((
+  _lsnrec         == lschet.nrec and
+  lschet.CAPPOINT == catalogs.nrec
+));
+
+create view vVIDOPL
+var _vidcode: word;
+as select *
+from klvidopl
+where ((
+_vidcode == klvidopl.vidoplp
+));
+
+function GetVidoplSyscodeByUsercode(aVidoplUserCode: word): word;     //вернуть системный код видопла по пользовательскому коду
+{
+  vVIDOPL._vidcode := aVidoplUserCode;
+  if vVIDOPL.getfirst klvidopl = tsOk
+    result := vVIDOPL.klvidopl.vidopl
+  else
+    result := aVidoplUserCode;
+}
+
+procedure InitAnZarBuffer(aWorkKind: word; aPaymodel: word; aFldKind: word; var buf: TZarAnBuffer);
+{
+  ClearAdvRecord(buf);
+  //установка счета
+  var aSchet: string;
+  aSchet := string(_rules.GetRuleValue(aWorkKind, aPaymodel, aFldKind, rulecode_schet));
+  var k: integer;
+  k := pos('.',aSchet+'.');
+  buf.cSchetD  := substr(aSchet, 1, k-1);
+  buf.cSubschD := substr(aSchet, k+1, 20);
+  //установка кау счета
+  if getfirst buhschet where (('8'+buf.cSchetD == buhschet.schet and buf.cSubschD == buhschet.subsch)) = tsOk
+  {
+    var i,j: byte;
+    for(i:=1;i<=6;i++)
+    {
+      buf.tbld[i] := buhschet.kodtable[i];
+      if buf.tbld[i] != 0
+        if _rules.RuleExists(aWorkKind, aPaymodel, aFldKind, buf.tbld[i])
+        {
+          var v: variant;
+          v := _rules.GetRuleValue(aWorkKind, aPaymodel, aFldKind, buf.tbld[i]);
+          if VType(v)= VT_BSTR
+            buf.cKaud[i] := GetSpKauByCode(buf.tbld[i], string(v));
+          else
+            buf.cKaud[i] := comp(v);
+        }
+        else
+        {
+          if (buf.tbld[i] = 40)
+            buf.cKaud[i] := pwsWork.KatstroyNrec;
+          else
+            for(j:=1;j<=6;j++) if (buf.tbld[i] = vLS.lschet.tbld[j]) { buf.cKaud[i] := vLS.lschet.cKaud[j]; break; }
+        }
+    }
+  }
+  //Установка вида оплаты
+  if _rules.RuleExists(aWorkKind, aPaymodel, aFldKind, rulecode_vidopl)
+    buf.vidopl := GetVidoplSyscodeByUsercode(word(_rules.GetRuleValue(aWorkKind, aPaymodel, aFldKind, rulecode_vidopl)));
+}
+
+function AddNardop(aWorkKind: word; aPayModel: word; aFldKind: word; aValue: double; aPercent: double): comp;
+{
+  result := 0;
+  if (aValue = 0 and aPercent = 0) exit;
+  var nardopAnBuffer: TZarAnBuffer;
+  InitAnZarBuffer(aWorkKind, aPayModel, aFldKind, nardopAnBuffer);
+  if(nardopAnBuffer.vidopl = 0) exit;
+  if getfirst nardop where ((1                       == nardop.tzp and
+                             prnaryad.Nrec           == nardop.mnrec and
+                             nardopAnBuffer.vidopl   == nardop.vidopl and
+                             (nardopAnBuffer.cSchetD  = nardop.cSchetD  and
+                              nardopAnBuffer.cSubschD = nardop.cSubschD and
+                              nardopAnBuffer.cKaud[1] = nardop.cKaud[1] and
+                              nardopAnBuffer.cKaud[2] = nardop.cKaud[2] and
+                              nardopAnBuffer.cKaud[3] = nardop.cKaud[3] and
+                              nardopAnBuffer.cKaud[4] = nardop.cKaud[4] and
+                              nardopAnBuffer.cKaud[5] = nardop.cKaud[5] and
+                              nardopAnBuffer.cKaud[6] = nardop.cKaud[6] ) )) != tsOk
+  {
+    clearbuffer(#nardop);
+    nardop.TZP        := 1;
+    nardop.MNREC      := prnaryad.Nrec;
+    nardop.cSchetD    := nardopAnBuffer.cSchetD;
+    nardop.cSubschD   := nardopAnBuffer.cSubschD;
+    var i: byte;
+    for(i:=1;i<=6;i++) {
+      nardop.tbld[i]  := nardopAnBuffer.tbld[i];
+      nardop.cKaud[i] := nardopAnBuffer.cKaud[i];
+    }
+    nardop.vidopl     := nardopAnBuffer.vidopl;
+    nardop.proc       := aPercent;
+    insert current nardop;
+  }
+  nardop.sumdop       += aValue;
+  update current nardop;
+  result := nardop.nrec;
+}
+
+function GetPrnaryadByAnBuffer(buf: TZarAnBuffer): comp;
+{
+  if getfirst prnaryad where (( sys_nar.nrec         == prnaryad.MNREC    and
+                                pwsPerson.LSchetNrec == prnaryad.CLSCH    and
+                                buf.vidopl           == prnaryad.VIDOPL   and
+                                (buf.cSchetD          = prnaryad.cSchetD  and
+                                 buf.cSubschD         = prnaryad.cSubschD and
+                                 buf.cKaud[1]         = prnaryad.cKaud[1] and
+                                 buf.cKaud[2]         = prnaryad.cKaud[2] and
+                                 buf.cKaud[3]         = prnaryad.cKaud[3] and
+                                 buf.cKaud[4]         = prnaryad.cKaud[4] and
+                                 buf.cKaud[5]         = prnaryad.cKaud[5] and
+                                 buf.cKaud[6]         = prnaryad.cKaud[6]) )) != tsOk
+  {
+    clearbuffer(#prnaryad);
+    prnaryad.tperson    := pwsPerson.PersonNrec;
+    prnaryad.mnrec      := sys_nar.nrec;
+    prnaryad.clsch      := pwsPerson.LSchetNrec;
+    prnaryad.tabn       := pwsPerson.PersonCode;
+    prnaryad.datan      := pws.StartDate;
+    prnaryad.datok      := pws.EndDate;
+    prnaryad.mes        := Month(sys_nar.datan);
+    prnaryad.cpodr      := vLS.lschet.CAPPOINT;
+    prnaryad.filialno   := vLS.lschet.kateg;
+    prnaryad.cexoz      := vLS.lschet.cex;
+    prnaryad.vidopl     := buf.vidopl;
+    prnaryad.cSchetD    := buf.cSchetD;
+    prnaryad.cSubschD   := buf.cSubschD;
+    var i: byte;
+    for(i:=1;i<=6;i++) {
+      prnaryad.tbld[i]  := buf.tbld[i];
+      prnaryad.cKaud[i] := buf.cKaud[i];
+    }
+    insert current prnaryad;
+  }
+  result := prnaryad.nrec;
+}
+
+procedure AddDistributedNardops(aFldKind: word; aValue: double; aPercent: double);
+{
+  var nardopNrecs: array[0..999] of comp;
+  var pwsWorkHours: array[0..999] of double;
+  var pwsWorkHoursFull: double; pwsWorkHoursFull := 0;
+  var cnt: longint; cnt := 0;
+  _loop pwsWork where ((pwsPerson.Nrec == pwswork.pwsPersonNrec))      // работы по человеку
+  {
+    var prnaryadAnBuffer: TZarAnBuffer;
+    InitAnZarBuffer(pwsWork.Kind, pwsPerson.PayModel, fld_prnaryad, prnaryadAnBuffer);
+    GetPrnaryadByAnBuffer(prnaryadAnBuffer);
+    var c: comp;
+    c := AddNardop(pwsWork.Kind, pwsPerson.PayModel, aFldKind, 0, aPercent);
+    if c!=0
+    {
+      nardopNrecs[cnt]  := c;
+      pwsWorkHours[cnt] := pwsWork.AvgHours;
+      pwsWorkHoursFull  += pwsWork.AvgHours;
+      cnt++;
+    }
+  }
+  var i: longint;
+  for(i := 0; i < cnt; i++)
+  {
+    if getfirst nardop where ((nardopNrecs[i] == nardop.nrec)) = tsOk
+    {
+      nardop.sumdop := aValue * pwsWorkHours[i] / pwsWorkHoursFull;
+      update current nardop;
+    }
+  }
+}
+
+function IPWSConverter.ConvertToSysNar(aMnplanNrec:comp): comp;
+{
+  result := 0;
+
+  ClearBuffer(#sys_nar);
+  _pwsDR.LoadPwsByMnplanNrec(aMnplanNrec);
+
+  if getfirst pws where ((aMnplanNrec == pws.MnplanNrec)) != tsOk exit;
+
+  clearbuffer(#sys_nar);
+  sys_nar.MNREC     := if(getlast sys_nar01 = tsOk, sys_nar01.MNREC+1, 1);
+  sys_nar.NMNEM     := 'Наряд №'+sys_nar.MNREC;
+  sys_nar.cex       := pws.PodrNrec;
+  sys_nar.filialno  := 1;
+  sys_nar.choice    := 2;
+  sys_nar.datan     := pws.StartDate;
+  sys_nar.datok     := pws.EndDate;
+  sys_nar.SUMMANAR  := 0;
+  sys_nar.SUMMAPREM := 0;
+  insert current sys_nar;
+  result := sys_nar.nrec;
+
+  _loop pwsPerson where ((pws.Nrec == pwsPerson.pwsNrec))
+  {
+    vLS._lsnrec := pwsPerson.LSchetNrec;
+    if vLS.getfirst lschet != tsOk continue;
+
+    _loop pwsWork where ((pwsPerson.Nrec == pwswork.pwsPersonNrec))      // работы по человеку
+    {
+      var prnaryadAnBuffer: TZarAnBuffer;
+      InitAnZarBuffer(pwsWork.Kind, pwsPerson.PayModel, fld_prnaryad, prnaryadAnBuffer);
+      GetPrnaryadByAnBuffer(prnaryadAnBuffer);
+      prnaryad.chasf    += pwsWork.AvgHours;                                          // часы по факту
+      prnaryad.koldn    := trunc(prnaryad.CHASF / 8);
+      prnaryad.chasgr   := pwsPerson.BalanceHoursPlan * prnaryad.CHASF / pwsPerson.BalanceHoursFact;  // часы по плану
+      prnaryad.summa    += pwsWork.PaymentValue; //pwsPerson.PaymentValue * prnaryad.CHASF / pwsPerson.BalanceHoursFact;
+      update current prnaryad;
+
+      AddNardop(pwsWork.Kind, pwsPerson.PayModel, fld_Bonus         , pwsPerson.BonusValue * pwsWork.AvgHours / pwsPerson.BalanceHoursFact, pwsPerson.BonusPercent);
+      AddNardop(pwsWork.Kind, pwsPerson.PayModel, fld_QualifPayValue, pwsWork.QualifPayValue, pwsWork.QualifPayPercent);
+      AddNardop(pwsWork.Kind, pwsPerson.PayModel, fld_HazardPayValue, pwsWork.HazardPayValue, pwsWork.HazardPayPercent);
+      AddNardop(pwsWork.Kind, pwsPerson.PayModel, fld_BonusHzrdValue, pwsPerson.BonusHzrdValue*pwsWork.HazardPayValue/pwsPerson.HazardPayValue, pwsPerson.BonusHzrdPercent);
+
+    } //_loop pwsWork
+
+    if pwsPerson.BonusQualif26Value > 0
+    {
+      var prnaryadAnBuffer: TZarAnBuffer;
+      InitAnZarBuffer(workkind_00, pwsPerson.PayModel, fld_BonusQualif26Value, prnaryadAnBuffer);
+      GetPrnaryadByAnBuffer(prnaryadAnBuffer);
+      prnaryad.summa := pwsPerson.BonusQualif26Value;
+      update current prnaryad;
+    }
+
+    if pwsPerson.BonusCombineValue > 0
+    {
+      var prnaryadAnBuffer: TZarAnBuffer;
+      InitAnZarBuffer(workkind_00, pwsPerson.PayModel, fld_BonusCombineValue, prnaryadAnBuffer);
+      GetPrnaryadByAnBuffer(prnaryadAnBuffer);
+      prnaryad.summa := pwsPerson.BonusCombineValue;
+      update current prnaryad;
+    }
+
+    AddDistributedNardops(fld_BonusQualif20Value, pwsPerson.BonusQualif20Value, 0);
+    AddDistributedNardops(fld_BonusQuarValue    , pwsPerson.BonusQuarValue, pwsPerson.BonusQuarPercent);
+    AddDistributedNardops(fld_BonusYearValue    , pwsPerson.BonusYearValue, pwsPerson.BonusYearPercent);
+  } //_loop pwsPerson
+
+
+  _loop prnaryad where ((sys_nar.nrec == prnaryad.mnrec))
+  {
+    sys_nar.SUMMANAR  += prnaryad.SUMMA;
+    sys_nar.SUMMAPREM += prnaryad.SUMMPREM;
+  }
+  update current sys_nar;
+
+}
+
+procedure ShowRules;
+{
+  _rules.ShowRules;
+}
+
+constructor Init;
+{
+  result := getvipref(_rules, 'AGAT::PWSConverterRules') and getvipref(_pwsDR, 'AGAT::PWSDataRepository');
+}
+
+property Rules: IPWSConverterRules absolute _rules;
+property DataRepository: IPWSDataRepository absolute _pwsDR;
+
+end.

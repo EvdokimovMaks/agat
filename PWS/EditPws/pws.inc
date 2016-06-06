@@ -36,11 +36,13 @@ table struct pwsPerson (
   BonusValue      : double,
   BonusHzrdPercent: double,
   BonusHzrdValue  : double,
-  BonusOtherValue : double,
-  BonusQuarPercent: double,
-  BonusQuarValue  : double,
-  BonusYearPercent: double,
-  BonusYearValue  : double
+  BonusQualif20Value: double,
+  BonusQualif26Value: double,
+  BonusCombineValue : double,
+  BonusQuarPercent  : double,
+  BonusQuarValue    : double,
+  BonusYearPercent  : double,
+  BonusYearValue    : double
 ) with index (
   i01 = Nrec (unique, surrogate),
   i02 = pwsNrec + personName
