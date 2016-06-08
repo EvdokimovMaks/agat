@@ -2,6 +2,8 @@
 #include SrDnZar.vih
 #include TitledocHelper.vih
 #include ComFiltr.vih
+#include ExtAttr.vih
+#include XLReport.vih
 
 #component "AGAT"
 
@@ -14,8 +16,10 @@ select coalesce(ls.nrec,#comp(0)) as clschet,
        plno.nrec as cplanotpusk,
        cast(p.tabnmb as string) as tabnmb,
        p.fio,
-       p.department as cdepartment,
+       coalesce(catdep.nrec, #comp(0)) as cdepartment,
        coalesce(catdep.name, '') as department,
+       coalesce(catpost.nrec, #comp(0)) as cpost,
+       coalesce(catpost.name, '') as post,
        plno.planyearbeg,
        plno.planyearend,
        plno.duration,
@@ -32,7 +36,7 @@ left join (select cd.cnew5 as cplanotpusk, count(td.nrec) as cnt, max(td.nrec) a
            from contdoc cd
            join partdoc pd on pd.nrec = cd.cpart
            join titledoc td on td.nrec = pd.cdoc
-           where cd.typeoper=6 and cd.seqnmb=1
+           where cd.typeoper in (6,41) and cd.seqnmb=1 and cd.cnew5 <> #comp(0)
            group by cd.cnew5
           ) td on td.cplanotpusk = plno.nrec
 left join (select tperson, max(nrec) as nrec
@@ -40,8 +44,15 @@ left join (select tperson, max(nrec) as nrec
            where datuv=0 or datuv>:startDate
            group by tperson
           ) ls on ls.tperson=p.nrec
+left join (select person, max(nrec) as nrec
+           from appointments
+           where dismissdate=0 or dismissdate>:startDate
+           group by person
+          ) apps on apps.person = p.nrec
+left join appointments app on app.nrec = coalesce(apps.nrec,#comp(0))
 left join titledoc td6 on td6.nrec = coalesce(td.ctitledoc,#comp(0))
-left join catalogs catdep on catdep.nrec = p.department
+left join catalogs catdep on catdep.nrec = coalesce(app.department, p.department)
+left join catalogs catpost on catpost.nrec = coalesce(app.post, #comp(0))
 where plno.vactype=1 and plno.planyearbeg between :startDate and :endDate
 order by p.tabnmb
 ;
@@ -51,6 +62,8 @@ table struct t (
   cperson    : comp,
   cdepartment: comp,
   department : string,
+  cpost      : comp,
+  post       : string,
   cplanotpusk: comp,
   tabnmb     : string[10],
   fio        : string,
@@ -76,18 +89,23 @@ var
   _srDnZar: iSrDnZar;
   _titledocHelper: TitledocHelper;
   _cf: CommonFiltr new;
+  _pXL: XLSRepBuilder;
+  _xltFileName: string;
+  _ea: IExtAttr;
 
 create view
 as select *
-from t, t brt, contdoc, partdoc, titledoc
+from t, t brt, contdoc, partdoc, titledoc, putvaccon
 where ((
-  brt.cperson   == contdoc.person and
-  6             == contdoc.typeoper and
-  1             == contdoc.seqnmb and (contdoc.cnew5=brt.cplanotpusk) and
-  contdoc.cpart == partdoc.nrec and
-  partdoc.cdoc  == titledoc.nrec
+  brt.cperson   == contdoc.person   and ((contdoc.typeoper=6 or contdoc.typeoper=41) and contdoc.cnew5=brt.cplanotpusk) and
+  contdoc.cpart == partdoc.nrec     and
+  partdoc.cdoc  == titledoc.nrec    and
+  25045         == putvaccon.wtable and
+  contdoc.nrec  == putvaccon.ctable
 ))
 ;
+
+//#region GUI настройки интерфейса
 
 screen sc1;
 show at (,,,3);
@@ -115,6 +133,10 @@ buttons
                                       <.    Продолжить    .> <.    Отмена    .>
 >>
 end;
+
+//#endregion
+
+//#region Вспомогательные функции для отображения полей в интерфейсе и отчете
 
 function getPeriodView(aStartDate: date; aEndDate: date): string;
 {
@@ -182,6 +204,95 @@ function getBRTFontBackColor: byte;
   result := if(brt.doccnt=1, getFontBackColorByDocStatus(brt.docstatus), if(brt.doccnt=0, 0, 61));
 }
 
+//#endregion
+
+//#region Отчет
+
+procedure ShowExcelReport(isCreateXLT: boolean);
+{
+  var _fname: string;
+  _fname := if(isCreateXLT, _pXL.CreateXLT(_xltFileName, True),  _pXL.CreateReport(_xltFileName, True));
+  _pXL.CreateVar(_fname);
+  _pXL.SetStringVar('drep1', datetostr(_d1,'DD.MM.YYYY'));
+  _pXL.SetStringVar('drep2', datetostr(_d2,'DD.MM.YYYY'));
+  _pXL.PublishVar;
+  _pXL.CreateTbls(_fname);
+  _pXL.CreateTbl('Main');
+  _pXL.CreateTblFld('ТабНомер');
+  _pXL.CreateTblFld('ФИО');
+  _pXL.CreateTblFld('Подразделение');
+  _pXL.CreateTblFld('Должность');
+  _pXL.CreateTblFld('ПериодОтпуска');
+  _pXL.CreateTblFld('РабочийПериод');
+  _pXL.CreateTblFld('ДнейВсего');
+  _pXL.CreateTblFld('СреднедневнаяЗП');
+  _pXL.CreateTblFld('СуммаВсего');
+  _pXL.CreateTblFld('Приказ');
+  _pXL.CreateTblFld('Заказ');
+  _pXL.CreateTblFld('Счет');
+  _pXL.CreateTblFld('ДнейПоПриказу');
+  _pXL.CreateTblFld('СуммаПоПриказу');
+
+  if not isCreateXLT
+  _loop brt
+  {
+    var fullcnt: integer;
+    fullcnt := brt.duration;
+    _loop contdoc
+    {
+      _pXL.ClearTblBuffer;
+      _pXL.SetTblStringFldValue('ТабНомер'       ,brt.Tabnmb);
+      _pXL.SetTblStringFldValue('ФИО'            ,brt.FIO);
+      _pXL.SetTblStringFldValue('Подразделение'  ,brt.Department);
+      _pXL.SetTblStringFldValue('Должность'      ,brt.Post);
+      _pXL.SetTblStringFldValue('ПериодОтпуска'  ,getPlanPeriodView);
+      _pXL.SetTblStringFldValue('РабочийПериод'  ,getWorkPeriodView);
+      _pXL.SetTblNumberFldValue('ДнейВсего'      ,brt.duration);
+      _pXL.SetTblNumberFldValue('СреднедневнаяЗП',brt.srdnzar);
+      _pXL.SetTblNumberFldValue('СуммаВсего'     ,brt.summa);
+      if getfirst partdoc = tsOk
+        if getfirst titledoc = tsOk
+          _pXL.SetTblStringFldValue('Приказ'     ,getDocNmbView(titledoc.docnmb)+getDocDateView(titledoc.docdate,' от '));
+
+      _pXL.SetTblStringFldValue('Заказ'          ,_ea.sGetAttrID(coContDoc, contdoc.nrec, 0001000000000921h));
+      _pXL.SetTblStringFldValue('Счет'           ,_ea.sGetAttrID(coContDoc, contdoc.nrec, 0001000000000920h));
+
+      var cnt: integer; cnt := 0;
+      _loop putvaccon
+        cnt += putvaccon.wdaycount;
+
+      fullcnt -= cnt;
+      _pXL.SetTblNumberFldValue('ДнейПоПриказу'  ,cnt);
+      _pXL.SetTblNumberFldValue('СуммаПоПриказу' ,cnt*brt.srdnzar);
+      _pXL.InsTblRow;
+    }
+
+    if fullcnt > 0
+    {
+      _pXL.ClearTblBuffer;
+      _pXL.SetTblStringFldValue('ТабНомер'       ,brt.Tabnmb);
+      _pXL.SetTblStringFldValue('ФИО'            ,brt.FIO);
+      _pXL.SetTblStringFldValue('Подразделение'  ,brt.Department);
+      _pXL.SetTblStringFldValue('Должность'      ,brt.Post);
+      _pXL.SetTblStringFldValue('ПериодОтпуска'  ,getPlanPeriodView);
+      _pXL.SetTblStringFldValue('РабочийПериод'  ,getWorkPeriodView);
+      _pXL.SetTblStringFldValue('Приказ'         ,'');
+      _pXL.SetTblStringFldValue('Заказ'          ,'');
+      _pXL.SetTblStringFldValue('Счет'           ,'');
+      _pXL.SetTblNumberFldValue('ДнейВсего'      ,brt.duration);
+      _pXL.SetTblNumberFldValue('СреднедневнаяЗП',brt.srdnzar);
+      _pXL.SetTblNumberFldValue('СуммаВсего'     ,brt.summa);
+      _pXL.SetTblNumberFldValue('ДнейПоПриказу'  ,fullcnt);
+      _pXL.SetTblNumberFldValue('СуммаПоПриказу' ,fullcnt*brt.srdnzar);
+      _pXL.InsTblRow;
+    }
+  }
+  _pXL.PublishTbl('Main');
+  _pXL.LoadReport(_fname);
+  _pXL.DisConnectExcel;
+}
+//#endregion
+
 procedure ShowDoc(aDocNrec: comp);
 {
   if aDocNrec != 0
@@ -197,6 +308,7 @@ window wData 'Реестр сотрудников с запланированными отпусками за период', escClo
     brt.tabnmb 'Таб. №': [10], protect;
     brt.fio 'ФИО': [20], protect;
     brt.department 'Подразделение': [20], protect;
+    brt.post 'Должность': [20], protect;
     [planPeriodView] getPlanPeriodView 'Период отпуска': [20], protect;
     brt.duration 'Длительность': [7], protect, browsesum;
     brt.srdnzar 'Ср.дн.зп': [,'[|-]3666`666`666`666.88'], protect;
@@ -215,8 +327,8 @@ window wData 'Реестр сотрудников с запланированными отпусками за период', escClo
     getDocDateView(titledoc.docdate,'') 'Дата': [10], protect;
     getDocStatusView(titledoc.wstatus) 'Статус': [10], protect, {font={backColor=getFontBackColorByDocStatus(titledoc.wstatus)}};
     titledoc.doctext 'Краткое содержание': [30], protect;
-    getDocZakazView(titledoc.nrec) 'Заказ': [20], protect;
-    getDocRSView(titledoc.nrec)'Расчетный счет': [30], protect;
+    _ea.sGetAttrID(coContDoc, contdoc.nrec, 0001000000000921h) 'Заказ': [20], protect;
+    _ea.sGetAttrID(coContDoc, contdoc.nrec, 0001000000000920h)'Расчетный счет': [30], protect;
   end;
 
   handleevent
@@ -231,6 +343,7 @@ window wData 'Реестр сотрудников с запланированными отпусками за период', escClo
   {
     rereadrecord(#brt);
   }
+  cmPrintDoc: ShowExcelReport(false);
   end;
 
 end;
@@ -288,6 +401,7 @@ cmInit:
 {
   if not readmydsk(_d2, 'PlanVacationsForPersonsWithSums_d2', false) _d2 := cur_date;
   if not readmydsk(_d1, 'PlanVacationsForPersonsWithSums_d1', false) _d1 := sub_day(_d2, 15);
+  _xltFileName := TranslatePath('%StartPath%xls\PlanVacationsForPersonsWithSums.xltm');
   _cf.ObjInit;
 }
 cmDone:
