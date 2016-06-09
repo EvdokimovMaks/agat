@@ -1,0 +1,271 @@
+#component "AGAT"
+
+interface GalGoods, doaccept, escclose; // интерфейс выбора МЦ Галактики
+const
+  MARKER_NAME = 'GroupMCMarker';
+  MCMARK_NAME = 'KatMCMarker';
+end;
+
+var
+  filter: string;
+  ISKL: array[1..10] of char;
+  MRKR, MCMRKR: longint;       // MRKR - маркер групп МЦ
+  GRPnrec: comp;
+  MarkOrNot: boolean; // true - маркер; false - единичный выбор
+
+parameters filter, MCMRKR, MarkOrNot;
+
+table struct katmctmp
+(
+  nrec     : comp,
+  name     : string,
+  barkod   : string,
+  obozn    : string,
+  cgroupmc : comp,
+  sys      : integer
+) with index (
+  i01 = nrec,
+  i02 = sys
+);
+
+table struct groupmctmp
+(
+  nrec : comp,
+  name : string,
+  kod  : string
+) with index (
+   i01 = nrec
+);
+
+create view
+as select *
+from katmctmp, groupmctmp, katmctmp katmctmp1
+where ((
+  1 == katmctmp.sys and
+  (foundmarker(mrkr, katmctmp.cgroupmc))
+));
+
+create view vSRCH
+var _grnrec: comp;
+as select *
+from groupmc
+where ((
+  _grnrec == groupmc.nrec
+));
+
+procedure ReDrawTitle;   // переписываем заголовок окна
+{
+  if MarkOrNot then // если маркер
+    SetTitle('Выбрано ' + GetMarkerCount(MCMRKR) + ' МЦ');
+  else
+    SetTitle('Выбор МЦ');
+}
+
+procedure MakeArrayOfChar;   // Заполняем массив спецсимволов для замены на % в запросе
+{
+  ISKL[1]  := '_';
+  ISKL[2]  := '.';
+  ISKL[3]  := ',';
+  ISKL[4]  := '-';
+  ISKL[5]  := '/';
+  ISKL[6]  := '\';
+  ISKL[7]  := '*';
+  ISKL[8]  := '"';
+  ISKL[9]  := '`';
+  ISKL[10] := ' ';
+}
+
+procedure SearchMC(SearchingWord: string);  // поиск в KATMC по фильтру
+{
+  delete all katmctmp;
+  var InString, strong: string;
+  var i: integer;
+  InString := SearchingWord;
+  for (i := 1; i <= 10; i++) InString := Replace(InString, ISKL[i], '%');
+  while Pos('%%', InString) <> 0 do InString := Replace(InString, '%%', '%');
+  InString := Ltrim(InString, '%');
+  InString := Rtrim(InString, '%');
+  strong := 'select nrec, name, barkod, obozn, cgroupmc, 1 from katmc where name like ''%' + InString + '%''';
+  sqlSelectInto(strong, #katmctmp1);
+}
+
+function StringCutter(InpStr:string): string;
+{
+  InpStr := Trim(InpStr);
+  var sd: string;
+  sd := '. -'; // строка-разделитель
+  var i: integer;
+  for (i := Length(InpStr); (pos(InpStr[i], sd) = 0) and i > 0; i--) {}
+  StringCutter := Substr(InpStr, 0, (i-1));
+}
+
+procedure AttentionFocus(format: longint); // если найдены МЦ, переводим фокус в брауз МЦ
+{
+  if getfirst katmctmp = tsOk
+  {
+    SelectFormat(format);
+    SelectField(#katmctmp.name);
+  }
+}
+
+window wGroupsMC 'Фильтр по группам МЦ', doaccept, escclose;
+  browse br2 (,, scAtlTreeMark);
+  table groupmctmp;
+  fields
+    if(FoundMarker(MRKR, groupmctmp.NREC), 'v', ' ')  '' : [1], skip;
+    groupmctmp.name                       'Наименование' : [39], protect;
+    groupmctmp.kod                        'Код'          : [10], protect;
+  end;
+  handleevent
+    cmMarkRec:       // пометка Insert'ом
+    {
+      InvertMarker(MRKR, groupmctmp.nrec);
+      RedrawCurrentAndGo(br2, true);
+      ReReadRecord(#katmctmp);
+      ReDrawTitle;
+    }
+    cmMarkAll:       // пометка плюс'ом
+    {
+      PushPos(#groupmctmp);
+      if GetFirst groupmctmp = tsOk do
+        InsertMarker(MRKR, groupmctmp.nrec);
+      while GetNext groupmctmp = tsOk;
+      PopPos(#groupmctmp);
+      RescanPanel(#groupmctmp);
+      ReReadRecord(#katmctmp);
+      ReDrawTitle;
+    }
+    cmUnmarkAll:     // пометка минус'ом
+    {
+      ClearMarker(MRKR);
+      RescanPanel(#groupmctmp);
+      ReReadRecord(#katmctmp);
+      ReDrawTitle;
+    }
+  end;
+end;
+/*
+window wSelectGlobal;
+end;
+
+window wSelectGal;
+end;
+
+window wGalGoods, escclose; */
+  screen sc1 (,,SciFA139Esc);
+  show(,,,3) fixed_x, fixed_y;
+  fields
+    filter, noprotect;
+  <<
+
+     Фильтр .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  >>
+  end;
+  browse br1 (,,Sci1InsPMAltB);
+  show(,4,,);
+  table katmctmp;
+  fields
+    if(FoundMarker(MCMRKR, katmctmp.NREC), 'v', ' ') '' : [1], skip;
+    katmctmp.name     'Наименование МЦ'                 : [20], protect;
+    katmctmp.barkod   'Номенклат.'#13'номер'            : [10], protect;
+    katmctmp.obozn    'Конструкт.'#13'обозначение'      : [20], protect;
+    if(getanykau(0, 8, katmctmp.cgroupmc), givenanname(1), '') 'Группа'#13'МЦ' : [15], protect;
+  end;
+  handleevent
+    cminit:
+    {
+      MakeArrayOfChar; // Массив исключений
+
+      delete all groupmctmp; // Заполняем таблицу групп мц
+      sqlSelectInto('select nrec, name, kod from groupmc', #groupmctmp);
+      groupmctmp.nrec := comp(0);
+      groupmctmp.name := 'БЕЗ ГРУППЫ';
+      groupmctmp.kod := '';
+      insert current groupmctmp;
+
+      MRKR := InitMarker(MARKER_NAME, sizeof(comp), 100, 10);
+      if GetMarkerCount(MRKR) = 0 then
+        _loop groupmctmp InsertMarker(MRKR, groupmctmp.nrec);
+
+      if MCMRKR = 0 then
+        MCMRKR := InitMarker('', sizeof(comp), 100, 10);
+      ClearMarker(MCMRKR); // первичная очистка маркера МЦ
+
+      var s: string; s := filter;
+      SearchMC(s); // поиск МЦ
+      while (getfirst katmctmp <> tsOk) and (s <> '') // если таблица пустая корректируем запрос, отсекая по букве справа
+      {
+        s := StringCutter(s);
+        SearchMC(s);
+      }
+      filter := if (s='', filter, s);
+      ReReadRecord(#katmctmp);
+      AttentionFocus(br1);
+      ReDrawTitle;
+    }
+    cmDefault:
+    {
+      if CurField = #filter              // это Enter для перерасчёта результатов по фильтру
+      {
+        SearchMC(filter);
+        ReReadRecord(#katmctmp);
+        AttentionFocus(br1);
+        ReDrawTitle;
+        abort;
+      }
+      else
+      {
+        if GetMarkerCount(MCMRKR) = 0 then
+          InsertMarker(MCMRKR, katmctmp.nrec);
+        DoneMarker(MRKR, MARKER_NAME); // сохраняем маркер групп
+      }
+    }
+    cmCancel:
+    {
+      DoneMarker(MRKR, MARKER_NAME); // сохраняем маркер групп
+    }
+    cmAlt1: { SelectFormat(sc1); SelectField(#filter); }
+    cmAlt2: { SelectFormat(br1); SelectField(#katmctmp.name); }
+    cmFilterSave: { RunWindowModal(wGroupsMC); } // вызов окна фильтра (группы МЦ)
+    cmDoMarkUnMark:       // пометка Insert'ом
+    {
+      if MarkOrNot then // если множественный выбор нужен
+      {
+        InvertMarker(MCMRKR, katmctmp.NREC);
+        RedrawCurrentAndGo(br1, true);
+        ReReadRecord(#katmctmp);
+        ReDrawTitle;
+      }
+    }
+    cmSelAll:       // пометка плюс'ом
+    {
+      if MarkOrNot then // если множественный выбор
+      {
+        PushPos(#katmctmp);
+        if GetFirst katmctmp = tsOk do
+          InsertMarker(MCMRKR, katmctmp.NREC);
+        while GetNext katmctmp = tsOk;
+        PopPos(#katmctmp);
+        ReReadRecord(#katmctmp);
+        ReDrawTitle;
+      }
+    }
+    cmUnSelAll:     // пометка минус'ом
+    {
+      if MarkOrNot then // если множественный выбор
+      {
+        ClearMarker(MCMRKR);
+        ReReadRecord(#katmctmp);
+        ReDrawTitle;
+      }
+    }
+  end;
+/*end;
+
+handleevent
+cmInit:
+{
+  RunWindowModal(wGalGoods);
+}
+end; */
+end.
