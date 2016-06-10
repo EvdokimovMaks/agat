@@ -1,0 +1,143 @@
+#include GlobalGoods.vih
+#include GlobalData.vih
+#include System.vih
+#include Marker.vih
+
+#component "AGAT"
+
+interface GlobalGoodsSelector;
+
+table struct tGoods (
+  GoodsId: comp,
+  GoodsName: string,
+  MeasureId: comp,
+  MeasureName: string[20]
+) with index (
+  i00 = GoodsId,
+  i01 = GoodsName
+);
+
+var
+  _goodsMarker: IMarker(Marker) new;
+  _globalDataProvider: IGlobalDataProvider;
+  _nameFilter: string;
+
+create view
+as select *
+from tGoods, tGoods brGoods (i01);
+
+constructor Init;
+{
+  result := getvipref(_globalDataProvider, 'AGAT::GlobalDataProvider');
+}
+
+constructor GlobalGoodsSelector(aDataProvider: IGlobalDataProvider);
+{
+  _globalDataProvider := aDataProvider;
+  result := _globalDataProvider != nullref;
+}
+
+function replaceSymbols(s: string; srcSymbols: string; dstSymbols: string): string;
+{
+  var i: integer;
+  for(i:=1; i<=length(srcSymbols); i++)
+    s := replace(s, srcSymbols[i], dstSymbols[i]);
+  result := s;
+}
+
+function getNameFilter: string;
+{
+  var s: string;
+  s := '%'+replaceSymbols(_nameFilter, '`#~!@#$^&*()-+_=,.;:/|\ "''','%%%%%%%%%%%%%%%%%%%%%%%%%%')+'%';
+  while pos('%%', s) > 0 do s := replace(s,'%%','%');
+  result := s;
+}
+
+procedure RefreshGoodsTable;
+{
+  delete all tGoods;
+  sqlCopyInto(_globalDataProvider.GlobalGoodsWithNameLike(getNameFilter), #tGoods, true);
+}
+
+function SetNameFilter(aNameFilter: string): longint;
+{
+  _nameFilter := aNameFilter;
+  RefreshGoodsTable;
+  result := recordsintable(#tGoods);
+}
+
+window wSelectGlobalGoods 'Выбор МЦ Global ERP', escclose;
+  screen sc1;
+    show(,,,3) fixed_y;
+    fields
+      _nameFilter: noprotect;
+<<
+
+ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+  end;
+  browse browseGoods (,,sci1EnIns);
+    show(,4,,);
+    table brGoods;
+    recMarker = _goodsMarker{brGoods.GoodsId};
+    fields
+      brGoods.GoodsName 'Наименование': [100], protect;
+      brGoods.MeasureName 'Ед.Изм.': [5], protect;
+  end;
+  handleevent
+    cmDefault:
+    {
+      if curfield = #_nameFilter
+      {
+        RefreshGoodsTable;
+        rereadrecord(#brGoods);
+        if getfirst brGoods = tsOk
+          SelectFormat(browseGoods);
+      }
+      else
+        closewindowex(wSelectGlobalGoods, cmDefault);
+    }
+    cminit:
+    {
+      _goodsMarker.Caption := (' Отмечено [%d] записей.');
+      rereadrecord(#brGoods);
+    }
+  end;
+end;
+
+function ShowUI: longint;
+{
+  result := runwindowmodal(wSelectGlobalGoods);
+}
+
+procedure FillCollectionWithSelectedGoods(aCollection: ICollection);
+{
+
+  var lMarker: longint;
+  lMarker := initmarker('', 8, 10, 20, false);
+  IMarkerExA(_goodsMarker).ExportToAll(lMarker);
+
+  if GetMarkerCount(lMarker) = 0
+    InsertMarker(lMarker, brGoods.GoodsId);
+
+  var rs: IResultSet;
+  rs :=  _globalDataProvider.GlobalGoodsFromMarker(lMarker);
+
+  if rs.getFirst = tsOk do
+  {
+    var g: IGlobalGoods;
+    g := IGlobalGoods(new(GlobalGoods,
+                          GlobalGoods( rs.row.Val('GoodsId'),
+                                       rs.row.Val('GoodsName'),
+                                       rs.row.Val('MeasureId'),
+                                       rs.row.Val('MeasureName') )));
+
+    aCollection.Add(IGlobalGoodsCollectionItem(new(GlobalGoodsCollectionItem,
+                                                   GlobalGoodsCollectionItem(g, 1))));
+  } while rs.getNext = tsOk;
+
+}
+
+property GlobalDataProvider: IGlobalDataProvider absolute _globalDataProvider;
+
+end.

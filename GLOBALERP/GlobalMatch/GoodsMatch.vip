@@ -7,12 +7,6 @@
 
 interface GoodsMatch;
 
-const
-  MatchDirection_SearchGlobal = 1;
-  MatchDirection_SearchGalaxy = 2;
-  MatchDirection_DontSearch   = 0;
-end;
-
 table struct tMatches (
   katmcNrec   : comp,
   groupmcNrec : comp,
@@ -25,9 +19,7 @@ table struct tMatches (
   measureName : string,
   matchesFound: longint,
   direction   : byte,
-  colored     : word,  // new field for clever coloring (id of color)
-  GalColored  : boolean, // if true - окрасить ячейку "Галактика МЦ"
-  GlobColored : boolean  // if true - окрасить ячейку "Глобал МЦ"
+  color       : word
 ) with index (
   i01 = katmcNrec + goodsId,
   i02 = katmcName,
@@ -45,12 +37,9 @@ table struct tFoundedMC (
 type tMatchesBuffer = record as table tMatches;
 
 var
-  _externalQueryTextFactory: IExternalQueryTextFactory;
-  _externalQuery           : IExternalQuery;
   _ei                      : L_MCU::EdIzm;
-  _gmm                     : GlobalMatchManager;
+  _globalMatchManager      : GlobalMatchManager;
   _globalGoodsSelector     : GlobalGoodsSelector;
-  _searcher                : IGlobalMatchSearcher;
 
 create view
 as select *
@@ -95,7 +84,6 @@ procedure ReDrawAll(katmcnrec: comp);  // процедура для редактирования brMatches
     if brMatches.matchesFound = 1 then brMatches.colored := 3; // green, if it's first match
     brMatches.katmcNrec := katmcnrec;
     brMatches.katmcName := vAdd.katmc.name;
-    brMatches.GalColored := true;
     update current brMatches;
   }
   ReReadRecord(#brMatches);
@@ -127,7 +115,6 @@ cmInit:
     if brMatches.matchesFound > 1
     {
       brMatches.colored := 12; // yellow
-      brMatches.GalColored := true;
       update current brMatches;
     }
   }
@@ -237,13 +224,11 @@ cmPick:
   }
 }
 end;
-end;
+end; //window wMatches
 
 constructor Init;
 {
-  result := loadvipref(_externalQueryTextFactory, 'AGAT::ExternalQueryTextFactory') and
-            loadvipref(_externalQuery, 'AGAT::ExternalQuery') and
-            loadvipref(_searcher, 'AGAT::GoodsByKatmcMatchSearcher');
+  result := true;
 }
 
 function getLinkedServerName: string;
@@ -259,6 +244,21 @@ function getMatchesDirection(aKatmcNrec: comp; aGoodsId: comp): byte;
     result := MatchDirection_SearchGlobal
   else
     result := MatchDirection_DontSearch;
+}
+
+function getMatchesDirectionInCollectionItem(aGlobalGoodsCollection: IGlobalGoodsCollection);
+{
+  result := getMatchesDirection(aGlobalGoodsCollection.KatmcNrec, aGlobalGoodsCollection.GoodsId);
+}
+
+function setMatchInCollectionItem(aGlobalGoodsCollection: IGlobalGoodsCollection): boolean;
+{
+  case getMatchesDirectionInCollectionItem(aGlobalGoodsCollection) of
+    MatchDirection_SearchGlobal:
+    MatchDirection_SearchGalaxy:
+  else
+    continue;
+  end;
 }
 
 function SearchGalaxy(buf: tMatchesBuffer): tMatchesBuffer;
@@ -292,9 +292,21 @@ function SearchGlobal(buf: tMatchesBuffer): tMatchesBuffer;
   result := buf;
 }
 
-function SearchMatches(aGlobalGoodsCollection: IGlobalGoodsCollection): boolean;
+function IGoodsMatch.LoadMatches(aGlobalGoodsCollection: IGlobalGoodsCollection): boolean;
 {
+  result := false;
+  if aGlobalGoodsCollection = nullref exit;
+  if (aGlobalGoodsCollection.GetFirst = tsOk) do
+  {
+    if aGlobalGoodsCollection.GoodsId=0 and aGlobalGoodsCollection.KatmcNrec=0
+      continue;
 
+
+  } (aGlobalGoodsCollection.GetNext = tsOk);
+}
+
+function ShowUI(aGlobalGoodsCollection: IGlobalGoodsCollection; aDefaultMatchDirection: byte = MatchDirection_SearchGlobal): longint;
+{
   delete all tMatches;
 
   result := true;
@@ -358,10 +370,6 @@ function SearchMatches(aGlobalGoodsCollection: IGlobalGoodsCollection): boolean;
     end;
     update current tMatches;
   }
-}
-
-function ShowUI: longint;
-{
   result := runwindowmodal(wMatches);
 }
 end.
