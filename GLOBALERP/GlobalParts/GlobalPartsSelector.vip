@@ -1,5 +1,4 @@
-#include GlobalGoods.vih
-#include ExternalQuery.vih
+#include GlobalParts.vih
 #include Marker.vih
 
 #component "AGAT"
@@ -36,7 +35,7 @@ table struct tParts (
 );
 
 var
-  _globalDataProvider      : IGlobalDataProvider;
+  _globalDataProvider      : IGlobalDataProviderParts;
   _selectQty               : double;
   _brpartsMarker           : longint;
   _nameFilter              : string;
@@ -69,11 +68,6 @@ where ((
   _docId  == childParts.DocId and
   _specId == childParts.ParentId
 ));
-
-function getLinkedServerName: string;
-{
-  result := if(_options!=nullref, _options.LinkedServerName, '');
-}
 
 procedure FillParts(aDocId: comp; aParentId: comp; aVersionId: comp; aParentQty: double = 1; isRecursive: boolean = false);     //aParentId: comp;
 {
@@ -117,22 +111,28 @@ procedure MarkParts(pickMarker: longint; aDocId: comp; mSpecs: longint; aValue: 
   }
 }
 
-constructor Init;
+function InitObjectsByDefaultIfNull: boolean;
 {
-  _brPartsMarker := initmarker('',8,100,100);
-  result := getvipref(_globalDataProvider, 'AGAT::GlobalDataProvider');
+  result := true;
+
+  if _brPartsMarker=0
+    _brPartsMarker := initmarker('',8,100,100);
+  result := result and (_brPartsMarker!=0);
+
+  if _globalDataProvider = nullref
+    result := result and getvipref(_globalDataProvider, 'AGAT::GlobalDataProviderParts');
 }
 
-constructor GlobalPartsSelector(aDataProvider: IGlobalDataProvider = nullref; aMarker: longint = 0);
+constructor Init;
 {
-  _brPartsMarker := if(aMarker != 0, aMarker, initmarker('',8,100,100));
-  if aDataProvider = nullref
-    result := getvipref(_globalDataProvider, 'AGAT::GlobalDataProvider');
-  else
-  {
-    _globalDataProvider := aDataProvider;
-    result := true;
-  }
+  result := InitObjectsByDefaultIfNull;
+}
+
+constructor GlobalPartsSelector(aDataProvider: IGlobalDataProviderParts = nullref; aMarker: longint = 0);
+{
+  _globalDataProvider := aDataProvider;
+  _brPartsMarker := aMarker;
+  result := InitObjectsByDefaultIfNull;
 }
 
 destructor Done;
@@ -150,15 +150,10 @@ function replaceSymbols(s: string; srcSymbols: string; dstSymbols: string): stri
 
 function getNameFilter: string;
 {
-  if _options != nullref
-  {
-    var s: string;
-    s := '%'+replaceSymbols(_nameFilter, '`#~!@#$^&*()-+_=,.;:/|\ "''','%%%%%%%%%%%%%%%%%%%%%%%%%%')+'%';
-    while pos('%%', s) > 0 do s := replace(s,'%%','%');
-    result := s;
-  }
-  else
-    result := '';
+  var s: string;
+  s := '%'+replaceSymbols(_nameFilter, '`#~!@#$^&*()-+_=,.;:/|\ "''','%%%%%%%%%%%%%%%%%%%%%%%%%%')+'%';
+  while pos('%%', s) > 0 do s := replace(s,'%%','%');
+  result := s;
 }
 
 procedure RefreshDocsTable;
@@ -173,13 +168,14 @@ function SetNameFilter(aNameFilter: string): longint;
 {
   _nameFilter := aNameFilter;
   RefreshDocsTable;
+  result := recordsintable(#tdocs);
 }
 
 window wSelectGlobalGoods 'Выбор МЦ из состава изделий Global ERP', escclose;
   screen sc1 (,,Sci1EnEsc);
     show(,,,3) fixed_y;
     fields
-      [OptionsNameFilter] _options.NameFilter: noprotect;
+      _nameFilter: noprotect;
       _selectQty: noprotect;
 <<
 
@@ -262,7 +258,7 @@ window wSelectGlobalGoods 'Выбор МЦ из состава изделий Global ERP', escclose;
     cmDefault:
     {
       case curfield of
-        #OptionsNameFilter:
+        #_nameFilter:
         {
           RefreshDocsTable;
           rereadrecord(#brDocs);
@@ -283,8 +279,8 @@ window wSelectGlobalGoods 'Выбор МЦ из состава изделий Global ERP', escclose;
         closewindowex(wSelectGlobalGoods, cmDefault);
       end;
     }
-    cmInit: clearmarker(_brPartsMarker);
-    cmAlt1: { SelectFormat(sc1);        SelectField(#OptionsNameFilter); }
+    cmInit: { clearmarker(_brPartsMarker); rereadrecord(#brDocs); }
+    cmAlt1: { SelectFormat(sc1);        SelectField(#_nameFilter); }
     cmAlt2: { SelectFormat(browseDocs); SelectField(#brDocs.GoodsName);  }
     cmAlt3: { SelectFormat(treeParts);  SelectField(#brParts.GoodsName); }
   end;
@@ -301,16 +297,6 @@ function ShowUI: longint;
 {
   _selectQty := 1;
   result := runwindowmodal(wSelectGlobalGoods);
-}
-
-procedure SetOptions(aOptions: IGlobalPartsSelectorOptions);
-{
-  _options := aOptions;
-}
-
-function Options: IGlobalPartsSelectorOptions;
-{
-  result := _options;
 }
 
 procedure FillCollectionWithParts(aDocId: comp; aParentItem: IGlobalPartsMarked);
@@ -340,10 +326,9 @@ procedure FillCollectionWithSelectedParts(aCollection: ICollection);
   topItem.Goods := IGlobalGoods(new(GlobalGoods, GlobalGoods(brDocs.GoodsId, brDocs.GoodsName, 0, '')));
   topItem.Qty := _selectQty;
   FillCollectionWithParts(brDocs.DocId, topItem);
-  result := c;
 }
 
-property GlobalDataProvider: IGlobalDataProvider absolute _globalDataProvider;
+property GlobalDataProvider: IGlobalDataProviderParts absolute _globalDataProvider;
 property NameFilter: string read _nameFilter;
 
 end.

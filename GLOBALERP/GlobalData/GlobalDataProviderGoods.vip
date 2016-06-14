@@ -1,0 +1,98 @@
+#include GlobalDataProviderGoods.vih
+#include ExternalQuery.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface GlobalDataProviderGoods;
+
+function IGlobalDataProviderGoods.GlobalGoodsWithNameLike(aName: string): IResultSet;
+{
+  var t: IExternalQueryText;
+  t := _externalQueryTextFactory.
+       CreateText('select dbo.toComp(ID) as GoodsId, SHEADLINE# as GoodsName,').
+       AddString('        dbo.toComp(IdMeasureItem) as MeasureId, sShortName as MeasureName').
+       AddString('from openquery ('+getLinkedServerName+', ''').
+       AddString('                SELECT goods.ID, goods.SHEADLINE#,').
+       AddString('                       goods.IdMeasureItem, measure.sShortName').
+       AddString('                FROM BTK.BS_GOODS goods').
+       AddString('                left join BTK.MSR_MEASUREITEMMAP measure').
+       AddString('                     on measure.idboobj#=goods.IdMeasureItem').
+       AddString('                WHERE UPPER(goods.SHEADLINE#) like '''''+upcase(aName)+'''''').
+       AddString('                '')');
+  result := _externalQuery.GetResultSet(t);
+}
+
+function IGlobalDataProviderGoods.GlobalGoodsFromMarker(lMarker: longint): IResultSet;
+{
+  var lMarkerCount: longint;
+  lMarkerCount := getMarkerCount(lMarker);
+
+  if (lMarkerCount > 500)   //если мц в маркере нельзя запихнуть в текст запроса
+  {
+    var s: longint;
+    sqlAddStr(s, 'table MarkedGoods (Id: comp) with index (i01 = Id);')
+    sqlCreateTmpTable(s, ctmNormal);
+
+    var i: longint;
+    var c: comp;
+    for(i:=0; i<lMarkerCount; i++)
+      if getmarker(lMarker, i, c)
+        sqlExecDirect('insert MarkedGoods (Id) Values (#comp('+c+'))');
+
+    var t: IExternalQueryText;
+    t := _externalQueryTextFactory.
+         CreateText('select dbo.toComp(g.ID) as GoodsId, g.SHEADLINE# as GoodsName,').
+         AddString ('       dbo.toComp(g.IdMeasureItem) as MeasureId, m.sShortName as MeasureName').
+         AddString ('from ['+getLinkedServerName+']..[BTK].[BS_GOODS] g').
+         AddString ('left join ['+getLinkedServerName+']..[BTK].MSR_MEASUREITEMMAP m').
+         AddString ('     on m.idboobj#=g.IdMeasureItem').
+         AddString ('where g.ID in (select dbo.galnrec2sql(#MARKEDGOODS.F$Id) from #MARKEDGOODS)');
+
+    result := _externalQuery.GetResultSet(t);
+
+    sqlDropTmpTable('MarkedGoods');
+  }
+  else    //если мц в маркере можно запихнуть в текст запроса
+  {
+    var t: IExternalQueryText;
+    t := _externalQueryTextFactory.
+         CreateText('select dbo.toComp(ID) as globalId, SHEADLINE# as name,').
+         AddString ('       dbo.toComp(IdMeasureItem) as MeasureId, sShortName as MeasureName').
+         AddString ('from openquery ('+getLinkedServerName+', ''').
+         AddString ('                SELECT goods.ID, goods.SHEADLINE#,').
+         AddString ('                       goods.IdMeasureItem, measure.sShortName').
+         AddString ('                FROM BTK.BS_GOODS goods').
+         AddString ('                LEFT JOIN BTK.MSR_MEASUREITEMMAP measure').
+         AddString ('                     on measure.idboobj#=goods.IdMeasureItem').
+         AddString ('                WHERE goods.ID IN (');
+
+    var c: comp;       c := 0;
+    var s, s1: string; s := ''; s1 := '';
+
+    if getmarker(lMarker, 0, c)
+      s := string(c);
+
+    var i: longint;    i := 1;
+    while getmarker(lMarker, i, c)
+    {
+      s1 := ','+string(c);
+      if (length(s)+length(s1) > 255)
+      {
+        t.AddString(s);
+        s := '';
+      }
+      s+=s1;
+      i++;
+    }
+    if (s!='')
+      t.AddString(s);
+
+    t.AddString(')'')');
+
+    result := _externalQuery.GetResultSet(t);
+  }
+
+}
+
+end.
