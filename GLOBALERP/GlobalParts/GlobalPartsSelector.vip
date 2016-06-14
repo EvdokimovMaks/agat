@@ -1,0 +1,349 @@
+#include GlobalGoods.vih
+#include ExternalQuery.vih
+#include Marker.vih
+
+#component "AGAT"
+
+interface GlobalPartsSelector;
+
+table struct tDocs (
+  DocId      : comp,
+  DocName    : string,
+  VersionId  : comp,
+  VersionName: string,
+  GoodsId    : comp,
+  GoodsName  : string
+) with index (
+  i00 = DocId,
+  i01 = GoodsName
+);
+
+table struct tParts (
+  DocId      : comp,
+  ParentId   : comp,
+  SpecId     : comp,
+  GoodsId    : comp,
+  GoodsName  : string,
+  MeasureId  : comp,
+  MeasureName: string[20],
+  ParentQty  : double,
+  NormQty    : double,
+  FullQty    : double,
+  VersionId  : comp
+) with index (
+  i00 = DocId + SpecId,
+  i01 = DocId + ParentId + GoodsName
+);
+
+var
+  _globalDataProvider      : IGlobalDataProvider;
+  _selectQty               : double;
+  _brpartsMarker           : longint;
+  _nameFilter              : string;
+
+create view
+var
+  _parentId: comp;
+(
+  brPartsMarked
+)
+as select foundmarker(_brPartsMarker, brParts.SpecId), *
+from tDocs, tParts,
+     tDocs brDocs (i01), tParts brParts, tParts brChildParts
+where ((
+  brDocs.DocId   == brParts.DocId and
+  _parentId      == brParts.ParentId and
+  brParts.DocId  == brChildParts.DocId and
+  brParts.SpecId == brChildParts.ParentId
+));
+
+create view vMarkParts
+var
+  _docId: comp;
+  _specId: comp;
+as select *
+from tParts curParts, tParts childParts
+where ((
+  _docId  == curParts.DocId and
+  _specId == curParts.SpecId and
+  _docId  == childParts.DocId and
+  _specId == childParts.ParentId
+));
+
+function getLinkedServerName: string;
+{
+  result := if(_options!=nullref, _options.LinkedServerName, '');
+}
+
+procedure FillParts(aDocId: comp; aParentId: comp; aVersionId: comp; aParentQty: double = 1; isRecursive: boolean = false);     //aParentId: comp;
+{
+  var rs: IResultSet;
+  rs := _globalDataProvider.GlobalSpecsPos(aDocId, aParentId, aVersionId, aParentQty);
+  if isRecursive
+  {
+    if rs.getFirst = tsOk do
+    {
+      if comp(rs.row.Val('VersionId')) != comp(0)
+        FillParts(aDocId, rs.row.Val('SpecId'), rs.row.Val('VersionId'), rs.row.Val('FullQty'), true);
+    } while rs.getNext = tsOk;
+  }
+  sqlCopyInto(rs, #tParts, false);
+
+}
+
+procedure MarkParts(pickMarker: longint; aDocId: comp; mSpecs: longint; aValue: boolean; markHierarhically: boolean = true);
+{
+  var i: longint; i := 0;
+  var c: comp; c := 0;
+  vMarkParts._docId := aDocId;
+  while getmarker(mSpecs, i, c)
+  {
+    vMarkParts._specId := c;
+    if vMarkParts.getFirst curParts = tsOk
+    {
+      if aValue
+        insertmarker(pickMarker, vMarkParts.curParts.SpecId);
+      else
+        deletemarker(pickMarker, vMarkParts.curParts.SpecId);
+
+      if markHierarhically and vMarkParts.curParts.VersionId != 0
+      {
+        if vMarkParts.getFirst fastfirstrow childParts != tsOk
+          FillParts(vMarkParts.curParts.DocId, vMarkParts.curParts.SpecId, vMarkParts.curParts.VersionId, vMarkParts.curParts.FullQty, true);
+        vMarkParts._loop childParts { insertmarker(mSpecs, vMarkParts.childParts.SpecId); }
+      }
+    }
+    i++;
+  }
+}
+
+constructor Init;
+{
+  _brPartsMarker := initmarker('',8,100,100);
+  result := getvipref(_globalDataProvider, 'AGAT::GlobalDataProvider');
+}
+
+constructor GlobalPartsSelector(aDataProvider: IGlobalDataProvider = nullref; aMarker: longint = 0);
+{
+  _brPartsMarker := if(aMarker != 0, aMarker, initmarker('',8,100,100));
+  if aDataProvider = nullref
+    result := getvipref(_globalDataProvider, 'AGAT::GlobalDataProvider');
+  else
+  {
+    _globalDataProvider := aDataProvider;
+    result := true;
+  }
+}
+
+destructor Done;
+{
+  doneMarker(_brPartsMarker,'');
+}
+
+function replaceSymbols(s: string; srcSymbols: string; dstSymbols: string): string;
+{
+  var i: integer;
+  for(i:=1; i<=length(srcSymbols); i++)
+    s := replace(s, srcSymbols[i], dstSymbols[i]);
+  result := s;
+}
+
+function getNameFilter: string;
+{
+  if _options != nullref
+  {
+    var s: string;
+    s := '%'+replaceSymbols(_nameFilter, '`#~!@#$^&*()-+_=,.;:/|\ "''','%%%%%%%%%%%%%%%%%%%%%%%%%%')+'%';
+    while pos('%%', s) > 0 do s := replace(s,'%%','%');
+    result := s;
+  }
+  else
+    result := '';
+}
+
+procedure RefreshDocsTable;
+{
+  var nf: string;
+  nf := ''''''+upcase(getNameFilter)+'''''';
+  delete all tDocs;
+  sqlCopyInto(_globalDataProvider.GlobalSpecsWithNameLike(nf), #tDocs, false);
+}
+
+function SetNameFilter(aNameFilter: string): longint;
+{
+  _nameFilter := aNameFilter;
+  RefreshDocsTable;
+}
+
+window wSelectGlobalGoods 'Выбор МЦ из состава изделий Global ERP', escclose;
+  screen sc1 (,,Sci1EnEsc);
+    show(,,,3) fixed_y;
+    fields
+      [OptionsNameFilter] _options.NameFilter: noprotect;
+      _selectQty: noprotect;
+<<
+
+`Фильтр:`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ `Количество`.@@@@@@@@
+>>
+  end;
+  browse browseDocs (,,Sci1EnEsc);
+    show(,4,50,);
+    table brDocs;
+    fields
+      brDocs.GoodsName 'Наименование Изделия': [20], protect;
+      brDocs.DocName   'Наименование спецификации': [10], protect;
+  end;
+  tree 1 treeParts (,,Sci1EscTreeI);
+    show(51,4,,);
+    table brParts;
+    recMarker : if (brPartsMarked,'bmTest1', '' );
+    fields
+      brParts.GoodsName 'Наименование МЦ': [30], protect;
+      brParts.MeasureName 'Ед.Изм.': [5], protect;
+      (brParts.ParentQty * _selectQty) 'Кол-во': [8,3], protect;
+      brParts.NormQty 'По норме': [8,3], protect;
+      (brParts.FullQty * _selectQty) 'Всего': [8,3], protect;
+  end;
+  procedure CurDocChanged;
+  {
+    clearmarker(_brPartsMarker);
+    _parentId := 0;
+    if getfirst brParts != tsOk
+      FillParts(brDocs.DocId, 0, brDocs.VersionId, 1);
+    if getfirst brParts = tsOk
+      TreeJumpToRecord(treeParts, brParts.SpecId);
+    rereadrecord(#brParts);
+  }
+  tableevent table brParts;
+    cmTreeTop      : { _parentId := 0; }
+    cmTreeUp       : { _parentId := brParts.ParentId;}
+    cmTreeDown     : { _parentId := brParts.SpecId;}
+    cmTreeNeedOwner: { TreeJumpToRecord(treeParts, brParts.ParentId); }
+    cmTreeNodeType : if (brParts.VersionId=0) TreeSetNodeType(treeParts, ntfText);
+  end;
+  tableevent table brDocs;
+    cmPositionChanged: CurDocChanged;
+  end;
+  handleevent
+    cmDoMarkUnmark :
+    {
+      var mSpecs: longint;
+      mSpecs := initmarker('', 8, 1, 100, false);
+      insertmarker(mSpecs, brParts.SpecId);
+      MarkParts(_brpartsMarker, brParts.DocId, mSpecs, not brPartsMarked);
+      donemarker(mSpecs,'');
+      redrawcurrentandgo(treeParts, true);
+      rescanpanel(#brParts);
+    }
+    cmSelAll:
+    {
+      var mSpecs: longint;
+      mSpecs := initmarker('', 8, 100, 100, false);
+      _loop tParts where ((brDocs.DocId == tParts.DocId and 0 == tParts.ParentId))
+        insertmarker(mSpecs, tParts.SpecId);
+      MarkParts(_brpartsMarker, brParts.DocId, mSpecs, not brPartsMarked);
+      donemarker(mSpecs,'');
+      rescanpanel(#brParts);
+    }
+    cmUnSelAll:
+    {
+      clearmarker(_brPartsMarker);
+      rescanpanel(#brParts);
+    }
+    cmTreeOpenNode :
+    {
+      if brParts.VersionId != 0
+      {
+        if getfirst fastfirstrow brChildParts != tsOk
+          FillParts(brParts.DocId, brParts.SpecId, brParts.VersionId, brParts.FullQty);
+        rereadrecord(#brParts);
+      }
+    }
+    cmDefault:
+    {
+      case curfield of
+        #OptionsNameFilter:
+        {
+          RefreshDocsTable;
+          rereadrecord(#brDocs);
+          if getfirst brDocs = tsOk
+          {
+            SelectFormat(browseDocs);
+            SelectField(#brDocs.GoodsName);
+            CurDocChanged;
+          }
+        }
+        #brDocs.GoodsName, #brDocs.DocName:
+        {
+          SelectFormat(treeParts);
+          SelectField(#BRPARTS.GOODSNAME);
+        }
+        #_selectQty: rereadrecord(#brParts);
+      else
+        closewindowex(wSelectGlobalGoods, cmDefault);
+      end;
+    }
+    cmInit: clearmarker(_brPartsMarker);
+    cmAlt1: { SelectFormat(sc1);        SelectField(#OptionsNameFilter); }
+    cmAlt2: { SelectFormat(browseDocs); SelectField(#brDocs.GoodsName);  }
+    cmAlt3: { SelectFormat(treeParts);  SelectField(#brParts.GoodsName); }
+  end;
+end;
+
+handleevent
+  cmCheckField:
+  {
+    if curfield = #_selectQty rereadrecord(#brParts);
+  }
+end;
+
+function ShowUI: longint;
+{
+  _selectQty := 1;
+  result := runwindowmodal(wSelectGlobalGoods);
+}
+
+procedure SetOptions(aOptions: IGlobalPartsSelectorOptions);
+{
+  _options := aOptions;
+}
+
+function Options: IGlobalPartsSelectorOptions;
+{
+  result := _options;
+}
+
+procedure FillCollectionWithParts(aDocId: comp; aParentItem: IGlobalPartsMarked);
+{
+  _loop tParts where (( aDocId == tParts.DocId and
+                        if(aParentItem=nullref,0,aParentItem.Id) == tParts.ParentId ))
+  {
+    var newItem: IGlobalPartsMarked;
+    newItem          := IGlobalPartsMarked(new(GlobalPartsMarked));
+    newItem.Id       := tParts.SpecId;
+    newItem.Goods    := IGlobalGoods(new(GlobalGoods, GlobalGoods(tParts.GoodsId, tParts.GoodsName, tParts.MeasureId, tParts.MeasureName)));
+    newItem.Qty      := tParts.NormQty;
+    newItem.IsMarked := foundmarker(_brPartsMarker, tParts.SpecId);
+    aParentItem.AddChild(newItem);
+    pushpos(#tParts);
+    FillCollectionWithParts(aDocId, newItem);
+    poppos(#tParts);
+  }
+}
+
+procedure FillCollectionWithSelectedParts(aCollection: ICollection);
+{
+  var topItem: IGlobalPartsMarked;
+  topItem := IGlobalPartsMarked(new(GlobalPartsMarked));
+  aCollection.Add(topItem);
+  topItem.Id := 0;
+  topItem.Goods := IGlobalGoods(new(GlobalGoods, GlobalGoods(brDocs.GoodsId, brDocs.GoodsName, 0, '')));
+  topItem.Qty := _selectQty;
+  FillCollectionWithParts(brDocs.DocId, topItem);
+  result := c;
+}
+
+property GlobalDataProvider: IGlobalDataProvider absolute _globalDataProvider;
+property NameFilter: string read _nameFilter;
+
+end.
