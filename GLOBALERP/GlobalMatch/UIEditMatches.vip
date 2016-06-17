@@ -1,0 +1,195 @@
+#include GlobalMatch.vih
+#include GlobalGoods.vih
+#include System.vih
+
+#component "AGAT"
+
+interface UIEditMatches;
+
+var
+ _globalGoodsSelector: GlobalGoodsSelector;
+ _MatchesList: IList;
+ _MatchDirection: byte;
+
+table struct UItable (
+  ListIndex   : longint,
+  KatmcNrec   : comp,
+  KatMcName   : string,
+  KatMcCode   : string,
+  GoodsId     : comp,
+  GoodsName   : string,
+  MeasureId   : comp,
+  MeasureName : string
+) with index (
+  i01 = ListIndex (unique)
+);
+
+create view
+as select *
+from UItable, UItable brUITable, katmc, kated
+where ((
+  brUITable.KatmcNrec == katmc.nrec and
+  katmc.ced           == kated.nrec
+));
+
+create view vAdd
+var
+  _katmcNrec: comp;
+as select *
+from katmc
+where ((
+  _katmcNrec == katmc.nrec
+));
+
+function CutWord(InpStr: string): string;
+{
+  InpStr := Trim(InpStr);
+  var sd: string;
+  sd := '. -'; // строка-разделитель
+  var i: integer;
+  for (i := Length(InpStr); (pos(InpStr[i], sd) = 0) and i > 0; i--) {}
+  result := Substr(InpStr, 0, (i-1));
+}
+
+window winmain, doaccept, escclose;
+  browse brmain;
+  table brUITable;
+  fields
+    brUITable.KatMcName   'Галактика МЦ'    : [25], protect, PickButton;
+    brUITable.KatMcCode   'Штрихкод'        : [15], protect;
+    kated.ABBR            'Ед.измерения МЦ' : [10], protect;
+    brUITable.GoodsName   'Глобал МЦ'       : [25], protect, PickButton;
+    brUITable.MeasureName 'Ед. измерения'   : [10], protect;
+  end;
+  handleevent
+  cminit:
+  {
+    rereadrecord(#brUITable);
+    cfsSetCurrentContainer('AGAT::UIEDITMATCHES');
+    case _MatchDirection of
+    MatchDirection_SearchGlobal:
+    {
+      cfsSetProp('brUITable.KatMcName', 'ButtonType', 0);
+      cfsSetProp('brUITable.GoodsName', 'ButtonType', 16);
+    }
+    MatchDirection_SearchGalaxy:
+    {
+      cfsSetProp('brUITable.KatMcName', 'ButtonType', 16);
+      cfsSetProp('brUITable.GoodsName', 'ButtonType', 0);
+    }
+    else
+    {
+      cfsSetProp('brUITable.KatMcName', 'ButtonType', 0);
+      cfsSetProp('brUITable.GoodsName', 'ButtonType', 0);
+    }
+    end;
+
+  }
+  cmpick:
+  {
+    case CurField of
+    #brUITable.KatMcName: {
+      var M: longint;
+      var instring: string;
+      M := 0;
+      instring := brUITable.GoodsName;
+      if RunInterface(AGAT::GalGoods, instring, M, false) = cmDefault then // false это единичный выбор МЦ
+      {
+        var cmp: comp;
+        cmp := 0;
+        GetMarker(M, 0, cmp);
+        vAdd._katmcNrec := cmp;
+        if vAdd.getfirst katmc != tsOk { message('Ошибка! МЦ не выбрана или такой не существует', error); exit; };
+
+        brUITable.KatmcNrec := vAdd.katmc.nrec;
+        brUITable.KatMcName := vAdd.katmc.name;
+        brUITable.KatMcCode := vAdd.katmc.barkod;
+        update current brUITable;
+        ReReadRecord(#brUITable);
+      }
+
+    }
+    #brUITable.GoodsName: {
+      var fltr: string;
+      fltr := brUITable.KatMcName;
+      while _globalGoodsSelector.SetNameFilter(fltr) = 0 and fltr != ''
+        fltr := CutWord(fltr);
+      if _globalGoodsSelector.ShowUI = cmdefault
+      {
+        var _GoodsCollection: ICollection;
+        _GoodsCollection := ICollection(new(System::Collection));
+        _globalGoodsSelector.FillCollectionWithSelectedGoods(_GoodsCollection);
+        var enum: IEnumerator;
+        enum := _GoodsCollection.GetEnumerator;
+        if enum.MoveNext
+        {
+          var g: IGlobalGoods;
+          g := IGlobalGoodsCollectionItem(enum.Current).Goods;
+          brUITable.GoodsId := g.GoodsId;
+          brUITable.GoodsName := g.GoodsName;
+          brUITable.MeasureId := g.MeasureId;
+          brUITable.MeasureName := g.MeasureName;
+          update current brUITable;
+          ReReadRecord(#brUITable);
+        }
+      }
+    }
+    end;
+  }
+  end;
+end;
+
+procedure ConvertListToUITable(aList: IList);
+{
+  var i: longint;
+  var CurItem: IGoodsMatches;
+  for(i := 0; i < aList.count; i++)
+  {
+    CurItem := IGoodsMatches(aList.ItemGet(i));
+    UItable.ListIndex   := i;
+    UItable.KatmcNrec   := CurItem.MC.Nrec;
+    UItable.KatMcName   := CurItem.MC.Name;
+    UItable.KatMcCode   := CurItem.MC.Code;
+    UItable.GoodsId     := CurItem.Goods.GoodsId;
+    UItable.GoodsName   := CurItem.Goods.GoodsName;
+    UItable.MeasureId   := CurItem.Goods.MeasureId;
+    UItable.MeasureName := CurItem.Goods.MeasureName;
+    insert current UItable;
+  }
+}
+
+procedure ConvertTableToList(aList: IList);
+{
+  var CurItem: IGoodsMatches;
+  _loop UItable
+  {
+    CurItem := IGoodsMatches(aList.ItemGet(UItable.ListIndex));
+    CurItem.MC.Nrec := UItable.KatmcNrec;
+    CurItem.MC.Name := UItable.KatMcName;
+    CurItem.MC.Code := UItable.KatMcCode;
+    CurItem.Goods.GoodsId := UItable.GoodsId;
+    CurItem.Goods.GoodsName := UItable.GoodsName;
+    CurItem.Goods.MeasureId := UItable.MeasureId;
+    CurItem.Goods.MeasureName := UItable.MeasureName;
+  }
+}
+
+function IUIEditMatches.ShowUI: longint;
+{
+  delete all UItable;
+  ConvertListToUITable(_MatchesList);
+  result := RunWindowModal(winmain);
+  ConvertTableToList(_MatchesList);
+}
+
+constructor Init;
+{
+  result := true;
+  result := result and LoadVipRef(_MatchesList,'System::Collection');
+  _MatchDirection := MatchDirection_SearchGlobal;
+}
+
+property IUIEditMatches.MatchesList: IList absolute _MatchesList;
+property IUIEditMatches.MatchDirection: byte absolute _MatchDirection;
+
+end.
