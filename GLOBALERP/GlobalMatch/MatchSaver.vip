@@ -1,0 +1,56 @@
+#include GlobalMatch.vih
+#include GlobalDataProviderMatches.vih
+#include GlobalGoods.vih
+#include System.vih
+
+#component "AGAT"
+
+interface MatchSaver;
+
+var
+  _searcher: ;
+
+function SaveMatches(aGoods: IGlobalGoods): boolean;
+{
+  result := false;
+
+  var rs: IResultSet;          //  aGoods.GoodsId
+  rs := _searcher.SearchMatch(_enum.Current.MC.Nrec); // Ищем Goods по Katmc (НУЖЕН НОВЫЙ СЁРЧЕР)
+
+  var t: IExternalQueryText;
+  var res: IQuery;
+  if rs.getfirst = tsOk then // МЦ с чем-то сопоставлена
+  {
+    if rs.row.Val('goodsId') != externalObjId then // сопоставлена с другим Глобалом, не нашим
+    {
+      if message('Эта МЦ уже сопоставлена. Пересопоставить?', yesNo) = cmYes
+      { // отвязать сопоставление с этой МЦ и сопоставить с нашим Глобалом
+        t := _externalQueryTextFactory.
+             CreateText('select *').
+             AddString ('from openquery ('+getLinkedServerName+', '' ').
+             AddString ('update BTK.AGT_OBJMAPPING mapping').
+             AddString ('set IDREFOBJ = '+externalObjId).
+             AddString ('where mapping.idobjmappingtype = '+_idObjMappingType+' and mapping.idrefclass = '+_idRefClass+' and mapping.SIDEXTERNALOBJ = '''''+string(refObjId)+'''''').
+             AddString (' '') ');
+        res := _externalQuery.Execute(t);
+      }
+      else { result := false; exit; };
+    }
+    else { result := false; exit; };
+  }
+  else // МЦ не сопоставлена вообще
+  { // сопоставляем с нашим Глобалом
+    t := _externalQueryTextFactory.
+         CreateText('select *').
+         AddString ('from openquery ('+getLinkedServerName+', '' ').
+         AddString ('insert into BTK.AGT_OBJMAPPING').
+         AddString ('(IDOBJMAPPINGTYPE, IDREFCLASS, IDREFOBJ, SIDEXTERNALOBJ)').
+         AddString ('values ('+_idObjMappingType+', '+_idRefClass+', '+externalObjId+', '''''+string(refObjId)+''''')').
+         AddString (' '') ');
+    res := _externalQuery.Execute(t);
+  }
+  if res.errorCode = tsOk then result := true
+                          else result := false;
+}
+
+end.
