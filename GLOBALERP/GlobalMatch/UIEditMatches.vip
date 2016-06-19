@@ -10,6 +10,7 @@ var
  _globalGoodsSelector: GlobalGoodsSelector;
  _MatchesList: IList;
  _MatchDirection: byte;
+ _matchLoaderGoodsByMC: IMatchLoaderGoodsByMC;
 
 table struct UItable (
   ListIndex   : longint,
@@ -21,7 +22,8 @@ table struct UItable (
   MeasureId   : comp,
   MeasureName : string
 ) with index (
-  i01 = ListIndex (unique)
+  i01 = ListIndex (unique),
+  i02 = KatmcNrec
 );
 
 create view
@@ -100,6 +102,41 @@ window winmain, doaccept, escclose;
         GetMarker(M, 0, cmp);
         vAdd._katmcNrec := cmp;
         if vAdd.getfirst katmc != tsOk { message('Ошибка! МЦ не выбрана или такой не существует', error); exit; };
+
+        //проверяем, сопоставлена ли МЦ с Глобалом: сначала в самой таблице
+        if getfirst uitable where (( cmp == uitable.katmcnrec
+                                 and (uitable.goodsId != 0 and uitable.ListIndex != bruitable.ListIndex) )) = tsOk
+        {
+          if message('Для МЦ "'+vAdd.katmc.name
+                    +'"'#13'установлено соответствие "'+uitable.GoodsName
+                    +'"'#13'Изменить?', YesNo) = cmYes
+          {
+            uitable.KatmcNrec := 0;
+            uitable.KatMcName := '';
+            uitable.KatMcCode := '';
+            update current uitable;
+          }
+          else
+            exit;
+        }
+        else //проверяем, сопоставлена ли МЦ с Глобалом: затем по сопоставлениям в глобале вцелом
+        {
+          var goodsCollection: ICollection;
+          goodsCollection := _matchLoaderGoodsByMC.LoadMatches(
+                               IMC(new( MC, LoadByNrec(cmp) ))
+                             );
+          if goodsCollection.Count > 0
+          {
+            var g: IGlobalGoods;
+            g := IGlobalGoodsCollectionItem(goodsCollection.First).Goods;
+            if message('Для МЦ "'+vAdd.katmc.name
+                    +'"'#13'установлено соответствие "'+g.GoodsName
+                    +'"'#13'Изменить?', YesNo) != cmYes
+            {
+              exit;
+            }
+          }
+        }
 
         brUITable.KatmcNrec := vAdd.katmc.nrec;
         brUITable.KatMcName := vAdd.katmc.name;
@@ -186,10 +223,12 @@ constructor Init;
 {
   result := true;
   result := result and LoadVipRef(_MatchesList,'System::Collection');
+  result := result and GetVipRef(_matchLoaderGoodsByMC, 'AGAT::MatchLoaderGoodsByMC');
   _MatchDirection := MatchDirection_SearchGlobal;
 }
 
 property IUIEditMatches.MatchesList: IList absolute _MatchesList;
 property IUIEditMatches.MatchDirection: byte absolute _MatchDirection;
+property MatchLoaderGoodsByMC: IMatchLoaderGoodsByMC absolute _matchLoaderGoodsByMC;
 
 end.
