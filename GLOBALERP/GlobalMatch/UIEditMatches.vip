@@ -11,6 +11,7 @@ var
  _MatchesList: IList;
  _MatchDirection: byte;
  _matchLoaderGoodsByMC: IMatchLoaderGoodsByMC;
+ _measureManager: IMeasureManager;
 
 table struct UItable (
   ListIndex   : longint,
@@ -20,7 +21,8 @@ table struct UItable (
   GoodsId     : comp,
   GoodsName   : string,
   MeasureId   : comp,
-  MeasureName : string
+  MeasureName : string,
+  MeasureCoeff: double
 ) with index (
   i01 = ListIndex (unique),
   i02 = KatmcNrec
@@ -43,17 +45,25 @@ where ((
   _katmcNrec == katmc.nrec
 ));
 
+function GetLastWordStartPos(s: string): integer;
+{
+  var i: integer;
+  for (i := Length(s); (pos(s[i], '.,/+*_ -') = 0) and i > 0; i--) {}
+  result := i;
+}
+
 function CutWord(InpStr: string): string;
 {
   InpStr := Trim(InpStr);
-  var sd: string;
-  sd := '. -'; // строка-разделитель
-  var i: integer;
-  for (i := Length(InpStr); (pos(InpStr[i], sd) = 0) and i > 0; i--) {}
-  result := Substr(InpStr, 0, (i-1));
+  result := Substr(InpStr, 0, GetLastWordStartPos(InpStr)-1);
 }
 
-window winmain, doaccept, escclose;
+function GetMeasureCoeff(aKatmcNrec: comp; aGlobalGoodsId: comp): double;
+{
+  result := _measureManager.GetMeasureOtpedCoeff(aKatmcNrec, aGlobalGoodsId);
+}
+
+window winmain 'Установка соответствий МЦ Галактика - Global', doaccept, escclose;
   browse brmain;
   table brUITable;
   fields
@@ -62,6 +72,10 @@ window winmain, doaccept, escclose;
     kated.ABBR            'Ед.измерения МЦ' : [10], protect;
     brUITable.GoodsName   'Глобал МЦ'       : [25], protect, PickButton;
     brUITable.MeasureName 'Ед. измерения'   : [10], protect;
+    brUITable.MeasureCoeff 'Коэффициент'    : [5], noprotect;
+  end;
+  tableevent table brUITable;
+    cmUpdateRecord: update current brUITable;
   end;
   handleevent
   cminit:
@@ -138,9 +152,10 @@ window winmain, doaccept, escclose;
           }
         }
 
-        brUITable.KatmcNrec := vAdd.katmc.nrec;
-        brUITable.KatMcName := vAdd.katmc.name;
-        brUITable.KatMcCode := vAdd.katmc.barkod;
+        brUITable.KatmcNrec    := vAdd.katmc.nrec;
+        brUITable.KatMcName    := vAdd.katmc.name;
+        brUITable.KatMcCode    := vAdd.katmc.barkod;
+        brUITable.MeasureCoeff := GetMeasureCoeff(brUItable.KatmcNrec, brUItable.GoodsId);
         update current brUITable;
         ReReadRecord(#brUITable);
       }
@@ -149,8 +164,9 @@ window winmain, doaccept, escclose;
     #brUITable.GoodsName: {
       var fltr: string;
       fltr := brUITable.KatMcName;
-      while _globalGoodsSelector.SetNameFilter(fltr) = 0 and fltr != ''
+      while _globalGoodsSelector.SetNameFilter(fltr) = 0 and fltr != '' and GetLastWordStartPos(fltr) > 1
         fltr := CutWord(fltr);
+
       if _globalGoodsSelector.ShowUI = cmdefault
       {
         var _GoodsCollection: ICollection;
@@ -162,16 +178,22 @@ window winmain, doaccept, escclose;
         {
           var g: IGlobalGoods;
           g := IGlobalGoodsCollectionItem(enum.Current).Goods;
-          brUITable.GoodsId := g.GoodsId;
-          brUITable.GoodsName := g.GoodsName;
-          brUITable.MeasureId := g.MeasureId;
-          brUITable.MeasureName := g.MeasureName;
+          brUITable.GoodsId       := g.GoodsId;
+          brUITable.GoodsName     := g.GoodsName;
+          brUITable.MeasureId     := g.MeasureId;
+          brUITable.MeasureName   := g.MeasureName;
+          brUITable.MeasureCoeff  := GetMeasureCoeff(brUItable.KatmcNrec, brUItable.GoodsId);
           update current brUITable;
           ReReadRecord(#brUITable);
         }
       }
     }
     end;
+  }
+  cmCancel:
+  {
+    if message('Выйти без сохранения?', YesNo) != cmYes
+      Abort;
   }
   end;
 end;
@@ -191,6 +213,7 @@ procedure ConvertListToUITable(aList: IList);
     UItable.GoodsName   := CurItem.Goods.GoodsName;
     UItable.MeasureId   := CurItem.Goods.MeasureId;
     UItable.MeasureName := CurItem.Goods.MeasureName;
+    UITable.MeasureCoeff:= GetMeasureCoeff(UItable.KatmcNrec, UItable.GoodsId);
     insert current UItable;
   }
 }
@@ -224,6 +247,7 @@ constructor Init;
   result := true;
   result := result and LoadVipRef(_MatchesList,'System::Collection');
   result := result and GetVipRef(_matchLoaderGoodsByMC, 'AGAT::MatchLoaderGoodsByMC');
+  result := result and GetVipRef(_measureManager, 'AGAT::MeasureManager');
   _MatchDirection := MatchDirection_SearchGlobal;
 }
 
