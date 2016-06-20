@@ -10,32 +10,70 @@ interface MatchSaver;
 var
   _searcher: IMatchLoaderGoodsByMC;
   _dataprovider: IGlobalDataProviderMatches;
+  _measureManager: IMeasureManager;
+
+create view
+as select *
+from katotped, kated;
 
 function IMatchSaver.SaveMatches(aMatch: IGoodsMatch): boolean;
 {
   result := false;
-  var enum: IEnumerator;
 
-  if aMatch.Goods != nullref and aMatch.MC != nullref and aMatch.Goods.GoodsId != 0 and aMatch.MC.Nrec != 0
+  if aMatch.Goods         = nullref
+  or aMatch.MC            = nullref
+  or aMatch.Goods.GoodsId = 0
+  or aMatch.MC.Nrec       = 0
+    exit;
+
+  //обновляем или добавляем соответствие
+  var goods: IGlobalGoods;
+  goods := IGlobalGoods(_searcher.LoadMatches(aMatch.MC).First);
+
+  if goods != nullref
   {
-    enum := _searcher.LoadMatches(aMatch.MC).GetEnumerator;
-    var foundgoods: IGlobalGoods;
-    foundgoods := nullref;
+    if goods.GoodsId != aMatch.Goods.GoodsId
+      result := _dataprovider.UpdateMatch(aMatch.Goods.GoodsId, aMatch.MC.Nrec) = tsOk;
+  }
+  else
+    result := _dataprovider.InsertMatch(aMatch.Goods.GoodsId,
+                                        aMatch.MC.Nrec,
+                                        aMatch.MC.GroupmcNrec,
+                                        aMatch.MC.TypemcNrec) = tsOk;
+  //Обновляем единицы измерения МЦ
+  var rs: IResultSet;
+  rs :=  _dataprovider.GetMeasures(aMatch.Goods.GoodsId);
+  if rs.getFirst = tsOk do
+  {
 
-    if enum.MoveNext then
-      foundgoods := IGlobalGoods(enum.Current);
+    var katedNrec: comp;
+    katedNrec := rs.row.val('KatedNrec');
 
-    if foundgoods != nullref
+    if getfirst katotped where (( 1                       == katotped.prmc
+                              and aMatch.MC.Nrec          == katotped.cmcusl
+                              and katedNrec               == katotped.ckated )) != tsOk
     {
-      if foundgoods.GoodsId != aMatch.Goods.GoodsId
-        result := _dataprovider.UpdateMatch(aMatch.Goods.GoodsId, aMatch.MC.Nrec) = tsOk;
+      if getfirst kated where ((katedNrec == kated.nrec)) = tsOk
+      {
+        clearbuffer(#katotped);
+        katotped.prmc    := 1;
+        katotped.cmcusl  := aMatch.MC.Nrec;
+        katotped.ckated  := katedNrec;
+        katotped.name    := kated.name;
+        katotped.diskret := kated.diskret;
+        katotped.abbr    := kated.abbr;
+        katotped.koef    := rs.row.val('nrate') * aMatch.MeasureCoeff;
+        insert current katotped;
+      }
     }
     else
-      result := _dataprovider.InsertMatch(aMatch.Goods.GoodsId,
-                                          aMatch.MC.Nrec,
-                                          aMatch.MC.GroupmcNrec,
-                                          aMatch.MC.TypemcNrec) = tsOk;
-  }
+    {
+      katotped.koef := rs.row.val('nrate') * aMatch.MeasureCoeff;
+      update current katotped;
+    }
+
+  } while rs.getNext = tsOk
+
 }
 
 function InitDefault: boolean;
@@ -47,6 +85,9 @@ function InitDefault: boolean;
 
   if _dataprovider = nullref
     result := result and getvipref(_dataprovider,'AGAT::GlobalDataProviderMatches');
+
+  if _measureManager = nullref
+    result := result and getvipref(_measureManager, 'AGAT::MeasureManager');
 }
 
 constructor Init;
