@@ -1,0 +1,197 @@
+#include GlobalMatch.vih
+#include GlobalGoods.vih
+#include System.vih
+#include userreport.vih
+
+#component "AGAT"
+
+interface UIMatchesFromKatmc 'Установка соответствий МЦ Галактика - Global', doaccept, escclose;
+
+var
+ _globalGoodsSelector: GlobalGoodsSelector;
+ _dataProvider: IGlobalDataProviderMatches;
+ _matchesManager: IMatchesManager;
+ _measureManager: IMeasureManager;
+
+table struct UItable (
+  KatmcNrec   : comp,
+  KatmcName   : string,
+  barkod      : string,
+  GoodsId     : comp,
+  GoodsName   : string,
+  MeasureId   : comp,
+  MeasureName : string,
+  MeasureCoeff: double,
+  State       : byte
+) with index (
+  i01 = KatmcNrec,
+  i02 = State
+);
+
+create view
+as select *
+from UItable, UItable brUITable, katmc brkatmc, kated
+where ((
+  brkatmc.nrec        == brUITable.KatmcNrec and
+  brkatmc.ced         == kated.nrec
+));
+
+function GetLastWordStartPos(s: string): integer;
+{
+  var i: integer;
+  for (i := Length(s); (pos(s[i], '.,/+*_ -') = 0) and i > 0; i--) {}
+  result := i;
+}
+
+function CutWord(InpStr: string): string;
+{
+  InpStr := Trim(InpStr);
+  result := Substr(InpStr, 0, GetLastWordStartPos(InpStr)-1);
+}
+
+function GetMeasureCoeff(aKatmcNrec: comp; aGlobalGoodsId: comp): double;
+{
+  result := _measureManager.GetMeasureOtpedCoeff(aKatmcNrec, aGlobalGoodsId);
+}
+
+browse brmain;
+table brkatmc;
+fields
+  brkatmc.Name           'Галактика МЦ'    : [25], protect;
+  brkatmc.barkod         'Штрихкод'        : [15], protect;
+  kated.ABBR             'Ед.измерения МЦ' : [10], protect;
+  brUITable.GoodsName    'Глобал МЦ'       : [25], protect, PickButton;
+  brUITable.MeasureName  'Ед. измерения'   : [10], protect;
+  brUITable.MeasureCoeff 'Коэффициент'     : [5], noprotect;
+end;
+
+handleevent
+cmCheckField:
+{
+  case curfield of
+    #brUITable.MeasureCoeff:
+    {
+      if isvalidall(#brUITable)
+      {
+        brUITable.State := 1;
+        update current brUITable;
+      }
+      else
+      {
+        brUITable.KatmcNrec := brKatmc.nrec;
+        brUITable.State := 1;
+        insert current brUITable;
+      }
+    }
+  end;
+}
+cminit:
+{
+  GetVipRef(_dataProvider, 'AGAT::GlobalDataProviderMatches');
+  GetVipRef(_matchesManager, 'AGAT::MatchesManager');
+  GetVipRef(_measureManager, 'AGAT::MeasureManager');
+
+  startnewvisual(vtRotateVisual, vfTimer, 'Загрузка соответствий', 0);
+
+  delete all UItable;
+
+  var rs: IResultSet;
+  rs := _dataProvider.GetAllMatches;
+  sqlCopyInto(rs, #uitable, true);
+
+  StopVisual('',0);
+}
+cmpick:
+{
+  var fltr: string;
+  fltr := brkatmc.Name;
+  while _globalGoodsSelector.SetNameFilter(fltr) = 0 and fltr != '' and GetLastWordStartPos(fltr) > 1
+    fltr := CutWord(fltr);
+
+  if _globalGoodsSelector.ShowUI = cmdefault
+  {
+    var _GoodsCollection: ICollection;
+    _GoodsCollection := ICollection(new(System::Collection));
+    _globalGoodsSelector.FillCollectionWithSelectedGoods(_GoodsCollection);
+    var enum: IEnumerator;
+    enum := _GoodsCollection.GetEnumerator;
+    if enum.MoveNext
+    {
+      var g: IGlobalGoods;
+      g := IGlobalGoodsCollectionItem(enum.Current).Goods;
+      brUITable.GoodsId      := g.GoodsId;
+      brUITable.GoodsName    := g.GoodsName;
+      brUITable.MeasureId    := g.MeasureId;
+      brUITable.MeasureName  := g.MeasureName;
+      brUITable.MeasureCoeff := GetMeasureCoeff(brKatmc.Nrec, brUItable.GoodsId);
+      brUITable.State        := 1;
+      if isvalidall(#brUItable)
+        update current brUITable;
+      else
+      {
+        brUITable.KatmcNrec  := brKatmc.Nrec;
+        insert current brUITable;
+      }
+      ReReadRecord(#brkatmc);
+    }
+  }
+}
+cmCancel:
+{
+  if message('Выйти без сохранения?', YesNo) != cmYes
+    Abort;
+}
+cmDefault:
+{
+  startnewvisual(vtRotateVisual, vfTimer, 'Сохранение соответствий', 0);
+
+  var col: ICollection;
+  col := ICollection(new(System::Collection));
+  _loop UITable where ((1 == UITable.State))
+  {
+    col.Add(
+      IGoodsMatches(new(
+        GoodsMatches,
+        GoodsMatches(
+          IGlobalGoods(new(GlobalGoods,GlobalGoods(UITable.GoodsId, UITable.GoodsName, UITable.MeasureId, UITable.MeasureName))),
+          IMC(new(MC,LoadByNrec(UITable.KatmcNrec)))
+        )
+      ))
+    );
+  }
+  _matchesManager.SaveMatches(col);
+
+  stopvisual('',0);
+}
+end;
+end.
+
+VipInterface UserReport_GalaktikaVSGlobal Implements IUserReport licensed(free);
+Interface UserReport_GalaktikaVSGlobal;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::UIMatchesFromKatmc);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'Сопоставление МЦ ИС "Галактика ERP" и "Global"';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    VisibleInModule := '*'; // чтобы видели все
+  }
+end.
+
