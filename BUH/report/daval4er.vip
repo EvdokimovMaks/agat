@@ -1,0 +1,152 @@
+#include Query.vih
+#include XLREPORT.vih
+#include getkau.vih
+#include userreport.vih
+#include ContractID.vih
+
+#component "AGAT"
+
+interface DavalchReport 'Отчет по давальческому сырью';
+
+var
+  q: IQuery;
+  rs: IResultSet;
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+  emptyshit: string;
+
+/*table struct dog (
+  nodoc   : string, // внутренний №
+  ddoc    : date,   // дата договора
+  name    : string, // наименование документа
+  nsopr   : string, // номер накладной
+  dsopr   : date,   // дата накладной
+  summa   : double, // сумма в НДЕ
+  mcname  : string, // наименование товара
+  barkod  : string, // идентификационная классификация
+  kolfact : double, // количество фактическое
+  price   : double  // цена за единицу
+) with index (
+  i01 = nodoc + nsopr + mcname
+);   */
+
+sql query DVLCH =
+select d.nodoc as nodoc,
+       d.ddoc as ddoc,
+       katdoc.name as name ,
+       ks.nsopr as nsopr,
+       ks.dsopr as dsopr,
+       o.summa as summa,
+       mc.name as mcname,
+       mc.barkod as barkod,
+       sps.kolfact as kolfact,
+       sps.price as price
+from (select kauos[3], tidkgal, csoprdoc, sum(sumob) as summa
+      from oborot
+      where scheto = '810' and subossch='07' and datob > 0
+      group by kauos[3], tidkgal, csoprdoc ) o
+join katdoc on o.tidkgal = katdoc.tidkgal
+join dogovor d on o.kauos[3] = d.nrec
+join katsopr ks on o.csoprdoc = ks.nrec
+left join spsopr sps on ks.nrec = sps.csopr and 1 = sps.prmc
+left join katmc mc on sps.cmcusl = mc.nrec
+//to dbf c:\gal\davalka.dbf
+;
+
+// выполняем запрос и заполняем таблицу
+procedure GetRS;
+{
+  q := queryManager.createQuery(DVLCH);
+  q.execute;
+  rs := q.getResultSet;
+}
+
+procedure printrep(isCreateXLT : boolean);
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('emptyshit', '');
+  pXL.PublishVar;
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('nodoc');
+  pXL.CreateTblFld('ddoc');
+  pXL.CreateTblFld('name');
+  pXL.CreateTblFld('nsopr');
+  pXL.CreateTblFld('dsopr');
+  pXL.CreateTblFld('summa');
+  pXL.CreateTblFld('mcname');
+  pXL.CreateTblFld('barkod');
+  pXL.CreateTblFld('kolfact');
+  pXL.CreateTblFld('price');
+
+//  pushPos(#dog);
+  if not isCreateXLT
+  {
+    if rs.getfirst = tsOk do
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('nodoc', rs.row.val('nodoc'));
+      pXL.SetTblStringFldValue('ddoc', datetostr(rs.row.val('ddoc'),'DD.MM.YYYY'));
+      pXL.SetTblStringFldValue('name', rs.row.val('name'));
+      pXL.SetTblStringFldValue('nsopr', rs.row.val('nsopr'));
+      pXL.SetTblStringFldValue('dsopr', datetostr(rs.row.val('dsopr'),'DD.MM.YYYY'));
+      pXL.SetTblStringFldValue('summa', rs.row.val('summa'));
+      pXL.SetTblStringFldValue('mcname', rs.row.val('mcname'));
+      pXL.SetTblStringFldValue('barkod', rs.row.val('barkod'));
+      pXL.SetTblStringFldValue('kolfact', rs.row.val('kolfact'));
+      pXL.SetTblStringFldValue('price', rs.row.val('price'));
+      pXL.InsTblRow;
+    } while rs.getNext = tsOk
+  }
+//  popPos(#dog);
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+handleevent
+cminit:
+{
+//  if not readmydsk(flag,  'Forma1GOZ_flag' , false) flag  := 1;
+//  if not readmydsk(dRep1, 'Forma1GOZ_dRep1', false) dRep1 := date(1,1,year(cur_date));
+//  if not readmydsk(dRep2, 'Forma1GOZ_dRep2', false) dRep2 := date(last_day(cur_date),month(cur_date),year(cur_date));
+  sXLTFileName := TranslatePath('%StartPath%xls\DavalchReport.xlsm');
+  GetRS;
+  printrep(false); // сначала тру (создаём ХЛТ), потом фолс - заполняем шаблон
+}
+end;
+
+end.
+
+VipInterface UserReport_Davalcher Implements IUserReport licensed(free);
+Interface UserReport_Davalcher;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::DavalchReport);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := '(АГАТ) Отчет по давальческому сырью';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'SKLAD';
+    end;
+  end;
+end.
