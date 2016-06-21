@@ -1,0 +1,206 @@
+#include grafotpusk.vih
+
+#component "AGAT"
+
+interface ContdocSetPlanOtpusk 'Установка ссылки на график отпусков для приказа', escClose, doAccept;
+show (,,50,6);
+
+var
+  ContdocNrec: comp;
+  PlanOtpuskNrec: comp;
+  DetPlanOtpuskNrec: comp;
+  WorkPeriodNrec: comp;
+  iGrafOtpusk: GrafOtpusk;
+
+create view
+as select *
+from contdoc, planotpusk, detplanotpusk, detplanotpusk seldpo, putvaccon, putvacation, factotpusk, vacations, otpusk
+where ((
+  ContdocNrec            == contdoc.nrec and
+  PlanotpuskNrec         == planotpusk.nrec and
+  DetPlanOtpuskNrec      == detplanotpusk.nrec and
+  PlanOtpuskNrec         == seldpo.cplanotpus and
+  25045                  == putvaccon.wtable and
+  ContdocNrec            == putvaccon.ctable and
+  putvaccon.cputvacation == putvacation.nrec and
+  ContdocNrec            == factotpusk.cContDoc and
+  factotpusk.nrec        == vacations.cfactotpusk and
+  vacations.nrec         == otpusk.cvacations
+));
+
+parameters ContdocNrec;
+
+window wselectdpo 'Выбор детализации планового отпуска', doaccept, escclose;
+browse brdpo;
+table seldpo;
+fields
+  seldpo.WORKYEARBEG 'Рабочий год - начало': [10], protect;
+  seldpo.WORKYEAREND 'Рабочий год - окончание': [10], protect;
+  seldpo.PLANYEARBEG 'Запланирован отпуск - начало': [10], protect;
+  seldpo.PLANYEAREND 'Запланирован отпуск - окончание': [10], protect;
+  seldpo.DURATION 'Количество дней': [10], protect;
+  seldpo.YEAR_VAC 'Год, в котором планируется': [10], protect;
+  seldpo.YEAR_WORK 'Год, за который планируется': [10], protect;
+end;
+end;
+
+function GetPlanotpuskName: string;
+{
+  result := '';
+  if getfirst planotpusk = tsOk
+    result := planotpusk.planyearbeg + ' - ' + planotpusk.planyearend + ' ' + planotpusk.duration;
+}
+
+function GetDetPlanOtpuskName: string;
+{
+  result := '';
+  if getfirst detplanotpusk = tsOk
+    result := detplanotpusk.planyearbeg + ' - ' + detplanotpusk.planyearend + ' ' + detplanotpusk.duration;
+}
+
+screen scmain;
+fields
+  [PlanOtpuskName] GetPlanOtpuskName: protect, pickbutton;
+  [DetPlanOtpuskName] GetDetPlanOtpuskName: protect, pickbutton;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Плановый отпуск`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Детализация`    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                   <. Установить .> <. Отмена .>
+>>
+end;
+
+handleevent
+cmDoOk:
+{
+  if contdoc.cworkperiod != 0
+    WorkPeriodNrec := contdoc.cworkperiod
+  else
+  {
+    _loop putvaccon
+    {
+      if getfirst putvacation = tsOk
+        if (putvacation.cworkperiod != 0)
+        {
+          WorkPeriodNrec := putvacation.cworkperiod;
+          break;
+        }
+    }
+  }
+
+  if getfirst planotpusk  = tsOk { }
+
+  if getfirst detplanotpusk = tsOk { }
+
+  if (WorkPeriodNrec != 0) contdoc.cworkperiod := WorkPeriodNrec;
+  contdoc.cnew5 := PlanOtpuskNrec;
+  update current contdoc;
+
+  _loop factotpusk
+  {
+    factotpusk.CPLANOTPUSK := PlanOtpuskNrec;
+    if (getfirst detplanotpusk = tsOk) factotpusk.YEAR_VAC := detplanotpusk.year_vac;
+    if (WorkPeriodNrec != 0) factotpusk.cworkperiod := WorkPeriodNrec;
+    update current factotpusk;
+
+    _loop vacations
+    {
+      if (getfirst detplanotpusk = tsOk)
+      {
+        vacations.WORKYEARBEG := detplanotpusk.WORKYEARBEG;
+        vacations.WORKYEAREND := detplanotpusk.WORKYEAREND;
+        vacations.PLANYEARBEG := detplanotpusk.PLANYEARBEG;
+        vacations.PLANYEAREND := detplanotpusk.PLANYEAREND;
+        vacations.YEAR_VAC := detplanotpusk.YEAR_VAC;
+        vacations.CDETPLANOTP := detplanotpusk.nrec;
+      }
+      if (WorkPeriodNrec != 0) vacations.CWORKPERIOD := WorkPeriodNrec;
+      if vacations.cputvac = 0
+      {
+        if getfirst putvaccon = tsOk vacations.cputvac := putvaccon.cputvacation;
+      }
+      update current vacations;
+
+      _loop otpusk
+      {
+        if (getfirst detplanotpusk = tsOk)
+        {
+          otpusk.cdetplanotp := detplanotpusk.nrec;
+          otpusk.YEAR_VAC := detplanotpusk.YEAR_VAC;
+          otpusk.WORKYEARBEG := detplanotpusk.WORKYEARBEG;
+          otpusk.WORKYEAREND := detplanotpusk.WORKYEAREND;
+        }
+        otpusk.cputvac := vacations.cputvac;
+        otpusk.cworkperiod := vacations.cworkperiod;
+        update current otpusk;
+
+      } //_loop otpusk
+
+    } //_loop vacations
+
+  } //_loop factotpusk
+
+  message('Установка завершена');
+  closeinterface(cmDefault);
+}
+
+cmpick:
+{
+  case curfield of
+    #PlanOtpuskName:
+    {
+      var c: comp;
+      c := iGrafOtpusk.PickNRecPlanOtpusk(contdoc.person, contdoc.dat1, 0);
+      if (c != 0) PlanOtpuskNrec := c;
+      rereadrecord;
+    }
+    #DetPlanOtpuskName:
+    {
+      if (PlanOtpuskNrec = 0)
+      {
+        message('Укажите плановый отпуск');
+        exit;
+      }
+      if runwindowmodal(wselectdpo) = cmDefault
+      {
+        DetPlanOtpuskNrec := seldpo.nrec;
+        rereadrecord;
+      }
+    }
+  end;
+}
+cmdelonprotect:
+{
+  case curfield of
+    #PlanOtpuskName:
+    {
+      PlanOtpuskNrec := 0;
+      DetPlanOtpuskNrec := 0;
+      rereadrecord;
+    }
+    #DetPlanOtpuskName:
+    {
+      DetPlanOtpuskNrec := 0;
+      rereadrecord;
+    }
+  end;
+}
+cmInit:
+{
+  if getfirst contdoc != tsOk
+  {
+    message('Приказ не существует');
+    closeinterface(cmCancel);
+  }
+}
+cmDone:
+{
+
+}
+end;
+
+end.
