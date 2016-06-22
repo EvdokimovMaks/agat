@@ -1,0 +1,189 @@
+#include UserReport.vih
+#include GlobalMatch.vih
+#include Params.vih
+#include System.vih
+#include Query.vih
+#include GetKau.vih
+
+#component "AGAT"
+interface ListMCUnmatchedFromIncome 'Реестр МЦ, поступивших за период, не сопоставленных с GLOBAL', doaccept, escclose;
+show (,,50,7);
+
+table struct tMatches (
+  KatmcNrec   : comp,
+  GoodsId     : comp
+) with index (
+  i01 = KatmcNrec
+);
+
+var
+  _collectionFiller: GoodsMatchCollectionFillerIncome;
+  _dataProvider    : GlobalDataProviderMatches;
+  _matchesManager  : MatchesManager;
+  _paramsFactory   : ParamsFactory;
+  _d1, _d2         : date;
+  _grmcMarker      : longint;
+  _getkau          : GetKAU;
+
+create view
+as select *
+from tMatches;
+
+function GetFldGrmcMarker: string;
+{
+  var cnt: longint;
+  cnt := getmarkercount(_grmcMarker);
+  case cnt of
+    0: result := 'Не установлен';
+    1:
+    {
+      var c: comp;
+      if getmarker(_grmcMarker, 0, c)
+        result := if(getanykau(1,8,c),givenanname(1),'???');
+      else
+        result := '???';
+    }
+  else
+  {
+    result := 'Выбрано групп: '+cnt;
+  }
+  end;
+}
+
+screen sc1;
+fields
+  _d1: noprotect;
+  _d2: noprotect;
+  [FldGrmcMarker] GetFldGrmcMarker: protect, pickbutton;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Период с`.@@@@@@@@@@`по`.@@@@@@@@@@
+
+`Фильтр по группам МЦ`.@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                   <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+cmDoOk:
+{
+  startnewvisual(vtRotateVisual, vfTimer, 'Отбор МЦ', 0);
+
+  var lst: IList;
+  lst := IList(new(System::Collection));
+
+  _collectionFiller.FillCollection(
+    ICollection(lst),
+    _paramsFactory.CreateParams.SetParam('D1', _d1).SetParam('D2', _d2)
+  );
+
+  setvisualheader('Загрузка сопоставлений');
+  delete all tMatches;
+  var rs: IResultSet;
+  rs := _dataProvider.GetAllMatches;
+  sqlCopyInto(rs, #tMatches, true);
+
+  var grmcMarkerCount: longint;
+  grmcMarkerCount := getmarkercount(_grmcMarker);
+
+  var gm: IGoodsMatches;
+  var i: longint; i := 0;
+  while i < lst.Count
+  {
+    gm := IGoodsMatches(lst.ItemGet(i));
+    if grmcMarkerCount>0
+      if not foundmarker(_grmcMarker, gm.MC.GroupmcNrec)
+      {
+        lst.RemoveAt(i);
+        continue;
+      }
+
+    if (getfirst tMatches where ((gm.MC.Nrec == tMatches.KatmcNrec)) = tsOk)
+    {
+      lst.RemoveAt(i);
+      continue;
+    }
+
+    i++;
+  }
+
+  stopvisual('', 0);
+
+  if lst.Count = 0
+  {
+    message('Все МЦ сопоставлены');
+    exit;
+  }
+
+  if _matchesManager.ShowUIEditMatches(lst, MatchDirection_SearchGlobal) = cmDefault
+  {
+    startnewvisual(vtRotateVisual, vfTimer, 'Сохранение изменений', 0);
+    _matchesManager.SaveMatches(ICollection(lst));
+    stopvisual('', 0);
+  }
+}
+cmPick:
+{
+  var c: comp;
+  _getkau.GetCodeKau(2,8,c) > 0
+  {
+    donemarker(_grmcMarker, '');
+    _grmcMarker := initmarker(_getkau.GetMarkerName(8),8,10,100,true);
+    rereadrecord;
+  }
+}
+cmdelonprotect:
+{
+  clearmarker(_grmcMarker);
+  rereadrecord;
+}
+cmInit:
+{
+  if not readmydsk(_d2, 'ListMCUnmatchedFromIncome_d2', false) _d2 := cur_date;
+  if not readmydsk(_d1, 'ListMCUnmatchedFromIncome_d1', false) _d1 := sub_day(_d2,30);
+  _grmcMarker := initmarker('ListMCUnmatchedFromIncome_grmcMarker',8,10,100,true);
+  rereadrecord;
+}
+cmDone:
+{
+  savemydsk(_d1, 'ListMCUnmatchedFromIncome_d1');
+  savemydsk(_d2, 'ListMCUnmatchedFromIncome_d2');
+  donemarker(_grmcMarker,'ListMCUnmatchedFromIncome_grmcMarker');
+}
+end;
+
+end.
+
+VipInterface UserReport_ListMCUnmatchedFromIncome Implements IUserReport licensed(free);
+Interface UserReport_ListMCUnmatchedFromIncome;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::ListMCUnmatchedFromIncome);
+  end;
+
+  function GetReportName: String;
+  {
+    GetReportName := 'АГАТ. Реестр МЦ, поступивших за период, не сопоставленных с GLOBAL';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    Ind := Ind;
+    VisibleInModule := '*';
+  };
+end.
