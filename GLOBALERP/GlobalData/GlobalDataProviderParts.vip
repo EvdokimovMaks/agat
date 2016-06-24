@@ -46,7 +46,7 @@ function IGlobalDataProviderParts.GlobalSpecsPos(aDocId: comp; aParentId: comp; 
        AddString ('       spec.IdMeasureItem as MeasureId, measure.sShortName as MeasureName, spec.nQuantity as NormQty').
        AddString ('  from BTK.TD_SPECPOSLIST spec').
        AddString ('  join BTK.BS_GOODS goods on goods.id = spec.IdGoods').
-       AddString ('  left join BTK.MSR_MEASUREITEMMAP measure on measure.idboobj#=spec.IdMeasureItem').
+       AddString ('  left join BTK.MSR_MEASUREITEMMAP measure on measure.IDOBJECT=spec.IdMeasureItem').
        AddString ('  left join (select doc.IdGoods, max(version.Id) as Id').
        AddString ('             from BTK.TD_CONSTRSPECIFICATION doc').
        AddString ('             join BTK.TD_SPECIFICATION version on version.idspecification=doc.id and version.idstate_mc=200').
@@ -54,7 +54,70 @@ function IGlobalDataProviderParts.GlobalSpecsPos(aDocId: comp; aParentId: comp; 
        AddString ('            ) v on v.IdGoods = goods.Id').
        AddString ('  where spec.idSpecification = '+string(aVersionId)).
        AddString (''')');
+  result := _externalQuery.GetResultSet(t);
+}
 
+function IGlobalDataProviderParts.GlobalSpecifications: IResultSet;
+{
+  var t: IExternalQueryText;
+  t := _externalQueryTextFactory.
+       CreateText('select dbo.toComp(tbl.GoodsId)   as GoodsId,').
+       AddString ('       tbl.GoodsName             as GoodsName,').
+       AddString ('       dbo.toComp(tbl.DocId)     as DocId,').
+       AddString ('       tbl.DocName               as DocName,').
+       AddString ('       dbo.toComp(tbl.VersionId) as VersionId,').
+       AddString ('       tbl.VersionName           as VersionName,').
+       AddString ('       h.f$name                  as PSName').
+       AddString ('from openquery ('+getLinkedServerName+', ''').
+       AddString ('  select goods.Id                as GoodsId,').
+       AddString ('		      goods.sheadline#        as GoodsName,').
+       AddString ('		      doc.Id                  as DocID,').
+       AddString ('		      doc.sheadline#          as DocName,').
+       AddString ('         version.Id              as VersionId,').
+       AddString ('     		version.sheadline#      as VersionName').
+       AddString ('  from BTK.BS_GOODS goods').
+       AddString ('  join BTK.TD_CONSTRSPECIFICATION doc on doc.idgoods = goods.id').
+       AddString ('  join BTK.TD_SPECIFICATION version on version.idspecification = doc.id').
+       AddString (''') tbl').
+       AddString ('left join T$ATTRVAL a on a.F$CATTRNAM = dbo.toComp(281474976713176) and a.F$VSTRING = cast(tbl.VersionId as varchar(20))').
+       AddString ('left join T$HDR_PS h on h.F$NREC = a.F$CREC');
+  result := _externalQuery.GetResultSet(t);
+}
+
+function IGlobalDataProviderParts.GlobalSearchSpecificationsByVersion(aVersionId: comp): IResultSet;
+{
+  var t: IExternalQueryText;
+  t := _externalQueryTextFactory.
+       CreateText('select t1.SpecId         as Spec,').
+       AddString ('       t1.Qty            as Qty,').
+       AddString ('	      t1.GoodsId        as GoodsId,').
+       AddString ('   	  t1.GoodsName      as GoodsName,').
+       AddString ('	      t1.MeasureId      as MeasureId,').
+       AddString ('	      t1.MeasureName    as MeasureName,').
+       AddString ('	      max(t1.KatmcNrec) as KatmcNrec').
+       AddString ('from (select spo.f$cmc  as KatmcNrec,').
+       AddString ('             spo.f$dord as dOrd,').
+       AddString ('             t.*,').
+       AddString ('			        max(spo.f$dord) over (partition by t.SpecId) as maxDOrd').
+       AddString ('      from openquery (uselect, ''').
+       AddString ('        select spec.id                as SpecId,').
+       AddString ('		            spec.nQuantity         as Qty,').
+       AddString ('			          goods.id               as GoodsId,').
+       AddString ('		            goods.sheadline#       as GoodsName,').
+       AddString ('		            matches.sidexternalobj as GlobalKatmcNrec,').
+       AddString ('			          measure.IDOBJECT       as MeasureId,').
+       AddString ('			          measure.sShortName     as MeasureName').
+       AddString ('        from BTK.TD_SPECIFICATION version').
+       AddString ('        join BTK.TD_SPECPOSLIST spec on spec.idSpecification = version.id').
+       AddString ('        join BTK.BS_GOODS goods on goods.id = spec.idgoods').
+       AddString ('        left join BTK.AGT_OBJMAPPING matches on matches.idrefobj = goods.id and matches.idobjmappingtype = 24746150001 and matches.idrefclass = 17372001').
+       AddString ('	       left join BTK.MSR_MEASUREITEMMAP measure on measure.IDOBJECT = spec.IdMeasureItem').
+       AddString ('        where version.Id = '+string(aVersionId)).
+       AddString ('      '') t').
+       AddString ('     join T$SPORDER spo on spo.F$SP = 0 and spo.F$VIDORDER = 0 and spo.F$CMC = dbo.toComp(t.GlobalKatmcNrec)').
+       AddString ('     ) t1').
+       AddString ('where t1.dOrd = t1.maxDOrd').
+       AddString ('group by t1.SpecId, t1.Qty, t1.GoodsId, t1.GoodsName, t1.MeasureId, t1.MeasureName');
   result := _externalQuery.GetResultSet(t);
 }
 
