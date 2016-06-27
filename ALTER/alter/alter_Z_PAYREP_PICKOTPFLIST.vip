@@ -6,29 +6,252 @@ alter interface PICKOTPFLIST;
 
 ExtendFormats BPICKOTP;
 
+const
+  attrnam_contdoc_zakaz = 0001000000000921h;
+  attrnam_contdoc_rs    = 0001000000000920h;
+end;
+
 var
   _ea: IExtAttr;
+  _getkau: GetKau;
+
+table struct tHiddenSrclist (
+  refdoc: comp
+) with index (
+  i01 = refdoc(unique)
+);
+
+table struct tZakazRS (
+  ZakazNrec: comp,
+  RSNrec: comp
+) with index (
+  i01 = ZakazNrec + RSNrec (unique)
+);
 
 create view
+var
+  _filterContdocZakazNrec: comp;
+  _filterContdocRSNrec: comp;
+  _filterFlag: byte;
 as select
-  _ea.sGetAttrId(coContDoc, contdoc.nrec, 0001000000000921h) (fieldname=ContDocZakaz),
-  _ea.sGetAttrId(coContDoc, contdoc.nrec, 0001000000000920h) (fieldname=ContDocRS)
-from partdoc, contdoc
+  _ea.sGetAttrId(coContDoc, contdoc.nrec, attrnam_contdoc_zakaz) (fieldname=ContDocZakaz),
+  _ea.sGetAttrId(coContDoc, contdoc.nrec, attrnam_contdoc_rs)    (fieldname=ContDocRS)
+from partdoc, contdoc,
+     tHiddenSrclist, srclist hsrclist, tZakazRS
 where ((
   if(factotpusk.vactype=1, 6, 41) == partdoc.typeoper and
   factotpusk.cprikaz              == partdoc.cdoc and
   factotpusk.person               == contdoc.person and
   partdoc.nrec                    == contdoc.cpart and
-  1                               == contdoc.wrec
+  1                               == contdoc.wrec and
+  tHiddenSrclist.refdoc           == hsrclist.refdoc
 ));
 
+//#region Процедуры и функции для установки фильтров
+
+function getFieldFilterAn(aNrec: comp; aKodgrKAU: word): string;
+{
+  if aNrec = comp(0)
+    result := '<Не установлен>';
+  else
+    result := if ( getanykau(1,aKodgrKAU,aNrec), givenanname(1), 'Ошибка. Выберите значение снова');
+}
+
+function getFieldFilterContdocZakaz: string;
+{
+  result := getFieldFilterAn(_filterContdocZakazNrec, 40);
+}
+
+function getFieldFilterContdocRS: string;
+{
+  result := getFieldFilterAn(_filterContdocRSNrec, 10545);
+}
+
+function getContdocExtAttrNrec(aAttrnamNrec: comp): comp;
+{
+  result := 0;
+  if getfirst factotpusk = tsOk
+    if getfirst partdoc = tsOK
+      if getfirst contdoc = tsOk
+        result := _ea.coGetAttrId(coContDoc, contdoc.nrec, aAttrnamNrec);
+}
+
+procedure ClearFilter;
+{
+  _loop tHiddenSrclist
+    if getfirst hsrclist = tsOk
+      update current hsrclist set hsrclist.visible := true;
+  delete all tHiddenSrclist;
+}
+
+procedure SetFilter;
+{
+  startnewvisual(vtIndicatorVisual, vfTimer+vfBreak, 'Установка фильтра', recordsintable(#srcList));
+  var showSrcList: boolean;
+  pushpos(#srcList);
+  ClearFilter;
+  _loop srcList
+  {
+    showSrcList := true;
+    if (_filterFlag and 1) = 1
+      showSrcList := showSrcList and (getContdocExtAttrNrec(attrnam_contdoc_zakaz) = _filterContdocZakazNrec);
+    if (_filterFlag and 2) = 2
+      showSrcList := showSrcList and (getContdocExtAttrNrec(attrnam_contdoc_rs)    = _filterContdocRSNrec);
+    if not showSrcList
+    {
+      insert tHiddenSrclist set tHiddenSrclist.refdoc := srcList.refdoc;
+      update current srcList set srcList.visible := false;
+    }
+    if not nextvisual break;
+  }
+  poppos(#srcList);
+  stopvisual('',0);
+}
+
+//#endregion
+
+window wSelectZakazRS 'Подбор заказа и счета' doaccept, escclose;
+browse brSelectZakazRS;
+table tZakazRS;
+fields
+  if(getanykau(1, 40, tZakazRS.ZakazNrec), givenanname(1), '<Не установлен>') 'Заказ': [20], protect;
+  if(getanykau(1, 10545, tZakazRS.RSNrec), givenanname(1), '<Не установлен>') 'Счет': [20], protect;
+end;
+end;
+
+window wSetFilter 'Установка/снятие фильтра';
+  show(,,50,7);
+  screen scFilter;
+  fields
+    _filterFlag: noprotect;
+    [FieldFilterContdocZakaz] getFieldFilterContdocZakaz: protect, pickbutton;
+    [FieldFilterContdocRS]    getFieldFilterContdocRS   : protect, pickbutton;
+  buttons
+    cmPodbor;
+    cmSetFilter, default;
+    cmUnsetFilter;
+<<
+
+  [.] Заказ`          .@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Расчетный счет` .@@@@@@@@@@@@@@@@@@@@@@@@@@
+                      <. Подбор заказа и счета .>
+
+       <. Установить фильтр .> <. Снять фильтр .>
+>>
+  end;
+  handleevent
+    cmPodbor:
+    {
+      if recordsintable(#tZakazRS) = 0
+      {
+        startnewvisual(vtIndicatorVisual, vfTimer+vfBreak, 'Инициализация', recordsintable(#srcList));
+        var znrec, rsnrec: comp;
+        pushpos(#srcList);
+        _loop srcList
+        {
+          znrec  := getContdocExtAttrNrec(attrnam_contdoc_zakaz);
+          rsnrec := getContdocExtAttrNrec(attrnam_contdoc_rs);
+          if getfirst tZakazRS where ((znrec == tZakazRS.ZakazNrec and rsnrec == tZakazRS.RSNrec)) != tsOk
+          {
+            clearbuffer(#tZakazRS);
+            tZakazRS.ZakazNrec := znrec;
+            tZakazRS.RSNrec := rsnrec;
+            insert current tZakazRS;
+          }
+          if not nextvisual break;
+        }
+        poppos(#srcList);
+        rereadrecord(#tZakazRS);
+        stopvisual('',0);
+      }
+
+      if runwindowmodal(wSelectZakazRS) = cmDefault
+      {
+        _filterContdocZakazNrec := tZakazRS.ZakazNrec;
+        _filterContdocRSNrec    := tZakazRS.RSNrec;
+        _filterFlag             := _filterFlag or 1 or 2;
+        rereadrecord;
+      }
+    }
+    cmPick:
+    {
+      case curfield of
+      #FieldFilterContdocZakaz:
+      {
+        var c: comp;
+        c := _filterContdocZakazNrec;
+        if _getkau.GetCodeKau(1,40,c) > 0
+        {
+          _filterContdocZakazNrec := c;
+          _filterFlag := _filterFlag or 1;
+        }
+      }
+      #FieldFilterContdocRS:
+      {
+        var c: comp;
+        c := _filterContdocRSNrec;
+        if _getkau.GetCodeKau(1,10545,c) > 0
+        {
+          _filterContdocRSNrec := c;
+          _filterFlag := _filterFlag or 2;
+        }
+      }
+      end;
+      rereadrecord;
+    }
+    cmSetFilter:
+    {
+      SetFilter;
+      rereadrecord(#srcList);
+      closewindow(wSetFilter);
+    }
+    cmUnsetFilter:
+    {
+      ClearFilter;
+      _filterFlag := 0;
+      rereadrecord(#srcList);
+      closewindow(wSetFilter);
+    }
+  end;
+end;
+
 window WPICKOTP;
-  browse BPICKOTP;
+
+  browse BPICKOTP (,,sci1EnIns);
   table srclist;
   fields
     ContDocZakaz 'Заказ': [10], protect;
     ContDocRS 'Счет': [10], protect;
   end;
+
+  handleevent
+    cmFilterSave:
+    {
+      runwindowmodal(wSetFilter);
+    }
+    cmHotkeys:
+    {
+      puthotcommand(runloadmenu(loadmenu('mnuPICKOTPFLIST')))
+    }
+  end;
+
+end; //window WPICKOTP
+
+handleevent
+  cmDelOnProtect:
+  {
+    case curfield of
+    #FieldFilterContdocZakaz: { _filterContdocZakazNrec := 0; rereadrecord; }
+    #FieldFilterContdocRS   : { _filterContdocRSNrec := 0; rereadrecord; }
+    else
+      inherited::handleevent(cmDelOnProtect);
+    end;
+  }
 end;
 
 end.
+
+mnuPICKOTPFLIST menu
+{
+  - 'Фильтр', cmFilterSave, 'Установка фильтра';
+}
