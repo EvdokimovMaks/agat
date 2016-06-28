@@ -3,14 +3,25 @@
 #include GlobalTunes.vih
 #include GlobalDataProviderParts.vih
 #include System.vih
+#include GlobalMatch.vih
 
 #component "AGAT"
 
 interface TestGlobalSpecifications 'Спецификации изделий из ИС Глобал и Галактика';
+show(,,,13);
 
 var
   _globalDataProvider: IGlobalDataProviderParts;
   MRKR: longint;
+  _matchesManager: IMatchesManager;
+  versId: comp;
+
+sql query qGetPS =
+select h.name as HdrPsNrec
+from attrval a
+join hdr_ps h on h.nrec = a.crec
+where a.cattrnam = #comp(00010000000009D8h) and a.vstring = #comp(:versId)
+;
 
 table struct tSpec (
   GoodsId     : comp,
@@ -25,9 +36,38 @@ table struct tSpec (
   i01 = GoodsId
 );
 
+table struct tMatchSpec (
+  VersionId   : comp,
+  Spec        : comp,
+  Qty         : double,
+  GoodsId     : comp,
+  GoodsName   : string,
+  MeasureId   : comp,
+  MeasureName : string,
+  KatmcNrec   : comp
+) with index (
+  i01 = GoodsId,
+  i02 = KatmcNrec,
+  i03 = VersionId
+);
+
+table struct tMatchSpecDistinct (
+  VersionId   : comp,
+  Spec        : comp,
+  Qty         : double,
+  GoodsId     : comp,
+  GoodsName   : string,
+  MeasureId   : comp,
+  MeasureName : string,
+  KatmcNrec   : comp
+) with index (
+  i01 = GoodsId,
+  i02 = KatmcNrec
+);
+
 create view
 as select *
-from tSpec, tSpec brSpec;
+from tSpec, tSpec brSpec, tMatchSpec, tMatchSpecDistinct, hdr_ps;
 
 browse brmain (,, scAtlTreeMark);
   show(,,,10);
@@ -41,7 +81,7 @@ browse brmain (,, scAtlTreeMark);
   end;
 
 screen importscreen;
-  show(,11,,13);
+  show(,11);
   buttons
     cmMakeImport;
   <<
@@ -57,7 +97,7 @@ cmInit:
   rs := _globalDataProvider.GlobalSpecifications;
   if rs = nullref
   {
-    message('Дико извиняюсь, но тут ничего :(');
+    message('Спецификации не найдены', error);
     exit;
   }
   sqlcopyinto(rs, #tSpec, true);
@@ -88,10 +128,83 @@ cmMakeImport:
   var i: integer;
   var CurVersionId: comp;
   CurVersionId := 0;
+  var res: IResultSet;
   for(i := 0; i < GetMarkerCount(MRKR); i++)
   {
     GetMarker(MRKR, i, CurVersionId);
-    // MakeImport(CurVersionId);
+    res := _globalDataProvider.GlobalSearchSpecificationsByVersion(CurVersionId);
+    if res.getFirst = tsOk do {
+      ClearBuffer(#tMatchSpec);
+      tMatchSpec.VersionId := CurVersionId;
+      tMatchSpec.Spec := res.row.val('Spec');
+      tMatchSpec.Qty := res.row.val('Qty');
+      tMatchSpec.GoodsId := res.row.val('GoodsId');
+      tMatchSpec.GoodsName := res.row.val('GoodsName');
+      tMatchSpec.MeasureId := res.row.val('MeasureId');
+      tMatchSpec.MeasureName := res.row.val('MeasureName');
+      tMatchSpec.KatmcNrec := res.row.val('KatmcNrec');
+      insert current tMatchSpec;
+    } while res.getNext = tsOk;
+  }
+
+  if getfirst tMatchSpec where ((tMatchSpecDistinct.GoodsId == tMatchSpec.GoodsId)) != tsOk //таблица с неповторяющ гудсами
+  {
+    tMatchSpecDistinct.VersionId   := tMatchSpec.VersionId;
+    tMatchSpecDistinct.Spec        := tMatchSpec.Spec;
+    tMatchSpecDistinct.Qty         := tMatchSpec.Qty;
+    tMatchSpecDistinct.GoodsId     := tMatchSpec.GoodsId;
+    tMatchSpec.GoodsName           := tMatchSpec.GoodsName;
+    tMatchSpecDistinct.MeasureId   := tMatchSpec.MeasureId;
+    tMatchSpecDistinct.MeasureName := tMatchSpec.MeasureName;
+    tMatchSpecDistinct.KatmcNrec   := tMatchSpec.KatmcNrec;
+    insert current tMatchSpecDistinct;
+  }
+
+  var matchesList: IList;
+  matchesList := IList(new(System::Collection));
+
+  _loop tMatchSpecDistinct where ((0 == tMatchSpecDistinct.KatmcNrec))
+  {
+    matchesList.Add(
+      new(GoodsMatches, GoodsMatches(
+        IGlobalGoods(new(GlobalGoods, GlobalGoods(tMatchSpec.GoodsId, tMatchSpec.GoodsName,
+                                            tMatchSpec.MeasureId, tMatchSpec.MeasureName))),
+        nullref
+      ))
+    );
+  }
+
+  getvipref(_matchesManager, 'AGAT::MatchesManager');  // инициализируем менеджер
+
+  if matchesList.Count > 0
+    if _matchesManager.ShowUIEditMatches(matchesList, MatchDirection_SearchGalaxy) = cmDefault
+    {
+      _matchesManager.SaveMatches(ICollection(matchesList));
+      //update tmatchesspec
+    }
+
+  //цикл по помеченным версиям
+  //вызвать функцию импорта
+  //(цикл по тматчспец где вершонайди = помеченным  и смотрим есть ли производственная спецификация,
+  //если нет, создаём её)
+  _loop tSpec where (FoundMarker(MRKR, tSpec.VersionId))
+  {
+    if getfirst tMatchSpec where ((tSpec.VersionId == tMatchSpec.VersionId)) = tsOk
+    {
+      var q: IQuery;
+      q := queryManager.createQuery(qGetPS);
+      q.setParam('versId', tMatchSpec.VersionId);
+      q.execute;
+
+      var rs1: IResultSet;
+      rs1 := q.getResultSet;
+
+      if rs1.count = 0
+      {
+        hdr_ps.name := tSpec.VersionName;
+        insert current hdr_ps;
+      }
+    }
   }
 }
 end;
