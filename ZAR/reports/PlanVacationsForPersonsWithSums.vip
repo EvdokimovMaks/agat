@@ -10,6 +10,42 @@
 interface PlanVacationsForPersonsWithSums 'Реестр сотрудников с запланированными отпусками за период', escClose, doAccept;
 show(,,80,14);
 
+sql query qFillMyTitledoc =
+
+insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, docdatef2, duration)
+
+  select td.nrec as ctitledoc,
+         cd.person as cperson,
+         coalesce(avZakaz.vComp,#comp(0)) as cZakaz,
+         coalesce(avRS.vComp,#comp(0)) as cRS,
+         min(cd.cnew5) as cplanotpusk,
+         min(cd.dat1) as docdatef1,
+         max(cd.dat2) as docdatef2,
+         sum(pvc.wdaycount) as duration
+
+  from titledoc td
+
+  join partdoc pd on pd.cdoc = td.nrec
+                 and pd.typeoper in (6,41)
+
+  join contdoc cd on cd.cpart = pd.nrec
+
+  join planotpusk plno on plno.nrec = cd.cnew5
+                      and plno.planyearbeg between :startDate and :endDate
+
+  join putvaccon pvc on pvc.wtable = 25045
+                    and pvc.ctable = cd.nrec
+
+  left join attrval avZakaz on avZakaz.wtable = 25045
+                           and avZakaz.crec = cd.nrec
+                           and avZakaz.cattrnam = #comp(0001000000000921h)
+
+  left join attrval avRS on avRS.wtable = 25045
+                        and avRS.crec = cd.nrec
+                        and avRS.cattrnam = #comp(0001000000000920h)
+
+  group by td.nrec, cd.person, coalesce(avZakaz.vComp,#comp(0)), coalesce(avRS.vComp,#comp(0));
+
 sql query qSelect =
 select coalesce(ls.nrec,#comp(0)) as clschet,
        p.nrec as cperson,
@@ -38,22 +74,27 @@ select coalesce(ls.nrec,#comp(0)) as clschet,
        coalesce(catpost.name, '') as post,
        plno.planyearbeg,
        plno.planyearend,
-       plno.duration,
+       plno.duration as durationp,
+       coalesce(td.duration,0) as durationf,
        plno.workyearbeg,
        plno.workyearend,
        coalesce(td.cnt,0) as doccnt,
        coalesce(td6.nrec,#comp(0)) as docnrec,
-       coalesce(td6.docnmb, '') as docnmb,
-       coalesce(td6.docdate, 0) as docdate,
-       coalesce(td6.wstatus, 0) as docstatus
+       coalesce(td6.docnmb,  '') as docnmb,
+       coalesce(td6.docdate,  0) as docdate,
+       coalesce(td6.wstatus,  0) as docstatus,
+       coalesce(td.docdatef1, 0) as docdatef1,
+       coalesce(td.docdatef2, 0) as docdatef2
 from planotpusk plno
 join persons p on p.nrec = plno.person
-left join (select cd.cnew5 as cplanotpusk, count(td.nrec) as cnt, max(td.nrec) as ctitledoc
-           from contdoc cd
-           join partdoc pd on pd.nrec = cd.cpart
-           join titledoc td on td.nrec = pd.cdoc
-           where cd.typeoper in (6,41) and cd.seqnmb=1 and cd.cnew5 <> #comp(0)
-           group by cd.cnew5
+left join (select td.cplanotpusk,
+                  count(*) as cnt,
+                  max(td.ctitledoc) as ctitledoc,
+                  min(td.docdatef1) as docdatef1,
+                  max(td.docdatef2) as docdatef2,
+                  sum(td.duration) as duration
+           from tMyTitledoc td
+           group by td.cplanotpusk
           ) td on td.cplanotpusk = plno.nrec
 left join (select tperson, max(nrec) as nrec
            from lschet
@@ -69,12 +110,24 @@ left join appointments app on app.nrec = coalesce(apps.nrec,#comp(0))
 left join titledoc td6 on td6.nrec = coalesce(td.ctitledoc,#comp(0))
 left join catalogs catdep on catdep.nrec = coalesce(app.department, p.department)
 left join catalogs catpost on catpost.nrec = coalesce(app.post, #comp(0))
-left join lschet on lschet.tperson=p.nrec and ( lschet.datuv=0 or lschet.datuv>:startDate )
+join lschet on lschet.tperson=p.nrec and ( lschet.datuv=0 or lschet.datuv>:startDate )
 where plno.vactype=1
   and plno.planyearbeg between :startDate and :endDate
-  and (coalesce(lschet.datuv,0) = 0 or coalesce(lschet.datuv,0) > :startDate )
 order by p.tabnmb
 ;
+
+table struct tMyTitledoc (
+  ctitledoc  : comp,
+  cperson    : comp,
+  cZakaz     : comp,
+  cRS        : comp,
+  cplanotpusk: comp,
+  docdatef1  : date,
+  docdatef2  : date,
+  duration   : double
+) with index (
+  i01 = cplanotpusk + ctitledoc
+);
 
 table struct t (
   clschet    : comp,
@@ -90,7 +143,8 @@ table struct t (
   ckateg     : comp,
   planyearbeg: date,
   planyearend: date,
-  duration   : double,
+  durationp  : double,
+  durationf  : double,
   srdnzar    : double,
   summa      : double,
   workyearbeg: date,
@@ -99,7 +153,9 @@ table struct t (
   docnrec    : comp,
   docnmb     : string[20],
   docdate    : date,
-  docstatus  : word
+  docstatus  : word,
+  docdatef1  : date,
+  docdatef2  : date
 ) with index (
   i01 = fio
 );
@@ -116,13 +172,13 @@ var
 
 create view
 as select *
-from t, t brt, contdoc, partdoc, titledoc, putvaccon, spkau spkKateg, spkau spkPodgr
+from t, t brt, tMyTitledoc, tMyTitledoc brMyTitledoc, tMyTitledoc brMyTitledoc1, titledoc,
+     spkau spkKateg, spkau spkPodgr
 where ((
-  brt.cperson   == contdoc.person   and ((contdoc.typeoper=6 or contdoc.typeoper=41) and contdoc.cnew5=brt.cplanotpusk) and
-  contdoc.cpart == partdoc.nrec     and
-  partdoc.cdoc  == titledoc.nrec    and
-  25045         == putvaccon.wtable and
-  contdoc.nrec  == putvaccon.ctable and
+  brt.cplanotpusk        == brMyTitledoc.cplanotpusk and
+  brMyTitledoc.ctitledoc == titledoc.nrec and
+  brt.cplanotpusk        == brMyTitledoc1.cplanotpusk and
+  brt.docnrec            == brMyTitledoc1.ctitledoc and
   brt.ckateg    == spkKateg.nrec    and
   brt.cpodgr    == spkPodgr.nrec
 ))
@@ -201,12 +257,26 @@ function getDocView: string;
   end;
 }
 
+function getDocDateFact: string;
+{
+  case brt.doccnt of
+    0: result := '';
+    1: result := getPeriodView(brt.docdatef1, brt.docdatef2);
+  else
+    result := 'см. нижнюю панель';
+  end;
+}
+
 function getDocZakazView(aDocNrec: comp): string;
 {
   if aDocNrec = 0
     result := ''
   else
-    result := _titledocHelper.getContdocExtAttrZakazVString(aDocNrec);
+    result := if(
+      getfirst brMyTitledoc1=tsOk,
+      if(getanykau(1, 40, brMyTitledoc.cZakaz),givenanname(1),''),
+      ''
+    ); //_titledocHelper.getContdocExtAttrZakazVString(aDocNrec);
 }
 
 function getDocRSView(aDocNrec: comp): string;
@@ -214,7 +284,11 @@ function getDocRSView(aDocNrec: comp): string;
   if aDocNrec = 0
     result := ''
   else
-    result := _titledocHelper.getContdocExtAttrRSVString(aDocNrec);
+    result := if(
+      getfirst brMyTitledoc1=tsOk,
+      if(getanykau(1, 10545, brMyTitledoc.cRS),givenanname(1),''),
+      ''
+    ); //_titledocHelper.getContdocExtAttrRSVString(aDocNrec);
 }
 
 function getFontBackColorByDocStatus(aDocStatus: word): byte;
@@ -263,8 +337,8 @@ procedure ShowExcelReport(isCreateXLT: boolean);
   _loop brt
   {
     var fullcnt: integer;
-    fullcnt := brt.duration;
-    _loop contdoc
+    fullcnt := brt.durationp;
+    _loop brMyTitledoc
     {
       _pXL.ClearTblBuffer;
       _pXL.SetTblStringFldValue('ТабНомер'       ,brt.Tabnmb);
@@ -275,26 +349,24 @@ procedure ShowExcelReport(isCreateXLT: boolean);
       _pXL.SetTblStringFldValue('Должность'      ,brt.Post);
       _pXL.SetTblStringFldValue('ПериодОтпуска'  ,getPlanPeriodView);
       _pXL.SetTblStringFldValue('РабочийПериод'  ,getWorkPeriodView);
-      _pXL.SetTblNumberFldValue('ДнейВсего'      ,brt.duration);
+      _pXL.SetTblNumberFldValue('ДнейВсего'      ,brt.durationp);
       _pXL.SetTblNumberFldValue('СреднедневнаяЗП',brt.srdnzar);
       _pXL.SetTblNumberFldValue('СуммаВсего'     ,brt.summa);
-      if getfirst partdoc = tsOk
-        if getfirst titledoc = tsOk
-        {
-          _pXL.SetTblStringFldValue('Приказ'     ,getDocNmbView(titledoc.docnmb)+getDocDateView(titledoc.docdate,' от '));
-          _pXL.SetTblStringFldValue('Статус'     ,getDocStatusView(titledoc.wStatus));
-        }
+      if getfirst titledoc = tsOk
+      {
+        _pXL.SetTblStringFldValue('Приказ'       ,getDocNmbView(titledoc.docnmb)+getDocDateView(titledoc.docdate,' от '));
+        _pXL.SetTblStringFldValue('Статус'       ,getDocStatusView(titledoc.wStatus));
+      }
+      _pXL.SetTblStringFldValue('Заказ'          ,if(getanykau(1, 40, brMyTitledoc.cZakaz), givenanname(1), ''));
+      _pXL.SetTblStringFldValue('Счет'           ,if(getanykau(1, 10545, brMyTitledoc.cRS), givenanname(1), ''));
 
-      _pXL.SetTblStringFldValue('Заказ'          ,_ea.sGetAttrID(coContDoc, contdoc.nrec, 0001000000000921h));
-      _pXL.SetTblStringFldValue('Счет'           ,_ea.sGetAttrID(coContDoc, contdoc.nrec, 0001000000000920h));
+      //var cnt: integer; cnt := 0;
+      //_loop putvaccon
+      //  cnt += putvaccon.wdaycount;
 
-      var cnt: integer; cnt := 0;
-      _loop putvaccon
-        cnt += putvaccon.wdaycount;
-
-      fullcnt -= cnt;
-      _pXL.SetTblNumberFldValue('ДнейПоПриказу'  ,cnt);
-      _pXL.SetTblNumberFldValue('СуммаПоПриказу' ,cnt*brt.srdnzar);
+      fullcnt -= brt.durationf;
+      _pXL.SetTblNumberFldValue('ДнейПоПриказу'  ,brt.durationf);
+      _pXL.SetTblNumberFldValue('СуммаПоПриказу' ,brt.durationf*brt.srdnzar);
       _pXL.InsTblRow;
     }
 
@@ -313,7 +385,7 @@ procedure ShowExcelReport(isCreateXLT: boolean);
       _pXL.SetTblStringFldValue('Статус'         ,'');
       _pXL.SetTblStringFldValue('Заказ'          ,'');
       _pXL.SetTblStringFldValue('Счет'           ,'');
-      _pXL.SetTblNumberFldValue('ДнейВсего'      ,brt.duration);
+      _pXL.SetTblNumberFldValue('ДнейВсего'      ,brt.durationp);
       _pXL.SetTblNumberFldValue('СреднедневнаяЗП',brt.srdnzar);
       _pXL.SetTblNumberFldValue('СуммаВсего'     ,brt.summa);
       _pXL.SetTblNumberFldValue('ДнейПоПриказу'  ,fullcnt);
@@ -345,10 +417,12 @@ window wData 'Реестр сотрудников с запланированными отпусками за период', escClo
     spkPodgr.name 'Подгруппа': [10], protect;
     brt.department 'Подразделение': [20], protect;
     brt.post 'Должность': [20], protect;
-    [planPeriodView] getPlanPeriodView 'Период отпуска': [20], protect;
-    brt.duration 'Длительность': [7], protect, browsesum;
-    brt.srdnzar 'Ср.дн.зп': [,'[|-]3666`666`666`666.88'], protect;
-    brt.summa 'Сумма': [,'[|-]3666`666`666`666.88'], protect, browsesum;
+    [planPeriodView] getPlanPeriodView 'План.период отпуска': [20], protect;
+    getDocDateFact 'Факт.период отпуска': [20], protect;
+    brt.durationp 'План.Длительность': [7], protect, browsesum;
+    brt.durationf 'Факт.Длительность': [7], protect, browsesum;
+    brt.srdnzar 'Ср.дн.зп': [,'\2p[|-]3666`666`666`666.88'], protect;
+    brt.summa 'Сумма': [,'\2p[|-]3666`666`666`666.88'], protect, browsesum;
     getWorkPeriodView 'Рабочий период сотрудника': [20], protect;
     getDocView 'Приказ': [20], protect, editButton, {font={backColor=getBRTFontBackColor}};
     if(brt.doccnt>1,'см. нижнюю панель',getDocZakazView(brt.docNrec)) 'Заказ': [10], protect;
@@ -357,22 +431,23 @@ window wData 'Реестр сотрудников с запланированными отпусками за период', escClo
 
   browse brDoc (,,sci14Esc);
   show (,19,,) fixed_y;
-  table contdoc;
+  table brMyTitledoc;
   fields
     getDocNmbView(titledoc.docnmb) 'Приказ - Номер': [20], protect;
     getDocDateView(titledoc.docdate,'') 'Дата': [10], protect;
     getDocStatusView(titledoc.wstatus) 'Статус': [10], protect, {font={backColor=getFontBackColorByDocStatus(titledoc.wstatus)}};
     titledoc.doctext 'Краткое содержание': [30], protect;
-    _ea.sGetAttrID(coContDoc, contdoc.nrec, 0001000000000921h) 'Заказ': [20], protect;
-    _ea.sGetAttrID(coContDoc, contdoc.nrec, 0001000000000920h)'Расчетный счет': [30], protect;
+    getPeriodView(brMyTitledoc.docdatef1, brMyTitledoc.docdatef2) 'Факт.перод отпуска': [20], protect;
+    if(getanykau(1, 40, brMyTitledoc.cZakaz),givenanname(1),'') 'Заказ': [20], protect;
+    if(getanykau(1, 10545, brMyTitledoc.cRS),givenanname(1),'') 'Расчетный счет': [30], protect;
   end;
 
   handleevent
   cmEdit:
   {
     case curtable of
-      #brt: ShowDoc(brt.docnrec);
-      #contdoc: ShowDoc(titledoc.nrec);
+      #brt         : ShowDoc(brt.docnrec);
+      #brMyTitledoc: ShowDoc(titledoc.nrec);
     end;
   }
   cminit:
@@ -392,7 +467,33 @@ procedure ShowUI;
 
 function prepareData: boolean;
 {
+  var s: longint;
+  sqlAddStr(s, 'table tMyTitledoc (');
+  sqlAddStr(s, '  ctitledoc  : comp,');
+  sqlAddStr(s, '  cperson    : comp,');
+  sqlAddStr(s, '  cZakaz     : comp,');
+  sqlAddStr(s, '  cRS        : comp,');
+  sqlAddStr(s, '  cplanotpusk: comp,');
+  sqlAddStr(s, '  docdatef1  : date,');
+  sqlAddStr(s, '  docdatef2  : date,');
+  sqlAddStr(s, '  duration   : double);');
+  sqlCreateTmpTable(s,ctmNormal);
+
   var q: IQuery;
+
+  q := queryManager.createQuery(qFillMyTitledoc);
+  q.setParam('startDate', _d1);
+  q.setParam('endDate', _d2);
+  if q.execute.errorCode != tsOk
+  {
+    result := false;
+    exit;
+  }
+
+  delete all tMyTitledoc;
+  q := queryManager.createQuery('select * from tMyTitledoc');
+  sqlCopyInto(q, #tMyTitledoc, false);
+
   q := queryManager.createQuery(qSelect);
   q.setParam('startDate', _d1);
   q.setParam('endDate', _d2);
@@ -415,7 +516,7 @@ function prepareData: boolean;
     {
       setvisualheader('Формирование реестра'#13'Расчет среднедневного заработка'#13''+t.fio);
       t.srdnzar := _srDnZar.GetSrDnZar(t.clschet, t.planyearbeg);
-      t.summa := t.srdnzar * t.duration;
+      t.summa := t.srdnzar * if(t.durationf>t.durationp, t.durationf, t.durationp);
       update current t;
       if not nextvisual
         break;
@@ -426,12 +527,18 @@ function prepareData: boolean;
     result := false;
 }
 
+procedure donedata;
+{
+  sqlDropTmpTable('tMyTitledoc');
+}
+
 handleevent
 cmDoOk:
 {
   _cf.EndSelect;
   if prepareData
     showUI;
+  donedata;
 }
 cmInit:
 {
