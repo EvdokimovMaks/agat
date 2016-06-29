@@ -12,7 +12,7 @@ show(,,80,14);
 
 sql query qFillMyTitledoc =
 
-insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, docdatef2, duration)
+insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, docdatef2, duration, spplbanNrec)
 
   select td.nrec as ctitledoc,
          cd.person as cperson,
@@ -21,7 +21,8 @@ insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, doc
          min(cd.cnew5) as cplanotpusk,
          min(cd.dat1) as docdatef1,
          max(cd.dat2) as docdatef2,
-         sum(pvc.wdaycount) as duration
+         sum(pvc.wdaycount) as duration,
+         coalesce(otp.SpplbanNrec, #comp(0)) as spplbanNrec
 
   from titledoc td
 
@@ -44,7 +45,19 @@ insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, doc
                         and avRS.crec = cd.nrec
                         and avRS.cattrnam = #comp(0001000000000920h)
 
-  group by td.nrec, cd.person, coalesce(avZakaz.vComp,#comp(0)), coalesce(avRS.vComp,#comp(0));
+  left join (select fo.ccontdoc, max(spplban.nrec) as SpplbanNrec
+             from factotpusk fo
+             join otpusk otp on otp.cfactotpusk = fo.nrec
+             join zaroper zo on zo.tipdoc=15028 and zo.clschet=otp.clsch and zo.cpodr=otp.nrec
+             join spplban on spplban.nrec = zo.cplpor
+             group by fo.ccontdoc
+            ) otp on otp.ccontdoc=cd.nrec
+
+  group by td.nrec,
+           cd.person,
+           coalesce(avZakaz.vComp,#comp(0)),
+           coalesce(avRS.vComp,#comp(0)),
+           coalesce(otp.SpplbanNrec, #comp(0));
 
 sql query qSelect =
 select coalesce(ls.nrec,#comp(0)) as clschet,
@@ -72,6 +85,7 @@ select coalesce(ls.nrec,#comp(0)) as clschet,
        coalesce(catdep.name, '') as department,
        coalesce(catpost.nrec, #comp(0)) as cpost,
        coalesce(catpost.name, '') as post,
+       lschet.tarif as salary,
        plno.planyearbeg,
        plno.planyearend,
        plno.duration as durationp,
@@ -124,7 +138,8 @@ table struct tMyTitledoc (
   cplanotpusk: comp,
   docdatef1  : date,
   docdatef2  : date,
-  duration   : double
+  duration   : double,
+  spplbanNrec: comp
 ) with index (
   i01 = cplanotpusk + ctitledoc
 );
@@ -141,6 +156,7 @@ table struct t (
   fio        : string,
   cpodgr     : comp,
   ckateg     : comp,
+  salary     : double,
   planyearbeg: date,
   planyearend: date,
   durationp  : double,
@@ -172,15 +188,17 @@ var
 
 create view
 as select *
-from t, t brt, tMyTitledoc, tMyTitledoc brMyTitledoc, tMyTitledoc brMyTitledoc1, titledoc,
+from t, t brt, tMyTitledoc, tMyTitledoc brMyTitledoc, tMyTitledoc brMyTitledoc1, titledoc, spplban, sbban,
      spkau spkKateg, spkau spkPodgr
 where ((
-  brt.cplanotpusk        == brMyTitledoc.cplanotpusk and
-  brMyTitledoc.ctitledoc == titledoc.nrec and
-  brt.cplanotpusk        == brMyTitledoc1.cplanotpusk and
-  brt.docnrec            == brMyTitledoc1.ctitledoc and
-  brt.ckateg    == spkKateg.nrec    and
-  brt.cpodgr    == spkPodgr.nrec
+  brt.cplanotpusk          == brMyTitledoc.cplanotpusk and
+  brMyTitledoc.ctitledoc   == titledoc.nrec and
+  brMyTitledoc.spplbanNrec == spplban.nrec and
+  spplban.csbban           == sbban.nrec and
+  brt.cplanotpusk          == brMyTitledoc1.cplanotpusk and
+  brt.docnrec              == brMyTitledoc1.ctitledoc and
+  brt.ckateg               == spkKateg.nrec and
+  brt.cpodgr               == spkPodgr.nrec
 ))
 ;
 
@@ -301,6 +319,19 @@ function getBRTFontBackColor: byte;
   result := if(brt.doccnt=1, getFontBackColorByDocStatus(brt.docstatus), if(brt.doccnt=0, 0, 61));
 }
 
+function getSpplbanView: string;
+{
+  result := 'нет';
+  if getfirst fastfirstrow spplban = tsOk
+    if getfirst fastfirstrow sbban = tsOk
+      result := sbban.name;
+}
+
+function ShowSalary: boolean;
+{
+  result := wGetTune('AGAT.ZAR.PLANVACREPSALARY')=1;
+}
+
 //#endregion
 
 //#region Отчет
@@ -321,7 +352,11 @@ procedure ShowExcelReport(isCreateXLT: boolean);
   _pXL.CreateTblFld('Подгруппа');
   _pXL.CreateTblFld('Подразделение');
   _pXL.CreateTblFld('Должность');
+  if ShowSalary
+    _pXL.CreateTblFld('Оклад');
   _pXL.CreateTblFld('ПериодОтпуска');
+  _pXL.CreateTblFld('ПериодОтпускаФакт');
+  _pXL.CreateTblFld('ВклВРеестр');
   _pXL.CreateTblFld('РабочийПериод');
   _pXL.CreateTblFld('ДнейВсего');
   _pXL.CreateTblFld('СреднедневнаяЗП');
@@ -347,8 +382,12 @@ procedure ShowExcelReport(isCreateXLT: boolean);
       _pXL.SetTblStringFldValue('Категория'      ,if(getfirst spkKateg = tsOk, spkKateg.name, ''));
       _pXL.SetTblStringFldValue('Подгруппа'      ,if(getfirst spkPodgr = tsOk, spkPodgr.name, ''));
       _pXL.SetTblStringFldValue('Должность'      ,brt.Post);
+      if ShowSalary
+        _pXL.SetTblNumberFldValue('Оклад'        ,brt.salary);
       _pXL.SetTblStringFldValue('ПериодОтпуска'  ,getPlanPeriodView);
+      _pXL.SetTblStringFldValue('ПериодОтпускаФакт',getDocDateFact);
       _pXL.SetTblStringFldValue('РабочийПериод'  ,getWorkPeriodView);
+      _pXL.SetTblStringFldValue('ВклВРеестр'     ,getSpplbanView);
       _pXL.SetTblNumberFldValue('ДнейВсего'      ,brt.durationp);
       _pXL.SetTblNumberFldValue('СреднедневнаяЗП',brt.srdnzar);
       _pXL.SetTblNumberFldValue('СуммаВсего'     ,brt.summa);
@@ -379,8 +418,12 @@ procedure ShowExcelReport(isCreateXLT: boolean);
       _pXL.SetTblStringFldValue('Категория'      ,if(getfirst spkKateg = tsOk, spkKateg.name, ''));
       _pXL.SetTblStringFldValue('Подгруппа'      ,if(getfirst spkPodgr = tsOk, spkPodgr.name, ''));
       _pXL.SetTblStringFldValue('Должность'      ,brt.Post);
+      if ShowSalary
+        _pXL.SetTblNumberFldValue('Оклад'        ,brt.salary);
       _pXL.SetTblStringFldValue('ПериодОтпуска'  ,getPlanPeriodView);
       _pXL.SetTblStringFldValue('РабочийПериод'  ,getWorkPeriodView);
+      _pXL.SetTblStringFldValue('ПериодОтпускаФакт','');
+      _pXL.SetTblStringFldValue('ВклВРеестр'     ,'');
       _pXL.SetTblStringFldValue('Приказ'         ,'');
       _pXL.SetTblStringFldValue('Статус'         ,'');
       _pXL.SetTblStringFldValue('Заказ'          ,'');
@@ -417,6 +460,7 @@ window wData 'Реестр сотрудников с запланированными отпусками за период', escClo
     spkPodgr.name 'Подгруппа': [10], protect;
     brt.department 'Подразделение': [20], protect;
     brt.post 'Должность': [20], protect;
+    brt.salary 'Оклад': [,'\2p666`666`666`666.88'], protect;
     [planPeriodView] getPlanPeriodView 'План.период отпуска': [20], protect;
     getDocDateFact 'Факт.период отпуска': [20], protect;
     brt.durationp 'План.Длительность': [7], protect, browsesum;
@@ -424,6 +468,7 @@ window wData 'Реестр сотрудников с запланированными отпусками за период', escClo
     brt.srdnzar 'Ср.дн.зп': [,'\2p[|-]3666`666`666`666.88'], protect;
     brt.summa 'Сумма': [,'\2p[|-]3666`666`666`666.88'], protect, browsesum;
     getWorkPeriodView 'Рабочий период сотрудника': [20], protect;
+    getSpplbanView 'Включено в реестр': [10], protect;
     getDocView 'Приказ': [20], protect, editButton, {font={backColor=getBRTFontBackColor}};
     if(brt.doccnt>1,'см. нижнюю панель',getDocZakazView(brt.docNrec)) 'Заказ': [10], protect;
     if(brt.doccnt>1,'см. нижнюю панель',getDocRSView(brt.docNrec)) 'Расчетный счет': [10], protect;
@@ -476,7 +521,8 @@ function prepareData: boolean;
   sqlAddStr(s, '  cplanotpusk: comp,');
   sqlAddStr(s, '  docdatef1  : date,');
   sqlAddStr(s, '  docdatef2  : date,');
-  sqlAddStr(s, '  duration   : double);');
+  sqlAddStr(s, '  duration   : double,');
+  sqlAddStr(s, '  spplbanNrec: comp);');
   sqlCreateTmpTable(s,ctmNormal);
 
   var q: IQuery;
@@ -547,6 +593,12 @@ cmInit:
     message('Недостаточно прав для формирования отчетной формы', error);
     closeinterface(cmCancel);
   }
+
+  if not ShowSalary
+  {
+    ClearFieldState(#brt.salary, sfVisible);
+  }
+
   if not readmydsk(_d2, 'PlanVacationsForPersonsWithSums_d2', false) _d2 := cur_date;
   if not readmydsk(_d1, 'PlanVacationsForPersonsWithSums_d1', false) _d1 := sub_day(_d2, 15);
   _xltFileName := TranslatePath('%StartPath%xls\PlanVacationsForPersonsWithSums.xltm');
