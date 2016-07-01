@@ -4,6 +4,7 @@
 #include GlobalDataProviderParts.vih
 #include System.vih
 #include GlobalMatch.vih
+#include GlobalGoods.vih
 
 #component "AGAT"
 
@@ -20,7 +21,16 @@ sql query qGetPS =
 select h.name as HdrPsNrec
 from attrval a
 join hdr_ps h on h.nrec = a.crec
-where a.cattrnam = #comp(00010000000009D8h) and a.vstring = #comp(:versId)
+where a.cattrnam = #comp(00010000000009D8h) and a.vstring = :versId
+;
+
+sql query qFullHouse =
+select d.sname, h.name, mc.name
+from distdoc d
+join hdr_ps h on h.cizd = d.cobject
+left join ps_lines p on p.chdr = h.nrec
+left join katmc mc on mc.nrec = p.cdet
+where d.nrec = #comp(0001000000000346h) and d.wtype = 4
 ;
 
 table struct tSpec (
@@ -33,7 +43,8 @@ table struct tSpec (
   VersionName : string,
   PSName      : string
 ) with index (
-  i01 = GoodsId
+  i01 = GoodsId,
+  i02 = VersionId
 );
 
 table struct tMatchSpec (
@@ -48,7 +59,7 @@ table struct tMatchSpec (
 ) with index (
   i01 = GoodsId,
   i02 = KatmcNrec,
-  i03 = VersionId
+  i03 = VersionId + KatmcNrec
 );
 
 table struct tMatchSpecDistinct (
@@ -67,7 +78,15 @@ table struct tMatchSpecDistinct (
 
 create view
 as select *
-from tSpec, tSpec brSpec, tMatchSpec, tMatchSpecDistinct, hdr_ps;
+from tSpec, tSpec brSpec, tMatchSpec, tMatchSpecDistinct, hdr_ps, distdoc, ps_lines;
+
+create view vKatmc
+var _nrec: comp;
+as select *
+from katmc
+where ((
+  _nrec == katmc.nrec
+));
 
 browse brmain (,, scAtlTreeMark);
   show(,,,10);
@@ -125,11 +144,16 @@ cmUnmarkAll:
 }
 cmMakeImport:
 {
+  if GetMarkerCount(MRKR) = 0 then
+  {
+    message(Chr(3)+'Не помечена ни одна спецификация.'#13'Выберите пожалуйста версию спецификации для импорта');
+    exit;
+  }
   var i: integer;
   var CurVersionId: comp;
   CurVersionId := 0;
   var res: IResultSet;
-  for(i := 0; i < GetMarkerCount(MRKR); i++)
+  for(i := 0; i < GetMarkerCount(MRKR); i++)  //заполняем таблицу tMatchSpec всеми спецификациями из помеченных версий
   {
     GetMarker(MRKR, i, CurVersionId);
     res := _globalDataProvider.GlobalSearchSpecificationsByVersion(CurVersionId);
@@ -147,23 +171,26 @@ cmMakeImport:
     } while res.getNext = tsOk;
   }
 
-  if getfirst tMatchSpec where ((tMatchSpecDistinct.GoodsId == tMatchSpec.GoodsId)) != tsOk //таблица с неповторяющ гудсами
+  _loop tMatchSpec //заполняем таблицу tMatchSpecDistinc неповторяющимися МЦ
   {
-    tMatchSpecDistinct.VersionId   := tMatchSpec.VersionId;
-    tMatchSpecDistinct.Spec        := tMatchSpec.Spec;
-    tMatchSpecDistinct.Qty         := tMatchSpec.Qty;
-    tMatchSpecDistinct.GoodsId     := tMatchSpec.GoodsId;
-    tMatchSpec.GoodsName           := tMatchSpec.GoodsName;
-    tMatchSpecDistinct.MeasureId   := tMatchSpec.MeasureId;
-    tMatchSpecDistinct.MeasureName := tMatchSpec.MeasureName;
-    tMatchSpecDistinct.KatmcNrec   := tMatchSpec.KatmcNrec;
-    insert current tMatchSpecDistinct;
+    if getfirst tMatchSpecDistinct where ((tMatchSpec.GoodsId == tMatchSpecDistinct.GoodsId)) != tsOk
+    {
+      tMatchSpecDistinct.VersionId   := tMatchSpec.VersionId;
+      tMatchSpecDistinct.Spec        := tMatchSpec.Spec;
+      tMatchSpecDistinct.Qty         := tMatchSpec.Qty;
+      tMatchSpecDistinct.GoodsId     := tMatchSpec.GoodsId;
+      tMatchSpecDistinct.GoodsName   := tMatchSpec.GoodsName;
+      tMatchSpecDistinct.MeasureId   := tMatchSpec.MeasureId;
+      tMatchSpecDistinct.MeasureName := tMatchSpec.MeasureName;
+      tMatchSpecDistinct.KatmcNrec   := tMatchSpec.KatmcNrec;
+      insert current tMatchSpecDistinct;
+    }
   }
 
   var matchesList: IList;
   matchesList := IList(new(System::Collection));
 
-  _loop tMatchSpecDistinct where ((0 == tMatchSpecDistinct.KatmcNrec))
+  _loop tMatchSpecDistinct where ((0 == tMatchSpecDistinct.KatmcNrec))  //create collection with "NO MATCHES"
   {
     matchesList.Add(
       new(GoodsMatches, GoodsMatches(
@@ -174,38 +201,97 @@ cmMakeImport:
     );
   }
 
-  getvipref(_matchesManager, 'AGAT::MatchesManager');  // инициализируем менеджер
-
-  if matchesList.Count > 0
+  if matchesList.Count > 0   // вызываем "сопоставлялку" если нужно
+  {
+    getvipref(_matchesManager, 'AGAT::MatchesManager');  // инициализируем менеджер
     if _matchesManager.ShowUIEditMatches(matchesList, MatchDirection_SearchGalaxy) = cmDefault
     {
       _matchesManager.SaveMatches(ICollection(matchesList));
-      //update tmatchesspec
+      var enum: IEnumerator;
+      enum := matchesList.GetEnumerator;
+      if enum.MoveNext do {
+        var g: IGoodsMatch;
+        g := IGoodsMatch(enum.Current);
+        update tMatchSpec where ((g.Goods.GoodsId == tMatchSpec.GoodsId))
+        set tMatchSpec.KatmcNrec := g.MC.Nrec;
+      } while enum.MoveNext;
     }
+  } //if matchesList.Count > 0
 
-  //цикл по помеченным версиям
-  //вызвать функцию импорта
-  //(цикл по тматчспец где вершонайди = помеченным  и смотрим есть ли производственная спецификация,
-  //если нет, создаём её)
+  var q: IQuery;
+  var rs1: IResultSet;
+  var MCLoader: IMatchLoaderMCByGoods;
+  MCLoader := IMatchLoaderMCByGoods(new(AGAT::MatchLoaderMCByGoods));
+  var CurCol: ICollection;
+  //CurCol := ICollection(new(System::Collection));
+  var LocalGoods: IGlobalGoods;
+  LocalGoods := IGlobalGoods(new(AGAT::GlobalGoods));
+  var DelMark: longint;
+  DelMark := InitMarker('', sizeof(comp), 50, 10, false);
   _loop tSpec where (FoundMarker(MRKR, tSpec.VersionId))
   {
-    if getfirst tMatchSpec where ((tSpec.VersionId == tMatchSpec.VersionId)) = tsOk
+    LocalGoods.GoodsId := tSpec.GoodsId;
+    CurCol := MCLoader.LoadMatches(LocalGoods);
+    if CurCol.count = 0 or CurCol = nullref continue; // if Collection is empty
+    var CurMC: IMC;
+    CurMC := IMC(CurCol.First);
+    var CurKatmcNrec: comp;
+    CurKatmcNrec := CurMC.Nrec;
+    if CurCol.count > 0
     {
-      var q: IQuery;
-      q := queryManager.createQuery(qGetPS);
-      q.setParam('versId', tMatchSpec.VersionId);
-      q.execute;
-
-      var rs1: IResultSet;
-      rs1 := q.getResultSet;
-
-      if rs1.count = 0
+      if getfirst distdoc where ((4 == distdoc.wtype and CurKatmcNrec == distdoc.cobject and 25 == distdoc.wdoctype)) != tsOk
       {
-        hdr_ps.name := tSpec.VersionName;
-        insert current hdr_ps;
+        ClearBuffer(#distdoc);
+        distdoc.wtype := 4;
+        distdoc.COBJECT := CurKatmcNrec;
+        distdoc.wdoctype := 25;
+        distdoc.sname := tSpec.VersionName;
+        insert current distdoc;
       }
+    } //if CurCol.count > 0
+    if getfirst hdr_ps where ((4 == hdr_ps.ctypeizd and distdoc.cobject == hdr_ps.cizd and 0 == hdr_ps.vid)) != tsOk
+    {
+      ClearBuffer(#hdr_ps);
+      hdr_ps.name := tSpec.VersionName;
+      hdr_ps.ctypeizd := 4;
+      hdr_ps.cizd := CurKatmcNrec;
+      hdr_ps.vid := 0;
+      vKatmc._nrec := CurKatmcNrec;
+      if vKatmc.getfirst katmc = tsOk {
+        hdr_ps.doccode := vKatmc.katmc.barkod;
+      };
+      hdr_ps.ednorm := 1;
+      hdr_ps.kind := 25;
+      hdr_ps.pargroup := 0000000000000027h;
+      hdr_ps.cnalter := tSpec.VersionId; // VersionId пишем в CNALTER, потому что можем
+      insert current hdr_ps;
     }
-  }
+
+    _loop tMatchSpec // заполняем спецификацию МЦ-шками
+    {
+      if getfirst ps_lines where ((hdr_ps.nrec          == ps_lines.chdr and
+                                   4                    == ps_lines.wdet and
+                                   tMatchSpec.KatmcNrec == ps_lines.cdet)) != tsOk
+      {
+        ClearBuffer(#ps_lines);
+        ps_lines.chdr := hdr_ps.nrec;
+        ps_lines.wdet := 4;
+        ps_lines.cdet := tMatchSpec.KatmcNrec;
+        ps_lines.kol := tMatchSpec.Qty;
+        insert current ps_lines;
+      }
+    } //_loop tMatchSpec
+
+    _loop ps_lines where ((hdr_ps.nrec == ps_lines.chdr))
+    {
+      if getfirst tMatchSpec where ((tSpec.VersionId == tMatchSpec.VersionId and ps_lines.cdet == tMatchSpec.KatmcNrec)) != tsOk
+        InsertMarker(DelMark, ps_lines.nrec);
+    }
+  } //_loop tSpec where (FoundMarker(MRKR, tSpec.VersionId))
+
+  delete all ps_lines where FoundMarker(DelMark, ps_lines.nrec);
+  DoneMarker(DelMark, '');
+  message('Импорт состава изделий произведён');
 }
 end;
 
