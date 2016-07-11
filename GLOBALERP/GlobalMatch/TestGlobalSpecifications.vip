@@ -1,21 +1,21 @@
-#include GlobalParts.vih
-#include GlobalPartsConverter.vih
-#include GlobalTunes.vih
-#include GlobalDataProviderParts.vih
+#include Marker.vih
 #include System.vih
-#include GlobalMatch.vih
 #include GlobalGoods.vih
-
+#include GlobalDataProviderGoods.vih
+#include GlobalDataProviderParts.vih
+#include GlobalMatch.vih
+#include getkau.vih
 #component "AGAT"
 
-interface TestGlobalSpecifications 'Спецификации изделий из ИС Глобал и Галактика';
+interface ImportGlobalSpecifications 'Импорт состава изделий Global ERP';
 show(,,,13);
 
 var
-  _globalDataProvider: IGlobalDataProviderParts;
-  MRKR: longint;
-  _matchesManager: IMatchesManager;
-  versId: comp;
+  _dataProviderParts: IGlobalDataProviderParts;
+  _dataProviderGoods: IGlobalDataProviderGoods;
+  _hdrMarker        : IMarker(Marker) new;
+  _matchesManager   : IMatchesManager;
+  _getkau           : GetKau;
 
 sql query qGetPS =
 select h.name as HdrPsNrec
@@ -33,52 +33,50 @@ left join katmc mc on mc.nrec = p.cdet
 where d.nrec = #comp(0001000000000346h) and d.wtype = 4
 ;
 
-table struct tSpec (
-  GoodsId     : comp,
-  KatmcNrec   : comp,
-  GoodsName   : string,
-  DocID       : comp,
-  DocName     : string,
-  VersionId   : comp,
-  VersionName : string,
-  PSName      : string
+table struct tHdr (
+  GoodsId      : comp,
+  GoodsName    : string,
+  MeasureId    : comp,
+  MeasureName  : string,
+  KatmcNrec    : comp,
+  DocID        : comp,
+  DocName      : string,
+  VersionId    : comp,
+  VersionName  : string,
+  dBeg         : date,
+  dEnd         : date,
+  HdrpsNrec    : comp
 ) with index (
   i01 = GoodsId,
-  i02 = VersionId
+  i02 = VersionId,
+  i03 = KatmcNrec
 );
 
-table struct tMatchSpec (
-  VersionId   : comp,
-  Spec        : comp,
-  Qty         : double,
-  GoodsId     : comp,
-  GoodsName   : string,
-  MeasureId   : comp,
-  MeasureName : string,
-  KatmcNrec   : comp
+table struct tSpec (
+  VersionId    : comp,
+  SpecId       : comp,
+  Qty          : double,
+  GoodsId      : comp,
+  GoodsName    : string,
+  MeasureId    : comp,
+  MeasureName  : string,
+  KatmcNrec    : comp,
+  ClassResShifr: string[20]
 ) with index (
   i01 = GoodsId,
   i02 = KatmcNrec,
-  i03 = VersionId + KatmcNrec
-);
-
-table struct tMatchSpecDistinct (
-  VersionId   : comp,
-  Spec        : comp,
-  Qty         : double,
-  GoodsId     : comp,
-  GoodsName   : string,
-  MeasureId   : comp,
-  MeasureName : string,
-  KatmcNrec   : comp
-) with index (
-  i01 = GoodsId,
-  i02 = KatmcNrec
+  i03 = VersionId + KatmcNrec,
+  i04 = SpecId
 );
 
 create view
 as select *
-from tSpec, tSpec brSpec, tMatchSpec, tMatchSpecDistinct, hdr_ps, distdoc, ps_lines;
+from tHdr brHdr, hdr_ps brHdrps, tSpec brSpec,
+     tHdr, tSpec,
+     hdr_ps, hdr_ps hdr_ps1, distdoc, ps_lines
+where ((
+  brHdr.HdrpsNrec == brHdrps.nrec
+));
 
 create view vKatmc
 var _nrec: comp;
@@ -88,210 +86,334 @@ where ((
   _nrec == katmc.nrec
 ));
 
+window wSpec 'tSpec';
+browse browse_tSpec;
+table brspec;
+fields
+  brspec.VersionId    'VersionId   ': [10], protect;
+  brspec.SpecId       'SpecId      ': [10], protect;
+  brspec.Qty          'Qty         ': [10], protect;
+  brspec.GoodsId      'GoodsId     ': [10], protect;
+  brspec.GoodsName    'GoodsName   ': [10], protect;
+  brspec.MeasureId    'MeasureId   ': [10], protect;
+  brspec.MeasureName  'MeasureName ': [10], protect;
+  brspec.KatmcNrec    'KatmcNrec   ': [10], protect;
+end;
+end;
+
 browse brmain (,, scAtlTreeMark);
   show(,,,10);
-  table brSpec;
+  table brHdr;
+  recMarker = _hdrMarker{brHdr.VersionId};
   fields
-    if(FoundMarker(MRKR, brSpec.VersionId), 'v', ' ')  '' : [1], skip;
-    brSpec.GoodsName   'Глобал МЦ'    : [25], protect;
-    brSpec.DocName     'Документ'     : [30], protect;
-    brSpec.VersionName 'Версия'       : [20], protect;
-    brSpec.PSName      'ПС Галактика' : [25], protect;
-  end;
+    brHdr.GoodsName   'Глобал МЦ'    : [25], protect;
+    brHdr.DocName     'Документ'     : [30], protect;
+    brHdr.VersionName 'Версия'       : [20], protect;
+    brHdr.dBeg        'Действует с'  : [10], protect;
+    brHdr.dEnd        'Действует по' : [10], protect;
+    brHdrps.Name      'ПС Галактика' : [25], protect, editbutton;
+end;
 
 screen importscreen;
-  show(,11);
+  show(,11,,) fixed_y;
   buttons
-    cmMakeImport;
+    cmMakeImport, default;
   <<
                                            <.  Импорт состава изделий  .>
   >>
-  end;
+end;
+
+function LoadGlobalSpecifications: boolean;
+{
+  var rs: IResultSet;
+  rs := _dataProviderParts.GlobalSpecifications;
+  if rs != nullref
+  {
+    sqlcopyinto(rs, #tHdr, true);
+    result := true;
+  }
+  else
+    result := false;
+}
+
+procedure FillMatchesCollectionByGoodsMarker(aGoodsMarker: longint; aCollection: ICollection);
+{
+  var rs: IResultSet;
+  rs := _dataProviderGoods.GlobalGoodsFromMarker(aGoodsMarker);
+  if rs != nullref
+  {
+    if (rs.getFirst = tsOk) do {
+      aCollection.Add(
+        new(GoodsMatches, GoodsMatches(
+          IGlobalGoods(new(GlobalGoods, GlobalGoods(
+            rs.row.Val('GoodsId'),
+            rs.row.Val('GoodsName'),
+            rs.row.Val('MeasureId'),
+            rs.row.Val('MeasureName')
+          )))
+        ))
+      );
+    } while (rs.getNext = tsOk);
+  }
+}
 
 handleevent
+cmEdit:
+{
+  case curfield of
+    #brHdrps.Name:
+    {
+      if brHdr.HdrpsNrec != 0
+      {
+        var c: comp;
+        c := brHdr.HdrpsNrec;
+        puthotcommand(cmEdit);
+        puthotcommand(cmDefault);
+        _getkau.getCodeKau(1, 25, c);
+      }
+    }
+  end;
+}
 cmInit:
 {
-  _globalDataProvider := IGlobalDataProviderParts(new(GlobalDataProviderParts));
-  var rs: IResultSet;
-  rs := _globalDataProvider.GlobalSpecifications;
-  if rs = nullref
-  {
-    message('Спецификации не найдены', error);
-    exit;
-  }
-  sqlcopyinto(rs, #tSpec, true);
-  MRKR := InitMarker('', sizeof(comp), 100, 10);
+  _dataProviderParts := IGlobalDataProviderParts(new(GlobalDataProviderParts));
+  _dataProviderGoods := IGlobalDataProviderGoods(new(GlobalDataProviderGoods));
+  _matchesManager    := IMatchesManager(new(MatchesManager));
+
+  //заполняем tHdr данными о заголовках и версиях спецификаций составов изделий
+  startnewvisual(vtRotateVisual, vfTimer, 'Загрузка спецификаций Global', 0);
+  delete all tHdr;
+  if not LoadGlobalSpecifications
+    message('Ошибка при загрузке спецификаций Global', error);
+  stopvisual('',0);
+
+  //маркер для пометок
+  _hdrMarker.Caption := ' (Отмечено [%d] записей)';
 }
-cmMarkRec:
-{
-  InvertMarker(MRKR, brSpec.VersionId);
-  RedrawCurrentAndGo(brmain, true);
-  ReReadRecord(#brSpec);
-}
-cmMarkAll:
-{
-  PushPos(#brSpec);
-  if GetFirst brSpec = tsOk do
-    InsertMarker(MRKR, brSpec.VersionId);
-  while GetNext brSpec = tsOk;
-  PopPos(#brSpec);
-  ReReadRecord(#brSpec);
-}
-cmUnmarkAll:
-{
-  ClearMarker(MRKR);
-  ReReadRecord(#brSpec);
-}
+
 cmMakeImport:
 {
-  if GetMarkerCount(MRKR) = 0 then
+  //если ничего не помечено - ругаемся, уходим
+  if _hdrMarker.Count = 0 then
   {
-    message(Chr(3)+'Не помечена ни одна спецификация.'#13'Выберите пожалуйста версию спецификации для импорта');
+    message(Chr(3)+'Не помечена ни одна спецификация.'#13'Отметьте спецификации для импорта');
     exit;
   }
-  var i: integer;
-  var CurVersionId: comp;
-  CurVersionId := 0;
+
+  //заполняем маркер пометками, которые сделал пользователь
+  var mrkr: longint;
+  mrkr := initmarker('', 8, 10, 20, false);
+  IMarkerExA(_hdrMarker).ExportToAll(mrkr);
+
+  //маркер для гудсов из помеченных tHdr
+  var hdrGoodsMarker: longint;
+  hdrGoodsMarker := initmarker('', 8, 10, 20, false);
+
+  //Проходим в цикле по помеченным tHdr
+  //заполняем таблицу tSpec позициями текущей спецификации глобала
+  //заполняем маркер hdrGoodsMarker гудсами из помеченных tHdr
+  delete all tSpec;
   var res: IResultSet;
-  for(i := 0; i < GetMarkerCount(MRKR); i++)  //заполняем таблицу tMatchSpec всеми спецификациями из помеченных версий
+  _loop tHdr where foundmarker(mrkr, tHdr.VersionId)
   {
-    GetMarker(MRKR, i, CurVersionId);
-    res := _globalDataProvider.GlobalSearchSpecificationsByVersion(CurVersionId);
-    if res.getFirst = tsOk do {
-      ClearBuffer(#tMatchSpec);
-      tMatchSpec.VersionId := CurVersionId;
-      tMatchSpec.Spec := res.row.val('Spec');
-      tMatchSpec.Qty := res.row.val('Qty');
-      tMatchSpec.GoodsId := res.row.val('GoodsId');
-      tMatchSpec.GoodsName := res.row.val('GoodsName');
-      tMatchSpec.MeasureId := res.row.val('MeasureId');
-      tMatchSpec.MeasureName := res.row.val('MeasureName');
-      tMatchSpec.KatmcNrec := res.row.val('KatmcNrec');
-      insert current tMatchSpec;
-    } while res.getNext = tsOk;
-  }
+    res := _dataProviderParts.GlobalSearchSpecificationsByVersion(tHdr.VersionId);
+    if res != nullref
+      sqlCopyInto(res, #tSpec, true);
 
-  _loop tMatchSpec //заполняем таблицу tMatchSpecDistinc неповторяющимися МЦ
+    insertmarker(hdrGoodsMarker, tHdr.GoodsId);
+  }
+  //исключаем из спецификаций ненужные типы деталей
+  delete all tSpec where tSpec.ClassResShifr = 'Doc';
+
+  //runwindowmodal(wSpec);
+
+  //коллекция для сопоставления гудсов из tHdr
+  var hdrMatchesCollection: ICollection;
+  hdrMatchesCollection := ICollection(new(System::Collection));
+
+  //заполняем коллекцию GoodsMatches'ами с гудсами из помеченных tHdr, теми, что в hdrGoodsMarker
+  FillMatchesCollectionByGoodsMarker(hdrGoodsMarker, hdrMatchesCollection);
+
+  //Загружаем сопоставления для этой коллекции
+  _matchesManager.LoadMatches(hdrMatchesCollection);
+
+  //маркер, содержащий GoodsId, для которых не найдены сопоставления с katmc
+  var goodsMarker: longint;
+  goodsMarker := initmarker('', 8, 10, 20, false);
+
+  //Проходим в цикле по коллекции с заполненными соответствиями
+  //если сопоставление не найдено - добавляем этот гудс в goodsMarker
+  //если найдено - обновляем tHdr
+  var e: IEnumerator;
+  e := hdrMatchesCollection.GetEnumerator;
+  while e.MoveNext
   {
-    if getfirst tMatchSpecDistinct where ((tMatchSpec.GoodsId == tMatchSpecDistinct.GoodsId)) != tsOk
+    var m: IGoodsMatch;
+    m := IGoodsMatch(e.Current);
+    if m.MC != nullref and m.MC.nrec != 0
     {
-      tMatchSpecDistinct.VersionId   := tMatchSpec.VersionId;
-      tMatchSpecDistinct.Spec        := tMatchSpec.Spec;
-      tMatchSpecDistinct.Qty         := tMatchSpec.Qty;
-      tMatchSpecDistinct.GoodsId     := tMatchSpec.GoodsId;
-      tMatchSpecDistinct.GoodsName   := tMatchSpec.GoodsName;
-      tMatchSpecDistinct.MeasureId   := tMatchSpec.MeasureId;
-      tMatchSpecDistinct.MeasureName := tMatchSpec.MeasureName;
-      tMatchSpecDistinct.KatmcNrec   := tMatchSpec.KatmcNrec;
-      insert current tMatchSpecDistinct;
+      var gi: comp; gi := m.Goods.GoodsId;
+      update tHdr where ((gi == tHdr.GoodsId))
+        set tHdr.KatmcNrec := m.MC.nrec;
     }
+    else
+      insertmarker(goodsMarker, m.Goods.GoodsId);
   }
 
-  var matchesList: IList;
-  matchesList := IList(new(System::Collection));
+  //Добавляем в goodsMarker несопоставленные GoodsId из tSpec
+  _loop tSpec where (( 0 == tSpec.KatmcNrec ))
+    insertmarker(goodsMarker, tSpec.GoodsId);
 
-  _loop tMatchSpecDistinct where ((0 == tMatchSpecDistinct.KatmcNrec))  //create collection with "NO MATCHES"
-  {
-    matchesList.Add(
-      new(GoodsMatches, GoodsMatches(
-        IGlobalGoods(new(GlobalGoods, GlobalGoods(tMatchSpec.GoodsId, tMatchSpec.GoodsName,
-                                            tMatchSpec.MeasureId, tMatchSpec.MeasureName))),
-        nullref
-      ))
-    );
-  }
+  //Коллекция МЦ для сопоставления
+  var matchesList: IList(Collection) new;
 
-  if matchesList.Count > 0   // вызываем "сопоставлялку" если нужно
+  //Заполняем matchesList GoodsMatches'ами с гудсами из goodsMarker
+  FillMatchesCollectionByGoodsMarker(goodsMarker, ICollection(matchesList));
+
+  //вызываем "сопоставлялку" если есть что сопоставлять
+  if matchesList.Count > 0
   {
-    getvipref(_matchesManager, 'AGAT::MatchesManager');  // инициализируем менеджер
     if _matchesManager.ShowUIEditMatches(matchesList, MatchDirection_SearchGalaxy) = cmDefault
     {
+      //сохраняем изменения
       _matchesManager.SaveMatches(ICollection(matchesList));
+
+      //обновляем tHdr и tSpec с учетом новых сопоставлений
+      var g: IGoodsMatch;
       var enum: IEnumerator;
       enum := matchesList.GetEnumerator;
-      if enum.MoveNext do {
-        var g: IGoodsMatch;
+
+      while enum.MoveNext {
+
         g := IGoodsMatch(enum.Current);
-        update tMatchSpec where ((g.Goods.GoodsId == tMatchSpec.GoodsId))
-        set tMatchSpec.KatmcNrec := g.MC.Nrec;
-      } while enum.MoveNext;
+
+        update tSpec where (( g.Goods.GoodsId == tSpec.GoodsId and (tSpec.KatmcNrec = 0) ))
+          set tSpec.KatmcNrec := g.MC.Nrec;
+
+        update tHdr where (( g.Goods.GoodsId == tHdr.GoodsId and (tHdr.KatmcNrec = 0) ))
+          set tHdr.KatmcNrec := g.MC.Nrec;
+
+      }
+    }
+
+    //Если остались несопоставленные позиции - ругаемся и выходим
+    if ( getfirst tHdr  where (( 0 == tHdr.KatmcNrec and (foundmarker(mrkr, tHdr.VersionId)) )) = tsOk )
+    or ( getfirst tSpec where (( 0 == tSpec.KatmcNrec )) = tsOk )
+    {
+      message('Не все МЦ сопоставлены. Импорт прерван', Warning);
+      exit;
     }
   } //if matchesList.Count > 0
 
-  var q: IQuery;
-  var rs1: IResultSet;
-  var MCLoader: IMatchLoaderMCByGoods;
-  MCLoader := IMatchLoaderMCByGoods(new(AGAT::MatchLoaderMCByGoods));
-  var CurCol: ICollection;
-  //CurCol := ICollection(new(System::Collection));
-  var LocalGoods: IGlobalGoods;
-  LocalGoods := IGlobalGoods(new(AGAT::GlobalGoods));
-  var DelMark: longint;
-  DelMark := InitMarker('', sizeof(comp), 50, 10, false);
-  _loop tSpec where (FoundMarker(MRKR, tSpec.VersionId))
+  //На текущий момент все Гудс глобала из помеченных спецификаций имеют сопоставления с МЦ Галактики
+
+  //маркер для удаляемых ps_lines
+  var delMark: longint;
+  delMark := InitMarker('', sizeof(comp), 50, 10, false);
+
+  //Снова проходим в цикле по помеченным tHdr
+  _loop tHdr where (FoundMarker(mrkr, tHdr.VersionId))
   {
-    LocalGoods.GoodsId := tSpec.GoodsId;
-    CurCol := MCLoader.LoadMatches(LocalGoods);
-    if CurCol.count = 0 or CurCol = nullref continue; // if Collection is empty
-    var CurMC: IMC;
-    CurMC := IMC(CurCol.First);
-    var CurKatmcNrec: comp;
-    CurKatmcNrec := CurMC.Nrec;
-    if CurCol.count > 0
+    //Находим или создаем distdoc
+    if getfirst distdoc where ((4 == distdoc.wtype and tHdr.KatmcNrec == distdoc.cobject and 25 == distdoc.wdoctype)) != tsOk
     {
-      if getfirst distdoc where ((4 == distdoc.wtype and CurKatmcNrec == distdoc.cobject and 25 == distdoc.wdoctype)) != tsOk
-      {
-        ClearBuffer(#distdoc);
-        distdoc.wtype := 4;
-        distdoc.COBJECT := CurKatmcNrec;
-        distdoc.wdoctype := 25;
-        distdoc.sname := tSpec.VersionName;
-        insert current distdoc;
-      }
-    } //if CurCol.count > 0
-    if getfirst hdr_ps where ((4 == hdr_ps.ctypeizd and distdoc.cobject == hdr_ps.cizd and 0 == hdr_ps.vid)) != tsOk
+      ClearBuffer(#distdoc);
+      distdoc.wtype    := 4;
+      distdoc.COBJECT  := tHdr.KatmcNrec;
+      distdoc.wdoctype := 25;
+      distdoc.sname    := tHdr.VersionName;
+      insert current distdoc;
+    }
+    //создаем hdr_ps
+    if getfirst hdr_ps where ((25 == hdr_ps.kind and 0 == hdr_ps.vid and (tHdr.VersionId = hdr_ps.checkers[6]) )) != tsOk
     {
       ClearBuffer(#hdr_ps);
-      hdr_ps.name := tSpec.VersionName;
-      hdr_ps.ctypeizd := 4;
-      hdr_ps.cizd := CurKatmcNrec;
-      hdr_ps.vid := 0;
-      vKatmc._nrec := CurKatmcNrec;
-      if vKatmc.getfirst katmc = tsOk {
-        hdr_ps.doccode := vKatmc.katmc.barkod;
-      };
-      hdr_ps.ednorm := 1;
-      hdr_ps.kind := 25;
-      hdr_ps.pargroup := 0000000000000027h;
-      hdr_ps.cnalter := tSpec.VersionId; // VersionId пишем в CNALTER, потому что можем
+      hdr_ps.kind        := 25;
+      hdr_ps.vid         := 0;
+      hdr_ps.checkers[6] := tHdr.VersionId;
       insert current hdr_ps;
     }
 
-    _loop tMatchSpec // заполняем спецификацию МЦ-шками
+    //обновляем hdr_ps
+    hdr_ps.name      := tHdr.VersionName;
+    hdr_ps.ctypeizd  := 4;
+    hdr_ps.cizd      := tHdr.KatmcNrec;
+    hdr_ps.ednorm    := 1;
+    hdr_ps.pargroup  := 0000000000000027h;
+    hdr_ps.cdocnastr := 0001000000000008h;
+    hdr_ps.wsrctext  := 2;
+    hdr_ps.woldt     := 1;
+    hdr_ps.dtbeg     := tHdr.dbeg;
+    hdr_ps.dtend     := tHdr.dend;
+
+    if hdr_ps.dtbeg <= cur_date and (hdr_ps.dtend = 0 or hdr_ps.dtend >= cur_date)
     {
-      if getfirst ps_lines where ((hdr_ps.nrec          == ps_lines.chdr and
-                                   4                    == ps_lines.wdet and
-                                   tMatchSpec.KatmcNrec == ps_lines.cdet)) != tsOk
+      if hdr_ps.active = 0
+      {
+        hdr_ps.active := 1;
+        update hdr_ps1 where ((hdr_ps.ctypeizd == hdr_ps1.ctypeizd
+                           and hdr_ps.cizd     == hdr_ps1.cizd
+                           and hdr_ps.kind     == hdr_ps1.kind
+                           and 1               == hdr_ps1.active))
+        set hdr_ps1.active := 0;
+      }
+    }
+    else
+    {
+      hdr_ps.active := 0;
+    }
+
+    vKatmc._nrec     := distdoc.cobject;
+    if vKatmc.getfirst katmc = tsOk {
+      hdr_ps.doccode := vKatmc.katmc.barkod;
+    };
+
+    update current hdr_ps;
+
+    update current tHdr set tHdr.HdrpsNrec := hdr_ps.nrec;
+
+    //Проходим в цикле по tSpec, подчиненным tHdr
+    _loop tSpec where (( tHdr.VersionId == tSpec.VersionId ))
+    {
+
+      //ищем или создаем ps_lines
+      if getfirst ps_lines where ((hdr_ps.nrec == ps_lines.chdr and
+                                  (tSpec.SpecId = ps_lines.cDocadd) )) != tsOk
       {
         ClearBuffer(#ps_lines);
         ps_lines.chdr := hdr_ps.nrec;
-        ps_lines.wdet := 4;
-        ps_lines.cdet := tMatchSpec.KatmcNrec;
-        ps_lines.kol := tMatchSpec.Qty;
+        ps_lines.cDocAdd := tSpec.SpecId;
         insert current ps_lines;
       }
-    } //_loop tMatchSpec
 
+      //обновляем ps_lines
+      ps_lines.wdet := 4;
+      ps_lines.cdet := tSpec.KatmcNrec;
+      ps_lines.kol := tSpec.Qty;
+      update current ps_lines;
+
+    } //_loop tSpec
+
+    //заполняем маркер удаляемыми ps_lines
     _loop ps_lines where ((hdr_ps.nrec == ps_lines.chdr))
     {
-      if getfirst tMatchSpec where ((tSpec.VersionId == tMatchSpec.VersionId and ps_lines.cdet == tMatchSpec.KatmcNrec)) != tsOk
+      if ps_lines.cDocAdd = 0
+      or getfirst tSpec where ((ps_lines.cDocAdd == tSpec.SpecId)) != tsOk
         InsertMarker(DelMark, ps_lines.nrec);
     }
-  } //_loop tSpec where (FoundMarker(MRKR, tSpec.VersionId))
+  } //_loop tHdr where (FoundMarker(MRKR, tHdr.VersionId))
 
+  //удаляем лишние ps_lines
   delete all ps_lines where FoundMarker(DelMark, ps_lines.nrec);
-  DoneMarker(DelMark, '');
-  message('Импорт состава изделий произведён');
+
+  //деинициализируем маркеры
+  DoneMarker(delMark, '');
+  DoneMarker(hdrGoodsMarker, '');
+  DoneMarker(mrkr, '');
+
+  rereadrecord(#brHdr);
+
+  message('Импорт состава изделий выполнен');
 }
 end;
 
