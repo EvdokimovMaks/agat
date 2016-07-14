@@ -1,0 +1,193 @@
+#include system.vih
+
+#component "System"
+
+interface ListIndexatorBase;
+
+var
+  _list: IList;
+  _currentNrec: longint;
+
+create view;
+
+constructor ListIndexatorBase(aList: IList);
+{
+  _list := aList;
+  result := _list != nullref;
+}
+
+function IIndexator.Current: objRef;
+{
+  result := _list.ItemGet(_currentNrec);
+}
+
+property List: IList absolute _list;
+
+function FirstNrec: comp;
+{
+  result := 0;
+}
+
+function LastNrec: comp;
+{
+  result := if(_list.Count = 0, 0, _list.Count - 1);
+}
+
+function setCurrentNrec(aValue: longint): boolean;
+{
+  if aValue < 0
+    _currentNrec := 0;
+  else if aValue >= _list.Count
+    _currentNrec := LastNrec;
+  else
+    _currentNrec := aValue;
+  result := _currentNrec = aValue;
+}
+
+property IIndexator.Nrec: comp
+  read  comp(_currentNrec)
+  //write setCurrentNrec(longint(result))
+  ;
+
+index IIndexator.iByNrec manual;
+
+//#region IManualIndex
+
+function IndexExists(indexNum: longint): boolean;
+{
+  result := indexNum = inIIndexator_iByNrec;
+}
+
+function IManualIndex.IndexActivated(indexNum: longInt): word;
+{
+  result := if(IndexExists(indexNum), tsOk, tsIndexNotFound);
+}
+
+function IManualIndex.IndexDeactivated(indexNum: longInt): word;
+{
+  result := if(IndexExists(indexNum), tsOk, tsIndexNotFound);
+}
+
+function IManualIndex.Find(direction: byte): word;
+{
+  result := tsOk
+
+  if FilterSegsCount = 0
+  {
+    _currentNrec := if(direction = idForward, FirstNrec, LastNrec);
+    exit;
+  }
+
+  var indexPropertyValue: comp;
+  var indexOperation    : byte;
+  var indexProperty     : longInt;
+  var indexSegNum       : word;
+
+  var tmp_currentNrec: longint;
+  tmp_currentNrec := _currentNrec;
+
+  /*
+  for(indexSegNum := 0; indexSegNum < FilterSegsCount; indexSegNum++)
+  {
+    GetFilterSeg(indexSegNum, indexPropertyValue, indexOperation, indexProperty);
+    if indexProperty = pnIIndexator_Nrec
+    {
+      case indexOperation of
+        cndEqual          : setCurrentNrec(indexPropertyValue);                                             // ==
+        cndGreater        : setCurrentNrec(if(direction=idForward, 0, indexPropertyValue-1));               // <<
+        cndLess           : setCurrentNrec(if(direction=idForward, indexPropertyValue+1, _list.Count - 1)); // >>
+        cndNotEqual       : setCurrentNrec(if(direction=idForward, 0, _list.Count - 1));                    // <>
+        cndGreaterOrEqual : setCurrentNrec(if(direction=idForward, 0, indexPropertyValue));                 // <<=
+        cndLessOrEqual    : setCurrentNrec(if(direction=idForward, indexPropertyValue, _list.Count - 1));   // >>=
+      end;
+    }
+    else
+    {
+      result := tsInternalError;
+      exit;
+    }
+  }
+  */
+
+  if FilterSegsCount > 0 then
+   {
+    GetFilterSeg(0, indexPropertyValue, indexOperation, indexProperty);
+    if indexProperty != pnIIndexator_Nrec
+    {
+      result := tsInternalError;
+      exit;
+    }
+  }
+
+  _currentNrec := if (direction = idForward, FirstNrec, LastNrec);
+
+  var delta_currentNrec: longint;
+  delta_currentNrec := if (direction = idForward, 1, -1);
+
+  do
+  {
+    if ValidateAllFilterSegs and ValidateBooleanFilters
+      exit;
+  } while setCurrentNrec(_currentNrec+delta_currentNrec);
+
+  result := tsNotFound;
+  _currentNrec := tmp_currentNrec;
+}
+
+Function IManualIndex.Move(direction: byte): word;
+{
+
+  result := tsOk;
+
+  var indexPropertyValue: comp;
+  var indexOperation    : byte;
+  var indexProperty     : longInt;
+
+  if FilterSegsCount > 0 then
+   {
+    GetFilterSeg(0, indexPropertyValue, indexOperation, indexProperty);
+    if indexProperty != pnIIndexator_Nrec
+    {
+      result := tsInternalError;
+      exit;
+    }
+  }
+
+  var tmp_currentNrec: longint;
+  tmp_currentNrec := _currentNrec;
+
+  if setCurrentNrec(_currentNrec + if(direction = idForward, 1, -1))
+  {
+    if ValidateAllFilterSegs and ValidateBooleanFilters
+      exit;
+  }
+
+  _currentNrec := tmp_currentNrec;
+  result := tsNotFound;
+
+}
+
+function IManualIndex.GetAddr(var address: comp): word;
+{
+  address := comp(_currentNrec);
+  result := tsOk;
+}
+
+function IManualIndex.GetDirect(address: comp): word;
+{
+  result := if(setCurrentNrec(longint(address)), tsOk, tsNotFound);
+}
+
+function IManualIndex.FilterChanged: word;
+{
+  result := tsOk;
+}
+
+function IManualIndex.Count: longInt;
+{
+  result := _list.count;
+}
+
+//#endregion
+
+end.
