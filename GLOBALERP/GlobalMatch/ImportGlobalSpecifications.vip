@@ -4,18 +4,24 @@
 #include GlobalDataProviderGoods.vih
 #include GlobalDataProviderParts.vih
 #include GlobalMatch.vih
+#include GlobalParts.vih
+#include GlobalPartsConverter.vih
 #include getkau.vih
+#include userreport.vih
 #component "AGAT"
 
 interface ImportGlobalSpecifications 'Импорт состава изделий Global ERP';
 show(,,,13);
 
 var
-  _dataProviderParts: IGlobalDataProviderParts;
-  _dataProviderGoods: IGlobalDataProviderGoods;
-  _hdrMarker        : IMarker(Marker) new;
-  _matchesManager   : IMatchesManager;
-  _getkau           : GetKau;
+  _dataProviderParts   : IGlobalDataProviderParts;
+  _dataProviderGoods   : IGlobalDataProviderGoods;
+  _hdrMarker           : IMarker(Marker) new;
+  _matchesManager      : IMatchesManager;
+  _measureManager      : IMeasureManager;
+  _globalPartsSelector : GlobalPartsSelector new;
+  _globalPartsConverter: IGlobalPartsConverter;
+  _getkau              : GetKau;
 
 sql query qGetPS =
 select h.name as HdrPsNrec
@@ -73,7 +79,7 @@ create view
 as select *
 from tHdr brHdr, hdr_ps brHdrps, tSpec brSpec,
      tHdr, tSpec,
-     hdr_ps, hdr_ps hdr_ps1, distdoc, ps_lines
+     hdr_ps, hdr_ps hdr_ps1, distdoc, ps_lines, katotped
 where ((
   brHdr.HdrpsNrec == brHdrps.nrec
 ));
@@ -117,9 +123,10 @@ end;
 screen importscreen;
   show(,11,,) fixed_y;
   buttons
+    cmMarkParts;
     cmMakeImport, default;
   <<
-                                           <.  Импорт состава изделий  .>
+ <. Установить пометки по составу .>   <.  Импорт состава изделий  .>
   >>
 end;
 
@@ -158,6 +165,42 @@ procedure FillMatchesCollectionByGoodsMarker(aGoodsMarker: longint; aCollection:
 }
 
 handleevent
+
+cmMarkParts:
+{
+  var c, c1: ICollection;
+  c := ICollection(new(System::Collection));
+
+  if _globalPartsSelector.ShowUI = cmDefault
+  {
+    startnewvisual(vtRotateVisual, vfTimer, 'Установка пометок', 0);
+    _globalPartsSelector.FillCollectionWithSelectedParts(c);
+
+    c1 := _globalPartsConverter.PartsToGoodsMarkedCollection(c,PARTS_MARKED,PARTS_LEAF+PARTS_NODE);
+
+    var enum: IEnumerator;
+    enum := c1.GetEnumerator;
+
+    var l: longint;
+    l := initmarker('', 8, 10, 100, false);
+
+    var g: IGlobalGoodsCollectionItem;
+    while enum.MoveNext
+    {
+      g := enum.Current;
+      _loop tHdr where ((g.Goods.GoodsId == tHdr.GoodsId))
+        insertmarker(l, tHdr.VersionId);
+    }
+
+    _hdrMarker.ImportFrom(l);
+
+    donemarker(l,'');
+
+    stopvisual('',0);
+    rereadrecord(#brHdr);
+  }
+}
+
 cmEdit:
 {
   case curfield of
@@ -174,11 +217,14 @@ cmEdit:
     }
   end;
 }
+
 cmInit:
 {
-  _dataProviderParts := IGlobalDataProviderParts(new(GlobalDataProviderParts));
-  _dataProviderGoods := IGlobalDataProviderGoods(new(GlobalDataProviderGoods));
-  _matchesManager    := IMatchesManager(new(MatchesManager));
+  _dataProviderParts    := IGlobalDataProviderParts(new(GlobalDataProviderParts));
+  _dataProviderGoods    := IGlobalDataProviderGoods(new(GlobalDataProviderGoods));
+  _matchesManager       := IMatchesManager(new(MatchesManager));
+  _measureManager       := IMeasureManager(new(MeasureManager));
+  _globalPartsConverter := IGlobalPartsConverter(new(GlobalPartsConverter));
 
   //заполняем tHdr данными о заголовках и версиях спецификаций составов изделий
   startnewvisual(vtRotateVisual, vfTimer, 'Загрузка спецификаций Global', 0);
@@ -189,6 +235,9 @@ cmInit:
 
   //маркер для пометок
   _hdrMarker.Caption := ' (Отмечено [%d] записей)';
+
+  //фильтр по умолчанию для выбирателя из состава
+  _globalPartsSelector.SetNameFilter('даеи');
 }
 
 cmMakeImport:
@@ -346,7 +395,8 @@ cmMakeImport:
     hdr_ps.dtbeg     := tHdr.dbeg;
     hdr_ps.dtend     := tHdr.dend;
 
-    if hdr_ps.dtbeg <= cur_date and (hdr_ps.dtend = 0 or hdr_ps.dtend >= cur_date)
+    //if hdr_ps.dtbeg <= cur_date and (hdr_ps.dtend = 0 or hdr_ps.dtend >= cur_date)
+    if substr(locase(hdr_ps.name), length(hdr_ps.name)-5, 6) != 'закрыт'
     {
       if hdr_ps.active = 0
       {
@@ -381,7 +431,7 @@ cmMakeImport:
                                   (tSpec.SpecId = ps_lines.cDocadd) )) != tsOk
       {
         ClearBuffer(#ps_lines);
-        ps_lines.chdr := hdr_ps.nrec;
+        ps_lines.chdr    := hdr_ps.nrec;
         ps_lines.cDocAdd := tSpec.SpecId;
         insert current ps_lines;
       }
@@ -389,6 +439,21 @@ cmMakeImport:
       //обновляем ps_lines
       ps_lines.wdet := 4;
       ps_lines.cdet := tSpec.KatmcNrec;
+      //возня с сопоставлением единиц измерения
+
+      //определяем единицу измерения галактики, соответствующую единице измерения глобала
+      var katedNrec: comp;
+      katedNrec := _measureManager.GetKatedNrec(tSpec.MeasureId);
+
+      //ищем отпускную единицу у мц с этой единицей измерения
+      //если нашли - записываем в ps_lines, иначе оставляем пустой - галактика понимает это как ед.изм. по умолчанию
+      if getfirst katotped where ((1             == katotped.prmc
+                               and ps_lines.cdet == katotped.cmcusl
+                               and katedNrec     == katotped.ckated)) = tsOk
+      {
+        ps_lines.ced := katotped.nrec;
+      }
+
       ps_lines.kol := tSpec.Qty;
       update current ps_lines;
 
@@ -417,4 +482,34 @@ cmMakeImport:
 }
 end;
 
+end.
+
+VipInterface UserReport_ImportGlobalSpec Implements IUserReport licensed(free);
+Interface UserReport_ImportGlobalSpec;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::ImportGlobalSpecifications);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'АГАТ. Импорт производственных спецификаций GLOBAL';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    Ind := Ind;
+    VisibleInModule := '*';
+  }
 end.
