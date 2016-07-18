@@ -12,7 +12,7 @@ show(,,80,14);
 
 sql query qFillMyTitledoc =
 
-insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, docdatef2, duration, spplbanNrec)
+insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, docdatef2, duration, spplbanNrec, KindOtp)
 
   select td.nrec as ctitledoc,
          cd.person as cperson,
@@ -22,7 +22,8 @@ insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, doc
          min(cd.dat1) as docdatef1,
          max(cd.dat2) as docdatef2,
          sum(pvc.wdaycount) as duration,
-         coalesce(otp.SpplbanNrec, #comp(0)) as spplbanNrec
+         coalesce(otp.SpplbanNrec, #comp(0)) as spplbanNrec,
+         klotp.notpus as KindOtp
 
   from titledoc td
 
@@ -36,6 +37,11 @@ insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, doc
 
   join putvaccon pvc on pvc.wtable = 25045
                     and pvc.ctable = cd.nrec
+                    and pvc.wdaycount <> 0
+
+  join putvacation pvac on pvac.nrec = pvc.cputvacation
+
+  join klotpusk klotp on klotp.nrec = pvac.cklotpusk
 
   left join attrval avZakaz on avZakaz.wtable = 25045
                            and avZakaz.crec = cd.nrec
@@ -57,7 +63,8 @@ insert tMyTitledoc (ctitledoc, cperson, cZakaz, cRS, cplanotpusk, docdatef1, doc
            cd.person,
            coalesce(avZakaz.vComp,#comp(0)),
            coalesce(avRS.vComp,#comp(0)),
-           coalesce(otp.SpplbanNrec, #comp(0));
+           coalesce(otp.SpplbanNrec, #comp(0)),
+           klotp.notpus;
 
 sql query qSelect =
 select coalesce(ls.nrec,#comp(0)) as clschet,
@@ -98,7 +105,8 @@ select coalesce(ls.nrec,#comp(0)) as clschet,
        coalesce(td6.docdate,  0) as docdate,
        coalesce(td6.wstatus,  0) as docstatus,
        coalesce(td.docdatef1, 0) as docdatef1,
-       coalesce(td.docdatef2, 0) as docdatef2
+       coalesce(td.docdatef2, 0) as docdatef2,
+       td.KindOtp as KindOtp
 from planotpusk plno
 join persons p on p.nrec = plno.person
 left join (select td.cplanotpusk,
@@ -106,9 +114,11 @@ left join (select td.cplanotpusk,
                   max(td.ctitledoc) as ctitledoc,
                   min(td.docdatef1) as docdatef1,
                   max(td.docdatef2) as docdatef2,
-                  sum(td.duration) as duration
+                  sum(td.duration) as duration,
+                  td.KindOtp
            from tMyTitledoc td
-           group by td.cplanotpusk
+           group by td.cplanotpusk,
+                    td.KindOtp
           ) td on td.cplanotpusk = plno.nrec
 left join (select tperson, max(nrec) as nrec
            from lschet
@@ -139,7 +149,8 @@ table struct tMyTitledoc (
   docdatef1  : date,
   docdatef2  : date,
   duration   : double,
-  spplbanNrec: comp
+  spplbanNrec: comp,
+  KindOtp    : string
 ) with index (
   i01 = cplanotpusk + ctitledoc
 );
@@ -163,6 +174,7 @@ table struct t (
   durationf  : double,
   srdnzar    : double,
   summa      : double,
+  KindOtp    : string,
   workyearbeg: date,
   workyearend: date,
   doccnt     : byte,
@@ -363,6 +375,7 @@ procedure ShowExcelReport(isCreateXLT: boolean);
   _pXL.CreateTblFld('СуммаВсего');
   _pXL.CreateTblFld('Приказ');
   _pXL.CreateTblFld('Статус');
+  _pXL.CreateTblFld('ВидОтпуска');
   _pXL.CreateTblFld('Заказ');
   _pXL.CreateTblFld('Счет');
   _pXL.CreateTblFld('ДнейПоПриказу');
@@ -396,6 +409,7 @@ procedure ShowExcelReport(isCreateXLT: boolean);
         _pXL.SetTblStringFldValue('Приказ'       ,getDocNmbView(titledoc.docnmb)+getDocDateView(titledoc.docdate,' от '));
         _pXL.SetTblStringFldValue('Статус'       ,getDocStatusView(titledoc.wStatus));
       }
+      _pXL.SetTblStringFldValue('ВидОтпуска'    ,brt.KindOtp);
       _pXL.SetTblStringFldValue('Заказ'          ,if(getanykau(1, 40, brMyTitledoc.cZakaz), givenanname(1), ''));
       _pXL.SetTblStringFldValue('Счет'           ,if(getanykau(1, 10545, brMyTitledoc.cRS), givenanname(1), ''));
 
@@ -426,6 +440,7 @@ procedure ShowExcelReport(isCreateXLT: boolean);
       _pXL.SetTblStringFldValue('ВклВРеестр'     ,'');
       _pXL.SetTblStringFldValue('Приказ'         ,'');
       _pXL.SetTblStringFldValue('Статус'         ,'');
+      _pXL.SetTblStringFldValue('ВидОтпуска'    ,'');
       _pXL.SetTblStringFldValue('Заказ'          ,'');
       _pXL.SetTblStringFldValue('Счет'           ,'');
       _pXL.SetTblNumberFldValue('ДнейВсего'      ,brt.durationp);
@@ -470,6 +485,7 @@ window wData 'Реестр сотрудников с запланированными отпусками за период', escClo
     getWorkPeriodView 'Рабочий период сотрудника': [20], protect;
     getSpplbanView 'Включено в реестр': [10], protect;
     getDocView 'Приказ': [20], protect, editButton, {font={backColor=getBRTFontBackColor}};
+    brt.KindOtp 'Вид отпуска': [10], protect;
     if(brt.doccnt>1,'см. нижнюю панель',getDocZakazView(brt.docNrec)) 'Заказ': [10], protect;
     if(brt.doccnt>1,'см. нижнюю панель',getDocRSView(brt.docNrec)) 'Расчетный счет': [10], protect;
   end;
@@ -522,7 +538,8 @@ function prepareData: boolean;
   sqlAddStr(s, '  docdatef1  : date,');
   sqlAddStr(s, '  docdatef2  : date,');
   sqlAddStr(s, '  duration   : double,');
-  sqlAddStr(s, '  spplbanNrec: comp);');
+  sqlAddStr(s, '  spplbanNrec: comp,');
+  sqlAddStr(s, '  KindOtp    : string);');
   sqlCreateTmpTable(s,ctmNormal);
 
   var q: IQuery;

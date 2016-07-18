@@ -1,0 +1,223 @@
+#component "AGAT"
+
+interface DocumentsBySchfacts 'Формирование отчета';
+show at (,,48,6);
+
+var
+  datefrom, dateto: date;
+  pXL: XLSRepBuilder;
+  sXLSFileName, sXLTFileName: string;
+  q: IQuery;
+  rs: IResultSet;
+
+sql query qGetDocs =
+select sf.num                           as SFNumber,
+       ko.name                          as Kontragent,
+       sf.dfact                         as SFDate,
+       sf.sum[1]                        as Summa,
+       sf.sum[2]                        as NDS,
+       sf.summa                         as Summa_NDS,
+       coalesce(bd.nodoc,' - ')         as BDNumber,
+       coalesce(bd.ddoc, #date(0,0,0))  as BDDate,
+       case when coalesce(ks.vidsopr,0) = 111 then 'Акт' else 'Накладная' end as DocType,
+       coalesce(ks.nsopr, ' - ')        as DocNumber,
+       coalesce(ks.dsopr, #date(0,0,0)) as DocDate,
+       coalesce(ks.summa, 0)            as DocSum,
+       ''                               as Bank,
+       ''                               as RSBank,
+       coalesce(dog.nodoc, ' - ')       as DogNumber,
+       coalesce(dog.ddoc, #date(0,0,0)) as DogDate,
+       coalesce(dop.nodoc, ' - ')       as DopSoglNumber,
+       coalesce(dop.ddoc, #date(0,0,0)) as DopSoglDate
+from schfact sf
+left join katorg ko   on ko.nrec = sf.corg
+left join katsopr ks  on ks.cschfact = sf.nrec
+left join basedoc bd  on bd.nrec = sf.cbasedoc
+left join dogovor dog on dog.nrec = coalesce(bd.CDOGOVOR, #comp(0))
+left join dogovor dop on dop.nrec = coalesce(bd.CAPPDOGOVOR, #comp(0))
+where sf.direct = 2 and sf.dfact between :datefrom and :dateto
+
+union all
+
+select sf.num,
+       ko.name,
+       sf.dfact,
+       sf.sum[1],
+       sf.sum[2],
+       sf.summa,
+       coalesce(bd.nodoc, ' - '),
+       coalesce(bd.ddoc, #date(0,0,0)),
+       'Платеж',
+       coalesce(pl.nodok, ' - '),
+       coalesce(pl.datvip, #date(0,0,0)),
+       coalesce(pl.SUMPLAT, 0),
+       coalesce(kb.name, ' - '),
+       coalesce(kb.schet1, ' - '),
+       coalesce(dog.nodoc, ' - '),
+       coalesce(dog.ddoc, #date(0,0,0)),
+       coalesce(dop.nodoc, ' - '),
+       coalesce(dop.ddoc, #date(0,0,0))
+from schfact sf
+left join katorg ko   on ko.nrec = sf.corg
+left join basedoc bd  on bd.nrec = sf.cbasedoc
+left join basefin bf  on bf.cbasedoc = bd.nrec and bd.nrec is not null
+left join plpor pl    on pl.nrec = coalesce(bf.cplpor, #comp(0))
+left join katbank kb  on kb.nrec = pl.cbankpol
+left join dogovor dog on dog.nrec = coalesce(bd.CDOGOVOR, #comp(0))
+left join dogovor dop on dop.nrec = coalesce(bd.CAPPDOGOVOR, #comp(0))
+where sf.direct = 2 and sf.dfact between :datefrom and :dateto
+;
+
+function ToNormDate(aDate: longint): date;
+{
+  if aDate < 32 result := 0;
+  var yy, mm, dd: integer;
+  yy := aDate div 65536;
+  mm := (aDate - 65536 * yy) div 256;
+  dd := aDate - 65536 * yy - 256 * mm;
+  result := StrToDate(dd + '/' + mm + '/' + yy, 'DD/MM/YYYY');
+}
+
+procedure PrintReport(isCreateXLT: boolean);
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+  pXL.CreateVar(sXLSFileName);
+  pXL.PublishVar;
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('СФНомер'     );
+  pXL.CreateTblFld('Контрагент'  );
+  pXL.CreateTblFld('СФДата'      );
+  pXL.CreateTblFld('СФСумма'     );
+  pXL.CreateTblFld('СФНдс'       );
+  pXL.CreateTblFld('СФВсего'     );
+  pXL.CreateTblFld('СчетНомер'   );
+  pXL.CreateTblFld('СчетДата'    );
+  pXL.CreateTblFld('ДокТип'      );
+  pXL.CreateTblFld('ДокНомер'    );
+  pXL.CreateTblFld('ДокДата'     );
+  pXL.CreateTblFld('ДокСумма'    );
+  pXL.CreateTblFld('Банк'        );
+  pXL.CreateTblFld('РСБанка'     );
+  pXL.CreateTblFld('ДоговорНомер');
+  pXL.CreateTblFld('ДоговорДата' );
+  pXL.CreateTblFld('ДопСоглНомер');
+  pXL.CreateTblFld('ДопСоглДата' );
+
+  if (not isCreateXLT)
+  {
+//    var _bdddate, _docdate, _dogdate, _dsdate: date;
+    startnewvisual(vtIndicatorVisual, vfTimer+vfBreak, 'Выгрузка в Excel', rs.Count)
+    if (rs.getfirst = tsOk) do
+    {
+/*      _bdddate := ToNormDate(rs.row.Val('BDDate'));
+      _docdate := ToNormDate(rs.row.Val('DocDate'));
+      _dogdate := ToNormDate(rs.row.Val('DogDate'));
+      _dsdate := ToNormDate(rs.row.Val('DopSoglDate'));   */
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('СФНомер',      rs.row.Val('SFNumber'));
+      pXL.SetTblStringFldValue('Контрагент',   rs.row.Val('Kontragent'));
+      pXL.SetTblDateFldValue  ('СФДата',       rs.row.Val('SFDate'));
+      pXL.SetTblNumberFldValue('СФСумма',      rs.row.Val('Summa'));
+      pXL.SetTblNumberFldValue('СФНдс',        rs.row.Val('NDS'));
+      pXL.SetTblNumberFldValue('СФВсего',      rs.row.Val('Summa_NDS'));
+      pXL.SetTblStringFldValue('СчетНомер',    rs.row.Val('BDNumber'));
+      pXL.SetTblDateFldValue  ('СчетДата',     ToNormDate(rs.row.Val('BDDate')));
+      pXL.SetTblStringFldValue('ДокТип',       rs.row.Val('DocType'));
+      pXL.SetTblStringFldValue('ДокНомер',     rs.row.Val('DocNumber'));
+      pXL.SetTblDateFldValue  ('ДокДата',      ToNormDate(rs.row.Val('DocDate')));
+      pXL.SetTblNumberFldValue('ДокСумма',     rs.row.Val('DocSum'));
+      pXL.SetTblStringFldValue('Банк',         rs.row.Val('Bank'));
+      pXL.SetTblStringFldValue('РСБанка',      rs.row.Val('RSBank'));
+      pXL.SetTblStringFldValue('ДоговорНомер', rs.row.Val('DogNumber'));
+      pXL.SetTblDateFldValue  ('ДоговорДата',  ToNormDate(rs.row.Val('DogDate')));
+      pXL.SetTblStringFldValue('ДопСоглНомер', rs.row.Val('DopSoglNumber'));
+      pXL.SetTblDateFldValue  ('ДопСоглДата',  ToNormDate(rs.row.Val('DopSoglDate')));
+      pXL.InsTblRow;
+      if not nextVisual break;
+    } while (rs.getnext = tsOk);
+    stopvisual('',0);
+  }
+
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+screen sc1;
+fields
+  datefrom: noprotect;
+  dateto: noprotect;
+buttons
+  cmMakeRep, default;
+<<
+
+  Дата с .@@@@@@@@@@@@   Дата по .@@@@@@@@@@@@
+
+  <.           Сформировать отчет           .>
+>>
+end;
+
+handleevent
+cminit:
+{
+  datefrom := Date(1, month(cur_date), Year(Cur_Date));
+  dateto := Date(last_day(cur_date), month(cur_date), Year(Cur_Date));
+  sXLTFileName := TranslatePath('%StartPath%xls\DocumentsBySchfacts.xltm');
+}
+cmMakeRep:
+{
+  if datefrom > dateto
+  {
+    message('"Дата с" не может быть позже "даты по"', error);
+    abort;
+    exit;
+  }
+  startnewvisual(vtRotateVisual, vfTimer, 'Выборка данных', 0);
+  q := queryManager.CreateQuery(qGetDocs);
+  q.setParam('datefrom', datefrom);
+  q.setParam('dateto', dateto);
+  rs := q.getResultSet;
+  stopvisual('',0);
+  if rs = nullref exit;
+  PrintReport(false); //first of all use true for create XLT, then false - to make report
+}
+end;
+
+end.
+
+VipInterface UserReport_DocumentsBySchfacts Implements IUserReport licensed(free);
+Interface UserReport_DocumentsBySchfacts;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::DocumentsBySchfacts);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Сопроводительные документы по счетам-фактурам';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1)
+      GetGroupName := ''
+    else
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'BUY';
+    end;
+  end;
+end.

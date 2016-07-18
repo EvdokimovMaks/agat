@@ -14,6 +14,7 @@ end;
 var
   _ea: IExtAttr;
   _getkau: GetKau;
+  KatMRKR, SubGroupMRKR: longint; //markers
 
 table struct tHiddenSrclist (
   refdoc: comp
@@ -58,6 +59,17 @@ function getFieldFilterAn(aNrec: comp; aKodgrKAU: word): string;
     result := if ( getanykau(1,aKodgrKAU,aNrec), givenanname(1), 'Ошибка. Выберите значение снова');
 }
 
+function getFieldFilterMany(aMRKR: longint; aKodgrKAU: word): string; // для множественного выбора
+{
+  var aNrec: comp;
+  GetMarker(aMRKR, 0, aNrec);
+  case GetMarkerCount(aMRKR) of
+    0: result := '<Не установлен>';
+    1: result := if(getanykau(1, aKodgrKAU, aNrec), givenanname(1), 'Выбрано 1 значение');
+    else result := 'Выбрано ' + GetMarkerCount(aMRKR) + ' значений';
+  end;
+}
+
 function getFieldFilterContdocZakaz: string;
 {
   result := getFieldFilterAn(_filterContdocZakazNrec, 40);
@@ -66,6 +78,16 @@ function getFieldFilterContdocZakaz: string;
 function getFieldFilterContdocRS: string;
 {
   result := getFieldFilterAn(_filterContdocRSNrec, 10545);
+}
+
+function getFieldFilterSubGroup: string;
+{
+  result := getFieldFilterMany(SubGroupMRKR, 10057);
+}
+
+function getFieldFilterKategory: string;
+{
+  result := getFieldFilterMany(KatMRKR, 10036);
 }
 
 function getContdocExtAttrNrec(aAttrnamNrec: comp): comp;
@@ -91,13 +113,33 @@ procedure SetFilter;
   var showSrcList: boolean;
   pushpos(#srcList);
   ClearFilter;
+
+  var i: integer;
+  var SubgroupNrec: comp;
+  var KategoryNrec: comp;
+
   _loop srcList
   {
+    SubgroupNrec := comp(0);
+    KategoryNrec := comp(0);
+    if getfirst lschet = tsOk
+    {
+      for(i := 1; i < 6; i++)
+      {
+        if lschet.tbld[i] = 10057 SubgroupNrec := lschet.ckaud[i];
+        if lschet.tbld[i] = 10036 KategoryNrec := lschet.ckaud[i];
+      }
+    }
+
     showSrcList := true;
     if (_filterFlag and 1) = 1
       showSrcList := showSrcList and (getContdocExtAttrNrec(attrnam_contdoc_zakaz) = _filterContdocZakazNrec);
     if (_filterFlag and 2) = 2
       showSrcList := showSrcList and (getContdocExtAttrNrec(attrnam_contdoc_rs)    = _filterContdocRSNrec);
+    if (_filterFlag and 4) = 4
+      showSrcList := showSrcList and FoundMarker(SubGroupMRKR, SubgroupNrec); // subgroup
+    if (_filterFlag and 8) = 8
+      showSrcList := showSrcList and FoundMarker(KatMRKR, KategoryNrec); // kategory
     if not showSrcList
     {
       insert tHiddenSrclist set tHiddenSrclist.refdoc := srcList.refdoc;
@@ -121,23 +163,27 @@ end;
 end;
 
 window wSetFilter 'Установка/снятие фильтра';
-  show(,,50,7);
+  show(,,56,9);
   screen scFilter;
   fields
     _filterFlag: noprotect;
     [FieldFilterContdocZakaz] getFieldFilterContdocZakaz: protect, pickbutton;
     [FieldFilterContdocRS]    getFieldFilterContdocRS   : protect, pickbutton;
+    [FieldFilterSubGroup]     getFieldFilterSubGroup    : protect, pickbutton;
+    [FieldFilterKategory]     getFieldFilterKategory    : protect, pickbutton;
   buttons
     cmPodbor;
     cmSetFilter, default;
     cmUnsetFilter;
 <<
 
-  [.] Заказ`          .@@@@@@@@@@@@@@@@@@@@@@@@@@
-  [.] Расчетный счет` .@@@@@@@@@@@@@@@@@@@@@@@@@@
-                      <. Подбор заказа и счета .>
+  [.] Заказ`               .@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Расчетный счет`      .@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Подгруппа персонала` .@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Категория`           .@@@@@@@@@@@@@@@@@@@@@@@@@@
+                          <.  Подбор заказа и счета  .>
 
-       <. Установить фильтр .> <. Снять фильтр .>
+ <. Установить фильтр .>  <.      Снять фильтр       .>
 >>
   end;
   handleevent
@@ -197,6 +243,30 @@ window wSetFilter 'Установка/снятие фильтра';
           _filterFlag := _filterFlag or 2;
         }
       }
+      #FieldFilterSubGroup:
+      {
+        var c: comp;
+        var _mrkname: string;
+        if _getkau.GetCodeKau(2, 10057, c) > 0
+        {
+          _mrkname := _getkau.getmarkername(10057);
+          SubGroupMRKR := initmarker(_mrkname,8,10,10,false);
+          _filterFlag := _filterFlag or 4;
+//          DoneMarker(SubGroupMRKR, _mrkname);
+        }
+      }
+      #FieldFilterKategory:
+      {
+        var c: comp;
+        var _mrkname: string;
+        if _getkau.GetCodeKau(2, 10036, c) > 0
+        {
+          _mrkname := _getkau.getmarkername(10036);
+          KatMRKR := initmarker(_mrkname,8,10,10,false);
+          _filterFlag := _filterFlag or 8;
+//          DoneMarker(KatMRKR, _mrkname);
+        }
+      }
       end;
       rereadrecord;
     }
@@ -244,6 +314,8 @@ handleevent
     case curfield of
     #FieldFilterContdocZakaz: { _filterContdocZakazNrec := 0; rereadrecord; }
     #FieldFilterContdocRS   : { _filterContdocRSNrec := 0; rereadrecord; }
+    #FieldFilterSubGroup    : { ClearMarker(SubGroupMRKR); ReReadRecord; }
+    #FieldFilterKategory    : { ClearMarker(KatMRKR); ReReadRecord; }
     else
       inherited::handleevent(cmDelOnProtect);
     end;
