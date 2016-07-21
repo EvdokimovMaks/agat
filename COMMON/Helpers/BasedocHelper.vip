@@ -1,0 +1,119 @@
+#include BasedocHelper.vih
+#include Query.vih
+
+#component "AGAT"
+
+
+interface BasedocHelper;
+
+const
+  BASEDOC_CNOTE_FULLPAID = 0001000000000077h;
+  BASEDOC_CNOTE_ISPOLN = 400056A46A9AD669h;
+end;
+
+sql query qSelectSumOplNoExcludes =
+  select sum(basefin.summa)
+  from basefin
+  join plpor on plpor.nrec = basefin.cplpor and plpor.datob > 0
+  where ( basefin.cbasedoc=:BasedocNrec or basefin.cpredopldo=:BasedocNrec )
+;
+
+var
+  _qSumOplNoExcludes: IQuery;
+
+create view
+as select *
+from basedoc;
+
+constructor Init;
+{
+  _qSumOplNoExcludes := queryManager.createQuery(qSelectSumOplNoExcludes);
+  result := true;
+}
+
+function RecalcBasedocStatusPrepareQuery(aExcludeBasefin: TCompArray): IQuery;
+{
+  var cnt: longint; cnt := count(aExcludeBasefin);
+  if cnt = 0
+    result := _qSumOplNoExcludes;
+  else
+  {
+    var s: longint; s := 0;
+    sqlAddStr(s, qSelectSumOplNoExcludes);
+    if cnt = 1
+      sqlAddStr(s, 'and basefin.nrec <> #comp('+string(aExcludeBasefin[0],0,0)+')');
+    else
+    {
+      var i: longint; i := 0;
+      sqlAddStr(s, 'and basefin.nrec not in (');
+      for(i := 0; i < cnt; i++)
+        sqlAddStr(s, if(i>0,',','') + '#comp(' + string(aExcludeBasefin[i],0,0) + ')');
+      sqlAddStr(s, ')');
+    }
+    result := queryManager.createQuery(s);
+  }
+}
+
+procedure IBasedocHelper.RecalcBasedocStatus(aBasedocNrec: comp; aExcludeBasefin: TCompArray);
+{
+  if getfirst fastfirstrow basedoc where ((aBasedocNrec == basedoc.nrec)) = tsOk
+  {
+    var q: IQuery;
+    q := RecalcBasedocStatusPrepareQuery(aExcludeBasefin);
+    q.setParam('BasedocNrec', aBasedocNrec);
+    var sumOpl: double;
+    sumOpl := q.getResultValue;
+    var fullPaid: boolean;
+    fullPaid := (sumOpl-basedoc.total) > -1;
+    if fullPaid and basedoc.cnote != BASEDOC_CNOTE_FULLPAID
+    {
+      basedoc.cnote := BASEDOC_CNOTE_FULLPAID;
+      update current basedoc;
+    }
+    else if (not fullPaid) and basedoc.cnote = BASEDOC_CNOTE_FULLPAID
+    {
+      basedoc.cnote := BASEDOC_CNOTE_ISPOLN;
+      update current basedoc;
+    }
+  }
+}
+
+function IBasedocHelper.GetBasedocViza(aBasedocNrec: comp; aBasedocVizaAttrnamNrec: comp): IBasedocViza;
+{
+  result := IBasedocViza(new(BasedocVizaBase, BasedocVizaBase(aBasedocNrec, aBasedocVizaAttrnamNrec)));
+}
+
+function IBasedocHelper.GetBasedocVizas(aBasedocNrec: comp): IBasedocVizas;
+{
+  result := IBasedocVizas(new(BasedocVizasBase, BasedocVizasBase(aBasedocNrec)));
+}
+
+function IBasedocHelper.GetDeferredDaysCount(aBasedocNrec: comp): word;
+{
+  result := 0;
+
+  if getfirst fastfirstrow basedoc where ((aBasedocNrec == basedoc.nrec)) = tsOk
+  {
+    if  basedoc.cnote != 000100000000007Eh //когда статус ДО не "включен в реестр"
+    and basedoc.cnote != 0001000000000077h //и не "оплачено"
+    {
+      var vizas: IBasedocVizas;
+      vizas := GetBasedocVizas(aBasedocNrec);
+      if vizas.Soglasovany
+      {
+        var d: date; d := 0;
+
+        if (d < vizas.BUH.LastDate) d := vizas.BUH.LastDate;
+        if (d < vizas.KAZ.LastDate) d := vizas.KAZ.LastDate;
+        if (d < vizas.PEU.LastDate) d := vizas.PEU.LastDate;
+        if (d < vizas.DIR.LastDate) d := vizas.DIR.LastDate;
+
+        if d > 0
+          result := calcdaysbetweendates(d, cur_date, true);
+      }
+    }
+  }
+
+}
+
+end.

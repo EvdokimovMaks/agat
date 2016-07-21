@@ -1,0 +1,119 @@
+#include SpstepHelper.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface SpstepHelper;
+
+sql query QSelectStz =
+  select top 1 fpimprel.cmean
+
+  from spstep
+
+  join katmc on spstep.cmcusl        = katmc.nrec
+
+  join attrval on attrval.wtable     = 1432
+              and attrval.crec       = katmc.cgroupmc
+              and attrval.cattrnam   = #comp(000100000000000Dh)
+
+  join fpimprel on fpimprel.cmain    = #comp(0001000000000045h)
+               and fpimprel.cimpmean = attrval.vcomp
+
+  where spstep.nrec = :SpstepNrec
+;
+
+const
+  SALDTUNE_NREC = 0001000000000001h;
+  STZATR_OTHER = 40017B9A6AFB5EE8h; //Статья структуры цены Прочие прямые затраты
+end;
+
+var
+  _qSelectStz: IQuery;
+
+create view
+var
+  _spstepNrec: comp;
+  _basedocNrec: comp;
+as select *
+from specmtr, stepdoc, spstep
+where ((
+  SALDTUNE_NREC == specmtr.csaldtune and
+  coSpstep      == specmtr.cotable and
+  _spstepNrec   == specmtr.cspec and
+  _basedocNrec  == stepdoc.cbasedoc and
+  stepdoc.nrec  == spstep.cstepdoc
+));
+
+constructor Init;
+{
+  _qSelectStz := queryManager.createQuery(QSelectStz);
+  result := _qSelectStz != nullref;
+}
+
+function SetSpstepStZatr(aSpstepNrec: comp): boolean;
+{
+  result := true;
+
+  var curStZatrNrec: comp;
+  _spstepNrec := aSpstepNrec;
+  if getfirst specmtr = tsOk
+    curStZatrNrec := specmtr.ckau[1];
+  else
+    curStZatrNrec := 0;
+
+  if curStZatrNrec = 0 or curStZatrNrec = STZATR_OTHER
+  {
+
+    var newStZatrNrec: comp;
+    newStZatrNrec := 0;
+
+    _qSelectStz.setParam('SpstepNrec', aSpstepNrec);
+
+    _try
+    {
+      newStZatrNrec := _qSelectStz.getResultValue;
+    }
+
+    _except
+      on exNoResult: newStZatrNrec := 0;
+      else
+      {
+        Message(ExploreException);
+        result := false;
+        exit;
+      }
+
+    _finally
+    {
+      if newStZatrNrec != 0 and newStZatrNrec != curStZatrNrec
+      {
+        if getfirst specmtr = tsOk
+        {
+          update current specmtr set specmtr.ckau[1] := newStZatrNrec;
+        }
+        else
+        {
+          clearbuffer(#specmtr);
+          specmtr.csaldtune := SALDTUNE_NREC;
+          specmtr.cotable   := coSpstep;
+          specmtr.cspec     := aSpstepNrec;
+          specmtr.ckau[1]   := newStZatrNrec;
+          insert current specmtr;
+        }
+      }
+    }
+
+  }
+}
+
+procedure SetSpstepStZatrByBasedoc(aBasedocNrec: comp);
+{
+  _basedocNrec := aBasedocNrec;
+  _loop stepdoc
+  {
+    _loop spstep
+      SetSpstepStZatr(spstep.nrec);
+  }
+}
+
+end.
