@@ -2,6 +2,8 @@ const
   cmChangeView = 32001;
 end;
 
+#define sumformat [10,'\2p[|-]3666`666`666`666`666~88']
+
 table struct tsection (
   nrec: comp,
   name: string[20],
@@ -25,6 +27,7 @@ table struct tbd (
   total : double,
   sumval: double,
   sumopl: double,
+  cnote : comp,
   bdds  : string[11],
   avans : string[20],
   ispoln: string[50],
@@ -35,14 +38,19 @@ table struct tbd (
   zakaz : string[50],
   sogl  : string[3],
   dsogl : date,
+  cbuh  : comp,
   vbuh  : string[15],
   dbuh  : date,
+  ckaz  : comp,
   vkaz  : string[15],
   dkaz  : date,
+  cdir  : comp,
   vdir  : string[15],
   ddir  : date,
+  cpeu  : comp,
   vpeu  : string[15],
   dpeu  : date,
+  crez  : comp,
   vrez  : string[15],
   drez  : date,
   daysogl: integer,
@@ -50,7 +58,8 @@ table struct tbd (
   daydir: integer,
   daykaz: integer,
   daypeu: integer,
-  dayrez: integer
+  dayrez: integer,
+  daydefer: integer
 ) with index (
   i01 = nrec,
   i02 = ddoc + nodoc,
@@ -135,6 +144,11 @@ const
   BIT_TOTAL      = 1;
   BIT_SUMVAL     = 2;
   BIT_SUMOPL     = 3;
+  VIZA_SOGLASOVANO      = 00010000000001CEh;
+  VIZA_NE_TREBUETSA     = 00010000000013CCh;
+  VIZA_S_OBSHIH_SCHETOV = 0001000000001423h;
+  STATUS_VKL_V_REESTR   = 000100000000007Eh;
+  STATUS_OPLACHEN       = 0001000000000077h;
 end;
 
 table struct tbdpair (
