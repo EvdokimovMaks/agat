@@ -1,0 +1,211 @@
+#include Query.vih
+#include CatFunc.vih
+
+#component "AGAT"
+
+interface ReportByIndirectApplication;
+
+var
+  InMNPlNrec: comp;
+  cmnplan, cspmnplan: comp;
+  sXLSFileName, sXLTFileName: string;
+  pXL: XLSRepBuilder;
+  qMNPL: IQuery;
+  rsMNPL: IResultSet;
+
+parameters InMNPlNrec; // ссылка на текущий мнплан
+
+sql query qMnPlan =
+select mp.descr      as Descriptor,
+       mp.number     as Number,
+       mp.name       as Name,
+       mp.statemdate as CreateDate,
+       per.name      as Period,
+       kp.name       as Department
+from mnplan mp
+left join fpperiod per on per.nrec = mp.canval1
+left join katpodr kp on kp.nrec = mp.canval2
+where mp.nrec = :cmnplan
+;
+
+sql query qGetChild =
+select spf.number as Father,
+       spf.nrec   as FathersNrec,
+       sp.nrec    as ChildNrec,
+       sp.number  as Child,
+       fps.name   as BudgetArticle,
+       mc.name    as MC,
+       vsp.kol    as Kol,
+       vsp.price  as Price,
+       vsp.vprice as Sum
+from spmnplan sp
+left join fpstbud  fps on fps.nrec      = sp.canval1
+left join katmc    mc  on mc.nrec       = sp.cizd
+left join spmnplan spf on spf.nrec      = sp.cspmnplan
+left join spmnpl   spl on spl.cspmnplan = sp.nrec and spl.wkolan = 25
+left join valspmnp vsp on vsp.cspmnpl   = spl.nrec
+where sp.cmnplan = :cmnplan and sp.cspmnplan = :cspmnplan
+order by sp.number
+;
+
+sql query qDetalization =
+select spm.number                   as NMB,
+       fsb.name                     as BudgetArticle,
+       mc.name                      as NAME,
+       fpl.name                     as PER,
+       month(datetime(fpl.dbeg, 0)) as Month,
+       coalesce(vsp.kol, 0)         as Kol,
+       coalesce(vsp.vprice, 0)      as Sum
+from mnplan mp
+left join fpperiod fper on fper.nrec     = mp.canval1
+left join katpodr  kp   on kp.nrec       = mp.canval2
+left join spmnplan spm  on spm.cmnplan   = mp.nrec
+left join fpstbud  fsb  on fsb.nrec      = spm.canval1
+left join katmc    mc   on mc.nrec       = spm.cizd
+left join spmnpl   spl  on spl.cspmnplan = spm.nrec and spl.wkolan = 1
+left join fpperiod fpl  on fpl.nrec      = spl.canval4 and fpl.dbeg between fper.dbeg and fper.dend
+left join valspmnp vsp  on vsp.cspmnpl   = spl.nrec
+where mp.nrec = :cmnplan and spm.nrec = :cspmnplan
+order by spm.number
+;
+
+procedure MakeTable(isCreateXLT: boolean);
+{
+  if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                  else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('Descriptor', rsMNPL.row.val('Descriptor'));
+  pXL.SetStringVar('Number',     rsMNPL.row.val('Number'));
+  pXL.SetStringVar('Name',       rsMNPL.row.val('Name'));
+  pXL.SetStringVar('CreateDate', rsMNPL.row.val('CreateDate'));
+  pXL.SetStringVar('Period',     rsMNPL.row.val('Period'));
+  pXL.SetStringVar('Department', rsMNPL.row.val('Department'));
+  pXL.PublishVar;
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Level');
+  pXL.CreateTblFld('Father');
+  pXL.CreateTblFld('Child');
+  pXL.CreateTblFld('BudgetArticle');
+  pXL.CreateTblFld('MC');
+  pXL.CreateTblFld('KolVsego');
+  pXL.CreateTblFld('Price');
+  pXL.CreateTblFld('SumVsego');
+  var i: integer;
+  for(i := 1; i <= 12; i++)  //количество и суммы по месяцам
+  {
+    pXL.CreateTblFld('Kol_' + i);
+    pXL.CreateTblFld('Sum_' + i);
+  }
+}
+
+procedure PrintTable(aRes: IResultSet; aResD: IResultSet; aLevel: word);
+{
+  pXL.ClearTblBuffer;
+  pXL.SetTblStringFldValue('Level',         aLevel);
+  pXL.SetTblStringFldValue('Father',        aRes.row.val('Father'));
+  pXL.SetTblStringFldValue('Child',         aRes.row.val('Child'));
+  pXL.SetTblStringFldValue('BudgetArticle', aRes.row.val('BudgetArticle'));
+  pXL.SetTblStringFldValue('MC',            aRes.row.val('MC'));
+  pXL.SetTblStringFldValue('KolVsego',      aRes.row.val('Kol'));
+  pXL.SetTblStringFldValue('Price',         aRes.row.val('Price'));
+  pXL.SetTblStringFldValue('SumVsego',      aRes.row.val('Sum'));
+  var mnth: integer;
+  var fkol, fsum: string;
+  var vkol, vsum: double;
+  var k: integer;
+  for (k := 1; k <= 12; k++)
+  {
+    fkol := 'Kol_' + k;
+    fsum := 'Sum_' + k;
+    pXL.SetTblNumberFldValue(fkol, 0);
+    pXL.SetTblNumberFldValue(fsum, 0);
+  }
+  if aResD.getfirst = tsOk do
+  {
+    mnth := aResD.row.val('month');
+    if mnth = 0 continue;
+    fkol := 'Kol_' + mnth;
+    fsum := 'Sum_' + mnth;
+    vkol := aResD.row.val('Kol');
+    vsum := aResD.row.val('Sum');
+    pXL.SetTblNumberFldValue(fkol, vkol);
+    pXL.SetTblNumberFldValue(fsum, vsum);
+  } while aResD.getNext = tsOk;
+  pXL.InsTblRow;
+}
+
+procedure PublishTable;
+{
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+function PrintChild(aCmnplan: comp; aCspmnplan: comp; alvl: word);
+{
+  var q, qD: IQuery;
+  q := queryManager.createQuery(qGetChild);
+  q.setParam('cmnplan', aCmnplan);
+  q.setParam('cspmnplan', aCspmnplan);
+  var rs, rsD: IResultSet;
+  rs := q.getResultSet;
+  if rs = nullref exit;
+  qD := queryManager.createQuery(qDetalization);
+  var _cspmnplan: comp;
+  if rs.getFirst = tsOk do
+  {
+    _cspmnplan := rs.row.Val('ChildNrec');
+    qD.setParam('cmnplan', aCmnplan);
+    qD.setParam('cspmnplan', _cspmnplan);
+    rsD := qD.getResultSet;
+    if rsD = nullref continue;
+    PrintTable(rs, rsD, alvl);
+    freevipinterface(rsD);
+    PrintChild(aCmnplan, _cspmnplan, (alvl + 1));
+  } while rs.getNext = tsOk;
+  freevipinterface(rs);
+}
+handleevent
+cminit:
+{
+  sXLTFileName := TranslatePath('%StartPath%xls\ReportByIndirectApplication.xltm'); //i'm using .xlt for creation and then rename it to .xltm
+  qMNPL := queryManager.createQuery(qMnPlan);
+  qMNPL.setParam('cmnplan', InMNPlNrec);
+  rsMNPL := qMNPL.getResultSet;
+  if rsMNPL = nullref
+  {
+    Message('Ошибка открытия плана! План не найден', error);
+    exit;
+  }
+  MakeTable(false); //use true for create XLT and false to content it
+  PrintChild(InMNPlNrec, 0, 0); // uncomment when content the report
+  PublishTable;
+}
+end;
+
+end.
+
+.LinkForm 'IndirectApplication' Prototype is 'MNPLAN'
+.NameInList 'Агат. Отчет по накладным расходам подразделения'
+.f "NUL"
+.{CheckEnter MNPLAN_LOOP1
+.begin
+  runinterface(AGAT::ReportByIndirectApplication, comp(_MNRec));
+end.
+.{CheckEnter SPMNPL_LOOP1
+.}
+.{CheckEnter OBJACCT_IN_LOOP
+.{CheckEnter SPOBJACC_IN_LOOP
+.{CheckEnter SPOBJACC_CURIN_LOOP
+.}
+.}
+.}
+.{CheckEnter OBJACCT_OUT_LOOP
+.{CheckEnter SPOBJACC_CUROUT_LOOP
+.{CheckEnter SPOBJACC_OUT_LOOP
+.}
+.}
+.}
+.}
+.endform
