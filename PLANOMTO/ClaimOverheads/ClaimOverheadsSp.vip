@@ -1,0 +1,282 @@
+#include ClaimOverheads.vih
+#include Query.vih
+#include IModify.vih
+
+#component "AGAT"
+
+interface ClaimOverheadsSp;
+
+sql Query qLoadSp =
+select spm.nrec      as Nrec,
+       spm.cspmnplan as ParentNrec,
+       spm.nrec      as SpmnplanNrec,
+       spm.condrec   as ConditionNrec,
+       spm.number    as Number,
+       spm.canval1   as CostitemNrec,
+       spm.typeizd   as ItemType,
+       spm.cizd      as ItemNrec,
+       spm.cotped    as OtpedNrec,
+       coalesce(vsp.kol, 0)    as Qty,
+       coalesce(vsp.price, 0)  as Price,
+       coalesce(vsp.vprice, 0) as Sum
+from spmnplan spm
+left join spmnpl spl on spl.cspmnplan = spm.nrec and spl.wkolan = 25
+left join valspmnp vsp on vsp.cspmnpl = spl.nrec and spl.nrec is not null
+where spm.cMnplan = :MnplanNrec
+;
+
+sql query qLoadSpMonth =
+select spm.nrec as SpmnplanNrec,
+       month(datetime(per.dbeg,0)) as MonthIndex,
+       vsp.kol as Qty,
+       vsp.price as Price,
+       vsp.vPrice as Sum
+from spmnplan spm
+join spmnpl spl on spl.cspmnplan = spm.nrec and spl.wkolan = 1
+join fpperiod per on spl.canval4 = per.nrec
+join valspmnp vsp on vsp.cspmnpl = spl.nrec
+where spm.cmnplan = :MnplanNrec
+;
+
+table struct tSp (
+  nrec         : comp,
+  parentNrec   : comp,
+  spmnplanNrec : comp,
+  conditionNrec: comp,
+  number       : string[20],
+  costitemNrec : comp,
+  itemType     : word,
+  itemNrec     : comp,
+  otpedNrec    : comp,
+  qty          : double,
+  price        : double,
+  sum          : double,
+  monthQty     : array[1..12] of double,
+  monthSum     : array[1..12] of double
+) with index (
+  i01 = nrec (unique, surrogate),
+  i02 = parentNrec + nrec
+);
+
+create view
+as select *
+from tSp, tSp tSpChildren
+where ((
+  tSp.nrec == tSpChildren.parentNrec
+));
+
+create view vSp
+var
+  _spNrec: comp
+as select *
+from tSp, tSp tSpChildren
+where ((
+  _spNrec == tSp.nrec and
+  _spNrec == tSpChildren.parentNrec
+));
+
+create view vDelete
+as select *
+from tSp;
+
+var
+  _claim: IClaimOverheads;
+
+//#region Вспомогательные функции
+
+function  isValidMonthIndex(monthIndex: byte): boolean;
+{
+  result := monthIndex > 0 and monthIndex <= 12;
+}
+
+function getIsLeaf: boolean;
+{
+  result := getfirst fastfirstrow tSpChildren != tsOk;
+}
+
+procedure RecalcCurrent;
+{
+  var i: byte;
+  tSp.qty := 0;
+  tSp.sum := 0;
+  for(i := 1; i <= 12; i++)
+  {
+    tSp.monthSum[i] := tSp.monthQty[i] * tSp.price;
+    tSp.qty += tSp.monthQty[i];
+    tSp.sum += tSp.monthSum[i];
+  }
+}
+
+procedure RecalcSpAgregate(aSpNrec: comp);
+{
+  vSp._spNrec := aSpNrec;
+
+  if vSp.getfirst fastfirstrow tSp = tsOk
+  {
+
+    vSp.tSp.sum    := 0;
+    vSp.tSp.price  := 0;
+    vSp.tSp.qty    := 0;
+
+    var i: byte;
+    for(i := 0; i <= 12; i++)
+    {
+      vSp.tSp.monthSum[i] := 0;
+      vSp.tSp.monthQty[i] := 0;
+    }
+
+    vSp._loop tSpChildren
+    {
+      for(i := 0; i <= 12; i++)
+      {
+        vSp.tSp.monthSum[i] += vSp.tSpChildren.monthSum[i];
+        vSp.tSp.monthQty[i] += vSp.tSpChildren.monthQty[i];
+        vSp.tSp.qty         += vSp.tSpChildren.qty;
+        vSp.tSp.sum         += vSp.tSpChildren.sum;
+      }
+    }
+
+    vSp.update current  tSp;
+
+    if vSp.tSp.parentNrec != 0
+      RecalcSpAgregate(vSp.tSp.parentNrec);
+  }
+}
+
+procedure DeleteSpChildren(aSpNrec: comp);
+{
+  var l: longint;
+  l := initmarker('', 8, 10, 20, false);
+
+  insertmarker(l, aSpNrec);
+
+  var i: longint;
+  var c: comp;
+  for(i := 0; getmarker(l, i, c); i++)
+  {
+    vSp._spNrec := c;
+    vSp._loop tSpChildren
+      insertmarker(l, vSp.tSpChildren.nrec);
+  }
+
+  AtDeleteMarker(l, 0);
+
+  vDelete.delete all tSp where foundmarker(l, vDelete.tSp.nrec);
+
+  donemarker(l, '');
+}
+
+//#endregion
+
+//#region IModify
+
+Function IModify.doInsert : Word;
+{
+  result := insert current tSp;
+  RecalcSpAgregate(tSp.nrec);
+}
+
+Function IModify.doUpdate : Word;
+{
+  result := update current tSp;
+  RecalcSpAgregate(tSp.nrec);
+}
+
+Function IModify.doDelete : Word;
+{
+  var aParentSpNrec: comp;
+  aParentSpNrec := tSp.parentNrec;
+
+  DeleteSpChildren(tSp.nrec);
+
+  result := delete current tSp;
+
+  RecalcSpAgregate(aParentSpNrec);
+}
+
+implementation IModify.doFlush  abstract;
+
+//#endregion
+
+//#region IClaimOverheadsSp
+
+function  IClaimOverheadsSp.Load(aMnplanNrec: comp): boolean;
+{
+  delete all tSp;
+
+  sqlCopyInto(
+    queryManager.createQuery(qLoadSp).setParam('MnplanNrec',aMnplanNrec),
+    #tSp,
+    true
+  );
+
+  var rs: IResultSet;
+  rs := queryManager.createQuery(qLoadSpMonth).setParam('MnplanNrec', aMnplanNrec).getResultSet;
+
+  if rs != nullref
+    if rs.getfirst = tsOk do
+    {
+      vSp._spNrec := rs.row.Val('SpmnplanNrec');
+      if vSp.getfirst tSp = tsOk
+      {
+        var monthIndex: byte;
+        monthIndex := rs.row.Val('MonthIndex');
+
+        if isValidMonthIndex(monthIndex)
+        {
+          vSp.tSp.monthQty[monthIndex] := rs.row.Val('Qty');
+          vSp.tSp.monthSum[monthIndex] := rs.row.Val('Sum');
+          vSp.update current tSp;
+        }
+      }
+    } while rs.getNext = tsOk;
+
+  result := true;
+}
+
+function  IClaimOverheadsSp.Save: boolean;
+{
+  result := true;
+}
+
+function  IClaimOverheadsSp.MonthQty(monthIndex: byte): double;
+{
+  result := if(isValidMonthIndex(monthIndex), tSp.monthQty[monthIndex], 0);
+}
+
+function  IClaimOverheadsSp.MonthSum(monthIndex: byte): double;
+{
+  result := if(isValidMonthIndex(monthIndex), tSp.monthSum[monthIndex], 0);
+}
+
+procedure IClaimOverheadsSp.SetMonthQty(monthIndex: byte; value: double);
+{
+  if isValidMonthIndex(monthIndex)
+    if value != tSp.monthQty[monthIndex]
+    {
+      set tSp.monthQty[monthIndex] := value;
+      RecalcCurrent;
+    }
+}
+
+property IClaimOverheadsSp.Nrec                : comp            absolute tSp.nrec;
+property IClaimOverheadsSp.ParentNrec          : comp            absolute tSp.parentNrec;
+property IClaimOverheadsSp.SpmnplanNrec        : comp            absolute tSp.spmnplanNrec;
+property IClaimOverheadsSp.ConditionNrec       : comp            absolute tSp.conditionNrec;
+property IClaimOverheadsSp.Number              : string[20]      absolute tSp.number;
+property IClaimOverheadsSp.CostitemNrec        : comp            absolute tSp.costitemNrec;
+property IClaimOverheadsSp.ItemType            : word            absolute tSp.itemType;
+property IClaimOverheadsSp.ItemNrec            : comp            absolute tSp.itemNrec;
+property IClaimOverheadsSp.OtpedNrec           : comp            absolute tSp.otpedNrec;
+property IClaimOverheadsSp.Price               : double          absolute tSp.price;
+property IClaimOverheadsSp.Qty                 : double          read     tSp.qty;
+property IClaimOverheadsSp.Sum                 : double          read     tSp.sum;
+property IClaimOverheadsSp.IsLeaf              : boolean         read     getIsLeaf;
+property IClaimOverheadsSp.Claim               : IClaimOverheads absolute _claim;
+
+index IClaimOverheadsSp.iByNrec auto;
+index IClaimOverheadsSp.iByParentNrec auto;
+
+//#endregion
+
+end.

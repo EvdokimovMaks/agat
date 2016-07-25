@@ -1,0 +1,109 @@
+#include ClaimOverheads.vih
+#include System.vih
+
+#component "AGAT"
+
+interface ClaimOverheads;
+
+var
+  _isDirty    : boolean;
+  _mnplanNrec : comp;
+  _periodNrec : comp;
+  _katpodrNrec: comp;
+  _number     : string[20];
+  _name       : string;
+  _sp         : IClaimOverheadsSp;
+
+create view vLoad
+var
+  _loadMnplanNrec: comp;
+as select *
+from mnplan, spmnplan
+where ((
+  _loadMnplanNrec == mnplan.nrec and
+  mnplan.nrec == spmnplan.cmnplan and
+  0 == spmnplan.cspmnplan
+));
+
+create view vSave
+var
+  _saveMnplanNrec: comp;
+as select *
+from mnplan
+where (( _saveMnplanNrec == mnplan.nrec ));
+
+procedure CopyMnplanBufferToProperties(buf: type$mnplan);
+{
+  _mnplanNrec  := buf.nrec;
+  _periodNrec  := buf.canval1;
+  _katpodrNrec := buf.canval2;
+  _number      := buf.number;
+  _name        := buf.name;
+}
+
+procedure CopyPropertiesToMnplanBuffer(buf: type$mnplan);
+{
+  buf.nrec    := _mnplanNrec;
+  buf.canval1 := _periodNrec;
+  buf.canval2 := _katpodrNrec;
+  buf.number  := _number;
+  buf.name    := _name;
+}
+
+procedure SetDirty;   { _IsDirty := true;  }
+
+procedure UnsetDirty; { _IsDirty := false; }
+
+function IClaimOverheads.Load(aMnplanNrec: comp): boolean;
+{
+  vLoad._loadMnplanNrec := aMnplanNrec;
+  if vLoad.getfirst fastfirstrow mnplan = tsOk
+  {
+    CopyMnplanBufferToProperties(type$mnplan(vLoad.mnplan.buffer));
+    _isDirty := false;
+    result := true;
+    _sp.Load(aMnplanNrec);
+  }
+  else
+    result := false;
+}
+
+function IClaimOverheads.Save: boolean;
+{
+  vSave._saveMnplanNrec := _mnplanNrec;
+  if vSave.getfirst fastfirstrow mnplan = tsOk
+  {
+    CopyPropertiesToMnplanBuffer(vSave.mnplan.buffer);
+    vSave.update current mnplan;
+    UnsetDirty;
+    result := true;
+    _sp.Save;
+  }
+  else
+    result := false;
+}
+
+function IsDirty: boolean;
+{
+  result := _isDirty;
+}
+
+constructor Init;
+{
+  _sp := IClaimOverheadsSp(new(ClaimOverheadsSp));
+  _sp.Claim := IClaimOverheads(self);
+
+  result := true;
+}
+
+#declare WriteProperty(PropertyName)
+{ if(#PropertyName != result) { #PropertyName := result; SetDirty; } }
+#end
+
+property IClaimOverheads.MnplanNrec : comp              read _mnplanNrec;
+property IClaimOverheads.PeriodNrec : comp              read _periodNrec   write #WriteProperty(_periodNrec);
+property IClaimOverheads.KatpodrNrec: comp              read _katpodrNrec  write #WriteProperty(_katpodrNrec);
+property IClaimOverheads.Number     : string[20]        read _number       write #WriteProperty(_number);
+property IClaimOverheads.Name       : string            read _name         write #WriteProperty(_name);
+property IClaimOverheads.Sp         : IClaimOverheadsSp read _sp;
+end.
