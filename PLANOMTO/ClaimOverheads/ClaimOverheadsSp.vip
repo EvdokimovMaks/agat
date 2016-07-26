@@ -38,29 +38,9 @@ join valspmnp vsp on vsp.cspmnpl = spl.nrec
 where spm.cmnplan = :MnplanNrec
 ;
 
-table struct tSp (
-  nrec         : comp,
-  parentNrec   : comp,
-  spmnplanNrec : comp,
-  conditionNrec: comp,
-  number       : string[20],
-  costitemNrec : comp,
-  itemType     : word,
-  itemNrec     : comp,
-  otpedNrec    : comp,
-  qty          : double,
-  price        : double,
-  sum          : double,
-  monthQty     : array[1..12] of double,
-  monthSum     : array[1..12] of double
-) with index (
-  i01 = nrec (unique, surrogate),
-  i02 = parentNrec + nrec
-);
-
 create view
 as select *
-from tSp, tSp tSpChildren
+from tClaimOverheadsSp tSp, tClaimOverheadsSp tSpChildren
 where ((
   tSp.nrec == tSpChildren.parentNrec
 ));
@@ -69,7 +49,7 @@ create view vSp
 var
   _spNrec: comp
 as select *
-from tSp, tSp tSpChildren
+from tClaimOverheadsSp tSp, tClaimOverheadsSp tSpChildren
 where ((
   _spNrec == tSp.nrec and
   _spNrec == tSpChildren.parentNrec
@@ -77,7 +57,25 @@ where ((
 
 create view vDelete
 as select *
-from tSp;
+from tClaimOverheadsSp tSp;
+
+create view vCheck
+var
+  _parentSpNrec: comp;
+  _number: string[20];
+  _costitemNrec: comp;
+as select *
+from tClaimOverheadsSp tSp
+where ((
+  _parentSpNrec    == tSp.parentNrec and
+  (tSp.costitemNrec = _costitemNrec and
+   tSp.number       = _number and
+   tSp.ItemNrec     = 0)
+));
+
+create view v
+as select *
+from tClaimOverheadsSp tSp;
 
 var
   _claim: IClaimOverheads;
@@ -119,7 +117,7 @@ procedure RecalcSpAgregate(aSpNrec: comp);
     vSp.tSp.qty    := 0;
 
     var i: byte;
-    for(i := 0; i <= 12; i++)
+    for(i := 1; i <= 12; i++)
     {
       vSp.tSp.monthSum[i] := 0;
       vSp.tSp.monthQty[i] := 0;
@@ -127,7 +125,7 @@ procedure RecalcSpAgregate(aSpNrec: comp);
 
     vSp._loop tSpChildren
     {
-      for(i := 0; i <= 12; i++)
+      for(i := 1; i <= 12; i++)
       {
         vSp.tSp.monthSum[i] += vSp.tSpChildren.monthSum[i];
         vSp.tSp.monthQty[i] += vSp.tSpChildren.monthQty[i];
@@ -166,6 +164,33 @@ procedure DeleteSpChildren(aSpNrec: comp);
   donemarker(l, '');
 }
 
+function CheckSpCostitem(aParentSpNrec: comp;
+                         aCostitemNrec: comp;
+                         aNumber: string;
+                         aAllowAddChildren: boolean = true;
+                         aItemType: word = 1): comp;
+{
+  vCheck._parentSpNrec := aParentSpNrec;
+  vCheck._costitemNrec := aCostitemNrec;
+  vCheck._number       := aNumber;
+
+  if vCheck.getfirst tSp != tsOk
+  {
+    clearbuffer(#vCheck.tSp);
+    vCheck.tSp.parentNrec := aParentSpNrec;
+    vCheck.tSp.costitemNrec := aCostitemNrec;
+    vCheck.tSp.number := aNumber;
+    vCheck.insert current tSp;
+  }
+
+  vCheck.tSp.isCostitem    := true;
+  vCheck.tSp.allowAddChild := aAllowAddChildren;
+  vCheck.tSp.itemType      := aItemType;
+  vCheck.update current tSp;
+
+  result := vCheck.tSp.nrec;
+}
+
 //#endregion
 
 //#region IModify
@@ -173,13 +198,13 @@ procedure DeleteSpChildren(aSpNrec: comp);
 Function IModify.doInsert : Word;
 {
   result := insert current tSp;
-  RecalcSpAgregate(tSp.nrec);
+  RecalcSpAgregate(tSp.parentNrec);
 }
 
 Function IModify.doUpdate : Word;
 {
   result := update current tSp;
-  RecalcSpAgregate(tSp.nrec);
+  RecalcSpAgregate(tSp.parentNrec);
 }
 
 Function IModify.doDelete : Word;
@@ -231,7 +256,25 @@ function  IClaimOverheadsSp.Load(aMnplanNrec: comp): boolean;
       }
     } while rs.getNext = tsOk;
 
+  CheckCostitems;
+
   result := true;
+}
+
+procedure IClaimOverheadsSp.CheckCostitems;
+{
+  var spNrec1, spNrec2, spNrec3: comp;
+  spNrec1 := CheckSpCostitem(0      , 0001000000000471h, '00001', false); //Расходы на материально - техническое обеспечение
+  spNrec2 := CheckSpCostitem(spNrec1, 00010000000005E2h, '00002', false); //Некапитализируемые затраты (стоимость единицы < 100 000 тыс. руб.)
+  spNrec3 := CheckSpCostitem(spNrec2, 000100000000031Ch, '00003', false); //Мебель, бытовая техника и пр.
+             CheckSpCostitem(spNrec3, 00010000000009CCh, '00004', true);  //Мебель
+             CheckSpCostitem(spNrec3, 00010000000009CDh, '00005', true);  //Бытовая техника
+             CheckSpCostitem(spNrec2, 000100000000047Ch, '00006', true);  //Канцелярские принадлежности
+             CheckSpCostitem(spNrec2, 000100000000047Dh, '00007', true);  //Материалы для нужд производства
+             CheckSpCostitem(spNrec2, 000100000000047Eh, '00008', true);  //Инструменты, оборудование, приборы и пр.
+             CheckSpCostitem(spNrec2, 00010000000009A4h, '00009', true);  //Материалы для копировально-множественной техники типографии
+             CheckSpCostitem(spNrec2, 000100000000047Fh, '00010', true);  //Прочие материально-производственные запасы
+             CheckSpCostitem(spNrec2, 00010000000005E2h, '00011', true);  //Некапитализируемые затраты (стоимость единицы < 100 000 тыс. руб.)
 }
 
 function  IClaimOverheadsSp.Save: boolean;
@@ -259,6 +302,24 @@ procedure IClaimOverheadsSp.SetMonthQty(monthIndex: byte; value: double);
     }
 }
 
+function  IClaimOverheadsSp.GetBuffer(aSpNrec: comp): TtClaimOverheadsSp;
+{
+  var buf: TtClaimOverheadsSp;
+  ClearAdvRecord(buf);
+  vSp._spNrec := aSpNrec;
+  if vSp.getfirst tSp = tsOk
+    buf := TtClaimOverheadsSp(vSp.tSp.buffer);
+  result := buf;
+}
+
+function IClaimOverheadsSp.InsertNewWithBuffer(buf: TtClaimOverheadsSp): TtClaimOverheadsSp;
+{
+  clearbuffer(#v.tSp);
+  v.tSp.buffer := buf;
+  v.insert current tSp;
+  result := TtClaimOverheadsSp(v.tSp.buffer);
+}
+
 property IClaimOverheadsSp.Nrec                : comp            absolute tSp.nrec;
 property IClaimOverheadsSp.ParentNrec          : comp            absolute tSp.parentNrec;
 property IClaimOverheadsSp.SpmnplanNrec        : comp            absolute tSp.spmnplanNrec;
@@ -269,9 +330,10 @@ property IClaimOverheadsSp.ItemType            : word            absolute tSp.it
 property IClaimOverheadsSp.ItemNrec            : comp            absolute tSp.itemNrec;
 property IClaimOverheadsSp.OtpedNrec           : comp            absolute tSp.otpedNrec;
 property IClaimOverheadsSp.Price               : double          absolute tSp.price;
-property IClaimOverheadsSp.Qty                 : double          read     tSp.qty;
-property IClaimOverheadsSp.Sum                 : double          read     tSp.sum;
-property IClaimOverheadsSp.IsLeaf              : boolean         read     getIsLeaf;
+property IClaimOverheadsSp.Qty                 : double          absolute tSp.qty;
+property IClaimOverheadsSp.Sum                 : double          absolute tSp.sum;
+property IClaimOverheadsSp.IsCostitem          : boolean         absolute tSp.isCostitem;
+property IClaimOverheadsSp.AllowAddChildren    : boolean         absolute tSp.allowAddChild;
 property IClaimOverheadsSp.Claim               : IClaimOverheads absolute _claim;
 
 index IClaimOverheadsSp.iByNrec auto;

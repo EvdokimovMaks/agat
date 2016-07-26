@@ -1,0 +1,211 @@
+#include ClaimOverheads.vih
+#include GetKau.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface ClaimOverheadsSpTreeView;
+
+sql query QueryGetIncomePrices =
+select sko.dord, sps.price
+from sporder spo
+join sklorder sko on sko.nrec = spo.csklorder
+join katsopr ks on ks.nrec = sko.csopr and ks.vidsopr in (101, 111)
+join spsopr sps on sps.nrec = spo.cspsopr
+where spo.sp = 0 and spo.vidorder = 0 and spo.cmc = :KatmcNrec
+order by sko.dord
+;
+
+var
+  _sp: IClaimOverheadsSp (ClaimOverheadsSp) new;
+  _getkau: GetKau;
+  _qGetIncomePrices: IQuery;
+
+create view
+var
+  _parentNrec: comp;
+as select
+  if(
+    _sp.IsCostitem,
+    fpstbud.Name,
+    if(_sp.ItemType = 2, 'Усл', 'МЦ')
+  ) (fieldname=CostitemName),
+  if(_sp.ItemType = 2, katusl.name, katmc.name) (fieldname=ItemName),
+
+from _sp, fpstbud, katusl, katmc, katotped
+where ((
+  _sp.costitemNrec == fpstbud.nrec and
+  _sp.ItemNrec     == katusl.nrec and
+  _sp.ItemNrec     == katmc.nrec and
+  _sp.OtpedNrec    == katotped.nrec
+))
+bounds byParent = _parentNrec == _sp.ParentNrec
+;
+
+tree tr1 ( ,,sci1478EscExInsTree);
+table _sp;
+fields
+  CostitemName     'Наименование'         : [30], protect;
+  ItemName         'Матценность/Услуга'   : [30], protect, pickbutton;
+end;
+
+procedure SetSp(aSp: IClaimOverheadsSp);
+{
+  if BoundActive(tbByParent)
+    SubBounds(tbByParent);
+  _sp := aSp;
+  AddBounds(tbByParent);
+}
+
+function AllowEditSp: boolean;
+{
+  result := not _sp.IsCostitem;
+}
+
+function GetLastIncomePrice(aKatmcNrec: comp): double;
+{
+  result := 0;
+
+  if _qGetIncomePrices = nullref
+    _qGetIncomePrices := queryManager.createQuery(QueryGetIncomePrices);
+
+  var rs: IResultSet;
+  rs := _qGetIncomePrices.setParam('KatmcNrec', aKatmcNrec).getResultSet;
+
+  if rs != nullref
+    if rs.getLast = tsOk
+      result := rs.row.Val('price');
+}
+
+function  AddSpToChildLevel: comp;
+{
+  result := _sp.nrec;
+
+  if (_sp.AllowAddChildren)
+  {
+    UpdateTable;
+
+    var buf: TtClaimOverheadsSp;
+    ClearAdvRecord(buf);
+
+    buf.ParentNrec    := _sp.Nrec;
+    buf.IsCostitem    := false;
+    buf.AllowAddChild := false;
+    buf.ItemType      := _sp.ItemType;
+    buf.CostitemNrec  := _sp.CostitemNrec;
+
+    result := _sp.InsertNewWithBuffer(buf).Nrec;
+  }
+
+}
+
+function  AddSpToCurrentLevel: comp;
+{
+  result := _sp.Nrec;
+
+  if _sp.ParentNrec = 0 exit;
+
+  var parentBuf: TtClaimOverheadsSp;
+  parentBuf := _sp.GetBuffer(_sp.ParentNrec);
+
+  if parentBuf.allowAddChild
+  {
+    UpdateTable;
+
+    var buf: TtClaimOverheadsSp;
+    ClearAdvRecord(buf);
+
+    buf.ParentNrec    := parentBuf.nrec;
+    buf.IsCostitem    := false;
+    buf.AllowAddChild := false;
+    buf.ItemType      := parentBuf.itemType;
+    buf.CostitemNrec  := parentBuf.costitemNrec;
+    result := _sp.InsertNewWithBuffer(buf).Nrec;
+  }
+}
+
+function DeleteCurrentSp: boolean;
+{
+  result := false;
+
+  if AllowEditSp
+    result := (delete current _sp) = tsOk;
+}
+
+function  PickItem: boolean;
+{
+  result := false;
+  if AllowEditSp
+  {
+    var c: comp; c := _sp.ItemNrec;
+    if _getkau.GetCodeKau(1, word(if(_sp.ItemType=2, 5, 4)), c) > 0
+    {
+      set _sp.ItemNrec := c;
+
+      var p: double;
+      p := GetLastIncomePrice(c);
+      if p > 0
+        set _sp.Price := p;
+
+      result := true;
+    }
+  }
+}
+
+tableevent table _sp
+  cmTreeTop      : _parentNrec := 0;
+  cmTreeUp       : _parentNrec := _sp.ParentNrec;
+  cmTreeDown     : _parentNrec := _sp.Nrec;
+  cmTreeNeedOwner: treejumptorecord(tr1, _sp.ParentNrec);
+  cmTreeNodeType : if not _sp.IsCostitem TreeSetNodeType(tr1, ntfText);
+  cmUpdateRecord :
+  {
+    if AllowEdit
+    {
+
+    }
+  }
+end;
+
+handleevent
+
+  cmPick:
+  {
+    case curfield of
+      #CostitemName, #ItemName:
+      {
+        if PickItem
+        {
+          update current _sp;
+          rereadrecord(#_sp);
+        }
+      }
+    end;
+  }
+
+  cmInsLevel:
+  {
+    treejumptorecord(tr1, AddSpToChildLevel);
+    rereadrecord(#_sp);
+    stop;
+  }
+
+  cmAddNewRec:
+  {
+    treejumptorecord(tr1, AddSpToCurrentLevel);
+    rereadrecord(#_sp);
+    stop;
+  }
+
+  cmDelete:
+  {
+    if DeleteCurrentSp
+    {
+      redrawcurrentandgo(tr1, false);
+    }
+    stop;
+  }
+
+end;
+
+end.
