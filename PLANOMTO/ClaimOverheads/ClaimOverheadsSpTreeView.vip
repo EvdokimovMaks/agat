@@ -1,6 +1,7 @@
 #include ClaimOverheads.vih
 #include GetKau.vih
 #include Query.vih
+#include Marker.vih
 
 #component "AGAT"
 
@@ -20,6 +21,15 @@ var
   _sp: IClaimOverheadsSp (ClaimOverheadsSp) new;
   _getkau: GetKau;
   _qGetIncomePrices: IQuery;
+  _marker: longint;
+
+table struct tCostitems (
+  SpNrec: comp,
+  CostitemNrec: comp,
+  CostitemName: string
+) with index (
+  i01 = SpNrec
+);
 
 create view
 var
@@ -53,8 +63,9 @@ as select
   _sp.MonthSum(9 ) (fieldname=MonthSum9 ),
   _sp.MonthSum(10) (fieldname=MonthSum10),
   _sp.MonthSum(11) (fieldname=MonthSum11),
-  _sp.MonthSum(12) (fieldname=MonthSum12)
-from _sp, fpstbud, katusl, katmc, katotped, pickpric, prices
+  _sp.MonthSum(12) (fieldname=MonthSum12),
+  foundmarker(_marker, _sp.nrec) (fieldname=IsMarked)
+from _sp, fpstbud, katusl, katmc, katotped, pickpric, prices, tCostitems
 where ((
   _sp.costitemNrec == fpstbud.nrec and
   _sp.ItemNrec     == katusl.nrec and
@@ -64,16 +75,17 @@ where ((
 bounds byParent = _parentNrec == _sp.ParentNrec
 ;
 
-tree tr1 ( ,,sci1478EscExInsTree);
+tree 1 tr1 ( ,,sci1478EscExInsTree);
 excelColumns;
 table _sp;
-fixedLeft(CostitemName, ItemName, OtpedName, _sp.Qty, _sp.Price, _sp.Sum);
+fixedLeft(IsMarkedField, CostitemName, ItemName, OtpedName, _sp.Qty, _sp.Price, _sp.Sum);
 fields
-  {font={bold=_sp.IsCostItem}};
+  {font={bold=_sp.IsCostItem;color=if(IsMarked, ColorMark, 0);}};
 //  _sp.Nrec         'Nrec'                 : [10] , protect;
 //  _sp.ParentNrec   'ParentNrec'           : [10] , protect;
 //  _sp.SpmnplanNrec 'SpmnplanNrec'         : [10] , protect;
 //  _sp.costitemNrec 'CostitemNrec'         : [10] , protect;
+  [IsMarkedField] if(IsMarked,'V','') ''  : [1], skip, noautosize;
   CostitemName     'Наименование'         : [30] , protect;
   ItemName         'Матценность/Услуга'   : [30] , protect, pickbutton;
   OtpedName        'Ед.изм'               : [8]  , protect, noautosize;
@@ -105,6 +117,17 @@ fields
   MonthQty12       'Декабрь '#13'Кол-во'  : [8]  , noprotect;
   //MonthSum12       'Декабрь '#13'Сумма'   : [8]  , protect;
 end;
+
+constructor Init;
+{
+  _marker := InitMarker('',8, 10, 20, false);
+  result := _marker != 0;
+}
+
+destructor Done;
+{
+  donemarker(_marker,'');
+}
 
 procedure OpenAllNodes;
 {
@@ -331,6 +354,61 @@ tableevent table _sp
       rereadrecord(#_sp);
     }
   }
+
+  cmDoMarkUnMark:
+  {
+    InvertMarker(_marker, _sp.nrec);
+    RedrawCurrentAndGo(tr1, true);
+  }
+
+  cmSelAll:
+  {
+    TreePushPos(tr1);
+    if TreeGetFirstEx(tr1) do
+    {
+      InsertMarker(_marker, _sp.nrec);
+    } while TreeGetNextEx(tr1);
+    TreePopPos(tr1);
+    rereadrecord(#_sp);
+  }
+
+  cmUnSelAll:
+  {
+    ClearMarker(_marker);
+    rereadrecord(#_sp);
+  }
+
+end;
+
+window wSelectCostitem 'Выбор статьи', escclose, doaccept;
+  show at (,,50, 10);
+  browse brCostitems;
+  table tCostitems;
+  fields
+    tCostitems.CostitemName 'Наименование': [30], protect;
+  end;
+  handleevent
+    cmInit:
+    {
+      delete all tCostitems;
+      pushpos(#_sp);
+      resetbounds(#_sp);
+      _loop _sp
+      {
+        if _sp.IsCostitem and _sp.AllowAddChildren
+        {
+          clearbuffer(#tCostitems);
+          tCostitems.SpNrec := _sp.nrec;
+          tCostitems.CostitemNrec := _sp.costitemNrec;
+          tCostitems.CostitemName := costitemName;
+          insert current tCostitems;
+        }
+      }
+      setbounds(#_sp);
+      poppos(#_sp);
+      rereadrecord(#tCostitems);
+    }
+  end;
 end;
 
 handleevent
@@ -387,6 +465,55 @@ handleevent
     stop;
   }
 
+  cmHotkeys:
+  {
+    PutHotCommand(RunLoadMenu(LoadMenu('ClaimOverheadsSpTreeViewMenu')));
+  }
+
+  cmValue1:
+  {
+    if runwindowmodal(wSelectCostitem) = cmDefault
+    {
+      var lParents: longint;
+      lParents := initmarker('', 8, 10, 20, false);
+
+      pushpos(#_sp);
+      resetbounds(#_sp);
+
+      var c: comp = 0;
+      _loop _sp
+      {
+        if not _sp.IsCostitem and foundmarker(_marker, _sp.nrec)
+        {
+          insertmarker(lParents, _sp.ParentNrec);
+          c := _sp.nrec;
+          _sp.parentNrec   := tCostitems.SpNrec;
+          _sp.costitemNrec := tCostitems.CostitemNrec;
+          update current _sp;
+        }
+      }
+
+      _loop _sp
+      {
+        if foundmarker(lParents, _sp.nrec)
+          update current _sp;
+      }
+      donemarker(lParents,'');
+
+      setbounds(#_sp);
+      poppos(#_sp);
+
+      TreeJumpToRecord(tr1, c);
+      rereadrecord(#_sp);
+    }
+  }
+
 end;
 
 end.
+
+
+ClaimOverheadsSpTreeViewMenu Menu
+{
+  - 'Изменить статью для помеченных записей', cmValue1, , , , , sci1Esc;
+}
