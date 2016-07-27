@@ -13,16 +13,18 @@ select spm.nrec      as Nrec,
        spm.condrec   as ConditionNrec,
        spm.number    as Number,
        spm.canval1   as CostitemNrec,
+       spm.canval4   as CONrec,
        spm.typeizd   as ItemType,
        spm.cizd      as ItemNrec,
        spm.cotped    as OtpedNrec,
        coalesce(vsp.kol, 0)    as Qty,
        coalesce(vsp.price, 0)  as Price,
        coalesce(vsp.vprice, 0) as Sum
-from spmnplan spm
+from mnplan
+join spmnplan spm on spm.cmnplan = mnplan.nrec
 left join spmnpl spl on spl.cspmnplan = spm.nrec and spl.wkolan = 25
 left join valspmnp vsp on vsp.cspmnpl = spl.nrec and spl.nrec is not null
-where spm.cMnplan = :MnplanNrec
+where mnplan.nrec = :MnplanNrec
 ;
 
 sql query qLoadSpMonth =
@@ -31,16 +33,32 @@ select spm.nrec as SpmnplanNrec,
        vsp.kol as Qty,
        vsp.price as Price,
        vsp.vPrice as Sum
-from spmnplan spm
+from mnplan
+left join fpperiod mainper on mainper.nrec = mnplan.canval1
+join spmnplan spm on spm.cmnplan = mnplan.nrec
 join spmnpl spl on spl.cspmnplan = spm.nrec and spl.wkolan = 1
-join fpperiod per on spl.canval4 = per.nrec
+join fpperiod per on spl.canval4 = per.nrec and per.dbeg between coalesce(mainper.dbeg,0) and coalesce(mainper.dend,0)
 join valspmnp vsp on vsp.cspmnpl = spl.nrec
-where spm.cmnplan = :MnplanNrec
+where mnplan.nrec = :MnplanNrec
 ;
+
+sql query qGetPeriodNrec =
+select per.nrec
+from fpperiod per1
+join fpperiod per on per.cmain = per1.cmain
+                 and year(datetime(per.dbeg,0))=year(datetime(per1.dbeg,0))
+                 and month(datetime(per.dbeg,0)) = :MonthIndex
+join fptper tper on tper.nrec = per.ctper and tper.edizm = 2
+where per1.nrec = :ClaimPeriodNrec
+;
+
+var
+  _claim: IClaimOverheads;
+  _qGetPeriodNrec: IQuery;
 
 create view
 as select *
-from tClaimOverheadsSp tSp, tClaimOverheadsSp tSpChildren
+from tClaimOverheadsSp tSp, tClaimOverheadsSp tSpChildren, tClaimOverheadsSp
 where ((
   tSp.nrec == tSpChildren.parentNrec
 ));
@@ -73,23 +91,49 @@ where ((
    tSp.ItemNrec     = 0)
 ));
 
+create view vSave
+var
+  _parentNrec: comp;
+as select *
+from  tClaimOverheadsSp tSpParent,
+      tClaimOverheadsSp tSp,
+      spmnplan spm,
+      spmnpl,
+      valspmnp,
+      mnanal
+where ((
+  _parentNrec       == tSpParent.nrec and
+  _parentNrec       == tSp.parentNrec and
+  tSp.spmnplanNrec  == spm.nrec and
+  _claim.SlojNrec   == mnanal.csloj and
+  0                 == mnanal.cblock and
+  0                 == mnanal.fldan1 and
+  _claim.MnplanNrec == mnanal.fldan2
+))
+;
+
+create view vRemovedSpmnplan
+var
+  _mnplanNrec: comp;
+as select *
+from spmnplan, tClaimOverheadsSp tSp, spmnpl, valspmnp
+where ((
+  _mnplanNrec   == spmnplan.cmnplan and
+  spmnplan.nrec == spmnpl.cspmnplan and
+  spmnpl.nrec   == valspmnp.cspmnpl and
+  spmnplan.nrec == tSp.SpmnplanNrec
+));
+
 create view v
 as select *
-from tClaimOverheadsSp tSp;
-
-var
-  _claim: IClaimOverheads;
+from tClaimOverheadsSp tSp
+;
 
 //#region Вспомогательные функции
 
 function  isValidMonthIndex(monthIndex: byte): boolean;
 {
   result := monthIndex > 0 and monthIndex <= 12;
-}
-
-function getIsLeaf: boolean;
-{
-  result := getfirst fastfirstrow tSpChildren != tsOk;
 }
 
 procedure RecalcCurrent;
@@ -129,9 +173,9 @@ procedure RecalcSpAgregate(aSpNrec: comp);
       {
         vSp.tSp.monthSum[i] += vSp.tSpChildren.monthSum[i];
         vSp.tSp.monthQty[i] += vSp.tSpChildren.monthQty[i];
-        vSp.tSp.qty         += vSp.tSpChildren.qty;
-        vSp.tSp.sum         += vSp.tSpChildren.sum;
       }
+      vSp.tSp.qty         += vSp.tSpChildren.qty;
+      vSp.tSp.sum         += vSp.tSpChildren.sum;
     }
 
     vSp.update current  tSp;
@@ -164,11 +208,12 @@ procedure DeleteSpChildren(aSpNrec: comp);
   donemarker(l, '');
 }
 
-function CheckSpCostitem(aParentSpNrec: comp;
-                         aCostitemNrec: comp;
-                         aNumber: string;
+function CheckSpCostitem(aParentSpNrec    : comp;
+                         aCostitemNrec    : comp;
+                         aNumber          : string;
                          aAllowAddChildren: boolean = true;
-                         aItemType: word = 1): comp;
+                         aItemType        : word = 1;
+                         aCONrec          : comp = 0001000000000077h): comp;
 {
   vCheck._parentSpNrec := aParentSpNrec;
   vCheck._costitemNrec := aCostitemNrec;
@@ -186,25 +231,258 @@ function CheckSpCostitem(aParentSpNrec: comp;
   vCheck.tSp.isCostitem    := true;
   vCheck.tSp.allowAddChild := aAllowAddChildren;
   vCheck.tSp.itemType      := aItemType;
+  vCheck.tSp.coNrec        := aCONrec;
   vCheck.update current tSp;
 
   result := vCheck.tSp.nrec;
 }
 
+procedure SetPrice(value: double);
+{
+  tSp.price := value;
+  RecalcCurrent;
+}
+
+type TSpmnplan = record as table spmnplan;
+type TSpmnpl = record as table spmnpl;
+
+function GetPeriodNrec(claimPeriodNrec: comp; monthIndex: byte): comp;
+{
+  result := 0;
+
+  if _qGetPeriodNrec = nullref
+    _qGetPeriodNrec := queryManager.createQuery(qGetPeriodNrec);
+
+  var rs: IResultSet;
+  rs := _qGetPeriodNrec.setParam('ClaimPeriodNrec', claimPeriodNrec)
+                       .setParam('MonthIndex', monthIndex)
+                       .getResultSet;
+  if rs != nullref
+    if rs.getFirst = tsOk
+      result := rs.row.Val('nrec');
+}
+
+procedure SaveValspmnp(spmnplBuf: TSpmnpl; aQty: double; aPrice: double; aSum: double);
+{
+  if vSave.getfirst fastfirstrow valspmnp where ((spmnplBuf.nrec == valspmnp.cspmnpl
+                                              and 1              == valspmnp.num)) != tsOk
+  {
+    vSave.clearbuffer(#vSave.valspmnp);
+    vSave.valspmnp.cspmnpl := spmnplBuf.nrec;
+    vSave.valspmnp.num     := 1;
+    vSave.insert current valspmnp;
+  }
+  vSave.valspmnp.cspmnplan := spmnplBuf.cspmnplan;
+  vSave.valspmnp.cmnanal   := spmnplBuf.cmnanal;
+  vSave.valspmnp.cOtpEd    := spmnplBuf.cotped;
+  vSave.valspmnp.EdTime    := spmnplBuf.edtime;
+  vSave.valspmnp.kol       := aQty;
+  vSave.valspmnp.price     := aPrice;
+  vSave.valspmnp.vprice    := aSum;
+  vSave.update current valspmnp;
+}
+
+procedure DeleteSpmnpl( _spmnplanNrec: comp;
+                        _wkolan      : word;
+                        _wkodgr4     : word;
+                        _canval4     : comp);
+{
+  if vSave.getfirst fastfirstrow spmnpl where (( _spmnplanNrec == spmnpl.cspmnplan
+                                             and _wkolan       == spmnpl.wkolan
+                                             and _wkodgr4      == spmnpl.wkodgr4
+                                             and _canval4      == spmnpl.canval4 )) = tsOk
+  {
+    vSave.delete all valspmnp where ((vSave.spmnpl.nrec == valspmnp.cspmnpl));
+    vSave.delete current spmnpl;
+  }
+
+}
+
+function SaveSpmnpl(bufSpmnplan: TSpmnplan;
+                    _wkolan    : word;
+                    _wkodgr4   : word;
+                    _crolean4  : comp;
+                    _canval4   : comp): TSpmnpl;
+{
+  if vSave.getfirst fastfirstrow mnanal != tsOk
+  {
+    vSave.clearbuffer(#vSave.mnanal);
+    vSave.mnanal.csloj  := _claim.SlojNrec;
+    vSave.mnanal.cblock := 0;
+    vSave.mnanal.fldan1 := 0;
+    vSave.mnanal.fldan2 := _claim.MnplanNrec;
+    vSave.insert current mnanal;
+  }
+
+  if vSave.getfirst fastfirstrow spmnpl where (( bufSpmnplan.nrec == spmnpl.cspmnplan
+                                             and _wkolan          == spmnpl.wkolan
+                                             and _wkodgr4         == spmnpl.wkodgr4
+                                             and _canval4         == spmnpl.canval4 )) != tsOk
+  {
+    vSave.clearbuffer(#vSave.spmnpl);
+    vSave.spmnpl.cspmnplan := bufSpmnplan.nrec;
+    vSave.spmnpl.wkolan    := _wkolan;
+    vSave.spmnpl.wkodgr4   := _wkodgr4;
+    vSave.spmnpl.crolean4  := _crolean4;
+    vSave.spmnpl.canval4   := _canval4;
+    vSave.insert current spmnpl;
+  }
+
+  vSave.spmnpl.cspmnplan := bufSpmnplan.nrec;
+  vSave.spmnpl.cRoleAn1  := bufSpmnplan.cRoleAn1;
+  vSave.spmnpl.wKodGr1   := bufSpmnplan.wKodGr1;
+  vSave.spmnpl.cAnVal1   := bufSpmnplan.cAnVal1;
+  vSave.spmnpl.cRoleAn2  := bufSpmnplan.cRoleAn2;
+  vSave.spmnpl.wKodGr2   := bufSpmnplan.wKodGr2;
+  vSave.spmnpl.cAnVal2   := bufSpmnplan.cAnVal2;
+  vSave.spmnpl.cRoleAn3  := bufSpmnplan.cRoleAn3;
+  vSave.spmnpl.wKodGr3   := bufSpmnplan.wKodGr3;
+  vSave.spmnpl.cAnVal3   := bufSpmnplan.cAnVal3;
+  vSave.spmnpl.wKodGr8   := bufSpmnplan.wKodGr4;
+  vSave.spmnpl.cAnVal8   := bufSpmnplan.cAnVal4;
+  vSave.spmnpl.typeizd   := bufSpmnplan.TypeIzd;
+  vSave.spmnpl.cRoleIzd  := bufSpmnplan.cRoleIzd;
+  vSave.spmnpl.cIzd      := bufSpmnplan.cIzd;
+  vSave.spmnpl.cOtpEd    := bufSpmnplan.cOtpEd;
+  vSave.spmnpl.NumSort   := bufSpmnplan.NumSort;
+  vSave.spmnpl.Number    := bufSpmnplan.Number;
+  vSave.spmnpl.cSloj     := bufSpmnplan.cSloj;
+  vSave.spmnpl.cMnPlan   := bufSpmnplan.cmnplan;
+  vSave.spmnpl.cVal1     := bufSpmnplan.cVal1;
+  vSave.spmnpl.cMnAnal   := if(vSave.getfirst mnanal = tsOk, vSave.mnanal.nrec, 0);
+  vSave.update current spmnpl;
+  result := TSpmnpl(vSave.spmnpl.buffer);
+}
+
+function SaveSpmnplan: TSpmnplan;
+{
+  if vSave.tSp.spmnplanNrec = 0
+  {
+    vSave.clearbuffer(#vSave.spm);
+    vSave.spm.cmnplan       := _claim.MnplanNrec;
+    vSave.spm.startdate     := _claim.StartDate;
+    vSave.spm.enddate       := _claim.EndDate;
+    vSave.spm.croleizd      := 40018CA016897966h;
+    vSave.spm.crolean1      := 0001000000000020h;      //Статья бюджета
+    vSave.spm.wkodgr1       := 20;                     //Статья бюджета
+    vSave.spm.crolean2      := 000100000000003Eh;      //Контрагент
+    vSave.spm.wkodgr2       := 1;                      //Организация
+    vSave.spm.canval2       := 0;
+    vSave.spm.crolean3      := 40013599DF00FAADh;      //Договор
+    vSave.spm.wkodgr3       := 14;                     //Договоры
+    vSave.spm.canval3       := 0;
+    vSave.spm.crolean4      := 0001000000000031h;      //Центр ответсвенности
+    vSave.spm.wkodgr4       := 22;                     //Центры ответственности
+    vSave.spm.csloj         := _claim.SlojNrec;
+    vSave.insert current spm;
+    vSave.update current tSp set tSp.SpmnplanNrec := vSave.spm.nrec;
+  }
+
+  if vSave.getfirst fastfirstrow spm = tsOk
+  {
+    vSave.spm.number        := vSave.tSp.number;
+    vSave.spm.cizd          := vSave.tSp.itemNrec;
+    vSave.spm.typeizd       := vSave.tSp.itemType;
+    vSave.spm.cotped        := vSave.tSp.otpedNrec;
+    vSave.spm.canval1       := vSave.tSp.costitemNrec;
+    vSave.spm.canval4       := vSave.tSp.coNrec;
+    vSave.spm.cspmnplan     := if(vSave.getfirst tSpParent = tsOk, vSave.tSpParent.spmnplanNrec, 0);
+    //vSave.spm.cstatus       := if(vSave.tSp.isCostitem, 0, 00010000000000E1h);
+    vSave.spm.condrec       := if(vSave.tSp.isCostitem, 1, 0);
+    vSave.spm.cval1         := 0001000000000231h;
+    vSave.update current spm;
+  }
+
+  result := TSpmnplan(vSave.spm.buffer);
+}
+
+procedure SaveChildren(aParentNrec: comp);
+{
+  var l: longint;
+  l := initmarker('',8,10,10,false);
+  vSave._parentNrec := aParentNrec;
+  vSave._loop tSp
+  {
+
+    var spmnplanBuf: TSpmnplan;
+    spmnplanBuf := SaveSpmnplan;
+
+    //все значения нулевые - удаляем ячейку
+    if vSave.tSp.qty=0 and vSave.tSp.price=0 and vSave.tSp.sum=0
+      DeleteSpmnpl(spmnplanBuf.nrec, 25, 29, _claim.MnplanNrec);
+    else
+    {
+      var spmnplBuf: TSpmnpl;
+      spmnplBuf := SaveSpmnpl(spmnplanBuf, 25, 29, 400174D9C8CF511Eh, _claim.MnplanNrec);
+      SaveValspmnp(spmnplBuf, vSave.tSp.qty, vSave.tSp.price, vSave.tSp.sum);
+    }
+
+    var monthIndex: byte;
+    for (monthIndex := 1; monthIndex <= 12; monthIndex++)
+    {
+      var monthPeriodNrec: comp;
+      monthPeriodNrec := getPeriodNrec(_claim.PeriodNrec, monthIndex);
+
+      if vSave.tSp.monthQty[monthIndex] = 0
+        DeleteSpmnpl(spmnplanBuf.nrec, 1, 21, monthPeriodNrec);
+      else
+      {
+        var spmnplBuf: TSpmnpl;
+        spmnplBuf := SaveSpmnpl(spmnplanBuf, 1, 21, 40015C4CA3652682h, monthPeriodNrec);
+        SaveValspmnp(spmnplBuf, vSave.tSp.monthQty[monthIndex], vSave.tSp.price, vSave.tSp.monthSum[monthIndex]);
+      }
+    }
+
+    insertmarker(l, vSave.tSp.Nrec);
+  }
+
+  var i: longint;
+  var c: comp;
+  for(i := 0; getmarker(l, i, c); i++)
+  {
+    SaveChildren(c);
+  }
+
+  donemarker(l,'');
+}
+
+procedure DeleteRemovedSpmnplan;
+{
+  var l: longint;
+  l := initmarker('',8,10,10,false);
+  vRemovedSpmnplan._mnplanNrec := _claim.MnplanNrec;
+  vRemovedSpmnplan._loop spmnplan
+  {
+    if vRemovedSpmnplan.getfirst tSp != tsOk
+    {
+      insertmarker(l, vRemovedSpmnplan.spmnplan.nrec);
+      vRemovedSpmnplan._loop spmnpl
+        vRemovedSpmnplan.delete all valspmnp;
+      vRemovedSpmnplan.delete all spmnpl;
+    }
+  }
+  vRemovedSpmnplan.delete all spmnplan where foundmarker(l, vRemovedSpmnplan.spmnplan.nrec);
+
+  donemarker(l,'');
+}
 //#endregion
 
 //#region IModify
 
 Function IModify.doInsert : Word;
 {
+  RecalcCurrent;
   result := insert current tSp;
   RecalcSpAgregate(tSp.parentNrec);
+  _claim.SetDirty;
 }
 
 Function IModify.doUpdate : Word;
 {
+  RecalcCurrent;
   result := update current tSp;
   RecalcSpAgregate(tSp.parentNrec);
+  _claim.SetDirty;
 }
 
 Function IModify.doDelete : Word;
@@ -217,6 +495,8 @@ Function IModify.doDelete : Word;
   result := delete current tSp;
 
   RecalcSpAgregate(aParentSpNrec);
+
+  _claim.SetDirty;
 }
 
 implementation IModify.doFlush  abstract;
@@ -227,11 +507,11 @@ implementation IModify.doFlush  abstract;
 
 function  IClaimOverheadsSp.Load(aMnplanNrec: comp): boolean;
 {
-  delete all tSp;
+  delete all tClaimOverheadsSp;
 
   sqlCopyInto(
-    queryManager.createQuery(qLoadSp).setParam('MnplanNrec',aMnplanNrec),
-    #tSp,
+    queryManager.createQuery(qLoadSp).setParam('MnplanNrec',aMnplanNrec).getResultSet,
+    #tClaimOverheadsSp,
     true
   );
 
@@ -274,12 +554,18 @@ procedure IClaimOverheadsSp.CheckCostitems;
              CheckSpCostitem(spNrec2, 000100000000047Eh, '00008', true);  //Инструменты, оборудование, приборы и пр.
              CheckSpCostitem(spNrec2, 00010000000009A4h, '00009', true);  //Материалы для копировально-множественной техники типографии
              CheckSpCostitem(spNrec2, 000100000000047Fh, '00010', true);  //Прочие материально-производственные запасы
-             CheckSpCostitem(spNrec2, 00010000000005E2h, '00011', true);  //Некапитализируемые затраты (стоимость единицы < 100 000 тыс. руб.)
 }
 
 function  IClaimOverheadsSp.Save: boolean;
 {
+  SaveChildren(0);
+  DeleteRemovedSpmnplan;
   result := true;
+}
+
+function IClaimOverheadsSp.IsLeaf: boolean;
+{
+  result := getfirst fastfirstrow tSpChildren != tsOk;
 }
 
 function  IClaimOverheadsSp.MonthQty(monthIndex: byte): double;
@@ -318,6 +604,7 @@ function IClaimOverheadsSp.InsertNewWithBuffer(buf: TtClaimOverheadsSp): TtClaim
   v.tSp.buffer := buf;
   v.insert current tSp;
   result := TtClaimOverheadsSp(v.tSp.buffer);
+  _claim.SetDirty;
 }
 
 property IClaimOverheadsSp.Nrec                : comp            absolute tSp.nrec;
@@ -329,7 +616,8 @@ property IClaimOverheadsSp.CostitemNrec        : comp            absolute tSp.co
 property IClaimOverheadsSp.ItemType            : word            absolute tSp.itemType;
 property IClaimOverheadsSp.ItemNrec            : comp            absolute tSp.itemNrec;
 property IClaimOverheadsSp.OtpedNrec           : comp            absolute tSp.otpedNrec;
-property IClaimOverheadsSp.Price               : double          absolute tSp.price;
+property IClaimOverheadsSp.CONrec              : comp            absolute tSp.coNrec;
+property IClaimOverheadsSp.Price               : double          read     tSp.price write SetPrice(result);
 property IClaimOverheadsSp.Qty                 : double          absolute tSp.qty;
 property IClaimOverheadsSp.Sum                 : double          absolute tSp.sum;
 property IClaimOverheadsSp.IsCostitem          : boolean         absolute tSp.isCostitem;
