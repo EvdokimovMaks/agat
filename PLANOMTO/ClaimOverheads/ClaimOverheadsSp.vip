@@ -16,12 +16,16 @@ select spm.nrec      as Nrec,
        spm.canval4   as CONrec,
        spm.typeizd   as ItemType,
        spm.cizd      as ItemNrec,
-       spm.cotped    as OtpedNrec,
+       case when spm.cotped = #comp(0)
+            then coalesce(oe.nrec,#comp(0))
+            else spm.cotped
+       end           as OtpedNrec,
        coalesce(vsp.kol, 0)    as Qty,
        coalesce(vsp.price, 0)  as Price,
        coalesce(vsp.vprice, 0) as Sum
 from mnplan
 join spmnplan spm on spm.cmnplan = mnplan.nrec
+left join katotped oe on oe.prmc = spm.typeizd and oe.cmcusl = spm.cizd and oe.akt = 1 and spm.cizd <> #comp(0)
 left join spmnpl spl on spl.cspmnplan = spm.nrec and spl.wkolan = 25
 left join valspmnp vsp on vsp.cspmnpl = spl.nrec and spl.nrec is not null
 where mnplan.nrec = :MnplanNrec
@@ -56,6 +60,8 @@ var
   _claim: IClaimOverheads;
   _qGetPeriodNrec: IQuery;
 
+file f;
+
 create view
 as select *
 from tClaimOverheadsSp tSp, tClaimOverheadsSp tSpChildren, tClaimOverheadsSp
@@ -69,8 +75,8 @@ var
 as select *
 from tClaimOverheadsSp tSp, tClaimOverheadsSp tSpChildren
 where ((
-  _spNrec == tSp.nrec and
-  _spNrec == tSpChildren.parentNrec
+  _spNrec          == tSp.nrec and
+  _spNrec          == tSpChildren.parentNrec
 ));
 
 create view vDelete
@@ -86,9 +92,9 @@ as select *
 from tClaimOverheadsSp tSp
 where ((
   _parentSpNrec    == tSp.parentNrec and
-  (tSp.costitemNrec = _costitemNrec and
-   tSp.number       = _number and
-   tSp.ItemNrec     = 0)
+  (vCheck.tSp.costitemNrec = _costitemNrec and
+   vCheck.tSp.number       = _number and
+   vCheck.tSp.ItemNrec     = 0)
 ));
 
 create view vSave
@@ -100,7 +106,8 @@ from  tClaimOverheadsSp tSpParent,
       spmnplan spm,
       spmnpl,
       valspmnp,
-      mnanal
+      mnanal,
+      allmemo
 where ((
   _parentNrec       == tSpParent.nrec and
   _parentNrec       == tSp.parentNrec and
@@ -126,7 +133,7 @@ where ((
 
 create view v
 as select *
-from tClaimOverheadsSp tSp
+from tClaimOverheadsSp tSp, allmemo
 ;
 
 //#region Вспомогательные функции
@@ -147,6 +154,8 @@ procedure RecalcCurrent;
     tSp.qty += tSp.monthQty[i];
     tSp.sum += tSp.monthSum[i];
   }
+
+  _claim.SetDirty;
 }
 
 procedure RecalcSpAgregate(aSpNrec: comp);
@@ -183,6 +192,8 @@ procedure RecalcSpAgregate(aSpNrec: comp);
     if vSp.tSp.parentNrec != 0
       RecalcSpAgregate(vSp.tSp.parentNrec);
   }
+
+  _claim.SetDirty;
 }
 
 procedure DeleteSpChildren(aSpNrec: comp);
@@ -206,6 +217,8 @@ procedure DeleteSpChildren(aSpNrec: comp);
   vDelete.delete all tSp where foundmarker(l, vDelete.tSp.nrec);
 
   donemarker(l, '');
+
+  _claim.SetDirty;
 }
 
 function CheckSpCostitem(aParentSpNrec    : comp;
@@ -221,17 +234,19 @@ function CheckSpCostitem(aParentSpNrec    : comp;
 
   if vCheck.getfirst tSp != tsOk
   {
-    clearbuffer(#vCheck.tSp);
-    vCheck.tSp.parentNrec := aParentSpNrec;
+    vCheck.clearbuffer(#vCheck.tSp);
+    vCheck.tSp.parentNrec   := aParentSpNrec;
     vCheck.tSp.costitemNrec := aCostitemNrec;
-    vCheck.tSp.number := aNumber;
+    vCheck.tSp.number       := aNumber;
     vCheck.insert current tSp;
+    _claim.SetDirty;
   }
 
   vCheck.tSp.isCostitem    := true;
   vCheck.tSp.allowAddChild := aAllowAddChildren;
   vCheck.tSp.itemType      := aItemType;
   vCheck.tSp.coNrec        := aCONrec;
+  vCheck.tSp.otpedNrec     := 0;
   vCheck.update current tSp;
 
   result := vCheck.tSp.nrec;
@@ -246,7 +261,7 @@ procedure SetPrice(value: double);
 type TSpmnplan = record as table spmnplan;
 type TSpmnpl = record as table spmnpl;
 
-function GetPeriodNrec(claimPeriodNrec: comp; monthIndex: byte): comp;
+function GetPeriodNrec(claimPeriodNrec: comp; monthIndex: byte): comp; cacheable;
 {
   result := 0;
 
@@ -356,6 +371,7 @@ function SaveSpmnpl(bufSpmnplan: TSpmnplan;
 
 function SaveSpmnplan: TSpmnplan;
 {
+
   if vSave.tSp.spmnplanNrec = 0
   {
     vSave.clearbuffer(#vSave.spm);
@@ -391,6 +407,31 @@ function SaveSpmnplan: TSpmnplan;
     vSave.spm.condrec       := if(vSave.tSp.isCostitem, 1, 0);
     vSave.spm.cval1         := 0001000000000231h;
     vSave.update current spm;
+
+    if vSave.tSp.Description = ''
+    {
+      if vSave.getfirst allmemo where ((11038          == allmemo.wtable and
+                                        vSave.spm.nrec == allmemo.cRec  )) = tsOk
+      {
+        vSave.delete current allmemo;
+      }
+    }
+    else
+    {
+      if vSave.getfirst allmemo where ((11038          == allmemo.wtable and
+                                        vSave.spm.nrec == allmemo.cRec  )) != tsOk
+      {
+        vSave.clearbuffer(#vSave.allmemo);
+        vSave.allmemo.wtable := 11038;
+        vSave.allmemo.cRec   := vSave.spm.nrec;
+        vSave.insert current allmemo;
+      }
+      ClearMemoField(vSave.allmemo.mem);
+      f.OpenMemo(vSave.allmemo.mem);
+      f.Writeln(vSave.tSp.Description);
+      f.Close;
+      vSave.update current allmemo;
+    }
   }
 
   result := TSpmnplan(vSave.spm.buffer);
@@ -546,6 +587,23 @@ function  IClaimOverheadsSp.Load(aMnplanNrec: comp): boolean;
 
   CheckCostitems;
 
+  v._loop tSp
+  {
+    if v.getfirst allmemo where ((11038              == allmemo.wtable and
+                                  v.tSp.SpmnplanNrec == allmemo.cRec )) = tsOk
+    {
+      var s: string = '';
+      f.OpenMemo(v.allmemo.mem);
+      while not f.eof
+      {
+        f.Readln(s);
+        v.tSp.Description := v.tSp.Description + if(v.tSp.Description != '', ' ', '') + s;
+      }
+      f.Close;
+      v.update current tSp;
+    }
+  }
+
   result := true;
 }
 
@@ -566,6 +624,7 @@ procedure IClaimOverheadsSp.CheckCostitems;
 
 function  IClaimOverheadsSp.Save: boolean;
 {
+  ClearFuncCache;
   SaveChildren(0);
   DeleteRemovedSpmnplan;
   result := true;
@@ -608,7 +667,7 @@ function  IClaimOverheadsSp.GetBuffer(aSpNrec: comp): TtClaimOverheadsSp;
 
 function IClaimOverheadsSp.InsertNewWithBuffer(buf: TtClaimOverheadsSp): TtClaimOverheadsSp;
 {
-  clearbuffer(#v.tSp);
+  v.clearbuffer(#v.tSp);
   v.tSp.buffer := buf;
   v.insert current tSp;
   result := TtClaimOverheadsSp(v.tSp.buffer);
@@ -625,6 +684,7 @@ property IClaimOverheadsSp.ItemType            : word            absolute tSp.it
 property IClaimOverheadsSp.ItemNrec            : comp            absolute tSp.itemNrec;
 property IClaimOverheadsSp.OtpedNrec           : comp            absolute tSp.otpedNrec;
 property IClaimOverheadsSp.CONrec              : comp            absolute tSp.coNrec;
+property IClaimOverheadsSp.Description         : string          absolute tSp.Description;
 property IClaimOverheadsSp.Price               : double          read     tSp.price write SetPrice(result);
 property IClaimOverheadsSp.Qty                 : double          absolute tSp.qty;
 property IClaimOverheadsSp.Sum                 : double          absolute tSp.sum;
