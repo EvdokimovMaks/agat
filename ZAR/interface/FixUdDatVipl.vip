@@ -1,0 +1,295 @@
+#include Query.vih
+
+#component "AGAT"
+
+interface FixUdDatVipl;
+
+var
+  _vidud: word;
+  _year: word;
+  _month: word;
+
+sql query qUd =
+  select u.nrec   as csumvidud,
+         u.clsch  as clsch,
+         u.sumud  as sum,
+         p.fio    as fio,
+         p.tabnmb as tabnmb
+  from sumvidud u
+  join lschet ls on u.clsch = ls.nrec
+  join persons p on ls.tperson = p.nrec
+  where u.yearn=:year and u.mesn=:month and u.vidud=:vidud
+  order by p.tabnmb, u.sumud desc
+;
+
+sql query qRee =
+  select s.nrec  as cspplban,
+         b.dform as datopl,
+         s.clsch as clsch,
+         s.sumud as sum
+  from spplban s
+  join sbban b on s.csbban = b.nrec and year(datetime(b.dform,0))=:year and month(datetime(b.dform,0))=:month
+  where s.vidud=:vidud
+;
+
+table struct tud (
+  csumvidud: comp,
+  clsch: comp,
+  fio: string,
+  tabnmb: longint,
+  cree: comp,
+  datopl: date,
+  sum: double
+) with index (
+  i01 = clsch,
+  i02 = csumvidud
+);
+
+table struct trees (
+  cspplban: comp,
+  datopl: date,
+  clsch: comp,
+  sum: double,
+  udsum: double
+) with index (
+  i01 = clsch + sum
+);
+
+table struct tlsch (
+  clsch: comp,
+  fio: string,
+  tabnmb: longint
+) with index (
+ i01 = clsch
+);
+
+type TIntegerArray = array[0..0] of integer;
+type TDoubleArray  = array[0..0] of double;
+type TCompArray    = array[0..0] of comp;
+type TBoolArray    = array[0..0] of boolean;
+type TDistrArray   = array[0..0] of array[0..0] of integer;
+
+var udNrecArr : TCompArray;
+var udSumArr  : TDoubleArray;
+var reeNrecArr: TCompArray;
+var reeSumArr : TDoubleArray;
+var usedUdArr : TBoolArray;
+
+
+create view
+as select *
+from tlsch, tud, trees, spplban, sbban
+where ((
+  tud.cree == spplban.nrec and
+  spplban.csbban == sbban.nrec
+))
+;
+
+screen sc1;
+fields
+  _vidud: noprotect;
+  _year: noprotect;
+  _month: noprotect;
+buttons
+  cmFix;
+<<
+`vidud`.@@@@@@
+`year`.@@@@@@@ `month`.@@@@@@@
+
+<. FIX .>
+>>
+end;
+
+window wRes 'Результаты';
+browse brUd;
+table tUd;
+fields
+  tUd.fio    'FIO'   : [20], protect;
+  tUd.tabnmb 'TABNMB': [10], protect;
+  tUd.sum    'Sum'   : [8,2], protect;
+  sbban.name 'Name'  : [20], protect;
+end;
+end;
+
+
+
+/*
+procedure upd;
+{
+  update current tUd set tUd.cree := trees.cspplban, tUd.datopl := trees.datopl;
+  update current trees set trees.udsum := trees.udsum + tUd.sum;
+}
+
+procedure processTUd;
+{
+  if getfirst trees where (( tUd.clsch == trees.clsch and ( (trees.sum - trees.udsum - tUd.sum) >= -3) )) = tsOk
+    upd;
+}
+*/
+
+function Distr(udStartIndex: integer; reeIndex: integer; aReeIndex: integer; var a: TDistrArray): boolean;
+{
+  result := false;
+
+  var i: integer;
+  i := reeIndex;
+
+  var j: integer;
+  j := udStartIndex;
+
+  while j < Count(udSumArr)
+  {
+    if usedUdArr[j]
+    {
+      j++;
+      continue;
+    }
+
+    a[i][aReeIndex] := j;
+    usedUdArr[j] := true;
+
+    var k: integer;
+    var distrSum: double = 0;
+    for(k:=0; k<count(a[i]); k++)
+      distrSum += udSumArr[a[i][k]];
+
+    var fullRaspr: boolean = false;
+
+    if abs(distrSum - reeSumArr[i]) < 2 //если сумма полностью распределена
+      fullRaspr := true;
+    else if distrSum < reeSumArr[i] //если сумма недораспределена
+      fullRaspr := Distr(j+1, reeIndex, aReeIndex+1, a);
+
+    if fullRaspr and reeIndex < ( count(reeSumArr) - 1 )
+    {
+      fullRaspr := Distr(0, reeIndex+1, 0, a);
+    }
+
+    if fullRaspr
+    {
+      result := true;
+      break;
+    }
+    else
+    {
+      ArrAtDelete(a[i], Count(a[i]) - 1);
+      usedUdArr[j] := false;
+      j++;
+    }
+
+  } //while j
+}
+
+handleevent
+cmFix:
+{
+  delete all tud;
+  sqlCopyInto(
+    queryManager.CreateQuery(qUd)
+                .SetParam('vidud', _vidud)
+                .SetParam('year' , _year)
+                .SetParam('month', _month)
+                .GetResultSet,
+    #tud,
+    true
+  );
+
+  delete all trees;
+  sqlCopyInto(
+    queryManager.CreateQuery(qRee)
+                .SetParam('vidud', _vidud)
+                .SetParam('year' , _year)
+                .SetParam('month', _month)
+                .GetResultSet,
+    #trees,
+    true
+  );
+
+  _loop tUd
+    if getfirst tLsch where ((tUd.clsch == tLsch.clsch)) != tsOk
+      insert tLsch set tLsch.clsch := tUd.clsch, tLsch.fio := tUd.fio, tLsch.tabnmb := tUd.tabnmb;
+
+
+  _loop tLsch
+  {
+    setlimit(udNrecArr, 0);
+    setlimit(udSumArr, 0);
+    setlimit(reeNrecArr, 0);
+    setlimit(reeSumArr, 0);
+    setlimit(usedUdArr, 0);
+
+    var i: integer;
+
+    i:=0;
+    _loop tUd where ((tLsch.clsch == tUd.clsch))
+    {
+      udNrecArr[i] := tUd.csumvidud;
+      udSumArr[i] := tUd.sum;
+      usedUdArr[i] := false;
+      i++;
+    }
+
+    var a: TDistrArray;
+    setLimit(a,0);
+
+    i:=0;
+    _loop tRees where ((tLsch.clsch == tRees.clsch))
+    {
+      reeNrecArr[i] := tRees.cspplban;
+      reeSumArr[i] := tRees.sum;
+      setLimit(a[i],0);
+      i++;
+    }
+
+    if Distr(0,0,0,a)
+    {
+      for(i := 0; i < count(reeNrecArr); i++)
+      {
+        var j: integer;
+        for(j := 0; j < count(a[i]); j++)
+        {
+          if getfirst tUd where ((udNrecArr[a[i][j]] == tUd.csumvidud)) = tsOk
+            update current tUd set tUd.cree := reeNrecArr[i];
+        }
+      }
+    }
+  }
+  /*
+  _loop tUd
+  {
+    if getfirst trees where (( tUd.clsch == trees.clsch and tUd.sum == trees.sum and (trees.udsum = 0) )) = tsOk
+      upd;
+  }
+
+  _loop tUd where (tUd.sum > 0)
+  {
+    if tUd.cree = 0 processTUd;
+  }
+
+  _loop tUd where (tUd.sum < 0)
+  {
+    if tUd.cree = 0
+    {
+      if getfirst trees where (( tUd.clsch == trees.clsch and ( (trees.sum - trees.udsum) > 0) )) = tsOk
+        upd
+      else
+        processTUd;
+    }
+  }
+
+  _loop tUd
+  {
+    if tUd.cree = 0 processTUd;
+  }
+      */
+  runwindow(wres);
+
+}
+cminit:
+{
+  _vidud := 182;
+  _year := 2016;
+  _month := 1;
+}
+end;
+end.
