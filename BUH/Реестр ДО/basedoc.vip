@@ -1,5 +1,7 @@
 #include ContractId.vih
 #include Query.vih
+#include extattr.vih
+#include myVSchetB.vih
 
 #component "AGAT"
 
@@ -12,12 +14,45 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     where (bf.cbasedoc = :basedocNrec or bf.cpredopldo = :basedocNrec ) and bf.tidkgal in (1,2)
   ;
 
+  sql query qGetVizaPEU =
+    select bd.nodoc   as DocNumber,
+           av.nrec    as AVNrec,
+           av.vcomp   as VizaNrec
+    from basedoc bd
+    left join attrval av on av.crec = bd.nrec and av.cattrnam = #comp(281474976710792)
+    where bd.nrec = :basedocNrec
+  ;
+
+  sql query qInsertAV =
+    insert into attrval (crec, vcomp, cattrnam, wtable, vstring)
+    values (:avcrec, :avvcomp, :avcattrnam, :avwtable, :avvstring)
+  ;
+
+  sql query qUpdateAV =
+    update attrval set attrval.vcomp = :avvcomp,
+                       attrval.vstring = :avvstring
+    where attrval.nrec = :avnrec
+  ;
+
+  sql query qSpec =
+  select rs.nrec as RSSpis,
+         um.nrec as UseMode
+  from basedoc bd
+  left join stepdoc sd on sd.cbasedoc = bd.nrec
+  left join spstep sps on sps.cstepdoc = sd.nrec
+  left join attrval rs on rs.cattrnam = #comp(0001000000000A86h) and rs.crec = sps.nrec // RS spisania DS
+  left join attrval um on um.cattrnam = #comp(000100000000079Eh) and um.crec = sps.nrec // use mode
+  where bd.nrec = :basedocNrec
+  ;
+
   var
     flagVid, flagBDDS, flagAvans, flagDates, flagSums, flagAttr, flagOpl, flagVsbl1, flagVsbl2: word;
     VvodBeg, VvodEnd, DDocBeg, DDocEnd, DSoglBeg, DSoglEnd: date;
     mrkOrg, mrkStatus, mrkIspoln, mrkDDS, mrkBDR, mrkBuhSch,  mrkZakaz, mrkDog, mrkCFO, mrkVal, mrkDescr: longint;
     sOrg, sIspoln, sDDS, sBDR, sBuhSch, sZakaz, sDog, sCFO, sVal, sDescr: string;
     SumSchOt, SumSchDo, SumTotOt, SumTotDo, SumValOt, SumValDo, SumOplOt, SumOplDo : double;
+    flagVizaKind: word;
+    SelectVizaNrec: comp;
 
     _contractIDHelper: ContractIDHelper;
     _qOpl: IQuery;
@@ -35,6 +70,9 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     viza4: agat_viza new;
     viza5: agat_viza new;
     viza6: agat_viza new;
+    DOPrePay: L_BASEDOC::myVSchetPB new;
+    DOBuy: L_BASEDOC::myVSchetB new;
+    BindedIFC: objref;
 
   create view
   var
@@ -46,16 +84,16 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
        katnotes brnote, statlog brstatlog(STATLOG02), klval brval, stepdoc brsd, basefin brbf,
        klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin
   where ((
-    brbd.nrec        == brbasedoc.nrec  and
-    brbasedoc.corg   == brorg.nrec      and
-    brbasedoc.cbank  == brbank.nrec     and
-    brbasedoc.cdogovor == brdog.nrec    and
-    brbasedoc.cnote  == brnote.nrec     and
-    40               == brstatlog.doctype and
-    brbasedoc.nrec   == brstatlog.cdoc  and
-    brbasedoc.cval   == brval.nrec      and
-    brbd.nrec        == brsd.cbasedoc   and
-    brbd.nrec        == brbf.cbasedoc
+    brbd.nrec          == brbasedoc.nrec    and
+    brbasedoc.corg     == brorg.nrec        and
+    brbasedoc.cbank    == brbank.nrec       and
+    brbasedoc.cdogovor == brdog.nrec        and
+    brbasedoc.cnote    == brnote.nrec       and
+    40                 == brstatlog.doctype and
+    brbasedoc.nrec     == brstatlog.cdoc    and
+    brbasedoc.cval     == brval.nrec        and
+    brbd.nrec          == brsd.cbasedoc     and
+    brbd.nrec          == brbf.cbasedoc
   ))
   bounds    byParent = cMainBD      == brbd.cPrnt
   condition bySogl   = brbd.daysogl >= viza1.days
@@ -167,6 +205,31 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       }
     end;
   end; //window
+
+  window wSelectViza 'Выбор значения поля "Виза ПЭУ"' EscClose, Doaccept;
+    show at (,,42,6);
+    screen scSelectViza;
+    fields
+      flagVizaKind: noProtect;
+<<
+
+    Выберите значение "Визы ПЭУ" и нажмите Enter
+
+    (.) На рабочую группу                      `
+    (.) С общих р/с                            `
+
+>>
+    end; //screen
+    handleevent
+    cmDefault:
+    {
+      if flagVizaKind = 0 //на рабочую группу
+        SelectVizaNrec := VIZA_NA_RAB_GROUP;
+      else                //с общих р/с
+        SelectVizaNrec := VIZA_S_OBSHIH_SCHETOV;
+    }
+    end; //handleevent
+  end; //wSelectViza
 
   TabbedSheet Top tsMain;
   show (,,55,);
@@ -408,7 +471,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   }
 
   tree 3 brMain (,,sci1EnIns);
-  show (56,,,);
+  show (56,,,10);
   table brbd;
   fields
     {font={color=getrowcolor}};
@@ -448,6 +511,10 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     [fldviza3] vizafld(brbd.vkaz,brbd.daykaz)    'Виза казначейства'   : [8]  , protect;
     [fldviza4] vizafld(brbd.vpeu,brbd.daypeu)    'Виза ПЭУ'            : [8]  , protect;
     [fldviza5] vizafld(brbd.vdir,brbd.daydir)    'Виза комм.дир.'      : [8]  , protect;
+  end;
+
+  embedded scDO interface;
+  show at (56,11);
   end;
 
   procedure CreateTmpTables; {
@@ -930,6 +997,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       cfsSetProp('SCVIZAFILTERS', 'Hidden', not isVisible);
       cfsSetProp('SCCOLUMNS', 'Hidden', not isVisible);
       cfsSetProp('BRMAIN', 'RectA_X', if(isVisible, 56, 1));
+      cfsSetProp('SCDO', 'RectA_X', if(isVisible, 56, 1));
     }
   }
 
@@ -1321,6 +1389,16 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     poppos(#brbd);
     stopvisual('',0);
   }
+  procedure ChangeViewBDCard(isVisible: boolean); //(GetTabbedSheetVisible(SCDO))
+  {
+    if cfsGetCurrentContainerSelf != 0
+    {
+      cfsSetProp('SCDO', 'Hidden', isVisible);
+      cfsSetProp('SCDO', 'Visible', not isVisible);
+      cfsSetProp('SCDO', 'RectA_X', if(GetTabbedSheetVisible(SCMAINFILTERS), 56, 1));
+      cfsSetProp('BRMAIN', 'RectB_Y', if(isVisible, 22, 14));
+    }
+  }
 
   handleevent
     cmChangeView   : {
@@ -1514,6 +1592,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       SetVisiblity;
       CreateTmpTables;
       SetFilter;
+      BindEmbeddedInterface(scDO, DOBuy, 'WVSCHET'); // перво-наперво пусть будет закупка
+      BindedIFC := DOBuy;
     }
     cmDone: {
       savemydsk(flagVid       , 'AGAT_BDREE_FLAGVID'       );
@@ -1565,6 +1645,142 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     cmFilterSave: {
       ToggleSettingsVisiblity;
     }
+    cmFilling: //заполнение "Виз ПЭУ"
+    {
+      var i: integer;
+      var curbdnrec: comp;
+      var mrkrcnt: longint;
+      mrkrcnt := GetMarkerCount(mrkMain);
+      if mrkrcnt < 2
+      {
+        message(Chr(3) + 'Функция работает только при групповом выборе,' + chr(13) +
+        'пожалуйста, отметьте несколько элементов');
+        exit;
+      }
+      if RunWindowModal(wSelectViza) = cmDefault
+      {
+        StartNewVisual(vtIndicatorVisual, vfThread + vfBreak + vfTimer, 'Простановка виз', mrkrcnt);
+        for (i := 0; i < mrkrcnt; i++)
+        {
+          GetMarker(mrkMain, i, curbdnrec);
+          if getfirst brbd where ((curbdnrec == brbd.nrec)) = tsOk
+          {
+            brbd.cpeu := SelectVizaNrec;
+            if SelectVizaNrec = VIZA_NA_RAB_GROUP
+            {
+              ea.coSetAttr(WT_BASEDOC, curbdnrec, 'Виза ПЭУ', VIZA_NA_RAB_GROUP, '006 На рабочую группу');
+              brbd.vpeu := '006 На рабочую группу';
+            }
+            else
+            {
+              ea.coSetAttr(WT_BASEDOC, curbdnrec, 'Виза ПЭУ', VIZA_S_OBSHIH_SCHETOV, '005 С общих р/счет');
+              brbd.vpeu := '005 С общих р/счет';
+            }
+            update current brbd;
+            RedrawPanel(#brbd);
+          }
+          if (not NextVisual) break;
+        }
+        ReReadRecord;
+        stopvisual('',0);
+      }
+    }
+    cmAutoAgreement: //Авто согласование
+    {
+      var mrkrcnt: longint;
+      mrkrcnt := GetMarkerCount(mrkMain);
+      var i: integer;
+      var curbdnrec: comp;
+      var q: IQuery;
+      var rs: IResultSet;
+      q := queryManager.createQuery(qSpec);
+      var AgreementFlag: boolean;
+      AgreementFlag := true;
+      if mrkrcnt != 0
+      {
+        StartNewVisual(vtIndicatorVisual, vfThread + vfBreak + vfTimer, 'Простановка виз', mrkrcnt);
+        for (i := 0; i < mrkrcnt; i++)
+        {
+          GetMarker(mrkMain, i, curbdnrec);
+          q.setParam('basedocNrec', curbdnrec);
+          rs := q.getResultSet;
+          if rs = nullref continue;
+          if (rs.getFirst = tsOk) do
+          {
+            if rs.row.val('RSSpis') = 0 or rs.row.val('UseMode') = 0
+            {
+              AgreementFlag := false;
+              break;
+            }
+          } while (rs.getNext = tsOk);
+          if AgreementFlag
+          {
+            ea.coSetAttr(WT_BASEDOC, curbdnrec, 'Виза ПЭУ', VIZA_SOGLASOVANO, '002 Согласовано');
+            brbd.cpeu := VIZA_SOGLASOVANO;
+            brbd.vpeu := '002 Согласовано';
+            update current brbd;
+            RedrawPanel(#brbd);
+          }
+          if (not NextVisual) break;
+        }
+        stopvisual('',0);
+      }
+      else
+      {
+        curbdnrec := brbd.nrec;
+        q.setParam('basedocNrec', curbdnrec);
+        rs := q.getResultSet;
+        if rs = nullref continue;
+        if (rs.getFirst = tsOk) do
+        {
+          if rs.row.val('RSSpis') = 0 or rs.row.val('UseMode') = 0
+          {
+            AgreementFlag := false;
+            break;
+          }
+        } while (rs.getNext = tsOk);
+        if AgreementFlag
+        {
+          ea.coSetAttr(WT_BASEDOC, curbdnrec, 'Виза ПЭУ', VIZA_SOGLASOVANO, '002 Согласовано');
+          brbd.cpeu := VIZA_SOGLASOVANO;
+          brbd.vpeu := '002 Согласовано';
+          update current brbd;
+          RedrawPanel(#brbd);
+        }
+      }
+    }
+    cmPositionChanged:
+    {
+      if CurTable = #brbd
+      {
+        if brbd.viddoc = 101 // ДО на закупку
+        {
+          DOBuy.SetPos(brbd.nrec);
+          if BindedIFC != DOBuy
+          {
+            BindEmbeddedInterface(scDO, DOBuy, 'WVSCHET');
+            BindedIFC := DOBuy;
+          }
+          DOBuy.RefreshPanel;
+        }
+        else // ДО на предоплату
+        {
+          DOPrePay.SetPos(brbd.nrec);
+          if BindedIFC != DOPrePay
+          {
+            BindEmbeddedInterface(scDO, DOPrePay, 'WVSCHET');
+            BindedIFC := DOPrePay;
+          }
+          DOPrePay.RefreshPanel;
+        }
+      }
+    }
+    cmCalcUslParam:
+    {
+      var visibleflag: boolean;
+      if cfsGetProp('ScDO', 'Visible', visibleflag) = cfOk
+        ChangeViewBDCard(visibleflag);
+    }
   end;
 end.
 
@@ -1604,6 +1820,9 @@ end.
 mnuAGAT_Basedoc_Ree Menu
 {
 - 'Печать', cmPrintDoc, 'Печать реестра', , 'Ctrl-P', kbCtrlP, sci1Esc;
+- 'Заполнение "Визы ПЭУ"', cmFilling, 'Заполнение "Визы ПЭУ"', , '', kbAltC, sci1Esc;
+- 'Автоматическое согласование', cmAutoAgreement, 'Автоматическое согласование', , '', kbAltD, sci1Esc;
 - 'Иерархия/список', cmChangeView, 'Иерархия/список', , '', kbAltA, sci1Esc;
 - 'Показать/скрыть фильтры', cmFilterSave, 'Показать/скрыть фильтры', , 'Alt+B', kbAltB, sci1Esc;
+- 'Показать/скрыть карточку ДО', cmCalcUslParam, 'Показать/скрыть карточку ДО', ,'Alt+W', kbAltW, sci1Esc;
 }

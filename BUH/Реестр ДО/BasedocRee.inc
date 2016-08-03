@@ -1,5 +1,8 @@
 const
   cmChangeView = 32001;
+  cmFilling = 32002;
+  cmAutoAgreement = 32003;
+//  cmChangeBDCard = 32004;
 end;
 
 #define sumformat [10,'\2p[|-]3666`666`666`666`666~88']
@@ -147,6 +150,7 @@ const
   VIZA_SOGLASOVANO      = 00010000000001CEh;
   VIZA_NE_TREBUETSA     = 00010000000013CCh;
   VIZA_S_OBSHIH_SCHETOV = 0001000000001423h;
+  VIZA_NA_RAB_GROUP     = 0001000000001424h;
   STATUS_VKL_V_REESTR   = 000100000000007Eh;
   STATUS_OPLACHEN       = 0001000000000077h;
 end;
