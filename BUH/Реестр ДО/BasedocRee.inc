@@ -2,7 +2,7 @@ const
   cmChangeView = 32001;
   cmFilling = 32002;
   cmAutoAgreement = 32003;
-//  cmChangeBDCard = 32004;
+  cmCreatePlpors = 32004;
 end;
 
 #define sumformat [10,'\2p[|-]3666`666`666`666`666~88']

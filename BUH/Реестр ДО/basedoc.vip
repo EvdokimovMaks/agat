@@ -23,17 +23,6 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     where bd.nrec = :basedocNrec
   ;
 
-  sql query qInsertAV =
-    insert into attrval (crec, vcomp, cattrnam, wtable, vstring)
-    values (:avcrec, :avvcomp, :avcattrnam, :avwtable, :avvstring)
-  ;
-
-  sql query qUpdateAV =
-    update attrval set attrval.vcomp = :avvcomp,
-                       attrval.vstring = :avvstring
-    where attrval.nrec = :avnrec
-  ;
-
   sql query qSpec =
   select rs.nrec as RSSpis,
          um.nrec as UseMode
@@ -43,6 +32,59 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   left join attrval rs on rs.cattrnam = #comp(0001000000000A86h) and rs.crec = sps.nrec // RS spisania DS
   left join attrval um on um.cattrnam = #comp(000100000000079Eh) and um.crec = sps.nrec // use mode
   where bd.nrec = :basedocNrec
+  ;
+
+  sql query qPlatezh =
+  select bd.nrec        as BaseDocNrec,
+         bd.name        as BaseDocName,
+         bd.nodoc       as Nodoc,      // DocNumber
+         bd.ddoc        as DateDoc,
+         bd.descr       as Descr,
+         bd.desgr       as Desgr,
+         bd.CMYBANK     as CMYBANK,
+         bd.cgrotpr     as cgrotpr,
+         bd.cgrpol      as cgrpol,
+         bd.CTRANSP     as CTRANSP,
+         bd.CBANK       as CBank,
+         bd.CORG        as Cpol,
+         naz.vstring    as Naznach,
+         sd.nrec        as StepDocNrec,
+         viz.vcomp      as VizaPEU,
+         sum(sps.summa) as Summa,
+         sum(sps.nds)   as NDS,
+         av.vcomp       as RSFromSpec, // расчетный счет позиции спецификации ДО
+         cb.cpodr       as BankSpec,
+         ud.tipusers    as UserDocType // TIDK для платёжки
+  from basedoc bd
+  left join attrval viz on viz.wtable = 1102 and viz.crec = bd.nrec and viz.cattrnam = #comp(281474976710792)
+  left join attrval naz on naz.wtable = 1102 and naz.crec = bd.nrec and naz.cattrnam = #comp(000100000000010Dh)
+  left join stepdoc sd  on sd.cbasedoc = bd.nrec
+  left join spstep sps  on sps.cstepdoc = sd.nrec
+  left join attrval av  on av.wtable = 1104 and av.crec = sps.nrec and av.cattrnam = #comp(0001000000000A86h)
+  left join spcash spc  on spc.cplanssch = #comp(000100000000000Eh) and
+                           (case when spc.tblos[1] = 10545 then spc.kauos[1]
+                                 when spc.tblos[2] = 10545 then spc.kauos[2]
+                                 when spc.tblos[3] = 10545 then spc.kauos[3]
+                                 when spc.tblos[4] = 10545 then spc.kauos[4]
+                                 when spc.tblos[5] = 10545 then spc.kauos[5]
+                                 when spc.tblos[6] = 10545 then spc.kauos[6] end) = av.vcomp and
+                                 coalesce(av.vcomp,#comp(0)) <> #comp(0)
+  left join cashbank cb on cb.nrec = spc.ccashbank
+  left join usersdoc ud on ud.ccashbank = cb.nrec and ud.razdel = cb.razdel and ud.tipgal = 1
+  where bd.nrec = :basedocNrec
+  group by bd.nrec, bd.name, bd.nodoc, bd.ddoc, bd.descr, bd.desgr, bd.CMYBANK, bd.cgrotpr, bd.cgrpol,
+           bd.CTRANSP, bd.CBANK, bd.CORG, naz.vstring, sd.nrec, viz.vcomp,
+           av.vcomp, cb.cpodr, ud.tipusers
+  ;
+
+  sql query qGetBySpCash =
+  select cb.name     as BankName,
+         cb.cpodr    as BankNrec,
+         ud.tipusers as UserType
+  from spcash spc
+  join cashbank cb on cb.nrec = spc.ccashbank
+  left join usersdoc ud on ud.ccashbank = cb.nrec and ud.razdel = cb.razdel and ud.tipgal = 1
+  where spc.nrec = :SpCashNrec
   ;
 
   var
@@ -82,7 +124,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   from katnotes, buhschet, tbd, tsection, tmpfltr,
        tbd brbd (i02), basedoc brbasedoc, katorg brorg, katbank brbank, dogovor brdog,
        katnotes brnote, statlog brstatlog(STATLOG02), klval brval, stepdoc brsd, basefin brbf,
-       klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin
+       klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin, plpor, soprhoz, nalogfin
   where ((
     brbd.nrec          == brbasedoc.nrec    and
     brbasedoc.corg     == brorg.nrec        and
@@ -1396,7 +1438,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       cfsSetProp('SCDO', 'Hidden', isVisible);
       cfsSetProp('SCDO', 'Visible', not isVisible);
       cfsSetProp('SCDO', 'RectA_X', if(GetTabbedSheetVisible(SCMAINFILTERS), 56, 1));
-      cfsSetProp('BRMAIN', 'RectB_Y', if(isVisible, 22, 14));
+      cfsSetProp('BRMAIN', 'RectB_Y', if(isVisible, 22, 10));
     }
   }
 
@@ -1592,8 +1634,16 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       SetVisiblity;
       CreateTmpTables;
       SetFilter;
-      BindEmbeddedInterface(scDO, DOBuy, 'WVSCHET'); // перво-наперво пусть будет закупка
-      BindedIFC := DOBuy;
+      if brbd.viddoc = 101
+      {
+        BindEmbeddedInterface(scDO, DOBuy, 'WVSCHET'); // перво-наперво пусть будет закупка
+        BindedIFC := DOBuy;
+      }
+      else
+      {
+        BindEmbeddedInterface(scDO, DOPrePay, 'WVSCHET');
+        BindedIFC := DOPrePay;
+      }
     }
     cmDone: {
       savemydsk(flagVid       , 'AGAT_BDREE_FLAGVID'       );
@@ -1751,7 +1801,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     }
     cmPositionChanged:
     {
-      if CurTable = #brbd
+      if CurTable = #brbd and brbd.nrec != 0
       {
         if brbd.viddoc = 101 // ДО на закупку
         {
@@ -1780,6 +1830,118 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       var visibleflag: boolean;
       if cfsGetProp('ScDO', 'Visible', visibleflag) = cfOk
         ChangeViewBDCard(visibleflag);
+    }
+    cmCreatePlpors:
+    {
+      var mrkrcnt: longint;
+      var i: integer;
+      var curbdnrec: comp;
+      var q, q1: IQuery;
+      var rs, rs1: IResultSet;
+      var mCash, VSogl: comp;
+      q := queryManager.createQuery(qPlatezh);
+      mrkrcnt := GetMarkerCount(mrkMain);
+      mCash := 0;
+      for (i := 0; i < mrkrcnt; i++)
+      {
+        GetMarker(mrkMain, i, curbdnrec);
+        q.setParam('basedocNrec', curbdnrec);
+        rs := q.getResultSet;
+        if rs = nullref continue;
+        if (rs.getFirst = tsOk) do
+        {
+          //добавить проверку, чтобы спецификации с пустыми атрибутами р/сч не добавлялись в платёжки
+          VSogl := rs.row.val('VizaPEU');
+          if VSogl = VIZA_NE_TREBUETSA and mCash = 0
+          {
+            if RunInterface('F_CASHBANK::SELUSDOC', 0, 0, 0, comp(0), mCash) = cmDefault
+            {
+              q1 := queryManager.createQuery(qGetBySpCash);
+              q1.setParam('SpCashNrec', mCash);
+              rs1 := q1.getResultSet;
+              if rs1 = nullref exit;
+            }
+            else exit;
+          }
+
+          ClearBuffer(#plpor);
+          plpor.tidkgal   := 1;
+          plpor.nodok     := rs.row.val('Nodoc');
+          plpor.descr     := rs.row.val('Descr');
+          plpor.desgr     := rs.row.val('Desgr');
+          plpor.datvip    := rs.row.val('DateDoc');
+          plpor.datots    := plpor.datvip;
+          plpor.cplat     := CoGetTune('myorg');
+          if VSogl = VIZA_NE_TREBUETSA
+          {
+            plpor.cbankplat := rs1.row.val('BankNrec');
+            plpor.tidk      := rs1.row.val('UserType');
+          }
+          else
+          {
+            plpor.cbankplat := rs.row.val('BankSpec');
+            plpor.tidk      := rs.row.val('UserDocType');
+          }
+          plpor.cpol      := rs.row.val('Cpol');
+          plpor.cbankpol  := rs.row.val('CBank');
+          plpor.cgruzotp  := plpor.cpol;
+          plpor.cgruzpol  := plpor.cplat;
+          plpor.sumplat   := rs.row.val('Summa'); //Сумма платежа по док-ту
+          plpor.cstepdoc  := rs.row.val('StepDocNrec'); //Ссылка на ЭТАП StepDoc
+          plpor.cwaymove  := rs.row.val('CTRANSP'); //Ссылка на способ транспортировки
+          plpor.namepl1   := rs.row.val('Naznach');
+/*          plpor.namepl3   := //Строка а-ля "Сумма НДС - 100500р"
+          plpor.denosch2  :=  //КПП
+          plpor.denosch3  := */
+          plpor.modedoc   := 2048
+          insert current plpor;
+
+          ClearBuffer(#soprhoz);
+//          soprhoz.cdogovor :=  ???
+          soprhoz.cstepdoc := plpor.cstepdoc;
+          soprhoz.csoprdoc := plpor.nrec;
+          soprhoz.tipdoc   := plpor.tidk;
+          soprhoz.tidkgal  := 1;
+          soprhoz.nodoc    := plpor.nodok;
+          soprhoz.descr    := plpor.descr;
+          soprhoz.desgr    := plpor.desgr;
+          soprhoz.namesho  := rs.row.val('BaseDocName');
+          soprhoz.summa    := plpor.sumplat;
+//          soprhoz.direct   := 2 or not?
+//          soprhoz.vhsumhoz := + or what?
+          soprhoz.modedoc  := plpor.modedoc;
+          soprhoz.corg     := plpor.cpol;
+          insert current soprhoz;
+
+          ClearBuffer(#basefin);
+//          basefin.cdogovor :=
+          basefin.cbasedoc := rs.row.val('BaseDocNrec');
+          basefin.cstepdoc := plpor.cstepdoc;
+          basefin.tipdoc   := plpor.tidk;
+          basefin.tidkgal  := 1;
+          basefin.cplpor   := plpor.nrec;
+          basefin.nodoc    := plpor.nodok;
+          basefin.descr    := plpor.descr;
+          basefin.desgr    := plpor.desgr;
+          basefin.namepl   := rs.row.val('BaseDocName');
+          basefin.summa    := plpor.sumplat;
+//          basefin.direct   := // 2 or not?
+          basefin.corg     := plpor.cpol;
+          basefin.csoprhoz := soprhoz.nrec;
+          insert current basefin;
+
+          ClearBuffer(#nalogfin);
+          nalogfin.csoprhoz := soprhoz.nrec;
+//          nalogfin.cnalog   :=
+//          nalogfin.keynalog := string 18 or 10
+//          nalogfin.stavka   := double 18 or 10
+          nalogfin.summa    := nalogfin.stavka * plpor.sumplat; // IMHO
+          nalogfin.tidkgal  := 1;
+          nalogfin.csoprdoc := plpor.nrec;
+          insert current nalogfin;
+
+        } while (rs.getnext = tsOk);
+      }
     }
   end;
 end.
@@ -1822,6 +1984,7 @@ mnuAGAT_Basedoc_Ree Menu
 - 'Печать', cmPrintDoc, 'Печать реестра', , 'Ctrl-P', kbCtrlP, sci1Esc;
 - 'Заполнение "Визы ПЭУ"', cmFilling, 'Заполнение "Визы ПЭУ"', , '', kbAltC, sci1Esc;
 - 'Автоматическое согласование', cmAutoAgreement, 'Автоматическое согласование', , '', kbAltD, sci1Esc;
+- 'Сформировать платежные поручения', cmCreatePlpors, 'Сформировать платежные поручения', , '', kbAltF, sci1Esc;
 - 'Иерархия/список', cmChangeView, 'Иерархия/список', , '', kbAltA, sci1Esc;
 - 'Показать/скрыть фильтры', cmFilterSave, 'Показать/скрыть фильтры', , 'Alt+B', kbAltB, sci1Esc;
 - 'Показать/скрыть карточку ДО', cmCalcUslParam, 'Показать/скрыть карточку ДО', ,'Alt+W', kbAltW, sci1Esc;
