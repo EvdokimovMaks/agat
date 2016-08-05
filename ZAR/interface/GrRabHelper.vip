@@ -1,0 +1,105 @@
+#include GrrabHelper.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface GrrabHelper;
+
+sql query qSelectGrupRab =
+select g.cex, g.clschet, g.oldclsch, g.tabn, g.lastuser, g.strtabn, spkPodgr.Name as Podgr
+from grup_rab g
+join lschet ls on ls.nrec = g.clschet
+join spkau spkPodgr on spkPodgr.nrec = case when ls.tbld[1] = 10057 then ls.ckaud[1]
+                                            when ls.tbld[2] = 10057 then ls.ckaud[2]
+                                            when ls.tbld[3] = 10057 then ls.ckaud[3]
+                                            when ls.tbld[4] = 10057 then ls.ckaud[4]
+                                            when ls.tbld[5] = 10057 then ls.ckaud[5]
+                                            when ls.tbld[6] = 10057 then ls.ckaud[6]
+                                            else #comp(0)
+                                       end
+where g.csp_gr_rab = :spgrabNrec
+;
+
+create view
+as select *
+from SP_G_RAB, grup_rab;
+
+create view vNum
+as select *
+from SP_G_RAB
+order by kodgr;
+
+create view v
+var
+  _spgrrabNrec: comp;
+as select *
+from SP_G_RAB spgrab
+where ((
+  _spgrrabNrec == spgrab.nrec
+));
+
+function GetLastSpGrabNumber: word;
+{
+  result := 1;
+  if vNum.getlast SP_G_RAB = tsOk
+    result := vNum.SP_G_RAB.kodgr;
+}
+
+function CreateSpGrab(aName: string; aCex: comp = 0): comp;
+{
+  clearbuffer(#SP_G_RAB);
+  SP_G_RAB.KODGR  := GetLastSpGrabNumber + 1;
+  SP_G_RAB.NAMEGR := aName;
+  SP_G_RAB.CEX    := aCex;
+  insert current SP_G_RAB;
+  result := SP_G_RAB.nrec;
+}
+
+procedure CreateGrrabByPodgr(srcSpGrabNrec: comp);
+{
+  v._spgrrabNrec := srcSpGrabNrec;
+  if v.getfirst spgrab = tsOk
+  {
+    var AupNvpSpgrabNrec: comp;
+    AupNvpSpgrabNrec := CreateSpGrab(v.spgrab.namegr+' Äìè+çÇè', v.spgrab.cex);
+    var PtpSpgrabNrec: comp;
+    PtpSpgrabNrec := CreateSpGrab(v.spgrab.namegr+' èíè', v.spgrab.cex);
+
+    var rs: IResultSet;
+    rs := queryManager.createQuery(qSelectGrupRab).setParam('spgrabNrec', srcSpGrabNrec).getResultSet;
+
+    if rs != nullref
+    {
+      startNewVisual(vtIndicatorVisual, vfBreak+vfTimer, 'á†ØÆ´≠•≠®• £‡„ØØ', rs.count);
+      if rs.getFirst = tsOk do
+      {
+        var podgr: string;
+        podgr := rs.row.Val('Podgr');
+
+        clearbuffer(#grup_rab)
+        grup_rab.cex      := rs.row.Val('cex');
+        grup_rab.clschet  := rs.row.Val('clschet');
+        grup_rab.oldclsch := rs.row.Val('oldclsch');
+        grup_rab.tabn     := rs.row.Val('tabn');
+        grup_rab.lastuser := rs.row.Val('lastuser');
+        grup_rab.strtabn  := rs.row.Val('strtabn');
+        case podgr of
+          'Äìè','çÇè':
+          {
+            grup_rab.csp_gr_rab := AupNvpSpgrabNrec;
+            insert current grup_rab;
+          }
+          'èíè':
+          {
+            grup_rab.csp_gr_rab := PtpSpgrabNrec;
+            insert current grup_rab;
+          }
+        end;
+        if not nextVisual break;
+      } while rs.getNext = tsOk;
+      stopVisual('',0);
+    }
+
+  }
+}
+end.
