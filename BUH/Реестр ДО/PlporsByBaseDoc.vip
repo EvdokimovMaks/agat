@@ -95,7 +95,7 @@ create view
 as select *
 from plpor, soprhoz, basefin, nalogfin;
 
-procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp);
+procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp; var aTIDK: word; aLogFileName: string);
 {
   var q, q1: IQuery;
   var rs, rs1: IResultSet;
@@ -103,12 +103,18 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp);
   q := queryManager.createQuery(qPlatezh);
   q.setParam('basedocNrec', aBaseDocNrec);
   rs := q.getResultSet;
-  if rs = nullref continue;
   if (rs.getFirst = tsOk) do
   {
     VSogl := rs.row.val('VizaPEU');
     RSSpec := rs.row.val('RSFromSpec');
-    if RSSpec = 0 and VSogl != VIZA_NE_TREBUETSA continue; //если в спецификации не заполнен атрибут "Р/счет списания ДС", то переходим к след итерации
+    if RSSpec = 0 and VSogl != VIZA_NE_TREBUETSA
+    {
+      LogStrToFile(aLogFileName, '|                                                                                                 |        Платёжное поручение не сформировано,      |');
+      LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|       т.к. не заполнен атрибут спецификации      |');
+      LogStrToFile(aLogFileName, '|                                                                                                 |                "Р/сч списания ДС"                |');
+      LogStrToFile(aLogFileName, '|-------------------------------------------------------------------------------------------------|--------------------------------------------------|');
+      continue; //если в спецификации не заполнен атрибут "Р/счет списания ДС", то переходим к след итерации
+    }
     if VSogl = VIZA_NE_TREBUETSA and aCash = 0
     {
       message('Выберите пожалуйста общий р/счёт для ДО с значением Визы ПЭУ "Не требуется"');
@@ -122,10 +128,12 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp);
           message('Не найден общий р/сч', error);
           exit;
         }
+        aBankNrec := rs1.row.val('BankNrec');
+        aTIDK := rs1.row.val('UserType');
       }
       else
       {
-        message('Процедура формирования платёжных поручений завершена');
+        message('Процедура формирования платёжных поручений прервана');
         exit;
       }
     }
@@ -140,8 +148,8 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp);
     plpor.cplat     := CoGetTune('myorg');
     if VSogl = VIZA_NE_TREBUETSA
     {
-      plpor.cbankplat := rs1.row.val('BankNrec');
-      plpor.tidk      := rs1.row.val('UserType');
+      plpor.cbankplat := aBankNrec;
+      plpor.tidk      := aTIDK;
     }
     else
     {
@@ -160,6 +168,11 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp);
     plpor.summa4    := rs.row.val('NDS');
     plpor.modedoc   := 2048
     insert current plpor;
+
+    LogStrToFile(aLogFileName, '|                                                                                                 |         Платёжное поручение сформировано         |');
+    LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|                № ' + Pad(plpor.nodok, 32) + '|');
+    LogStrToFile(aLogFileName, '|                                                                                                 |               от ' + Pad(DateToStr(plpor.datvip, 'DD.MM.YYYY'), 32) + '|');
+    LogStrToFile(aLogFileName, '+-------------------------------------------------------------------------------------------------+--------------------------------------------------+');
 
     ClearBuffer(#soprhoz);
     soprhoz.cdogovor := rs.row.val('CDogovor');
