@@ -1,0 +1,224 @@
+#include PlporsByBaseDoc.vih
+
+#component "AGAT"
+
+interface iPlatezh;
+
+sql query qPlatezh =
+  select bd.nrec          as BaseDocNrec,
+         bd.name          as BaseDocName,
+         bd.nodoc         as Nodoc,      // DocNumber
+         bd.ddoc          as DateDoc,
+         bd.descr         as Descr,
+         bd.desgr         as Desgr,
+         bd.CMYBANK       as CMYBANK,
+         bd.cgrotpr       as cgrotpr,
+         bd.cgrpol        as cgrpol,
+         bd.CTRANSP       as CTRANSP,
+         bd.CBANK         as CBank,
+         bd.CORG          as Cpol,
+         bd.CDOGOVOR      as CDogovor,
+         bd.CAPPDOGOVOR   as CAPPDOGOVOR,
+         naz.vstring      as Naznach,
+         sd.nrec          as StepDocNrec,
+         viz.vcomp        as VizaPEU,
+         spst.Summa       as Summa,//sum(sps.summa) as Summa,
+         spst.NDS         as NDS,//sum(sps.nds)   as NDS,
+         spst.RSFromSpec  as RSFromSpec,//av.vcomp       as RSFromSpec, // расчетный счет позиции спецификации ДО
+         spst.BankSpec    as BankSpec,//cb.cpodr       as BankSpec,
+         spst.UserDocType as UserDocType,//ud.tipusers    as UserDocType // TIDK для платёжки
+         spst.Summa18     as Summa18,
+         spst.CNal18      as CNal18,
+         spst.Stavka18    as Stavka18,
+         spst.Summa10     as Summa10,
+         spst.CNal10      as CNal10,
+         spst.Stavka10    as Stavka10
+  from basedoc bd
+  left join attrval viz on viz.wtable = 1102 and viz.crec = bd.nrec and viz.cattrnam = #comp(281474976710792)
+  left join attrval naz on naz.wtable = 1102 and naz.crec = bd.nrec and naz.cattrnam = #comp(000100000000010Dh)
+  left join stepdoc sd  on sd.cbasedoc = bd.nrec
+  left join (select sum(sps.summa)    as Summa,
+                    sum(sps.nds)      as NDS,
+                    sps.cstepdoc      as CStepDoc,
+                    av.vcomp          as RSFromSpec, // расчетный счет позиции спецификации ДО
+                    cb.cpodr          as BankSpec,
+                    ud.tipusers       as UserDocType, // TIDK для платёжки
+                    sum(nal18.SumNal) as Summa18,
+                    max(nal18.CNalog) as CNal18,
+                    max(nal18.Stavka) as Stavka18,
+                    sum(nal10.SumNal) as Summa10,
+                    max(nal10.CNalog) as CNal10,
+                    max(nal10.Stavka) as Stavka10
+             from spstep sps
+             left join attrval av  on av.wtable = 1104 and av.crec = sps.nrec and av.cattrnam = #comp(0001000000000A86h)
+             left join spcash spc  on spc.cplanssch = #comp(000100000000000Eh) and
+                                      (case when spc.tblos[1] = 10545 then spc.kauos[1]
+                                            when spc.tblos[2] = 10545 then spc.kauos[2]
+                                            when spc.tblos[3] = 10545 then spc.kauos[3]
+                                            when spc.tblos[4] = 10545 then spc.kauos[4]
+                                            when spc.tblos[5] = 10545 then spc.kauos[5]
+                                            when spc.tblos[6] = 10545 then spc.kauos[6] end) = av.vcomp and
+                                            coalesce(av.vcomp,#comp(0)) <> #comp(0)
+             left join cashbank cb on cb.nrec = spc.ccashbank
+             left join usersdoc ud on ud.ccashbank = cb.nrec and ud.razdel = cb.razdel and ud.tipgal = 1
+             left join (select n.cspdoc,
+                               n.summa  as SumNal,
+                               n.cnalog as CNalog,
+                               n.nalog  as Stavka
+                        from spdocnal n
+                        where n.tipdoc = 1101 and n.nalog = 18
+                       ) nal18 on nal18.cspdoc = sps.nrec
+             left join (select n.cspdoc,
+                               n.summa  as SumNal,
+                               n.cnalog as CNalog,
+                               n.nalog  as Stavka
+                        from spdocnal n
+                        where n.tipdoc = 1101 and n.nalog = 10
+                       ) nal10 on nal10.cspdoc = sps.nrec
+             group by sps.cstepdoc, av.vcomp, cb.cpodr, ud.tipusers
+            ) spst on spst.cstepdoc = sd.nrec
+  where bd.nrec = :basedocNrec
+
+;
+
+sql query qGetBySpCash =
+  select cb.name     as BankName,
+         cb.cpodr    as BankNrec,
+         ud.tipusers as UserType
+  from spcash spc
+  join cashbank cb on cb.nrec = spc.ccashbank
+  left join usersdoc ud on ud.ccashbank = cb.nrec and ud.razdel = cb.razdel and ud.tipgal = 1
+  where spc.nrec = :SpCashNrec
+;
+
+create view
+as select *
+from plpor, soprhoz, basefin, nalogfin;
+
+procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp);
+{
+  var q, q1: IQuery;
+  var rs, rs1: IResultSet;
+  var VSogl, RSSpec: comp;
+  q := queryManager.createQuery(qPlatezh);
+  q.setParam('basedocNrec', aBaseDocNrec);
+  rs := q.getResultSet;
+  if rs = nullref continue;
+  if (rs.getFirst = tsOk) do
+  {
+    VSogl := rs.row.val('VizaPEU');
+    RSSpec := rs.row.val('RSFromSpec');
+    if RSSpec = 0 and VSogl != VIZA_NE_TREBUETSA continue; //если в спецификации не заполнен атрибут "Р/счет списания ДС", то переходим к след итерации
+    if VSogl = VIZA_NE_TREBUETSA and aCash = 0
+    {
+      message('Выберите пожалуйста общий р/счёт для ДО с значением Визы ПЭУ "Не требуется"');
+      if RunInterface('F_CASHBANK::SELUSDOC', 0, 0, 0, comp(0), aCash) = cmDefault
+      {
+        q1 := queryManager.createQuery(qGetBySpCash);
+        q1.setParam('SpCashNrec', aCash);
+        rs1 := q1.getResultSet;
+        if rs1 = nullref
+        {
+          message('Не найден общий р/сч', error);
+          exit;
+        }
+      }
+      else
+      {
+        message('Процедура формирования платёжных поручений завершена');
+        exit;
+      }
+    }
+
+    ClearBuffer(#plpor);
+    plpor.tidkgal   := 1;
+    plpor.nodok     := rs.row.val('Nodoc');
+    plpor.descr     := rs.row.val('Descr');
+    plpor.desgr     := rs.row.val('Desgr');
+    plpor.datvip    := rs.row.val('DateDoc');
+    plpor.datots    := plpor.datvip;
+    plpor.cplat     := CoGetTune('myorg');
+    if VSogl = VIZA_NE_TREBUETSA
+    {
+      plpor.cbankplat := rs1.row.val('BankNrec');
+      plpor.tidk      := rs1.row.val('UserType');
+    }
+    else
+    {
+      plpor.cbankplat := rs.row.val('BankSpec');
+      plpor.tidk      := rs.row.val('UserDocType');
+    }
+    plpor.cpol      := rs.row.val('Cpol');
+    plpor.cbankpol  := rs.row.val('CBank');
+    plpor.cgruzotp  := plpor.cpol;
+    plpor.cgruzpol  := plpor.cplat;
+    plpor.sumplat   := rs.row.val('Summa'); //Сумма платежа по док-ту
+    plpor.cstepdoc  := rs.row.val('StepDocNrec'); //Ссылка на ЭТАП StepDoc
+    plpor.cwaymove  := rs.row.val('CTRANSP'); //Ссылка на способ транспортировки
+    plpor.namepl1   := rs.row.val('Naznach');
+    plpor.namepl4   := 'Сумма НДС ' + rs.row.val('NDS') + ' руб.';
+    plpor.summa4    := rs.row.val('NDS');
+    plpor.modedoc   := 2048
+    insert current plpor;
+
+    ClearBuffer(#soprhoz);
+    soprhoz.cdogovor := rs.row.val('CDogovor');
+    soprhoz.cstepdoc := plpor.cstepdoc;
+    soprhoz.csoprdoc := plpor.nrec;
+    soprhoz.tipdoc   := plpor.tidk;
+    soprhoz.tidkgal  := 1;
+    soprhoz.nodoc    := plpor.nodok;
+    soprhoz.descr    := plpor.descr;
+    soprhoz.desgr    := plpor.desgr;
+    soprhoz.namesho  := rs.row.val('BaseDocName');
+    soprhoz.summa    := plpor.sumplat;
+    soprhoz.direct   := 2;
+    soprhoz.vhsumhoz := '+';
+    soprhoz.modedoc  := plpor.modedoc;
+    soprhoz.corg     := plpor.cpol;
+    insert current soprhoz;
+
+    ClearBuffer(#basefin);
+    basefin.cdogovor := soprhoz.cdogovor;
+    basefin.cbasedoc := rs.row.val('BaseDocNrec');
+    basefin.cstepdoc := plpor.cstepdoc;
+    basefin.tipdoc   := plpor.tidk;
+    basefin.tidkgal  := 1;
+    basefin.cplpor   := plpor.nrec;
+    basefin.nodoc    := plpor.nodok;
+    basefin.descr    := plpor.descr;
+    basefin.desgr    := plpor.desgr;
+    basefin.namepl   := rs.row.val('BaseDocName');
+    basefin.summa    := plpor.sumplat;
+    basefin.direct   := 2;
+    basefin.corg     := plpor.cpol;
+    basefin.csoprhoz := soprhoz.nrec;
+    insert current basefin;
+
+    if rs.row.val('Summa18') != 0
+    {
+      ClearBuffer(#nalogfin);
+      nalogfin.csoprhoz := soprhoz.nrec;
+      nalogfin.cnalog   := rs.row.val('CNal18');
+      nalogfin.keynalog := rs.row.val('Stavka18');
+      nalogfin.stavka   := rs.row.val('Stavka18');
+      nalogfin.summa    := rs.row.val('Summa18');
+      nalogfin.tidkgal  := 1;
+      nalogfin.csoprdoc := plpor.nrec;
+      insert current nalogfin;
+    }
+    if rs.row.val('Summa10') != 0
+    {
+      ClearBuffer(#nalogfin);
+      nalogfin.csoprhoz := soprhoz.nrec;
+      nalogfin.cnalog   := rs.row.val('CNal10');
+      nalogfin.keynalog := rs.row.val('Stavka10');
+      nalogfin.stavka   := rs.row.val('Stavka10');
+      nalogfin.summa    := rs.row.val('Summa10');
+      nalogfin.tidkgal  := 1;
+      nalogfin.csoprdoc := plpor.nrec;
+      insert current nalogfin;
+    }
+  } while (rs.getnext = tsOk);
+}
+end.
