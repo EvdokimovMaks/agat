@@ -2,6 +2,7 @@
 #include BasedocReeReport.vih
 #include extattr.vih
 #include Query.vih
+#include XLREPORT.vih
 
 #component "AGAT"
 
@@ -16,7 +17,7 @@ table struct trs (
 
 table struct tbd (
   nrec       : comp,
-  viddoc     : string,
+  viddoc     : word,
   ddoc       : date,
   nodoc      : string,
   bdds       : string,
@@ -39,7 +40,6 @@ table struct tbd (
   bankrs     : string,
   cfo        : string,
   zakaz      : string,
-  viddoc     : word,
   dognum     : string,
   dogdate    : date,
   procav     : string,
@@ -65,18 +65,42 @@ table struct tbd (
   vizaKOMPrim: string,
   vizaBUHPrim: string
 ) with index (
-  i01 = nrec: comp,
+  i01 = nrec,
   i02 = spkRSNrec + ddoc + nodoc
 );
 
 //#region Queries
 
+sql query qSpstepData =
+  select
+  from basedoc bd
+  join stepdoc sd on sd.cbasedoc = bd.nrec
+  join spstep sps on sps.cstepdoc = sd.nrec
+  left join attrval avRS on avRS.wtable = 1104 and avRS.cRec = sps.nrec and avRS.cattrnam = #comp(0001000000000A86h)
+  left join spcash on spcash.cplanssch=#comp(000100000000000Eh)
+                  and case when spcash.tblos[1] = 10545 then spcash.kauos[1]
+                           when spcash.tblos[2] = 10545 then spcash.kauos[2]
+                           when spcash.tblos[3] = 10545 then spcash.kauos[3]
+                           when spcash.tblos[4] = 10545 then spcash.kauos[4]
+                           when spcash.tblos[5] = 10545 then spcash.kauos[5]
+                           when spcash.tblos[6] = 10545 then spcash.kauos[6]
+                           else #comp(0)
+                      end = avRS.vcomp and avRS.vcomp is not null
+  left join cashbank on cashbank.nrec = coalesce(spcash.ccashbank,#comp(0))
+  left join attrval avRS on avRS.wtable = 1104 and avRS.cRec = sps.nrec and avRS.cattrnam = #comp(0001000000000A86h)
+  where bd.nrec = :basedocNrec and coalesce(avRS.vcomp,#comp(0)) = :rsNrec
+;
+
+sql query qSelectOpl =
+  select distinct plpor.datob
+  from basefin bf
+  join plpor on plpor.nrec = bf.cplpor and plpor.datob <> 0
+  where (bf.cbasedoc = :basedocNrec or bf.cpredopldo = :basedocNrec ) and bf.tidkgal in (1,2)
+;
+
 sql query querymain =
 select bd.nrec,
-       case when bd.viddoc=111
-            then 'ДО на предоплату закупок'
-            else 'ДО на закупку'
-       end as viddoc,
+       bd.viddoc as viddoc,
        bd.ddoc as ddoc,
        bd.nodoc as nodoc,
        coalesce(spkBdds.Name,'') as bdds,
@@ -99,7 +123,6 @@ select bd.nrec,
        coalesce(bank.schet1, '') as bankrs,
        coalesce(getdocfo(bd.nrec),'-') as cfo,
        coalesce(getdozakaz(bd.nrec),'-') as zakaz,
-       bd.viddoc as viddoc,
        coalesce(dog.nodoc,'') as dognum,
        coalesce(dog.ddoc,0) as dogdate,
        bd.procopl as procav,
@@ -211,6 +234,7 @@ left join (select cbasedoc, max(basefin.ddoc) as dopl, sum(summa) as summa
 //#endregion
 
 var
+  _qOpl: IQuery;
   _contractIDHelper: ContractIDHelper;
   pXL: XLSRepBuilder;
   ea: iextattr;
@@ -233,6 +257,20 @@ where ((
   brbasedoc.cval     == brval.nrec        and
   brbd.nrec          == brsd.cbasedoc     and
   brbd.nrec          == brbf.cbasedoc
+));
+
+create view vExtAttrInfo
+var
+  _wtable: word;
+  _crec: comp;
+  _cattrnam: comp;
+as select *
+from attrval, x$users
+where ((
+  _wtable   == attrval.wtable   and
+  _crec     == attrval.crec     and
+  _cattrnam == attrval.cattrnam and
+  attrval.atl_lastuser == x$users.atl_nrec
 ));
 
 procedure CreateTmpTableForMarker(lMarker: longint; tableName: string);
@@ -267,180 +305,217 @@ procedure PrepareData(lBasedocMarker: longint);
   }
 }
 
-
 function IBasedocReeReport.Title: string;
 {
   result := 'Реестр ДО с группировкой по счетам';
 }
 
+function vizafld(vizaName: string; dSogl: date; sogl: string): string; cacheable;
+{
+  if vizaName != ''
+    result := vizaName
+  else if dSogl > 0 and sogl != ''
+    result := calcdaysbetweendates(dSogl, cur_date, true)+ ' дн.'
+  else
+    result := '';
+}
+
+function GetExtAttrSetInfo(aWTable: word; aCRec: comp; aCAttrnam: comp): string;
+{
+  vExtAttrInfo._wtable := aWTable;
+  vExtAttrInfo._crec := aCRec;
+  vExtAttrInfo._cattrnam := aCAttrnam;
+  if vExtAttrInfo.getfirst attrval = tsOk
+  {
+    result := datetostr(vExtAttrInfo.attrval.atl_lastdate,'DD.MM.YYYY')
+              + ' ' + timetostr(vExtAttrInfo.attrval.atl_lasttime, 'HH:MM')
+              + ' ' + if(vExtAttrInfo.getfirst x$users = tsOk,
+                         vExtAttrInfo.x$users.xu$loginname,
+                         'неизвестный пользователь '+string(vExtAttrInfo.attrval.atl_lastuser,0,0));
+  }
+  else
+    result := '';
+}
+
+function GetBDReeExtAttrInfo(aTitle: string; aCAttrnam: comp): string;
+{
+  result := aTitle+': '+GetExtAttrSetInfo(WT_BASEDOC, brbd.nrec, aCAttrnam);
+}
+
 function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams = nullref): boolean;
 {
-    PrepareData(lBasedocMarker)
+  _qOpl := queryManager.createQuery(qSelectOpl);
 
-    var szakaz, scfo, _dds: string;
-    StartNewVisual(vtRotateVisual, vfThread+vfTimer, 'Формирование отчета', 0);
+  PrepareData(lBasedocMarker);
 
-    sXLTFileName := TranslatePath('%StartPath%xls\agat_basedoc_ree_hier.xlt');
-    //sXLSFileName := pXL.CreateReport(sXLTFileName, True)
-    sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+  var szakaz, scfo, _dds: string;
 
-    pXL.CreateTbls(sXLSFileName);
-    pXL.CreateTbl('Main');
-    pXL.CreateTblFld('viddoc');
-    pXL.CreateTblFld('ddoc'  );
-    pXL.CreateTblFld('nodoc' );
-    pXL.CreateTblFld('bdds'  );
-    pXL.CreateTblFld('dform' );
-    pXL.CreateTblFld('summa' );
-    pXL.CreateTblFld('total' );
-    pXL.CreateTblFld('sumopl');
-    pXL.CreateTblFld('sumdolg');
-    pXL.CreateTblFld('val'   );
-    pXL.CreateTblFld('statusopl');
-    pXL.CreateTblFld('dopl'  );
-    pXL.CreateTblFld('avans' );
-    pXL.CreateTblFld('status');
-    pXL.CreateTblFld('ispoln');
-    pXL.CreateTblFld('dds'   );
-    pXL.CreateTblFld('bdr'   );
-    pXL.CreateTblFld('buhsch');
-    pXL.CreateTblFld('dsogl' );
-    pXL.CreateTblFld('sogl'  );
-    pXL.CreateTblFld('vbuh'  );
-    pXL.CreateTblFld('vkaz'  );
-    pXL.CreateTblFld('vpeu'  );
-    pXL.CreateTblFld('vdir'  );
-    pXL.CreateTblFld('pbuh'  );
-    pXL.CreateTblFld('pkaz'  );
-    pXL.CreateTblFld('ppeu'  );
-    pXL.CreateTblFld('pdir'  );
-    pXL.CreateTblFld('vrez'  );
-    pXL.CreateTblFld('soglinfo');
-    pXL.CreateTblFld('org'   );
-    pXL.CreateTblFld('bank'  );
-    pXL.CreateTblFld('bankrs');
-    pXL.CreateTblFld('init'  );
-    pXL.CreateTblFld('cfo'   );
-    pXL.CreateTblFld('zakaz' );
-    pXL.CreateTblFld('contractId');
-    pXL.CreateTblFld('viddoc');
-    pXL.CreateTblFld('dognum' );
-    pXL.CreateTblFld('dogdate');
-    pXL.CreateTblFld('procav');
-    pXL.CreateTblFld('nazn');
-    pXL.CreateTblFld('npp');
-    pXL.CreateTblFld('statusName');
-    pXL.CreateTblFld('statusComment');
-    if (not isCreateXLT) {
-      pushpos(#brbd);
-      var _cnt, _npp: longint;
-      _cnt := getmarkercount(mrkmain);
-      _npp := 0;
-      _loop brbd  where (_cnt=0 or foundmarker(mrkmain,brbd.nrec)) {
-        _npp += 1;
-        //выводим строки
-        if getfirst brbasedoc = tsOk {};
-        if getfirst brorg     = tsOk {};
-        if getfirst brbank    = tsOk {};
-        if getfirst brnote    = tsOk {};
-        pXL.ClearTblBuffer;
-        pXL.SetTblStringFldValue('npp'      , _npp);
-        pXL.SetTblStringFldValue('ddoc'     , datetostr(brbd.ddoc,'DD.MM.YYYY'));
-        pXL.SetTblStringFldValue('nodoc'    , brbd.nodoc                       );
-        pXL.SetTblStringFldValue('viddoc'   , if(brbasedoc.viddoc=101, 'ДО на закупку', 'ДО на предоплату закупок'));
-        pXL.SetTblStringFldValue('nazn'     , brbd.naznpl                      );
-        pXL.SetTblStringFldValue('bdds'     , brbd.bdds                        );
-        pXL.SetTblStringFldValue('dform'    , datetostr(brbd.dform,'DD.MM.YYYY'));
-        pXL.SetTblNumberFldValue('summa'    , brbd.summa                       );
-        pXL.SetTblNumberFldValue('total'    , brbd.total                       );
-        pXL.SetTblNumberFldValue('sumopl'   , brbd.sumopl                      );
-        pXL.SetTblNumberFldValue('sumdolg'  , round(brbd.total-brbd.sumopl,2)  );
-        pXL.SetTblStringFldValue('statusopl', if(brbd.sumopl<=0,'Не оплачен', if(brbd.sumopl>=brbd.total,'Полностью оплачен', 'Частично оплачен')));
+  sXLTFileName := TranslatePath('%StartPath%xls\agat_basedoc_ree_hier.xlt');
+  sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+  //sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
 
-        _qOpl.setParam('basedocNrec', brbd.nrec);
-        if _qOpl.execute.errorcode = tsOk
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('rowtype');
+  pXL.CreateTblFld('viddoc');
+  pXL.CreateTblFld('ddoc'  );
+  pXL.CreateTblFld('nodoc' );
+  pXL.CreateTblFld('bdds'  );
+  pXL.CreateTblFld('dform' );
+  pXL.CreateTblFld('summa' );
+  pXL.CreateTblFld('total' );
+  pXL.CreateTblFld('sumopl');
+  pXL.CreateTblFld('sumdolg');
+  pXL.CreateTblFld('val'   );
+  pXL.CreateTblFld('statusopl');
+  pXL.CreateTblFld('dopl'  );
+  pXL.CreateTblFld('avans' );
+  pXL.CreateTblFld('status');
+  pXL.CreateTblFld('ispoln');
+  pXL.CreateTblFld('dds'   );
+  pXL.CreateTblFld('bdr'   );
+  pXL.CreateTblFld('buhsch');
+  pXL.CreateTblFld('dsogl' );
+  pXL.CreateTblFld('sogl'  );
+  pXL.CreateTblFld('vbuh'  );
+  pXL.CreateTblFld('vkaz'  );
+  pXL.CreateTblFld('vpeu'  );
+  pXL.CreateTblFld('vdir'  );
+  pXL.CreateTblFld('pbuh'  );
+  pXL.CreateTblFld('pkaz'  );
+  pXL.CreateTblFld('ppeu'  );
+  pXL.CreateTblFld('pdir'  );
+  pXL.CreateTblFld('vrez'  );
+  pXL.CreateTblFld('soglinfo');
+  pXL.CreateTblFld('org'   );
+  pXL.CreateTblFld('bank'  );
+  pXL.CreateTblFld('bankrs');
+  pXL.CreateTblFld('init'  );
+  pXL.CreateTblFld('cfo'   );
+  pXL.CreateTblFld('zakaz' );
+  pXL.CreateTblFld('contractId');
+  pXL.CreateTblFld('viddoc');
+  pXL.CreateTblFld('dognum' );
+  pXL.CreateTblFld('dogdate');
+  pXL.CreateTblFld('procav');
+  pXL.CreateTblFld('nazn');
+  pXL.CreateTblFld('npp');
+  pXL.CreateTblFld('statusName');
+  pXL.CreateTblFld('statusComment');
+
+  var _npp: longint = 0;
+
+  _loop brrs {
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('rowtype'  , 'СЧЕТ');
+    pXL.SetTblStringFldValue('npp'      , brrs.name);
+    pXL.InsTblRow;
+
+    _loop brbd  {
+      _npp += 1;
+      //выводим строки
+      if getfirst brbasedoc = tsOk {};
+      if getfirst brorg     = tsOk {};
+      if getfirst brbank    = tsOk {};
+      if getfirst brnote    = tsOk {};
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('npp'      , _npp);
+      pXL.SetTblStringFldValue('rowtype'  , 'ДО');
+      pXL.SetTblStringFldValue('ddoc'     , datetostr(brbd.ddoc,'DD.MM.YYYY'));
+      pXL.SetTblStringFldValue('nodoc'    , brbd.nodoc                       );
+      pXL.SetTblStringFldValue('viddoc'   , if(brbd.viddoc=111,'ДО на предоплату закупок','ДО на закупку'));
+      pXL.SetTblStringFldValue('nazn'     , brbd.nazn                        );
+      pXL.SetTblStringFldValue('bdds'     , brbd.bdds                        );
+      pXL.SetTblStringFldValue('dform'    , datetostr(brbd.dform,'DD.MM.YYYY'));
+      pXL.SetTblNumberFldValue('summa'    , brbd.summa                       );
+      pXL.SetTblNumberFldValue('total'    , brbd.total                       );
+      pXL.SetTblNumberFldValue('sumopl'   , brbd.sumopl                      );
+      pXL.SetTblNumberFldValue('sumdolg'  , round(brbd.total-brbd.sumopl,2)  );
+      pXL.SetTblStringFldValue('statusopl', if(brbd.sumopl<=0,'Не оплачен', if(brbd.sumopl>=brbd.total,'Полностью оплачен', 'Частично оплачен')));
+
+      _qOpl.setParam('basedocNrec', brbd.nrec);
+      if _qOpl.execute.errorcode = tsOk
+      {
+        if _qOpl.fetch.errorCode = tsOk
         {
-          if _qOpl.fetch.errorCode = tsOk
-          {
-            pXL.AddTblStringFldValue('dopl', datetostr(_qOpl.row.Val('datob'),'DD.MM.YYYY'));
-            while _qOpl.fetch.errorCode = tsOk
-              pXL.AddTblStringFldValue('dopl', '; '+datetostr(_qOpl.row.Val('datob'),'DD.MM.YYYY'));
-          }
+          pXL.AddTblStringFldValue('dopl', datetostr(_qOpl.row.Val('datob'),'DD.MM.YYYY'));
+          while _qOpl.fetch.errorCode = tsOk
+            pXL.AddTblStringFldValue('dopl', '; '+datetostr(_qOpl.row.Val('datob'),'DD.MM.YYYY'));
         }
-
-        pXL.SetTblStringFldValue('avans'    , brbd.avans                       );
-        pXL.SetTblStringFldValue('status'   , brnote.name                      );
-        pXL.SetTblStringFldValue('ispoln'   , brbd.ispoln                      );
-        if pos(' ',brbd.dds) > 0 {
-          _dds := replace(substr(brbd.dds,1,pos(' ',brbd.dds)), '.', '');
-        } else {
-          _dds := brbd.dds;
-        }
-        pXL.SetTblStringFldValue('dds'      , _dds                             );
-        pXL.SetTblStringFldValue('bdr'      , brbd.bdr                         );
-        pXL.SetTblStringFldValue('buhsch'   , brbd.buhsch                      );
-        pXL.SetTblStringFldValue('dsogl'    , datetostr(brbd.dsogl,'DD.MM.YYYY'));
-        pXL.SetTblStringFldValue('sogl'     , vizafld(brbd.sogl,brbd.daysogl)  );
-        pXL.SetTblStringFldValue('vbuh'     , vizafld(brbd.vbuh,brbd.daybuh)   );
-        pXL.SetTblStringFldValue('vkaz'     , vizafld(brbd.vkaz,brbd.daykaz)   );
-        pXL.SetTblStringFldValue('vpeu'     , vizafld(brbd.vpeu,brbd.daypeu)   );
-        pXL.SetTblStringFldValue('vdir'     , vizafld(brbd.vdir,brbd.daydir)   );
-
-        pXL.SetTblStringFldValue('pbuh'     , ea.sGetAttrID(WT_BASEDOC, brbd.nrec, ATTRNAM_PBUH));
-        pXL.SetTblStringFldValue('pkaz'     , ea.sGetAttrID(WT_BASEDOC, brbd.nrec, ATTRNAM_PKAZ));
-        pXL.SetTblStringFldValue('ppeu'     , ea.sGetAttrID(WT_BASEDOC, brbd.nrec, ATTRNAM_PPEU));
-        pXL.SetTblStringFldValue('pdir'     , ea.sGetAttrID(WT_BASEDOC, brbd.nrec, ATTRNAM_PDIR));
-
-        pXL.AddTblStringFldValue('soglinfo' ,         GetBDReeExtAttrInfo('Передано на согл.    ', ATTRNAM_SOGL));
-        pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('Казначейство         ', ATTRNAM_KAZN));
-        pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('Бухгалтерия          ', ATTRNAM_BUH));
-        pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('ПЭУ                  ', ATTRNAM_PEU));
-        pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('Коммерческая дирекция', ATTRNAM_DIR));
-
-        pXL.SetTblStringFldValue('vrez'     , vizafld(brbd.vrez,brbd.dayrez)   );
-        pXL.SetTblStringFldValue('org'      , brorg.name                       );
-        pXL.SetTblStringFldValue('bank'     , brbank.name                      );
-        pXL.SetTblStringFldValue('bankrs'   , brbank.schet1                    );
-        pXL.SetTblStringFldValue('zakaz'    , brbd.zakaz                       );
-
-        if (getfirst brsd = tsOk)
-          pXL.SetTblStringFldValue('contractId', _contractIDHelper.GetContractId(GetContractIDKey_ByStepdoc, brsd.nrec));
-
-        pXL.SetTblStringFldValue('cfo'      , brbd.cfo                         );
-        if getfirst brdog     = tsOk {
-          pXL.SetTblStringFldValue('dognum' , brdog.nodoc                    );
-          pXL.SetTblStringFldValue('dogdate', datetostr(brdog.ddoc,'DD.MM.YYYY'));
-        }
-        if getfirst brval     = tsOk {
-          pXL.SetTblStringFldValue('val'    , brval.dollar);
-        } else {
-          pXL.SetTblStringFldValue('val'    , '');
-        }
-        pXL.SetTblStringFldValue('procav'   , if(brbasedoc.procopl>0,
-                                                 brbasedoc.procopl,
-                                                 if(brbd.total>0 and brbd.sumopl>0,
-                                                    round(brbd.sumopl/brbd.total*100,2),
-                                                    ''
-                                                 )
-                                              ) );
-        if getfirst brnote = tsOk
-          pXL.SetTblStringFldValue('statusName', brnote.name);
-        else
-          pXL.SetTblStringFldValue('statusName', '');
-
-        if getlast brstatlog = tsOk
-          pXL.SetTblStringFldValue('statusComment', brstatlog.comment);
-        else
-          pXL.SetTblStringFldValue('statusComment', '');
-
-        pXL.InsTblRow;
       }
-    }
-    pXL.PublishTbl('Main');
-    pXL.LoadReport(sXLSFileName);
-    pXL.DisConnectExcel;
-    poppos(#brbd);
-    stopvisual('',0);
+
+      pXL.SetTblStringFldValue('avans'    , brbd.avans                       );
+      pXL.SetTblStringFldValue('status'   , brbd.status                      );
+      pXL.SetTblStringFldValue('ispoln'   , brbd.ispoln                      );
+      if pos(' ',brbd.dds) > 0 {
+        _dds := replace(substr(brbd.dds,1,pos(' ',brbd.dds)), '.', '');
+      } else {
+        _dds := brbd.dds;
+      }
+      pXL.SetTblStringFldValue('dds'      , _dds                             );
+      pXL.SetTblStringFldValue('buhsch'   , brbd.buhsch                      );
+      pXL.SetTblStringFldValue('dsogl'    , datetostr(brbd.dsogl,'DD.MM.YYYY'));
+      pXL.SetTblStringFldValue('sogl'     , if(brbd.sogl='',
+                                               calcdaysbetweendates(brbd.dform, cur_date, true)+' дн.',
+                                               brbd.sogl));
+      pXL.SetTblStringFldValue('vbuh'     , vizafld(brbd.vizaBUHName, brbd.dsogl, brbd.sogl));
+      pXL.SetTblStringFldValue('vkaz'     , vizafld(brbd.vizaKAZName, brbd.dsogl, brbd.sogl));
+      pXL.SetTblStringFldValue('vpeu'     , vizafld(brbd.vizaPEUName, brbd.dsogl, brbd.sogl));
+      pXL.SetTblStringFldValue('vdir'     , vizafld(brbd.vizaKOMName, brbd.dsogl, brbd.sogl));
+
+      pXL.SetTblStringFldValue('pbuh'     , brbd.vizaBUHPrim);
+      pXL.SetTblStringFldValue('pkaz'     , brbd.vizaKAZPrim);
+      pXL.SetTblStringFldValue('ppeu'     , brbd.vizaPEUPrim);
+      pXL.SetTblStringFldValue('pdir'     , brbd.vizaKOMPrim);
+
+      pXL.AddTblStringFldValue('soglinfo' ,         GetBDReeExtAttrInfo('Передано на согл.    ', ATTRNAM_SOGL));
+      pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('Казначейство         ', ATTRNAM_KAZN));
+      pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('Бухгалтерия          ', ATTRNAM_BUH));
+      pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('ПЭУ                  ', ATTRNAM_PEU));
+      pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('Коммерческая дирекция', ATTRNAM_DIR));
+
+      pXL.SetTblStringFldValue('org'      , brorg.name                       );
+      pXL.SetTblStringFldValue('bank'     , brbank.name                      );
+      pXL.SetTblStringFldValue('bankrs'   , brbank.schet1                    );
+      pXL.SetTblStringFldValue('zakaz'    , brbd.zakaz                       );
+
+      if (getfirst brsd = tsOk)
+        pXL.SetTblStringFldValue('contractId', _contractIDHelper.GetContractId(GetContractIDKey_ByStepdoc, brsd.nrec));
+
+      pXL.SetTblStringFldValue('cfo'      , brbd.cfo                         );
+      if getfirst brdog     = tsOk {
+        pXL.SetTblStringFldValue('dognum' , brdog.nodoc                    );
+        pXL.SetTblStringFldValue('dogdate', datetostr(brdog.ddoc,'DD.MM.YYYY'));
+      }
+      if getfirst brval     = tsOk {
+        pXL.SetTblStringFldValue('val'    , brval.dollar);
+      } else {
+        pXL.SetTblStringFldValue('val'    , '');
+      }
+      pXL.SetTblStringFldValue('procav'   , if(brbasedoc.procopl>0,
+                                               brbasedoc.procopl,
+                                               if(brbd.total>0 and brbd.sumopl>0,
+                                                  round(brbd.sumopl/brbd.total*100,2),
+                                                  ''
+                                               )
+                                            ) );
+      if getfirst brnote = tsOk
+        pXL.SetTblStringFldValue('statusName', brnote.name);
+      else
+        pXL.SetTblStringFldValue('statusName', '');
+
+      if getlast brstatlog = tsOk
+        pXL.SetTblStringFldValue('statusComment', brstatlog.comment);
+      else
+        pXL.SetTblStringFldValue('statusComment', '');
+
+      pXL.InsTblRow;
+    } //loop brbd
+  }//loop brrs
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+  result := true;
 }
 
 end.

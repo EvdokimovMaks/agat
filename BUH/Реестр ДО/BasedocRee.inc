@@ -1,3 +1,4 @@
+
 const
   cmChangeView = 32001;
   cmFilling = 32002;
@@ -125,6 +126,7 @@ const
   DSK_MRKDOG     = 'AGAT_BDREE_MRKDOG';
   DSK_MRKCFO     = 'AGAT_BDREE_MRKCFO';
   DSK_MRKVAL     = 'AGAT_BDREE_MRKVAL';
+  DSK_MRKREJIM   = 'AGAT_BDREE_MRKREJIM';
   KODGR_DDS      = 10009;
   KODGR_BDR      = 10010;
   cmPrintDoc     = 3440;
@@ -142,7 +144,8 @@ const
   BIT_DOG        = 8;
   BIT_CFO        = 9;
   BIT_VAL        = 10;
-  BIT_NODOC      = 11;
+  BIT_REJIM      = 11;
+  BIT_NODOC      = 12;
   BIT_SUMMA      = 0;
   BIT_TOTAL      = 1;
   BIT_SUMVAL     = 2;
