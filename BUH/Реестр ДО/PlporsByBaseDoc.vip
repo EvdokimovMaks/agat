@@ -1,13 +1,18 @@
 #include PlporsByBaseDoc.vih
+#include extattr.vih
 
 #component "AGAT"
 
 interface iPlatezh;
 
+var
+  ea: iextattr;
+
 sql query qPlatezh =
-  select bd.nrec          as BaseDocNrec,
+  select ko.kodplatnds    as KPP,
+         bd.nrec          as BaseDocNrec,
          bd.name          as BaseDocName,
-         bd.nodoc         as Nodoc,      // DocNumber
+         bd.nodoc         as Nodoc,
          bd.ddoc          as DateDoc,
          bd.descr         as Descr,
          bd.desgr         as Desgr,
@@ -22,11 +27,13 @@ sql query qPlatezh =
          naz.vstring      as Naznach,
          sd.nrec          as StepDocNrec,
          viz.vcomp        as VizaPEU,
-         spst.Summa       as Summa,//sum(sps.summa) as Summa,
-         spst.NDS         as NDS,//sum(sps.nds)   as NDS,
-         spst.RSFromSpec  as RSFromSpec,//av.vcomp       as RSFromSpec, // расчетный счет позиции спецификации ДО
-         spst.BankSpec    as BankSpec,//cb.cpodr       as BankSpec,
-         spst.UserDocType as UserDocType,//ud.tipusers    as UserDocType // TIDK для платёжки
+         spst.Summa       as Summa,
+         spst.NDS         as NDS,
+         spst.RSFromSpec  as RSFromSpec,
+         spst.UserMode    as UserMode,
+         spst.UserModeStr as UserModeStr,
+         spst.BankSpec    as BankSpec,
+         spst.UserDocType as UserDocType,
          spst.Summa18     as Summa18,
          spst.CNal18      as CNal18,
          spst.Stavka18    as Stavka18,
@@ -34,6 +41,7 @@ sql query qPlatezh =
          spst.CNal10      as CNal10,
          spst.Stavka10    as Stavka10
   from basedoc bd
+  left join katorg ko on ko.nrec = bd.corg
   left join attrval viz on viz.wtable = 1102 and viz.crec = bd.nrec and viz.cattrnam = #comp(281474976710792)
   left join attrval naz on naz.wtable = 1102 and naz.crec = bd.nrec and naz.cattrnam = #comp(000100000000010Dh)
   left join stepdoc sd  on sd.cbasedoc = bd.nrec
@@ -41,6 +49,8 @@ sql query qPlatezh =
                     sum(sps.nds)      as NDS,
                     sps.cstepdoc      as CStepDoc,
                     av.vcomp          as RSFromSpec, // расчетный счет позиции спецификации ДО
+                    max(um.vcomp)     as UserMode,
+                    max(um.vstring)   as UserModeStr,
                     cb.cpodr          as BankSpec,
                     ud.tipusers       as UserDocType, // TIDK для платёжки
                     sum(nal18.SumNal) as Summa18,
@@ -51,16 +61,21 @@ sql query qPlatezh =
                     max(nal10.Stavka) as Stavka10
              from spstep sps
              left join attrval av  on av.wtable = 1104 and av.crec = sps.nrec and av.cattrnam = #comp(0001000000000A86h)
-             left join spcash spc  on spc.cplanssch = #comp(000100000000000Eh) and
-                                      (case when spc.tblos[1] = 10545 then spc.kauos[1]
+             left join attrval um  on um.wtable = 1104 and um.crec = sps.nrec and um.cattrnam = #comp(000100000000079Eh)
+             left join (select spkau.nrec as cRS, max(spc.ccashbank) as ccashbank
+                        from spcash spc
+                        join spkau on (case when spc.tblos[1] = 10545 then spc.kauos[1]
                                             when spc.tblos[2] = 10545 then spc.kauos[2]
                                             when spc.tblos[3] = 10545 then spc.kauos[3]
                                             when spc.tblos[4] = 10545 then spc.kauos[4]
                                             when spc.tblos[5] = 10545 then spc.kauos[5]
-                                            when spc.tblos[6] = 10545 then spc.kauos[6] end) = av.vcomp and
-                                            coalesce(av.vcomp,#comp(0)) <> #comp(0)
+                                            when spc.tblos[6] = 10545 then spc.kauos[6] end) = spkau.nrec
+                        where spc.cplanssch = #comp(000100000000000Eh)
+                        group by spkau.nrec
+                       ) spc on spc.cRS = coalesce(av.vcomp,#comp(0)) and coalesce(av.vcomp,#comp(0)) <> #comp(0)
              left join cashbank cb on cb.nrec = spc.ccashbank
-             left join usersdoc ud on ud.ccashbank = cb.nrec and ud.razdel = cb.razdel and ud.tipgal = 1
+             left join usersdoc ud on ud.tipgal = 1 and ud.razdel = cb.razdel and ud.ccashbank = cb.nrec
+
              left join (select n.cspdoc,
                                n.summa  as SumNal,
                                n.cnalog as CNalog,
@@ -78,7 +93,6 @@ sql query qPlatezh =
              group by sps.cstepdoc, av.vcomp, cb.cpodr, ud.tipusers
             ) spst on spst.cstepdoc = sd.nrec
   where bd.nrec = :basedocNrec
-
 ;
 
 sql query qGetBySpCash =
@@ -100,6 +114,7 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
   var q, q1: IQuery;
   var rs, rs1: IResultSet;
   var VSogl, RSSpec: comp;
+  var TIDK: word;
   q := queryManager.createQuery(qPlatezh);
   q.setParam('basedocNrec', aBaseDocNrec);
   rs := q.getResultSet;
@@ -107,17 +122,27 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
   {
     VSogl := rs.row.val('VizaPEU');
     RSSpec := rs.row.val('RSFromSpec');
-    if RSSpec = 0 and VSogl != VIZA_NE_TREBUETSA
+    TIDK := rs.row.val('UserDocType');
+    if RSSpec = 0 and VSogl != VIZA_S_OBSHIH_SCHETOV
     {
-      LogStrToFile(aLogFileName, '|                                                                                                 |        Платёжное поручение не сформировано,      |');
+      LogStrToFile(aLogFileName, '|                                                                                                 |        Платежное поручение не сформировано,      |');
       LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|       т.к. не заполнен атрибут спецификации      |');
       LogStrToFile(aLogFileName, '|                                                                                                 |                "Р/сч списания ДС"                |');
       LogStrToFile(aLogFileName, '|-------------------------------------------------------------------------------------------------|--------------------------------------------------|');
       continue; //если в спецификации не заполнен атрибут "Р/счет списания ДС", то переходим к след итерации
     }
-    if VSogl = VIZA_NE_TREBUETSA and aCash = 0
+    if TIDK = 0
     {
-      message('Выберите пожалуйста общий р/счёт для ДО с значением Визы ПЭУ "Не требуется"');
+      LogStrToFile(aLogFileName, '|                                                                                                 |        Платежное поручение не сформировано,      |');
+      LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|  т.к. нет р/счета предприятия выбранного банка   |');
+      LogStrToFile(aLogFileName, '|                                                                                                 |                                                  |');
+      LogStrToFile(aLogFileName, '|-------------------------------------------------------------------------------------------------|--------------------------------------------------|');
+      continue; // если р/счёт не привязан к банку, платежку не формируем!
+    }
+    if VSogl = VIZA_S_OBSHIH_SCHETOV and aCash = 0
+    {
+      message(chr(3) + 'Выберите пожалуйста общий р/счёт для формирования платежек по ДО со значением Визы ПЭУ "С общих р/счет"' + chr(13) +
+              'Платежки с данным р/счетом будут сформированы для всех ДО с такой визой');
       if RunInterface('F_CASHBANK::SELUSDOC', 0, 0, 0, comp(0), aCash) = cmDefault
       {
         q1 := queryManager.createQuery(qGetBySpCash);
@@ -133,9 +158,18 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
       }
       else
       {
-        message('Процедура формирования платёжных поручений прервана');
+        message('Процедура формирования платежных поручений прервана');
         exit;
       }
+    }
+
+    if VSogl = VIZA_S_OBSHIH_SCHETOV and aTIDK = 0
+    {
+      LogStrToFile(aLogFileName, '|                                                                                                 |        Платежное поручение не сформировано,      |');
+      LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|  т.к. нет р/счета предприятия выбранного банка   |');
+      LogStrToFile(aLogFileName, '|                                                                                                 |                                                  |');
+      LogStrToFile(aLogFileName, '|-------------------------------------------------------------------------------------------------|--------------------------------------------------|');
+      continue; // если выбранный общий счёт не привязан к банку, платежку не формируем!
     }
 
     ClearBuffer(#plpor);
@@ -146,7 +180,7 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
     plpor.datvip    := rs.row.val('DateDoc');
     plpor.datots    := plpor.datvip;
     plpor.cplat     := CoGetTune('myorg');
-    if VSogl = VIZA_NE_TREBUETSA
+    if VSogl = VIZA_S_OBSHIH_SCHETOV
     {
       plpor.cbankplat := aBankNrec;
       plpor.tidk      := aTIDK;
@@ -168,6 +202,8 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
     plpor.summa4    := rs.row.val('NDS');
     plpor.modedoc   := 2048
     insert current plpor;
+
+    ea.coSetAttrID(WT_PLPOR, plpor.nrec, ATTRNAM_USEMODE_PLPOR, rs.row.val('UserMode'), rs.row.val('UserModeStr'));
 
     LogStrToFile(aLogFileName, '|                                                                                                 |         Платёжное поручение сформировано         |');
     LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|                № ' + Pad(plpor.nodok, 32) + '|');
