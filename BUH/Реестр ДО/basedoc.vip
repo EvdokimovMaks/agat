@@ -4,6 +4,9 @@
 #include myVSchetB.vih
 #include PlporsByBaseDoc.vih
 #include TriggerFunctions.vih
+#include BasedocReeReport.vih
+#include UserReport.vih
+#include XLREPORT.vih
 
 #component "AGAT"
 
@@ -13,7 +16,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     select distinct plpor.datob
     from basefin bf
     join plpor on plpor.nrec = bf.cplpor and plpor.datob <> 0
-    where bf.cbasedoc = :basedocNrec or bf.cpredopldo = :basedocNrec
+    where (bf.cbasedoc = :basedocNrec or bf.cpredopldo = :basedocNrec ) and bf.tidkgal in (1,2)
   ;
 
   sql query qGetVizaPEU =
@@ -39,13 +42,14 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   var
     flagVid, flagBDDS, flagAvans, flagDates, flagSums, flagAttr, flagOpl, flagVsbl1, flagVsbl2: word;
     VvodBeg, VvodEnd, DDocBeg, DDocEnd, DSoglBeg, DSoglEnd: date;
-    mrkOrg, mrkStatus, mrkIspoln, mrkDDS, mrkBDR, mrkBuhSch,  mrkZakaz, mrkDog, mrkCFO, mrkVal, mrkDescr: longint;
-    sOrg, sIspoln, sDDS, sBDR, sBuhSch, sZakaz, sDog, sCFO, sVal, sDescr: string;
+    mrkOrg, mrkStatus, mrkIspoln, mrkDDS, mrkBDR, mrkBuhSch,  mrkZakaz, mrkDog, mrkCFO, mrkVal, mrkDescr, mrkRejim: longint;
+    sOrg, sIspoln, sDDS, sBDR, sBuhSch, sZakaz, sDog, sCFO, sVal, sDescr, sRejim: string;
     SumSchOt, SumSchDo, SumTotOt, SumTotDo, SumValOt, SumValDo, SumOplOt, SumOplDo : double;
     flagVizaKind: word;
     SelectVizaNrec: comp;
 
     _contractIDHelper: ContractIDHelper;
+    _hierReport: BasedocReeReport_Hier;
     _qOpl: IQuery;
     mrkMain: longint;
     cfltrStatus: comp;
@@ -76,7 +80,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   from katnotes, buhschet, tbd, tsection, tmpfltr,
        tbd brbd (i02), basedoc brbasedoc, katorg brorg, katbank brbank, dogovor brdog,
        katnotes brnote, statlog brstatlog(STATLOG02), klval brval, stepdoc brsd, basefin brbf,
-       klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin, plpor, soprhoz, nalogfin
+       klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin
   where ((
     brbd.nrec          == brbasedoc.nrec    and
     brbasedoc.corg     == brorg.nrec        and
@@ -265,6 +269,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     sDog     : Protect, PickButton;
     sCFO     : Protect, PickButton;
     sVal     : Protect, PickButton;
+    sRejim   : Protect, PickButton;
     sNumSch  : noProtect;
   buttons
     cmFilter;
@@ -304,6 +309,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   [.] Договор        ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
   [.] ЦФО            ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
   [.] Валюта         ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Реж.исп.счета  ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
   [.] Номер счета    ` .@@@@@@@@@@@@@@@
 
   Возможен фильтр по неточному соответствию номера счета. При
@@ -700,6 +706,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     FillPickTableFromMarker(DSK_MRKDOG   , mrkDog);
     FillPickTableFromMarker(DSK_MRKCFO   , mrkCFO);
     FillPickTableFromMarker(DSK_MRKVAL   , mrkVal);
+    FillPickTableFromMarker(DSK_MRKREJIM , mrkRejim);
     if bitset(flagBDDS,  0) FillPickTableInstantly(DSK_MRKBDDS, 00010000000001DCh);
     if bitset(flagBDDS,  1) FillPickTableInstantly(DSK_MRKBDDS, 00010000000001DDh);
     if bitset(flagBDDS,  2) FillPickTableInstantly(DSK_MRKBDDS, 0);
@@ -866,9 +873,9 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     mysqlAddStr(s, 'COALESCE('+viza6.dskname+'.atl_lastdate,0),');
     mysqlAddStr(s, '0,0,0,0,0,0,0');
     mysqlAddStr(s, 'FROM basedoc bd');
-    mysqlAddStr(s, 'left join (select cbasedoc, sum(summa * case when tidkgal = 1 then 1 else -1 end) as summa');    //tipdoc=10443 - приходные ордера в кассу "Денежные документы"
+    mysqlAddStr(s, 'left join (select cbasedoc, sum(summa) as summa');    //tipdoc=10443 - приходные ордера в кассу "Денежные документы"
     mysqlAddStr(s, '           from basefin');
-    mysqlAddStr(s, '           where cbasedoc<>#comp(0) and tidkgal in (1,2)');
+    mysqlAddStr(s, '           where tidkgal = 1 and  cbasedoc<>#comp(0)');
     mysqlAddStr(s, '           group by cbasedoc) bf on bf.cbasedoc = bd.nrec');
     mysqlAddStr(s, 'left join attrval av_parent on '+WT_BASEDOC+' = av_parent.wtable and bd.nrec = av_parent.crec and #comp('+00010000000000B9h+') = av_parent.cattrnam ');
     mysqlAddStr(s, 'left join attrval av_naznpl on '+WT_BASEDOC+' = av_naznpl.wtable and bd.nrec = av_naznpl.crec and #comp('+ATTRNAM_NAZNPL+') = av_naznpl.cattrnam ');
@@ -919,6 +926,16 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       mysqlAddStr(s, '           join specmtr sm on #comp(281474976710657) = sm.csaldtune and 1104 = sm.cotable and sps.nrec = sm.cspec and sm.ckau[2] in (select tmppick.crec as crec from tmppick where tmppick.filter='''+DSK_MRKCFO+''')');
       mysqlAddStr(s, '          where bd.nrec = sd.cbasedoc)');
     }
+    //Фильтр по режиму использования счета
+    if bitset(flagAttr, BIT_REJIM) {
+      mysqlAddStr(s, 'AND 0 < (select count(*)');
+      mysqlAddStr(s, '           from stepdoc sd');
+      mysqlAddStr(s, '           join spstep sps on sd.nrec = sps.cstepdoc');
+      mysqlAddStr(s, '           join attrval av on av.wtable=1104 and av.crec=sps.nrec and av.cattrnam=#comp(000100000000079Eh)');
+      mysqlAddStr(s, '                          and av.vcomp in (select tmppick.crec as crec from tmppick where tmppick.filter='''+DSK_MRKREJIM+''')');
+      mysqlAddStr(s, '         where bd.nrec = sd.cbasedoc)');
+    }
+
     //mysqlAddStr(s, 'GROUP BY bd.nrec, av_parent.vcomp, bd.viddoc, bd.descr, bd.ddoc, bd.nodoc, COALESCE(av_naznpl.vstring,bd.name), bd.dform, bd.atl_lastdate, bd.summa, bd.total, bd.sumval, av_bdds.vstring, av_avans.vstring, ');
     //mysqlAddStr(s, '         podr_ispoln.kod, av_dds.vstring, av_bdr.vstring, buhschet.schet, '+viza1.dskname+'.vstring, '+viza1.dskname+'.atl_lastdate, ');
     //mysqlAddStr(s, '         '+viza2.dskname+'.vstring, '+viza2.dskname+'.atl_lastdate,'+viza3.dskname+'.vstring, '+viza3.dskname+'.atl_lastdate, ');
@@ -1181,6 +1198,14 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     sCFO := '';
     clearmarker(mrkCFO);
     updateflag(BIT_CFO, false, flagAttr);
+  }
+  procedure selectRejim; {
+    updateflag(BIT_REJIM, selectkau(mrkRejim, 10695, sRejim)>0, flagAttr);
+  }
+  procedure clearRejim; {
+    sRejim := '';
+    clearmarker(mrkRejim);
+    updateflag(BIT_REJIM, false, flagAttr);
   }
   function getvalfldname: string; {
     var s: string;
@@ -1472,6 +1497,10 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     cmPrintDoc: {
       PrintRee(false);
     }
+    cmPlansNo:
+    {
+      _hierReport.PrintReport(mrkMain);
+    }
     cmDefault: {
       if getfirst brbasedoc = tsOk {
         if brbasedoc.viddoc = 101 {
@@ -1504,6 +1533,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
         #sDog        : { selectDog;    rereadrecord; }
         #sCFO        : { selectCFO;    rereadrecord; }
         #sVal        : { selectVal;    rereadrecord; }
+        #sRejim      : { selectRejim;  rereadrecord; }
         #v1operator  : { if(viza1.operator=0) viza1.operator := 1 else viza1.operator := 0; rereadrecord;}
         #v2operator  : { if(viza2.operator=0) viza2.operator := 1 else viza2.operator := 0; rereadrecord;}
         #v3operator  : { if(viza3.operator=0) viza3.operator := 1 else viza3.operator := 0; rereadrecord;}
@@ -1529,6 +1559,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
         #sBuhSch    : { clearbuhsch; rereadrecord; }
         #sDog       : { clearDog;    rereadrecord; }
         #sCFO       : { clearCFO;    rereadrecord; }
+        #sRejim     : { clearRejim;  rereadrecord; }
         #sVal       : { clearVal;    rereadrecord; }
       end;
     }
@@ -1589,6 +1620,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       sCFO      := getfldname(mrkCFO, 2);
       mrkVal    := initmarker(DSK_MRKVAL   ,8,100,10);
       sVal      := getvalfldname;
+      mrkRejim  := initmarker(DSK_MRKREJIM ,8,100,10);
+      sRejim    := getfldname(mrkRejim, 10695);
       SetVisiblity;
       CreateTmpTables;
       SetFilter;
@@ -1645,6 +1678,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       donemarker(mrkDog    ,DSK_MRKDog);
       donemarker(mrkCFO    ,DSK_MRKCFO);
       donemarker(mrkVal    ,DSK_MRKVAL);
+      donemarker(mrkRejim  ,DSK_MRKREJIM);
       donemarker(mrkmain   ,'');
     }
     cmHotKeys: {
@@ -1870,7 +1904,8 @@ end.
 
 mnuAGAT_Basedoc_Ree Menu
 {
-- 'Печать', cmPrintDoc, 'Печать реестра', , 'Ctrl-P', kbCtrlP, sci1Esc;
+- 'Печать', cmPrintDoc, 'Печать реестра', , 'Ctrl+P', kbCtrlP, sci1Esc;
+- 'Печать с группировкой по счетам', cmPlansNo, 'Печать реестра с группировкой по счетам', , 'Alt+P', kbAltP, sci1Esc;
 - 'Заполнение "Визы ПЭУ"', cmFilling, 'Заполнение "Визы ПЭУ"', , '', kbAltC, sci1Esc;
 - 'Сформировать платежные поручения', cmCreatePlpors, 'Сформировать платежные поручения', , '', kbAltF, sci1Esc;
 - 'Иерархия/список', cmChangeView, 'Иерархия/список', , '', kbAltA, sci1Esc;
