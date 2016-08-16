@@ -72,23 +72,57 @@ table struct tbd (
 //#region Queries
 
 sql query qSpstepData =
-  select
+select coalescen(katbank.nrec, spkRS.nrec, #comp(0)) as RSNrec,
+       coalescen(katbank.name, spkRS.name, '')       as BankName,
+       coalescen(katbank.schet1, spkRS.name, '')     as RSName,
+       coalesce(spkIGK.nrec,#comp(0))                as IGKNrec,
+       coalesce(spkIGK.name,'')                      as IGKName,
+       coalesce(spkRejim.nrec,#comp(0))              as RejimNrec,
+       coalesce(spkRejim.name,'')                    as RejimName,
+       coalesce(ksVib.nrec,#comp(0))                 as ZakazVibNrec,
+       substring(coalesce(ksVib.name,''),1,instr(' ',coalesce(ksVib.name,'')+' ',1)-1) as ZakazVibName,
+       coalesce(ks.nrec,#comp(0))                    as ZakazNrec,
+       substring(coalesce(ks.name,''),1,instr(' ',coalesce(ks.name,'')+' ',1)-1) as ZakazName,
+       coalesce(cfo.nrec,#comp(0))                   as CFONrec,
+       coalesce(cfo.kod,'')                          as CFOKod
   from basedoc bd
   join stepdoc sd on sd.cbasedoc = bd.nrec
   join spstep sps on sps.cstepdoc = sd.nrec
+  left join attrval avVizaPEU on avVizaPEU.wtable = 1102 and avVizaPEU.cRec = bd.nrec and avVizaPEU.cattrnam = #comp(0001000000000088h)
   left join attrval avRS on avRS.wtable = 1104 and avRS.cRec = sps.nrec and avRS.cattrnam = #comp(0001000000000A86h)
-  left join spcash on spcash.cplanssch=#comp(000100000000000Eh)
-                  and case when spcash.tblos[1] = 10545 then spcash.kauos[1]
-                           when spcash.tblos[2] = 10545 then spcash.kauos[2]
-                           when spcash.tblos[3] = 10545 then spcash.kauos[3]
-                           when spcash.tblos[4] = 10545 then spcash.kauos[4]
-                           when spcash.tblos[5] = 10545 then spcash.kauos[5]
-                           when spcash.tblos[6] = 10545 then spcash.kauos[6]
-                           else #comp(0)
-                      end = avRS.vcomp and avRS.vcomp is not null
-  left join cashbank on cashbank.nrec = coalesce(spcash.ccashbank,#comp(0))
-  left join attrval avRS on avRS.wtable = 1104 and avRS.cRec = sps.nrec and avRS.cattrnam = #comp(0001000000000A86h)
-  where bd.nrec = :basedocNrec and coalesce(avRS.vcomp,#comp(0)) = :rsNrec
+  left join attrval avZakVib on avZakVib.wtable = 1104 and avZakVib.cRec = sps.nrec and avZakVib.cattrnam = #comp(0001000000000A87h)
+  left join attrval avRejim on avRejim.wtable = 1104 and avRejim.cRec = sps.nrec and avRejim.cattrnam = #comp(000100000000079Eh)
+  left join specmtr spm on spm.csaldtune = #comp(0001000000000001h) and spm.cotable = 1104 and spm.cspec = sps.nrec
+  left join (select spkRS.nrec as spkRSNrec, max(coalesce(spkIGK.nrec,#comp(0))) as spkIGKNrec, max(cb.cpodr) as katbankNrec
+             from spcash
+             join spkau spkRS on spkRS.nrec = case when spcash.tblos[1] = 10545 then spcash.kauos[1]
+                                                   when spcash.tblos[2] = 10545 then spcash.kauos[2]
+                                                   when spcash.tblos[3] = 10545 then spcash.kauos[3]
+                                                   when spcash.tblos[4] = 10545 then spcash.kauos[4]
+                                                   when spcash.tblos[5] = 10545 then spcash.kauos[5]
+                                                   when spcash.tblos[6] = 10545 then spcash.kauos[6]
+                                                   else #comp(0)
+                                              end
+             join cashbank cb on cb.nrec = spcash.ccashbank
+             left join spkau spkIGK on spkIGK.nrec = case when spcash.tblos[1] = 10527 then spcash.kauos[1]
+                                                          when spcash.tblos[2] = 10527 then spcash.kauos[2]
+                                                          when spcash.tblos[3] = 10527 then spcash.kauos[3]
+                                                          when spcash.tblos[4] = 10527 then spcash.kauos[4]
+                                                          when spcash.tblos[5] = 10527 then spcash.kauos[5]
+                                                          when spcash.tblos[6] = 10527 then spcash.kauos[6]
+                                                          else #comp(0)
+                                                     end
+             where spcash.cplanssch=#comp(000100000000000Eh)
+             group by spkRS.nrec
+            ) tCashbank on tCashbank.spkRSNrec = avRS.vcomp
+  left join spkau spkIGK on spkIGK.nrec = coalesce(tCashbank.spkIGKNrec,#comp(0))
+  left join katbank on katbank.nrec = coalesce(tCashbank.katbankNrec,#comp(0))
+  left join spkau spkRejim on spkRejim.nrec = coalesce(avRejim.vComp,#comp(0))
+  left join spkau spkRS on spkRS.nrec = coalesce(avRS.vComp,#comp(0))
+  left join katstroy ksVib on ksVib.nrec = coalesce(avZakVib.vComp,#comp(0))
+  left join katstroy ks on ks.nrec = coalesce(spm.cobj,#comp(0))
+  left join katpodr cfo on cfo.nrec = coalesce(spm.ckau[2],#comp(0))
+  where bd.nrec = :basedocNrec and ( coalesce(avRS.vcomp,#comp(0)) = :rsNrec or coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h) )
 ;
 
 sql query qSelectOpl =
@@ -148,7 +182,13 @@ select bd.nrec,
        coalesce(avPrimKOM.vString, '') as vizaKOMPrim,
        coalesce(avPrimBUH.vString, '') as vizaBUHPrim
 from (select bd.nrec,
-             case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(00010000000013CCh) then #comp(0) else coalesce(spkRS.nrec,#comp(0)) end as spkRSNrec,
+             case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h)
+                  then #comp(0)
+                  else case when coalesce(spkRS.nrec,#comp(0)) = #comp(0)
+                            then #comp(-1)
+                            else coalesce(spkRS.nrec,#comp(0))
+                       end
+             end as spkRSNrec,
              sum(sps.summa + case when bd.vhodnal=2 then sps.nds else 0 end) as summa,
              sum(case when bd.summa <> 0 then sps.summa / bd.summa * bd.total else 0 end) as total
       from bdreeagat
@@ -159,7 +199,14 @@ from (select bd.nrec,
       left join spkau spkRS on spkRS.nrec = coalesce(avRS.vcomp,#comp(0))
       left join attrval avVizaPEU on avVizaPEU.wtable = 1102 and avVizaPEU.cRec = bd.nrec and avVizaPEU.cattrnam = #comp(0001000000000088h)
       group by bd.nrec,
-               case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(00010000000013CCh) then #comp(0) else coalesce(spkRS.nrec,#comp(0)) end
+               case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h)
+                    then #comp(0)
+                    else case when coalesce(spkRS.nrec,#comp(0)) = #comp(0)
+                              then #comp(-1)
+                              else coalesce(spkRS.nrec,#comp(0))
+                         end
+               end
+               //case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h) then #comp(0) else coalesce(spkRS.nrec,#comp(0)) end
      ) tbd
 
 join basedoc bd on bd.nrec = tbd.nrec
@@ -235,6 +282,7 @@ left join (select cbasedoc, max(basefin.ddoc) as dopl, sum(summa) as summa
 
 var
   _qOpl: IQuery;
+  _qSpstepData: IQuery;
   _contractIDHelper: ContractIDHelper;
   pXL: XLSRepBuilder;
   ea: iextattr;
@@ -273,6 +321,11 @@ where ((
   attrval.atl_lastuser == x$users.atl_nrec
 ));
 
+function isVizaSObshihSchetov(vizaNrec: comp): boolean;
+{
+  result := vizaNrec = VIZA_S_OBSHIH_SCHETOV;
+}
+
 procedure CreateTmpTableForMarker(lMarker: longint; tableName: string);
 {
   sqlCreateTmpTable('table '+tableName+'(crec: comp);', ctmNormal);
@@ -294,13 +347,21 @@ procedure PrepareData(lBasedocMarker: longint);
   delete all trs;
   _loop tbd
   {
-    if getfirst trs where ((tbd.spkRSNrec == trs.spkRSNrec)) != tsOk
+    var currentRSNrec: comp;
+    //if isVizaSObshihSchetov(tbd.vizaPEUNrec)
+    //  currentRSNrec := 0;
+    //else
+    //  currentRSNrec := if(tbd.spkRSNrec = 0, comp(-1), tbd.spkRSNrec);
+    currentRSNrec := tbd.spkRSNrec;
+
+    if getfirst trs where ((currentRSNrec == trs.spkRSNrec)) != tsOk
     {
       clearbuffer(#trs);
-      trs.spkRSNrec := tbd.spkRSNrec;
-      trs.name := if(trs.spkRSNrec = 0,
-                     'Общий счет',
-                     if(getfirst spkau where ((tbd.spkRSNrec == spkau.nrec)) = tsOk, spkau.name, ''));
+      trs.spkRSNrec := currentRSNrec;
+      trs.name := case(trs.spkRSNrec;
+                       comp(-1) : 'Счет не установлен',
+                       comp(0)  : 'Общий счет';
+                       if(getfirst spkau where ((currentRSNrec == spkau.nrec)) = tsOk, spkau.name, 'Счет Nrec='+string(currentRSNrec,0,0)));
       insert current trs;
     }
   }
@@ -343,9 +404,39 @@ function GetBDReeExtAttrInfo(aTitle: string; aCAttrnam: comp): string;
   result := aTitle+': '+GetExtAttrSetInfo(WT_BASEDOC, brbd.nrec, aCAttrnam);
 }
 
+procedure AddSpstepInfo(spstepDataResultSet: IResultSet;
+                        xlsFieldName       : string;
+                        queryFieldNrec     : string;
+                        queryFieldName     : string;
+                        delimiter          : string = ';');
+{
+  var isFirst: boolean = true;
+  var l: longint;
+  l := initmarker('', 8, 10, 10, false);
+  if spstepDataResultSet.getFirst = tsOk do
+  {
+    var c: comp;
+    c := spstepDataResultSet.row.val(queryFieldNrec);
+    if not foundmarker(l, c) and c != 0
+    {
+      insertmarker(l, c);
+
+      if isFirst
+        isFirst := false;
+      else
+        pXL.AddTblStringFldValue(xlsFieldName, delimiter+' ');
+
+      pXL.AddTblStringFldValue(xlsFieldName, spstepDataResultSet.row.val(queryFieldName));
+    }
+  } while spstepDataResultSet.getNext = tsOk;
+  donemarker(l, '');
+}
+
 function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams = nullref): boolean;
 {
   _qOpl := queryManager.createQuery(qSelectOpl);
+
+  _qSpstepData := queryManager.createQuery(qSpstepData);
 
   PrepareData(lBasedocMarker);
 
@@ -392,6 +483,11 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
   pXL.CreateTblFld('bank'  );
   pXL.CreateTblFld('bankrs');
   pXL.CreateTblFld('init'  );
+  pXL.CreateTblFld('ContractIdVib');
+  pXL.CreateTblFld('BankRSVib');
+  pXL.CreateTblFld('BankVib');
+  pXL.CreateTblFld('ZakazVib');
+  pXL.CreateTblFld('Rejim');
   pXL.CreateTblFld('cfo'   );
   pXL.CreateTblFld('zakaz' );
   pXL.CreateTblFld('contractId');
@@ -478,12 +574,26 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
       pXL.SetTblStringFldValue('org'      , brorg.name                       );
       pXL.SetTblStringFldValue('bank'     , brbank.name                      );
       pXL.SetTblStringFldValue('bankrs'   , brbank.schet1                    );
-      pXL.SetTblStringFldValue('zakaz'    , brbd.zakaz                       );
 
+      var rsSpstepData: IResultSet;
+      _qSpstepData.setParam('basedocNrec' , brbd.nrec);
+      _qSpstepData.setParam('rsNrec'      , brrs.spkRSNrec);
+      rsSpstepData := _qSpstepData.getResultSet;
+
+      AddSpstepInfo(rsSpstepData, 'ContractIdVib'   , 'IGKNrec'     , 'IGKName');
+      AddSpstepInfo(rsSpstepData, 'BankRSVib'       , 'RSNrec'      , 'RSName');
+      AddSpstepInfo(rsSpstepData, 'BankVib'         , 'RSNrec'      , 'BankName');
+      AddSpstepInfo(rsSpstepData, 'ZakazVib'        , 'ZakazVibNrec', 'ZakazVibName');
+      AddSpstepInfo(rsSpstepData, 'Rejim'           , 'RejimNrec'   , 'RejimName');
+      /*
+      pXL.SetTblStringFldValue('zakaz'    , brbd.zakaz                       );
+      pXL.SetTblStringFldValue('cfo'      , brbd.cfo                         );
+      */
+      AddSpstepInfo(rsSpstepData, 'zakaz'        , 'ZakazNrec', 'ZakazName');
+      AddSpstepInfo(rsSpstepData, 'cfo'          , 'CFONrec'  , 'CFOKod');
       if (getfirst brsd = tsOk)
         pXL.SetTblStringFldValue('contractId', _contractIDHelper.GetContractId(GetContractIDKey_ByStepdoc, brsd.nrec));
 
-      pXL.SetTblStringFldValue('cfo'      , brbd.cfo                         );
       if getfirst brdog     = tsOk {
         pXL.SetTblStringFldValue('dognum' , brdog.nodoc                    );
         pXL.SetTblStringFldValue('dogdate', datetostr(brdog.ddoc,'DD.MM.YYYY'));
