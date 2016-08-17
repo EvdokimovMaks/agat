@@ -2,12 +2,17 @@
 
 #component "AGAT"
 
-interface ThreeMillionReport 'Формирование отчёта';
-show at (,,40,6);
+interface ThreeMillionReport;
+
 var
   pXL: XLSRepBuilder;
-  sXLSFileName, sXLTFileName: string;
-  dBeg, dEnd: date;
+  sXLSFileName: string = '';
+  sXLTFileName: string = '';
+  dBeg, dEnd  : date;
+  igkMarker   : longint;
+  isCreateXLT : boolean = false;
+
+//#region Queries
 
 sql query qGetPlporsIGK =
 select pl.nodok    as PlporNumber,
@@ -19,7 +24,7 @@ select pl.nodok    as PlporNumber,
 from spcash spc
 join cashbank cb on cb.nrec = spc.ccashbank
 join usersdoc ud on ud.tipgal = 1 and ud.razdel = cb.razdel and ud.ccashbank = cb.nrec
-join plpor pl on pl.tidk = ud.tipusers and pl.datvip between #date(1,1,2016) and #date(31,12,2016)
+join plpor pl on pl.tidk = ud.tipusers and pl.datvip between :dbeg and :dend
 join attrval av on av.wtable = 9015 and av.crec = pl.nrec and av.cattrnam = #comp(000100000000077Ah) and av.vcomp = #comp(000100000000139Eh)
 join spkau spkRS on spkRS.nrec = (case when spc.tblos[1] = 10545 then spc.kauos[1]
                                        when spc.tblos[2] = 10545 then spc.kauos[2]
@@ -78,6 +83,8 @@ left join spkau spkIGK on spkIGK.nrec = (case when spc.tblos[1] = 10527 then spc
 where bd.viddoc in (101,111) and coalesce(bf.cnt,0) = 0
 ;
 
+//#endregion
+
 table struct tRS (
   IGKName : string,
   IGKNrec : comp
@@ -111,12 +118,42 @@ create view
 as select *
 from tRS, tPlporsIGK, tBDWithoutPlpors;
 
+parameters dBeg, dEnd, igkMarker, sXLTFileName, isCreateXLT
+
 procedure MakeRSTable; //content tRS by 2 tables (tPlporsIGK and tBDWithoutPlpors)
 {
   var q: IQuery;
   var rs: IResultSet;
+
+  var isFilteredByIGK: boolean = false;
+
+  if igkMarker != 0
+    if getmarkercount(igkMarker) > 0
+      isFilteredByIGK := true;
+
+  if isFilteredByIGK
+  {
+    //создаем временную таблицу для маркера по ИГК
+    sqlCreateTmpTable('table tigkfilter (crec: comp);', ctmNormal);
+    //заполняем ее значениями из маркера
+    sqlTruncateTmpTable('tigkfilter');
+    q := querymanager.createquery('insert tigkfilter (crec) values (:crec)');
+
+    var i: longint = 0;
+    var c: comp = 0;
+    for (i := 0; getmarker(igkMarker, i, c); i++)
+      q.setparam('crec', c).execute;
+  }
+
   //выполняем 1ый запрос и rs в таблицу
-  q := querymanager.createquery(qGetPlporsIGK);
+
+  var s1: longint = 0;
+  sqladdstr(s1, qGetPlporsIGK);
+  if isFilteredByIGK
+    sqladdstr(s1,'where spkigk.nrec in (select crec from tigkfilter)')
+
+  q := querymanager.createquery(s1);
+
   q.setParam('dBeg', dBeg);
   q.setParam('dEnd', dEnd);
   rs := q.getresultset;
@@ -131,8 +168,16 @@ procedure MakeRSTable; //content tRS by 2 tables (tPlporsIGK and tBDWithoutPlpor
     tPlporsIGK.IGKNrec     := rs.row.val('IGKNrec');
     insert current tPlporsIGK;
   } while (rs.getnext = tsOk);
+
   //потом второй запрос
-  q := querymanager.createquery(qGetBDWithoutPlpors);
+
+  var s2: longint = 0;
+  sqlAddStr(s2, qGetBDWithoutPlpors);
+  if isFilteredByIGK
+    sqlAddStr(s2, 'and coalesce(spkigk.nrec,#comp(0)) in (select crec from tigkfilter)');
+
+  q := querymanager.createquery(s2);
+
   rs := q.getresultset;
   if (rs.getfirst = tsOk) do
   {
@@ -167,6 +212,9 @@ procedure MakeRSTable; //content tRS by 2 tables (tPlporsIGK and tBDWithoutPlpor
       insert current tRS;
     }
   }
+
+  if isFilteredByIGK
+    sqlDropTmpTable('tigkfilter');
 }
 
 procedure PrintRazdel(aStr: string); //kind of documents
@@ -177,7 +225,7 @@ procedure PrintRazdel(aStr: string); //kind of documents
   pXL.InsTblRow;
 }
 
-procedure PrintReport(isCreateXLT: boolean);
+procedure PrintReport;
 {
   if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
                   else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
@@ -192,22 +240,22 @@ procedure PrintReport(isCreateXLT: boolean);
 
   if (not isCreateXLT)
   {
-    var PreSumPl, PreSumBD, TotalSum: double;
+    var PreSumPl, PreSumBD, TotalSum: double = 0;
+    TotalSum := 0;
     StartNewVisual(vtRotateVisual, vfThread + vfBreak + vfTimer, 'Формирование отчёта', 0);
     _loop tRS
     {
       PreSumPl := 0;
       PreSumBD := 0;
-      TotalSum := 0;
       pXL.ClearTblBuffer;
-      pXL.SetTblStringFldValue('IGKName', tRS.IGKName);
+      pXL.SetTblStringFldValue('IGKName', ''''+tRS.IGKName);
       pXL.SetTblNumberFldValue('Status',  1);
       pXL.InsTblRow;
       PrintRazdel('Платежки в период с ' + dBeg + ' по ' + dEnd);
       _loop tPlporsIGK where ((tRS.IGKNrec == tPlporsIGK.IGKNrec))
       {
         pXL.ClearTblBuffer;
-        pXL.SetTblStringFldValue('IGKName',   tPlporsIGK.IGKName);
+        pXL.SetTblStringFldValue('IGKName',   ''''+tPlporsIGK.IGKName);
         pXL.SetTblStringFldValue('DocNumber', tPlporsIGK.PlporNumber);
         pXL.SetTblDateFldValue  ('DocDate',   tPlporsIGK.PlporDate);
         pXL.SetTblStringFldValue('Naznach',   tPlporsIGK.Naznach);
@@ -225,7 +273,7 @@ procedure PrintReport(isCreateXLT: boolean);
       _loop tBDWithoutPlpors where ((tRS.IGKNrec == tBDWithoutPlpors.IGKNrec and (tBDWithoutPlpors.DocDate <= dEnd)))
       {
         pXL.ClearTblBuffer;
-        pXL.SetTblStringFldValue('IGKName',   tBDWithoutPlpors.IGKName);
+        pXL.SetTblStringFldValue('IGKName',   ''''+tBDWithoutPlpors.IGKName);
         pXL.SetTblStringFldValue('DocNumber', tBDWithoutPlpors.DocNumber);
         pXL.SetTblDateFldValue  ('DocDate',   tBDWithoutPlpors.DocDate);
         pXL.SetTblStringFldValue('Naznach',   tBDWithoutPlpors.Naznach);
@@ -243,7 +291,7 @@ procedure PrintReport(isCreateXLT: boolean);
       _loop tBDWithoutPlpors where ((tRS.IGKNrec == tBDWithoutPlpors.IGKNrec and (tBDWithoutPlpors.DocDate > dEnd))) //ознакомительный раздел
       {
         pXL.ClearTblBuffer;
-        pXL.SetTblStringFldValue('IGKName',   tBDWithoutPlpors.IGKName);
+        pXL.SetTblStringFldValue('IGKName',   ''''+tBDWithoutPlpors.IGKName);
         pXL.SetTblStringFldValue('DocNumber', tBDWithoutPlpors.DocNumber);
         pXL.SetTblDateFldValue  ('DocDate',   tBDWithoutPlpors.DocDate);
         pXL.SetTblStringFldValue('Naznach',   tBDWithoutPlpors.Naznach);
@@ -275,42 +323,124 @@ procedure PrintReport(isCreateXLT: boolean);
   pXL.DisConnectExcel;
 }
 
+handleevent
+cminit:
+{
+  if dEnd = 0
+    dEnd := cur_date;
+
+  if dBeg = 0
+    dBeg := sub_day(dEnd,30);
+
+  if sXLTFileName = ''
+    sXLTFileName := TranslatePath('%StartPath%xls\ReportForThreeMln.xltm'); //rename to .xltm when content report
+
+  MakeRSTable;
+  PrintReport; //first of all use true for create XLT, then false - to make report
+
+}
+end;
+end.
+
+interface ReportForThreeMlnUI 'Отчёт по ДО с режимом использования до 3 млн (ФЗ-275)', escclose, doaccept;
+show (,,40,7);
+
+var
+  dBeg, dEnd: date;
+  sXLTFileName: string;
+  igkMarker: longint;
+  _getkau: getkau;
+
+function GetIGKMarkerView: string;
+{
+  var cnt: longint;
+  cnt := getmarkercount(igkMarker);
+  case cnt of
+    0: result := 'Все ИГК';
+    1: {
+      var c: comp = 0;
+      if getmarker(igkMarker, 0, c)
+        result := if(getanykau(1, 10527, c), givenanname(1), '');
+      else
+        result := 'Выбрано элементов: ' + cnt;
+    }
+    else
+      result := 'Выбрано элементов: ' + cnt;
+  end;
+}
+
+create view
+(IGKMarkerField)
+as select GetIGKMarkerView
+;
+
 screen scMain;
 fields
   dBeg: noprotect;
   dEnd: noprotect;
+  IGKMarkerField: protect, pickbutton;
 buttons
   cmMakeMagic, default;
 <<
 
-        Дата с .@@@@@@@@@@
-            по .@@@@@@@@@@
+ Период `с`.@@@@@@@@@@ `по`.@@@@@@@@@@
 
-    <.     Сформировать     .>
+`ИГК`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+            <.     Сформировать     .>
 >>
 end;
 
+
 handleevent
-cminit:
+cmPick:
 {
-  if not readmydsk(dEnd, 'dEnd_Rep3Mln', false) dEnd := cur_date;
-  if not readmydsk(dBeg, 'dBeg_Rep3Mln', false) dBeg := sub_day(dEnd,30);
-  sXLTFileName := TranslatePath('%StartPath%xls\ReportForThreeMln.xltm'); //rename to .xltm when content report
+  case curfield of
+    #IGKMarkerField:
+    {
+      if _getkau.GetCodeKau(2, 10527, 0) > 0
+      {
+        var l: longint;
+        l := initmarker(_getkau.GetMarkerName(10527), 8, 10, 10, false);
+        CopyMarker(igkMarker, l);
+        donemarker(l,'');
+        rereadrecord;
+      }
+    }
+  end;
+}
+cmDelonprotect:
+{
+  case curfield of
+    #IGKMarkerField:
+    {
+      clearmarker(igkMarker);
+      rereadrecord;
+    }
+  end;
 }
 cmMakeMagic:
 {
   if dBeg = 0 or dEnd = 0
   {
-    message('Заполните пожалуйста даты отчёта', error);
+    message('Не заполнен период формирования отчета', error);
     exit;
   }
-  MakeRSTable;
-  PrintReport(false); //first of all use true for create XLT, then false - to make report
+  runinterface(AGAT::ThreeMillionReport, dBeg, dEnd, igkMarker, sXLTFileName, false);
+}
+cminit:
+{
+  if not readmydsk(dEnd, 'dEnd_Rep3Mln', false) dEnd := cur_date;
+  if not readmydsk(dBeg, 'dBeg_Rep3Mln', false) dBeg := sub_day(dEnd,30);
+  igkMarker := initmarker('igkMarker_Rep3Mln', 8, 10, 10, false);
+  sXLTFileName := TranslatePath('%StartPath%xls\ReportForThreeMln.xltm'); //rename to .xltm when content report
+  rereadrecord;
 }
 cmDone:
 {
   savemydsk(dBeg, 'dBeg_Rep3Mln');
   savemydsk(dEnd, 'dEnd_Rep3Mln');
+  donemarker(igkMarker, 'igkMarker_Rep3Mln');
 }
 end;
 end.
@@ -320,7 +450,7 @@ Interface UserReport_ThreeMillionReport;
   create view dummy;
   procedure Run;
   begin
-    runinterfacenomodal(AGAT::ThreeMillionReport);
+    runinterfacenomodal(AGAT::ReportForThreeMlnUI);
   end;
 
   function GetReportName: String;
