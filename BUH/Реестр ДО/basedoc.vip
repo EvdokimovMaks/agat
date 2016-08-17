@@ -1,0 +1,1933 @@
+#include ContractId.vih
+#include Query.vih
+#include extattr.vih
+#include myVSchetB.vih
+#include PlporsByBaseDoc.vih
+#include TriggerFunctions.vih
+#include BasedocReeReport.vih
+#include UserReport.vih
+#include XLREPORT.vih
+
+#component "AGAT"
+
+interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
+
+  sql query qSelectOpl =
+    select distinct plpor.datob
+    from basefin bf
+    join plpor on plpor.nrec = bf.cplpor and plpor.datob <> 0
+    where (bf.cbasedoc = :basedocNrec or bf.cpredopldo = :basedocNrec ) and bf.tidkgal in (1,2)
+  ;
+
+  sql query qGetVizaPEU =
+    select bd.nodoc   as DocNumber,
+           av.nrec    as AVNrec,
+           av.vcomp   as VizaNrec
+    from basedoc bd
+    left join attrval av on av.crec = bd.nrec and av.cattrnam = #comp(281474976710792)
+    where bd.nrec = :basedocNrec
+  ;
+
+  sql query qSpec =
+  select rs.nrec as RSSpis,
+         um.nrec as UseMode
+  from basedoc bd
+  left join stepdoc sd on sd.cbasedoc = bd.nrec
+  left join spstep sps on sps.cstepdoc = sd.nrec
+  left join attrval rs on rs.cattrnam = #comp(0001000000000A86h) and rs.crec = sps.nrec // RS spisania DS
+  left join attrval um on um.cattrnam = #comp(000100000000079Eh) and um.crec = sps.nrec // use mode
+  where bd.nrec = :basedocNrec
+  ;
+
+  var
+    flagVid, flagBDDS, flagAvans, flagDates, flagSums, flagAttr, flagOpl, flagVsbl1, flagVsbl2: word;
+    VvodBeg, VvodEnd, DDocBeg, DDocEnd, DSoglBeg, DSoglEnd: date;
+    mrkOrg, mrkStatus, mrkIspoln, mrkDDS, mrkBDR, mrkBuhSch,  mrkZakaz, mrkDog, mrkCFO, mrkVal, mrkDescr, mrkRejim: longint;
+    sOrg, sIspoln, sDDS, sBDR, sBuhSch, sZakaz, sDog, sCFO, sVal, sDescr, sRejim: string;
+    SumSchOt, SumSchDo, SumTotOt, SumTotDo, SumValOt, SumValDo, SumOplOt, SumOplDo : double;
+    flagVizaKind: word;
+    SelectVizaNrec: comp;
+
+    _contractIDHelper: ContractIDHelper;
+    _hierReport: BasedocReeReport_Hier;
+    _qOpl: IQuery;
+    mrkMain: longint;
+    cfltrStatus: comp;
+    sfltrStatus: string;
+    igetkau: getkau;
+    pXL: XLSRepBuilder;
+    ea: iextattr;
+    sXLSFileName, sXLTFileName: string;
+    ShowIER: boolean;
+    viza1: agat_viza new;
+    viza2: agat_viza new;
+    viza3: agat_viza new;
+    viza4: agat_viza new;
+    viza5: agat_viza new;
+    viza6: agat_viza new;
+    DOPrePay: L_BASEDOC::myVSchetPB new;
+    DOBuy: L_BASEDOC::myVSchetB new;
+    BindedIFC: objref;
+    pl: iPlatezh;
+    LogFileName: string;
+    tf: TriggerFunctions;
+
+  create view
+  var
+    sNumSch: string;
+    cMainBD: comp;
+  as select *
+  from katnotes, buhschet, tbd, tsection, tmpfltr,
+       tbd brbd (i02), basedoc brbasedoc, katorg brorg, katbank brbank, dogovor brdog,
+       katnotes brnote, statlog brstatlog(STATLOG02), klval brval, stepdoc brsd, basefin brbf,
+       klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin
+  where ((
+    brbd.nrec          == brbasedoc.nrec    and
+    brbasedoc.corg     == brorg.nrec        and
+    brbasedoc.cbank    == brbank.nrec       and
+    brbasedoc.cdogovor == brdog.nrec        and
+    brbasedoc.cnote    == brnote.nrec       and
+    40                 == brstatlog.doctype and
+    brbasedoc.nrec     == brstatlog.cdoc    and
+    brbasedoc.cval     == brval.nrec        and
+    brbd.nrec          == brsd.cbasedoc     and
+    brbd.nrec          == brbf.cbasedoc
+  ))
+  bounds    byParent = cMainBD      == brbd.cPrnt
+  condition bySogl   = brbd.daysogl >= viza1.days
+  condition byBuh    = brbd.daybuh  >= viza2.days
+  condition byKaz    = brbd.daykaz  >= viza3.days
+  condition byDir    = brbd.daydir  >= viza4.days
+  condition byPEU    = brbd.daypeu  >= viza5.days
+  condition BySumOpl = brbd.sumopl  >= SumOplOt and brbd.sumopl <= SumOplDo
+
+//  condition byRez  = brbd.dayrez  >= viza6.days
+  ;
+
+  create view vExtAttrInfo
+  var
+    _wtable: word;
+    _crec: comp;
+    _cattrnam: comp;
+  as select *
+  from attrval, x$users
+  where ((
+    _wtable   == attrval.wtable   and
+    _crec     == attrval.crec     and
+    _cattrnam == attrval.cattrnam and
+    attrval.atl_lastuser == x$users.atl_nrec
+  ));
+
+  window wSelectVal 'Выбор валют' EscClose, Doaccept;
+    show at (,,40,10);
+    browse brSelVal (,,sci1EnIns);
+      table selval;
+      fields
+        {font={color=if(foundmarker(mrkval, selval.nrec),5,0)}};
+        if(foundmarker(mrkval, selval.nrec),'V',''): [1], skip, noautosize;
+        selval.dollar 'Наименование': [20], protect;
+        selval.iso    'Код'         : [5], protect;
+    end;
+    handleevent
+      cmDefault: {
+        if getmarkercount(mrkVal) = 0 {
+          insertmarker(mrkval,selval.nrec);
+        }
+        closewindow(wSelectVal);
+      }
+      cmDoMarkUnMark : {
+        if foundmarker(mrkval,selval.nrec) {
+          deletemarker(mrkval,selval.nrec);
+        } else {
+          insertmarker(mrkval,selval.nrec);
+        }
+        RedrawCurrentAndGo(brSelVal,true);
+      }
+
+      cmSelAll : {
+        clearmarker(mrkval);
+        pushpos(#selval);
+        _loop selval {
+          insertmarker(mrkval,selval.nrec);
+        }
+        poppos(#selval);
+        rereadrecord(#selval);
+      }
+
+      cmUnSelAll :{
+        clearmarker(mrkval);
+        rereadrecord(#selval);
+      }
+    end;
+  end; //window
+
+  window wSelectDescr 'Выбор дескрипторов' EscClose, Doaccept;
+    show at (,,40,10);
+    browse brSelDescr (,,sci1EnIns);
+      table tmInfoDescr;
+      fields
+        {font={color=if(foundmarker(mrkdescr, tmInfoDescr.cUser),5,0)}};
+        if(foundmarker(mrkdescr, tmInfoDescr.cUser),'V',''): [4], skip, noautosize;
+        tmInfoDescr.Descr 'Дескриптор  ': [10], protect;
+        tmInfoDescr.FIO   'ФИО'         : [30], protect;
+    end;
+    handleevent
+      cmDefault: {
+        if getmarkercount(mrkDescr) = 0 {
+          insertmarker(mrkDescr,tmInfoDescr.cUser);
+        }
+        closewindow(wSelectVal);
+      }
+      cmDoMarkUnMark : {
+        if foundmarker(mrkDescr,tmInfoDescr.cUser) {
+          deletemarker(mrkDescr,tmInfoDescr.cUser);
+        } else {
+          insertmarker(mrkDescr,tmInfoDescr.cUser);
+        }
+        RedrawCurrentAndGo(brSelDescr,true);
+      }
+
+      cmSelAll : {
+        clearmarker(mrkDescr);
+        pushpos(#tmInfoDescr);
+        _loop tmInfoDescr {
+          insertmarker(mrkDescr,tmInfoDescr.cUser);
+        }
+        poppos(#tmInfoDescr);
+        rereadrecord(#tmInfoDescr);
+      }
+
+      cmUnSelAll :{
+        clearmarker(mrkDescr);
+        rereadrecord(#tmInfoDescr);
+      }
+    end;
+  end; //window
+
+  window wSelectViza 'Выбор значения поля "Виза ПЭУ"' EscClose, Doaccept;
+    show at (,,42,6);
+    screen scSelectViza;
+    fields
+      flagVizaKind: noProtect;
+<<
+
+    Выберите значение "Визы ПЭУ" и нажмите Enter
+    (.) На рабочую группу                           `
+    (.) С общих р/с                                 `
+    (.) Не требуется                                `
+
+>>
+    end; //screen
+    handleevent
+    cmDefault:
+    {
+      case flagVizaKind of
+        0: SelectVizaNrec := VIZA_NA_RAB_GROUP;
+        1: SelectVizaNrec := VIZA_S_OBSHIH_SCHETOV;
+        2: SelectVizaNrec := VIZA_NE_TREBUETSA;
+      end;
+    }
+    end; //handleevent
+  end; //wSelectViza
+
+  TabbedSheet Top tsMain;
+  show (,,55,);
+  screen scmainfilters 'Основные фильтры' show (,,,) fixed_x;
+  fields
+    flagVid  : noProtect;
+    flagOpl  : noProtect;
+    flagBDDS : noProtect;
+    flagAvans: noProtect;
+
+    flagDates: noProtect;
+    DDocBeg  : noprotect;
+    DDocEnd  : noprotect;
+    VvodBeg  : noprotect;
+    VvodEnd  : noProtect;
+    DSoglBeg : noprotect;
+    DSoglEnd : noprotect;
+
+    flagSums : noProtect;
+    SumSchOt : noProtect;
+    SumSchDo : noProtect;
+    SumTotOt : noProtect;
+    SumTotDo : noProtect;
+    SumValOt : noProtect;
+    SumValDo : noProtect;
+    SumOplOt : noProtect;
+    SumOplDo : noProtect;
+
+    flagAttr : noProtect;
+    sDescr   : Protect, PickButton;
+    sOrg     : Protect, PickButton;
+    sfltrStatus: Protect, PickButton;
+    sIspoln  : Protect, PickButton;
+    sDDS     : Protect, PickButton;
+    sBDR     : Protect, PickButton;
+    sBuhSch  : Protect, PickButton;
+    sZakaz   : Protect, PickButton;
+    sDog     : Protect, PickButton;
+    sCFO     : Protect, PickButton;
+    sVal     : Protect, PickButton;
+    sRejim   : Protect, PickButton;
+    sNumSch  : noProtect;
+  buttons
+    cmFilter;
+<<
+  <.              Установить фильтр              .>
+
+  Вид ДО                Оплачено
+  [.] Закупка   `       [.] Полностью`
+  [.] Предоплата`       [.] Частично`
+                        [.] Не оплачено`
+
+  Бюджет                Аванс
+  [.] По БДДС    `      [.] Аванс  `
+  [.] Вне бюджета`      [.] Окончательный расчет`
+  [.] Не указан  `      [.] Не указан`
+
+  Даты
+  [.] Дата счета`     `с`.@@@@@@@@@@`по`.@@@@@@@@@@
+  [.] Дата создания`  `с`.@@@@@@@@@@`по`.@@@@@@@@@@
+  [.] Дата на согл.`  `с`.@@@@@@@@@@`по`.@@@@@@@@@@
+
+  Суммы
+  [.] Сумма счета   ` `от` .@@@@@@@@@`до`.@@@@@@@@@
+  [.] Сумма к оплате` `от` .@@@@@@@@@`до`.@@@@@@@@@
+  [.] Сумма в валюте` `от` .@@@@@@@@@`до`.@@@@@@@@@
+  [.] Сумма оплачено` `от` .@@@@@@@@@`до`.@@@@@@@@@
+
+  Атрибуты
+  [.] Дескриптор     ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Контрагент     ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Статус         ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Инициатор      ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Статья ДДС     ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Статья БДР     ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Бух. счет      ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Заказ          ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Договор        ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] ЦФО            ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Валюта         ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Реж.исп.счета  ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Номер счета    ` .@@@@@@@@@@@@@@@
+
+  Возможен фильтр по неточному соответствию номера счета. При
+  установленном значении "43%" будут отобраны все счета, но-
+  мер которых начинается с "43"; при значении "%43%" будут
+  отобраны счета, в номере которых встречается "43".
+>>
+  end; //screen scmainfilters
+  screen scVizaFilters 'Фильтры по визам' show (,,,) fixed_x;
+  fields
+    [v1operator] if(viza1.operator=0,'И','ИЛИ'): protect, pickbutton;
+    viza1.caption  : Skip;
+    viza1.flag     : noProtect;
+    viza1.flagdays : noProtect;
+    viza1.days     : noProtect;
+
+    [v2operator] if(viza2.operator=0,'И','ИЛИ'): protect, pickbutton;
+    viza2.caption  : Skip;
+    viza2.flag     : noProtect;
+    viza2.flagdays : noProtect;
+    viza2.days     : noProtect;
+    [v2sfld] viza2.sfld     : Protect, PickButton;
+
+    [v3operator] if(viza3.operator=0,'И','ИЛИ'): protect, pickbutton;
+    viza3.caption  : Skip;
+    viza3.flag     : noProtect;
+    viza3.flagdays : noProtect;
+    viza3.days     : noProtect;
+    [v3sfld] viza3.sfld     : Protect, PickButton;
+
+    [v4operator] if(viza4.operator=0,'И','ИЛИ'): protect, pickbutton;
+    viza4.caption  : Skip;
+    viza4.flag     : noProtect;
+    viza4.flagdays : noProtect;
+    viza4.days     : noProtect;
+    [v4sfld] viza4.sfld     : Protect, PickButton;
+
+    [v5operator] if(viza5.operator=0,'И','ИЛИ'): protect, pickbutton;
+    viza5.caption  : Skip;
+    viza5.flag     : noProtect;
+    viza5.flagdays : noProtect;
+    viza5.days     : noProtect;
+    [v5sfld] viza5.sfld     : Protect, PickButton;
+
+    [v6operator] if(viza6.operator=0,'И','ИЛИ'): protect, pickbutton, skip;
+    viza6.caption  : Skip;
+    viza6.flag     : noProtect, skip;
+    viza6.flagdays : noProtect, skip;
+    viza6.days     : noProtect, skip;
+    [v6sfld] viza6.sfld     : Protect, PickButton, skip;
+  buttons
+    cmFilter;
+    cmClearFilters;
+    cmSetNotSoglFilter;
+    cmSetWorkgroupFilter;
+<<
+  <.              Установить фильтр              .>
+
+  <. Снять все фильтры по визам                  .>
+
+  <. Фильтр "Не согласованные кем-либо"          .>
+
+  <. Фильтр "На рабочую группу"                  .>
+
+  .@@@@@@@ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Не переданные `  [.] Более`.@@@@ (раб. дней)
+  [.] Переданные    `
+
+  .@@@@@@@ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Не установлена ` [.] Более`.@@@@ (раб. дней)
+  [.] Установлена    `.@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+  .@@@@@@@ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Не установлена ` [.] Более`.@@@@ (раб. дней)
+  [.] Установлена    `.@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+  .@@@@@@@ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Не установлена ` [.] Более`.@@@@ (раб. дней)
+  [.] Установлена   ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+  .@@@@@@@ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Не установлена ` [.] Более`.@@@@ (раб. дней)
+  [.] Установлена    `.@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+  .@@@@@@@ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  [.] Не установлена ` [.] Более`.@@@@ (раб. дней)
+  [.] Установлена    `.@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+  end; //screen scVizaFilters;
+  screen scColumns     'Видимость колонок' show (,,,) fixed_x;
+    fields
+      flagVsbl1: noprotect;
+      flagVsbl2: noprotect;
+    buttons
+      cmSetVisiblity;
+<<
+  <. Установить видимость .>
+
+  [.] Дескриптор`          [.] Дата ввода`
+  [.] Тип ДО`              [.] Оплата`
+  [.] Статус`              [.] Номер договора`
+  [.] Контрагент`          [.] Дата договора`
+  [.] Назначение`          [.] БДДС/вне бюдж.`
+  [.] Аванс/оконч`         [.] БДР`
+  [.] Процент`             [.] ДДС`
+  [.] Номер заказа`        [.] ЦФО`
+  [.] Сумма счета`         [.] Инициатор`
+  [.] Сумма к оплате`      [.] Счет`
+  [.] Сумма в валюте`      [.] Дата согл.`
+  [.] Сумма оплачено`      [.] На согл (+)`
+  [.] Сумма осталось опл.` [.] Виза бухгалтерии`
+  [.] Валюта`              [.] Виза казначейства`
+  [.] Номер счета`         [.] Виза ПЭУ`
+  [.] Дата счета`          [.] Виза комм. дир.`
+>>
+  end;
+  end; // tabbedsheet
+
+  function bitset(_flag: word; _bit: byte): boolean; {
+    var _i, _j: integer;
+    _i := 1;
+    for (_j := 1; _j <= _bit; _j := _j + 1) {
+      _i := _i * 2;
+    }
+    result := (_flag and _i) > 0;
+  }
+
+  function SetIerBounds: boolean; {
+    result := true;
+    if ShowIER {
+      if bitset(flagVid, 0) {
+        if(not boundactive(tbByParent)) addbounds(tbByParent);
+      } else {
+        message('Переключиться на иерархический вид возможно при установленном флаге "Вид ДО: Закупка"');
+        result := false;
+      }
+    } else {
+      if (boundactive(tbByParent)) subbounds(tbByParent);
+    }
+  }
+
+  procedure mysqlAddStr(var _s: longint; _str: string); {
+    //logstrtofile('c:\gal\queries.txt',_str);
+    sqlAddStr(_s, _str);
+  }
+
+  function vizafld(_value: string; _days: integer): string; {
+    if (_value = '') result := if(_days>0,_days + ' дней','')
+    else result := _value
+  }
+
+  function getrowcolor: integer; {
+    if foundmarker(mrkmain, brbd.nrec) {
+      result := 5;
+    } else {
+      result := if (brbd.daybuh>3 or brbd.daydir>3 or brbd.daykaz>3,2,0);
+    }
+  }
+
+  function isStatusVklVReestr(_statusNrec: comp): boolean;
+  {
+    result := _statusNrec = STATUS_VKL_V_REESTR or _statusNrec = STATUS_OPLACHEN;
+  }
+
+  tree 3 brMain (,,sci1EnIns);
+  show (56,,,10);
+  table brbd;
+  fields
+    {font={color=getrowcolor}};
+    if(foundmarker(mrkmain, brbd.nrec),'V','') 'Выбор'#13'документа'   : [1]  , protect, noautosize;
+    if(getfirst fastfirstrow brbf = tsOk, 'П', '') 'Наличие'#13'платежного документа': [1]  , protect, noautosize;
+    if(isStatusVklVReestr(brbd.cnote),'+', '') 'Включено'#13'в реестр' : [1]  , protect, noautosize;
+    brbd.descr                        'Дескриптор'                     : [6]  , protect, noautosize;
+    [fldtipdo] if(brbasedoc.viddoc=101, 'Закупка', 'Предоплата закупок') 'Тип ДО': [5], protect;
+    brnote.name                       'Статус'                         : [5]  , protect;
+    brorg.name                        'Контрагент'                     : [20] , protect;
+    brbd.naznpl                       'Назначение платежа'             : [20] , protect;
+    brbd.avans                        'Аванс'#13'Оконч.'               : [5]  , protect;
+    brbasedoc.procopl                 'Процент аванса'                 : [4]  , protect;
+    brbd.zakaz                        'Номер'#13'заказа'               : [5]  , protect;
+    brbd.summa                        'Сумма'#13'счета'                : #sumformat, protect;
+    brbd.total                        'Сумма'#13'к оплате'             : #sumformat, protect;
+    brbd.sumval                       'Сумма'#13'в валюте'             : #sumformat, protect;
+    brbd.sumopl                       'Сумма'#13'оплачено'             : #sumformat, protect;
+    [sumdolg]round((brbd.total-brbd.sumopl),2) 'Сумма'#13'осталось опл.':#sumformat, protect;
+    brval.dollar                      'Валюта платежа'                 : [4]  , protect;
+    brbd.nodoc                        'Номер'#13'счета'                : [8]  , protect;
+    brbd.ddoc                         'Дата'#13'счета'                 : [9]  , protect;
+    brbd.dform                        'Дата'#13'ввода ДО'              : [9]  , protect;
+    [statusopl] if(brbd.sumopl<=0,'Не оплачен', if(brbd.sumopl>=brbd.total,'Полностью оплачен', 'Частично оплачен')) 'Оплата' : [8], protect;
+    brdog.nodoc                       'Номер'#13'договора'             : [5]  , protect;
+    brdog.ddoc                        'Дата'#13'договора'              : [8]  , protect;
+    brbd.bdds                         'По БДДС'#13'вне бюджета'        : [10] , protect;
+    brbd.bdr                          'БДР'                            : [5]  , protect;
+    brbd.dds                          'ДДС'                            : [10] , protect;
+    brbd.cfo                          'ЦФО'                            : [5]  , protect;
+    brbd.ispoln                       'Инициатор'                      : [5]  , protect;
+    brbd.buhsch                       'Счет'                           : [4]  , protect;
+    [flddefer] if(brbd.daydefer=0,'',brbd.daydefer) 'Дней'#13'отлож. платежа': [4], protect;
+    [flddsogl] if(brbd.dsogl=0,'',brbd.dsogl) 'Дата'#13'на согл.'   : [9]  , protect;
+    brbd.sogl                         'На согласование'                : [2]  , protect;
+    [fldviza2] vizafld(brbd.vbuh,brbd.daybuh)    'Виза бухгалтерии'    : [8]  , protect;
+    [fldviza3] vizafld(brbd.vkaz,brbd.daykaz)    'Виза казначейства'   : [8]  , protect;
+    [fldviza4] vizafld(brbd.vpeu,brbd.daypeu)    'Виза ПЭУ'            : [8]  , protect;
+    [fldviza5] vizafld(brbd.vdir,brbd.daydir)    'Виза комм.дир.'      : [8]  , protect;
+  end;
+
+  embedded scDO interface;
+  show at (56,11);
+  end;
+
+  procedure CreateTmpTables; {
+    var s, s1: longint;
+    mysqlAddStr(s, 'table tmppick (       ');
+    mysqlAddStr(s, ' filter : string[100],');
+    mysqlAddStr(s, ' crec   : comp        ');
+    mysqlAddStr(s, ') with index (        ');
+    mysqlAddStr(s, '  i01 = filter + crec ');
+    mysqlAddStr(s, ');');
+    sqlCreateTmpTable(s, ctmNormal);
+    mysqlAddStr(s1, 'table tmpdescr (      ');
+    mysqlAddStr(s1, ' descr : string[20]   ');
+    mysqlAddStr(s1, ') with index (        ');
+    mysqlAddStr(s1, '  i01 = descr         ');
+    mysqlAddStr(s1, ');');
+    sqlCreateTmpTable(s1, ctmNormal);
+  }
+
+  procedure FillPickTableFromMarker(_filter: string[100]; _l: longint); {
+    var i, cnt, stmt: longint;
+    var _c: comp;
+    var errcode: integer;
+    cnt := getmarkercount(_l);
+    if (cnt = 0) exit;
+    stmt := sqlAllocStmt;
+    sqlPrepare(stmt, 'INSERT INTO tmppick (filter, crec) VALUES (?, ?)');
+    for ( i := 0; i < cnt; i := i + 1) {
+      getmarker(_l, i, _c);
+      if (_c = 0) continue;
+      sqlBindParam(stmt, 1, _filter);
+      sqlBindParam(stmt, 2, _c);
+      errcode := sqlExecute(stmt);
+      if errcode <> 0 {
+        message('Ошибка при добавлении записей во временную таблицу. Код ошибки: '+errcode);
+        exit;
+      }
+    }
+    sqlFreeStmt(stmt);
+  }
+
+  procedure FillDescrTableFromMarker(_l: longint); {
+    var i, cnt, stmt: longint;
+    var _c: comp;
+    var errcode: integer;
+    cnt := getmarkercount(_l);
+    if (cnt = 0) exit;
+    stmt := sqlAllocStmt;
+    sqlPrepare(stmt, 'INSERT INTO tmpdescr (descr) VALUES (?)');
+    for ( i := 0; i < cnt; i := i + 1) {
+      getmarker(_l, i, _c);
+      if getfirst tmInfoDescr where ((_c == tmInfoDescr.cUser)) = tsOk {
+        sqlBindParam(stmt, 1, tmInfoDescr.Descr);
+        errcode := sqlExecute(stmt);
+        if errcode <> 0 {
+          message('Ошибка при добавлении записей во временную таблицу. Код ошибки: '+errcode);
+          exit;
+        }
+      }
+    }
+    sqlFreeStmt(stmt);
+  }
+
+  procedure FillPickTableInstantly(_filter: string[100]; _c: comp); {
+    var stmt: longint;
+    stmt := sqlAllocStmt;
+    sqlPrepare(stmt, 'INSERT INTO tmppick (filter, crec) VALUES (?, ?)');
+    sqlBindParam(stmt, 1, _filter);
+    sqlBindParam(stmt, 2, _c);
+    sqlExecute(stmt);
+  }
+
+  procedure addsect(_name: string[20]; _value: string; _operator: string = 'AND'); {
+    insert tsection set tsection.name := _name, tsection.value := _value, tsection.operator := _operator;
+  }
+
+  procedure SetVisiblity; {
+    if bitset(flagVsbl1,  0) SetFieldState(#brbd.descr        , sfVisible) else ClearFieldState(#brbd.descr        , sfVisible);
+    if bitset(flagVsbl1,  1) SetFieldState(#fldtipdo          , sfVisible) else ClearFieldState(#fldtipdo          , sfVisible);
+    if bitset(flagVsbl1,  2) SetFieldState(#brnote.name       , sfVisible) else ClearFieldState(#brnote.name       , sfVisible);
+    if bitset(flagVsbl1,  3) SetFieldState(#brorg.name        , sfVisible) else ClearFieldState(#brorg.name        , sfVisible);
+    if bitset(flagVsbl1,  4) SetFieldState(#brbasedoc.name    , sfVisible) else ClearFieldState(#brbasedoc.name    , sfVisible);
+    if bitset(flagVsbl1,  5) SetFieldState(#brbd.avans        , sfVisible) else ClearFieldState(#brbd.avans        , sfVisible);
+    if bitset(flagVsbl1,  6) SetFieldState(#brbasedoc.procopl , sfVisible) else ClearFieldState(#brbasedoc.procopl , sfVisible);
+    if bitset(flagVsbl1,  7) SetFieldState(#brbd.zakaz        , sfVisible) else ClearFieldState(#brbd.zakaz        , sfVisible);
+    if bitset(flagVsbl1,  8) SetFieldState(#brbd.summa        , sfVisible) else ClearFieldState(#brbd.summa        , sfVisible);
+    if bitset(flagVsbl1,  9) SetFieldState(#brbd.total        , sfVisible) else ClearFieldState(#brbd.total        , sfVisible);
+    if bitset(flagVsbl1, 10) SetFieldState(#brbd.sumval       , sfVisible) else ClearFieldState(#brbd.sumval       , sfVisible);
+    if bitset(flagVsbl1, 11) SetFieldState(#brbd.sumopl       , sfVisible) else ClearFieldState(#brbd.sumopl       , sfVisible);
+    if bitset(flagVsbl1, 12) SetFieldState(#sumdolg           , sfVisible) else ClearFieldState(#sumdolg           , sfVisible);
+    if bitset(flagVsbl1, 13) SetFieldState(#brval.dollar      , sfVisible) else ClearFieldState(#brval.dollar      , sfVisible);
+    if bitset(flagVsbl1, 14) SetFieldState(#brbd.nodoc        , sfVisible) else ClearFieldState(#brbd.nodoc        , sfVisible);
+    if bitset(flagVsbl1, 15) SetFieldState(#brbd.ddoc         , sfVisible) else ClearFieldState(#brbd.ddoc         , sfVisible);
+    if bitset(flagVsbl2,  0) SetFieldState(#brbd.dform        , sfVisible) else ClearFieldState(#brbd.dform        , sfVisible);
+    if bitset(flagVsbl2,  1) SetFieldState(#statusopl         , sfVisible) else ClearFieldState(#statusopl         , sfVisible);
+    if bitset(flagVsbl2,  2) SetFieldState(#brdog.nodoc       , sfVisible) else ClearFieldState(#brdog.nodoc       , sfVisible);
+    if bitset(flagVsbl2,  3) SetFieldState(#brdog.ddoc        , sfVisible) else ClearFieldState(#brdog.ddoc        , sfVisible);
+    if bitset(flagVsbl2,  4) SetFieldState(#brbd.bdds         , sfVisible) else ClearFieldState(#brbd.bdds         , sfVisible);
+    if bitset(flagVsbl2,  5) SetFieldState(#brbd.bdr          , sfVisible) else ClearFieldState(#brbd.bdr          , sfVisible);
+    if bitset(flagVsbl2,  6) SetFieldState(#brbd.dds          , sfVisible) else ClearFieldState(#brbd.dds          , sfVisible);
+    if bitset(flagVsbl2,  7) SetFieldState(#brbd.cfo          , sfVisible) else ClearFieldState(#brbd.cfo          , sfVisible);
+    if bitset(flagVsbl2,  8) SetFieldState(#brbd.ispoln       , sfVisible) else ClearFieldState(#brbd.ispoln       , sfVisible);
+    if bitset(flagVsbl2,  9) SetFieldState(#brbd.buhsch       , sfVisible) else ClearFieldState(#brbd.buhsch       , sfVisible);
+    if bitset(flagVsbl2, 10) SetFieldState(#flddsogl          , sfVisible) else ClearFieldState(#flddsogl          , sfVisible);
+    if bitset(flagVsbl2, 11) SetFieldState(#brbd.sogl         , sfVisible) else ClearFieldState(#brbd.sogl         , sfVisible);
+    if bitset(flagVsbl2, 12) SetFieldState(#fldviza2          , sfVisible) else ClearFieldState(#fldviza2          , sfVisible);
+    if bitset(flagVsbl2, 13) SetFieldState(#fldviza3          , sfVisible) else ClearFieldState(#fldviza3          , sfVisible);
+    if bitset(flagVsbl2, 14) SetFieldState(#fldviza4          , sfVisible) else ClearFieldState(#fldviza4          , sfVisible);
+    if bitset(flagVsbl2, 15) SetFieldState(#fldviza5          , sfVisible) else ClearFieldState(#fldviza5          , sfVisible);
+    rereadrecord(#brbd);
+  }
+
+  function isVisaSet(_visaValueNrec: comp): boolean;
+  {
+    result := _visaValueNrec = VIZA_SOGLASOVANO
+           or _visaValueNrec = VIZA_NE_TREBUETSA
+           or _visaValueNrec = VIZA_S_OBSHIH_SCHETOV;
+  }
+
+  function maxDateIn(d1: date; d2: date; d3: date = 0; d4: date = 0; d5: date = 0; d6: date = 0): date;
+  {
+    var d: date; d := 0;
+    if (d1 > d) d := d1;
+    if (d2 > d) d := d2;
+    if (d3 > d) d := d3;
+    if (d4 > d) d := d4;
+    if (d5 > d) d := d5;
+    if (d6 > d) d := d6;
+    result := d;
+  }
+
+  procedure PrepareVizaFilter(_v: agat_viza); {
+    var _cnt: longint;
+    var _av, _s, _sect: string;
+    _cnt  := getmarkercount(_v.mrk);
+    _av   := _v.dskname;
+    _sect := if(_v.operator=0,'WHERE','WHEREVIZAOR');
+    _s   := 'LEFT JOIN attrval '+_av+' ON '+WT_BASEDOC+'='+_av+'.wtable AND bd.nrec='+_av+'.crec AND #comp('+_v.cattrnam+')='+_av+'.cattrnam';
+    //if bitset(_v.flag,0) _s := 'LEFT '+_s;
+    addsect('JOIN', _s);
+    if (not bitset(_v.flag, 0)) and bitset(_v.flag,1) and _cnt > 0 {
+      //in ...
+      addsect(_sect, '('+_av+'.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+_av+'''))');
+    } else if (not bitset(_v.flag, 0)) and bitset(_v.flag,1) and _cnt = 0 {
+      //not null
+      addsect(_sect, '('+_av+'.vcomp IS NOT NULL and '+_av+'.vcomp > #comp(0))');
+    } else if bitset(_v.flag,0) and (not bitset(_v.flag,1)) {
+      //isnull
+      addsect(_sect, '('+_av+'.vcomp IS NULL OR '+_av+'.vcomp=0)');
+    } else if bitset(_v.flag,0) and bitset(_v.flag,1) and _cnt > 0 {
+      //in or isnull
+      addsect(_sect, '('+_av+'.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+_av+''') OR '+_av+'.vcomp IS NULL OR '+_av+'.vcomp=0)');
+    }
+  }
+
+  procedure PrepareSoglFilter(_v: agat_viza); {
+    var _av, _s, _sect: string;
+    _av  := _v.dskname;
+    _s   := 'LEFT JOIN attrval '+_av+' ON '+WT_BASEDOC+'='+_av+'.wtable AND bd.nrec='+_av+'.crec AND #comp('+_v.cattrnam+')='+_av+'.cattrnam';
+    _sect:= if(_v.operator=0,'WHERE','WHEREVIZAOR');
+    addsect('JOIN', _s);
+    if (not bitset(_v.flag, 0)) and bitset(_v.flag,1) {
+      addsect(_sect, _av+'.vstring <> '''' AND '+_av+'.vstring IS NOT NULL ');
+    } else if bitset(_v.flag,0) and (not bitset(_v.flag,1)) {
+      addsect(_sect,'('+_av+'.vstring IS NULL OR '+_av+'.vstring='''') ');
+    }
+  }
+
+  procedure SetFilter; {
+    if not bitset(flagVid,0) ShowIer := false;
+    SetIerBounds;
+    StartNewVisual(vtRotateVisual, vfThread + vfTimer, 'Установка фильтра', 0);
+    clearmarker(mrkmain);
+    sqlExecDirect('DELETE FROM tmppick');
+    FillPickTableFromMarker(viza1.dskname, viza1.mrk);
+    FillPickTableFromMarker(viza2.dskname, viza2.mrk);
+    FillPickTableFromMarker(viza3.dskname, viza3.mrk);
+    FillPickTableFromMarker(viza4.dskname, viza4.mrk);
+    FillPickTableFromMarker(viza5.dskname, viza5.mrk);
+    FillPickTableFromMarker(viza6.dskname, viza6.mrk);
+    FillPickTableFromMarker(viza6.dskname, viza6.mrk);
+    FillPickTableFromMarker(DSK_MRKORG   , mrkOrg);
+    FillPickTableFromMarker(DSK_MRKISPOLN, mrkIspoln);
+    FillPickTableFromMarker(DSK_MRKDDS   , mrkDDS);
+    FillPickTableFromMarker(DSK_MRKBDR   , mrkBDR);
+    FillPickTableFromMarker(DSK_MRKBUHSCH, mrkBuhSch);
+    FillPickTableFromMarker(DSK_MRKZAKAZ , mrkZakaz);
+    FillPickTableFromMarker(DSK_MRKDOG   , mrkDog);
+    FillPickTableFromMarker(DSK_MRKCFO   , mrkCFO);
+    FillPickTableFromMarker(DSK_MRKVAL   , mrkVal);
+    FillPickTableFromMarker(DSK_MRKREJIM , mrkRejim);
+    if bitset(flagBDDS,  0) FillPickTableInstantly(DSK_MRKBDDS, 00010000000001DCh);
+    if bitset(flagBDDS,  1) FillPickTableInstantly(DSK_MRKBDDS, 00010000000001DDh);
+    if bitset(flagBDDS,  2) FillPickTableInstantly(DSK_MRKBDDS, 0);
+    if bitset(flagAvans, 0) FillPickTableInstantly(DSK_MRKAVANS, 00010000000001DEh);
+    if bitset(flagAvans, 1) FillPickTableInstantly(DSK_MRKAVANS, 00010000000001DFh);
+    if bitset(flagAvans, 2) FillPickTableInstantly(DSK_MRKAVANS, 0);
+    sqlExecDirect('DELETE FROM tmpdescr');
+    FillDescrTableFromMarker(mrkDescr);
+    var stmt, s: longint;
+    var s1: string;
+    //для просмотра фильтра
+    stmt := sqlAllocStmt;
+    sqlExecStmt(stmt, 'select filter, crec from tmppick');
+    delete all tmpfltr;
+    sqlFetchInto(stmt, #tmpfltr);
+    sqlFreeStmt(stmt);
+    //отбор ДО
+    //подготовка отборов:
+    delete all tsection;
+    //по виду ДО
+    if (not bitset(flagVid, 0) and not bitset(flagVid, 1)) flagVid := flagVid or 3;
+    if (bitset(flagVid, 0) and bitset(flagVid, 1)) addsect('WHERE','(bd.viddoc=101 or bd.viddoc=111)')
+    else if bitset(flagVid, 0) addsect('WHERE','bd.viddoc=101')
+    else if bitset(flagVid, 1) addsect('WHERE','bd.viddoc=111');
+    //по БДДС
+    if (not bitset(flagBDDS, 2)) {
+      addsect('JOIN', 'JOIN attrval av_bdds ON '+WT_BASEDOC+'=av_bdds.wtable AND bd.nrec=av_bdds.crec AND #comp('+ATTRNAM_BDDS+')=av_bdds.cattrnam');
+      addsect('WHERE', 'av_bdds.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKBDDS+''')');
+    } else {
+      addsect('JOIN', 'LEFT JOIN attrval av_bdds ON '+WT_BASEDOC+'=av_bdds.wtable AND bd.nrec=av_bdds.crec AND #comp('+ATTRNAM_BDDS+')=av_bdds.cattrnam');
+      addsect('WHERE', '(av_bdds.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKBDDS+''') OR av_bdds.cattrnam is null)');
+    }
+    //по авансам
+    if (not bitset(flagAvans, 2)) {
+      addsect('JOIN', 'JOIN attrval av_avans ON '+WT_BASEDOC+'=av_avans.wtable AND bd.nrec=av_avans.crec AND #comp('+ATTRNAM_AVANS+')=av_avans.cattrnam');
+      addsect('WHERE', 'av_avans.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKAVANS+''')');
+    } else {
+      addsect('JOIN', 'LEFT JOIN attrval av_avans ON '+WT_BASEDOC+'=av_avans.wtable AND bd.nrec=av_avans.crec AND #comp('+ATTRNAM_AVANS+')=av_avans.cattrnam');
+      addsect('WHERE', '(av_avans.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKAVANS+''') OR av_avans.cattrnam is null)');
+    }
+    //по дате счета
+    if bitset(flagDates, BIT_DDOC) {
+      if (DDocEnd = 0) DDocEnd := cur_date;
+      if (DDocBeg = 0) DDocBeg := sub_day(DDocEnd,31);
+      addsect('WHERE', '(bd.ddoc BETWEEN #date('+datetostr(DDocBeg,'DD,MM,YYYY')+') AND #date('+datetostr(DDocEnd,'DD,MM,YYYY')+'))');
+    }
+    //по дате создания
+    if bitset(flagDates, BIT_DFORM) {
+      if (VvodEnd = 0) VvodEnd := cur_date;
+      if (VvodBeg = 0) VvodBeg := sub_day(VvodEnd,31);
+      addsect('WHERE', '(bd.dform BETWEEN #date('+datetostr(VvodBeg,'DD,MM,YYYY')+') AND #date('+datetostr(VvodEnd,'DD,MM,YYYY')+'))');
+    }
+    //по дате передачи на согласование
+    if bitset(flagDates, BIT_DSOGL) {
+      if (DSoglEnd = 0) DSoglEnd := cur_date;
+      if (DSoglBeg = 0) DSoglBeg := sub_day(DSoglEnd,31);
+      addsect('WHERE', '('+viza1.dskname+'.atl_lastdate BETWEEN #date('+datetostr(DSoglBeg,'DD,MM,YYYY')+') AND #date('+datetostr(DSoglEnd,'DD,MM,YYYY')+'))');
+    }
+    //по сумме счета
+    if bitset(flagSums, BIT_SUMMA) {
+      addsect('WHERE', '(bd.summa BETWEEN '+string(SumSchOt,0,0)+' AND '+string(SumSchDo,0,0)+')');
+    }
+    //по сумме к оплате
+    if bitset(flagSums, BIT_TOTAL) {
+      addsect('WHERE', '(bd.total BETWEEN '+string(SumTotOt,0,0)+' AND '+string(SumTotDo,0,0)+')');
+    }
+    //по сумме в валюте
+    if bitset(flagSums, BIT_SUMVAL) {
+      addsect('WHERE', '(bd.sumval BETWEEN '+string(SumValOt,0,0)+' AND '+string(SumValDo,0,0)+')');
+    }
+    //по дескрипторам
+    if bitset(flagAttr, BIT_DESCR) {
+      addsect('WHERE', 'bd.descr IN (select tmpdescr.descr from tmpdescr)');
+    }
+    //по контрагентам
+    if bitset(flagAttr, BIT_KONTRAG) {
+      addsect('WHERE', 'bd.corg IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKORG+''')');
+    }
+    //по статусу
+    if bitset(flagAttr, BIT_STATUS) {
+      addsect('WHERE', 'bd.cnote = #comp('+cfltrStatus+')');
+    }
+    //по исполнителю
+    if bitset(flagAttr, BIT_INICIATOR) {
+      addsect('JOIN', 'JOIN attrval av_ispoln ON '+WT_BASEDOC+'=av_ispoln.wtable AND bd.nrec=av_ispoln.crec AND #comp('+ATTRNAM_ISPOLN+')=av_ispoln.cattrnam');
+      addsect('WHERE', 'av_ispoln.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKISPOLN+''')');
+    } else {
+      addsect('JOIN', 'LEFT JOIN attrval av_ispoln ON '+WT_BASEDOC+'=av_ispoln.wtable AND bd.nrec=av_ispoln.crec AND #comp('+ATTRNAM_ISPOLN+')=av_ispoln.cattrnam');
+    }
+    addsect('JOIN', 'LEFT JOIN katpodr podr_ispoln ON COALESCE(av_ispoln.vcomp,#comp(0)) = podr_ispoln.nrec');
+    //по статье ДДС
+    if bitset(flagAttr, BIT_DDS) {
+      addsect('JOIN', 'JOIN attrval av_dds ON '+WT_BASEDOC+'=av_dds.wtable AND bd.nrec=av_dds.crec AND #comp('+ATTRNAM_DDS+')=av_dds.cattrnam');
+      addsect('WHERE', 'av_dds.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKDDS+''')');
+    } else {
+      addsect('JOIN', 'LEFT JOIN attrval av_dds ON '+WT_BASEDOC+'=av_dds.wtable AND bd.nrec=av_dds.crec AND #comp('+ATTRNAM_DDS+')=av_dds.cattrnam');
+    }
+    //по статье БДР
+    if bitset(flagAttr, BIT_BDR) {
+      addsect('JOIN', 'JOIN attrval av_bdr ON '+WT_BASEDOC+'=av_bdr.wtable AND bd.nrec=av_bdr.crec AND #comp('+ATTRNAM_BDR+')=av_bdr.cattrnam');
+      addsect('WHERE', 'av_bdr.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKBDR+''')');
+    } else {
+      addsect('JOIN', 'LEFT JOIN attrval av_bdr ON '+WT_BASEDOC+'=av_bdr.wtable AND bd.nrec=av_bdr.crec AND #comp('+ATTRNAM_BDR+')=av_bdr.cattrnam');
+    }
+    //по бух. счетам
+    if bitset(flagAttr, BIT_BUHSCH) {
+      addsect('JOIN', 'JOIN attrval av_buhsch ON '+WT_BASEDOC+'=av_buhsch.wtable AND bd.nrec=av_buhsch.crec AND #comp('+ATTRNAM_BUHSCH+')=av_buhsch.cattrnam');
+      addsect('WHERE', 'av_buhsch.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKBUHSCH+''')');
+    } else {
+      addsect('JOIN', 'LEFT JOIN attrval av_buhsch ON '+WT_BASEDOC+'=av_buhsch.wtable AND bd.nrec=av_buhsch.crec AND #comp('+ATTRNAM_BUHSCH+')=av_buhsch.cattrnam');
+    }
+    addsect('JOIN', 'LEFT JOIN buhschet ON COALESCE(av_buhsch.vcomp,#comp(0)) = buhschet.nrec');
+    //по договорам
+    if bitset(flagAttr, BIT_DOG) {
+      addsect('WHERE', 'bd.cdogovor IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKDOG+''')');
+    }
+    //по номеру счета
+    if bitset(flagAttr, BIT_NODOC) {
+      addsect('WHERE', 'bd.nodoc LIKE '''+sNumSch+''' ');
+    }
+    //по валюте
+    if bitset(flagAttr, BIT_VAL) {
+      addsect('WHERE', 'bd.cval IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKVAL+''')');
+    }
+    //передан на согласование
+    PrepareSoglFilter(viza1);
+    //по визам
+    PrepareVizaFilter(viza2);
+    PrepareVizaFilter(viza3);
+    PrepareVizaFilter(viza4);
+    PrepareVizaFilter(viza5);
+    PrepareVizaFilter(viza6);
+    //подготовка запроса:
+    stmt := sqlAllocStmt;
+    mysqlAddStr(s, 'SELECT bd.nrec, COALESCE(av_parent.vcomp,#comp(0)), bd.viddoc, bd.descr, bd.ddoc, bd.nodoc,');
+    mysqlAddStr(s, 'COALESCE(av_naznpl.vstring,bd.name),');
+    mysqlAddStr(s, 'CASE WHEN bd.dform=0 THEN bd.atl_lastdate ELSE bd.dform END,');
+    mysqlAddStr(s, 'round(bd.summa,2), round(bd.total,2), round(bd.sumval,2), round(COALESCE(bf.summa,0),2) sumfactopl,');
+    mysqlAddStr(s, 'bd.cnote,');
+    mysqlAddStr(s, 'COALESCE(av_bdds.vstring,''''),');
+    mysqlAddStr(s, 'SUBSTRING(COALESCE(av_avans.vstring,''''),1,1),');
+    mysqlAddStr(s, 'COALESCE(podr_ispoln.kod,''''),');
+    mysqlAddStr(s, 'COALESCE(av_dds.vstring,''''),');
+    mysqlAddStr(s, 'COALESCE(av_bdr.vstring,''''),');
+    mysqlAddStr(s, 'COALESCE(SUBSTRING(buhschet.schet,2,10),''''),');
+    mysqlAddStr(s, 'COALESCE(GETDOCFO(bd.nrec),''-''), COALESCE(GETDOZAKAZ(bd.nrec),''-''),');
+//    mysqlAddStr(s, ''''', '''',');
+    mysqlAddStr(s, 'COALESCE('+viza1.dskname+'.vstring,''''),');
+    mysqlAddStr(s, 'COALESCE('+viza1.dskname+'.atl_lastdate,0),');
+    mysqlAddStr(s, 'COALESCE('+viza2.dskname+'.vcomp,#comp(0)),');
+    mysqlAddStr(s, 'COALESCE('+viza2.dskname+'.vstring,''''),');
+    mysqlAddStr(s, 'COALESCE('+viza2.dskname+'.atl_lastdate,0),');
+    mysqlAddStr(s, 'COALESCE('+viza3.dskname+'.vcomp,#comp(0)),');
+    mysqlAddStr(s, 'COALESCE('+viza3.dskname+'.vstring,''''),');
+    mysqlAddStr(s, 'COALESCE('+viza3.dskname+'.atl_lastdate,0),');
+    mysqlAddStr(s, 'COALESCE('+viza4.dskname+'.vcomp,#comp(0)),');
+    mysqlAddStr(s, 'COALESCE('+viza4.dskname+'.vstring,''''),');
+    mysqlAddStr(s, 'COALESCE('+viza4.dskname+'.atl_lastdate,0),');
+    mysqlAddStr(s, 'COALESCE('+viza5.dskname+'.vcomp,#comp(0)),');
+    mysqlAddStr(s, 'COALESCE('+viza5.dskname+'.vstring,''''),');
+    mysqlAddStr(s, 'COALESCE('+viza5.dskname+'.atl_lastdate,0),');
+    mysqlAddStr(s, 'COALESCE('+viza6.dskname+'.vcomp,#comp(0)),');
+    mysqlAddStr(s, 'COALESCE('+viza6.dskname+'.vstring,''''),');
+    mysqlAddStr(s, 'COALESCE('+viza6.dskname+'.atl_lastdate,0),');
+    mysqlAddStr(s, '0,0,0,0,0,0,0');
+    mysqlAddStr(s, 'FROM basedoc bd');
+    mysqlAddStr(s, 'left join (select cbasedoc, sum(summa) as summa');    //tipdoc=10443 - приходные ордера в кассу "Денежные документы"
+    mysqlAddStr(s, '           from basefin');
+    mysqlAddStr(s, '           where tidkgal = 1 and  cbasedoc<>#comp(0)');
+    mysqlAddStr(s, '           group by cbasedoc) bf on bf.cbasedoc = bd.nrec');
+    mysqlAddStr(s, 'left join attrval av_parent on '+WT_BASEDOC+' = av_parent.wtable and bd.nrec = av_parent.crec and #comp('+00010000000000B9h+') = av_parent.cattrnam ');
+    mysqlAddStr(s, 'left join attrval av_naznpl on '+WT_BASEDOC+' = av_naznpl.wtable and bd.nrec = av_naznpl.crec and #comp('+ATTRNAM_NAZNPL+') = av_naznpl.cattrnam ');
+    //секция JOIN
+    _loop tsection where (('JOIN' == tsection.name)) {
+      mysqlAddStr(s, tsection.value);
+    }
+    //секция WHERE
+    var isfirst: boolean;
+    if (getfirst tsection where (('WHERE' == tsection.name)) = tsOk) mysqlAddStr(s, 'WHERE');
+    isfirst := true;
+    _loop tsection where (('WHERE' == tsection.name)) {
+      mysqlAddStr(s, if(isfirst,'',' '+tsection.operator+' ')+tsection.value);
+      if (isfirst) isfirst := false;
+    }
+    //секция WHEREVIZAOR
+    if getfirst tsection where (('WHEREVIZAOR' == tsection.name)) = tsOk {
+      if (getfirst tsection where (('WHERE' == tsection.name)) <> tsOk)
+        mysqlAddStr(s, 'WHERE (')
+      else
+        mysqlAddStr(s, 'AND (');
+      isfirst := true;
+      _loop tsection where (('WHEREVIZAOR' == tsection.name)) {
+        mysqlAddStr(s, if(isfirst,'',' OR ')+tsection.value);
+        if (isfirst) isfirst := false;
+      }
+      mysqlAddStr(s, ')');
+    }
+    //отдельно отработаем выборку по заказу и ЦФО, т.к. она большая
+    if bitset(flagAttr, BIT_ZAKAZ) and bitset(flagAttr, BIT_CFO) {
+      mysqlAddStr(s, 'AND 0 < (select count(*)');
+      mysqlAddStr(s, '           from stepdoc sd');
+      mysqlAddStr(s, '           join spstep sps on sd.nrec = sps.cstepdoc');
+      mysqlAddStr(s, '           join specmtr sm on #comp(281474976710657) = sm.csaldtune and 1104 = sm.cotable and sps.nrec = sm.cspec');
+      mysqlAddStr(s, '                              and sm.cobj in (select tmppick.crec as crec from tmppick where tmppick.filter='''+DSK_MRKZAKAZ+''')');
+      mysqlAddStr(s, '                              and sm.ckau[2] in (select tmppick.crec as crec from tmppick where tmppick.filter='''+DSK_MRKCFO+''')');
+      mysqlAddStr(s, '          where bd.nrec = sd.cbasedoc)');
+    } else if bitset(flagAttr, BIT_ZAKAZ) {
+      mysqlAddStr(s, 'AND 0 < (select count(*)');
+      mysqlAddStr(s, '           from stepdoc sd');
+      mysqlAddStr(s, '           join spstep sps on sd.nrec = sps.cstepdoc');
+      mysqlAddStr(s, '           join specmtr sm on #comp(281474976710657) = sm.csaldtune and 1104 = sm.cotable and sps.nrec = sm.cspec and sm.cobj in (select tmppick.crec as crec from tmppick where tmppick.filter='''+DSK_MRKZAKAZ+''')');
+      mysqlAddStr(s, '          where bd.nrec = sd.cbasedoc)');
+    } else if bitset(flagAttr, BIT_CFO) {
+      mysqlAddStr(s, 'AND 0 < (select count(*)');
+      mysqlAddStr(s, '           from stepdoc sd');
+      mysqlAddStr(s, '           join spstep sps on sd.nrec = sps.cstepdoc');
+      mysqlAddStr(s, '           join specmtr sm on #comp(281474976710657) = sm.csaldtune and 1104 = sm.cotable and sps.nrec = sm.cspec and sm.ckau[2] in (select tmppick.crec as crec from tmppick where tmppick.filter='''+DSK_MRKCFO+''')');
+      mysqlAddStr(s, '          where bd.nrec = sd.cbasedoc)');
+    }
+    //Фильтр по режиму использования счета
+    if bitset(flagAttr, BIT_REJIM) {
+      mysqlAddStr(s, 'AND 0 < (select count(*)');
+      mysqlAddStr(s, '           from stepdoc sd');
+      mysqlAddStr(s, '           join spstep sps on sd.nrec = sps.cstepdoc');
+      mysqlAddStr(s, '           join attrval av on av.wtable=1104 and av.crec=sps.nrec and av.cattrnam=#comp(000100000000079Eh)');
+      mysqlAddStr(s, '                          and av.vcomp in (select tmppick.crec as crec from tmppick where tmppick.filter='''+DSK_MRKREJIM+''')');
+      mysqlAddStr(s, '         where bd.nrec = sd.cbasedoc)');
+    }
+
+    //mysqlAddStr(s, 'GROUP BY bd.nrec, av_parent.vcomp, bd.viddoc, bd.descr, bd.ddoc, bd.nodoc, COALESCE(av_naznpl.vstring,bd.name), bd.dform, bd.atl_lastdate, bd.summa, bd.total, bd.sumval, av_bdds.vstring, av_avans.vstring, ');
+    //mysqlAddStr(s, '         podr_ispoln.kod, av_dds.vstring, av_bdr.vstring, buhschet.schet, '+viza1.dskname+'.vstring, '+viza1.dskname+'.atl_lastdate, ');
+    //mysqlAddStr(s, '         '+viza2.dskname+'.vstring, '+viza2.dskname+'.atl_lastdate,'+viza3.dskname+'.vstring, '+viza3.dskname+'.atl_lastdate, ');
+    //mysqlAddStr(s, '         '+viza4.dskname+'.vstring, '+viza4.dskname+'.atl_lastdate,'+viza5.dskname+'.vstring, '+viza5.dskname+'.atl_lastdate, ');
+    //mysqlAddStr(s, '         '+viza6.dskname+'.vstring, '+viza6.dskname+'.atl_lastdate ');
+    mysqlAddStr(s, 'ORDER BY bd.ddoc, bd.nodoc');
+    sqlExecStmt(stmt, s);
+    setvisualheader('Установка фильтра. Выполнение запроса');
+    delete all tbd;
+    sqlFetchInto(stmt, #tbd);
+    sqlFreeStmt(stmt);
+    setvisualheader('Установка фильтра. Расчет оплаты предоплатных ДО');
+    //расчет суммы оплаты предоплатных ДО
+    var _sum: double;
+    _loop tbd where ((111 == tbd.viddoc)) {
+      _sum := 0;
+      _loop basefin where ((0 == basefin.tidkbase and tbd.nrec == basefin.cpredopldo and (basefin.tidkgal = 1) )) {
+        _sum += basefin.summa;
+      }
+      if (_sum > 0) update current tbd set tbd.sumopl := _sum;
+    }
+    setvisualheader('Установка фильтра. Расчет дней простоя');
+    //расчет дней простоя
+    var _cd: date;
+    _cd := cur_date;
+    update tbd set
+      tbd.daysogl := if(tbd.sogl  = '', calcdaysbetweendates(tbd.dform, _cd, true), 0),
+      tbd.daybuh  := if(tbd.sogl <> '', calcdaysbetweendates(tbd.dsogl, _cd, true), 0),     //tbd.vbuh ='' and
+      tbd.daydir  := if(tbd.sogl <> '', calcdaysbetweendates(tbd.dsogl, _cd, true), 0),     //tbd.vdir ='' and
+      tbd.daykaz  := if(tbd.sogl <> '', calcdaysbetweendates(tbd.dsogl, _cd, true), 0),     //tbd.vkaz ='' and
+      tbd.daypeu  := if(tbd.sogl <> '', calcdaysbetweendates(tbd.dsogl, _cd, true), 0),     //tbd.vpeu ='' and
+      tbd.daydefer:= if(
+        isVisaSet(tbd.cbuh)
+        and isVisaSet(tbd.ckaz)
+        and isVisaSet(tbd.cdir)
+        and isVisaSet(tbd.cpeu)
+        and not isStatusVklVReestr(tbd.cnote),
+        calcdaysbetweendates(maxDateIn(tbd.dbuh, tbd.dkaz, tbd.ddir, tbd.dpeu), _cd, true),
+        0
+      )
+      //tbd.dayrez  := if(tbd.vrez ='' and tbd.sogl <> '', calcdaysbetweendates(tbd.dsogl, _cd, true), 0)
+    ;
+    setvisualheader('Установка фильтра. Установка ограничений');
+    //ставим conditions
+    PopAllConditionForLeave(#brbd);
+    if bitset(viza1.flagdays, 0) pushcondition(tcBySogl) else PopCondition(tcBySogl);
+    if bitset(viza2.flagdays, 0) pushcondition(tcByBuh)  else PopCondition(tcByBuh);
+    if bitset(viza3.flagdays, 0) pushcondition(tcByDir)  else PopCondition(tcByDir);
+    if bitset(viza4.flagdays, 0) pushcondition(tcByKaz)  else PopCondition(tcByKaz);
+    if bitset(viza5.flagdays, 0) pushcondition(tcByPeu)  else PopCondition(tcByPeu);
+    if bitset(flagSums, BIT_SUMOPL) pushcondition(tcBySumOpl) else popcondition(tcBySumOpl);
+
+    //условия, которые неудобно выставить через condition - делаем через delete
+    if not bitset(flagopl, 0) delete all tbd where (tbd.sumopl >= tbd.total);
+    if not bitset(flagopl, 1) delete all tbd where (tbd.sumopl > 0 and tbd.sumopl < tbd.total);
+    if not bitset(flagopl, 2) delete all tbd where (tbd.sumopl = 0);
+
+    if not getlast brbd <> tsOk { };
+    rereadrecord(#brbd);
+    StopVisual('',0);
+  }
+
+  procedure setSettingsVisiblity(isVisible: boolean);
+  {
+    SetTabbedSheetVisible(SCMAINFILTERS, isVisible);
+    SetTabbedSheetVisible(SCVIZAFILTERS, isVisible);
+    SetTabbedSheetVisible(SCCOLUMNS, isVisible);
+    if cfsGetCurrentContainerSelf != 0
+    {
+      cfsSetProp('SCMAINFILTERS', 'Hidden', not isVisible);
+      cfsSetProp('SCVIZAFILTERS', 'Hidden', not isVisible);
+      cfsSetProp('SCCOLUMNS', 'Hidden', not isVisible);
+      cfsSetProp('BRMAIN', 'RectA_X', if(isVisible, 56, 1));
+      cfsSetProp('SCDO', 'RectA_X', if(isVisible, 56, 1));
+    }
+  }
+
+  procedure ToggleSettingsVisiblity; {
+    setSettingsVisiblity(not GetTabbedSheetVisible(SCMAINFILTERS));
+  }
+
+  function getfldname(_lmarker: longint; _kodgr: word): string; {
+    var _cnt: longint;
+    var _c: comp;
+    _cnt := getmarkercount(_lmarker);
+    if _cnt = 0 {
+      result := '';
+    } else if _cnt = 1 {
+      getmarker(_lmarker, 0, _c);
+      result := if(getanykau(0, _kodgr, _c),givenanname(1),'');
+    } else {
+      result := 'Выбрано позиций: '+_cnt;
+    }
+  }
+
+  function selectkau(_lmarker: longint; _kodgr: word; var _fldname: string): integer; {
+    var _l: longint;
+    var _c: comp;
+    var _mrkname: string;
+    _mrkname := igetkau.getmarkername(_kodgr);
+    if igetkau.getcodekau(2, _kodgr, _c) > 0 {
+      _l := initmarker(_mrkname,8,10,10,false);
+      copymarker(_lmarker, _l);
+      donemarker(_l      , _mrkname);
+      _fldname := getfldname(_lmarker, _kodgr);
+    }
+    result := getmarkercount(_lmarker);
+  }
+
+  procedure updateflag(bitnum: byte; isset: boolean; var _flag: word); {
+    var i: integer;
+    var d: longint;
+    d := 1;
+    for (i:=1; i<=bitnum; inc(i)) {
+      d := d * 2;
+    }
+    if isset {
+      _flag := _flag or d;
+    } else {
+      _flag := _flag and not(d);
+    }
+  }
+
+  procedure FilltmInfoDescr; {
+    delete all tmInfoDescr;
+    _loop x$users {
+      clearbuffer(#tmInfoDescr);
+      tmInfoDescr.cUser := x$users.atl_nrec;
+      tmInfoDescr.FIO   := sGetTuneEx('USER.FIO'  ,UserOfficeFilial(x$users.atl_nrec),x$users.atl_nrec);
+      tmInfoDescr.Descr := sGetTuneEx('USER.DESCR',UserOfficeFilial(x$users.atl_nrec),x$users.atl_nrec);
+      if (tmInfoDescr.Descr <> '') insert current tmInfoDescr;
+    }
+  }
+  function  getdescrfldname: string; {
+    var s: string;
+    s := '';
+    _loop tmInfoDescr where (foundmarker(mrkdescr,tmInfoDescr.cUser)) {
+      s := s+tmInfoDescr.Descr+'; ';
+    }
+    result := s;
+  }
+  procedure selectdescr; {
+    runwindowmodal(wSelectDescr);
+    sDescr := getdescrfldname;
+    updateflag(BIT_DESCR, true, flagAttr);
+  }
+  procedure cleardescr; {
+    sDescr := '';
+    clearmarker(mrkDescr);
+    updateflag(BIT_DESCR, false, flagAttr);
+  }
+  procedure selectorg; {
+    updateflag(BIT_KONTRAG, selectkau(mrkOrg, 1, sOrg)>0, flagAttr);
+  }
+  procedure clearorg; {
+    sOrg := '';
+    clearmarker(mrkOrg);
+    updateflag(BIT_KONTRAG, false, flagAttr);
+  }
+  procedure selectstatus; {
+    var _c: comp;
+    _c := cfltrStatus;
+    if runinterface(L_DOGOVOR::GETSOMKATNOTES, word(40), word(0), word(0), false, _c) = cmDefault {
+      if getfirst katnotes where (( _c == katnotes.nrec )) = tsOk {
+        cfltrStatus := katnotes.nrec;
+        sfltrStatus := katnotes.name;
+        updateflag(BIT_STATUS, true, flagAttr);
+      }
+    }
+  }
+  procedure clearstatus; {
+    sfltrStatus := '';
+    cfltrStatus := 0;
+    updateflag(BIT_STATUS, false, flagAttr);
+  }
+  procedure selectispoln; {
+    updateflag(BIT_INICIATOR, selectkau(mrkIspoln, 2, sIspoln)>0, flagAttr);
+  }
+  procedure clearispoln; {
+    sIspoln := '';
+    clearmarker(mrkIspoln);
+    updateflag(BIT_INICIATOR, false, flagAttr);
+  }
+  procedure selectdds; {
+    updateflag(BIT_DDS, selectkau(mrkDDS, KODGR_DDS, sDDS)>0, flagAttr);
+  }
+  procedure cleardds; {
+    sDDS := '';
+    clearmarker(mrkDDS);
+    updateflag(BIT_DDS, false, flagAttr);
+  }
+  procedure selectzakaz; {
+    updateflag(BIT_ZAKAZ, selectkau(mrkZakaz, 40, sZakaz)>0, flagAttr);
+  }
+  procedure clearzakaz; {
+    sZakaz := '';
+    clearmarker(mrkZakaz);
+    updateflag(BIT_ZAKAZ, false, flagAttr);
+  }
+  procedure selectbdr; {
+    updateflag(BIT_BDR, selectkau(mrkBDR, KODGR_BDR, sBDR)>0, flagAttr);
+  }
+  procedure clearbdr; {
+    sBDR := '';
+    clearmarker(mrkBDR);
+    updateflag(BIT_BDR, false, flagAttr);
+  }
+  procedure SetSchetFldName; {
+    var _cnt: integer;
+    _cnt := getmarkercount(mrkBuhSch);
+    if _cnt = 0 {
+      sBuhSch := '';
+      updateflag(BIT_BUHSCH, false, flagAttr);
+    } else if _cnt <= 10 {
+      var i: integer;
+      var s: string;
+      var _c: comp;
+      s := '';
+      for (i := 0; i < _cnt; inc(i)) {
+        getmarker(mrkBuhSch, i, _c);
+        if getfirst buhschet where ((_c == buhschet.nrec)) = tsOk {
+          s += substr(buhschet.schet,2,20)+'.'+buhschet.subsch+'; ';
+        }
+      }
+      sBuhSch := s;
+    } else {
+      sBuhSch := 'Выбрано счетов: '+_cnt;
+    }
+  }
+  procedure selectbuhsch; {
+    var _sch, _subsch, _markername: string;
+    var _l: longint;
+    var _cnt: integer;
+    if runinterface(F_BUHSCHET::GETBUHSCHET, 3, coGetTune('FIN.USER.CPLANSSCH'), _sch, _subsch) = cmDefault {
+      _markername := 'gt'+string(65532)+'buhschet';
+      _l := initmarker(_markername,8,10,10);
+      copymarker(mrkBuhSch, _l);
+      donemarker(_l, _markername);
+      SetSchetFldName;
+      updateflag(BIT_BUHSCH, true, flagAttr);
+    }
+  }
+  procedure clearbuhsch; {
+    sBuhSch := '';
+    clearmarker(mrkBuhSch);
+    updateflag(BIT_BUHSCH, false, flagAttr);
+  }
+  procedure selectdog; {
+    updateflag(BIT_DOG, selectkau(mrkDOG, 14, sDog)>0, flagAttr);
+  }
+  procedure cleardog; {
+    sDog := '';
+    clearmarker(mrkDog);
+    updateflag(BIT_DOG, false, flagAttr);
+  }
+  procedure selectCFO; {
+    updateflag(BIT_CFO, selectkau(mrkCFO, 2, sCFO)>0, flagAttr);
+  }
+  procedure clearCFO; {
+    sCFO := '';
+    clearmarker(mrkCFO);
+    updateflag(BIT_CFO, false, flagAttr);
+  }
+  procedure selectRejim; {
+    updateflag(BIT_REJIM, selectkau(mrkRejim, 10695, sRejim)>0, flagAttr);
+  }
+  procedure clearRejim; {
+    sRejim := '';
+    clearmarker(mrkRejim);
+    updateflag(BIT_REJIM, false, flagAttr);
+  }
+  function getvalfldname: string; {
+    var s: string;
+    s := '';
+    _loop selval where (foundmarker(mrkval,selval.nrec)) {
+      s := s+selval.simvolv+'; ';
+    }
+    result := s;
+  }
+  procedure selectval; {
+    runwindowmodal(wselectval);
+    sval := getvalfldname;
+    updateflag(BIT_VAL, true, flagAttr);
+  }
+  procedure clearval; {
+    clearmarker(mrkval);
+    sval := '';
+    updateflag(BIT_VAL, false, flagAttr);
+  }
+  function GetExtAttrSetInfo(aWTable: word; aCRec: comp; aCAttrnam: comp): string;
+  {
+    vExtAttrInfo._wtable := aWTable;
+    vExtAttrInfo._crec := aCRec;
+    vExtAttrInfo._cattrnam := aCAttrnam;
+    if vExtAttrInfo.getfirst attrval = tsOk
+    {
+      result := datetostr(vExtAttrInfo.attrval.atl_lastdate,'DD.MM.YYYY')
+                + ' ' + timetostr(vExtAttrInfo.attrval.atl_lasttime, 'HH:MM')
+                + ' ' + if(vExtAttrInfo.getfirst x$users = tsOk,
+                           vExtAttrInfo.x$users.xu$loginname,
+                           'неизвестный пользователь '+string(vExtAttrInfo.attrval.atl_lastuser,0,0));
+    }
+    else
+      result := '';
+  }
+  function GetBDReeExtAttrInfo(aTitle: string; aCAttrnam: comp): string;
+  {
+    result := aTitle+': '+GetExtAttrSetInfo(WT_BASEDOC, brbd.nrec, aCAttrnam);
+  }
+  procedure PrintRee(isCreateXLT : boolean); {
+    var szakaz, scfo, _dds: string;
+    StartNewVisual(vtRotateVisual, vfThread+vfTimer, 'Формирование отчета', 0);
+    var _c: comp;
+    if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
+                    else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+    pXL.CreateTbls(sXLSFileName);
+    pXL.CreateTbl('Main');
+    pXL.CreateTblFld('viddoc');
+    pXL.CreateTblFld('ddoc'  );
+    pXL.CreateTblFld('nodoc' );
+    pXL.CreateTblFld('bdds'  );
+    pXL.CreateTblFld('dform' );
+    pXL.CreateTblFld('summa' );
+    pXL.CreateTblFld('total' );
+    pXL.CreateTblFld('sumopl');
+    pXL.CreateTblFld('sumdolg');
+    pXL.CreateTblFld('val'   );
+    pXL.CreateTblFld('statusopl');
+    pXL.CreateTblFld('dopl'  );
+    pXL.CreateTblFld('avans' );
+    pXL.CreateTblFld('status');
+    pXL.CreateTblFld('ispoln');
+    pXL.CreateTblFld('dds'   );
+    pXL.CreateTblFld('bdr'   );
+    pXL.CreateTblFld('buhsch');
+    pXL.CreateTblFld('dsogl' );
+    pXL.CreateTblFld('sogl'  );
+    pXL.CreateTblFld('vbuh'  );
+    pXL.CreateTblFld('vkaz'  );
+    pXL.CreateTblFld('vpeu'  );
+    pXL.CreateTblFld('vdir'  );
+    pXL.CreateTblFld('pbuh'  );
+    pXL.CreateTblFld('pkaz'  );
+    pXL.CreateTblFld('ppeu'  );
+    pXL.CreateTblFld('pdir'  );
+    pXL.CreateTblFld('vrez'  );
+    pXL.CreateTblFld('soglinfo');
+    pXL.CreateTblFld('org'   );
+    pXL.CreateTblFld('bank'  );
+    pXL.CreateTblFld('bankrs');
+    pXL.CreateTblFld('init'  );
+    pXL.CreateTblFld('cfo'   );
+    pXL.CreateTblFld('zakaz' );
+    pXL.CreateTblFld('contractId');
+    pXL.CreateTblFld('viddoc');
+    pXL.CreateTblFld('dognum' );
+    pXL.CreateTblFld('dogdate');
+    pXL.CreateTblFld('procav');
+    pXL.CreateTblFld('nazn');
+    pXL.CreateTblFld('npp');
+    pXL.CreateTblFld('statusName');
+    pXL.CreateTblFld('statusComment');
+    if (not isCreateXLT) {
+      pushpos(#brbd);
+      var _cnt, _npp: longint;
+      _cnt := getmarkercount(mrkmain);
+      _npp := 0;
+      _loop brbd  where (_cnt=0 or foundmarker(mrkmain,brbd.nrec)) {
+        _npp += 1;
+        //выводим строки
+        if getfirst brbasedoc = tsOk {};
+        if getfirst brorg     = tsOk {};
+        if getfirst brbank    = tsOk {};
+        if getfirst brnote    = tsOk {};
+        pXL.ClearTblBuffer;
+        pXL.SetTblStringFldValue('npp'      , _npp);
+        pXL.SetTblStringFldValue('ddoc'     , datetostr(brbd.ddoc,'DD.MM.YYYY'));
+        pXL.SetTblStringFldValue('nodoc'    , brbd.nodoc                       );
+        pXL.SetTblStringFldValue('viddoc'   , if(brbasedoc.viddoc=101, 'ДО на закупку', 'ДО на предоплату закупок'));
+        pXL.SetTblStringFldValue('nazn'     , brbd.naznpl                      );
+        pXL.SetTblStringFldValue('bdds'     , brbd.bdds                        );
+        pXL.SetTblStringFldValue('dform'    , datetostr(brbd.dform,'DD.MM.YYYY'));
+        pXL.SetTblNumberFldValue('summa'    , brbd.summa                       );
+        pXL.SetTblNumberFldValue('total'    , brbd.total                       );
+        pXL.SetTblNumberFldValue('sumopl'   , brbd.sumopl                      );
+        pXL.SetTblNumberFldValue('sumdolg'  , round(brbd.total-brbd.sumopl,2)  );
+        pXL.SetTblStringFldValue('statusopl', if(brbd.sumopl<=0,'Не оплачен', if(brbd.sumopl>=brbd.total,'Полностью оплачен', 'Частично оплачен')));
+
+        _qOpl.setParam('basedocNrec', brbd.nrec);
+        if _qOpl.execute.errorcode = tsOk
+        {
+          if _qOpl.fetch.errorCode = tsOk
+          {
+            pXL.AddTblStringFldValue('dopl', datetostr(_qOpl.row.Val('datob'),'DD.MM.YYYY'));
+            while _qOpl.fetch.errorCode = tsOk
+              pXL.AddTblStringFldValue('dopl', '; '+datetostr(_qOpl.row.Val('datob'),'DD.MM.YYYY'));
+          }
+        }
+
+        pXL.SetTblStringFldValue('avans'    , brbd.avans                       );
+        pXL.SetTblStringFldValue('status'   , brnote.name                      );
+        pXL.SetTblStringFldValue('ispoln'   , brbd.ispoln                      );
+        if pos(' ',brbd.dds) > 0 {
+          _dds := replace(substr(brbd.dds,1,pos(' ',brbd.dds)), '.', '');
+        } else {
+          _dds := brbd.dds;
+        }
+        pXL.SetTblStringFldValue('dds'      , _dds                             );
+        pXL.SetTblStringFldValue('bdr'      , brbd.bdr                         );
+        pXL.SetTblStringFldValue('buhsch'   , brbd.buhsch                      );
+        pXL.SetTblStringFldValue('dsogl'    , datetostr(brbd.dsogl,'DD.MM.YYYY'));
+        pXL.SetTblStringFldValue('sogl'     , vizafld(brbd.sogl,brbd.daysogl)  );
+        pXL.SetTblStringFldValue('vbuh'     , vizafld(brbd.vbuh,brbd.daybuh)   );
+        pXL.SetTblStringFldValue('vkaz'     , vizafld(brbd.vkaz,brbd.daykaz)   );
+        pXL.SetTblStringFldValue('vpeu'     , vizafld(brbd.vpeu,brbd.daypeu)   );
+        pXL.SetTblStringFldValue('vdir'     , vizafld(brbd.vdir,brbd.daydir)   );
+
+        pXL.SetTblStringFldValue('pbuh'     , ea.sGetAttrID(WT_BASEDOC, brbd.nrec, ATTRNAM_PBUH));
+        pXL.SetTblStringFldValue('pkaz'     , ea.sGetAttrID(WT_BASEDOC, brbd.nrec, ATTRNAM_PKAZ));
+        pXL.SetTblStringFldValue('ppeu'     , ea.sGetAttrID(WT_BASEDOC, brbd.nrec, ATTRNAM_PPEU));
+        pXL.SetTblStringFldValue('pdir'     , ea.sGetAttrID(WT_BASEDOC, brbd.nrec, ATTRNAM_PDIR));
+
+        pXL.AddTblStringFldValue('soglinfo' ,         GetBDReeExtAttrInfo('Передано на согл.    ', ATTRNAM_SOGL));
+        pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('Казначейство         ', ATTRNAM_KAZN));
+        pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('Бухгалтерия          ', ATTRNAM_BUH));
+        pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('ПЭУ                  ', ATTRNAM_PEU));
+        pXL.AddTblStringFldValue('soglinfo' , chr(10)+GetBDReeExtAttrInfo('Коммерческая дирекция', ATTRNAM_DIR));
+
+        pXL.SetTblStringFldValue('vrez'     , vizafld(brbd.vrez,brbd.dayrez)   );
+        pXL.SetTblStringFldValue('org'      , brorg.name                       );
+        pXL.SetTblStringFldValue('bank'     , brbank.name                      );
+        pXL.SetTblStringFldValue('bankrs'   , brbank.schet1                    );
+        pXL.SetTblStringFldValue('zakaz'    , brbd.zakaz                       );
+
+        if (getfirst brsd = tsOk)
+          pXL.SetTblStringFldValue('contractId', _contractIDHelper.GetContractId(GetContractIDKey_ByStepdoc, brsd.nrec));
+
+        pXL.SetTblStringFldValue('cfo'      , brbd.cfo                         );
+        if getfirst brdog     = tsOk {
+          pXL.SetTblStringFldValue('dognum' , brdog.nodoc                    );
+          pXL.SetTblStringFldValue('dogdate', datetostr(brdog.ddoc,'DD.MM.YYYY'));
+        }
+        if getfirst brval     = tsOk {
+          pXL.SetTblStringFldValue('val'    , brval.dollar);
+        } else {
+          pXL.SetTblStringFldValue('val'    , '');
+        }
+        pXL.SetTblStringFldValue('procav'   , if(brbasedoc.procopl>0,
+                                                 brbasedoc.procopl,
+                                                 if(brbd.total>0 and brbd.sumopl>0,
+                                                    round(brbd.sumopl/brbd.total*100,2),
+                                                    ''
+                                                 )
+                                              ) );
+        if getfirst brnote = tsOk
+          pXL.SetTblStringFldValue('statusName', brnote.name);
+        else
+          pXL.SetTblStringFldValue('statusName', '');
+
+        if getlast brstatlog = tsOk
+          pXL.SetTblStringFldValue('statusComment', brstatlog.comment);
+        else
+          pXL.SetTblStringFldValue('statusComment', '');
+
+        pXL.InsTblRow;
+      }
+    }
+    pXL.PublishTbl('Main');
+    pXL.LoadReport(sXLSFileName);
+    pXL.DisConnectExcel;
+    poppos(#brbd);
+    stopvisual('',0);
+  }
+  procedure ChangeViewBDCard(isVisible: boolean); //(GetTabbedSheetVisible(SCDO))
+  {
+    if cfsGetCurrentContainerSelf != 0
+    {
+      cfsSetProp('SCDO', 'Hidden', isVisible);
+      cfsSetProp('SCDO', 'Visible', not isVisible);
+      cfsSetProp('SCDO', 'RectA_X', if(GetTabbedSheetVisible(SCMAINFILTERS), 56, 1));
+      cfsSetProp('BRMAIN', 'RectB_Y', if(isVisible, 22, 10));
+    }
+  }
+
+  function AreYouFromPEU: boolean; //if true - user is realy from PEU (or Admin)
+  {
+    result := tf.UserInGroup(UserId, 0001000000000100h) or (pr_CurUserAdmin);
+  }
+
+  handleevent
+    cmChangeView   : {
+      ShowIER := not ShowIER;
+      if (not SetIerBounds) ShowIER := not ShowIER;
+      rereadrecord(#brbd);
+    }
+    cmTreeTop      : cMainBD := 0;
+    cmTreeDown     : cMainBD := brbd.NRec;
+    cmTreeUp       : cMainBD := brbd.cPrnt;
+    cmTreeNodeType : if (TreeIsTerminal(brmain) or (not ShowIER)) TreeSetNodeType(brmain, ntfText);
+
+    cmSetVisiblity : {
+      SetVisiblity;
+      rereadrecord;
+    }
+
+    cmDoMarkUnMark : {
+      if foundmarker(mrkmain,brbd.nrec) {
+        deletemarker(mrkmain,brbd.nrec);
+      } else {
+        insertmarker(mrkmain,brbd.nrec);
+      }
+      RedrawCurrentAndGo(brmain,true);
+    }
+
+    cmSelAll : {
+      clearmarker(mrkmain);
+      pushpos(#brbd);
+      _loop brbd {
+        insertmarker(mrkmain,brbd.nrec);
+      }
+      poppos(#brbd);
+      rereadrecord(#brbd);
+    }
+
+    cmUnSelAll :{
+      clearmarker(mrkmain);
+      rereadrecord(#brbd);
+    }
+
+    cmClearFilters: {
+      viza1.clearfilters;
+      viza2.clearfilters;
+      viza3.clearfilters;
+      viza4.clearfilters;
+      viza5.clearfilters;
+      //viza6.clearfilters;
+      SetFilter;
+      rereadrecord;
+    }
+    cmSetNotSoglFilter: {
+      viza1.flag := 2;
+      viza1.flagdays := 0;
+      viza1.operator := 0;
+      viza2.SetNotSoglFilters;
+      viza3.SetNotSoglFilters;
+      viza4.SetNotSoglFilters;
+      viza5.SetNotSoglFilters;
+      SetFilter;
+      rereadrecord;
+    }
+    cmSetWorkgroupFilter: {
+      viza1.flag := 3;
+      viza1.flagdays := 0;
+      viza1.operator := 0;
+      viza2.SetWorkgroupFilters;
+      viza3.SetWorkgroupFilters;
+      viza4.SetWorkgroupFilters;
+      viza5.SetWorkgroupFilters;
+      SetFilter;
+      rereadrecord;
+    }
+    cmCheckField: {
+      case curfield of
+        #sNumSch: {
+          updateflag(BIT_NODOC,sNumsch <> '',flagAttr);
+          rereadrecord;
+        }
+      end;
+    }
+    cmPrintDoc: {
+      PrintRee(false);
+    }
+    cmPlansNo:
+    {
+      _hierReport.PrintReport(mrkMain);
+    }
+    cmDefault: {
+      if getfirst brbasedoc = tsOk {
+        if brbasedoc.viddoc = 101 {
+          runinterfacenomodal(L_BASEDOC::VSCHETB,brbasedoc.nrec);
+        } else {
+          runinterfacenomodal(L_BASEDOC::VSCHETPB,brbasedoc.nrec);
+        }
+      }
+      //putcommand(cmEdit);
+      //igetkau.getcodekau(1, 6, brbd.nrec);
+    }
+    cmFilter: {
+      SetFilter;
+    }
+    cmpick: {
+      case curfield of
+        #v2sfld      : { viza2.selectviza; rereadrecord; }
+        #v3sfld      : { viza3.selectviza; rereadrecord; }
+        #v4sfld      : { viza4.selectviza; rereadrecord; }
+        #v5sfld      : { viza5.selectviza; rereadrecord; }
+        #v6sfld      : { viza6.selectviza; rereadrecord; }
+        #sDescr      : { selectdescr;  rereadrecord; }
+        #sOrg        : { selectorg;    rereadrecord; }
+        #sfltrStatus : { selectstatus; rereadrecord; }
+        #sIspoln     : { selectispoln; rereadrecord; }
+        #sDDS        : { selectdds;    rereadrecord; }
+        #sZakaz      : { selectzakaz;  rereadrecord; }
+        #sBDR        : { selectBDR;    rereadrecord; }
+        #sBuhSch     : { selectBuhSch; rereadrecord; }
+        #sDog        : { selectDog;    rereadrecord; }
+        #sCFO        : { selectCFO;    rereadrecord; }
+        #sVal        : { selectVal;    rereadrecord; }
+        #sRejim      : { selectRejim;  rereadrecord; }
+        #v1operator  : { if(viza1.operator=0) viza1.operator := 1 else viza1.operator := 0; rereadrecord;}
+        #v2operator  : { if(viza2.operator=0) viza2.operator := 1 else viza2.operator := 0; rereadrecord;}
+        #v3operator  : { if(viza3.operator=0) viza3.operator := 1 else viza3.operator := 0; rereadrecord;}
+        #v4operator  : { if(viza4.operator=0) viza4.operator := 1 else viza4.operator := 0; rereadrecord;}
+        #v5operator  : { if(viza5.operator=0) viza5.operator := 1 else viza5.operator := 0; rereadrecord;}
+        #v6operator  : { if(viza6.operator=0) viza6.operator := 1 else viza6.operator := 0; rereadrecord;}
+      end;
+    }
+    cmdelonprotect: {
+      case curfield of
+        #v2sfld     : { viza2.clearselection; rereadrecord; }
+        #v3sfld     : { viza3.clearselection; rereadrecord; }
+        #v4sfld     : { viza4.clearselection; rereadrecord; }
+        #v5sfld     : { viza5.clearselection; rereadrecord; }
+        #v6sfld     : { viza6.clearselection; rereadrecord; }
+        #sDescr     : { cleardescr;  rereadrecord; }
+        #sOrg       : { clearorg;    rereadrecord; }
+        #sfltrStatus: { clearstatus; rereadrecord; }
+        #sIspoln    : { clearispoln; rereadrecord; }
+        #sDDS       : { cleardds;    rereadrecord; }
+        #sZakaz     : { clearzakaz;  rereadrecord; }
+        #sBDR       : { clearBDR;    rereadrecord; }
+        #sBuhSch    : { clearbuhsch; rereadrecord; }
+        #sDog       : { clearDog;    rereadrecord; }
+        #sCFO       : { clearCFO;    rereadrecord; }
+        #sRejim     : { clearRejim;  rereadrecord; }
+        #sVal       : { clearVal;    rereadrecord; }
+      end;
+    }
+    cminit: {
+      sXLTFileName := TranslatePath('%StartPath%xls\agat_basedoc_ree.xlt');
+      _qOpl := queryManager.createQuery(qSelectOpl);
+      mrkmain := initmarker('',8,100,100,false);
+      //sXLTFileName := TranslatePath('c:\gal\vip\agat_basedoc_ree.xlt');
+      if (not readmydsk(flagVid       , 'AGAT_BDREE_FLAGVID'       , false)) flagVid        := 65535;
+      if (not readmydsk(flagOpl       , 'AGAT_BDREE_FLAGOPL'       , false)) flagOpl        := 65535;
+      if (not readmydsk(flagBDDS      , 'AGAT_BDREE_FLAGBDDS'      , false)) flagBDDS       := 65535;
+      if (not readmydsk(flagAvans     , 'AGAT_BDREE_FLAGAVANS'     , false)) flagAvans      := 65535;
+      if (not readmydsk(flagDates     , 'AGAT_BDREE_FLAGDATES'     , false)) flagDates      := 1;
+      if (not readmydsk(flagSums      , 'AGAT_BDREE_FLAGSUMS'      , false)) flagSums       := 0;
+      if (not readmydsk(flagAttr      , 'AGAT_BDREE_FLAGATTR'      , false)) flagAttr       := 0;
+      if (not readmydsk(cfltrStatus   , 'AGAT_BDREE_STATUS'        , false)) cfltrStatus    := 0;
+      if (not readmydsk(DDocBeg       , 'AGAT_BDREE_DDOCBEG'       , false)) DDocBeg        := sub_day(cur_date,31);
+      if (not readmydsk(DDocEnd       , 'AGAT_BDREE_DDOCEND'       , false)) DDocEnd        := cur_date;
+      if (not readmydsk(VvodBeg       , 'AGAT_BDREE_VVODBEG'       , false)) VvodBeg        := sub_day(cur_date,31);
+      if (not readmydsk(VvodEnd       , 'AGAT_BDREE_VVODEND'       , false)) VvodEnd        := cur_date;
+      if (not readmydsk(DSoglBeg      , 'AGAT_BDREE_DSOGLBEG'      , false)) DSoglBeg       := sub_day(cur_date,31);
+      if (not readmydsk(DSoglEnd      , 'AGAT_BDREE_DSOGLEND'      , false)) DSoglEnd       := cur_date;
+      if (not readmydsk(sNumSch       , 'AGAT_BDREE_sNumSch'       , false)) sNumSch        := '';
+      if (not readmydsk(SumSchOt      , 'AGAT_BDREE_SumSchOt'      , false)) SumSchOt       := 1;
+      if (not readmydsk(SumSchDo      , 'AGAT_BDREE_SumSchDo'      , false)) SumSchDo       := 1000000000;
+      if (not readmydsk(SumTotOt      , 'AGAT_BDREE_SumTotOt'      , false)) SumTotOt       := 1;
+      if (not readmydsk(SumTotDo      , 'AGAT_BDREE_SumTotDo'      , false)) SumTotDo       := 1000000000;
+      if (not readmydsk(SumValOt      , 'AGAT_BDREE_SumValOt'      , false)) SumValOt       := 1;
+      if (not readmydsk(SumValDo      , 'AGAT_BDREE_SumValDo'      , false)) SumValDo       := 1000000000;
+      if (not readmydsk(SumOplOt      , 'AGAT_BDREE_SumOplOt'      , false)) SumOplOt       := 1;
+      if (not readmydsk(SumOplDo      , 'AGAT_BDREE_SumOplDo'      , false)) SumOplDo       := 1000000000;
+      if (not readmydsk(flagVsbl1     , 'AGAT_BDREE_flagVsbl1'     , false)) flagVsbl1      := 65535;
+      if (not readmydsk(flagVsbl2     , 'AGAT_BDREE_flagVsbl2'     , false)) flagVsbl2      := 65535;
+      viza1.initviza('AGAT_BDREE_SOGL', 'На согласование', 'Готов к согласованию', 1102);
+      viza2.initviza('AGAT_BDREE_BUH', 'Виза бухгалтерии', 'Виза бухгалтерии', 1102);
+      viza3.initviza('AGAT_BDREE_KAZ', 'Виза казначейства', 'Виза казначейства', 1102);
+      viza4.initviza('AGAT_BDREE_DIR', 'Виза коммерческой дирекции', 'Виза комерческой дирекции', 1102);
+      viza5.initviza('AGAT_BDREE_PEU', 'Виза ПЭУ', 'Виза ПЭУ', 1102);
+      viza6.initviza('AGAT_BDREE_REZERV', 'Виза резерв', 'Виза резерв', 1102);
+      FilltmInfoDescr;
+      mrkDescr  := initmarker(DSK_MRKDESCR ,8,100,10);
+      sDescr    := getdescrfldname;
+      mrkOrg    := initmarker(DSK_MRKORG   ,8,100,10);
+      sOrg      := getfldname(mrkOrg, 1);
+      mrkIspoln := initmarker(DSK_MRKISPOLN,8,100,10);
+      sIspoln   := getfldname(mrkIspoln, 2);
+      mrkDDS    := initmarker(DSK_MRKDDS   ,8,100,10);
+      sDDS      := getfldname(mrkDDS, KODGR_DDS);
+      mrkZakaz  := initmarker(DSK_MRKZAKAZ ,8,100,10);
+      sZakaz    := getfldname(mrkZakaz, 40);
+      mrkBDR    := initmarker(DSK_MRKBDR   ,8,100,10);
+      sBDR      := getfldname(mrkBDR, KODGR_BDR);
+      mrkBuhSch := initmarker(DSK_MRKBUHSCH,8,100,10);
+      SetSchetFldName;
+      mrkDog    := initmarker(DSK_MRKDOG   ,8,100,10);
+      sDog      := getfldname(mrkDog, 14);
+      mrkCFO    := initmarker(DSK_MRKCFO   ,8,100,10);
+      sCFO      := getfldname(mrkCFO, 2);
+      mrkVal    := initmarker(DSK_MRKVAL   ,8,100,10);
+      sVal      := getvalfldname;
+      mrkRejim  := initmarker(DSK_MRKREJIM ,8,100,10);
+      sRejim    := getfldname(mrkRejim, 10695);
+      SetVisiblity;
+      CreateTmpTables;
+      SetFilter;
+      if brbd.viddoc = 101
+      {
+        BindEmbeddedInterface(scDO, DOBuy, 'WVSCHET'); // перво-наперво пусть будет закупка
+        BindedIFC := DOBuy;
+      }
+      else
+      {
+        BindEmbeddedInterface(scDO, DOPrePay, 'WVSCHET');
+        BindedIFC := DOPrePay;
+      }
+    }
+    cmDone: {
+      savemydsk(flagVid       , 'AGAT_BDREE_FLAGVID'       );
+      savemydsk(flagOpl       , 'AGAT_BDREE_FLAGOPL'       );
+      savemydsk(flagBDDS      , 'AGAT_BDREE_FLAGBDDS'      );
+      savemydsk(flagAvans     , 'AGAT_BDREE_FLAGAVANS'     );
+      savemydsk(flagDates     , 'AGAT_BDREE_FLAGDATES'     );
+      savemydsk(flagSums      , 'AGAT_BDREE_FLAGSUMS'      );
+      savemydsk(flagAttr      , 'AGAT_BDREE_FLAGATTR'      );
+      savemydsk(cfltrStatus   , 'AGAT_BDREE_STATUS'        );
+      savemydsk(DDocBeg       , 'AGAT_BDREE_DDOCBEG'       );
+      savemydsk(DDocEnd       , 'AGAT_BDREE_DDOCEND'       );
+      savemydsk(VvodBeg       , 'AGAT_BDREE_VVODBEG'       );
+      savemydsk(VvodEnd       , 'AGAT_BDREE_VVODEND'       );
+      savemydsk(DSoglBeg      , 'AGAT_BDREE_DSOGLBEG'      );
+      savemydsk(DSoglEnd      , 'AGAT_BDREE_DSOGLEND'      );
+      savemydsk(sNumSch       , 'AGAT_BDREE_sNumSch'       );
+      savemydsk(SumSchOt      , 'AGAT_BDREE_SumSchOt'      );
+      savemydsk(SumSchDo      , 'AGAT_BDREE_SumSchDo'      );
+      savemydsk(SumTotOt      , 'AGAT_BDREE_SumTotOt'      );
+      savemydsk(SumTotDo      , 'AGAT_BDREE_SumTotDo'      );
+      savemydsk(SumValOt      , 'AGAT_BDREE_SumValOt'      );
+      savemydsk(SumValDo      , 'AGAT_BDREE_SumValDo'      );
+      savemydsk(SumOplOt      , 'AGAT_BDREE_SumOplOt'      );
+      savemydsk(SumOplDo      , 'AGAT_BDREE_SumOplDo'      );
+      savemydsk(flagVsbl1     , 'AGAT_BDREE_flagVsbl1'     );
+      savemydsk(flagVsbl2     , 'AGAT_BDREE_flagVsbl2'     );
+      viza1.doneviza;
+      viza2.doneviza;
+      viza3.doneviza;
+      viza4.doneviza;
+      viza5.doneviza;
+      viza6.doneviza;
+      donemarker(mrkDescr  ,DSK_MRKDESCR );
+      donemarker(mrkOrg    ,DSK_MRKORG   );
+      donemarker(mrkIspoln ,DSK_MRKISPOLN);
+      donemarker(mrkDDS    ,DSK_MRKDDS   );
+      donemarker(mrkZakaz  ,DSK_MRKZAKAZ );
+      donemarker(mrkBDR    ,DSK_MRKBDR   );
+      donemarker(mrkBuhSch ,DSK_MRKBUHSCH);
+      donemarker(mrkDog    ,DSK_MRKDog);
+      donemarker(mrkCFO    ,DSK_MRKCFO);
+      donemarker(mrkVal    ,DSK_MRKVAL);
+      donemarker(mrkRejim  ,DSK_MRKREJIM);
+      donemarker(mrkmain   ,'');
+    }
+    cmHotKeys: {
+      if AreYouFromPEU
+        PutHotCommand(RunDynMenu('AGAT::mnuAGAT_Basedoc_Ree' + ';SEPARATOR;' + 'AGAT::mnuAGAT_Basedoc_Dop'))
+      else
+        PutHotCommand(RunMenu('mnuAGAT_Basedoc_Ree'));
+    }
+    cmFilterSave: {
+      ToggleSettingsVisiblity;
+    }
+    cmFilling: //заполнение "Визы ПЭУ"
+    {
+      var i: integer;
+      var curbdnrec: comp;
+      var mrkrcnt: longint;
+      mrkrcnt := GetMarkerCount(mrkMain);
+      var RewriteAllVisas, DontTouchAllVisas: boolean;
+      RewriteAllVisas := false;
+      DontTouchAllVisas := false;
+      if RunWindowModal(wSelectViza) = cmDefault
+      {
+        StartNewVisual(vtIndicatorVisual, vfThread + vfBreak + vfTimer, 'Простановка виз', mrkrcnt);
+        for (i := 0; i < mrkrcnt; i++)
+        {
+          GetMarker(mrkMain, i, curbdnrec);
+          if getfirst brbd where ((curbdnrec == brbd.nrec)) = tsOk
+          {
+            //check to empty viza peu field, if not empty - ask, "Do you realy want to overwrite this?"
+            if DontTouchAllVisas continue;
+            if brbd.cpeu != 0 and (not RewriteAllVisas)
+            {
+              case message(chr(3) + 'Виза ПЭУ у ДО "' + BRBD.NAZNPL + '"' + chr(13) +
+                           'уже проставлена в значение "' + brbd.vpeu + '"' + chr(13) +
+                           'Переписать значение?', yesNo + mfYes4All + mfNo4All) of
+                cmYes4All: { RewriteAllVisas := true; }
+                cmNo:      { continue; }
+                cmNo4All:  { DontTouchAllVisas := true; continue; }
+              end;
+            }
+            case SelectVizaNrec of
+              VIZA_NA_RAB_GROUP: {
+                ea.coSetAttr(WT_BASEDOC, curbdnrec, 'Виза ПЭУ', VIZA_NA_RAB_GROUP, '006 На рабочую группу');
+                brbd.vpeu := '006 На рабочую группу';
+              }
+              VIZA_S_OBSHIH_SCHETOV: {
+                ea.coSetAttr(WT_BASEDOC, curbdnrec, 'Виза ПЭУ', VIZA_S_OBSHIH_SCHETOV, '005 С общих р/счет');
+                brbd.vpeu := '005 С общих р/счет';
+              }
+              VIZA_NE_TREBUETSA: {
+                ea.coSetAttr(WT_BASEDOC, curbdnrec, 'Виза ПЭУ', VIZA_NE_TREBUETSA, '004 Не требуется');
+                brbd.vpeu := '004 Не требуется';
+              }
+            end;
+            brbd.cpeu := SelectVizaNrec;
+            update current brbd;
+            RedrawPanel(#brbd);
+          }
+          if (not NextVisual) break;
+        } //for (i := 0; i < mrkrcnt; i++)
+        ReReadRecord;
+        stopvisual('',0);
+      }
+    }
+    cmAutoAgreement: //Авто согласование
+    {
+      var mrkrcnt: longint;
+      mrkrcnt := GetMarkerCount(mrkMain);
+      var i: integer;
+      var curbdnrec: comp;
+      var q: IQuery;
+      var rs: IResultSet;
+      q := queryManager.createQuery(qSpec);
+      var AgreementFlag: boolean;
+      AgreementFlag := true;
+      if mrkrcnt != 0
+      {
+        StartNewVisual(vtIndicatorVisual, vfThread + vfBreak + vfTimer, 'Простановка виз', mrkrcnt);
+        for (i := 0; i < mrkrcnt; i++)
+        {
+          GetMarker(mrkMain, i, curbdnrec);
+          q.setParam('basedocNrec', curbdnrec);
+          rs := q.getResultSet;
+          if rs = nullref continue;
+          if (rs.getFirst = tsOk) do
+          {
+            if rs.row.val('RSSpis') = 0 or rs.row.val('UseMode') = 0
+            {
+              AgreementFlag := false;
+              break;
+            }
+          } while (rs.getNext = tsOk);
+          if AgreementFlag
+          {
+            ea.coSetAttr(WT_BASEDOC, curbdnrec, 'Виза ПЭУ', VIZA_SOGLASOVANO, '002 Согласовано');
+            brbd.cpeu := VIZA_SOGLASOVANO;
+            brbd.vpeu := '002 Согласовано';
+            update current brbd;
+            RedrawPanel(#brbd);
+          }
+          if (not NextVisual) break;
+        }
+        stopvisual('',0);
+      }
+      else
+      {
+        curbdnrec := brbd.nrec;
+        q.setParam('basedocNrec', curbdnrec);
+        rs := q.getResultSet;
+        if rs = nullref continue;
+        if (rs.getFirst = tsOk) do
+        {
+          if rs.row.val('RSSpis') = 0 or rs.row.val('UseMode') = 0
+          {
+            AgreementFlag := false;
+            break;
+          }
+        } while (rs.getNext = tsOk);
+        if AgreementFlag
+        {
+          ea.coSetAttr(WT_BASEDOC, curbdnrec, 'Виза ПЭУ', VIZA_SOGLASOVANO, '002 Согласовано');
+          brbd.cpeu := VIZA_SOGLASOVANO;
+          brbd.vpeu := '002 Согласовано';
+          update current brbd;
+          RedrawPanel(#brbd);
+        }
+      }
+    }
+    cmPositionChanged:
+    {
+      if CurTable = #brbd and brbd.nrec != 0
+      {
+        if brbd.viddoc = 101 // ДО на закупку
+        {
+          DOBuy.SetPos(brbd.nrec);
+          if BindedIFC != DOBuy
+          {
+            BindEmbeddedInterface(scDO, DOBuy, 'WVSCHET');
+            BindedIFC := DOBuy;
+          }
+          DOBuy.RefreshPanel;
+        }
+        else // ДО на предоплату
+        {
+          DOPrePay.SetPos(brbd.nrec);
+          if BindedIFC != DOPrePay
+          {
+            BindEmbeddedInterface(scDO, DOPrePay, 'WVSCHET');
+            BindedIFC := DOPrePay;
+          }
+          DOPrePay.RefreshPanel;
+        }
+      }
+    }
+    cmCalcUslParam:
+    {
+      var visibleflag: boolean;
+      if cfsGetProp('ScDO', 'Visible', visibleflag) = cfOk
+        ChangeViewBDCard(visibleflag);
+    }
+    cmCreatePlpors:
+    {
+      var i: integer;
+      var mrkrcnt: longint;
+      var curbdnrec: comp;
+      var mCash, mBankNrec: comp;
+      var mTIDK: word;
+      mCash := 0;
+      mBankNrec := 0;
+      mTIDK := 0;
+      LogFileName := CreateTmpFileName;  // имя файла лога
+      LogStrToFile(LogFileName, '+-------------------------------------------------------------------------------------------------+--------------------------------------------------+');
+      LogStrToFile(LogFileName, '|                                        Документ основание                                       |                Платёжное поручение               |');
+      LogStrToFile(LogFileName, '+-------------------------------------------------------------------------------------------------+--------------------------------------------------+');
+      mrkrcnt := GetMarkerCount(mrkMain);
+      StartNewVisual(vtRotateVisual, vfThread + vfBreak + vfTimer, 'Формирование платежных поручений', 0);
+      for (i := 0; i < mrkrcnt; i++)
+      {
+        GetMarker(mrkMain, i, curbdnrec);
+        pl.CreatePlpors(curbdnrec, mCash, mBankNrec, mTIDK, LogFileName);
+        if (not NextVisual) break;
+      }
+      ReReadRecord(#brbd);
+      stopvisual('',0);
+      message('Процедура формирования платежных поручений завершена');
+      ProcessText(LogFileName, vfNewTitle or vfEscable, 'Протокол формирования платёжных поручений из реестра ДО');
+    }
+  end;
+end.
+
+VipInterface UserReport_AGAT_BASEDOC_REE Implements IUserReport licensed(free);
+Interface UserReport_AGAT_BASEDOC_REE;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::AGAT_BASEDOC_REE);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Реестр документов оснований';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'BUY';
+      2 : VisibleInModule := 'DOGOVOR';
+    end;
+  end;
+end.
+
+mnuAGAT_Basedoc_Ree Menu
+{
+- 'Печать', cmPrintDoc, 'Печать реестра', , 'Ctrl+P', kbCtrlP, sci1Esc;
+- 'Печать с группировкой по счетам', cmPlansNo, 'Печать реестра с группировкой по счетам', , 'Alt+P', kbAltP, sci1Esc;
+- 'Сформировать платежные поручения', cmCreatePlpors, 'Сформировать платежные поручения', , '', kbAltF, sci1Esc;
+- 'Иерархия/список', cmChangeView, 'Иерархия/список', , '', kbAltA, sci1Esc;
+- 'Показать/скрыть фильтры', cmFilterSave, 'Показать/скрыть фильтры', , 'Alt+B', kbAltB, sci1Esc;
+- 'Показать/скрыть карточку ДО', cmCalcUslParam, 'Показать/скрыть карточку ДО', ,'Alt+W', kbAltW, sci1Esc;
+}
+
+mnuAGAT_Basedoc_Dop Menu
+{
+- 'Заполнение "Визы ПЭУ"', cmFilling, 'Заполнение "Визы ПЭУ"', , '', kbAltC, sci1Esc;
+- 'Автоматическое согласование "Визы ПЭУ"', cmAutoAgreement, 'Автоматическое согласование "Визы ПЭУ"', , '', kbAltD, sci1Esc;
+}
