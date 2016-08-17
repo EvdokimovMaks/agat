@@ -13,6 +13,7 @@ var
 sql query qPlatezh =
   select ko.kodplatnds    as KPP,
          bd.nrec          as BaseDocNrec,
+         bd.viddoc        as BaseDocViddoc,
          bd.name          as BaseDocName,
          bd.nodoc         as Nodoc,
          bd.ddoc          as DateDoc,
@@ -26,11 +27,13 @@ sql query qPlatezh =
          bd.CORG          as Cpol,
          bd.CDOGOVOR      as CDogovor,
          bd.CAPPDOGOVOR   as CAPPDOGOVOR,
+         coalesce(avOsnDO.vcomp,#comp(0)) as OsnDONrec,
+         coalesce(osndoStepdoc.nrec,#comp(0)) as OsnStepdocNrec,
          naz.vstring      as Naznach,
          sd.nrec          as StepDocNrec,
          viz.vcomp        as VizaPEU,
-         spst.Summa       as Summa,
-         spst.NDS         as NDS,
+         spst.Summa * case when bd.viddoc=111 then bd.procopl/100 else 1 end as Summa,
+         spst.NDS * case when bd.viddoc=111 then bd.procopl/100 else 1 end as NDS,
          spst.RSFromSpec  as RSFromSpec,
          spst.UserMode    as UserMode,
          spst.UserModeStr as UserModeStr,
@@ -46,6 +49,8 @@ sql query qPlatezh =
   left join katorg ko on ko.nrec = bd.corg
   left join attrval viz on viz.wtable = 1102 and viz.crec = bd.nrec and viz.cattrnam = #comp(281474976710792)
   left join attrval naz on naz.wtable = 1102 and naz.crec = bd.nrec and naz.cattrnam = #comp(000100000000010Dh)
+  left join attrval avOsnDO on avOsnDO.wtable = 1102 and avOsnDO.crec = bd.nrec and avOsnDO.cattrnam = #comp(281474976710841)
+  left join stepdoc osndoStepdoc on osndoStepdoc.cbasedoc = coalesce(avOsnDO.vcomp,#comp(0)) and coalesce(avOsnDO.vcomp,#comp(0)) <> #comp(0)
   left join stepdoc sd  on sd.cbasedoc = bd.nrec
   left join (select sum(sps.summa)    as Summa,
                     sum(sps.nds)      as NDS,
@@ -117,11 +122,13 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
   var rs, rs1: IResultSet;
   var VSogl, RSSpec: comp;
   var TIDK: word;
+  var aViddoc: word;
   q := queryManager.createQuery(qPlatezh);
   q.setParam('basedocNrec', aBaseDocNrec);
   rs := q.getResultSet;
   if (rs.getFirst = tsOk) do
   {
+    aViddoc := rs.row.val('BasedocViddoc');
     VSogl := rs.row.val('VizaPEU');
     RSSpec := rs.row.val('RSFromSpec');
     TIDK := rs.row.val('UserDocType');
@@ -199,6 +206,7 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
     plpor.cgruzpol  := plpor.cplat;
     plpor.sumplat   := rs.row.val('Summa'); //Сумма платежа по док-ту
     plpor.cstepdoc  := rs.row.val('StepDocNrec'); //Ссылка на ЭТАП StepDoc
+    plpor.cstepdoc  := rs.row.val('OsnStepdocNrec');
     plpor.cwaymove  := rs.row.val('CTRANSP'); //Ссылка на способ транспортировки
     plpor.namepl1   := rs.row.val('Naznach');
     plpor.namepl4   := 'Сумма НДС ' + rs.row.val('NDS') + ' руб.';
@@ -215,6 +223,8 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
 
     ClearBuffer(#soprhoz);
     soprhoz.cdogovor := rs.row.val('CDogovor');
+    if (aViddoc = 111)
+      soprhoz.cpredopldo := rs.row.val('BaseDocNrec');
     soprhoz.cstepdoc := plpor.cstepdoc;
     soprhoz.csoprdoc := plpor.nrec;
     soprhoz.tipdoc   := plpor.tidk;
@@ -232,7 +242,15 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
 
     ClearBuffer(#basefin);
     basefin.cdogovor := soprhoz.cdogovor;
-    basefin.cbasedoc := rs.row.val('BaseDocNrec');
+    if (aViddoc = 111)
+    {
+      basefin.cpredopldo := rs.row.val('BaseDocNrec');
+      basefin.cbasedoc   := rs.row.val('OsnDONrec');
+    }
+    else
+    {
+      basefin.cbasedoc   := rs.row.val('BaseDocNrec');
+    }
     basefin.cstepdoc := plpor.cstepdoc;
     basefin.tipdoc   := plpor.tidk;
     basefin.tidkgal  := 1;
