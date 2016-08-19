@@ -9,10 +9,12 @@
 interface BasedocReeReport_Hier;
 
 table struct trs (
+  ObshiySchet: byte,
   spkRSNrec: comp,
   name: string
 ) with index (
-  i01 = spkRSNrec
+  i01 = ObshiySchet+spkRSNrec,
+  i02 = name
 );
 
 table struct tbd (
@@ -22,6 +24,7 @@ table struct tbd (
   nodoc      : string,
   bdds       : string,
   dform      : date,
+  ObshiySchet: byte,
   spkRSNrec  : comp,
   summa      : double,
   total      : double,
@@ -66,7 +69,7 @@ table struct tbd (
   vizaBUHPrim: string
 ) with index (
   i01 = nrec,
-  i02 = spkRSNrec + ddoc + nodoc
+  i02 = ObshiySchet + spkRSNrec + ddoc + nodoc
 );
 
 //#region Queries
@@ -139,6 +142,7 @@ select bd.nrec,
        bd.nodoc as nodoc,
        coalesce(spkBdds.Name,'') as bdds,
        bd.dform as dform,
+       tbd.obshiySchet as ObshiySchet,
        tbd.spkRSNrec as spkRSNrec,
        tbd.summa as summa,
        tbd.total as total,
@@ -182,13 +186,8 @@ select bd.nrec,
        coalesce(avPrimKOM.vString, '') as vizaKOMPrim,
        coalesce(avPrimBUH.vString, '') as vizaBUHPrim
 from (select bd.nrec,
-             case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h)
-                  then #comp(0)
-                  else case when coalesce(spkRS.nrec,#comp(0)) = #comp(0)
-                            then #comp(-1)
-                            else coalesce(spkRS.nrec,#comp(0))
-                       end
-             end as spkRSNrec,
+             case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h) then 1 else 0 end as obshiySchet,
+             coalesce(spkRS.nrec,#comp(0)) as spkRSNrec,
              sum(sps.summa + case when bd.vhodnal=2 then sps.nds else 0 end) as summa,
              sum(case when bd.summa <> 0 then sps.summa / bd.summa * bd.total else 0 end) as total
       from bdreeagat
@@ -199,13 +198,8 @@ from (select bd.nrec,
       left join spkau spkRS on spkRS.nrec = coalesce(avRS.vcomp,#comp(0))
       left join attrval avVizaPEU on avVizaPEU.wtable = 1102 and avVizaPEU.cRec = bd.nrec and avVizaPEU.cattrnam = #comp(0001000000000088h)
       group by bd.nrec,
-               case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h)
-                    then #comp(0)
-                    else case when coalesce(spkRS.nrec,#comp(0)) = #comp(0)
-                              then #comp(-1)
-                              else coalesce(spkRS.nrec,#comp(0))
-                         end
-               end
+               case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h) then 1 else 0 end,
+               coalesce(spkRS.nrec,#comp(0))
                //case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h) then #comp(0) else coalesce(spkRS.nrec,#comp(0)) end
      ) tbd
 
@@ -291,9 +285,10 @@ var
 create view
 as select *
 from tbd, trs, spkau,
-     trs brrs, tbd brbd, basedoc brbasedoc, katorg brorg, katbank brbank, dogovor brdog,
+     trs brrs (i02), tbd brbd, basedoc brbasedoc, katorg brorg, katbank brbank, dogovor brdog,
      katnotes brnote, statlog brstatlog(STATLOG02), klval brval, stepdoc brsd, basefin brbf
 where ((
+  brrs.ObshiySchet   == brbd.ObshiySchet  and
   brrs.spkRSNrec     == brbd.spkRSNrec    and
   brbd.nrec          == brbasedoc.nrec    and
   brbasedoc.corg     == brorg.nrec        and
@@ -354,14 +349,14 @@ procedure PrepareData(lBasedocMarker: longint);
     //  currentRSNrec := if(tbd.spkRSNrec = 0, comp(-1), tbd.spkRSNrec);
     currentRSNrec := tbd.spkRSNrec;
 
-    if getfirst trs where ((currentRSNrec == trs.spkRSNrec)) != tsOk
+    if getfirst trs where ((tbd.ObshiySchet == trs.ObshiySchet and tbd.spkRSNrec == trs.spkRSNrec)) != tsOk
     {
       clearbuffer(#trs);
+      trs.ObshiySchet := tbd.ObshiySchet;
       trs.spkRSNrec := currentRSNrec;
-      trs.name := case(trs.spkRSNrec;
-                       comp(-1) : 'Счет не установлен',
-                       comp(0)  : 'Общий счет';
-                       if(getfirst spkau where ((currentRSNrec == spkau.nrec)) = tsOk, spkau.name, 'Счет Nrec='+string(currentRSNrec,0,0)));
+      trs.name := if (trs.spkRSNrec = 0,
+                      'не установлен',
+                      if(getfirst spkau where ((currentRSNrec == spkau.nrec)) = tsOk, spkau.name, 'Счет Nrec='+string(currentRSNrec,0,0)));
       insert current trs;
     }
   }
@@ -505,7 +500,7 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
   _loop brrs {
     pXL.ClearTblBuffer;
     pXL.SetTblStringFldValue('rowtype'  , 'СЧЕТ');
-    pXL.SetTblStringFldValue('npp'      , brrs.name);
+    pXL.SetTblStringFldValue('npp'      , if(brrs.spkRSNrec!=0, '', if(brrs.ObshiySchet=1,'Общий счет ','Спец. счет ')) + brrs.name);
     pXL.InsTblRow;
 
     _loop brbd  {

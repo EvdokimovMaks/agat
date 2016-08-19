@@ -27,7 +27,7 @@ sql query qPlatezh =
          bd.CORG          as Cpol,
          bd.CDOGOVOR      as CDogovor,
          bd.CAPPDOGOVOR   as CAPPDOGOVOR,
-         coalesce(avOsnDO.vcomp,#comp(0)) as OsnDONrec,
+         coalesce(avOsnDO.vcomp,#comp(0)) as OsnBasedocNrec,
          coalesce(osndoStepdoc.nrec,#comp(0)) as OsnStepdocNrec,
          naz.vstring      as Naznach,
          sd.nrec          as StepDocNrec,
@@ -123,34 +123,24 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
   var VSogl, RSSpec: comp;
   var TIDK: word;
   var aViddoc: word;
+  var osnBasedocNrec: comp;
+  var osnStepdocNrec: comp;
+
   q := queryManager.createQuery(qPlatezh);
   q.setParam('basedocNrec', aBaseDocNrec);
   rs := q.getResultSet;
   if (rs.getFirst = tsOk) do
   {
     aViddoc := rs.row.val('BasedocViddoc');
+    osnBasedocNrec := rs.row.val('osnBasedocNrec');
+    osnStepdocNrec := rs.row.val('osnStepdocNrec');
     VSogl := rs.row.val('VizaPEU');
     RSSpec := rs.row.val('RSFromSpec');
     TIDK := rs.row.val('UserDocType');
-    if RSSpec = 0 and VSogl != VIZA_S_OBSHIH_SCHETOV
+
+    if RSSpec = 0 and VSogl = VIZA_S_OBSHIH_SCHETOV and aCash = 0
     {
-      LogStrToFile(aLogFileName, '|                                                                                                 |        Платежное поручение не сформировано,      |');
-      LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|       т.к. не заполнен атрибут спецификации      |');
-      LogStrToFile(aLogFileName, '|                                                                                                 |                "Р/сч списания ДС"                |');
-      LogStrToFile(aLogFileName, '|-------------------------------------------------------------------------------------------------|--------------------------------------------------|');
-      continue; //если в спецификации не заполнен атрибут "Р/счет списания ДС", то переходим к след итерации
-    }
-    if TIDK = 0 and VSogl != VIZA_S_OBSHIH_SCHETOV
-    {
-      LogStrToFile(aLogFileName, '|                                                                                                 |        Платежное поручение не сформировано,      |');
-      LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|  т.к. нет р/счета предприятия выбранного банка   |');
-      LogStrToFile(aLogFileName, '|                                                                                                 |                                                  |');
-      LogStrToFile(aLogFileName, '|-------------------------------------------------------------------------------------------------|--------------------------------------------------|');
-      continue; // если р/счёт не привязан к банку, платежку не формируем!
-    }
-    if VSogl = VIZA_S_OBSHIH_SCHETOV and aCash = 0
-    {
-      message(chr(3) + 'Выберите пожалуйста общий р/счёт для формирования платежек по ДО со значением Визы ПЭУ "С общих р/счет"' + chr(13) +
+      message(chr(3) + 'Выберите общий р/счёт для формирования платежек по ДО со значением Визы ПЭУ "С общих р/счет"' + chr(13) +
               'Платежки с данным р/счетом будут сформированы для всех ДО с такой визой');
       //if RunInterface('F_CASHBANK::SELUSDOC', 0, 0, 0, comp(0), aCash) = cmDefault
       if ks.SingleSelector(aCash)
@@ -173,7 +163,25 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
       }
     }
 
-    if VSogl = VIZA_S_OBSHIH_SCHETOV and aTIDK = 0
+/*
+    if RSSpec = 0 and VSogl != VIZA_S_OBSHIH_SCHETOV
+    {
+      LogStrToFile(aLogFileName, '|                                                                                                 |        Платежное поручение не сформировано,      |');
+      LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|       т.к. не заполнен атрибут спецификации      |');
+      LogStrToFile(aLogFileName, '|                                                                                                 |                "Р/сч списания ДС"                |');
+      LogStrToFile(aLogFileName, '|-------------------------------------------------------------------------------------------------|--------------------------------------------------|');
+      continue; //если в спецификации не заполнен атрибут "Р/счет списания ДС", то переходим к след итерации
+    } */
+    if (TIDK = 0 and VSogl != VIZA_S_OBSHIH_SCHETOV) or (TIDK = 0 and aTIDK = 0 and VSogl = VIZA_S_OBSHIH_SCHETOV)
+    {
+      LogStrToFile(aLogFileName, '|                                                                                                 |        Платежное поручение не сформировано,      |');
+      LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|        т.к. не определен банк плательщика        |');
+      LogStrToFile(aLogFileName, '|                                                                                                 |                                                  |');
+      LogStrToFile(aLogFileName, '|-------------------------------------------------------------------------------------------------|--------------------------------------------------|');
+      continue; // если р/счёт не привязан к банку, платежку не формируем!
+    }
+    /*
+    if VSogl = VIZA_S_OBSHIH_SCHETOV
     {
       LogStrToFile(aLogFileName, '|                                                                                                 |        Платежное поручение не сформировано,      |');
       LogStrToFile(aLogFileName, '| ДО ' + if(Length(rs.row.val('Naznach'))>=93, substr(rs.row.val('Naznach'),1,93), Pad(rs.row.val('Naznach'), 93)) + '|  т.к. нет р/счета предприятия выбранного банка   |');
@@ -181,7 +189,7 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
       LogStrToFile(aLogFileName, '|-------------------------------------------------------------------------------------------------|--------------------------------------------------|');
       continue; // если выбранный общий счёт не привязан к банку, платежку не формируем!
     }
-
+    */
     ClearBuffer(#plpor);
     plpor.tidkgal   := 1;
     plpor.nodok     := rs.row.val('Nodoc');
@@ -190,23 +198,27 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
     plpor.datvip    := rs.row.val('DateDoc');
     plpor.datots    := plpor.datvip;
     plpor.cplat     := CoGetTune('myorg');
-    if VSogl = VIZA_S_OBSHIH_SCHETOV
-    {
+
+    plpor.cbankplat := rs.row.val('BankSpec');
+
+    if plpor.cbankplat = 0
       plpor.cbankplat := aBankNrec;
+
+    plpor.tidk      := rs.row.val('UserDocType');
+    if plpor.tidk = 0
       plpor.tidk      := aTIDK;
-    }
-    else
-    {
-      plpor.cbankplat := rs.row.val('BankSpec');
-      plpor.tidk      := rs.row.val('UserDocType');
-    }
+
     plpor.cpol      := rs.row.val('Cpol');
     plpor.cbankpol  := rs.row.val('CBank');
     plpor.cgruzotp  := plpor.cpol;
     plpor.cgruzpol  := plpor.cplat;
     plpor.sumplat   := rs.row.val('Summa'); //Сумма платежа по док-ту
-    plpor.cstepdoc  := rs.row.val('StepDocNrec'); //Ссылка на ЭТАП StepDoc
-    plpor.cstepdoc  := rs.row.val('OsnStepdocNrec');
+
+    if aViddoc = 111 and osnStepdocNrec != 0
+      plpor.cstepdoc  := osnStepdocNrec;
+    else
+      plpor.cstepdoc  := rs.row.val('StepdocNrec');
+
     plpor.cwaymove  := rs.row.val('CTRANSP'); //Ссылка на способ транспортировки
     plpor.namepl1   := rs.row.val('Naznach');
     plpor.namepl4   := 'Сумма НДС ' + rs.row.val('NDS') + ' руб.';
@@ -241,28 +253,26 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
     insert current soprhoz;
 
     ClearBuffer(#basefin);
-    basefin.cdogovor := soprhoz.cdogovor;
-    if (aViddoc = 111)
-    {
-      basefin.cpredopldo := rs.row.val('BaseDocNrec');
-      basefin.cbasedoc   := rs.row.val('OsnDONrec');
-    }
+    basefin.cdogovor   := soprhoz.cdogovor;
+    basefin.cpredopldo := soprhoz.cpredopldo;
+    basefin.cstepdoc   := soprhoz.cstepdoc;
+
+    if (aViddoc = 111 and osnBasedocNrec != 0)
+      basefin.cbasedoc := osnBasedocNrec;
     else
-    {
-      basefin.cbasedoc   := rs.row.val('BaseDocNrec');
-    }
-    basefin.cstepdoc := plpor.cstepdoc;
-    basefin.tipdoc   := plpor.tidk;
-    basefin.tidkgal  := 1;
-    basefin.cplpor   := plpor.nrec;
-    basefin.nodoc    := plpor.nodok;
-    basefin.descr    := plpor.descr;
-    basefin.desgr    := plpor.desgr;
-    basefin.namepl   := rs.row.val('BaseDocName');
-    basefin.summa    := plpor.sumplat;
-    basefin.direct   := 2;
-    basefin.corg     := plpor.cpol;
-    basefin.csoprhoz := soprhoz.nrec;
+      basefin.cbasedoc := rs.row.val('BaseDocNrec');
+
+    basefin.tipdoc     := plpor.tidk;
+    basefin.tidkgal    := 1;
+    basefin.cplpor     := plpor.nrec;
+    basefin.nodoc      := plpor.nodok;
+    basefin.descr      := plpor.descr;
+    basefin.desgr      := plpor.desgr;
+    basefin.namepl     := rs.row.val('BaseDocName');
+    basefin.summa      := plpor.sumplat;
+    basefin.direct     := 2;
+    basefin.corg       := plpor.cpol;
+    basefin.csoprhoz   := soprhoz.nrec;
     insert current basefin;
 
     if rs.row.val('Summa18') != 0
