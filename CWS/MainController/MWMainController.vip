@@ -17,6 +17,7 @@ const
   cmOpenAllGroups       = 9944;
   cmCloseAllGroups      = 9945;
   cmSortRows            = 9946;
+  cmCopyRows            = 9947;
 end;
 
 interface iMWMainController;
@@ -46,6 +47,13 @@ table struct tSort (
   i01 = name[1] + name[2] + name[3] + name[4] + name[5] + name[6]
 );
 
+table struct tPersons (
+  mwrowNrec: comp,
+  personNrec: comp
+) with index (
+  i01 = mwrowNrec
+);
+
 var
   MWRow: oMWRow(iMWRow) new;
   MWVal: oMWVal(iMWVal) new;
@@ -53,6 +61,7 @@ var
   FullFOT, FullFOTD, BalHours: double;
   EnableEditDocWithAnotherDescr, EnableEditOforml, EnableEditProv, EnableEditUtv: boolean;
   UserDesgr: string[80];
+  persMarker: IMarker(marker) new;
 
 create view
 var
@@ -60,7 +69,7 @@ var
   cCurMnPlan   : comp;
   cSetupFormPl : comp;
 as select *
-from MnPlan, MWRow, FormPl, tDopInfo, tDopInfoGr, tDopInfoGr brDIGr, tDopInfo brDI, tSort, fpperiod, r_users, r_workplace
+from MnPlan, MWRow, FormPl, tDopInfo, tDopInfoGr, tDopInfoGr brDIGr, tDopInfo brDI, tSort, fpperiod, r_users, r_workplace, tPersons
 where ((
   cCurMnPlan    == MnPlan.nRec and
   TreeParentRow == MWRow.cParent and
@@ -230,6 +239,28 @@ cmInit:
   TreeCloseAllOpenedNode(trDI1);
 }
 end;
+end;
+
+window wSelectPersons 'Выбор сотрудников наряда' doaccept, escclose;
+  browse brSelectPers;
+  table tPersons;
+  recMarker = persMarker{tPersons.mwrowNrec};
+  fields
+    if(getanykau(1,3,tPersons.personNrec), givenanname(1), '') 'ФИО': [30], protect;
+  end;
+  handleevent
+    cmInit:
+    {
+      delete all tPersons;
+      treePushPos(trMain);
+      if treegetfirstex(trMain) do
+      {
+        if (MWRow.IsPersonLevel)
+          insert tPersons set tPersons.mwrowNrec := MWRow.nrec, tPersons.personNrec := MWRow.cPerson;
+      } while treegetnextex(trMain);
+      treePopPos(trMain);
+    }
+  end;
 end;
 
 procedure SetColumnProtected(aField: longint; _isProtected: boolean);
@@ -767,6 +798,8 @@ procedure RefreshValColumnsVisiblity;
   if (_cnt >= 10) SetFieldState(#Val10, sfVisible) else ClearFieldState(#Val10, sfVisible);
 }
 
+
+
 function ValFieldIndex(aField: longint): byte;
 {
   case aField of
@@ -868,6 +901,25 @@ handleevent
     SortRows;
     rereadrecord;
   }
+  cmCopyRows:
+  {
+    if runwindowmodal(wSelectPersons) = cmDefault {
+      var l: longint;
+      l := initmarker('',8,10,10,false);
+      IMarkerExA(persMarker).ExportToAll(l);
+      _loop tPersons where foundmarker(l, tPersons.mwrowNrec)
+      {
+        var c: comp;
+        c := MWRow.CopyRowToParent(tPersons.mwrowNrec);
+        TreePushPos(trMain);
+        TreeJumpToRecord(trMain, MWRow.nRec);
+        MWVal.LoadRowValues(MWRow);
+        TreePopPos(trMain);
+      }
+      donemarker(l,'');
+      rereadrecord;
+    }
+  }
 end;
 
 procedure SetCurMnPlan(_cMnPlan: comp);
@@ -951,6 +1003,7 @@ mnuAGAT_MNF_DISTRIBUTE Menu
 - 'по текущему сотруднику', cmDistributeDByPerson, , , , , sci1Esc;
 - 'по всем сотрудникам', cmDistributeDAll, , , , , sci1Esc;
 }
+- 'Копировать работу сотрудникам', cmCopyRows, , , , , sci1Esc;
 }
 mnuAGAT_MNF_UTILS Menu
 {
