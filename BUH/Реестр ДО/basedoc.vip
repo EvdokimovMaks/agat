@@ -75,11 +75,12 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   create view
   var
     sNumSch: string;
+    sReestr: string;
     cMainBD: comp;
   as select *
   from katnotes, buhschet, tbd, tsection, tmpfltr,
        tbd brbd (i02), basedoc brbasedoc, katorg brorg, katbank brbank, dogovor brdog,
-       katnotes brnote, statlog brstatlog(STATLOG02), klval brval, stepdoc brsd, basefin brbf, basefin brbf1,
+       katnotes brnote, klval brval, stepdoc brsd, basefin brbf, basefin brbf1,
        klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin
   where ((
     brbd.nrec          == brbasedoc.nrec    and
@@ -87,8 +88,6 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     brbasedoc.cbank    == brbank.nrec       and
     brbasedoc.cdogovor == brdog.nrec        and
     brbasedoc.cnote    == brnote.nrec       and
-    40                 == brstatlog.doctype and
-    brbasedoc.nrec     == brstatlog.cdoc    and
     brbasedoc.cval     == brval.nrec        and
     brbd.nrec          == brsd.cbasedoc     and
     brbd.nrec          == brbf.cbasedoc     and
@@ -273,6 +272,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     sVal     : Protect, PickButton;
     sRejim   : Protect, PickButton;
     sNumSch  : noProtect;
+    sReestr  : noProtect;
   buttons
     cmFilter;
 <<
@@ -313,11 +313,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   [.] Валюта         ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
   [.] Реж.исп.счета  ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
   [.] Номер счета    ` .@@@@@@@@@@@@@@@
-
-  Возможен фильтр по неточному соответствию номера счета. При
-  установленном значении "43%" будут отобраны все счета, но-
-  мер которых начинается с "43"; при значении "%43%" будут
-  отобраны счета, в номере которых встречается "43".
+  [.] Номер реестра  ` .@@@@@@@@@@@@@@@
 >>
   end; //screen scmainfilters
   screen scVizaFilters 'Фильтры по визам' show (,,,) fixed_x;
@@ -430,13 +426,13 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   end;
   end; // tabbedsheet
 
+  function pow2(p: byte): word; cacheable;
+  {
+    result := word(2**p);
+  }
+
   function bitset(_flag: word; _bit: byte): boolean; {
-    var _i, _j: integer;
-    _i := 1;
-    for (_j := 1; _j <= _bit; _j := _j + 1) {
-      _i := _i * 2;
-    }
-    result := (_flag and _i) > 0;
+    result := (_flag and pow2(_bit)) > 0;
   }
 
   function SetIerBounds: boolean; {
@@ -518,6 +514,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     brbd.cfo                          'ЦФО'                            : [5]  , protect;
     brbd.ispoln                       'Инициатор'                      : [5]  , protect;
     brbd.buhsch                       'Счет'                           : [4]  , protect;
+    brbd.reestr                       'Номер'#13'реестра'              : [4]  , protect;
     [flddefer] if(brbd.daydefer=0,'',brbd.daydefer) 'Дней'#13'отлож. платежа': [4], protect;
     [flddsogl] if(brbd.dsogl=0,'',brbd.dsogl) 'Дата'#13'на согл.'   : [9]  , protect;
     brbd.sogl                         'На согласование'                : [2]  , protect;
@@ -840,6 +837,10 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     if bitset(flagAttr, BIT_NODOC) {
       addsect('WHERE', 'bd.nodoc LIKE '''+sNumSch+''' ');
     }
+    //по реестру
+    if bitset(flagAttr, BIT_REESTR) {
+      addsect('WHERE', 'coalesce(statlog.comment,'''') LIKE '''+sReestr+''' ');
+    }
     //по валюте
     if bitset(flagAttr, BIT_VAL) {
       addsect('WHERE', 'bd.cval IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKVAL+''')');
@@ -858,7 +859,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     mysqlAddStr(s, 'COALESCE(av_naznpl.vstring,bd.name),');
     mysqlAddStr(s, 'CASE WHEN bd.dform=0 THEN bd.atl_lastdate ELSE bd.dform END,');
     mysqlAddStr(s, 'round(bd.summa,2), round(bd.total,2), round(bd.sumval,2), round(COALESCE(bf.summa,0),2) sumfactopl,');
-    mysqlAddStr(s, 'bd.cnote,');
+    mysqlAddStr(s, 'bd.cnote, coalesce(statlog.comment,''''),');
     mysqlAddStr(s, 'COALESCE(av_bdds.vstring,''''),');
     mysqlAddStr(s, 'SUBSTRING(COALESCE(av_avans.vstring,''''),1,1),');
     mysqlAddStr(s, 'COALESCE(podr_ispoln.kod,''''),');
@@ -896,6 +897,11 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     mysqlAddStr(s, '           where tidkbase = 0 and cpredopldo<>#comp(0) and cpredopldo<>cbasedoc and tidkgal = 1');
     mysqlAddStr(s, '           group by cpredopldo');
     mysqlAddStr(s, '          ) bf on bf.cbasedoc = bd.nrec');
+    mysqlAddStr(s, 'left join (select cdoc, max(datetime(doper, timeoper)) as dt');
+    mysqlAddStr(s, '           from statlog');
+    mysqlAddStr(s, '           where doctype=40 and cnewnote=#comp(000100000000007Eh)');
+    mysqlAddStr(s, '           group by cdoc) lastStatlog on lastStatlog.cdoc = bd.nrec');  //последний статус "в реестре"
+    mysqlAddStr(s, 'left join statlog on statlog.doctype=40 and statlog.cdoc=bd.nrec and statlog.doper=date(lastStatlog.dt) and statlog.timeoper=time(lastStatlog.dt)');
     mysqlAddStr(s, 'left join attrval av_parent on '+WT_BASEDOC+' = av_parent.wtable and bd.nrec = av_parent.crec and #comp('+00010000000000B9h+') = av_parent.cattrnam ');
     mysqlAddStr(s, 'left join attrval av_naznpl on '+WT_BASEDOC+' = av_naznpl.wtable and bd.nrec = av_naznpl.crec and #comp('+ATTRNAM_NAZNPL+') = av_naznpl.cattrnam ');
     //секция JOIN
@@ -1417,10 +1423,11 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
         else
           pXL.SetTblStringFldValue('statusName', '');
 
-        if getlast brstatlog = tsOk
-          pXL.SetTblStringFldValue('statusComment', brstatlog.comment);
-        else
-          pXL.SetTblStringFldValue('statusComment', '');
+        //if getlast brstatlog = tsOk
+        //  pXL.SetTblStringFldValue('statusComment', brstatlog.comment);
+        //else
+        //  pXL.SetTblStringFldValue('statusComment', '');
+        pXL.SetTblStringFldValue('statusComment', brbd.reestr);
 
         pXL.InsTblRow;
       }
@@ -1529,6 +1536,9 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
           updateflag(BIT_NODOC,sNumsch <> '',flagAttr);
           rereadrecord;
         }
+        #sReestr: {
+          updateflag(BIT_REESTR, sReestr <> '', flagAttr);
+        }
       end;
     }
     cmPrintDoc: {
@@ -1624,6 +1634,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       if (not readmydsk(DSoglBeg      , 'AGAT_BDREE_DSOGLBEG'      , false)) DSoglBeg       := sub_day(cur_date,31);
       if (not readmydsk(DSoglEnd      , 'AGAT_BDREE_DSOGLEND'      , false)) DSoglEnd       := cur_date;
       if (not readmydsk(sNumSch       , 'AGAT_BDREE_sNumSch'       , false)) sNumSch        := '';
+      if (not readmydsk(sReestr       , 'AGAT_BDREE_sReestr'       , false)) sReestr        := '';
       if (not readmydsk(SumSchOt      , 'AGAT_BDREE_SumSchOt'      , false)) SumSchOt       := 1;
       if (not readmydsk(SumSchDo      , 'AGAT_BDREE_SumSchDo'      , false)) SumSchDo       := 1000000000;
       if (not readmydsk(SumTotOt      , 'AGAT_BDREE_SumTotOt'      , false)) SumTotOt       := 1;
@@ -1693,6 +1704,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       savemydsk(DSoglBeg      , 'AGAT_BDREE_DSOGLBEG'      );
       savemydsk(DSoglEnd      , 'AGAT_BDREE_DSOGLEND'      );
       savemydsk(sNumSch       , 'AGAT_BDREE_sNumSch'       );
+      savemydsk(sReestr       , 'AGAT_BDREE_sReestr'       );
       savemydsk(SumSchOt      , 'AGAT_BDREE_SumSchOt'      );
       savemydsk(SumSchDo      , 'AGAT_BDREE_SumSchDo'      );
       savemydsk(SumTotOt      , 'AGAT_BDREE_SumTotOt'      );

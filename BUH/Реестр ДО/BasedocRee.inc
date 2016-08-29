@@ -32,6 +32,7 @@ table struct tbd (
   sumval: double,
   sumopl: double,
   cnote : comp,
+  reestr: string[20],
   bdds  : string[11],
   avans : string[20],
   ispoln: string[50],
@@ -150,6 +151,7 @@ const
   BIT_VAL               = 10;
   BIT_REJIM             = 11;
   BIT_NODOC             = 12;
+  BIT_REESTR            = 13;
   BIT_SUMMA             = 0;
   BIT_TOTAL             = 1;
   BIT_SUMVAL            = 2;
