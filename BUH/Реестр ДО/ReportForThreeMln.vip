@@ -14,13 +14,14 @@ var
 
 //#region Queries
 
-sql query qGetPlporsIGK =
-select pl.nodok    as PlporNumber,
+sql query qGetPlpors =
+select 1           as Razdel,
+       pl.nodok    as DocNumber,
+       pl.datvip   as DocDate,
+       pl.NAMEPL1+' '+pl.NAMEPL2+' '+pl.NAMEPL3 as Naznach,
        pl.sumplat  as Summa,
-       pl.datvip   as PlporDate,
-       pl.NAMEPL1  as Naznach,
-       spkIGK.name as IGKName,
-       spkIGK.nrec as IGKNrec
+       spkIGK.nrec as IGKNrec,
+       spkIGK.name as IGKName
 from spcash spc
 join cashbank cb on cb.nrec = spc.ccashbank
 join usersdoc ud on ud.tipgal = 1 and ud.razdel = cb.razdel and ud.ccashbank = cb.nrec
@@ -40,22 +41,23 @@ join spkau spkIGK on spkIGK.nrec = (case when spc.tblos[1] = 10527 then spc.kauo
                                          when spc.tblos[6] = 10527 then spc.kauos[6] end)
 ;
 
-sql query qGetBDWithoutPlpors =
-select bd.nodoc    as DocNumber,
+sql query qGetBasedocs =
+select case when bd.ddoc > :dend then 4
+            else case when vp.vcomp = #comp(0001000000001424h) then 3
+                      else 2
+                 end
+            end    as Reestr,
+       bd.nodoc    as DocNumber,
        bd.ddoc     as DocDate,
-       naz.vstring as Naznach,
+       coalesce(naz.vstring,'') as Naznach,
        sps.summa   as Summa,
        spkIGK.nrec as IGKNrec,
        spkIGK.name as IGKName
 from basedoc bd
-join attrval vk on vk.wtable = 1102 and vk.crec = bd.nrec and vk.cattrnam = #comp(0001000000000087h) and
-                   vk.vcomp in (#comp(00010000000001CEh), #comp(00010000000013CCh), #comp(0001000000001423h))
-join attrval vb on vb.wtable = 1102 and vb.crec = bd.nrec and vb.cattrnam = #comp(0001000000000089h) and
-                   vb.vcomp in (#comp(00010000000001CEh), #comp(00010000000013CCh), #comp(0001000000001423h))
-join attrval vp on vp.wtable = 1102 and vp.crec = bd.nrec and vp.cattrnam = #comp(0001000000000088h) and
-                   vp.vcomp in (#comp(00010000000001CEh), #comp(00010000000013CCh), #comp(0001000000001423h))
-join attrval vd on vd.wtable = 1102 and vd.crec = bd.nrec and vd.cattrnam = #comp(000100000000008Ah) and
-                   vd.vcomp in (#comp(00010000000001CEh), #comp(00010000000013CCh), #comp(0001000000001423h))
+left join attrval vk on vk.wtable = 1102 and vk.crec = bd.nrec and vk.cattrnam = #comp(0001000000000087h)
+left join attrval vb on vb.wtable = 1102 and vb.crec = bd.nrec and vb.cattrnam = #comp(0001000000000089h)
+left join attrval vp on vp.wtable = 1102 and vp.crec = bd.nrec and vp.cattrnam = #comp(0001000000000088h)
+left join attrval vd on vd.wtable = 1102 and vd.crec = bd.nrec and vd.cattrnam = #comp(000100000000008Ah)
 left join attrval naz on naz.wtable = 1102 and naz.crec = bd.nrec and naz.cattrnam = #comp(000100000000010Dh)
 join stepdoc sd on sd.cbasedoc = bd.nrec
 join spstep sps on sps.cstepdoc = sd.nrec
@@ -94,7 +96,19 @@ left join spkau spkIGK on spkIGK.nrec = (case when spc.tblos[1] = 10527 then spc
                                               when spc.tblos[4] = 10527 then spc.kauos[4]
                                               when spc.tblos[5] = 10527 then spc.kauos[5]
                                               when spc.tblos[6] = 10527 then spc.kauos[6] end)
-where bd.viddoc in (101,111) and coalesce(bf.cnt,0) = 0
+where bd.viddoc in (101,111) and coalesce(bf.cnt,0) = 0 and
+      (
+        (
+         vk.vcomp in (#comp(00010000000001CEh), #comp(00010000000013CCh), #comp(0001000000001423h)) and
+         vb.vcomp in (#comp(00010000000001CEh), #comp(00010000000013CCh), #comp(0001000000001423h)) and
+         vp.vcomp in (#comp(00010000000001CEh), #comp(00010000000013CCh), #comp(0001000000001423h)) and
+         vd.vcomp in (#comp(00010000000001CEh), #comp(00010000000013CCh), #comp(0001000000001423h))
+        )
+        or
+        (
+         vp.vcomp = #comp(0001000000001424h)
+        )
+      )
 ;
 
 //#endregion
@@ -106,18 +120,8 @@ table struct tRS (
   i01 = IGKNrec
 );
 
-table struct tPlporsIGK (
-  PlporNumber : string,
-  PlporDate   : date,
-  Naznach     : string,
-  Summa       : double,
-  IGKName     : string,
-  IGKNrec     : comp
-) with index (
-  i01 = IGKNrec
-);
-
-table struct tBDWithoutPlpors (
+table struct tDocs (
+  Razdel    : byte,
   DocNumber : string,
   DocDate   : date,
   Naznach   : string,
@@ -125,17 +129,20 @@ table struct tBDWithoutPlpors (
   IGKName   : string,
   IGKNrec   : comp
 ) with index (
-  i01 = IGKNrec
+  i01 = IGKNrec + razdel
 );
 
 create view
 as select *
-from tRS, tPlporsIGK, tBDWithoutPlpors;
+from tRS, tDocs;
 
 parameters dBeg, dEnd, igkMarker, sXLTFileName, isCreateXLT
 
-procedure MakeRSTable; //content tRS by 2 tables (tPlporsIGK and tBDWithoutPlpors)
+procedure MakeRSTable; //content tRS by 2 tables (tDocs and tDocs)
 {
+  delete all tRS;
+  delete all tDocs;
+
   var q: IQuery;
   var rs: IResultSet;
 
@@ -159,70 +166,46 @@ procedure MakeRSTable; //content tRS by 2 tables (tPlporsIGK and tBDWithoutPlpor
       q.setparam('crec', c).execute;
   }
 
-  //выполняем 1ый запрос и rs в таблицу
+  //выполняем 1ый запрос
 
   var s1: longint = 0;
-  sqladdstr(s1, qGetPlporsIGK);
+  sqladdstr(s1, qGetPlpors);
   if isFilteredByIGK
     sqladdstr(s1,'where spkigk.nrec in (select crec from tigkfilter)')
 
-  q := querymanager.createquery(s1);
+  sqlCopyInto(
+    querymanager.createquery(s1)
+                .setParam('dBeg', dBeg)
+                .setParam('dEnd', dEnd)
+                .getresultset,
+    #tDocs,
+    true
+  );
 
-  q.setParam('dBeg', dBeg);
-  q.setParam('dEnd', dEnd);
-  rs := q.getresultset;
-  if (rs.getfirst = tsOk) do
-  {
-    ClearBuffer(#tPlporsIGK);
-    tPlporsIGK.PlporNumber := rs.row.val('PlporNumber');
-    tPlporsIGK.PlporDate   := rs.row.val('PlporDate');
-    tPlporsIGK.Naznach     := rs.row.val('Naznach');
-    tPlporsIGK.Summa       := rs.row.val('Summa');
-    tPlporsIGK.IGKName     := rs.row.val('IGKName');
-    tPlporsIGK.IGKNrec     := rs.row.val('IGKNrec');
-    insert current tPlporsIGK;
-  } while (rs.getnext = tsOk);
-
-  //потом второй запрос
+  //потом 2й запрос
 
   var s2: longint = 0;
-  sqlAddStr(s2, qGetBDWithoutPlpors);
+  sqlAddStr(s2, qGetBasedocs);
   if isFilteredByIGK
     sqlAddStr(s2, 'and coalesce(spkigk.nrec,#comp(0)) in (select crec from tigkfilter)');
 
-  q := querymanager.createquery(s2);
+  sqlCopyInto(
+    querymanager.createquery(s2)
+                .setParam('dEnd', dEnd)
+                .getResultSet,
+    #tDocs,
+    true
+  );
 
-  rs := q.getresultset;
-  if (rs.getfirst = tsOk) do
-  {
-    ClearBuffer(#tBDWithoutPlpors);
-    tBDWithoutPlpors.DocNumber := rs.row.val('DocNumber');
-    tBDWithoutPlpors.DocDate   := rs.row.val('DocDate');
-    tBDWithoutPlpors.Naznach   := rs.row.val('Naznach');
-    tBDWithoutPlpors.Summa     := rs.row.val('Summa');
-    tBDWithoutPlpors.IGKName   := rs.row.val('IGKName');
-    tBDWithoutPlpors.IGKNrec   := rs.row.val('IGKNrec');
-    insert current tBDWithoutPlpors;
-  } while (rs.getnext = tsOk);
+  //заполняем расчетные счета
 
-  _loop tPlporsIGK
+  _loop tDocs
   {
-    if getfirst tRS where ((tPlporsIGK.IGKNrec == tRS.IGKNrec)) != tsOk
+    if getfirst tRS where ((tDocs.IGKNrec == tRS.IGKNrec)) != tsOk
     {
       ClearBuffer(#tRS);
-      tRS.IGKNrec := tPlporsIGK.IGKNrec;
-      tRS.IGKName := tPlporsIGK.IGKName;
-      insert current tRS;
-    }
-  }
-
-  _loop tBDWithoutPlpors
-  {
-    if getfirst tRS where ((tBDWithoutPlpors.IGKNrec == tRS.IGKNrec)) != tsOk
-    {
-      ClearBuffer(#tRS);
-      tRS.IGKNrec := tBDWithoutPlpors.IGKNrec;
-      tRS.IGKName := tBDWithoutPlpors.IGKName;
+      tRS.IGKNrec := tDocs.IGKNrec;
+      tRS.IGKName := tDocs.IGKName;
       insert current tRS;
     }
   }
@@ -231,11 +214,39 @@ procedure MakeRSTable; //content tRS by 2 tables (tPlporsIGK and tBDWithoutPlpor
     sqlDropTmpTable('tigkfilter');
 }
 
-procedure PrintRazdel(aStr: string); //kind of documents
+function PrintRazdel(aRazdel: byte; aRazdelName: string): double;
+{
+  var subtotal: double = 0;
+  pXL.ClearTblBuffer;
+  pXL.SetTblStringFldValue('IGKName', aRazdelName);
+  pXL.SetTblNumberFldValue('Status',  2);
+  pXL.InsTblRow;
+  _loop tDocs where ((tRS.IGKNrec == tDocs.IGKNrec and aRazdel == tDocs.Razdel))
+  {
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('IGKName',   ''''+tDocs.IGKName);
+    pXL.SetTblStringFldValue('DocNumber', tDocs.DocNumber);
+    pXL.SetTblDateFldValue  ('DocDate',   tDocs.DocDate);
+    pXL.SetTblStringFldValue('Naznach',   tDocs.Naznach);
+    pXL.SetTblNumberFldValue('Summa',     tDocs.Summa);
+    pXL.SetTblNumberFldValue('Status',    0);
+    pXL.InsTblRow;
+    subtotal += tDocs.Summa;
+  }
+  pXL.ClearTblBuffer;
+  pXL.SetTblStringFldValue('IGKName', 'Итого по разделу');
+  pXL.SetTblNumberFldValue('Summa',   subtotal);
+  pXL.SetTblNumberFldValue('Status',  3);
+  pXL.InsTblRow;
+  result := subtotal;
+}
+
+procedure PrintTotal(aName: string; aSumma: double; aStatus: byte);
 {
   pXL.ClearTblBuffer;
-  pXL.SetTblStringFldValue('IGKName', aStr);
-  pXL.SetTblNumberFldValue('Status',  2);
+  pXL.SetTblStringFldValue('IGKName', aName);
+  pXL.SetTblNumberFldValue('Summa',   aSumma);
+  pXL.SetTblNumberFldValue('Status',  aStatus);
   pXL.InsTblRow;
 }
 
@@ -243,7 +254,9 @@ procedure PrintReport;
 {
   if (not isCreateXLT) Set sXLSFileName := pXL.CreateReport(sXLTFileName, True)
                   else Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+
   pXL.CreateTbls(sXLSFileName);
+
   pXL.CreateTbl('Main');
   pXL.CreateTblFld('IGKName');
   pXL.CreateTblFld('DocNumber');
@@ -254,78 +267,27 @@ procedure PrintReport;
 
   if (not isCreateXLT)
   {
-    var PreSumPl, PreSumBD, TotalSum: double = 0;
-    TotalSum := 0;
     StartNewVisual(vtRotateVisual, vfThread + vfBreak + vfTimer, 'Формирование отчёта', 0);
     _loop tRS
     {
-      PreSumPl := 0;
-      PreSumBD := 0;
       pXL.ClearTblBuffer;
       pXL.SetTblStringFldValue('IGKName', ''''+tRS.IGKName);
       pXL.SetTblNumberFldValue('Status',  1);
       pXL.InsTblRow;
-      PrintRazdel('1. Платежки в период с ' + dBeg + ' по ' + dEnd);
-      _loop tPlporsIGK where ((tRS.IGKNrec == tPlporsIGK.IGKNrec))
-      {
-        pXL.ClearTblBuffer;
-        pXL.SetTblStringFldValue('IGKName',   ''''+tPlporsIGK.IGKName);
-        pXL.SetTblStringFldValue('DocNumber', tPlporsIGK.PlporNumber);
-        pXL.SetTblDateFldValue  ('DocDate',   tPlporsIGK.PlporDate);
-        pXL.SetTblStringFldValue('Naznach',   tPlporsIGK.Naznach);
-        pXL.SetTblNumberFldValue('Summa',     tPlporsIGK.Summa);
-        pXL.SetTblNumberFldValue('Status',    0);
-        PreSumPl := PreSumPl + tPlporsIGK.Summa;
-        pXL.InsTblRow;
-      }
-      pXL.ClearTblBuffer;
-      pXL.SetTblStringFldValue('IGKName', 'Итого по платежам');
-      pXL.SetTblNumberFldValue('Summa',   PreSumPl);
-      pXL.SetTblNumberFldValue('Status',  3);
-      pXL.InsTblRow;
-      PrintRazdel('2. Запланированные платежи');
-      _loop tBDWithoutPlpors where ((tRS.IGKNrec == tBDWithoutPlpors.IGKNrec and (tBDWithoutPlpors.DocDate <= dEnd)))
-      {
-        pXL.ClearTblBuffer;
-        pXL.SetTblStringFldValue('IGKName',   ''''+tBDWithoutPlpors.IGKName);
-        pXL.SetTblStringFldValue('DocNumber', tBDWithoutPlpors.DocNumber);
-        pXL.SetTblDateFldValue  ('DocDate',   tBDWithoutPlpors.DocDate);
-        pXL.SetTblStringFldValue('Naznach',   tBDWithoutPlpors.Naznach);
-        pXL.SetTblNumberFldValue('Summa',     tBDWithoutPlpors.Summa);
-        pXL.SetTblNumberFldValue('Status',    0);
-        PreSumBD := PreSumBD + tBDWithoutPlpors.Summa;
-        pXL.InsTblRow;
-      }
-      pXL.ClearTblBuffer;
-      pXL.SetTblStringFldValue('IGKName', 'Итого по ДО');
-      pXL.SetTblNumberFldValue('Summa',   PreSumBD);
-      pXL.SetTblNumberFldValue('Status',  3);
-      pXL.InsTblRow;
-      PrintRazdel('3. Будущие платежи');
-      _loop tBDWithoutPlpors where ((tRS.IGKNrec == tBDWithoutPlpors.IGKNrec and (tBDWithoutPlpors.DocDate > dEnd))) //ознакомительный раздел
-      {
-        pXL.ClearTblBuffer;
-        pXL.SetTblStringFldValue('IGKName',   ''''+tBDWithoutPlpors.IGKName);
-        pXL.SetTblStringFldValue('DocNumber', tBDWithoutPlpors.DocNumber);
-        pXL.SetTblDateFldValue  ('DocDate',   tBDWithoutPlpors.DocDate);
-        pXL.SetTblStringFldValue('Naznach',   tBDWithoutPlpors.Naznach);
-        pXL.SetTblNumberFldValue('Summa',     tBDWithoutPlpors.Summa);
-        pXL.SetTblNumberFldValue('Status',    0);
-        pXL.InsTblRow;
-      }
-      pXL.ClearTblBuffer;
-      pXL.SetTblStringFldValue('IGKName', 'Итого по ИГК ' + tRS.IGKName);
-      pXL.SetTblNumberFldValue('Summa',   PreSumPl + PreSumBD);
-      pXL.SetTblNumberFldValue('Status',  4);
-      pXL.InsTblRow;
-      TotalSum := TotalSum + PreSumPl + PreSumBD;
+
+      var d1, d2, d3, d4: double = 0;
+
+      d1 := PrintRazdel(1, '1. Платежки в период с ' + dBeg + ' по ' + dEnd);
+      d2 := PrintRazdel(2, '2. Запланированные платежи (согласованно всеми)');
+      d3 := PrintRazdel(3, '3. Запланированные платежи (на рабочую группу виза ПЭУ)');
+      d4 := PrintRazdel(4, '4. Будущие платежи');
+
+      PrintTotal('ИТОГО по ИГК ' + tRS.IGKName, d1+d2+d3, 4);
+      PrintTotal('ИТОГО остаток из 3 млн руб. без учета "на рабочую группу"', 3000000-d1-d2, 4);
+      PrintTotal('ИТОГО остаток из 3 млн руб.', 3000000-d1-d2-d3, 4);
+
       if (not NextVisual) break;
     }
-    pXL.ClearTblBuffer;
-    pXL.SetTblStringFldValue('IGKName', 'ИТОГО');
-    pXL.SetTblNumberFldValue('Summa',   TotalSum);
-    pXL.SetTblNumberFldValue('Status',  4);
-    pXL.InsTblRow;
   }
   stopvisual('',0);
   pXL.PublishTbl('Main');
