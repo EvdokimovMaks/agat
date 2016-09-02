@@ -1,0 +1,50 @@
+#include MCIncome.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface MCIncomeHelper;
+
+var
+  _col: ICollection new;
+
+sql query qGetLastKatsopr =
+select sps.nrec  as Nrec,
+       ks.corg   as KontrAgent,
+       sps.price as Price
+from (select max(sp.nrec) as MaxNrec
+      from (select doprttn, nrec, max(doprttn) over () as maxdoprttn
+            from spsopr
+            where prmc = 1 and cmcusl = :mcNrec and vidsopr = 101 and doprttn between 1 and :maxDate
+           ) sp
+      where sp.doprttn = sp.maxdoprttn
+     ) selsp
+join spsopr sps on sps.nrec = selsp.MaxNrec
+join katsopr ks on ks.nrec = sps.csopr
+;
+
+function GetMCIncomeInfoCollection(aMRKR: longint; aMaxDate: date): ICollection;
+{
+  if aMRKR = 0
+  {
+    Message('Не выбрано ни одной МЦ', Error);
+    exit;
+  }
+  var i: integer;
+  i := 1;
+  var cmc: comp;
+  var rs: IResultSet;
+  while GetMarker(aMRKR, i, cmc)
+  {
+    rs := queryManager.createQuery(qGetLastKatsopr).setparam('mcNrec', cmc).setparam('maxDate', aMaxDate).getresultset;
+    if rs = nullref exit;
+    if rs.getFirst = tsOk
+    {
+      _col.Add(IMCIncomeInfo(new(MCIncomeInfo, Loader(cmc, rs.row.val('Nrec'), rs.row.val('KontrAgent'), rs.row.val('Price')))));
+    }
+    i++;
+  }
+  result := _col;
+}
+
+end.
