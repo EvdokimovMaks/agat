@@ -1,6 +1,7 @@
 #include MCSpecification.vih
 #include Query.vih
 #include system.vih
+#include MCCollectionItem.vih
 
 #component "AGAT"
 
@@ -39,6 +40,7 @@ where (hps.name like :fltr or mc.name like :fltr )
 
 sql query qGetComposition =
 select ls.kol   as Kol,
+       ls.ced   as MeasureId,
        h.nrec   as HDRPSNrec,
        mc.nrec  as MCNrec,
        hin.nrec as CurHDRPS,
@@ -78,7 +80,6 @@ var
   _nameFilter: string;
   _selectQty: integer;
   _brPartsMarker: longint;
-  col: ICollection;
 
 table struct tHDRPS (
   HDRPSNrec : comp,
@@ -98,6 +99,8 @@ table struct tParts (
   HavePS    : boolean, // true if it have ProductionSpecification, MTHFCKR
   CurHDRPS  : comp,
   Kol       : decimal,
+  MeasureId : comp, //link to katotped
+  Measure   : string[20],
   MCNrec    : comp, //SpecId
   MCName    : string
 ) with index (
@@ -135,6 +138,19 @@ where ((
   _Nrec      == childParts.ParentId
 ));
 
+create view vOtpEd
+var
+  _oe: comp;
+  _mcnrec: comp;
+as select *
+from katotped koe, katotped kmc
+where ((
+  _oe     == koe.nrec and
+  1       == kmc.PRMC and
+  _mcnrec == kmc.CMCUSL and
+  1       == kmc.AKT
+));
+
 procedure FillParts(aHDRPSNrec: comp; aCurHDRPS: comp; aParentId: comp; isRecursive: boolean = false);                                            //+
 {
   var q: IQuery;
@@ -163,18 +179,23 @@ procedure FillParts(aHDRPSNrec: comp; aCurHDRPS: comp; aParentId: comp; isRecurs
       tParts.MCNrec    := rs.row.val('MCNrec');
       tParts.MCName    := rs.row.val('MCName');
       tParts.CurHDRPS  := rs.row.val('CurHDRPS');
+      tParts.MeasureId := rs.row.val('MeasureId');
+      if tParts.MeasureId != 0
+      {
+        vOtpEd._oe := tParts.MeasureId;
+        if vOtpEd.getfirst koe = tsOk { tParts.Measure := vOtpEd.koe.abbr; }
+      }
+      else
+      {
+        vOtpEd._mcnrec := tParts.MCNrec;
+        if vOtpEd.getfirst kmc = tsOk { tParts.Measure := vOtpEd.kmc.abbr; }
+      }
       rsMC := queryManager.CreateQuery(qTestPs).setParam('mcNrec', tParts.MCNrec).setParam('dDate', Cur_Date).getResultSet;
       if rsMC != nullref
         if rsMC.count != 0
-        {
-          tParts.HavePS := true;
-//          if getfirst tHDRPS where ((tParts.MCNrec == tHDRPS.MCNrec)) = tsOk
-//            tParts.CurHDRPS := tHDRPS.HDRPSNrec;
-        }
+          tParts.HavePS := true
         else
-        {
           tParts.HavePS := false;
-        }
       insert current tParts;
     } while (rs.getNext = tsOk);
   }
@@ -197,7 +218,7 @@ procedure MarkParts(pickMarker: longint; aHDRPSNrec: comp; mSpecs: longint; aVal
       if markHierarhically and vMarkParts.curParts.HavePS
       {
         if vMarkParts.getFirst fastfirstrow childParts != tsOk
-          FillParts(vMarkParts.curParts.HDRPSNrec, vMarkParts.curParts.CurHDRPS, vMarkParts.curParts.Nrec, true); //подумать!
+          FillParts(vMarkParts.curParts.HDRPSNrec, vMarkParts.curParts.CurHDRPS, vMarkParts.curParts.Nrec, true);
         vMarkParts._loop childParts { insertmarker(mSpecs, vMarkParts.childParts.Nrec); }
       }
     }
@@ -271,6 +292,7 @@ window wSelectMC 'Состав изделий МЦ Галактики', escclose;
     fields
       brParts.MCName 'Наименование МЦ' : [30], protect;
      (brParts.Kol * _selectQty) 'Кол-во' : [8,3], protect;
+      brParts.Measure 'Ед-ца измерения' : [5], protect;
   end;
 
 procedure CurDocChanged;
@@ -293,7 +315,7 @@ cmInit:
   q.setParam('fltr', '%');
   var rs: IResultSet;
   rs := q.getResultSet;
-  if rs != nullref
+  if rs != nullref and getfirst tHDRPS != tsOk
     sqlCopyInto(rs, #tHDRPS, true);
   SelectFormat(browseDocs);
   CurDocChanged;
@@ -375,34 +397,28 @@ function ShowUI: longint;
   result := runwindowmodal(wSelectMC);
 }
 
-procedure FillCollectionWithParts(aDocId: comp; aParentItem: IGlobalPartsMarked);
+procedure FillCollectionWithSelectedParts(aCol: ICollection);
 {
-  _loop tParts where (( aDocId == tParts.HDRPSNrec and
-                        if(aParentItem=nullref,0,aParentItem.Id) == tParts.ParentId ))
+  var i: integer;
+  i := 0;
+  var c: comp;
+  c := comp(0);
+  var cnrec: comp;
+  var kolvo: double;
+  var oed: comp;
+  var mcobj: IMCCollectionItem;
+  while GetMarker(_brpartsMarker, i, c) //берем маркер и по нему собираем инфу
   {
-    var newItem: IGlobalPartsMarked;
-    newItem          := IGlobalPartsMarked(new(GlobalPartsMarked));
-    newItem.Id       := tParts.SpecId;
-    newItem.Goods    := IGlobalGoods(new(GlobalGoods, GlobalGoods(tParts.GoodsId, tParts.GoodsName, tParts.MeasureId, tParts.MeasureName)));
-    newItem.Qty      := tParts.NormQty;
-    newItem.IsMarked := foundmarker(_brPartsMarker, tParts.SpecId);
-    aParentItem.AddChild(newItem);
-    pushpos(#tParts);
-    FillCollectionWithParts(aDocId, newItem);
-    poppos(#tParts);
+    if getfirst brParts where ((c == brParts.Nrec)) = tsOk
+    {
+      cnrec := brParts.MCNrec;
+      kolvo := brParts.Kol;
+      oed   := brParts.MeasureId;
+      mcobj := IMCCollectionItem(new(MCCollectionItem, CreateMCCollectionItem(cnrec, kolvo, oed)));
+      aCol.add(mcobj);
+    }
+    i++;
   }
 }
-
-procedure FillCollectionWithSelectedParts(aCollection: ICollection);
-{
-  var topItem: IMC;
-  topItem := IMC(new(IMC));
-  aCollection.Add(topItem);
-  topItem.Nrec := 0;
-  topItem.MC := IMC(new(IMC, IMC(brHDRPS.MCNrec, brHDRPS.MCName, '', 0, 0, 0, 0)));
-  topItem.Qty := _selectQty;
-  FillCollectionWithParts(brHDRPS.HDRPSNrec, topItem);
-}
-
 
 end.
