@@ -1,7 +1,8 @@
 #include ClaimDirects.vih
 #include Mc.vih
-#include McCollectionItem.vih
+#include McPartsCollection.vih
 #include McPartsSelector.vih
+#include MonthSelector.vih
 #include System.vih
 #include GetKau.vih
 #include Query.vih
@@ -29,6 +30,8 @@ var
   _marker: longint;
   _mcPartsSelector: MCPartsSelector;
   _ei: EdIzm;
+  _setAttrDialog: SetClaimDirectsSpAttributesDialog;
+  _monthSelector: MonthSelector;
 
 table struct tCostitems (
   SpNrec: comp,
@@ -37,7 +40,6 @@ table struct tCostitems (
 ) with index (
   i01 = SpNrec
 );
-
 
 create view
 var
@@ -234,13 +236,18 @@ procedure SetSpDefaultOtpEd;
   _sp.OtpedNrec := _ei.GetAktOtpEdNRec(_sp.ItemNrec, _sp.ItemType);
 }
 
+procedure UpdateSp;
+{
+  if AllowEditSp UpdateTable;
+}
+
 function  AddSpToChildLevel: comp;
 {
   result := _sp.nrec;
 
   if (_sp.AllowAddChildren)
   {
-    UpdateTable;
+    UpdateSp;
 
     var buf: TtClaimDirectsSp;
     ClearAdvRecord(buf);
@@ -267,7 +274,7 @@ function  AddSpToCurrentLevel: comp;
 
   if parentBuf.allowAddChild
   {
-    UpdateTable;
+    UpdateSp;
 
     var buf: TtClaimDirectsSp;
     ClearAdvRecord(buf);
@@ -326,19 +333,23 @@ function  PickItemFromCatalog: boolean;
   }
 }
 
-procedure SetSpFromMCCollectionItem(aMcCollectionItem: IMcCollectionItem);
+procedure SetSpFromMCCollectionItem(aMcPartsCollectionItem: IMcPartsCollectionItem; aMontNumber: byte);
 {
   _sp.ItemType  := 1;
-  _sp.ItemNrec  := aMcCollectionItem.MC.Nrec;
-  _sp.OtpedNrec := aMcCollectionItem.OtpEd;
-  _sp.SetMonthQty(1, aMcCollectionItem.Qty);
+  _sp.ItemNrec  := aMcPartsCollectionItem.MC.Nrec;
+  _sp.OtpedNrec := aMcPartsCollectionItem.OtpEd;
+  _sp.SetMonthQty(aMontNumber, aMcPartsCollectionItem.Qty);
 }
 
-function PickItemFromParts: boolean;
+function AddItemsFromParts: boolean;
 {
   result := false;
+
   if _mcPartsSelector.ShowUI = cmDefault
   {
+    _monthSelector.Title := 'В какой месяц записать количества';
+    if _monthSelector.ShowUI != cmDefault exit;
+
     var col: ICollection;
     col := ICollection(new(Collection));
     _mcPartsSelector.FillCollectionWithSelectedParts(col);
@@ -346,22 +357,28 @@ function PickItemFromParts: boolean;
     var enum: IEnumerator;
     enum := col.GetEnumerator;
 
-    if enum.MoveNext
+    while enum.MoveNext
     {
-      SetSpFromMCCollectionItem(IMcCollectionItem(enum.current));
+      var item: IMcPartsCollectionItem;
+      item := IMcPartsCollectionItem(enum.current);
+
+      if item.HasPs continue;
+
+      var jumpToSpNrec: comp;
+      case item.Mc.TypemcNrec of
+        0001000000000017h: jumpToSpNrec := _sp.GetCostitemSpBuffer(ClaimDirectsCostitemMateriali).nrec; //материалы
+        000100000000001Ch: jumpToSpNrec := _sp.GetCostitemSpBuffer(ClaimDirectsCostitemPolufabrikati).nrec; //полуфабрикаты
+      else
+        jumpToSpNrec := _sp.GetCostitemSpBuffer(ClaimDirectsCostitemPki).nrec; //иначе считаем что это ПКИ
+      end;
+      treejumptorecord(tr1, jumpToSpNrec);
+      treejumptorecord(tr1, AddSpToChildLevel);
+      SetSpFromMCCollectionItem(item, _monthSelector.SelectedMonth);
       SetSpLastIncomePrice;
       update current _sp;
-
-      while enum.MoveNext
-      {
-        treejumptorecord(tr1, AddSpToCurrentLevel);
-        SetSpFromMCCollectionItem(IMcCollectionItem(enum.current));
-        SetSpLastIncomePrice;
-        update current _sp;
-      }
-
-      result := true;
     }
+
+    result := true;
   }
 }
 
@@ -564,18 +581,6 @@ handleevent
     end;
   }
 
-  cmRestoreDoc:
-  {
-    case curfield of
-      #CostitemName, #ItemName:
-      {
-        if AllowEditSp and _sp.ItemType = 1
-          if PickItemFromParts
-            rereadrecord(#_sp);
-      }
-    end;
-  }
-
   cmInsLevel:
   {
     treejumptorecord(tr1, AddSpToChildLevel);
@@ -592,15 +597,31 @@ handleevent
 
   cmDelete:
   {
-    if DeleteCurrentSp
+    if getmarkercount(_marker) > 0
     {
+      treePushPos(tr1);
+      if treeGetFirstEx(tr1) do {
+        if foundmarker(_marker, _sp.Nrec)
+        {
+          var c: comp;
+          c := _sp.Nrec;
+          if DeleteCurrentSp
+            deletemarker(_marker, c);
+        }
+      } while treeGetNextEx(tr1);
+      treePopPos(tr1);
       rereadrecord(#_sp);
-      if not isValid(#_sp)
-      {
-        redrawcurrentandgo(tr1, false);
-        rereadrecord(#_sp);
-      }
     }
+    else
+      if DeleteCurrentSp
+      {
+        rereadrecord(#_sp);
+        if not isValid(#_sp)
+        {
+          redrawcurrentandgo(tr1, false);
+          rereadrecord(#_sp);
+        }
+      }
     stop;
   }
 
@@ -609,7 +630,35 @@ handleevent
     PutHotCommand(RunLoadMenu(LoadMenu('ClaimDirectsSpTreeViewMenu')));
   }
 
-  cmValue9:
+  cmAccording:   //Alt+S Добавить позиции из состава изделий
+  {
+    if AddItemsFromParts
+      rereadrecord(#_sp);
+  }
+
+  cmPickAttr:    // Alt+A Установка атрибутов для помеченных позиций
+  {
+    if _setAttrDialog.ShowUI = cmDefault
+    {
+      treePushPos(tr1);
+      if treeGetFirstEx(tr1) do {
+        if AllowEditSp and foundmarker(_marker, _sp.Nrec)
+        {
+          if _setAttrDialog.IsSetPriceStruct
+            _sp.PriceStructNrec := _setAttrDialog.PriceStructNrec;
+          if _setAttrDialog.IsSetDevice
+            _sp.DeviceNrec := _setAttrDialog.DeviceNrec;
+          if _setAttrDialog.IsSetKatorg
+            _sp.KatorgNrec := _setAttrDialog.KatorgNrec;
+          update current _sp;
+        }
+      } while treeGetNextEx(tr1);
+      treePopPos(tr1);
+      rereadrecord(#_sp);
+    }
+  }
+
+  cmValue9: //Изменить статью для помеченных записей
   {
     if runwindowmodal(wSelectCostitem) = cmDefault
     {
@@ -655,4 +704,6 @@ end.
 ClaimDirectsSpTreeViewMenu Menu
 {
   - 'Изменить статью для помеченных записей', cmValue9, , , , , sci1Esc;
+  - 'Добавить позиции из состава изделий', cmAccording, , , 'Alt+S', kbAltS, sci1Esc;
+  - 'Установка атрибутов для помеченных позиций', cmPickAttr, , , 'Alt+A', kbAltA, sciEsc;
 }
