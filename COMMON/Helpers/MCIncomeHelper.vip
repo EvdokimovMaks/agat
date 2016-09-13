@@ -8,18 +8,22 @@ interface MCIncomeHelper;
 var
   _query: IQuery;
 
-sql query qGetLastKatsopr =
-select sps.nrec  as Nrec,
-       ks.corg   as KontrAgent,
-       sps.price as Price
-from (select max(sp.nrec) as MaxNrec
-      from (select doprttn, nrec, max(doprttn) over () as maxdoprttn
-            from spsopr
-            where prmc = 1 and cmcusl = :mcNrec and vidsopr = 101 and doprttn between 1 and :maxDate
-           ) sp
-      where sp.doprttn = sp.maxdoprttn
-     ) selsp
-join spsopr sps on sps.nrec = selsp.MaxNrec
+sql query qGetLastMcIncome =
+select sps.nrec    as Nrec,
+       ks.corg     as KontrAgent,
+       spo.srprice as Price,
+       coalesce(spdn.nalog, 0) as PercentNds
+from (select max(spo.nrec) as MaxNrec
+      from (select spo.dord, spo.nrec, max(spo.dord) over () as maxdord
+            from sporder spo
+            join spsopr sps on sps.nrec = spo.cspsopr and sps.vidsopr = 101
+            where spo.sp = 0 and spo.vidorder = 0 and spo.cmc = :mcNrec and spo.dord between 1 and :maxDate
+           ) spo
+      where spo.dord = spo.maxdord
+     ) selspo
+join sporder spo on spo.nrec = selspo.maxNrec
+join spsopr sps on sps.nrec = spo.cspsopr
+left join spdocnal spdn on spdn.cspdoc = sps.nrec and spdn.tipdoc = sps.vidsopr
 join katsopr ks on ks.nrec = sps.csopr
 ;
 
@@ -47,6 +51,7 @@ function IMCIncomeHelper.GetMCIncomeInfo(aKatmcNrec: comp; aMaxDate: date = 0): 
   var katsoprNrec: comp = 0;
   var katorgNrec: comp = 0;
   var price: double = 0;
+  var percentNds: double = 0;
 
   var rs: IResultSet;
   rs := _query.setparam('mcNrec', aKatmcNrec).setparam('maxDate', aMaxDate).getresultset;
@@ -55,18 +60,19 @@ function IMCIncomeHelper.GetMCIncomeInfo(aKatmcNrec: comp; aMaxDate: date = 0): 
     if rs.GetFirst = tsOk
     {
       katsoprNrec := rs.row.val('Nrec');
-      katorgNrec := rs.row.val('KontrAgent');
-      price := rs.row.val('Price');
+      katorgNrec  := rs.row.val('KontrAgent');
+      price       := rs.row.val('Price');
+      percentNds  := rs.row.val('PercentNds');
     }
 
   result := IMCIncomeInfo(
-    new(MCIncomeInfo, Loader(aKatmcNrec, katsoprNrec, katorgNrec, price))
+    new(MCIncomeInfo, Loader(aKatmcNrec, katsoprNrec, katorgNrec, price, percentNds))
   );
 }
 
 constructor Init;
 {
-  _query := queryManager.createQuery(qGetLastKatsopr);
+  _query := queryManager.createQuery(qGetLastMcIncome);
   result := _query != nullref;
 }
 
