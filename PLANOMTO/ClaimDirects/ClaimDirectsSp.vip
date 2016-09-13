@@ -24,9 +24,12 @@ select spm.nrec      as Nrec,
             then coalesce(oe.nrec,#comp(0))
             else spm.cotped
        end           as OtpedNrec,
-       coalesce(vsp.kol, 0)    as Qty,
-       coalesce(vsp.price, 0)  as Price,
-       coalesce(vsp.vprice, 0) as Sum
+       coalesce(vsp.kol      , 0) as Qty,
+       coalesce(vsp.price    , 0) as Price,
+       coalesce(vsp.vprice   , 0) as Sum,
+       coalesce(vsp.summa    , 0) as PercentNds,
+       coalesce(vsp.kolfield5, 0) as SumNds,
+       coalesce(vsp.kolfact  , 0) as SumWithNds
 from mnplan
 join spmnplan spm on spm.cmnplan = mnplan.nrec
 left join katotped oe on oe.prmc = spm.typeizd and oe.cmcusl = spm.cizd and oe.akt = 1 and spm.cizd <> #comp(0)
@@ -165,6 +168,8 @@ procedure RecalcCurrent;
     tSp.qty += tSp.monthQty[i];
     tSp.sum += tSp.monthSum[i];
   }
+  tSp.sumNds := tSp.sum * tSp.percentNds / 100;
+  tSp.sumWithNds := tSp.sum + tSp.sumNds;
 
   _claim.SetDirty;
 }
@@ -176,9 +181,12 @@ procedure RecalcSpAgregate(aSpNrec: comp);
   if vSp.getfirst fastfirstrow tSp = tsOk
   {
 
-    vSp.tSp.sum    := 0;
-    vSp.tSp.price  := 0;
-    vSp.tSp.qty    := 0;
+    vSp.tSp.sum        := 0;
+    vSp.tSp.price      := 0;
+    vSp.tSp.qty        := 0;
+    vSp.tSp.percentNds := 0;
+    vSp.tSp.sumNds     := 0;
+    vSp.tSp.sumWithNds := 0;
 
     var i: byte;
     for(i := 1; i <= 12; i++)
@@ -196,6 +204,8 @@ procedure RecalcSpAgregate(aSpNrec: comp);
       }
       vSp.tSp.qty         += vSp.tSpChildren.qty;
       vSp.tSp.sum         += vSp.tSpChildren.sum;
+      vSp.tSp.sumNds      += vSp.tSpChildren.sumNds;
+      vSp.tSp.sumWithNds  += vSp.tSpChildren.sumWithNds;
     }
 
     vSp.update current  tSp;
@@ -275,6 +285,12 @@ procedure SetPrice(value: double);
   RecalcCurrent;
 }
 
+procedure SetPercentNds(value: double);
+{
+  tSp.percentNds := value;
+  RecalcCurrent;
+}
+
 type TSpmnplan = record as table spmnplan;
 type TSpmnpl = record as table spmnpl;
 
@@ -298,7 +314,8 @@ function GetPeriodNrec(claimPeriodNrec: comp; monthIndex: byte): comp; cacheable
 
 //#region Сохранение модели в БД
 
-procedure SaveValspmnp(spmnplBuf: TSpmnpl; aQty: double; aPrice: double; aSum: double);
+procedure SaveValspmnp(spmnplBuf: TSpmnpl; aQty: double; aPrice: double; aSum: double;
+                       aPercentNds: double=0; aSumNds: double=0; aSumWithNds: double=0);
 {
   if vSave.getfirst fastfirstrow valspmnp where ((spmnplBuf.nrec == valspmnp.cspmnpl
                                               and 1              == valspmnp.num)) != tsOk
@@ -315,6 +332,9 @@ procedure SaveValspmnp(spmnplBuf: TSpmnpl; aQty: double; aPrice: double; aSum: d
   vSave.valspmnp.kol       := aQty;
   vSave.valspmnp.price     := aPrice;
   vSave.valspmnp.vprice    := aSum;
+  vSave.valspmnp.summa     := aPercentNds;
+  vSave.valspmnp.kolfield5 := aSumNds;
+  vSave.valspmnp.kolfact   := aSumWithNds;
   vSave.update current valspmnp;
 }
 
@@ -475,7 +495,8 @@ procedure SaveChildren(aParentNrec: comp);
     {
       var spmnplBuf: TSpmnpl;
       spmnplBuf := SaveSpmnpl(spmnplanBuf, 25, 29, 400174D9C8CF511Eh, _claim.MnplanNrec);
-      SaveValspmnp(spmnplBuf, vSave.tSp.qty, vSave.tSp.price, vSave.tSp.sum);
+      SaveValspmnp(spmnplBuf, vSave.tSp.qty, vSave.tSp.price, vSave.tSp.sum,
+                   vSave.tSp.percentNds, vSave.tSp.sumNds, vSave.tSp.sumWithNds);
     }
 
     var monthIndex: byte;
@@ -754,6 +775,9 @@ property IClaimDirectsSp.Description         : string          absolute tSp.Desc
 property IClaimDirectsSp.Price               : double          read     tSp.price write SetPrice(result);
 property IClaimDirectsSp.Qty                 : double          absolute tSp.qty;
 property IClaimDirectsSp.Sum                 : double          absolute tSp.sum;
+property IClaimDirectsSp.PercentNds          : double          read     tSp.percentNds write SetPercentNds(result);
+property IClaimDirectsSp.SumNds              : double          absolute tSp.sumNds;
+property IClaimDirectsSp.SumWithNds          : double          absolute tSp.sumWithNds;
 property IClaimDirectsSp.AllowAddChildren    : boolean         absolute tSp.allowAddChild;
 property IClaimDirectsSp.Claim               : IClaimDirects absolute _claim;
 
