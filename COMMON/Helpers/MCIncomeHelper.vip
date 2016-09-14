@@ -1,5 +1,8 @@
+#include System.vih
 #include MCIncome.vih
+#include McUslHelper.vih
 #include Query.vih
+#include DeflatorResolver.vih
 
 #component "AGAT"
 
@@ -7,9 +10,14 @@ interface MCIncomeHelper;
 
 var
   _query: IQuery;
+  _mcUslHelper: McUslHelper;
+
+create view
+as select *
+from katsopr;
 
 sql query qGetLastMcIncome =
-select sps.nrec    as Nrec,
+select ks.nrec     as Nrec,
        ks.corg     as KontrAgent,
        spo.srprice as Price,
        coalesce(spdn.nalog, 0) as PercentNds
@@ -68,6 +76,61 @@ function IMCIncomeHelper.GetMCIncomeInfo(aKatmcNrec: comp; aMaxDate: date = 0): 
   result := IMCIncomeInfo(
     new(MCIncomeInfo, Loader(aKatmcNrec, katsoprNrec, katorgNrec, price, percentNds))
   );
+}
+
+function GetDefaultDeflatorResolver: oDeflatorResolver;
+{
+  var dm: DeflatorResolverManager;
+  result := dm.GetLastDeflatorResolver;
+}
+
+function IMCIncomeHelper.GetDeflatorCollection(aMcIncomeInfoCollection: ICollection;
+                                               aDate: date = 0;
+                                               aDeflatorResolver: oDeflatorResolver = nullref): ICollection;
+{
+  if aDeflatorResolver = nullref
+    aDeflatorResolver := GetDefaultDeflatorResolver;
+
+  if aDate = 0
+    aDate := cur_date;
+
+  var c: ICollection;
+  c := ICollection(new(Collection));
+
+  var enum: IEnumerator;
+  enum := aMcIncomeInfoCollection.GetEnumerator;
+
+  while enum.MoveNext
+  {
+    var info: IMcIncomeInfo;
+    info :=  IMcIncomeInfo(enum.current);
+
+    c.Add(GetDeflator(info, aDate, aDeflatorResolver));
+  }
+
+  result := c;
+}
+
+function IMCIncomeHelper.GetDeflator(aMcIncomeInfo: IMcIncomeInfo;
+                                     aDate: date = 0;
+                                     aDeflatorResolver: oDeflatorResolver = nullref): IMcIncomeInfoDeflator;
+{
+  if aDeflatorResolver = nullref
+    aDeflatorResolver := GetDefaultDeflatorResolver;
+
+  if aDate = 0
+    aDate := cur_date;
+
+  var d: IMcIncomeInfoDeflator;
+  d := IMcIncomeInfoDeflator(new(McIncomeInfoDeflator, Create(aMcIncomeInfo, 1)));
+
+  if getfirst katsopr where (( aMcIncomeInfo.KatsoprNrec == katsopr.nrec )) = tsOk
+  {
+    d.IndexDeflator := aDeflatorResolver.GetDeflator(_mcUslHelper.GetMcDeflatorGroupNrec(aMcIncomeInfo.KatmcNrec),
+                                                     year(katsopr.dsopr), year(aDate));
+  }
+
+  result := d;
 }
 
 constructor Init;
