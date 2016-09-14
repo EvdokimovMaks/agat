@@ -4,6 +4,7 @@
 #include McPartsSelector.vih
 #include MonthSelector.vih
 #include MCIncome.vih
+#include DeflatorResolver.vih
 #include System.vih
 #include GetKau.vih
 #include Query.vih
@@ -25,6 +26,7 @@ var
   _monthSelector: MonthSelector;
   _mcIncomeHelper: MCIncomeHelper;
   _mcUslHelper: McUslHelper;
+  _deflatorResolver: oDeflatorResolver;
 
 table struct tCostitems (
   SpNrec: comp,
@@ -92,6 +94,15 @@ where ((
 bounds byParent = _parentNrec == _sp.ParentNrec
 ;
 
+create view vPer
+var
+  _fpperiodNrec: comp;
+as select *
+from fpperiod
+where ((
+  _fpperiodNrec == fpperiod.nrec
+));
+
 #define QtyFieldFormat [8, '\4p[|-]36666666666666666~9999']
 
 #define SumFieldFormat [12, '\2p[|-]3666`666`666`666`666~88']
@@ -101,7 +112,7 @@ excelColumns;
 table _sp;
 fixedLeft(IsMarkedField, CostitemName, ItemName, OtpedName, _sp.Description,
           KatorgName, DeviceName, PriceStructName,
-          _sp.Qty, _sp.Price, _sp.Sum, _sp.PercentNds, _sp.SumNds, _sp.SumWithNds);
+          _sp.Qty, _sp.Price, _sp.Sum, _sp.PercentNds, _sp.SumWithNds);
 fields
   {font={bold=_sp.IsCostitem;color=if(IsMarked, ColorMark, 0);}};
   [IsMarkedField] if(IsMarked,'V','') ''      : [1], skip, noautosize;
@@ -116,7 +127,7 @@ fields
   _sp.Price        'Цена'                     : #SumFieldFormat  , noprotect;
   _sp.Sum          'Сумма'                    : #SumFieldFormat  , protect;
   _sp.PercentNds   '%'#13'НДС'                : [5], noprotect;
-  _sp.SumNds       'Сумма'#13'НДС'            : #SumFieldFormat  , protect;
+  //_sp.SumNds       'Сумма'#13'НДС'            : #SumFieldFormat  , protect;
   _sp.SumWithNds   'Сумма'#13'с НДС'          : #SumFieldFormat  , protect;
   MonthQty1        'Январь  '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
   //MonthSum1        'Январь  '#13'Сумма'       : #SumFieldFormat  , protect;
@@ -190,10 +201,30 @@ procedure SetTreeBounds;
   AddBounds(tbByParent);
 }
 
+function GetDeflatorResolver: oDeflatorResolver;
+{
+  if _deflatorResolver = nullref
+  {
+    var manager: DeflatorResolverManager;
+    _deflatorResolver := manager.GetDeflatorResolverForMnplan(_sp.Claim.MnplanNrec);
+  }
+  result := _deflatorResolver;
+}
+
+function GetFpPeriodYear(aFpPeriodNrec: comp): word; cacheable;
+{
+  vPer._fpperiodNrec := aFpPeriodNrec;
+  if vPer.getfirst fpperiod = tsOk
+    result := year(vPer.fpperiod.dbeg)
+  else
+    result := 0;
+}
+
 procedure SetSp(aSp: IClaimDirectsSp);
 {
   UnsetTreeBounds;
   _sp := aSp;
+  _deflatorResolver := nullref;
   SetTreeBounds;
   TreeGetFirstEx(tr1);
   rereadrecord(#_sp);
@@ -209,14 +240,23 @@ procedure SetSpDefaultPercentNds;
   set _sp.PercentNds := _mcUslHelper.GetPercentNds(_sp.ItemType, _sp.ItemNrec);
 }
 
-procedure SetSpIncomeInfo;
+procedure SetSpIncomeInfo(useDeflators: boolean = true);
 {
+
   var incomeInfo: IMcIncomeInfo;
   incomeInfo := _mcIncomeHelper.GetMCIncomeInfo(_sp.ItemNrec);
 
-  set _sp.Price := incomeInfo.Price;
   set _sp.KatorgNrec := incomeInfo.KatorgNrec;
   set _sp.PercentNds := incomeInfo.PercentNds;
+
+  var deflator: double = 1;
+
+  if useDeflators
+    deflator := _mcIncomeHelper.GetDeflator(incomeInfo,
+                                            date(31,12,GetFpPeriodYear(_sp.Claim.PeriodNrec)),
+                                            GetDeflatorResolver).IndexDeflator;
+
+  set _sp.Price := incomeInfo.Price * deflator;
 
   if _sp.PercentNds = 0
     SetSpDefaultPercentNds;
@@ -314,7 +354,10 @@ function  PickItemFromCatalog: boolean;
 
       _sp.ItemType := curItemType;
       _sp.ItemNrec := c;
-      SetSpIncomeInfo;
+      if curItemType = 1
+        SetSpIncomeInfo;
+      else
+        SetSpDefaultPercentNds;
       SetSpDefaultOtpEd;
       update current _sp;
     }
@@ -653,20 +696,28 @@ handleevent
 
   cmPickClass: //Alt+C Подбор цен и контрагентов по последним поступлениям
   {
+    var useDeflators: boolean = false;
+    if message('Учитывать индексы-дефляторы?', YesNo) = cmYes
+      useDeflators := true;
+
     if getmarkercount(_marker) > 0
     {
       treePushPos(tr1);
       if treeGetFirstEx(tr1) do {
-        if AllowEditSp and foundmarker(_marker, _sp.Nrec)
+        if AllowEditSp and _sp.ItemType = 1 and foundmarker(_marker, _sp.Nrec)
         {
-          SetSpIncomeInfo;
+          SetSpIncomeInfo(useDeflators);
           update current _sp;
         }
       } while treeGetNextEx(tr1);
       treePopPos(tr1);
     }
     else
-      if AllowEditSp SetSpIncomeInfo;
+      if AllowEditSp and _sp.ItemType = 1
+      {
+        SetSpIncomeInfo(useDeflators);
+        update current _sp;
+      }
     rereadrecord(#_sp);
   }
 
