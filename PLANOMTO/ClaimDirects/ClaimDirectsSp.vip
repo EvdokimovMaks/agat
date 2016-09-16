@@ -29,12 +29,20 @@ select spm.nrec      as Nrec,
        coalesce(vsp.vprice   , 0) as Sum,
        coalesce(vsp.summa    , 0) as PercentNds,
        coalesce(vsp.kolfield5, 0) as SumNds,
-       coalesce(vsp.kolfact  , 0) as SumWithNds
+       coalesce(vsp.kolfact  , 0) as SumWithNds,
+       coalesce(tOrdered.orderedQty, 0) as OrderedQty
 from mnplan
 join spmnplan spm on spm.cmnplan = mnplan.nrec
 left join katotped oe on oe.prmc = spm.typeizd and oe.cmcusl = spm.cizd and oe.akt = 1 and spm.cizd <> #comp(0)
 left join spmnpl spl on spl.cspmnplan = spm.nrec and spl.wkolan = 25
 left join valspmnp vsp on vsp.cspmnpl = spl.nrec and spl.nrec is not null
+left join (select spoa.cpos as spmnplNrec, sum(claim.kol) as OrderedQty
+           from objacct oa
+           join spobjacc spoa on spoa.cobjacct = oa.nrec and spoa.typepos = 31 and spoa.typeobj = 13 and spoa.typehier = 1
+           join claim on claim.nrec = spoa.cobject
+           where oa.typeobj = 29 and oa.cobject = :MnplanNrec and oa.typeown = 3
+           group by spoa.cpos
+          ) tOrdered on tOrdered.spmnplNrec = spl.nrec
 where mnplan.nrec = :MnplanNrec
 ;
 
@@ -120,6 +128,7 @@ from  tClaimDirectsSp tSpParent,
       spmnplan spm,
       spmnpl,
       valspmnp,
+      spobjacc,
       mnanal,
       allmemo
 where ((
@@ -137,12 +146,14 @@ create view vRemovedSpmnplan
 var
   _mnplanNrec: comp;
 as select *
-from spmnplan, tClaimDirectsSp tSp, spmnpl, valspmnp
+from spmnplan, tClaimDirectsSp tSp, spmnpl, valspmnp, spobjacc
 where ((
   _mnplanNrec   == spmnplan.cmnplan and
   spmnplan.nrec == spmnpl.cspmnplan and
   spmnpl.nrec   == valspmnp.cspmnpl and
-  spmnplan.nrec == tSp.SpmnplanNrec
+  spmnplan.nrec == tSp.SpmnplanNrec and
+  31            == spobjacc.typepos and
+  spmnpl.nrec   == spobjacc.cpos
 ));
 
 create view v
@@ -349,6 +360,7 @@ procedure DeleteSpmnpl( _spmnplanNrec: comp;
                                              and _canval4      == spmnpl.canval4 )) = tsOk
   {
     vSave.delete all valspmnp where ((vSave.spmnpl.nrec == valspmnp.cspmnpl));
+    vSave.delete all spobjacc where ((31 == spobjacc.typepos and vSave.spmnpl.nrec == spobjacc.cpos));
     vSave.delete current spmnpl;
   }
 
@@ -489,15 +501,17 @@ procedure SaveChildren(aParentNrec: comp);
     spmnplanBuf := SaveSpmnplan;
 
     //все значения нулевые - удаляем ячейку
-    if vSave.tSp.qty=0 and vSave.tSp.price=0 and vSave.tSp.sum=0
-      DeleteSpmnpl(spmnplanBuf.nrec, 25, 29, _claim.MnplanNrec);
-    else
-    {
-      var spmnplBuf: TSpmnpl;
-      spmnplBuf := SaveSpmnpl(spmnplanBuf, 25, 29, 400174D9C8CF511Eh, _claim.MnplanNrec);
-      SaveValspmnp(spmnplBuf, vSave.tSp.qty, vSave.tSp.price, vSave.tSp.sum,
-                   vSave.tSp.percentNds, vSave.tSp.sumNds, vSave.tSp.sumWithNds);
-    }
+    //if vSave.tSp.qty=0 and vSave.tSp.price=0 and vSave.tSp.sum=0
+    //  DeleteSpmnpl(spmnplanBuf.nrec, 25, 29, _claim.MnplanNrec);
+    //else
+    //{
+    //для итоговых ячеек - не удаляем, даже если все цифры - нулевые,
+    //т.к. к ним могут быть привязаны исходящие заявки
+    var spmnplBuf: TSpmnpl;
+    spmnplBuf := SaveSpmnpl(spmnplanBuf, 25, 29, 400174D9C8CF511Eh, _claim.MnplanNrec);
+    SaveValspmnp(spmnplBuf, vSave.tSp.qty, vSave.tSp.price, vSave.tSp.sum,
+                 vSave.tSp.percentNds, vSave.tSp.sumNds, vSave.tSp.sumWithNds);
+    //}
 
     var monthIndex: byte;
     for (monthIndex := 1; monthIndex <= 12; monthIndex++)
@@ -539,7 +553,10 @@ procedure DeleteRemovedSpmnplan;
     {
       insertmarker(l, vRemovedSpmnplan.spmnplan.nrec);
       vRemovedSpmnplan._loop spmnpl
+      {
+        vRemovedSpmnplan.delete all spobjacc;
         vRemovedSpmnplan.delete all valspmnp;
+      }
       vRemovedSpmnplan.delete all spmnpl;
     }
   }
@@ -689,11 +706,6 @@ function  IClaimDirectsSp.MonthSum(monthIndex: byte): double;
   result := if(isValidMonthIndex(monthIndex), tSp.monthSum[monthIndex], 0);
 }
 
-function  IClaimDirectsSp.MonthOrderedQty(monthIndex: byte): double;
-{
-  result := if(isValidMonthIndex(monthIndex), tSp.monthOrderedQty[monthIndex], 0);
-}
-
 procedure IClaimDirectsSp.SetMonthQty(monthIndex: byte; value: double);
 {
   if isValidMonthIndex(monthIndex)
@@ -778,6 +790,7 @@ property IClaimDirectsSp.Sum                 : double          absolute tSp.sum;
 property IClaimDirectsSp.PercentNds          : double          read     tSp.percentNds write SetPercentNds(result);
 property IClaimDirectsSp.SumNds              : double          absolute tSp.sumNds;
 property IClaimDirectsSp.SumWithNds          : double          absolute tSp.sumWithNds;
+property IClaimDirectsSp.OrderedQty          : double          absolute tSp.orderedQty;
 property IClaimDirectsSp.AllowAddChildren    : boolean         absolute tSp.allowAddChild;
 property IClaimDirectsSp.Claim               : IClaimDirects absolute _claim;
 
