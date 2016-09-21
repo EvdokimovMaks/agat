@@ -385,7 +385,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   }
 
   procedure mysqlAddStr(var _s: longint; _str: string); {
-    //logstrtofile('c:\gal\queries.txt',_str);
+    //logstrtofile('d:\gal\queries.txt',_str);
     sqlAddStr(_s, _str);
   }
 
@@ -678,6 +678,17 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       addsect('JOIN', 'LEFT JOIN attrval av_avans ON '+WT_BASEDOC+'=av_avans.wtable AND bd.nrec=av_avans.crec AND #comp('+ATTRNAM_AVANS+')=av_avans.cattrnam');
       addsect('WHERE', '(av_avans.vcomp IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKAVANS+''') OR av_avans.cattrnam is null)');
     }
+    //Оплачено полностью / частично / не оплачено
+    if not (bitset(flagOpl, 0) and bitset(flagOpl, 1) and bitset(flagOpl, 2)) and
+       not ((not bitset(flagOpl, 0)) and (not bitset(flagOpl, 1)) and (not bitset(flagOpl, 2)))
+    {
+      var sopl: string = '';
+      if bitset(flagOpl, 0) sopl += if(sopl='','(',' or ') + '(round(coalesce(bf.summa,0),2)>=round(bd.total,2))';
+      if bitset(flagOpl, 1) sopl += if(sopl='','(',' or ') + '(round(coalesce(bf.summa,0),2)>0 and round(coalesce(bf.summa,0),2)<round(bd.total,2))';
+      if bitset(flagOpl, 2) sopl += if(sopl='','(',' or ') + '(round(coalesce(bf.summa,0),2)<=0)';
+      sopl += ')';
+      addsect('WHERE', sopl);
+    }
     //по дате счета
     if bitset(flagDates, BIT_DDOC) {
       if (DDocEnd = 0) DDocEnd := cur_date;
@@ -805,9 +816,16 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     mysqlAddStr(s, '0,0,0,0,0,0,0');
     mysqlAddStr(s, 'FROM basedoc bd');
     mysqlAddStr(s, 'left join (select cbasedoc, sum(summa) as summa');    //tipdoc=10443 - приходные ордера в кассу "Денежные документы"
-    mysqlAddStr(s, '           from basefin');
-    mysqlAddStr(s, '           where tidkgal = 1 and  cbasedoc<>#comp(0)');
-    mysqlAddStr(s, '           group by cbasedoc) bf on bf.cbasedoc = bd.nrec');
+    mysqlAddStr(s, '           from (select cbasedoc, summa');
+    mysqlAddStr(s, '                 from basefin');
+    mysqlAddStr(s, '                 where tidkgal = 1 and  cbasedoc<>#comp(0)');
+    mysqlAddStr(s, '                 union all');
+    mysqlAddStr(s, '                 select cpredopldo, summa');
+    mysqlAddStr(s, '                 from basefin');
+    mysqlAddStr(s, '                 where tidkbase = 0 and cpredopldo<>#comp(0) and cpredopldo<>cbasedoc and tidkgal = 1');
+    mysqlAddStr(s, '                ) bf');
+    mysqlAddStr(s, '           group by cbasedoc');
+    mysqlAddStr(s, '          ) bf on bf.cbasedoc = bd.nrec');
     mysqlAddStr(s, 'left join attrval av_parent on '+WT_BASEDOC+' = av_parent.wtable and bd.nrec = av_parent.crec and #comp('+00010000000000B9h+') = av_parent.cattrnam ');
     mysqlAddStr(s, 'left join attrval av_naznpl on '+WT_BASEDOC+' = av_naznpl.wtable and bd.nrec = av_naznpl.crec and #comp('+ATTRNAM_NAZNPL+') = av_naznpl.cattrnam ');
     //секция JOIN
@@ -869,6 +887,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     sqlFetchInto(stmt, #tbd);
     sqlFreeStmt(stmt);
     setvisualheader('Установка фильтра. Расчет оплаты предоплатных ДО');
+    /*
     //расчет суммы оплаты предоплатных ДО
     var _sum: double;
     _loop tbd where ((111 == tbd.viddoc)) {
@@ -878,6 +897,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       }
       if (_sum > 0) update current tbd set tbd.sumopl := _sum;
     }
+    */
     setvisualheader('Установка фильтра. Расчет дней простоя');
     //расчет дней простоя
     var _cd: date;
@@ -910,9 +930,9 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     if bitset(flagSums, BIT_SUMOPL) pushcondition(tcBySumOpl) else popcondition(tcBySumOpl);
 
     //условия, которые неудобно выставить через condition - делаем через delete
-    if not bitset(flagopl, 0) delete all tbd where (tbd.sumopl >= tbd.total);
-    if not bitset(flagopl, 1) delete all tbd where (tbd.sumopl > 0 and tbd.sumopl < tbd.total);
-    if not bitset(flagopl, 2) delete all tbd where (tbd.sumopl = 0);
+    //if not bitset(flagopl, 0) delete all tbd where (tbd.sumopl >= tbd.total);
+    //if not bitset(flagopl, 1) delete all tbd where (tbd.sumopl > 0 and tbd.sumopl < tbd.total);
+    //if not bitset(flagopl, 2) delete all tbd where (tbd.sumopl = 0);
 
     if not getlast brbd <> tsOk { };
     rereadrecord(#brbd);
