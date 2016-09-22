@@ -57,8 +57,17 @@ where oa.typeown = 29
 order by indent.nrec, claim.nrec
 ;
 
+sql query qMaxCurNum =
+select max(noind) as MaxNum
+from indent
+;
+
 var
   _log: IAtlProtocol;
+
+create view
+as select *
+from indent, claim;
 
 create view vInputIndents
 var
@@ -99,6 +108,15 @@ as select *
 from katmc
 where ((
   _katmcNrec == katmc.nrec
+));
+
+create view vUsl
+var
+  _katuslNrec: comp;
+as select *
+from katusl
+where ((
+  _katuslNrec == katusl.nrec
 ));
 
 create view vPer
@@ -155,8 +173,46 @@ where ((
   spl.nrec        == spoa2.cpos
 ));
 
+create view vCreateIndent
+var
+  _sq: ISelectQty;
+  _sp: IClaimDirectsSp;
+as select *
+from _sq, _sp
+where ((
+  _sq.crec == _sp.nrec
+));
+
 type tfpperiod = record as table fpperiod;
 type tclaim = record as table claim;
+
+function MaxCurNum: string;
+{
+  var rs: IResultSet;
+  rs := queryManager.createQuery(qMaxCurNum).getResultSet;
+  if rs.getFirst = tsOk
+    result := rs.row.val('MaxNum');
+}
+
+function GetCGroupNrec(aType: word; aNrec: comp): comp;
+{
+  if aType = 2
+  {
+    vUsl._katuslNrec := aNrec;
+    if vUsl.getfirst katusl = tsOk {
+      result := vUsl.katusl.CGROUPUSL;
+    }
+    else result := 0;
+  }
+  else
+  {
+    vMc._katmcNrec := aNrec;
+    if vMc.getfirst katmc = tsOk {
+      result := vMc.katmc.CGROUPMC;
+    }
+    else result := 0;
+  }
+}
 
 function GetFpPeriodBuf(fpperiodNrec: comp): tfpperiod;
 {
@@ -482,6 +538,105 @@ procedure SyncOutputLinksWithInputLinks(claimDirects: IClaimDirects; log: IAtlPr
   if rs.getFirst = tsOk do {
     LinkOutputIndentClaim(rs.row.val('SpmnplanNrec'), rs.row.val('ClaimNrec'), log);
   } while rs.getNext = tsOk;
+}
+
+procedure CreateOutputIndent(aSp: IClaimDirectsSp; aSelQty: ISelectQty; log: IAtlProtocol = nullref);
+{
+  if log = nullref
+    log := _log;
+
+  ClearBuffer(#indent);
+  indent.descr       := sgettune('USER.DESCR');
+  indent.desgr       := sgettune('USER.DESGR');
+  indent.noind       := nextnumstr(MaxCurNum);
+  indent.DIND        := Cur_Date;
+  indent.CSTATE      := 00010000000000F2h;
+  indent.STATE       := 1;
+  indent.CTYPE       := 0001000000000004h;
+  indent.PRIORITY    := 0001000000000005h;
+  indent.CORDER      := aSp.Claim.KatpodrNrec;
+  indent.CPERFORM    := 40000EAF977C078Ah;
+  indent.SUMMA       := 0;
+  indent.VHODNAL     := 2;
+  indent.RULE01      := 3;
+  indent.WCODEKAU[1] := 10005;
+  indent.WCODEKAU[2] := 10005;
+  indent.WCODEKAU[3] := 10005;
+  indent.CROLEKAU[1] := 0001000000000022h;
+  indent.CROLEKAU[2] := 0001000000000023h;
+  indent.CROLEKAU[3] := 0001000000000021h;
+  indent.CROLEKAU[4] := 40016EE4408C5A55h;
+  indent.CVALKAU[1]  := 00010000000001CFh;
+  indent.CVALKAU[2]  := 00010000000001CFh;
+  indent.CVALKAU[3]  := 00010000000001CFh;
+
+  log.LogStartVisual('Формирование текущей заявки №' + indent.noind, 0);
+
+  log.LogMessage(APE_INFO, 'Формирование заголовка');
+  if insert current indent = tsOk
+    log.LogLine(APE_INFO, 'Заголовок сформирован');
+  else
+  {
+    log.LogLine(APE_ERROR, 'Формирование заголовка завершено с ошибкой');
+    log.LogCommit;
+    exit;
+  }
+  log.LogCommit;
+
+
+  vCreateIndent._sq := aSelQty;
+  vCreateIndent._sp := aSp;
+
+  var k: integer = 1;
+  vCreateIndent._loop viewtable
+  {
+    ClearBuffer(#claim);
+    claim.CINDENT     := indent.nrec;
+    claim.KOL         := vCreateIndent._sq.SelectedQty;
+    claim.PRICE       := vCreateIndent._sp.Price;
+    claim.SUMMA       := claim.KOL * claim.PRICE;
+    claim.ADVDO[1]    := vCreateIndent._sp.PercentNds;
+    claim.DSTART      := indent.DIND;
+    claim.WPOS        := k;
+    claim.CSTATE      := indent.CSTATE;
+    claim.STATE       := indent.STATE;
+    claim.PRMC        := vCreateIndent._sp.ItemType;
+    claim.CMCUSL      := vCreateIndent._sp.ItemNrec;
+    claim.CGROUP      := GetCGroupNrec(vCreateIndent._sp.ItemType, vCreateIndent._sp.ItemNrec);
+    claim.COTPED      := vCreateIndent._sp.OtpedNrec;
+    claim.WCODEKAU[1] := 40;
+    claim.WCODEKAU[3] := 73;
+    claim.WCODEKAU[4] := 4;
+    claim.CROLEKAU[1] := 0001000000000001h;
+    claim.CROLEKAU[2] := 0001000000000024h;
+    claim.CROLEKAU[3] := 0001000000000002h;
+    claim.CROLEKAU[4] := 0001000000000036h;
+    claim.CROLEKAU[5] := 400111A5C92CBBF8h;
+    claim.CVALKAU[1]  := vCreateIndent._sp.Claim.KatstroyNrec;   //заказ
+    claim.CVALKAU[3]  := vCreateIndent._sp.PriceStructNrec;      //статьи затрат объектов строительства
+    claim.CVALKAU[4]  := vCreateIndent._sp.DeviceNrec;           //МЦ
+
+    log.LogMessage(APE_INFO, 'Формирование позиции спецификации №' + claim.WPOS);
+    if insert current claim = tsOk
+      log.LogLine(APE_INFO, 'Позиция сформирована');
+    else
+    {
+      log.LogLine(APE_ERROR, 'Ошибка');
+      log.LogCommit;
+      break;
+    }
+    log.LogCommit;
+
+    k++;
+    log.LogMessage(APE_INFO, 'Установка связи позиции спецификации №' + claim.WPOS + ' с позицией годовой заявки');
+    LinkOutputIndentClaim(vCreateIndent._sp.SpmnplanNrec, claim.nrec, log);
+    log.LogCommit;
+    indent.SUMMA := indent.SUMMA + claim.SUMMA;
+  }
+  update current indent;
+  log.LogCommit;
+  log.LogStopVisual;
+  log.Visible := true;
 }
 
 procedure InitObjects;

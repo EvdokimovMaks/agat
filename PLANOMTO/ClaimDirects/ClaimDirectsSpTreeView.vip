@@ -11,6 +11,9 @@
 #include Marker.vih
 #include oEdIzm.vih
 #include McUslHelper.vih
+#include GlobalParts.vih
+#include GlobalPartsConverter.vih
+#include GlobalMatch.vih
 
 #component "AGAT"
 
@@ -27,7 +30,6 @@ var
   _mcIncomeHelper: MCIncomeHelper;
   _mcUslHelper: McUslHelper;
   _deflatorResolver: oDeflatorResolver;
-  _ccc: ICreateCurClaim(CreateCurClaim) new;
 
 table struct tCostitems (
   SpNrec: comp,
@@ -378,6 +380,21 @@ procedure SetSpFromMCCollectionItem(aMcPartsCollectionItem: IMcPartsCollectionIt
   _sp.SetMonthQty(aMontNumber, aMcPartsCollectionItem.Qty);
 }
 
+function GetCostitemNrecByKatmcType(aKatmcType: comp): comp;
+{
+  case aKatmcType of
+    0001000000000017h: result := ClaimDirectsCostitemMateriali;
+    000100000000001Ch: result := ClaimDirectsCostitemPolufabrikati;
+  else
+    result := ClaimDirectsCostitemPki;
+  end;
+}
+
+function GetSpNrecByCostitemNrec(aCostitemNrec: comp): comp;
+{
+  result := _sp.GetCostitemSpBuffer(aCostitemNrec).nrec;
+}
+
 function AddItemsFromParts: boolean;
 {
   result := false;
@@ -401,14 +418,7 @@ function AddItemsFromParts: boolean;
 
       if item.HasPs continue;
 
-      var jumpToSpNrec: comp;
-      case item.Mc.TypemcNrec of
-        0001000000000017h: jumpToSpNrec := _sp.GetCostitemSpBuffer(ClaimDirectsCostitemMateriali).nrec; //материалы
-        000100000000001Ch: jumpToSpNrec := _sp.GetCostitemSpBuffer(ClaimDirectsCostitemPolufabrikati).nrec; //полуфабрикаты
-      else
-        jumpToSpNrec := _sp.GetCostitemSpBuffer(ClaimDirectsCostitemPki).nrec; //иначе считаем что это ПКИ
-      end;
-      treejumptorecord(tr1, jumpToSpNrec);
+      treejumptorecord(tr1, GetSpNrecByCostitemNrec(GetCostitemNrecByKatmcType(item.Mc.TypemcNrec)));
       treejumptorecord(tr1, AddSpToChildLevel);
       SetSpFromMCCollectionItem(item, _monthSelector.SelectedMonth);
       SetSpIncomeInfo;
@@ -764,29 +774,131 @@ handleevent
 
   cmDocBas: //Alt+D Сформировать текущие заявки
   {
-    if GetMarkerCount(_marker) = 0
-    {
-      message('Отметьте позиции для формирования заявки');
-      exit;
-    }
+    var cdssqv: ClaimDirectsSpSelectQtyView noauto;
+    var sq: ISelectQty(SelectQty) new;
 
     pushpos(#_sp);
     resetbounds(#_sp);
+    _loop _sp
+    {
+      if not _sp.IsCostitem and foundmarker(_marker, _sp.nrec)
+        sq.Add(_sp.nrec, (_sp.Qty - _sp.OrderedQty));
+    }
+    cdssqv := new(ClaimDirectsSpSelectQtyView, ClaimDirectsSpSelectQtyView(_sp, sq));
+    if cdssqv.ShowUi = cmDefault
+    {
+      var prtcl: IAtlProtocol(AtlProtocol) new;
+      var cds: ClaimDirectsSync;
+      cds.CreateOutputIndent(_sp, sq, prtcl);
+    }
+    setbounds(#_sp);
+    poppos(#_sp);
+  }
 
-    var SelectedSP: IClaimDirectsSp (ClaimDirectsSp) new;
+  cmNal: //Alt+F Сформировать заявку из состава Глобала
+  {
+    var gt: IGlobalTunes(GlobalTunes) new;
+    var gdpp: IGlobalDataProviderParts noauto;
+    var gps: GlobalPartsSelector noauto;
+    var gpc: IGlobalPartsConverter(GlobalPartsConverter) new;
+    var c, c_leaf, c_matches: ICollection;
+
+    gdpp := IGlobalDataProviderParts(new(GlobalDataProviderParts, GlobalDataProviderBase(gt)));
+    gps := new(GlobalPartsSelector, GlobalPartsSelector(gdpp));
+    c := ICollection(new(System::Collection));
+
+    gps.SetNameFilter('даеи');
+    if gps.ShowUI = cmDefault
+    {
+      gps.FillCollectionWithSelectedParts(c);
+
+      c_leaf := gpc.PartsToGoodsMarkedCollection(c, PARTS_MARKED, PARTS_LEAF);
+
+      c_matches := ICollection(new(Collection));
+
+      var en, en1: IEnumerator;
+      en := c_leaf.GetEnumerator;
+
+/*      while en.MoveNext
+        c_matches.add(IGoodsMatches(new(GoodsMatches, GoodsMatches(en.current))));
+
+      var mm: MatchesManager new;
+      mm.LoadMatches(c_matches);
+
+      en.reset;
+      en1 := c_matches.GetEnumerator;
+
+      while en.MoveNext and en1.MoveNext
+      {
+        var match: IGoodsMatch;
+        match := IGoodsMatch(en1.current);
+
+        var goodsColItem: IGlobalGoodsCollectionItem;
+        goodsColItem := IGlobalGoodsCollectionItem(en.Current);
+
+        treejumptorecord(tr1, GetSpNrecByCostitemNrec(GetCostitemNrecByKatmcType(match.mc.TypemcNrec)));
+        treejumptorecord(tr1, AddSpToChildLevel);
+        SetSpFromMCCollectionItem(
+          IMcPartsCollectionItem(new(McPartsCollectionItem, CreateMCCollectionItem(match.mc.nrec, goodsColItem.Qty))),
+          1
+        );
+        SetSpIncomeInfo;
+        update current _sp;
+
+      }
+    }    */
+
+      var gg: IGlobalGoodsCollectionItem;
+      var ml: IMatchLoaderMCByGoods;
+      ml := IMatchLoaderMCByGoods(new(MatchLoaderMCByGoods));
+
+      while en.movenext
+      {
+        gg := IGlobalGoodsCollectionItem(en.current);
+        c_matches := ml.LoadMatches(gg.Goods);
+        if c_matches.Count = 0
+        {
+          //обработка ситуации, когда не найдено сопоставление
+        }
+        else
+        {
+          var mc: IMC;
+          mc := IMC(c_matches.First);
+          treejumptorecord(tr1, GetSpNrecByCostitemNrec(GetCostitemNrecByKatmcType(mc.TypemcNrec)));
+          treejumptorecord(tr1, AddSpToChildLevel);
+          SetSpFromMCCollectionItem(
+            IMcPartsCollectionItem(new(McPartsCollectionItem, CreateMCCollectionItem(mc.nrec, gg.Qty))),
+            1
+          );
+          SetSpIncomeInfo;
+          SetSpDefaultOtpEd;
+          update current _sp;
+        }
+      }
+    }
+  }
+
+  cmRecalcAllSums:  //Alt+G Выполнить сопоставление МЦ Галактика/Global
+  {
+    pushpos(#_sp);
+    resetbounds(#_sp);
+
+    var col: IList(Collection) new;
+
     _loop _sp
     {
       if not _sp.IsCostitem and foundmarker(_marker, _sp.nrec)
       {
-        SelectedSP := _sp;
+        col.add(new(GoodsMatches, GoodsMatches(nullref, IMC(new(MC, LoadByNrec(_sp.ItemNrec))))));
       }
     }
 
+    var mm: IMatchesManager(MatchesManager) new;
+    mm.LoadMatches(col);
+    mm.ShowUIEditMatches(col);
+
     setbounds(#_sp);
     poppos(#_sp);
-
-    if _ccc.ShowUI = cmDefault
-      _ccc.SetCurClaim(_sp.Claim, SelectedSP);
   }
 
 end;
@@ -800,5 +912,7 @@ ClaimDirectsSpTreeViewMenu Menu
   - 'Добавить позиции из состава изделий', cmAccording, , , 'Alt+S', kbAltS, sci1Esc;
   - 'Установка атрибутов для помеченных позиций', cmPickAttr, , , 'Alt+A', kbAltA, sciEsc;
   - 'Подбор цен и контрагентов по последним поступлениям', cmPickClass, , , 'Alt+C', kbAltC, sciEsc;
-  - 'Сформировать текущие заявки', cmDocBas, , , 'Alt+D', kbAltD, sciEsc;
+  - 'Сформировать текущую заявку по помеченным позициям', cmDocBas, , , 'Alt+D', kbAltD, sciEsc;
+  - 'Добавить позиции из состава Global ERP', cmNal, , , 'Alt+F', kbAltF, sciEsc;
+  - 'Выполнить сопоставление МЦ Галактика/Global', cmRecalcAllSums, , , 'Alt+G', kbAltG, sciEsc;
 }
