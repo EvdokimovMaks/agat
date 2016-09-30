@@ -1,0 +1,233 @@
+#include PlanOmto.vih
+#include QueryText.vih
+#include UserFilter.vih
+#include QueryTextWithUserFilter.vih
+
+#component "AGAT"
+
+vipinterface JoinLinkedBasedocsWithMarkerFilter(QueryTextDecorator);
+public:
+  constructor JoinLinkedBasedocsWithMarkerFilter(aFilter: IUserFilterByMarker);
+  procedure IQueryText.CreateJoin   (var sqlString: longint; params: IParams = nullref);
+end;
+
+
+interface JoinLinkedBasedocsWithMarkerFilter;
+
+var
+  _filter      : IUserFilterByMarker;
+  _emptyMarker : longint;
+  _inMarker    : SqlString_InMarker noauto;
+
+function GetFilterMarker: longint;
+{
+  result := _emptyMarker;
+  if _filter != nullref
+    if _filter.IsSet
+      result := _filter.Marker;
+}
+
+constructor JoinLinkedBasedocsWithMarkerFilter(aFilter: IUserFilterByMarker);
+{
+  _filter      := aFilter;
+  _emptyMarker := initmarker('',8,1,1,false);
+  _inMarker    := new(SqlString_InMarker, SqlString_InMarker(GetFilterMarker));
+  result := true;
+}
+
+procedure IQueryText.CreateJoin   (var sqlString: longint; params: IParams = nullref);
+{
+  inherited::CreateJoin(sqlString, params);
+  if _filter.IsSet
+  {
+    sqlAddStr(sqlString, 'join (select claim.nrec as ClaimNrec, count(sd.cbasedoc) as Cnt');
+    sqlAddStr(sqlString, '      from indent');
+    sqlAddStr(sqlString, '      join claim on claim.cindent = indent.nrec');
+    sqlAddStr(sqlString, '      join objacct oa on oa.vidsopr = 101');
+    sqlAddStr(sqlString, '                     and oa.kindrec = 1');
+    sqlAddStr(sqlString, '                     and oa.typeobj = 3');
+    sqlAddStr(sqlString, '                     and oa.cobject = indent.nrec');
+    sqlAddStr(sqlString, '                     and oa.typeown = 34');
+    sqlAddStr(sqlString, '      join spobjacc spoa on spoa.typepos  = 13');
+    sqlAddStr(sqlString, '                        and spoa.cpos     = claim.nrec');
+    sqlAddStr(sqlString, '                        and spoa.cobjacct = oa.nrec');
+    sqlAddStr(sqlString, '                        and spoa.typehier = 0');
+    sqlAddStr(sqlString, '      join spstep sps on sps.nrec = spoa.cobject');
+    sqlAddStr(sqlString, '      join stepdoc sd on sd.nrec = sps.cstepdoc');
+    sqlAddStr(sqlString, '      where sd.cbasedoc');
+    _inMarker.Marker := GetFilterMarker;
+    _inMarker.Create(sqlString);
+    sqlAddStr(sqlString, '      group by claim.nrec');
+    sqlAddStr(sqlString, '     ) tBdFilter on tBdFilter.ClaimNrec = Claim.nrec and tBdFilter.Cnt > 0');
+  }
+}
+
+end.
+
+
+vipinterface PlanOmtoQueryTextBase(QueryText);
+public:
+  procedure IQueryText.CreateSelect (var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateFrom   (var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateJoin   (var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateWhere  (var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateGroupBy(var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateOrderBy(var sqlString: longint; params: IParams = nullref);
+end;
+
+
+interface PlanOmtoQueryTextBase;
+
+sql query qSelect =
+select claim.nrec as ClaimNrec,
+       indent.nrec as IndentNrec,
+       claim.cstate as ClaimStateNrec,
+       claim.cvalkau[5] as DeliverOrgNrec,
+       claim.cvalkau[1] as KatstroyNrec,
+       claim.cvalkau[2] as PersonNrec,
+       claim.cvalkau[4] as DeviceNrec,
+       claim.cgroup as GroupmcNrec,
+       claim.cmcusl as KatmcNrec,
+       claim.cotped as OtpedNrec,
+       coalesce(avTu.vstring,'') as Tu,
+       '' as Description,
+       claim.kol as ClaimQty,
+       claim.price as ClaimPrice,
+       0 as SaldoQty,
+       0 as RegradeQty,
+       0 as BasedocQty,
+       0 as BasedocSum,
+       0 as PaidSum,
+       0 as DeliveredQty,
+       0 as IssuedQty,
+       indent.dind as IndentDate,
+       claim.dfinish as IndentDeliverDate,
+       claim.dstart as ClaimAcceptDate,
+       #date(1,1,1) as DeliverDatePlan,
+       claim.advda[1] as DeliverDateChanged,
+       #date(1,1,1) as DeliverDateFact,
+       coalesce(tBd.minDate, 0) as BasedocDate,
+       #date(1,1,1) as PaidDate;
+
+sql query qFrom =
+from indent;
+
+sql query qJoin =
+join claim on claim.cindent = indent.nrec and claim.prmc = 1
+left join attrval avTu on avTu.wtable = 31012 and avTu.crec = claim.nrec and avTu.cattrnam = #comp(0001000000000421h)
+left join (select claim.nrec as ClaimNrec, min(bd.ddoc) as minDate, max(bd.ddoc) as maxDate
+           from indent
+           join claim on claim.cindent = indent.nrec
+           join objacct oa on oa.vidsopr = 101
+                          and oa.kindrec = 1
+                          and oa.typeobj = 3
+                          and oa.cobject = indent.nrec
+                          and oa.typeown = 34
+           join spobjacc spoa on spoa.typepos  = 13
+                             and spoa.cpos     = claim.nrec
+                             and spoa.cobjacct = oa.nrec
+                             and spoa.typehier = 0
+           join spstep sps on sps.nrec = spoa.cobject
+           join stepdoc sd on sd.nrec = sps.cstepdoc
+           join basedoc bd on bd.nrec = sd.cbasedoc
+           group by claim.nrec
+          ) tBd on tBd.ClaimNrec = claim.nrec;
+
+sql query qWhere =
+where indent.cstate in (#comp(281474976710896), #comp(281474976710897), #comp(281474976710895)); //Статус "Согласована", "Принята к исполнению", "Исполнена"
+
+sql query qGroupBy = ;
+
+sql query qOrderBy = ;
+
+procedure IQueryText.CreateSelect (var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qSelect); params := params;
+}
+procedure IQueryText.CreateFrom   (var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qFrom); params := params;
+}
+procedure IQueryText.CreateJoin   (var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qJoin); params := params;
+}
+procedure IQueryText.CreateWhere  (var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qWhere); params := params;
+}
+procedure IQueryText.CreateGroupBy(var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qGroupBy); params := params;
+}
+procedure IQueryText.CreateOrderBy(var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qOrderBy); params := params;
+}
+end.
+
+
+interface PlanOmtoQueryText;
+
+var
+  _filters: PlanOmtoFilters noauto;
+  _queryText: IQueryText;
+
+constructor PlanOmtoQueryText(filters: PlanOmtoFilters);
+{
+  result := true;
+  _filters := filters;
+  _queryText := IQueryText(new(PlanOmtoQueryTextBase));
+  _queryText := _queryText
+                //По группе МЦ
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithMarkerFilter,
+                      WhereFieldWithMarkerFilter(_filters.GroupmcFilter, 'claim.cgroup'))
+                ))
+                //По МЦ
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithMarkerFilter,
+                      WhereFieldWithMarkerFilter(_filters.KatmcFilter, 'claim.cmcusl'))
+                ))
+                //По заявке
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithMarkerFilter,
+                      WhereFieldWithMarkerFilter(_filters.IndentFilter, 'indent.nrec'))
+                ))
+                //По заказу
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithMarkerFilter,
+                      WhereFieldWithMarkerFilter(_filters.KatstroyFilter, 'claim.cvalkau[1]'))
+                ))
+                //По отв. исполнителю
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithMarkerFilter,
+                      WhereFieldWithMarkerFilter(_filters.PersonFilter, 'claim.cvalkau[2]'))
+                ))
+                //По поставщику
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithMarkerFilter,
+                      WhereFieldWithMarkerFilter(_filters.DeliverOrgFilter, 'claim.cvalkau[5]'))
+                ))
+                //По счету
+                .Decorate(IQueryTextDecorator(
+                  new(JoinLinkedBasedocsWithMarkerFilter,
+                      JoinLinkedBasedocsWithMarkerFilter(_filters.DeliverOrgFilter))
+                ))
+                //По статусу строк заявок
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithMarkerFilter,
+                      WhereFieldWithMarkerFilter(_filters.PriorityFilter, 'indent.priority'))
+                ))
+                //По дате счета
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithPeriodFilter,
+                      WhereFieldWithPeriodFilter(_filters.BasedocDateFilter, 'coalesce(tBd.minDate, 0)'))
+                ));
+}
+
+procedure ISqlString.Create(var sqlString: longint; params: IParams = nullref);
+{
+  _queryText.Create(sqlString, params);
+}
+end.
