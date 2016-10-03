@@ -78,6 +78,8 @@ end;
 
 interface PlanOmtoQueryTextBase;
 
+//#region Queries
+
 sql query qSelect =
 select claim.nrec as ClaimNrec,
        indent.nrec as IndentNrec,
@@ -93,7 +95,7 @@ select claim.nrec as ClaimNrec,
        '' as Description,
        claim.kol as ClaimQty,
        claim.price as ClaimPrice,
-       0 as SaldoQty,
+       coalesce(tSaldo.qty, 0) as SaldoQty,
        0 as RegradeQty,
        0 as BasedocQty,
        0 as BasedocSum,
@@ -103,18 +105,20 @@ select claim.nrec as ClaimNrec,
        indent.dind as IndentDate,
        claim.dfinish as IndentDeliverDate,
        claim.dstart as ClaimAcceptDate,
-       #date(1,1,1) as DeliverDatePlan,
+       0 as DeliverDatePlan,
        claim.advda[1] as DeliverDateChanged,
-       #date(1,1,1) as DeliverDateFact,
+       0 as DeliverDateFact,
        coalesce(tBd.minDate, 0) as BasedocDate,
-       #date(1,1,1) as PaidDate;
+       0 as PaidDate;
 
 sql query qFrom =
 from indent;
 
 sql query qJoin =
 join claim on claim.cindent = indent.nrec and claim.prmc = 1
+
 left join attrval avTu on avTu.wtable = 31012 and avTu.crec = claim.nrec and avTu.cattrnam = #comp(0001000000000421h)
+
 left join (select claim.nrec as ClaimNrec, min(bd.ddoc) as minDate, max(bd.ddoc) as maxDate
            from indent
            join claim on claim.cindent = indent.nrec
@@ -131,7 +135,24 @@ left join (select claim.nrec as ClaimNrec, min(bd.ddoc) as minDate, max(bd.ddoc)
            join stepdoc sd on sd.nrec = sps.cstepdoc
            join basedoc bd on bd.nrec = sd.cbasedoc
            group by claim.nrec
-          ) tBd on tBd.ClaimNrec = claim.nrec;
+          ) tBd on tBd.ClaimNrec = claim.nrec
+
+left join (select tmc.nrec as katmcNrec,
+                  sum(case when sporder.vidorder = 0 then 1 else -1 end * sporder.kol) as qty
+           from (select distinct claim.cmcusl as nrec
+                 from indent
+                 join claim on claim.cindent = indent.nrec and claim.prmc = 1
+                 where indent.cstate in (#comp(281474976710896), #comp(281474976710897), #comp(281474976710895))
+                ) tmc
+           join sporder on sporder.sp = 0 and sporder.cmc = tmc.nrec
+           left join specmtr on specmtr.cotable = 1112 and specmtr.csaldtune = #comp(0001000000000001h) and specmtr.cspec = sporder.nrec
+           left join katstroy ks on specmtr.cobj = ks.nrec
+           where ( instr('закрыт', lower(coalesce(ks.name,'')), 1) > 0 or    //остаток по закрытым заказам
+                   coalesce(ks.code,'') = '000029' or                        //или по заказам в связи с дефицитом и мин. нормой комплектации
+                   coalesce(ks.nrec, #comp(0)) = #comp(0) )                  //или без заказов
+           group by tmc.nrec
+          ) tSaldo on tSaldo.katmcNrec = claim.cmcusl
+;
 
 sql query qWhere =
 where indent.cstate in (#comp(281474976710896), #comp(281474976710897), #comp(281474976710895)); //Статус "Согласована", "Принята к исполнению", "Исполнена"
@@ -139,6 +160,8 @@ where indent.cstate in (#comp(281474976710896), #comp(281474976710897), #comp(28
 sql query qGroupBy = ;
 
 sql query qOrderBy = ;
+
+//#endregion
 
 procedure IQueryText.CreateSelect (var sqlString: longint; params: IParams = nullref);
 {
@@ -217,7 +240,7 @@ constructor PlanOmtoQueryText(filters: PlanOmtoFilters);
                 //По статусу строк заявок
                 .Decorate(IQueryTextDecorator(
                   new(WhereFieldWithMarkerFilter,
-                      WhereFieldWithMarkerFilter(_filters.PriorityFilter, 'indent.priority'))
+                      WhereFieldWithMarkerFilter(_filters.ClaimStatusFilter, 'claim.cstate'))
                 ))
                 //По дате счета
                 .Decorate(IQueryTextDecorator(
