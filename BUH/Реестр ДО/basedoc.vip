@@ -12,6 +12,14 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     where (bf.cbasedoc = :basedocNrec or bf.cpredopldo = :basedocNrec ) and bf.tidkgal in (1,2)
   ;
 
+  sql query qVklVReestrDate =
+    select max(s.doper) as LastDate
+    from STATLOG s
+    where s.doctype = 40 and s.cdoc = :basedocNrec and
+          s.cnewnote = #comp(000100000000007Eh)
+  ;
+
+
   var
     flagVid, flagBDDS, flagAvans, flagDates, flagSums, flagAttr, flagOpl, flagVsbl1, flagVsbl2: word;
     VvodBeg, VvodEnd, DDocBeg, DDocEnd, DSoglBeg, DSoglEnd: date;
@@ -46,16 +54,16 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
        katnotes brnote, statlog brstatlog(STATLOG02), klval brval, stepdoc brsd, basefin brbf,
        klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin
   where ((
-    brbd.nrec        == brbasedoc.nrec  and
-    brbasedoc.corg   == brorg.nrec      and
-    brbasedoc.cbank  == brbank.nrec     and
-    brbasedoc.cdogovor == brdog.nrec    and
-    brbasedoc.cnote  == brnote.nrec     and
-    40               == brstatlog.doctype and
-    brbasedoc.nrec   == brstatlog.cdoc  and
-    brbasedoc.cval   == brval.nrec      and
-    brbd.nrec        == brsd.cbasedoc   and
-    brbd.nrec        == brbf.cbasedoc
+    brbd.nrec          == brbasedoc.nrec    and
+    brbasedoc.corg     == brorg.nrec        and
+    brbasedoc.cbank    == brbank.nrec       and
+    brbasedoc.cdogovor == brdog.nrec        and
+    brbasedoc.cnote    == brnote.nrec       and
+    40                 == brstatlog.doctype and
+    brbasedoc.nrec     == brstatlog.cdoc    and
+    brbasedoc.cval     == brval.nrec        and
+    brbd.nrec          == brsd.cbasedoc     and
+    brbd.nrec          == brbf.cbasedoc
   ))
   bounds    byParent = cMainBD      == brbd.cPrnt
   condition bySogl   = brbd.daysogl >= viza1.days
@@ -407,6 +415,9 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     result := _statusNrec = STATUS_VKL_V_REESTR or _statusNrec = STATUS_OPLACHEN;
   }
 
+  function DaysFromLastVizaToVklVReestr: integer; forward;
+  function DaysVklVReestrWithoutVizaPEU: integer; forward;
+
   tree 3 brMain (,,sci1EnIns);
   show (56,,,);
   table brbd;
@@ -442,12 +453,14 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     brbd.ispoln                       'Инициатор'                      : [5]  , protect;
     brbd.buhsch                       'Счет'                           : [4]  , protect;
     [flddefer] if(brbd.daydefer=0,'',brbd.daydefer) 'Дней'#13'отлож. платежа': [4], protect;
-    [flddsogl] if(brbd.dsogl=0,'',brbd.dsogl) 'Дата'#13'на согл.'   : [9]  , protect;
+    [flddsogl] if(brbd.dsogl=0,'',brbd.dsogl) 'Дата'#13'на согл.'      : [9]  , protect;
     brbd.sogl                         'На согласование'                : [2]  , protect;
     [fldviza2] vizafld(brbd.vbuh,brbd.daybuh)    'Виза бухгалтерии'    : [8]  , protect;
     [fldviza3] vizafld(brbd.vkaz,brbd.daykaz)    'Виза казначейства'   : [8]  , protect;
     [fldviza4] vizafld(brbd.vpeu,brbd.daypeu)    'Виза ПЭУ'            : [8]  , protect;
     [fldviza5] vizafld(brbd.vdir,brbd.daydir)    'Виза комм.дир.'      : [8]  , protect;
+    [fldDFLVTR] DaysFromLastVizaToVklVReestr     'Дней до'#13'вкл. в реестр'        : [5], protect;
+    [fldVRWVP] DaysVklVReestrWithoutVizaPEU      'Дней в реестре'#13' без визы ПЭУ' : [5], protect;
   end;
 
   procedure CreateTmpTables; {
@@ -577,6 +590,81 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     if (d5 > d) d := d5;
     if (d6 > d) d := d6;
     result := d;
+  }
+
+  function LastVizaDate: date; //функция возвращает дату последней проставленной визы
+  {
+    if (isVisaSet(brbd.cbuh) and
+        isVisaSet(brbd.ckaz) and
+        isVisaSet(brbd.cdir) and
+        isVisaSet(brbd.cpeu)) // все визы есть
+      result := maxDateIn(brbd.dbuh, brbd.dkaz, brbd.ddir, brbd.dpeu)
+    else
+      result := 0;
+  }
+
+  function VklVReestrDate: date; //функция возвращает последнюю дату простановки статуса в реестре
+  {
+    result := 0;
+    var rs: IResultSet;
+    rs := queryManager.createQuery(qVklVReestrDate).SetParam('basedocNrec', brbd.nrec).getResultSet;
+
+    if rs != nullref
+      if rs.getFirst = tsOk
+      {
+        var DirtyDate: LongInt;
+        DirtyDate := rs.row.val('LastDate');
+        if DirtyDate < 32
+        {
+          result := 0;
+          exit;
+        }
+        else
+        {
+          var yy, mm, dd: integer;
+          yy := DirtyDate div 65536;
+          mm := (DirtyDate - 65536 * yy) div 256;
+          dd := DirtyDate - 65536 * yy - 256 * mm;
+          result := StrToDate(dd + '/' + mm + '/' + yy, 'DD/MM/YYYY');
+        }
+      }
+  }
+
+  function DaysFromLastVizaToVklVReestr: integer; //функция возвращает кол-во дней с последней визы до включения в реестр
+  {
+    var d1, d2: date;
+    d1 := LastVizaDate;
+    if d1 != 0
+    {
+      if brbd.cnote = STATUS_VKL_V_REESTR
+        d2 := VklVReestrDate
+      else
+        d2 := Cur_Date;
+
+      var preres: integer;
+      preres := CalcDaysBetweenDates(d1, d2, false) - 1;
+      if preres < 0
+        result := 0
+      else
+        result := preres;
+    }
+    else
+    {
+      result := 0;
+    }
+  }
+
+  function DaysVklVReestrWithoutVizaPEU: integer; //функция возвращает кол-во дней с "в реестре" до сегодня
+  {
+    if (brbd.cnote = STATUS_VKL_V_REESTR) and (not isVisaSet(brbd.cpeu))
+    {
+      var d1, d2: date;
+      d1 := VklVReestrDate;
+      d2 := Cur_Date;
+      result := CalcDaysBetweenDates(d1, d2, false) - 1;
+    }
+    else
+      result := 0;
   }
 
   procedure PrepareVizaFilter(_v: agat_viza); {
@@ -1230,6 +1318,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     pXL.CreateTblFld('npp');
     pXL.CreateTblFld('statusName');
     pXL.CreateTblFld('statusComment');
+    pXL.CreateTblFld('daystoree'); //days to inc to reestr after all visas
+    pXL.CreateTblFld('daysinree'); //days in reestr without viza PEU
     if (not isCreateXLT) {
       pushpos(#brbd);
       var _cnt, _npp: longint;
@@ -1331,6 +1421,9 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
           pXL.SetTblStringFldValue('statusComment', brstatlog.comment);
         else
           pXL.SetTblStringFldValue('statusComment', '');
+
+        pXL.SetTblNumberFldValue('daystoree', DaysFromLastVizaToVklVReestr);
+        pXL.SetTblNumberFldValue('daysinree', DaysVklVReestrWithoutVizaPEU);
 
         pXL.InsTblRow;
       }
