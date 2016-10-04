@@ -8,10 +8,13 @@ interface PlanOmto;
 
 create view
 as select *
-from tPlanOmto tpo, tPlanOmto;
+from tPlanOmto tpo,
+     tPlanOmto, katnotes
+;
 
 var
   _dataProvider: IPlanOmtoDataProvider;
+  _dataSaver: IPlanOmtoDataSaver;
 
 //#region vipinterface конструкторы, свойства
 
@@ -20,14 +23,16 @@ constructor Init;
   result := false;
 }
 
-constructor Create(aDataProvider: IPlanOmtoDataProvider);
+constructor Create(aDataProvider: IPlanOmtoDataProvider; aDataSaver: IPlanOmtoDataSaver);
 {
-  _dataProvider := aDataProvider
-  result := _dataProvider != nullref;
+  _dataProvider := aDataProvider;
+  _dataSaver := aDataSaver;
+  result := _dataProvider != nullref
+        and _dataSaver    != nullref;
 }
 
 property DataProvider: IPlanOmtoDataProvider absolute _dataProvider;
-
+property DataSaver   : IPlanOmtoDataSaver    absolute _dataSaver;
 //#endregion
 
 //#region IModify
@@ -58,9 +63,53 @@ procedure IPlanOmto.Load;
   sqlCopyInto(_dataProvider.Load, #tPlanOmto, true);
 }
 
+procedure IPlanOmto.Save;
+{
+  _dataSaver.Save(IPlanOmto(self));
+}
+
+procedure setState(stateNrec: comp);
+{
+  tpo.ClaimStateNrec := stateNrec;
+  if getfirst katnotes where ((stateNrec == katnotes.nrec)) = tsOk
+  {
+    tpo.ClaimState := katnotes.status;
+    case katnotes.status of
+      1: tpo.ClaimAcceptDate := 0;
+      2: tpo.ClaimAcceptDate := cur_date;
+    end;
+  }
+  update current tpo;
+}
+
+procedure IPlanOmto.SetAccept(value: boolean);
+{
+  if value
+  {
+    case tpo.ClaimStateNrec of
+      ClaimStateMadeoutTop      : setState(ClaimStateAcceptTop);
+      ClaimStateMadeout         : setState(ClaimStateAccept);
+      ClaimStateMadeoutReplacing: setState(ClaimStateAcceptReplacing);
+    else
+      setState(ClaimStateAcceptTop);
+    end;
+  }
+  else
+  {
+    case tpo.ClaimStateNrec of
+      ClaimStateAcceptTop      : setState(ClaimStateMadeoutTop);
+      ClaimStateAccept         : setState(ClaimStateMadeout);
+      ClaimStateAcceptReplacing: setState(ClaimStateMadeoutReplacing);
+    else
+      setState(ClaimStateMadeoutTop);
+    end;
+  }
+}
+
 property IPlanOmto.ClaimNrec         : comp   absolute tpo.ClaimNrec         ;
 property IPlanOmto.IndentNrec        : comp   absolute tpo.IndentNrec        ;
-property IPlanOmto.ClaimStateNrec    : comp   absolute tpo.ClaimStateNrec    ;
+property IPlanOmto.ClaimState        : word   absolute tpo.ClaimState        ;
+property IPlanOmto.ClaimStateNrec    : comp   read     tpo.ClaimStateNrec     write setState(result);
 property IPlanOmto.DeliverOrgNrec    : comp   absolute tpo.DeliverOrgNrec    ;
 property IPlanOmto.KatstroyNrec      : comp   absolute tpo.KatstroyNrec      ;
 property IPlanOmto.PersonNrec        : comp   absolute tpo.PersonNrec        ;

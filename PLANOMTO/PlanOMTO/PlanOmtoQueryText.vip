@@ -96,47 +96,56 @@ select claim.nrec as ClaimNrec,
        claim.kol as ClaimQty,
        claim.price as ClaimPrice,
        coalesce(tSaldo.qty, 0) as SaldoQty,
-       0 as RegradeQty,
-       0 as BasedocQty,
-       0 as BasedocSum,
-       0 as PaidSum,
-       0 as DeliveredQty,
-       0 as IssuedQty,
+       coalesce(tOrder.regradeQty, 0) as RegradeQty,
+       coalesce(tBd.Qty, 0) as BasedocQty,
+       coalesce(tBd.summa, 0) as BasedocSum,
+       coalesce(tBd.sumOpl, 0) as PaidSum,
+       coalesce(tOrder.deliveredQty, 0) as DeliveredQty,
+       coalesce(tOrder.issuedQty, 0) as IssuedQty,
        indent.dind as IndentDate,
-       claim.dfinish as IndentDeliverDate,
+       case when claim.dfinish = 0 then indent.dplan else claim.dfinish end as IndentDeliverDate,
        claim.dstart as ClaimAcceptDate,
        0 as DeliverDatePlan,
        claim.advda[1] as DeliverDateChanged,
-       0 as DeliverDateFact,
+       coalesce(tOrder.deliverDate, 0) as DeliverDateFact,
        coalesce(tBd.minDate, 0) as BasedocDate,
-       0 as PaidDate;
+       coalesce(tBd.platDate,0) as PaidDate;
 
 sql query qFrom =
 from indent;
 
 sql query qJoin =
-join claim on claim.cindent = indent.nrec and claim.prmc = 1
+join claim on claim.cindent = indent.nrec and claim.prmc = 1 and claim.cstate <> #comp(00010000000000FBh) //исключаем услуги и позиции в статусе "Заменена"
 
 left join attrval avTu on avTu.wtable = 31012 and avTu.crec = claim.nrec and avTu.cattrnam = #comp(0001000000000421h)
-
-left join (select claim.nrec as ClaimNrec, min(bd.ddoc) as minDate, max(bd.ddoc) as maxDate
-           from indent
-           join claim on claim.cindent = indent.nrec
-           join objacct oa on oa.vidsopr = 101
-                          and oa.kindrec = 1
-                          and oa.typeobj = 3
-                          and oa.cobject = indent.nrec
-                          and oa.typeown = 34
-           join spobjacc spoa on spoa.typepos  = 13
-                             and spoa.cpos     = claim.nrec
-                             and spoa.cobjacct = oa.nrec
-                             and spoa.typehier = 0
-           join spstep sps on sps.nrec = spoa.cobject
-           join stepdoc sd on sd.nrec = sps.cstepdoc
+//информация по ДО
+left join (select sm.ckau[4] as indentNrec,
+                  sp.cmcusl as katmcNrec,
+                  sum(case when bd.total > 0 then sp.summa / bd.total else 0 end * coalesce(tPlat.summa, 0)) as sumOpl,
+                  sum(sp.kol) as qty,
+                  sum(sp.summa) as summa,
+                  min(bd.ddoc) as minDate,
+                  max(bd.ddoc) as maxDate,
+                  max(coalesce(tPlat.ddoc,0)) as platDate
+           from specmtr sm
+           join spstep  sp on sp.nrec = sm.cspec and sp.prmc = 1 and sp.cmcusl <> #comp(0)
+           join stepdoc sd on sd.nrec = sp.cstepdoc
            join basedoc bd on bd.nrec = sd.cbasedoc
-           group by claim.nrec
-          ) tBd on tBd.ClaimNrec = claim.nrec
-
+           left join (select cbasedoc, sum(summa) as summa, max(ddoc) as ddoc
+                      from (select cbasedoc, summa, ddoc
+                            from basefin
+                            where tidkgal = 1 and  cbasedoc <> #comp(0)
+                            union all
+                            select cpredopldo, summa, ddoc
+                            from basefin
+                            where tidkbase = 0 and cpredopldo <> #comp(0) and cpredopldo <> cbasedoc and tidkgal = 1
+                           ) bf
+                      group by cbasedoc
+                     ) tPlat on tPlat.cbasedoc = bd.nrec
+           where sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1104 and sm.cspec <> #comp(0) and sm.ckau[4] <> #comp(0)
+           group by sm.ckau[4], sp.cmcusl
+          ) tBd on tBd.indentNrec = indent.nrec and tBd.katmcNrec = claim.cmcusl
+//свободный остаток
 left join (select tmc.nrec as katmcNrec,
                   sum(case when sporder.vidorder = 0 then 1 else -1 end * sporder.kol) as qty
            from (select distinct claim.cmcusl as nrec
@@ -152,6 +161,19 @@ left join (select tmc.nrec as katmcNrec,
                    coalesce(ks.nrec, #comp(0)) = #comp(0) )                  //или без заказов
            group by tmc.nrec
           ) tSaldo on tSaldo.katmcNrec = claim.cmcusl
+//поставлено
+left join (select sm.ckau[4] as indentNrec,
+                  spo.cmc as katmcNrec,
+                  sum(case when sps.vidsopr = 101 and spo.vidorder = 0 then spo.kol else 0 end) as deliveredQty,
+                  sum(case when sps.vidsopr = 630 and spo.vidorder = 0 then spo.kol else 0 end) as regradeQty,
+                  sum(case when sps.vidsopr = 501 and spo.vidorder = 1 then spo.kol else 0 end) as issuedQty,
+                  max(case when sps.vidsopr = 101 and spo.vidorder = 0 then spo.dord else 0 end) as deliverDate
+           from specmtr sm
+           join sporder spo on spo.nrec = sm.cspec and spo.sp = 0
+           join spsopr  sps on sps.nrec = spo.cspsopr
+           where sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1112 and sm.cspec <> #comp(0) and sm.ckau[4] <> #comp(0)
+           group by spo.cmc, sm.ckau[4]
+          ) tOrder on tOrder.indentNrec = indent.nrec and tOrder.katmcNrec = claim.cmcusl
 ;
 
 sql query qWhere =
@@ -235,7 +257,7 @@ constructor PlanOmtoQueryText(filters: PlanOmtoFilters);
                 //По счету
                 .Decorate(IQueryTextDecorator(
                   new(JoinLinkedBasedocsWithMarkerFilter,
-                      JoinLinkedBasedocsWithMarkerFilter(_filters.DeliverOrgFilter))
+                      JoinLinkedBasedocsWithMarkerFilter(_filters.BasedocFilter))
                 ))
                 //По статусу строк заявок
                 .Decorate(IQueryTextDecorator(
