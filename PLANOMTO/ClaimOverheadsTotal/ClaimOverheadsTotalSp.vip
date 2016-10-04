@@ -7,22 +7,22 @@
 interface ClaimOverheadsTotalSp;
 
 sql Query qLoadSp =
-select spm.nrec      as Nrec,
-       spm.cspmnplan as ParentNrec,
-       spm.nrec      as SpmnplanNrec,
-       spm.condrec   as ConditionNrec,
-       spm.number    as Number,
-       spm.canval1   as CostitemNrec,
-       spm.canval4   as CONrec,
-       spm.typeizd   as ItemType,
-       spm.cizd      as ItemNrec,
+select mnplan.canval2           as KatpodrNrec,
+       spm.nrec                 as Nrec,
+       spm.cspmnplan            as ParentNrec,
+       spm.nrec                 as SpmnplanNrec,
+       spm.condrec              as ConditionNrec,
+       spm.number               as Number,
+       spm.canval1              as CostitemNrec,
+       spm.canval4              as CONrec,
+       spm.typeizd              as ItemType,
+       spm.cizd                 as ItemNrec,
        case when spm.cotped = #comp(0)
             then coalesce(oe.nrec,#comp(0))
-            else spm.cotped
-       end           as OtpedNrec,
-       coalesce(vsp.kol, 0)    as Qty,
-       coalesce(vsp.price, 0)  as Price,
-       coalesce(vsp.vprice, 0) as Sum
+            else spm.cotped end as OtpedNrec,
+       coalesce(vsp.kol, 0)     as Qty,
+       coalesce(vsp.price, 0)   as Price,
+       coalesce(vsp.vprice, 0)  as Sum
 from mnplan
 join spmnplan spm on spm.cmnplan = mnplan.nrec
 left join katotped oe on oe.prmc = spm.typeizd and oe.cmcusl = spm.cizd and oe.akt = 1 and spm.cizd <> #comp(0)
@@ -135,6 +135,16 @@ create view v
 as select *
 from tClaimOverheadsSp tSp, allmemo
 ;
+
+create view vAddPodr
+var _curtSPNrec: comp;
+as select *
+from tClaimOverheadsSp tSp, tClaimOverheadsSp tSpChildren
+where ((
+  _curtSPNrec == tSp.nrec and
+  tSp.nrec    == tSpChildren.parentNrec
+));
+
 
 //#region Вспомогательные функции
 
@@ -556,13 +566,49 @@ implementation IModify.doFlush  abstract;
 
 function  IClaimOverheadsTotalSp.Load(aMnplanNrec: comp): boolean;
 {
-  delete all tClaimOverheadsSp;
-
+//  delete all tClaimOverheadsSp;
+  CheckCostitems;
+/*
   sqlCopyInto(
     queryManager.createQuery(qLoadSp).setParam('MnplanNrec',aMnplanNrec).getResultSet,
     #tClaimOverheadsSp,
     true
-  );
+  );  */
+  var rsSp: IResultSet;
+  rsSp := queryManager.createQuery(qLoadSp).setParam('MnplanNrec',aMnplanNrec).getResultSet;
+  if rsSp != nullref
+    if rsSp.getfirst = tsOk do
+    {
+      var CurItemNrec: comp;
+      CurItemNrec := rsSp.row.val('ITEMNREC');
+      if CurItemNrec != comp(0)
+      {
+        ClearBuffer(#tClaimOverheadsSp);
+        tClaimOverheadsSp.spmnplanNrec   := rsSp.row.val('SpmnplanNrec');
+        tClaimOverheadsSp.conditionNrec  := rsSp.row.val('ConditionNrec');
+        tClaimOverheadsSp.number         := rsSp.row.val('Number');
+        tClaimOverheadsSp.costitemNrec   := rsSp.row.val('CostitemNrec');
+        tClaimOverheadsSp.itemType       := rsSp.row.val('ItemType');
+        tClaimOverheadsSp.itemNrec       := CurItemNrec;
+        tClaimOverheadsSp.KatpodrNrec    := rsSp.row.val('KatpodrNrec');
+        tClaimOverheadsSp.otpedNrec      := rsSp.row.val('OtpedNrec');
+        tClaimOverheadsSp.coNrec         := rsSp.row.val('CONrec');
+        tClaimOverheadsSp.Kind           := 1;
+        tClaimOverheadsSp.isCostitem     := false;
+        tClaimOverheadsSp.allowAddChild  := true;
+        tClaimOverheadsSp.qty            := rsSp.row.val('Qty');
+        tClaimOverheadsSp.price          := rsSp.row.val('Price');
+        tClaimOverheadsSp.sum            := rsSp.row.val('Sum');
+
+        if getfirst tSp where ((tClaimOverheadsSp.costitemNrec == tSp.CostitemNrec and
+                                0                              == tSp.ItemNrec)) = tsOk
+        {
+          tClaimOverheadsSp.parentNrec := tSp.Nrec;
+        }
+
+        insert current tClaimOverheadsSp;
+      }
+    } while rsSp.getnext = tsOk;
 
   var rs: IResultSet;
   rs := queryManager.createQuery(qLoadSpMonth).setParam('MnplanNrec', aMnplanNrec).getResultSet;
@@ -580,15 +626,38 @@ function  IClaimOverheadsTotalSp.Load(aMnplanNrec: comp): boolean;
         {
           vSp.tSp.monthQty[monthIndex] := rs.row.Val('Qty');
           vSp.tSp.monthSum[monthIndex] := rs.row.Val('Sum');
+
           vSp.update current tSp;
         }
       }
     } while rs.getNext = tsOk;
 
-  CheckCostitems;
-
   v._loop tSp
   {
+    if v.tSp.IsCostitem
+      v.tSp.Kind := 0                //статья
+    else if (v.tSp.ItemType = 1) or (v.tSp.ItemType = 2)
+    {
+      v.tSp.Kind := 1                //мц
+      v.tSp.allowAddChild := true;
+
+      vAddPodr._curtSPNrec := v.tSp.Nrec;   //каждой мц добавляем подразделение
+      if vAddPodr.getfirst tSp = tsOk
+      {
+        ClearBuffer(#vAddPodr.tSpChildren);
+        vAddPodr.tSpChildren.ParentNrec    := vAddPodr.tSp.Nrec;
+        vAddPodr.tSpChildren.AllowAddChild := false;
+        vAddPodr.tSpChildren.ItemType      := 3;
+        vAddPodr.tSpChildren.Kind          := 2;
+        vAddPodr.tSpChildren.KatpodrNrec   := vAddPodr.tSp.KatpodrNrec;
+        vAddPodr.tSpChildren.CostitemNrec  := vAddPodr.tSp.CostitemNrec;
+        vAddPodr.insert current tSpChildren;
+      }
+    }
+    else
+      v.tSp.Kind := 2;             //подразделение
+    v.update current tSp;
+
     if v.getfirst allmemo where ((11038              == allmemo.wtable and
                                   v.tSp.SpmnplanNrec == allmemo.cRec )) = tsOk
     {
@@ -605,6 +674,7 @@ function  IClaimOverheadsTotalSp.Load(aMnplanNrec: comp): boolean;
   }
 
   result := true;
+  message(RecordsInTable(#tClaimOverheadsSp));
 }
 
 procedure IClaimOverheadsTotalSp.CheckCostitems;
