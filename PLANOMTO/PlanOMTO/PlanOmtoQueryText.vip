@@ -107,7 +107,7 @@ select claim.nrec as ClaimNrec,
        indent.dind as IndentDate,
        case when claim.dfinish = 0 then indent.dplan else claim.dfinish end as IndentDeliverDate,
        claim.dstart as ClaimAcceptDate,
-       0 as DeliverDatePlan,
+       coalesce(tBd.calplanDate, 0) as DeliverDatePlan,
        claim.advda[1] as DeliverDateChanged,
        coalesce(tOrder.deliverDate, 0) as DeliverDateFact,
        coalesce(tBd.minDate, 0) as BasedocDate,
@@ -128,12 +128,21 @@ left join (select sm.ckau[4] as indentNrec,
                   sum(sp.summa) as summa,
                   min(bd.ddoc) as minDate,
                   max(bd.ddoc) as maxDate,
-                  max(coalesce(tPlat.ddoc,0)) as platDate
+                  max(coalesce(tPlat.maxddoc, 0)) as platDate,
+                  min(case when coalesce(cp.termdefby, 0) = 0
+                           then coalesce(cp.dto, 0)
+                           else case when coalesce(tplat.minddoc, 0) > 0
+                                     then coalesce(tplat.minddoc, 0) + coalesce(cp.ndays, 0)
+                                     else 0
+                                end
+                      end
+                  ) as calplanDate
            from specmtr sm
            join spstep  sp on sp.nrec = sm.cspec and sp.prmc = 1 and sp.cmcusl <> #comp(0)
            join stepdoc sd on sd.nrec = sp.cstepdoc
            join basedoc bd on bd.nrec = sd.cbasedoc
-           left join (select cbasedoc, sum(summa) as summa, max(ddoc) as ddoc
+           left join calplan cp on cp.nrec = bd.ccalplan
+           left join (select cbasedoc, sum(summa) as summa, max(ddoc) as maxddoc, min(ddoc) as minddoc
                       from (select cbasedoc, summa, ddoc
                             from basefin
                             where tidkgal = 1 and  cbasedoc <> #comp(0)
