@@ -43,6 +43,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     viza4: agat_viza new;
     viza5: agat_viza new;
     viza6: agat_viza new;
+    _queryVklVReestrDate: IQuery;
 
   create view
   var
@@ -592,13 +593,12 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     result := d;
   }
 
-  function LastVizaDate: date; //функция возвращает дату последней проставленной визы
+  function LastVizaDateExceptPEU: date; //функция возвращает дату последней проставленной визы
   {
     if (isVisaSet(brbd.cbuh) and
         isVisaSet(brbd.ckaz) and
-        isVisaSet(brbd.cdir) and
-        isVisaSet(brbd.cpeu)) // все визы есть
-      result := maxDateIn(brbd.dbuh, brbd.dkaz, brbd.ddir, brbd.dpeu)
+        isVisaSet(brbd.cdir)) // все визы кроме ПЭУ есть
+      result := maxDateIn(brbd.dbuh, brbd.dkaz, brbd.ddir)
     else
       result := 0;
   }
@@ -606,40 +606,23 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   function VklVReestrDate: date; //функция возвращает последнюю дату простановки статуса в реестре
   {
     result := 0;
-    var rs: IResultSet;
-    rs := queryManager.createQuery(qVklVReestrDate).SetParam('basedocNrec', brbd.nrec).getResultSet;
+    if _queryVklVReestrDate = nullref
+      _queryVklVReestrDate := queryManager.createQuery(qVklVReestrDate);
 
-    if rs != nullref
-      if rs.getFirst = tsOk
-      {
-        var DirtyDate: LongInt;
-        DirtyDate := rs.row.val('LastDate');
-        if DirtyDate < 32
-        {
-          result := 0;
-          exit;
-        }
-        else
-        {
-          var yy, mm, dd: integer;
-          yy := DirtyDate div 65536;
-          mm := (DirtyDate - 65536 * yy) div 256;
-          dd := DirtyDate - 65536 * yy - 256 * mm;
-          result := StrToDate(dd + '/' + mm + '/' + yy, 'DD/MM/YYYY');
-        }
-      }
+    _queryVklVReestrDate.SetParam('basedocNrec', brbd.nrec).Execute;
+
+    if _queryVklVReestrDate.errorCode = tsOk
+      if _queryVklVReestrDate.fetch.errorCode = tsOk
+        result := _queryVklVReestrDate.row.val('LastDate');
   }
 
   function DaysFromLastVizaToVklVReestr: integer; //функция возвращает кол-во дней с последней визы до включения в реестр
   {
     var d1, d2: date;
-    d1 := LastVizaDate;
+    d1 := LastVizaDateExceptPEU;
     if d1 != 0
     {
-      if brbd.cnote = STATUS_VKL_V_REESTR
-        d2 := VklVReestrDate
-      else
-        d2 := Cur_Date;
+      d2 := if(brbd.dvklree=0, cur_date, brbd.dvklree);
 
       var preres: integer;
       preres := CalcDaysBetweenDates(d1, d2, false) - 1;
@@ -656,15 +639,10 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
 
   function DaysVklVReestrWithoutVizaPEU: integer; //функция возвращает кол-во дней с "в реестре" до сегодня
   {
-    if (brbd.cnote = STATUS_VKL_V_REESTR) and (not isVisaSet(brbd.cpeu))
-    {
       var d1, d2: date;
-      d1 := VklVReestrDate;
-      d2 := Cur_Date;
-      result := CalcDaysBetweenDates(d1, d2, false) - 1;
-    }
-    else
-      result := 0;
+      d1 := brbd.dvklree;
+      d2 := if(not isVisaSet(brbd.cpeu), Cur_Date, brbd.dpeu);
+      result := if(d2 > d1 and d1 > 0, CalcDaysBetweenDates(d1, d2, false) - 1, 0);
   }
 
   procedure PrepareVizaFilter(_v: agat_viza); {
@@ -901,6 +879,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     mysqlAddStr(s, 'COALESCE('+viza6.dskname+'.vcomp,#comp(0)),');
     mysqlAddStr(s, 'COALESCE('+viza6.dskname+'.vstring,''''),');
     mysqlAddStr(s, 'COALESCE('+viza6.dskname+'.atl_lastdate,0),');
+    mysqlAddStr(s, 'tVklRee.LastDate,');
     mysqlAddStr(s, '0,0,0,0,0,0,0');
     mysqlAddStr(s, 'FROM basedoc bd');
     mysqlAddStr(s, 'left join (select cbasedoc, sum(summa) as summa');    //tipdoc=10443 - приходные ордера в кассу "Денежные документы"
@@ -914,6 +893,10 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     mysqlAddStr(s, '                ) bf');
     mysqlAddStr(s, '           group by cbasedoc');
     mysqlAddStr(s, '          ) bf on bf.cbasedoc = bd.nrec');
+    mysqlAddStr(s, 'left join (select cdoc, max(doper) as LastDate');
+    mysqlAddStr(s, '           from statlog');
+    mysqlAddStr(s, '           where doctype = 40 and cnewnote = #comp(000100000000007Eh)');
+    mysqlAddStr(s, '           group by cdoc) tVklRee on tVklRee.cdoc = bd.nrec');
     mysqlAddStr(s, 'left join attrval av_parent on '+WT_BASEDOC+' = av_parent.wtable and bd.nrec = av_parent.crec and #comp('+00010000000000B9h+') = av_parent.cattrnam ');
     mysqlAddStr(s, 'left join attrval av_naznpl on '+WT_BASEDOC+' = av_naznpl.wtable and bd.nrec = av_naznpl.crec and #comp('+ATTRNAM_NAZNPL+') = av_naznpl.cattrnam ');
     //секция JOIN
