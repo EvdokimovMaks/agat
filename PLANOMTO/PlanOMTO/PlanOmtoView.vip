@@ -7,43 +7,18 @@
 
 interface PlanOmtoView;
 
-sql query queryBasedoc =
-select bd.nrec, bd.nodoc, bd.ddoc, bd.corg
-from specmtr sm
-join spstep  sp on sp.nrec = sm.cspec and sp.prmc = 1 and sp.cmcusl = :katmcNrec
-join stepdoc sd on sd.nrec = sp.cstepdoc
-join basedoc bd on bd.nrec = sd.cbasedoc
-where sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1104 and sm.ckau[4] = :indentNrec
-;
-
 var
   _po: IPlanOmto;
   _marker: IMarker(Marker) new;
-  _qBasedoc: IQuery;
   _getkau: GetKau;
-
-function GetLinkedBasedocs(aIndentNrec: comp; aKatmcNrec: comp): string; cacheable;
-{
-  var rs: IResultSet;
-  rs := _qBasedoc.setParam('indentNrec', aIndentNrec)
-                 .setParam('katmcNrec', aKatmcNrec)
-                 .getResultSet;
-  var s: string = '';
-  if (rs.getFirst = tsOk)
-  {
-    s := 'ό' + rs.row.val('nodoc') + ' ®β ' + datetostr(rs.row.val('ddoc'),'DD.MM.YY');
-    while rs.getNext = tsOk
-      s += '; ό' + rs.row.val('nodoc') + ' ®β ' + datetostr(rs.row.val('ddoc'),'DD.MM.YY');
-  }
-  result := s;
-}
+  _helper: PlanOmtoHelper;
 
 create view
 as select ('ό' + indent.noind + ' ®β ' + indent.dind + ', αβΰ®ª  ' + claim.wpos) (fieldname=ClaimName),
-          GetLinkedBasedocs(_po.IndentNrec, _po.KatmcNrec)   (fieldname=LinkedBasedocs),
-          (_po.ClaimQty - _po.RegradeQty)                    (fieldname=QtyToDeliver),
-          (_po.ClaimQty - _po.RegradeQty - _po.DeliveredQty) (fieldname=DeficitPurchaseQty),
-          (_po.ClaimQty - _po.IssuedQty)                     (fieldname=DeficitIndentQty)
+          _helper.GetLinkedBasedocsString(_po.IndentNrec, _po.KatmcNrec)         (fieldname=LinkedBasedocs),
+          (_po.ClaimQty - _po.RegradeQty)                                        (fieldname=QtyToDeliver),
+          (_po.ClaimQty - _po.RegradeQty - _po.DeliveredQty)                     (fieldname=DeficitPurchaseQty),
+          (_po.ClaimQty - _po.IssuedQty)                                         (fieldname=DeficitIndentQty)
 from _po, claim, indent, katnotes, katorg, katstroy, persons,
      katmc device, groupmc, katmc mc, katotped oe, katpodr podr
 where ((
@@ -195,15 +170,15 @@ procedure SetCurrentAccept(value: boolean);
 
 procedure SetDeliverOrgByBasedoc;
 {
-  var rs: IResultSet;
-  rs := _qBasedoc.setParam('indentNrec', _po.IndentNrec)
-                 .setParam('katmcNrec', _po.KatmcNrec)
-                 .getResultSet;
+  var q: IQuery;
+  q := _helper.GetLinkedBasedocsQuery(_po.IndentNrec, _po.KatmcNrec);
+
   var c: comp = 0;
-  if rs.getFirst = tsOk do
-  {
-    c := rs.row.val('corg');
-  } while rs.getNext = tsOk and c = 0;
+
+  if q.execute.errorCode = tsOk
+    while q.fetch.errorCode = tsOk and c = 0
+      c := q.row.val('corg');
+
   if c != 0
   {
     _po.DeliverOrgNrec := c;
@@ -238,7 +213,6 @@ constructor Create(aPlanOmto: IPlanOmto);
 {
   _po := aPlanOmto;
   _marker.Caption := ' β¬¥η¥­® [%d] ';
-  _qBasedoc := queryManager.createQuery(queryBasedoc);
   result := _po != nullref;
 }
 

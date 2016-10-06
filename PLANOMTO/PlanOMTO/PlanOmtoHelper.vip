@@ -1,0 +1,92 @@
+#include PlanOmto.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface PlanOmtoHelper;
+
+sql query queryLinkedBasedocs =
+select distinct bd.nrec as DocumentNrec, bd.nodoc as DocumentNumber, bd.ddoc as DocumentDate, bd.corg
+from specmtr sm
+join spstep  sp on sp.nrec = sm.cspec and sp.prmc = 1 and sp.cmcusl = :katmcNrec
+join stepdoc sd on sd.nrec = sp.cstepdoc
+join basedoc bd on bd.nrec = sd.cbasedoc
+where sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1104 and sm.ckau[4] = :indentNrec
+;
+
+
+var
+  _queryLinkedBasedocs: IQuery;
+
+function GetLinkedDocPresentation(r: IResultRow): string;
+{
+  result := '№' + r.val('DocumentNumber') + ' от ' + datetostr(r.val('DocumentDate'),'DD.MM.YY')
+}
+
+function GetLinkedDocsQuery(indentNrec: comp; katmcNrec: comp; q: IQuery): IQuery;
+{
+  result := q.setParam('katmcNrec', KatmcNrec)
+             .setParam('indentNrec', indentNrec);
+}
+
+function GetLinkedDocsString(q: IQuery): string;
+{
+  var s: string = '';
+
+  if q.execute.errorCode = tsOk
+    if q.fetch.errorCode = tsOk
+    {
+      s := GetLinkedDocPresentation(q.row);
+      while q.fetch.errorCode = tsOk
+        s += '; ' + GetLinkedDocPresentation(q.row);
+    }
+
+  result := s;
+}
+
+function GetLinkedDocsMenu(q: IQuery; title: string; ifcName: string): TLinkedDocsMenu;
+{
+  var rslt: TLinkedDocsMenu;
+  rslt.MenuId := CreateMenu;
+  rslt.ItemsCount := 0;
+
+  var rs: IResultSet;
+  rs := q.getResultSet;
+
+  rslt.ItemsCount := rs.count;
+  if rs.getFirst = tsOk do
+  {
+      AddMenuItemEx2(rslt.MenuId, if(rs.count = 1, title, '') + GetLinkedDocPresentation(rs.row),
+                     '', hcNoContext, cmRunInterface, 0,
+                     replace(ifcName, '{nrec}', rs.row.val('DocumentNrec')));
+
+  } while rs.getNext = tsOk;
+  result := rslt;
+}
+
+function GetLinkedBasedocsQuery(indentNrec: comp; katmcNrec: comp): IQuery;
+{
+  result := GetLinkedDocsQuery(indentNrec, katmcNrec, _queryLinkedBasedocs);
+}
+
+function GetLinkedBasedocsString(IndentNrec: comp; KatmcNrec: comp): string; cacheable;
+{
+  result := GetLinkedDocsString(GetLinkedBasedocsQuery(indentNrec, katmcNrec));
+}
+
+function GetLinkedBasedocsMenu(indentNrec: comp; katmcNrec: comp): TLinkedDocsMenu;
+{
+  result := GetLinkedDocsMenu(GetLinkedBasedocsQuery(indentNrec, katmcNrec),
+                              'Открыть ДО ',
+                              'L_BASEDOC::VSCHETB({nrec})');
+}
+
+constructor Init;
+{
+  _queryLinkedBasedocs := queryManager.createQuery(queryLinkedBasedocs);
+  result := _queryLinkedBasedocs != nullref;
+}
+
+end.
+
+
