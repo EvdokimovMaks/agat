@@ -54,6 +54,7 @@ table struct tbd (
   vrez  : string[15],
   drez  : date,
   dvklree: date,
+  dopl  : date,
   daysogl: integer,
   daybuh: integer,
   daydir: integer,
