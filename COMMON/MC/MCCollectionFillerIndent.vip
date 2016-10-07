@@ -11,6 +11,14 @@ create view
 as select *
 from claim;
 
+create view vMCClaim
+var _indentNrec: comp;
+as select *
+from claim
+where ((
+  _indentNrec == claim.cindent
+));
+
 sql query qClaim =
 select count(i.nrec) as CNT
 from indent i
@@ -19,13 +27,22 @@ where i.nrec = :indentNrec
 group by i.nrec
 ;
 
+/*sql query qGetMCClaims =
+select c.cmcusl as McNrec,
+       c.prmc   as PrMc
+from indent i
+join claim c on c.cindent = i.nrec
+where i.nrec = :indentNrec;
+; */
+
 procedure IMCCollectionFiller.FillDoc(aDocNrec: comp; aCollection: ICollection);
 {
   var enum: IEnumerator;
   enum := aCollection.GetEnumerator;
 
-  var rs: IResultSet;
+  var rs, rs1: IResultSet;
   rs := queryManager.createquery(qClaim).setparam('indentNrec', aDocNrec).getresultset;
+//  rs1 := queryManager.createquery(qGetMCClaims).setparam('indentNrec', aDocNrec).getresultset;
   var cnt: word = 0;
   if rs != nullref
     cnt := rs.row.val('CNT');
@@ -34,21 +51,35 @@ procedure IMCCollectionFiller.FillDoc(aDocNrec: comp; aCollection: ICollection);
     i := 1
   else
     i := cnt + 1;
+  vMCClaim._indentNrec := aDocNrec;
   while enum.MoveNext
   {
+    var CurMCNrec: comp;
     var mci: IMCPartsCollectionItem;
     mci := IMCPartsCollectionItem(enum.Current);
-    ClearBuffer(#claim);
-      claim.wpos    := i;
-      claim.prmc    := 1;
-      claim.cindent := aDocNrec;
-      claim.CMCUSL  := mci.MC.Nrec;
-      claim.CGROUP  := mci.MC.GroupmcNrec;
-      claim.cotped  := mci.OtpEd;
-      claim.kol     := mci.Qty;
-    insert current claim;
-    i++;
-  }
+    CurMCNrec := mci.MC.Nrec;
+
+    if vMCClaim.getfirst claim where ((1 == claim.prmc and CurMCNrec == claim.cmcusl)) != tsOk //инсертим
+    {
+      ClearBuffer(#claim);
+      vMCClaim.claim.wpos    := i;
+      vMCClaim.claim.prmc    := 1;
+      vMCClaim.claim.cindent := aDocNrec;
+      vMCClaim.claim.CMCUSL  := CurMCNrec;
+      vMCClaim.claim.CGROUP  := mci.MC.GroupmcNrec;
+      vMCClaim.claim.cotped  := mci.OtpEd;
+      vMCClaim.claim.kol     := mci.Qty;
+      vMCClaim.claim.cstate  := 00010000000000F2h;
+      vMCClaim.claim.state   := 1;
+      vMCClaim.insert current claim;
+      i++;
+    }
+    else //апдейтим только кол-во
+    {
+      vMCClaim.claim.kol += mci.Qty;
+      vMCClaim.update current claim; // or vMCClaim.update current claim;
+    }
+  } //while MoveNext
 }
 
 end.
