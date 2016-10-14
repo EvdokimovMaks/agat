@@ -95,6 +95,7 @@ select claim.nrec as ClaimNrec,
        claim.cotped as OtpedNrec,
        coalesce(avTu.vstring,'') as Tu,
        '' as Description,
+       claim.name as DeliverClaimNumber,
        claim.kol as ClaimQty,
        claim.price as ClaimPrice,
        coalesce(tSaldo.qty, 0) as SaldoQty,
@@ -121,7 +122,6 @@ join claim on claim.cindent = indent.nrec and claim.prmc = 1 and claim.cstate <>
 
 left join attrval avTu on avTu.wtable = 31012 and avTu.crec = claim.nrec and avTu.cattrnam = #comp(0001000000000421h)
 
-left join attrval avDeliverClaimNumber on avTu.wtable = 31012 and avTu.crec = claim.nrec and avTu.cattrnam = #comp(0001000000000421h)
 //информация по ДО
 left join (select sm.ckau[4] as indentNrec,
                   sp.cmcusl as katmcNrec,
@@ -139,8 +139,8 @@ left join (select sm.ckau[4] as indentNrec,
                                 end
                       end
                   ) as calplanDate
-           from specmtr sm
-           join spstep  sp on sp.nrec = sm.cspec and sp.prmc = 1 and sp.cmcusl <> #comp(0)
+           from spstep  sp
+           join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1104 and sp.nrec = sm.cspec and sm.ckau[4] <> #comp(0)
            join stepdoc sd on sd.nrec = sp.cstepdoc
            join basedoc bd on bd.nrec = sd.cbasedoc
            left join calplan cp on cp.nrec = bd.ccalplan
@@ -155,7 +155,7 @@ left join (select sm.ckau[4] as indentNrec,
                            ) bf
                       group by cbasedoc
                      ) tPlat on tPlat.cbasedoc = bd.nrec
-           where sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1104 and sm.cspec <> #comp(0) and sm.ckau[4] <> #comp(0)
+           where sp.prmc = 1 and sp.cmcusl <> #comp(0)
            group by sm.ckau[4], sp.cmcusl
           ) tBd on tBd.indentNrec = indent.nrec and tBd.katmcNrec = claim.cmcusl
 //свободный остаток
@@ -181,10 +181,10 @@ left join (select sm.ckau[4] as indentNrec,
                   sum(case when sps.vidsopr = 630 and spo.vidorder = 0 then spo.kol else 0 end) as regradeQty,
                   sum(case when sps.vidsopr = 501 and spo.vidorder = 1 then spo.kol else 0 end) as issuedQty,
                   max(case when sps.vidsopr = 101 and spo.vidorder = 0 then spo.dord else 0 end) as deliverDate
-           from specmtr sm
-           join sporder spo on spo.nrec = sm.cspec and spo.sp = 0
+           from sporder spo
+           join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1112 and sm.cspec = spo.nrec and sm.ckau[4] <> #comp(0)
            join spsopr  sps on sps.nrec = spo.cspsopr
-           where sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1112 and sm.cspec <> #comp(0) and sm.ckau[4] <> #comp(0)
+           where spo.sp = 0
            group by spo.cmc, sm.ckau[4]
           ) tOrder on tOrder.indentNrec = indent.nrec and tOrder.katmcNrec = claim.cmcusl
 ;
@@ -237,6 +237,11 @@ constructor PlanOmtoQueryText(filters: PlanOmtoFilters);
   _filters := filters;
   _queryText := IQueryText(new(PlanOmtoQueryTextBase));
   _queryText := _queryText
+                //По номеру заявки поставщику
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithTextFilter,
+                      WhereFieldWithTextFilter(_filters.DeliverClaimNumberFilter, 'claim.name'))
+                ))
                 //По заказчику
                 .Decorate(IQueryTextDecorator(
                   new(WhereFieldWithMarkerFilter,
