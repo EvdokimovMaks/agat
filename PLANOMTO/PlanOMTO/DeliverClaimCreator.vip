@@ -1,0 +1,123 @@
+#include PlanOmto.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface DeliverClaimCreator;
+
+sql query queryLastNumber =
+  select top 1 name
+  from claim
+  where name <> ''
+  order by nrec desc;
+
+var
+  _po: IPlanOmto;
+
+create view
+var
+  _number: string;
+  _writeNumberToClaim: boolean;
+  _overwriteNumberToClaim: boolean;
+;
+
+create view v
+as select *
+from _po;
+
+function getLastNumber: string;
+{
+  result := '';
+  var q: IQuery;
+  q := queryManager.createQuery(queryLastNumber);
+  if q.execute.errorCode = tsOk
+    if q.fetch.errorCode = tsOk
+      result := q.row.val('name');
+}
+
+function getNextNumber: string;
+{
+  result := nextnumstr(getLastNumber);
+}
+
+procedure LoadCfg;
+{
+  _number := getNextNumber;
+  if not readmydsk(_writeNumberToClaim, 'DeliverClaimCreator_writeNumberToClaim', false) _writeNumberToClaim := false;
+  if not readmydsk(_overwriteNumberToClaim, 'DeliverClaimCreator_overwriteNumberToClaim', false) _overwriteNumberToClaim := false;
+}
+
+procedure SaveCfg;
+{
+  savemydsk(_writeNumberToClaim, 'DeliverClaimCreator_writeNumberToClaim');
+  savemydsk(_overwriteNumberToClaim, 'DeliverClaimCreator_overwriteNumberToClaim');
+}
+
+window wndConfig 'Параметры формирования заявки поставщику', doaccept, escclose;
+show(, , 41, 8);
+
+  screen scConfig;
+  fields
+    _number: noprotect;
+    _writeNumberToClaim: noprotect, noframe;
+    _overwriteNumberToClaim: noprotect, noframe;
+  buttons
+    cmDoOk, default;
+    cmCancel;
+<<
+
+`Номер`.@@@@@@@@@@@@@@@@@@@@
+
+ [:] Сохранять номер в заявке подразделения`
+ [:] Перезаписывать номер, если установлен ранее`
+
+            <. Продолжить .> <. Отмена .>
+>>
+  end;
+
+  handleevent
+  cmInit:
+  {
+    LoadCfg;
+    rereadrecord;
+  }
+  cmDefault:
+  {
+    SaveCfg;
+  }
+  cmDoOk:
+  {
+    putcommand(cmDefault);
+  }
+  end;
+
+end; //window
+
+function ShowConfig: word;
+{
+  result := runwindowmodal(wndConfig);
+}
+
+procedure CreateDeliverClaim(aPlanOmto: IPlanOmto);
+{
+  _po := aPlanOmto;
+  v._loop _po
+  {
+    if _writeNumberToClaim
+      if _po.DeliverClaimNumber = '' or _overwriteNumberToClaim
+      {
+        v._po.DeliverClaimNumber := _number;
+        v.update current _po;
+        _po.SaveData;
+      }
+  }
+}
+
+constructor Init;
+{
+  _po := IPlanOmto(new(PlanOmtoBase));
+  LoadCfg;
+  result := true;
+}
+
+end.
