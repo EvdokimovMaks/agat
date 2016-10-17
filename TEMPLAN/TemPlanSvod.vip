@@ -1,0 +1,1233 @@
+/*
+
+1. Что делать, когда выбраны заказы за прошлые периоды, но по ним не было планирования. В Структуру цены они попадут!!!
+
+*/
+
+#component "AGAT"
+
+bmpOK bitmap "Agat_Analitik.bmp"
+
+#param /linc:c:\gal\vip\lic.vpp
+
+#define ComponentVersion
+#define Licensed_Free licensed(free)
+#define sum_format '\2p[|-]366`666`666`666`666.88'
+#include "GetKau.vih"                    // GetKau
+//#include "FpExtHashAn.Vih"               // GetHashAn
+
+const
+  cmOpenAllGroups        = 9944;
+  cmCloseAllGroups       = 9945;
+  cmMakeExcel            = 9946;
+  cmFindZakaz            = 9947;
+end;
+
+interface iTemPlanSvod 'Сводный Тематический план', doaccept, escclose;
+/*
+ВНИМАНИЕ: При построении Excel смотрится только первые 4-ре уровня вложения
+*/
+show (,,76,9);
+File mFile;
+
+var
+  tfb                 : comp;                  // ссылка на типовую форму для фильтра
+  ParentNrec          : comp;                  // ссылка на родителя для фильтра
+  _mmBeg, _mmEnd      : byte;                  // Данные для начала и окончания периода для фильтра
+  _YEnd               : word;                  // Данные для начала и окончания периодадля фильтра
+  _dBeg, _dEnd, _Date : date;                  // Дата начала поиска проводок
+  cZakaz, cPodr       : comp;                  // ссылка на ЭЛЕМЕНТАРНЫЙ заказ / подразделение для фильтра
+  sZakaz, sPodr       : string;                // Наименование заказ(ов) / подразделения(ий) для фильтра
+  kZakaz              : longInt;
+  iGetKAU             : GetKau;                // Переменной присваивается значение интерфейса
+  qm                  : vipQueryManager;       // Для прямого SQL запроса
+  tsManager           : iTemplanSpecManager;   // "Менеджер" таблицы для "плана"
+  tfManager           : iTemplanFactManager;   // "Менеджер" таблицы для "факта"
+  _cPodrOld           : comp;                  // ссылка на подразделение Заказа
+  wCol, wRow          : longint;               // Строка и колонка для Excel
+  _step               : longint;               // Шаг группировки по подразделениям
+  tZakaz              : longint;               // Идентификатор маркера
+
+/* *** Для помесячного анализа
+table struct tMatrixTable
+(
+  TipVal : word,                               // Тип значения 1 - з\п; 2 - трудоемкость
+  nYear  : word,                               // Год
+  nMon   : byte,                               // Месяц
+  cKau   : comp,                               // Ссылка на КАУ
+  Value  : double                              // Сумма
+)
+with index
+(
+  i01 = TipVal + nYear + nMon + cKau
+)
+;*/
+
+// Формирование дерева
+create view
+as Select *
+from  tTemplanSpec, tTemplanSpec tTPS, tTemplanSpec tTPS1, tTemplanSpec tTPS2   // Основная временная таблица
+      , tTemPlanLink                    // нужно для связей иначе временная таблица будет сразу же удаляться из памяти. Так же нужно для поиска существующих связей, чтобы блокировать записи
+      , tAnalit                         // нужно для заполнения аналитики
+//*** для помесячного анализа      , tMatrixTable                    // таблица для расчёта средней зарплаты
+
+where
+      ((
+        ParentNrec == tTemplanSpec.cParent
+      ))
+;
+
+// Получение наименования статей типового бюджета.
+create view tFpTForm
+as Select *
+from fptform
+where
+        ((
+          tfb == fptform.nrec
+        ))
+;
+
+SQL query qZakaz=
+Select distinct katstroy.nrec
+from (
+      select distinct d.nrec as DogovorNrec, katstroy.nrec as KatstroyNrec, cp.nrec as CalPlanNrec                  //заказы по схеме связей
+      from spschem
+      join katstroy on spschem.cbasedoc = katstroy.nrec
+      join calplan cp on spschem.cdoc = cp.nrec and cp.directmc = 1
+      join dogovor d on cp.cdogovor = d.nrec
+      where spschem.tidk=403 and spschem.tidkbase=454
+      union
+      select distinct d.nrec, katstroy.nrec, cp.nrec                                                                //заказы по ЦУ
+      from calplan cp
+      join spdocs spd on 403 = spd.tidk and cp.nrec = spd.cdoc
+      join specmtr spm on #comp(0001000000000001h) = spm.csaldtune and 1723 = spm.cotable and spd.nrec = spm.cspec
+      join katstroy on spm.cobj = katstroy.nrec
+      join dogovor d on cp.cdogovor = d.nrec
+      where cp.directmc = 1
+     ) t
+join dogovor on t.DogovorNrec = dogovor.nrec
+join katstroy on t.KatstroyNrec = katstroy.nrec
+join calplan on t.CalPlanNrec = calplan.nrec and calplan.dto >= :dBeg //and calplan.dfrom <= #date(31,12,2015)
+;
+
+SQL query qKatstroySum=
+Select coalesce(FpImpRel.cImpMean, #comp(0)), sum(addsumobj.sumcur)
+from  katstroy
+  join  kaureff on 2 = kaureff.wkau and 2101 = kaureff.cotable and katstroy.nrec = kaureff.crec and kaureff.ckau = :cPodr
+//  join  katpodr on kaureff.ckau = katpodr.nrec and katpodr.nrec = :cPodr
+  join  addsumobj on 2101 = addsumobj.cotable and katstroy.nrec = addsumobj.ckatstroy and 0 <> addsumobj.sumcur
+  join  fpimprel on #comp(0001000000000041h) = fpimprel.cmain and addsumobj.caddsumtune = fpimprel.CMEAN
+where
+  katstroy.nrec in (select tmpZakaz.cRec from tmpZakaz)
+group by FpImpRel.cImpMean
+;
+
+SQL query qFactSaldo=
+Select coalesce(fpimprel.cMean, #comp(0)),
+       Case coalesce(fpimprel.cMean, #comp(0))
+            when #comp(0001000000000098h) then 1
+            when #comp(0001000000000919h) then 1
+            when #comp(000100000000091Dh) then 1
+            when #comp(000100000000091Eh) then 1
+            when #comp(000100000000091Fh) then 1
+            when #comp(0001000000000920h) then 1
+            when #comp(0001000000000924h) then 1
+            when #comp(0001000000000926h) then 1
+            else 2
+       end as _GrKau,
+           Case coalesce(fpimprel.cMean, #comp(0))
+                when #comp(0001000000000098h) then coalesce(#comp(1), #comp(0))
+                when #comp(0001000000000919h) then coalesce(#comp(1), #comp(0))
+                when #comp(000100000000091Dh) then coalesce(#comp(1), #comp(0))
+                when #comp(000100000000091Eh) then coalesce(#comp(1), #comp(0))
+                when #comp(000100000000091Fh) then coalesce(#comp(1), #comp(0))
+                when #comp(0001000000000920h) then coalesce(#comp(1), #comp(0))
+                when #comp(0001000000000924h) then coalesce(#comp(1), #comp(0))
+                when #comp(0001000000000926h) then coalesce(#comp(1), #comp(0))
+                else coalesce(#comp(2), #comp(0))
+           end as _cAnalit,
+       sum(oborot.sumob) as summa
+
+from oborot
+left join fpimprel on oborot.kauos[2] = fpimprel.cImpMean and #comp(0001000000000043h) = fpimprel.cMain
+join  kaureff on 2 = kaureff.wkau and 2101 = kaureff.cotable and oborot.kauos[1] = kaureff.crec and kaureff.ckau = :cPodr
+where
+  oborot.datob between 1 and :dEnd and '820' = oborot.scheto and oborot.kauos[1] in (select tmpZakaz.cRec from tmpZakaz)
+
+Group by fpimprel.cMean,
+         Case coalesce(fpimprel.cmean, #comp(0))
+              when #comp(0001000000000098h) then 1
+              when #comp(0001000000000919h) then 1
+              when #comp(000100000000091Dh) then 1
+              when #comp(000100000000091Eh) then 1
+              when #comp(000100000000091Fh) then 1
+              when #comp(0001000000000920h) then 1
+              when #comp(0001000000000924h) then 1
+              when #comp(0001000000000926h) then 1
+              else 2
+         end,
+           Case coalesce(fpimprel.cMean, #comp(0))
+                when #comp(0001000000000098h) then coalesce(#comp(1), #comp(0))
+                when #comp(0001000000000919h) then coalesce(#comp(1), #comp(0))
+                when #comp(000100000000091Dh) then coalesce(#comp(1), #comp(0))
+                when #comp(000100000000091Eh) then coalesce(#comp(1), #comp(0))
+                when #comp(000100000000091Fh) then coalesce(#comp(1), #comp(0))
+                when #comp(0001000000000920h) then coalesce(#comp(1), #comp(0))
+                when #comp(0001000000000924h) then coalesce(#comp(1), #comp(0))
+                when #comp(0001000000000926h) then coalesce(#comp(1), #comp(0))
+                else coalesce(#comp(2), #comp(0))
+           end
+;
+
+// SQL запрос для выборки сальдо по факту Прибыли по формуле К90.1-Д90.3-Д90.2
+SQL query qPriblSaldo=
+select katstroyNrec, sum(sumOb)
+from (
+     Select kauks[2] as katstroyNrec, sumob
+     from oborot
+     join kaureff on 2 = kaureff.wkau and 2101 = kaureff.cotable and oborot.kauks[2] = kaureff.crec and kaureff.ckau = :cPodr
+     where schetk='890' and subschk='01' and datob between 1 and :dEnd and oborot.kauks[2] in (select tmpZakaz.cRec from tmpZakaz)
+
+     union all
+     select kauos[2], sumob*(-1)
+     from oborot
+     join kaureff on 2 = kaureff.wkau and 2101 = kaureff.cotable and oborot.kauos[2] = kaureff.crec and kaureff.ckau = :cPodr
+     where scheto='890' and subossch in ('02','03') and datob between 1 and :dEnd and oborot.kauos[2] in (select tmpZakaz.cRec from tmpZakaz)
+     //#comp(0001000000000450h) = oborot.kauos[2]
+     ) o
+group by katstroyNrec
+;
+
+SQL Query qTrudoemkostSaldo=
+Select
+//*** Расчет без учета аналитики    mnplan.canval2, fpperiod.dbeg, fpperiod.dend, sum(valspmnp.kol + valspmnp.price)                                                   // сумма часы на агат + часы в командировках
+    fpperiod.dbeg, fpperiod.dend, sum(valspmnp.kol + valspmnp.price)                                                   // сумма часы на агат + часы в командировках
+from
+    mnplan                                                                                                                              // Производственные планы
+join fpperiod on mnplan.canval1 = fpperiod.nrec and fpperiod.dend <= :dEnd                                                                // Отфильтруем только необходимые периоды
+join spmnplan on mnplan.nrec = spmnplan.cmnplan and spmnplan.canval1 in (select tmpZakaz.cRec from tmpZakaz)                              // Шаблон спецификация плана
+join kaureff on 2 = kaureff.wkau and 2101 = kaureff.cotable and spmnplan.canval1 = kaureff.crec and kaureff.ckau = :cPodr                 // Добавим фильтр по ответственному подразделению Объекта строительства
+join spmnpl on spmnplan.nrec = spmnpl.cspmnplan and 22 = spmnpl.wkolan and 21 = spmnpl.wkodgr4 and mnplan.canval1 = spmnpl.canval4 and 10029 = spmnpl.wkodgr5 and spmnpl.canval5 = #comp(00010000000008AEh) // Ячейка "Отработано часов" по строке
+join valspmnp on spmnpl.nrec = valspmnp.cspmnpl                                                                                           // Значения позиций плана (Значения по ячейки "Отработано часов")
+where
+    mnplan.cwayaccou = #comp(0001000000000088h)                                                                                         // Производственный план = "Сводный наряд" (Текущий алгоритм расчета)
+//*** Расчет без учета аналитики group by mnplan.canval2, fpperiod.dbeg, fpperiod.dend
+group by fpperiod.dbeg, fpperiod.dend
+;
+
+SQL query qtps=
+select katpodr.nrec, fpstbud.nrec, coalesce(kau.npp, #comp(0)), coalesce(kau.KodGrKau, #comp(0)), fpspaxtf.csloj, coalesce(kau40.npp40, #comp(0)), fpoborot.cperiod, month(datetime(fpperiod.dbeg, 0)),
+//select fpstbud.nrec, coalesce(kau.npp, 0), coalesce(kau.KodGrKau, 0), fpspaxtf.csloj, coalesce(kau40.npp40, 0), fpoborot.cperiod, month(datetime(fpperiod.dbeg,0)),
+       case coalesce(kau.npp,0)
+         when 1 then coalesce(hashan.canalit[1], #comp(0))
+         when 2 then coalesce(hashan.canalit[2], #comp(0))
+         when 3 then coalesce(hashan.canalit[3], #comp(0))
+         when 4 then coalesce(hashan.canalit[4], #comp(0))
+         when 5 then coalesce(hashan.canalit[5], #comp(0))
+         else #comp(0)
+       end as cAnalit,
+       sum(fpoborot.summa) as summa
+
+from fpaxtf
+
+join fpspaxtf on fpaxtf.nrec = fpspaxtf.cmain and 20 = fpspaxtf.kodgrkau
+
+left join ( select cmain, kodgrkau, min(npp) as npp
+            from spsloj
+            where kodgrkau <> 40
+            group by cmain, kodgrkau
+          ) kau on fpspaxtf.csloj = kau.cmain
+
+left join ( select cmain, min(npp) as npp40
+            from spsloj
+            where kodgrkau = 40
+            group by cmain
+          ) kau40 on fpspaxtf.csloj = kau40.cmain
+
+join fpperiod on #comp(0001000000000005h) = fpperiod.ctper and fpperiod.dbeg <= :dEnd and fpperiod.dend >= :dBeg
+
+join fpoborot on fpperiod.nrec = fpoborot.cperiod and #comp(000100000000000Ah) = fpoborot.cplanssch and fpspaxtf.cmean = fpoborot.cstbud and fpoborot.datob <= :dOtchet
+
+join fpstbud on fpoborot.cstbud = fpstbud.nrec
+
+join hashan on fpoborot.chashdoc = hashan.nrec
+
+join katstroy on    case kau40.npp40
+                         when 1 then hashan.canalit[1]
+                         when 2 then hashan.canalit[2]
+                         when 3 then hashan.canalit[3]
+                         when 4 then hashan.canalit[4]
+                         when 5 then hashan.canalit[5]
+                         else #comp(0)
+                    End = katstroy.nrec and katstroy.nrec in (select tmpZakaz.cRec from tmpZakaz)
+
+join kaureff on 2 = kaureff.wkau and 2101 = kaureff.cotable and katstroy.nrec = kaureff.crec
+
+join katpodr on kaureff.ckau = katpodr.nrec
+
+where :FormNrec = fpaxtf.cmain and 1 = fpaxtf.waxisxy
+
+group by katpodr.nrec, fpstbud.nrec, kau.npp, kau.kodgrkau, fpspaxtf.csloj, kau40.npp40, fpoborot.cperiod, month(datetime(fpperiod.dbeg,0)),
+//group by fpstbud.nrec, kau.npp, kau.kodgrkau, fpspaxtf.csloj, kau40.npp40, fpoborot.cperiod, month(datetime(fpperiod.dbeg,0)),
+         case coalesce(kau.npp,0)
+         when 1 then coalesce(hashan.canalit[1], #comp(0))
+         when 2 then coalesce(hashan.canalit[2], #comp(0))
+         when 3 then coalesce(hashan.canalit[3], #comp(0))
+         when 4 then coalesce(hashan.canalit[4], #comp(0))
+         when 5 then coalesce(hashan.canalit[5], #comp(0))
+         else #comp(0)
+         end
+order by katpodr.nrec
+;
+// Объявление процедуры
+procedure StartNewExcel; forward;
+
+// Функция суммирования веток дерева перенесена в секцию с методами объектов
+procedure summation (_Parent :comp; _sum : double);
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ procedure summation (_Parent :comp; _sum : double);                                                        │
+│ _Parent - ссылка на родителя                                                                               │
+│ _sum    - сумма для суммирования                                                                           │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+  if _Parent <> 0 then
+    {
+      if getfirst tTPS1 where ((_Parent == tTPS1.nrec)) = tsOK then
+        {
+         tTPS1.sumObj := tTPS1.sumObj + _sum;
+         update current tTPS1;
+
+         if getfirst tTPS2 where ((tTPS1.cParent == tTPS2.nrec)) = tsOK then summation(tTPS1.cParent, _sum);
+        }
+    }
+} // procedure summation (_nrec :comp);
+
+// Функция для расчёт выводимых значений в зависимости от статей
+function funGetSumText (_sum : string) : string;
+{
+  result := if((tTemplanSpec.cMean = comp(STBUD_PROCZENT_PRIBILI)                 or tTemplanSpec.cMean = comp(STBUD_PROZCENT_SOBSTVENNIH_RABOT) or
+                tTemplanSpec.cMean = comp(STBUD_PROCZENT_NAKLADNIH_RASHODOV)      or //tTemplanSpec.cMean = comp(STBUD_SREDNYAY_ZP_V_TCH)  or
+                tTemplanSpec.cMean = comp(STBUD_SREDNYAY_ZP_PO_ZAKAZU_NIOKR)      or tTemplanSpec.cMean = comp(STBUD_SREDNYAY_ZP_NA_OBESPECHIVAUSHIE_RABOTI) or
+                tTemplanSpec.cMean = comp(STBUD_SREDNYAY_ZP_NA_OBEKTOVIE_RABOTI)  or tTemplanSpec.cMean = comp(STBUD_PROCZENT_DOP_ZP) or
+                tTemplanSpec.cMean = comp(STBUD_PROCZENT_OTCHISLENII)), '-' , _sum);
+}
+
+screen scMain;
+//show(1,1,99,11)
+fields
+//===========================================================================
+//                                   Field
+//===========================================================================
+//  _mmBeg        : [List 'январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'], protect;
+//  _mmEnd        : [List 'январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'], protect;
+  _YEnd         : noprotect;
+  _Date         : noprotect;
+  [ftp]  if(tFpTForm.getfirst fptform = tsOk, tFpTForm.fptform.name, '') : protect, pickbutton;
+  [zak]  sZakaz : protect, pickbutton;
+buttons
+  cmMakeExcel, Default;
+  cmFindZakaz;
+<<
+
+ Сводные план на .@@@@ год                              Дата ТП .@@@@@@@@@@
+
+ Типовая форма бюджета  .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ Заказ  .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ <. Сформировать .>                                  <. Подобрать заказы .>
+>>
+end;  // screen
+
+//  Новое окно
+window wTemPlanSvod 'Тематический план' escClose
+  show (,,100,20);
+  screen cstree
+  show (,18,,19) fixed_y;
+    buttons
+      cmExcel,,,'Сформировать отчёт и выгрузить его в Excel';
+<<
+  <. Сформировать Excel-отчёт .>
+>>
+  end;
+  //  Описание дерева
+  Tree trTemPlan(,,sci1Esc);
+  show (,,,17);
+  wideOffset, linesAtRoot, dottedLines;
+  table tTemplanSpec;
+  fields
+    {font = {color = if(tTempLanSpec.priznak = TPSPEC_KIND_DEFAULT, 2, if(tTempLanSpec.priznak = TPSPEC_KIND_EDITABLE_STBUD, 5, 3))}}; // 1 - Черный; 2 - Рыжий; 3 - Зеленый; 4- Золотистый; 5 - Синий;
+    tTemplanSpec.name                                               #13#3'Перечень статей'              : [60], protect;//, pickbutton;
+    tTemplanSpec.sumObj                                             #3'Структура'#13#3'цены'            : [15, #sum_format], protect;
+    tTemplanSpec.sumSaldo                                           #3'Незавершённое'#13#3'производство на '#13#3'начало периода'           : [16, #sum_format], protect;
+    [Ostatok_Zakaz] (tTemplanSpec.sumObj - tTemplanSpec.sumSaldo)   #3'Остаток для'#13#3'распределения на '#13#3'начало периода'            : [16, #sum_format], protect;
+    tTemplanSpec.sumYear                                            'План распределения'#13#3'на отчетный'#13#3'период'     : [15, #sum_format], protect, Right, {font = {backColor = 8;  bold = true}};
+    tTemplanSpec.sum[1]                                             #3'Январь'#13#13#3'(план)'          : [15, #sum_format], protect;
+    tTemplanSpec.sum[2]                                             #3'Февраль'#13#13#3'(план)'         : [15, #sum_format], protect;
+    tTemplanSpec.sum[3]                                             #3'Март'#13#13#3'(план)'            : [15, #sum_format], protect;
+    tTemplanSpec.sum[4]                                             #3'Апрель'#13#13#3'(план)'          : [15, #sum_format], protect;
+    tTemplanSpec.sum[5]                                             #3'Май'#13#13#3'(план)'             : [15, #sum_format], protect;
+    tTemplanSpec.sum[6]                                             #3'Июнь'#13#13#3'(план)'            : [15, #sum_format], protect;
+    tTemplanSpec.sum[7]                                             #3'Июль'#13#13#3'(план)'            : [15, #sum_format], protect;
+    tTemplanSpec.sum[8]                                             #3'Август'#13#13#3'(план)'          : [15, #sum_format], protect;
+    tTemplanSpec.sum[9]                                             #3'Сентябрь'#13#13#3'(план)'        : [15, #sum_format], protect;
+    tTemplanSpec.sum[10]                                            #3'Октябрь'#13#13#3'(план)'         : [15, #sum_format], protect;
+    tTemplanSpec.sum[11]                                            #3'Ноябрь'#13#13#3'(план)'          : [15, #sum_format], protect;
+    tTemplanSpec.sum[12]                                            #3'Декабрь'#13#13#3'(план)'         : [15, #sum_format], protect;
+  end; // tree trTemPlan
+
+tableEvent table tTemplanSpec
+//  Обработка дерева
+    cmTreeTop       : ParentNrec := 0;
+    cmTreeUp        : ParentNrec := tTemplanSpec.cParent;
+    cmTreeDown      : ParentNrec := tTemplanSpec.nrec;
+    cmTreeNodeType  : if (TreeIsTerminal(trTemPlan)) then if ((tTemplanSpec.priznak = TPSPEC_KIND_KAU_NEW) or (tTemplanSpec.priznak = TPSPEC_KIND_KAU)) then TreeSetNodeType(trTemPlan, 2, 'bmpOK') else TreeSetNodeType(trTemPlan, ntfText);
+    cmTreeNeedOwner : TreeJumpToRecord(trTemPlan, tTemplanSpec.cParent);
+end; // tableEvent
+
+handleevent
+    cmOpenAllGroups:
+    {
+      TreePushPos(trTemPlan);
+      TreeGetFirst(trTemPlan);
+      do {
+           TreeOpenNode(trTemPlan);
+         } while TreeGetNext(trTemPlan);
+      TreePopPos(trTemPlan);
+      rereadrecord(#tTemplanSpec);
+    }
+    cmCloseAllGroups:
+    {
+      TreeCloseAllOpenedNode(trTemPlan);
+      rereadrecord(#tTemplanSpec);
+    }
+end;  // handleevent
+end;  // window
+
+// Процедура формирования отчета по новому подразделению
+procedure StartNewExcel;
+{
+    ReReadRecord(#tTemplanSpec);
+    if RecordsInTable(#tTemplanSpec) = 0 then exit;
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Произведем заполнение матрицы Excel
+    wCol := 1;
+    xlStWriteToMatrix(wRow, wCol, 'Тематический план подразделения ' + if(GetAnyKau(0, 2, _cPodrOld), givenanname(1), '') + ' по основным заказам на ' + _YEnd);
+    wRow++;
+    xlStWriteToMatrix(wRow, wCol, 'Статья затрат');
+    wCol++;
+    wCol++;
+    wCol++;
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'План по заказу');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'Факт за 1 полугодие ' + (_yEnd - 1));
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'Прогноз на 2 полугодие ' + (_yEnd - 1));
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'Итого на 31.12.' + (_yEnd - 1));
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'План на ' + _yEnd + ' год');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'январь');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'февраль');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'март');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'апрель');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'май');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'июнь');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'июль');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'август');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'сентябрь');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'октябрь');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'ноябрь');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'декабрь');
+    wCol++;
+    xlStWriteToMatrix(wRow, wCol, 'Последующие года');
+
+    TreePushPos(trTemPlan);
+    TreeGetFirstEx(trTemPlan);
+    do
+      {
+        if TreeLevel(trTemPlan) <= 4 and tTemplanSpec.GrKau = word(20) then
+            {
+               wRow++; wCol := 1;
+               if tTemplanSpec.cMean = STBUD_SREDNYAY_ZP_V_TCH then
+                  {
+                    xlStWriteToMatrix(wRow, 1, 'Oups...');
+                  }
+               xlStWriteToMatrix(wRow, wCol + TreeLevel(trTemPlan), tTemplanSpec.Name);
+               wCol++;
+               wCol++;
+               wCol++;
+               wCol++;
+               xlDoWriteToMatrix(wRow, wCol, tTemplanSpec.sumObj);
+               wCol++;
+               xlStWriteToMatrix(wRow, wCol, funGetSumText(tTemplanSpec.sumSaldo));
+               wCol++;
+               wCol++;
+               xlStWriteToMatrix(wRow, wCol, funGetSumText('=F' + wRow + '+G' + wRow));
+               wCol++;
+               xlStWriteToMatrix(wRow, wCol, funGetSumText('=SUM(J' + wRow + ':U' + wRow + ')'));
+               var i : byte;
+               for (i := 1; i <= 12; i++)
+                  {
+                    wCol++;
+                    xlStWriteToMatrix(wRow, wCol, tTemplanSpec.sum[i]);
+                  }
+               wCol++;
+               xlStWriteToMatrix(wRow, wCol, funGetSumText('=E' + wRow + '-I' + wRow));
+            }
+      } while TreeGetNextEx(trTemPlan);
+     TreePopPos(trTemPlan);
+     xlStWriteToMatrix(wRow + 1, 1, '_');
+     if _step = -1 then _step := wRow + 1;
+     wRow := wRow + 2;
+}
+
+// Описание событий
+handleevent
+//  Обработка кнопки выбора
+cmInit:
+{
+  _Date   := cur_date;
+  _YEnd   := year(cur_date);
+  _mmBeg  := month(cur_date)-1;
+  _mmEnd  := 11;
+  tZakaz  := InitMarker(iGetKAU.GetMarkerName(40), 8, 10, 10, false);
+  case GetMarkerCount(tZakaz) of
+    0: {cZakaz := 0; sZakaz := ''}
+    1: {GetMarker(tZakaz, 0, cZakaz) ; sZakaz := if(GetAnyKau(0, 40, cZakaz), givenanname(1), '')}
+    else sZakaz := 'Множественный выбор (' + GetMarkerCount(tZakaz) +')';
+  end; // end of case
+
+  ReadMyDSK(tfb,    'AGAT_TemPlan_tfb',True);
+//***  ReadMyDSK(cZakaz, 'AGAT_TemPlan_cZakaz',True);
+}
+cmPick:
+{
+  case curfield of
+    #ftp:
+       {
+          runinterface(F_FPBUDGET::GETTFORM, 1, 0, tfb); // 2-й параметр выводит всё дерево, при указании comp - только значения внутри этой ветки. Если потребуется, то установим этот NREC comp(0001000000000046h)
+       }
+    #zak:
+	     {
+          ClearMarker(tZakaz);
+          kZakaz := iGetKAU.GetCodeKau(2, 40, cZakaz);  // 1-й параметр: 1 - единичный ввод, 2: - множественный выбор
+          case kZakaz of
+              0:  sZakaz := '';
+              1:  sZakaz := if(GetAnyKau(0, 40, cZakaz), givenanname(1), '');
+              else {sZakaz := 'Множественный выбор (' + kZakaz +')';}
+          end;  // End of Case
+          tZakaz := InitMarker(iGetKAU.GetMarkerName(40), 8, 10, 10, false);
+          StoreMarker(tZakaz, iGetKAU.GetMarkerName(40));
+          ReReadRecord;      // Для обновления полей Заказа
+	     }
+  end; // end of case
+} // cmPick
+// Описание кнопки Сформировать
+cmMakeExcel:
+{
+  _step := -1;
+  delete all tTemplanLink;
+  delete all tAnalit;
+  delete all tTPS;
+// Проверка на заполнение всех обязательных полей
+  if ((_mmBeg > _mmEnd) or (ftp = '') or (zak = '') or (_YEnd < 1950) or (_YEnd > 3000)) then
+    {
+      Message('Не заполнены все обязательные поля', 2);
+    } else
+      {
+        if tfb <> comp(0) then
+          {
+// Создадим Матрицу для Excel
+           xlCreateExcel('TemPlanSvod.xls', true);
+           xlSetSheetName(1, 'Сводный ТП по заказам');
+//***           xlSetSheetName(2, 'Сводный Тематический план');
+//***           xlSetSheetName(2, 'SVOD');
+           xlCreateMatrix(10000, 56);
+           wCol := 1; wRow := 1;
+
+           StartNewVisual(vtRotateVisual, vfTimer, 'Загрузка данных', 0);
+           SetVisualTitle('Формирование отчета');
+
+           // работа с переменными
+           _dBeg    := date(01, _mmBeg+1, _YEnd);
+           _dEnd    := date(last_day(date(01,_mmEnd+1,_YEnd)), _mmEnd+1, _YEnd);
+           _cPodrOld := comp(-1);
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Создадим и заполним временную таблицу выбранными заказами
+           // Создадим таблицу с отбором по Заказам
+           SQLDropTmpTable('tmpZakaz');
+           SQLCreateTmpTable('table tmpZakaz (cRec : comp);', ctmNormal);
+tZakaz := InitMarker(iGetKAU.GetMarkerName(40), 8, 10, 10, false);
+           var stmt: longint;
+           stmt := sqlAllocStmt;
+           var t : longint;
+           var __cZakaz : comp;
+           SQLPrepare(stmt, 'insert tmpZakaz (cRec) values (?)');
+           t := 0;
+           while GetMarker(tZakaz, t, __cZakaz)
+            {
+              sqlBindParam(stmt, 1, __cZakaz);
+              sqlExecute(stmt);
+              t++;
+            }
+           sqlFreeStmt(stmt);
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Заполним временную таблицу данными по плану
+        // Заполним временную таблицу требуемыми данными
+           var query1 : IQuery;
+        // Инициализация запроса
+           query1 := qm.createQuery(qtps);
+        // Передача параметров в запрос
+           query1.setParam('dbeg', date(01,01,Year(_dBeg)));
+           query1.setParam('dend', _dEnd);
+           query1.setParam('FormNrec', tfb);
+           query1.setParam('dOtchet', _Date);
+        // Переменная для получения данных из запроса
+           var rs: IResultSet;
+           rs := query1.getResultSet;
+           if rs <> NullRef then
+              {
+               if (rs.getFirst = tsOk) then
+                  {
+                    do
+                    {
+                    // Инициализация переменных, принимающих значения из запроса
+                      var _cPodr                                : comp;
+                      var _cStbud, _cSloj, _cPeriod, _cAnalit   : comp;
+                      var _cParent                              : comp;
+                      var _npp, _npp40, _KodGrKau, _Month       : word;
+                      var _summa                                : double;
+                    // Инициализация принимающих переменных с привязкой к колонкам в запросе
+                      _cPodr    := rs.row.valat(1);
+                      _cStbud   := rs.row.valat(2);
+                      _npp      := rs.row.valat(3);
+                      _KodGrKau := rs.row.valat(4);
+                      _cSloj    := rs.row.valat(5);
+                      _npp40    := rs.row.valat(6);
+                      _cPeriod  := rs.row.valat(7);
+                      _Month    := rs.row.valat(8);
+                      _cAnalit  := rs.row.valat(9);
+                      _summa    := rs.row.valat(10);
+
+                      if _cPodr <> _cPodrOld then
+                          {
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Сделаем вывод данных в Excel
+                            if _cPodrOld <> comp(-1) then
+                                {
+                                  StartNewExcel;
+                                  ReReadRecord;
+                                }
+                            _cPodrOld := _cPodr;
+                            delete all tTemplanLink;
+                            delete all tAnalit;
+                            delete all tTPS;
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Заполним тематический план статьями бюджета
+                            insert tTPS (Nrec, cmean, name, code, LevelCode, cParent, GrKau, KodGrKau, csloj, npp, priznak)   //tTemplanSpec
+                            select
+                                  fpspaxtf.nrec,
+                                  fpspaxtf.cmean,
+                                  fpspaxtf.name,
+                                  fpspaxtf.code,
+                                  fpspaxtf.levelcode,
+                                  fpspaxtf.cnode,
+                                  Word(20),
+                                  spsloj.kodgrkau,
+                                  cMain40,
+                                  spsloj.npp,
+                                  TPSPEC_KIND_DEFAULT
+                            from
+                                fpaxtf, fpspaxtf,// fpstbud,
+                            (
+                             select min(_sps1.npp) (fieldname = npp40), first(_sps1.cMain) (fieldname = cMain40)
+                             from spsloj _sps1
+                             where
+                                ((
+                                  Fpspaxtf.csloj /== _sps1.cmain and
+                                  (_sps1.kodgrkau = word(40))
+                                ))
+                            ) _kau40,
+                                (
+                                 select min(_sps.npp) (fieldname = npp)    // fieldname = npp - единственное возвращаемое поле
+                                 from spsloj _sps
+                                 where
+                                    ((
+                                      fpspaxtf.csloj /== _sps.cmain and
+                                      (_sps.kodgrkau <> word(40))
+                                    ))
+                                ) _kau, spsloj, spsloj spsloj40
+                            where
+                            ((
+                               tfb    /== fpaxtf.cmain and
+//***                               Comp(281474976710976) /== fpaxtf.cmain and
+                               word(1)        /== fpaxtf.waxisxy and
+                               fpaxtf.nrec    /== fpspaxtf.cmain and
+                               word(20)       /== fpspaxtf.kodgrkau and
+
+                          //     fpspaxtf.cmean == fpstbud.nrec and
+                               fpspaxtf.csloj == spsloj.cmain and
+                               _kau.npp       == spsloj.npp and
+
+                               fpspaxtf.csloj /== spsloj40.cmain and
+                               _kau40.npp40   /== spsloj40.npp
+                            ));
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Загрузим Структуру цены
+                     var query2 : IQuery;
+                  // Инициализация запроса
+                     query2 := qm.createQuery(qKatstroySum);
+                  // Передача параметров в запрос
+                     query2.setParam('cPodr', _cPodrOld);
+                  // Переменная для получения данных из запроса
+                     var rs2: IResultSet;
+                     rs2 := query2.getResultSet;
+                     if rs2 <> NullRef then
+                        {
+                         if (rs2.getFirst = tsOk) then
+                            {
+                              do
+                              {
+                              // Инициализация переменных, принимающих значения из запроса
+                                var __cStbud : comp;
+                                var __summa  : double;
+                              // Инициализация принимающих переменных с привязкой к колонкам в запросе
+                                __cStBud   := rs2.row.valat(1);
+                                __summa    := rs2.row.valat(2);
+                                if getfirst tTPS where ((__cStBud == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOK then
+                                  {
+                                   tTPS.sumObj := tTPS.sumObj + __summa;
+                                   update current tTPS;
+
+                                   summation(tTPS.cParent, __summa);
+                                  }
+                              } while (rs2.getNext = tsOk)
+                            } // if (rs2.getFirst = tsOk)
+                        } //if rs2 <> NullRef
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Пройдёмся по временной таблице и построим связи зависящих объектов по факту.
+                            _loop tTPS
+                              {
+                                var obj: oTemplanSpecObject;
+                                obj := tfManager.GetTemplanSpec(tTPS.Nrec);
+                                if obj != NullRef
+                                {
+                                  obj.InitLinks;
+                                }
+                                else
+                                {
+                                  message('Ошибка инициализации связей в' + tTPS.name);
+                                }
+                              }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Загрузим Факт
+                    // Инициализация запроса
+                      query2 := qm.createQuery(qFactSaldo);
+                    // Передача параметров в запрос
+                      query2.setParam('dend', date(30,06,year(_dBeg) - 1));
+                      query2.setParam('cPodr', _cPodrOld);
+                    // Переменная для получения данных из запроса
+                      rs2 := query2.getResultSet;
+                    // Цикл по результатам SQL запроса
+                      if (rs2.getFirst = tsOk) then
+                          {
+                            do
+                            {
+                            // Инициализация переменных, принимающих значения из запроса
+                              var _cStbud, _cAnalit   : comp;
+                              var _summa              : double;
+                              var _GrKau              : word;
+                              var _cParent            : comp;
+                            // Инициализация принимающих переменных с привязкой к колонкам в запросе
+                              _cStbud   := rs2.row.valat(1);
+                              _GrKau    := rs2.row.valat(2);
+                              _cAnalit  := rs2.row.valat(3);
+                              _summa    := rs2.row.valat(4);
+
+                              if abs(Round(_summa,6)) <> 0 then
+                                {
+                                  if (getfirst tTPS where ((_cStbud == tTPS.cmean and (word(20) = tTPS.GrKau))) = tsOk) then _cParent := tTPS.nrec else _cParent := comp(0);   // Определяем ссылку на родителя
+                                  if tTPS.KodGrKau = 0 then
+                                    {
+                                        var obj: oTemplanSpecObject;
+
+                                        obj := tfManager.GetTemplanSpec(tTPS.nrec);
+                                        obj.SetVal(0, (obj.GetVal(0) + _summa));
+                                        obj.Save;
+                                    } else
+                                      if _cParent <> comp(0) then                                                                                       // Если родителя нет, то просто отбрасываем запись!!!
+                                        {
+                                          var obj : oTemplanSpecObject;
+                                          obj := tfManager.GetTemplanSpecKau(_cParent, _GrKau, _cAnalit);
+
+                                          if obj = NullRef then
+                                             {
+                                              ClearBuffer(#tAnalit);
+                                              tAnalit.GrKau   := _GrKau;
+                                              tAnalit.cSloj   := tTPS.cSloj;
+                                              tAnalit.cKau    := _cAnalit;
+                                              insert current tAnalit;
+
+                                              tfManager.AddKAU(tAnalit.Nrec, TPSPEC_KIND_KAU);
+
+                                              obj := tfManager.GetTemplanSpecKau(_cParent, _GrKau, _cAnalit);
+                                             }
+                                          obj.SetVal(0, (obj.GetVal(0) + _summa));
+                                          obj.Save;
+                                        }  // if _cParent <> comp(0) then
+                                } // if abs(Round(_summa,6)) <> 0
+                            } while (rs2.getNext = tsOk)
+                          } // if (rs2.getFirst = tsOk)
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Загрузим прибыль
+                    // Инициализация запроса
+                      query2 := qm.createQuery(qPriblSaldo);
+                    // Передача параметров в запрос
+                      query2.setParam('dend', date(30,06,year(_dBeg) - 1));
+                      query2.setParam('cPodr', _cPodrOld);
+                    // Переменная для получения данных из запроса
+                      rs2 := query2.getResultSet;
+                      // Цикл по результатам SQL запроса
+                      if (rs2.getFirst = tsOk) then
+                          {
+                            do
+                            {
+                            // Инициализация переменных, принимающих значения из запроса
+                              var _summa  : double;
+                            // Инициализация принимающих переменных с привязкой к колонкам в запросе
+                              _summa    := rs2.row.valat(2);
+
+                              var obj:oTemplanSpecObject;
+                              obj := tfManager.GetTemplanSpecStBud(STBUD_PRIBIL_OT_REALIZACZII_ZAKAZA);
+                              if obj != NullRef then
+                                {
+                                  obj.SetVal(0, (obj.GetVal(0) + _summa));
+                                  obj.Save;
+                                }
+                            } while (rs2.getNext = tsOk)
+                          } // if (rs2.getFirst = tsOk)
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Загрузим трудоемкость по НИОКР
+                    // Инициализация запроса
+                      query2 := qm.createQuery(qTrudoemkostSaldo);
+                    // Передача параметров в запрос
+                      query2.setParam('dEnd', date(30,06,year(_dBeg) - 1));
+                      query2.setParam('cPodr', _cPodrOld);
+                    // Переменная для получения данных из запроса
+                      rs2 := query2.getResultSet;
+                    // Цикл по результатам SQL запроса
+                      if (rs2.getFirst = tsOk) then
+                          {
+                            do
+                            {
+                              // Инициализация переменных, принимающих значения из запроса
+                              var _summa            : double;
+                              var _cAnalit          : comp;
+                              var _DatBeg, _DatEnd  : date;
+
+                              // Инициализация принимающих переменных с привязкой к колонкам в запросе
+//*** Расчёт без учета аналитики
+/*                              _cAnalit  := rs2.row.valat(1);
+                              _DatBeg   := rs2.row.valat(2);
+                              _DatEnd   := rs2.row.valat(3);
+                              _summa    := rs2.row.valat(4);*/
+                              _cAnalit  := comp(2);
+                              _DatBeg   := rs2.row.valat(1);
+                              _DatEnd   := rs2.row.valat(2);
+                              _summa    := rs2.row.valat(3);
+
+                              if abs(Round(_summa,6)) <> 0 then
+                                {
+/* *** для помесячного анализа                                 if getfirst tMatrixTable where ((word(2) == tMatrixTable.TipVal and Year(DatBeg) == tMatrixTable.nYear and Month(tMatrixTable.nMonth) ==  tMatrixTable.nMon))= tsOK then*/
+                    //              if tKatPodrImp.getfirst fpimprel where ((comp(000100000000002Bh) == fpimprel.cMain and word(2) == fpimprel.impkodan and _cAnalit == fpimprel.cimpmean)) = tsOK then _cAnalit := tKatPodrImp.fpimprel.cMean;
+                                  var obj:oTemplanSpecObject;
+                                  obj := tfManager.GetTemplanSpecStBudKau(STBUD_TRUDOEMKOST_NA_NIOKR, word(2), _cAnalit);
+                                  if obj = NullRef then
+                                    {
+                                        ClearBuffer(#tAnalit);
+                                        if getfirst tTPS where ((STBUD_TRUDOEMKOST_NA_NIOKR == tTPS.cMean)) = tsOK then
+                                          {
+                                           tAnalit.GrKau   := word(2);
+                                           tAnalit.cSloj   := tTPS.cSloj;
+                                           tAnalit.cKau    := _cAnalit;
+                                           insert current tAnalit;
+
+                                           tfManager.AddKAU(tAnalit.Nrec, TPSPEC_KIND_KAU);
+
+                                           obj := tfManager.GetTemplanSpecStBudKau(STBUD_TRUDOEMKOST_NA_NIOKR, word(2), _cAnalit);
+                                          }
+                                    }
+                                  if BalBwDates(11, _DatBeg, _DatEnd, 1) <> 0 then
+                                    {
+                                      if obj != NullRef then
+                                        {
+                                          obj.SetVal(0, (obj.GetVal(0) + _summa/BalBwDates(11, _DatBeg, _DatEnd, 1)));
+                                          obj.Save;
+                                        }
+                                    }
+                                }
+                            } while (rs2.getNext = tsOk)
+                          } // if (rs2.getFirst = tsOk)
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Рассчитаем среднюю з/п
+                            {
+                              var obj1, obj2 : oTemplanSpecObject;
+                              obj1 := tfmanager.GetTemplanSpecStBud(STBUD_OSNOVNAYA_ZARPLATA);
+                              obj2 := tfmanager.GetTemplanSpecStBud(STBUD_TRUDOEMKOST);
+                              if obj1 != NullRef and obj2 != NullRef then
+                                {
+                                  if obj2.GetVal(0) != 0 then
+                                    {
+                                      if getfirst tTPS where ((STBUD_SREDNYAY_ZP_V_TCH == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOK then
+                                        tTPS.sumsaldo := obj1.GetVal(0)/obj2.GetVal(0);
+                                        update current tTPS;
+                                    }
+                                }
+                            }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Удалим старые связи
+                            delete all tTemplanLink;
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Пройдёмся по временной таблице и построим связи зависящих объектов.
+                            _loop tTPS
+                              {
+                                var obj: oTemplanSpecObject;
+                                obj := tsManager.GetTemplanSpec(tTPS.Nrec);
+                                if obj != NullRef
+                                {
+                                  obj.InitLinks;
+                                }
+                                else
+                                {
+                                  message('Ошибка инициализации связей в' + tTPS.name);
+                                }
+                              }
+                          } // if _cPodr <> _cPodrOld then
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Заполним таблицу плановыми показателями
+                      if _KodGrKau = 0 then
+                        {
+                          if (getfirst tTPS where ((_cStbud == tTPS.cmean and (word(20) = tTPS.GrKau))) = tsOk) then                                         // Определяем ссылку на статью Бюджета
+                              {
+                                var obj: oTemplanSpecObject;
+                                obj := tsManager.GetTemplanSpec(tTPS.nrec);
+                                obj.priznak := TPSPEC_KIND_EDITABLE_STBUD;
+                                obj.SetVal(_Month, (obj.GetVal(_Month) + _summa));
+                                obj.Save;
+                              }
+                        } else
+                            {
+                              if (getfirst tTPS where ((_cStbud == tTPS.cmean and (word(20) = tTPS.GrKau))) = tsOk) then _cParent := tTPS.nrec else _cParent := comp(0);   // Определяем ссылку на родителя
+                              if _cParent <> comp(0) then                                                                                       // Если родителя нет, то просто отбрасываем запись!!!
+                                {
+                                  if (getfirst tTPS where ((_cParent == tTPS.cParent and _KodGrKau == tTPS.GrKau and _cAnalit == tTPS.cKau)) = tsOK) then                       // Определяем конкретную запись Аналитики с привязкой к родителю
+                                    {
+                                      var obj: oTemplanSpecObject;
+                                      obj := tsManager.GetTemplanSpec(tTPS.nrec);
+                                      obj.SetVal(_Month, (obj.GetVal(_Month) + _summa));
+                                      obj.Save;
+                                    } else
+                                        {
+                                          ClearBuffer(#tAnalit);
+                                          tAnalit.GrKau   := _KodGrKau;
+                                          tAnalit.cSloj   := tTPS.cSloj;
+                                          tAnalit.cKau    := _cAnalit;
+                                          insert current tAnalit;
+                                          tsManager.AddKAU(tAnalit.Nrec, TPSPEC_KIND_KAU);
+
+                                          if (getfirst tTPS where ((_cParent == tTPS.cParent and _KodGrKau == tTPS.GrKau and _cAnalit == tTPS.cKau)) = tsOK) then
+                                             {
+                                              var obj: oTemplanSpecObject;
+                                              obj := tsManager.GetTemPlanSpec(tTPS.Nrec);
+                                              obj.SetVal(_Month, _summa);
+                                              obj.Save;
+                                             }
+                                        } // else if (getfirst tTPS where ((_cParent == tTPS.cParent and _cAnalit == tTPS.cKau)) = tsOK) then
+                                }  // if _cParent <> comp(0) then
+                            } // else if KodGrKau = 0;
+                    } while (rs.getNext = tsOk)
+                  } // if (rs.getFirst = tsOk)
+              }
+          }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Создадим Excel-файл и заполним его матрицей
+        StartNewExcel;  // Выполняем заполнение последней матрицы
+        if wRow > 2 then
+          {
+            xlWriteMatrixToExcel(1,1);
+
+            xlSetFontName('Times New Roman', 1, 1, wRow + _step, wCol+1);
+            xlSetFontSize(8, 1, 1, wRow + _step, wCol+1);
+            xlSetColumnWidth(4, 1, 1, 1, 3);
+            xlSetColumnWidth(35, 1, 4, 1, 4);
+            xlSetColumnWidth(14, 1, 5, 1, wCol);
+
+            var wRow1 : longint;
+            wRow1 := 1;
+            do
+            {
+             xlMergeCells(wRow1 + 1, 1, wRow1 + 1, 4);
+             xlSetRowHeight(30, wRow1 + 1, 1, wRow1 + 1, 1);
+             xlWrapText(wRow1 + 1, 1, wRow1 + 1, wCol);
+             xlSetFontSize(12, wRow1, 1, wRow1, 1);
+             xlSetBackColor(087CFB9h,wRow1 + 2, 1, wRow1 + 2, wCol);                    // Порядок не RGB, а BGR
+             xlFrameCells(31, 2, 1, 0, wRow1 + 1, 1, wRow1 + _step - 2, 4);            // 15 - только внешние линии; 31 внешние и внутренние горизонтальные
+             xlFrameCells(63, 2, 1, 0, wRow1 + 1, 5, wRow1 + _step - 2, wCol);         // 63 - внешние и внутренние линии
+             xlSetNumberFormat('# ##0,00', wRow1 + 1, 5, wRow1 + _step - 2, wCol);
+             xlAlignCellsEx(-4108, -4108, wRow1 + 1, 1, wRow1 + 1, wCol);
+             wRow1 := wRow1 + _step;
+            } while wRow1 <= wRow - 2
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Добавим Макрос
+            var fName : string;
+            fName := CreateTmpFileName;
+            _try
+              {
+                mFile.OpenFile(fName, stCreate)
+              }
+            _except
+               on ExFileNotFound     : message('Ошибка обработки файла',2);
+               on ExPathNotFound     : message('Ошибка обработки файла',2);
+               on ExFileAlreadyExist : message('Ошибка обработки файла',2);
+               on ExFileNotOpened    : message('Ошибка обработки файла',2);
+            _finally
+
+            mFile.WriteLn('Sub TemPlanSvod_Group()');
+            mFile.WriteLn('    On Error GoTo ErrorHandler');
+            mFile.WriteLn('    Dim level, i, start, LastRow, First_Row As Single');
+            mFile.WriteLn('    Dim STEP, marker');
+            mFile.WriteLn('    STEP = -1');
+            mFile.WriteLn('    marker = -1');
+            mFile.WriteLn('    Const FIRST_COLUMN = 1');
+            mFile.WriteLn('    Const NUMBER_OF_LEVELS = 4');
+            mFile.WriteLn('    Set ws = ActiveSheet');
+            mFile.WriteLn('    ws.UsedRange.ClearOutline');
+            mFile.WriteLn('    i = 1');
+            mFile.WriteLn('    While ws.Cells(i, 1).Value <> "" Or ws.Cells(i, 2).Value <> "" Or ws.Cells(i, 3).Value <> "" Or ws.Cells(i, 4).Value <> ""');
+            mFile.WriteLn('        i = i + 1');
+            mFile.WriteLn('        If ws.Cells(i, 1).Value = "_" then');
+            mFile.WriteLn('            If STEP = -1 Then');
+            mFile.WriteLn('                STEP = i');
+            mFile.WriteLn('            End If');
+            mFile.WriteLn('        End If');
+            mFile.WriteLn('        If ws.Cells(i, 1).Value = "Oups..." Then');    // найдем = "Средняя заработная плата в т.ч."
+            mFile.WriteLn('            ws.Cells(i, 1).Value = ""');
+            mFile.WriteLn('            If marker = -1 Then');
+            mFile.WriteLn('                marker = i');
+            mFile.WriteLn('            End If');
+            mFile.WriteLn('        End If');
+            mFile.WriteLn('    Wend');
+            mFile.WriteLn('    First_Row = 3 - STEP');
+            mFile.WriteLn('    Last_Row = 0');
+            mFile.WriteLn('    Dim j');
+            mFile.WriteLn('    j = ((i - 1) / STEP)');
+            mFile.WriteLn('    Dim K');
+            mFile.WriteLn('    For K = 1 To Int(j)');
+            mFile.WriteLn('        LastRow = LastRow + STEP');
+            mFile.WriteLn('        First_Row = First_Row + STEP');
+            mFile.WriteLn('        For level = 1 To NUMBER_OF_LEVELS');
+            mFile.WriteLn('            start = 0');
+            mFile.WriteLn('            For i = First_Row To (LastRow + 1)');
+            mFile.WriteLn('                If ws.Cells(i, level + FIRST_COLUMN - 1) <> "" And WorksheetFunction.CountA(ws.Cells(i + 1, FIRST_COLUMN).Resize(1, level)) = 0 Then');
+            mFile.WriteLn('                    start = i');
+            mFile.WriteLn('                End If');
+            mFile.WriteLn('                If WorksheetFunction.CountA(ws.Cells(i + 1, FIRST_COLUMN).Resize(1, level)) > 0 And start > 0 Then');
+            mFile.WriteLn('                    ws.Rows(start + 1 & ":" & i).Group');
+            mFile.WriteLn('                    start = 0');
+            mFile.WriteLn('                End If');
+            mFile.WriteLn('            Next i');
+            mFile.WriteLn('        Next level');
+            mFile.WriteLn('        ws.Cells(i - 2, 1).Value = ""');
+            mFile.WriteLn('    Next K');
+            mFile.WriteLn('    ws.Cells(i - 1, 1).Value = ""');
+            mFile.WriteLn('    ActiveSheet.Outline.ShowLevels RowLevels := 2');
+            mFile.WriteLn('''');
+            mFile.WriteLn('    ws.Cells(i, 1).Value = "=A2"');
+            mFile.WriteLn('    ws.Cells(i, 5).Value = "=E2"');
+            mFile.WriteLn('    Range("E" & i, "E" & i).Select');
+            mFile.WriteLn('    Selection.Copy');
+            mFile.WriteLn('    Range("E" & i, "V" & i).Select');
+            mFile.WriteLn('    ActiveSheet.Paste');
+            mFile.WriteLn('    i = i + 1');
+            mFile.WriteLn('    ws.Cells(i, 1).Value = "=A3"');
+            mFile.WriteLn('    Range("A" & i, "A" & i).Select');
+            mFile.WriteLn('    Selection.Copy');
+            mFile.WriteLn('    Range("A" & i, "D" & i + STEP - 4).Select');
+            mFile.WriteLn('    ActiveSheet.Paste');
+            mFile.WriteLn('    Dim K1');
+            mFile.WriteLn('    For K = (i) To (i + STEP - 4)');
+            mFile.WriteLn('        For K1 = 1 To 4');
+            mFile.WriteLn('            If ws.Cells(K, K1).Value = "0" Then');
+            mFile.WriteLn('                ws.Cells(K, K1).Value = ""');
+            mFile.WriteLn('            End If');
+            mFile.WriteLn('        Next K1');
+            mFile.WriteLn('    Next K');
+            mFile.WriteLn('    Dim Val');
+            mFile.WriteLn('    Val = "=IFERROR(E3"');
+            mFile.WriteLn('    K1 = 3');
+            mFile.WriteLn('    If Int(j) > 1 Then');
+            mFile.WriteLn('        For K = 2 To Int(j)');
+            mFile.WriteLn('            K1 = K1 + STEP');
+            mFile.WriteLn('            Val = Val & "+E" & K1');
+            mFile.WriteLn('        Next K');
+            mFile.WriteLn('    End If');
+            mFile.WriteLn('    ws.Cells(i, 5).Value = Val & ", ""-"")"');
+            mFile.WriteLn('    Range("E" & i, "E" & i).Select');
+            mFile.WriteLn('    Selection.Copy');
+            mFile.WriteLn('    Range("E" & i, "V" & i + STEP - 4).Select');
+            mFile.WriteLn('    ActiveSheet.Paste');
+            mFile.WriteLn('    Range("A" & i, "A" & i).Select');
+            mFile.WriteLn('    ''');
+            mFile.WriteLn('    Cells.Find(What:="=C" & marker, After:=ActiveCell, _');
+            mFile.WriteLn('    LookIn:=xlFormulas, LookAt:=xlPart, SearchOrder:=xlByRows, _');
+            mFile.WriteLn('    SearchDirection:=xlNext, MatchCase:=False, SearchFormat:=False).Activate');
+            mFile.WriteLn('    dim sred, sred_row');
+            mFile.WriteLn('    sred_row = ActiveCell.Row()');
+            mFile.WriteLn('    sred = ws.Cells(sred_row,6).FormulaR1C1');
+            mFile.WriteLn('    sred = Replace(sred, "(", "(AVERAGE(")');
+            mFile.WriteLn('    sred = Replace(sred, ",", "),")');
+            mFile.WriteLn('    sred = Replace(sred, "+", ",")');
+            mFile.WriteLn('    ws.Cells(sred_row, 6).FormulaR1C1 = sred');
+            mFile.WriteLn('    sred = ws.Cells(sred_row,8).FormulaR1C1');
+            mFile.WriteLn('    sred = Replace(sred, "(", "(AVERAGE(")');
+            mFile.WriteLn('    sred = Replace(sred, ",", "),")');
+            mFile.WriteLn('    sred = Replace(sred, "+", ",")');
+            mFile.WriteLn('    ws.Cells(sred_row, 8).FormulaR1C1 = sred');
+
+            mFile.WriteLn('ErrorHandler:');
+            mFile.WriteLn('');
+            mFile.WriteLn('End Sub');
+            mFile.Close;
+
+            xlImportModule(fName);
+            xlRunMacro('TemPlanSvod_Group()');
+            DeleteFile(fName);
+
+
+    // *** Перенос а другую вкладку пока убрал - Вставить перед ErrorHandler
+    /*        mFile.WriteLn('''');
+            mFile.WriteLn('    Rows((i - 1) & ":" & (i + STEP - 3)).Select');
+            mFile.WriteLn('    Selection.Cut');
+            mFile.WriteLn('    Sheets("SVOD").Select');
+            mFile.WriteLn('    Rows("5:5").Select');
+            mFile.WriteLn('    ActiveSheet.Paste');
+            mFile.WriteLn('    Range("A5").Select');*/
+
+
+            xlMergeCells(wRow1 + 1, 1, wRow1 + 1, 4);
+            xlSetRowHeight(30, wRow1 + 1, 1, wRow1 + 1, 1);
+            xlWrapText(wRow1 + 1, 1, wRow1 + 1, wCol);
+            xlSetFontSize(12, wRow1, 1, wRow1, 1);
+            xlSetBackColor(087CFB9h,wRow1 + 2, 1, wRow1 + 2, wCol);                    // Порядок не RGB, а BGR
+            xlFrameCells(31, 2, 1, 0, wRow1 + 1, 1, wRow1 + _step - 2, 4);            // 15 - только внешние линии; 31 внешние и внутренние горизонтальные
+            xlFrameCells(63, 2, 1, 0, wRow1 + 1, 5, wRow1 + _step - 2, wCol);         // 63 - внешние и внутренние линии
+            xlSetNumberFormat('# ##0,00', wRow1 + 1, 5, wRow1 + _step - 2, wCol);
+            xlAlignCellsEx(-4108, -4108, wRow1 + 1, 1, wRow1 + 1, wCol);
+          }
+// *** Если будем использовать две вкладки
+/****        xlSetActiveSheet(2);
+        xlSetFontName('Times New Roman', 1, 1, wRow + _step, wCol+1);
+        xlSetFontSize(8, 1, 1, wRow + _step, wCol+1);
+        xlSetColumnWidth(4, 1, 1, 1, 3);
+        xlSetColumnWidth(35, 1, 4, 1, 4);
+        xlSetColumnWidth(14, 1, 5, 1, wCol);*/
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Освободим Excel
+        xlKillExcel;
+        xlFreeMatrix;
+        StopVisual('',0);
+      }
+}
+cmFindZakaz:
+{
+     tZakaz := InitMarker(iGetKAU.GetMarkerName(40), 8, 10, 10, false);
+     ClearMarker(tZakaz);
+     var query2 : IQuery;
+  // Инициализация запроса
+     query2 := qm.createQuery(qZakaz);
+  // Передача параметров в запрос
+     query2.setParam('dBeg', date(01, 01, _YEnd));
+  // Переменная для получения данных из запроса
+     var rs2: IResultSet;
+     rs2 := query2.getResultSet;
+     cZakaz := comp(0);
+     if rs2 <> NullRef then
+        {
+         if (rs2.getFirst = tsOk) then
+            {
+              do
+              {
+              // Инициализация принимающих переменных с привязкой к колонкам в запросе
+                cZakaz   := rs2.row.valat(1);
+
+                InsertMarker(tZakaz, cZakaz);
+              } while (rs2.getNext = tsOk)
+            } // if (rs2.getFirst = tsOk)
+        } //if rs2 <> NullRef
+     case GetMarkerCount(tZakaz) of
+        0:  {sZakaz := ''; cZakaz := comp(0);}
+        1:  {sZakaz := if(GetAnyKau(0, 40, cZakaz), givenanname(1), '')}
+        else sZakaz := 'Множественный выбор (' + GetMarkerCount(tZakaz) +')';
+     end; // end of case
+     reReadRecord;
+     StoreMarker(tZakaz, iGetKAU.GetMarkerName(40));
+}
+cmDone:
+{
+    SaveMyDSK(tfb,    'AGAT_TemPlan_tfb');
+    DoneMarker(tZakaz, iGetKAU.GetMarkerName(40));
+
+//***    SaveMyDSK(czakaz, 'AGAT_TemPlan_czakaz');
+}
+end; // Описание событий
+end.
+
+// Добавим отчет в отчеты пользователя
+VipInterface UserReport_TemplanSvod Implements IUserReport licensed(free);
+Interface UserReport_TemplanSvod;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::iTemPlanSvod);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Сводный план по заказам';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '*';
+//    case Ind of
+//      1 : VisibleInModule := 'BUDGET';
+//    end;
+  end;
+end.

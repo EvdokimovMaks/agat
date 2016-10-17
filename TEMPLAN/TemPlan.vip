@@ -1,0 +1,2152 @@
+/*
+2. НА БУДУЩЕЕ: Продумать алгоритм удаление КАУ через связи и создавая соответствующие записи в таблице изменений.
+5. НА БУДУЩЕЕ: Продумать алгоритм отображения кварталов при условии скрытия месяцев не входящих в этот квартал.
+6. НА БУДУЩЕЕ: При удалении записи сделать OnRemoveLink, для пересчёта зависимых. Потребуется, когда удаление записей будет делаться на лету, а не с предварительным обнулением.
+
+#50 - последний номер для ошибки при построении линков
+*/
+
+/*
+ОТНОСИМ на НИОКР
+
+Трудоемкость рассчитывается как отношение фактически отработанных часов по заказу к балансу рабочего времени за месяц.
+Баланс рабочего времени рассчитывается с помощью функции
+     BalBwDates(11, date(1,3,2015), date(31,3,2015), 1)
+где 11 это код режима работы <5-дневная рабочая неделя>
+
+Фактически отработанные часы в разрезе заказов рассчитываются  с помощью запроса
+
+select ks.nrec, sum(vsp.kol+vsp.price) //часы на агате + часы в командировках
+
+//заголовок плана (сводного наряда)
+from mnplan mp
+
+//период, на который сформирован наряд
+join fpperiod per on mp.canval1 = per.nrec and per.dbeg=#date(1,3,2015) and per.dend=#date(31,3,2015) //фильтруем наряды по нужному периоду
+
+//спецификация наряда
+join spmnplan spm on mp.nrec = spm.cmnplan
+
+//заказ из строки наряда
+join katstroy ks on spm.canval1 = ks.nrec
+
+//ячейка "Отработано часов" по строке
+join spmnpl spl on spm.nrec = spl.cspmnplan and 22 = spl.wkolan and 21 = spl.wkodgr4 and mp.canval1 = spl.canval4 and 10029 = spl.wkodgr5 and spl.canval5 = #comp(00010000000008AEh)
+
+//цифры по ячейке
+join valspmnp vsp on spl.nrec = vsp.cspmnpl
+
+where mp.cwayaccou=#comp(0001000000000088h) //шаблон плана = "Сводный наряд"
+
+group by ks.nrec
+
+*/
+#component "AGAT"
+
+bmpOK       bitmap "Agat_Analitik.bmp"
+bmpBack     bitmap "Agat_Back.bmp"
+bmpForward  bitmap "Agat_Forward.bmp"
+
+#param /linc:c:\gal\vip\lic.vpp
+
+#define ComponentVersion
+#define Licensed_Free licensed(free)
+#define sum_format '\2p[|-]366`666`666`666`666`666.88'
+#include "GetKau.vih"                    // GetKau
+#include "FpExtHashAn.Vih"               // GetHashAn
+//#include "Excel.inc"                     // Excel const
+
+const
+  cmOpenAllGroups            = 9944;
+  cmCloseAllGroups           = 9945;
+  cmHideQauters              = 9946;
+  cmHideMonths               = 9947;
+  cmHideFactDelta            = 9948;
+  cmShowQauters              = 9949;
+  cmShowMonths               = 9950;
+  cmShowFactDelta            = 9951;
+  cmExcel                    = 9952;
+  cmHideTillPlan             = 9953;
+  cmShowTillPlan             = 9954;
+  cmFillCellCurrentValue     = 9955;
+  cmFillCellByDelta          = 9956;
+  cmFillCellByOstatok        = 9957;
+  cmFillCellBySumRaspred     = 9958;
+  cmFillCellByFutureOstatok  = 9959;
+  cmBack                     = 9960;
+  cmForward                  = 9961;
+  cmOZPsohrSredZP            = 9962;
+end;
+
+interface iTemPlan 'План по заказу', doaccept, escclose;
+/*
+ВНИМАНИЕ: Проставление аналитик статье бюджета делается по 0000000000000001h (Прочие ...)
+ВНИМАНИЕ: Аналитика проверяется только до пятой по порядку.
+ВНИМАНИЕ: В SQL запросах НЕ используются константы статей бюджета. В случаи их изменения необходимо поправить SQL запросы.
+ВНИМАНИЕ: При изменении группы аналитики на статье - надо переписать зависимость этой статьи
+ПРИМЕЧАНИЕ: Если у родителя в типовой форме бюджета (ТФБ) не стоит аналитика ЗАКАЗ, то все подчиненные элементы не попадут в отчёт. Это ошибка заполнения ТФБ.
+ПРИМЕЧАНИЕ: Если ЦО отсутствует во внешней аналитики заказа, то проставляется собственная организация.
+ПРИМЕЧАНИЕ: Для получения названия класса используется перечень cMean указанных в формате string(cMean,0,0) через запятую с пробелом в getKey.
+ПРИМЕЧАНИЕ: Количество статей в "группе" не должно превышать 13 шт. ((Nrec + ', ')*Кол-во_статей < 256) [(17 + 2)*13 = 247 < 256] Иначе данные будут отбрасываться
+
+Описание методов:
+CreateTemPlanSpec - создание новой записи аналитики с автоматической привязкой связей.
+GetTemplanSpec    - Получение буфера записи аналитики.
+Clear             - Удаление записей из временной таблицы.
+Load              - Заполнение таблице необходимыми значениями.
+RemoveObject      - Удалении записи из временной таблицы.
+*/
+show (,,76,9);
+
+File mFile;
+
+var
+  tfb                 : comp;             // ссылка на типовую форму
+  ParentNrec          : comp;             // ссылка на родителя
+  _csloj              : comp;             // ссылка на слой
+  cZakaz              : comp;             // ссылка на заказ
+  cUn                 : comp;             // ссылка на отсутствующего родителя при присвоении аналитики
+  _cco                : comp;             // Ссылка на центр ответственности, берётся из внешних атрибутов заказа, если ссылки нет, то ставится собственная организация
+  _cKatPodr           : comp;             // Ссылка на подразделение
+  _cmean              : comp;             // Ссылка на cmean, если требуется, то от родителя
+  iGetKAU             : GetKau;           // переменной присваивается значение интерфейса
+  tsManager           : iTemplanSpecManager;  // "Менеджер" таблицы
+  _GetHashAn          : vExtFpHashAn;     // Интерфейс получения HashAn
+  _FixCAn             : LongInt;          // Идентификатор контейнера дополнительных аналитик
+  _dBeg, _dEnd, _Date : date;             // Дата начала поиска проводок
+  _c                  : comp;             // Ссылка на ...
+  _kodgrkau           : word;             // Код аналитики
+  _PlanFact           : word;             // Тип выгружаемых данных
+  _mmBeg, _mmEnd      : byte;             // Данные для начала и окончания периода
+  _YEnd               : word;             // Данные для начала и окончания периода
+  _sum                : double;           // Изменяемое значение для формирования сумм по колонкам
+  _redakt             : boolean;          // Признак редактирования: true - допускается \ false - не допускается
+  i, j                : integer;          // Переменная для организации цикла
+  filename            : string;           // Имя файла Excel
+  _RedaktPlan         : word;             // Редактирование планового распределения на год или нет
+  _Log, _LogMax       : integer;          // Порядковый номер изменения
+
+
+// Формирование дерева
+create view
+as Select
+    tTemplanSpec.sum[1]  (fieldname = mon1),
+    tTemplanSpec.sum[2]  (fieldname = mon2),
+    tTemplanSpec.sum[3]  (fieldname = mon3),
+    tTemplanSpec.sum[4]  (fieldname = mon4),
+    tTemplanSpec.sum[5]  (fieldname = mon5),
+    tTemplanSpec.sum[6]  (fieldname = mon6),
+    tTemplanSpec.sum[7]  (fieldname = mon7),
+    tTemplanSpec.sum[8]  (fieldname = mon8),
+    tTemplanSpec.sum[9]  (fieldname = mon9),
+    tTemplanSpec.sum[10] (fieldname = mon10),
+    tTemplanSpec.sum[11] (fieldname = mon11),
+    tTemplanSpec.sum[12] (fieldname = mon12),
+    tTemplanSpec.sumfact[1]  (fieldname = monfact1),
+    tTemplanSpec.sumfact[2]  (fieldname = monfact2),
+    tTemplanSpec.sumfact[3]  (fieldname = monfact3),
+    tTemplanSpec.sumfact[4]  (fieldname = monfact4),
+    tTemplanSpec.sumfact[5]  (fieldname = monfact5),
+    tTemplanSpec.sumfact[6]  (fieldname = monfact6),
+    tTemplanSpec.sumfact[7]  (fieldname = monfact7),
+    tTemplanSpec.sumfact[8]  (fieldname = monfact8),
+    tTemplanSpec.sumfact[9]  (fieldname = monfact9),
+    tTemplanSpec.sumfact[10] (fieldname = monfact10),
+    tTemplanSpec.sumfact[11] (fieldname = monfact11),
+    tTemplanSpec.sumfact[12] (fieldname = monfact12)
+from  tTemplanSpec, tTemplanSpec ttp1, tTemplanSpec ttp2,    // Основная временная таблица
+tTemplanSpec tTPS,
+      iTP, iTP iTP1                                          // таблица изменений
+      , fpoborot fp                                          // таблицы для записи в БД
+      , tTemPlanLink                                         // нужно для связей иначе временная таблица будет сразу же удаляться из памяти. Так же нужно для поиска существующих связей, чтобы блокировать записи
+      , tAnalit                                              // нужно для заполнения аналитики
+      , iTPLog                                               // лог для отката
+
+where
+      ((
+        ParentNrec == tTemplanSpec.cParent
+/*
+*** Можно сделать такой вариант отображения информации - это скроет лишние аналитики
+Нужно добавить все зависимые поля, проанализировать ситуацию добавление аналитики, когда она нулевая, но потребовалось её добавить. Желательно заменить расчетные данные на реальные.
+        and ((tTemplanSpec.priznak = TPSPEC_KIND_DEFAULT) or (tTemplanSpec.priznak = TPSPEC_KIND_EDITABLE_STBUD) or (tTemplanSpec.priznak = TPSPEC_KIND_KAU_NEW) or
+            ((tTemplanSpec.priznak = TPSPEC_KIND_KAU) and
+              (tTemplanSpec.sumfact[1]  <> 0 or tTemplanSpec.sumfact[2]  <> 0 or tTemplanSpec.sumfact[3]  <> 0 or
+               tTemplanSpec.sumfact[4]  <> 0 or tTemplanSpec.sumfact[5]  <> 0 or tTemplanSpec.sumfact[6]  <> 0 or
+               tTemplanSpec.sumfact[7]  <> 0 or tTemplanSpec.sumfact[8]  <> 0 or tTemplanSpec.sumfact[9]  <> 0 or
+               tTemplanSpec.sumfact[10] <> 0 or tTemplanSpec.sumfact[11] <> 0 or tTemplanSpec.sumfact[12] <> 0 or
+               tTemplanSpec.sum[1]  <> 0 or tTemplanSpec.sum[2]  <> 0 or tTemplanSpec.sum[3]  <> 0 or
+               tTemplanSpec.sum[4]  <> 0 or tTemplanSpec.sum[5]  <> 0 or tTemplanSpec.sum[6]  <> 0 or
+               tTemplanSpec.sum[7]  <> 0 or tTemplanSpec.sum[8]  <> 0 or tTemplanSpec.sum[9]  <> 0 or
+               tTemplanSpec.sum[10] <> 0 or tTemplanSpec.sum[11] <> 0 or tTemplanSpec.sum[12] <> 0)
+              ))
+*/
+      ))
+;
+
+// Получение кода аналитики
+create view _kodkau
+as Select *
+from spsloj, spsloj sps1
+where
+      ((
+        _csloj == spsloj.cmain and
+        (40 <> spsloj.kodgrkau)
+      ))
+;
+
+// Получение наименования статей типового бюджета.
+create view tFpTForm
+as Select *
+from fptform
+where
+        ((
+          tfb == fptform.nrec
+        ))
+;
+
+// Таблица для определения наличия оборотов на более позднюю дату
+create view tFpOborotCheck
+as select *
+from fpoborot, hashan, spsloj,
+     (
+      select min(_sps1.npp) (fieldname = npp40)
+      from spsloj _sps1
+      where
+        ((
+          HashAn.csloj /== _sps1.cmain and
+          word(40) == _sps1.kodgrkau
+        ))
+     ) _kau40
+where
+        ((
+          _cplanssch == fpoborot.cplanssch and            // План бюджетных оборотов
+          _Date      << fpoborot.datob and
+
+          fpoborot.chashdoc == hashan.nrec and
+          (if(_kau40.npp40 = 1, hashan.canalit[1], if(_kau40.npp40 = 2, hashan.canalit[2], if(_kau40.npp40 = 3, hashan.canalit[3], if(_kau40.npp40 = 4, hashan.canalit[4], if(_kau40.npp40 = 5, hashan.canalit[5], comp(0)))))) = cZakaz)
+          and hashan.csloj /== spsloj.cmain
+          and _kau40.npp40  ==  spsloj.npp
+        ))
+;
+
+// Получение ссылки на период при анализе дат периода
+create view tPeriod
+as Select *
+from fpperiod
+;
+
+// Получение центра ответственности через внешние аналитики
+create view tCentrOt
+as select *
+from Katstroy, kaureff, fpco
+where
+  ((
+    cZakaz        == katstroy.nrec and
+    2             == kaureff.wkau and
+    2101          == kaureff.cotable and
+    katstroy.nrec == KAUREFF.CREC and
+    2             == fpco.cotable and
+    kaureff.ckau  == fpco.cmean
+  ))
+;
+
+// Функция получения значения в зависимости от поля
+function funGetSumByField (_aField : word) : double; forward;
+// Функция для расчёт выводимых значений в зависимости от статей
+function funGetSumText (_aSum : double; _aField : word = 0; aTipSum : boolean = False) : string; forward;
+// Функция определения HashAn и при необходимости создание необходимой записи
+function funGetHashAn (_cSpSloj : comp; _cKau : comp; _KodGrKau : word) : comp;
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ function funGetHashAn (_cspsloj : comp; _ckau : comp; _kodgrkau : word) : comp;                            │
+│ _cspsloj - ссылка на spsloj                                                                                │
+│ _ckau - ссылка на ckau                                                                                     │
+│ _kodgrkau - Элементарный код аналитики                                                                     │
+│ ВНИМАНИЕ: используется глобальная переменная cZakaz                                                        │
+│                                                                                                            │
+│ По переданным параметрам строится контейнер для дальнейшего определения ссылки на HashAn                   │
+│ При необходимости, есть возможность создавать отсутствующий HashAn и передать на него ссылку               │
+│ Функция возвращает ссылку на определённый HashAn                                                           │
+│                                                                                                            │
+│ Возвращает ссылку на HashAn                                                                                │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+  ContAnClear(_FixCAn);       // Очистим контейнер
+  _kodkau._loop sps1 where ((_cSpSloj == sps1.cMain)) ordered by npp
+    {
+      case _kodkau.sps1.KodGrKau of
+        40:
+            {
+             ContAnAdd(_FixCAn, _kodkau.sps1.KodGrKau, cZakaz);
+            }
+        else
+            {
+              if _kodkau.sps1.KodGrKau = _KodGrKau then
+                {
+                 ContAnAdd(_FixCAn, _kodkau.sps1.KodGrKau, _cKau);
+                }
+                else
+                    {
+                      ContAnAdd(_FixCAn, _kodkau.sps1.KodGrKau, comp(0));
+                    }
+            }
+      end; // end of case
+    } // _getkau._loop sps1 where ((_c == sps1.nrec))
+
+  result := _GetHashAn.GetHashAn(_cspsloj, _FixCAn, True);
+}
+// функция вычисления Дельты до месяца планирования
+function funGetDelta : double;
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ function fungetDelta : double;                                                                             │
+│                                                                                                            │
+│ Функция производит расчет образовавшейся дельты по строке дерева с использованием следующей формулы:       │
+│ (Плановое значение) - (Фактическое значение)                                                               │
+│                                                                                                            │
+│ Возвращает значение Дельты                                                                                 │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+  result := 0;
+  var i : integer;
+  if _mmBeg <> 0 then
+    {
+      for (i := 1; i < _mmBeg; i++)
+        {
+          result := result + tTemplanSpec.sum[i] - tTemplanSpec.sumfact[i];
+        }
+    }
+}
+// функция вычисления Годовой суммы с учетом факта
+function funGetYearSum : double;
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ function funGetYearSum : double;                                                                           │
+│                                                                                                            │
+│ Функция производит расчет суммы распределения на год:                                                      │
+│ (факт до начала планирования) + (план с месяца планирования)                                               │
+│                                                                                                            │
+│ Возвращает значение Суммы за год Факт + План                                                               │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+//  result := funGetDelta; //***
+  result := 0;
+  var i : integer;
+  for (i:= _mmBeg + 1; i <= _mmEnd + 1; i++)        // Цикл с начального месяца до конца периода
+    {
+      result := result + tTemplanSpec.sum[i];
+    }
+  if _mmBeg <> 0 then
+    {
+      for (i:=1; i <= _mmBeg; i++)                      // Цикл с первого месяца до начального месяца не включительно
+        {
+          result := result + tTemplanSpec.sumfact[i];
+        }
+    }
+}
+// Функция вычисления Дельты по строке
+function funFullDelta : double;
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ function funFullDelta : double;                                                                            │
+│                                                                                                            │
+│ Функция производит расчет дельту для распределения по строке дерева с использованием следующей формулы:    │
+│ (Сумма распределения на год) - (факт до начала планирования) - (план с месяца планирования)                │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+  result := tTemplanSpec.sumYear;
+//  result := funGetYearSum;
+  var i : integer;
+  for (i:= _mmBeg + 1; i <= _mmEnd + 1; i++)        // Цикл с начального месяца до конца периода
+      {
+        result := result - tTemplanSpec.sum[i];       // Факт = 0, поэтому вычитая дельту мы получаем только плановые данные
+      }
+  if _mmBeg <> 0 then
+    {
+      for (i:=1; i <= _mmBeg; i++)                      // Цикл с первого месяца до начального месяца не включительно
+        {
+          result := result - tTemplanSpec.sumfact[i];
+        }
+    }
+}
+
+// процедура закрытия / открытия полей для редактирования
+procedure protect_mon(_b : boolean);
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ procedure protect_mon(_b : boolean);                                                                       │
+│ _b      - false/true - открыто/закрыто поле для редактирования                                             │
+│ ВНИМАНИЕ: используется глобальная переменная _redakt - false/true - запрет/разрешение на редактирование    │
+│           полей                                                                                            │
+│                                                                                                            │
+│ Процедура закрывает от редактирования необходимые ячейки строки                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+ DisableCommand(cmInsert);
+ DisableCommand(cmDelete);
+// DisableCommand(cmPick);
+ if ((tTemplanSpec.kodgrkau <> 0) or (tTemplanSpec.code = '')) then
+      {
+        EnableCommand(cmInsert);
+      }
+ if tTemplanSpec.priznak = TPSPEC_KIND_KAU_NEW then
+      {
+        EnableCommand(cmDelete);
+//        EnableCommand(cmPick);
+      }
+// if _redakt = false or tTemplanSpec.redakt = byte(1) then
+ if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) = tsOK)  or (_redakt = false)) then
+    {
+      DisableCommand(cmInsert);
+      if ((tTemplanSpec.KodGrKau <> 0) and (getfirst tTP1 where ((tTemplanSpec.nrec == tTP1.cParent)) = tsOK)) then {EnableCommand(cmInsert)}
+      DisableCommand(cmDelete);
+//      DisableCommand(cmPick);
+      _b := true;
+    }
+ case _b of
+   false: {
+            if month(_dBeg) < 2  then clearfieldoption(#mon1,  ofProtected);
+            if month(_dBeg) < 3  then clearfieldoption(#mon2,  ofProtected);
+            if month(_dBeg) < 4  then clearfieldoption(#mon3,  ofProtected);
+            if month(_dBeg) < 5  then clearfieldoption(#mon4,  ofProtected);
+            if month(_dBeg) < 6  then clearfieldoption(#mon5,  ofProtected);
+            if month(_dBeg) < 7  then clearfieldoption(#mon6,  ofProtected);
+            if month(_dBeg) < 8  then clearfieldoption(#mon7,  ofProtected);
+            if month(_dBeg) < 9  then clearfieldoption(#mon8,  ofProtected);
+            if month(_dBeg) < 10 then clearfieldoption(#mon9,  ofProtected);
+            if month(_dBeg) < 11 then clearfieldoption(#mon10, ofProtected);
+            if month(_dBeg) < 12 then clearfieldoption(#mon11, ofProtected);
+            clearfieldoption(#mon12, ofProtected);
+         }
+   true: {
+            clearfieldoption(#mon1,  ofProtected);
+            clearfieldoption(#mon2,  ofProtected);
+            clearfieldoption(#mon3,  ofProtected);
+            clearfieldoption(#mon4,  ofProtected);
+            clearfieldoption(#mon5,  ofProtected);
+            clearfieldoption(#mon6,  ofProtected);
+            clearfieldoption(#mon7,  ofProtected);
+            clearfieldoption(#mon8,  ofProtected);
+            clearfieldoption(#mon9,  ofProtected);
+            clearfieldoption(#mon10, ofProtected);
+            clearfieldoption(#mon11, ofProtected);
+            clearfieldoption(#mon12, ofProtected);
+
+/*          ето мы хотим всегда иметь возможность менять все поля!
+            setfieldoption(#mon1,  ofProtected);
+            setfieldoption(#mon2,  ofProtected);
+            setfieldoption(#mon3,  ofProtected);
+            setfieldoption(#mon4,  ofProtected);
+            setfieldoption(#mon5,  ofProtected);
+            setfieldoption(#mon6,  ofProtected);
+            setfieldoption(#mon7,  ofProtected);
+            setfieldoption(#mon8,  ofProtected);
+            setfieldoption(#mon9,  ofProtected);
+            setfieldoption(#mon10, ofProtected);
+            setfieldoption(#mon11, ofProtected);
+            setfieldoption(#mon12, ofProtected);   */
+         }
+ end; // case _b of
+}
+// Процедура заполнения лога для возможности отката
+procedure doLog (aNrec : comp; aMon : byte; aSum : double);
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ procedure doLog (aNrec : comp; aMon : byte; aSum : double)                                                 │
+│ aNrec - nRec запись таблицы tTemplanSpec                                                                   │
+│ aMon  - Номер месяца изменений                                                                             │
+│ aSum  - Сумма изменений                                                                                    │
+│ ВНИМАНИЕ: Используется глобальная переменная _Log, _LogMax                                                 │
+│                                                                                                            │
+│ Процедура заносит запись в таблицу изменений.                                                              │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+// Запишим Лог изменений
+  if Round(aSum, 6) <> 0 then     // Добавлено, чтобы в лог не ложились нулевые значения
+    {
+// Удалим уже занесённые данные
+      if _LogMax > _Log then
+        {
+          for (i := _Log; i <= _LogMax; i++)
+            {
+              delete all iTPLog where ((i == iTPLog.num));
+            }
+          DisableCommand(cmForward);
+        }
+
+      ClearBuffer(#iTPLog);
+      iTPLog.ctempTP := aNrec;
+      iTPLog.sum     := aSum;
+      iTPLog.num     := _Log;
+      iTPLog.mon     := aMon;
+      insert current iTPLog;
+//      ReReadRecord(#iTPLog);    // *** ВРЕМЕННО для контроля
+//      ReReadRecord(#iTP);       // *** ВРЕМЕННО для контроля
+      if _Log > 0 then EnableCommand(cmBack);
+      _LogMax := _Log;
+    }
+}
+// Процедура заполнения журнала изменений для последующего создания оборотов по этому журналу
+function doRecord (aNrec : comp; aMon: byte; aSumOld : double; aSum : double) : boolean;
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ function doRecord  (aNrec : comp; aMon: byte; aSumOld : double; aSum : double) : boolean;                  │
+│ aNrec - nRec запись таблицы tTemplanSpec                                                                   │
+│ aMon - номер месяца для периода                                                                            │
+│ aSumOld - Значение поля до изменения                                                                       │
+│ aSum - Измененное значение поля                                                                            │
+│                                                                                                            │
+│ Процедура делает добавление в таблицу в памяти, содержащую разницы между планом и изменениями, для         │
+│ дальнейшего занесения этих данных в таблицу FpOborot и инициализирует пересчёт зависимых объектов, также   │
+│ запускает процедуру логирования действий                                                                   │
+│                                                                                                            │
+│ Возвращает истуну, если запись была добавлена                                                              │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+    result := false;
+    if aSum <> aSumOld then
+      {
+        if tPeriod.getfirst fpperiod where ((_CTPER == fpperiod.ctper and date(1, aMon,_yEnd) == fpperiod.dBeg and date(Last_Day(date(1, aMon,_yEnd)), aMon, _yEnd) == fpperiod.dEnd)) = tsOK then
+        {
+          if getfirst iTP1 where ((tTemplanSpec.nrec == iTP1.ctempTP and tPeriod.fpperiod.nrec == iTP1.cperiod)) = tsOK then
+              {
+                  {
+                    iTP1.sum := aSum - (aSumOld - iTP1.sum);
+                    if abs(Round(iTP1.sum,6)) <> 0 then update current iTP1 else delete current iTP1;
+                  }
+              } else
+                  {
+                    ClearBuffer(#iTP);
+                    iTP.ctempTP  := tTemplanSpec.nRec;
+                    iTP.cperiod  := tPeriod.fpperiod.nrec;
+                    iTP.sum      := aSum - aSumOld;
+                    if abs(Round(iTP.sum,6)) <> 0 then insert current iTP;
+                  }
+          doLog(aNrec, aMon, aSum - aSumOld);
+          result := true;
+        } else message('Редактируемый период отсутствует в Базе Данных',0);
+      }
+}
+
+// Процедура заполнения значениями текущей ячейки до конца периода планирования
+procedure FillCellCurrentValue(aMon : byte; aSum : double); forward;
+// Процедура пропорционального распределения Дельты по статье
+procedure FillCellBySumRaspred (aSum : double); forward;
+
+screen scmain;
+//show(1,1,99,11)
+fields
+//===========================================================================
+//                                   Field
+//===========================================================================
+  _mmBeg       : [List 'январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'], protect;
+  _mmEnd       : [List 'январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'], protect;
+  _YEnd        : noprotect;
+  _Date        : noprotect;
+  [ftp] if(tFpTForm.getfirst fptform = tsOk, tFpTForm.fptform.name, '') : protect, pickbutton;
+  [zak] if(GetAnyKau(0, 40, cZakaz), givenanname(1), '') : protect, pickbutton;
+//***   _RedaktPlan : noprotect;
+buttons
+  cmValue1, Default;
+<<
+
+ Период плана с .@@@@@@@@@@@@ по .@@@@@@@@@@@@ .@@@@    Дата ТП .@@@@@@@@@@
+
+ Типовая форма бюджета  .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ Заказ  .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                              <. Сформировать .>
+>>
+end;  // screen
+//*** [.] Редактировать годовой план распределения`
+
+//  Новое окно
+window wTemPlan 'План по заказу' escClose
+  show (,,100,20);
+  screen cstree
+  show (,18,,19) fixed_y;
+    buttons
+      cmValue3,,,'Загрузить измененные данные в Базу Данных';
+      cmBack,[icon bmpBack];
+      cmForward,[icon bmpForward];
+      cmExcel,,,'Сформировать отчёт и выгрузить его в Excel';
+<<
+  <. Сохранить данные .>            <. .> <. .>                <. Сформировать Excel-отчёт .>
+>>
+  end;
+  //  Описание дерева
+Tree trTemPlan(,,sci1Esc);
+  show (,,,17);
+  wideOffset, linesAtRoot, dottedLines, customSorting;           // customSorting - отключает стандартную Галактическую сортировку по шапкам колонок. Можно через событие cmOnColumnClick сделать обработку требуемой сортировки.
+  table tTemplanSpec;
+  fixedLeft(_name);
+  fields
+    {font = {color = if(tTempLanSpec.priznak = TPSPEC_KIND_DEFAULT, 2, if(tTempLanSpec.priznak = TPSPEC_KIND_EDITABLE_STBUD, 5, 3))}}; // 1 - Черный; 2 - Рыжий; 3 - Зеленый; 4- Золотистый; 5 - Синий;
+    [_name] tTemplanSpec.name                                       #13#3'Перечень статей'              : [60], protect;//, pickbutton;
+//***    [_code] tTemplanSpec.code                                       'Код'                               : [5],  protect, skip;
+//    tTemplanSpec.levelcode        'levelcode': [3],  protect, skip;
+//    tTemplanSpec.nrec             'nrec'     : [15], protect;
+//    tTemplanSpec.cParent          'cParent'  : [15], protect, skip;
+//    tTemplanSpec.cmean            'cmean'    : [15], protect;
+//    tTemplanSpec.ckau             'ckau'     : [15], protect, skip;
+//    tTemplanSpec.npp              'npp'      : [3],  protect, skip;
+//    tTemplanSpec.csloj            'csloj'    : [15], protect, skip;
+//    tTemplanSpec.kodgrkau         'kodgrkau' : [5],  protect, skip;
+//    tTemplanSpec.priznak          '*'        : [2],  protect, skip;
+//    tTemplanSpec.grkau            'grkau'    : [10], protect, skip;
+//    tTemplanSpec.redakt           'redakt'   : [2],  protect, skip;
+    tTemplanSpec.sumObj                                             #3'Структура'#13#3'цены'            : [15, #sum_format], protect;
+    [_yearVhod] tTemplanSpec.sumSaldo                               #3'Незавершённое'#13#3'производство на '#13#3'начало периода'           : [16, #sum_format], protect;
+    [Ostatok_Zakaz] funGetSumText(tTemplanSpec.sumObj - tTemplanSpec.sumSaldo, 1)
+                                                                    #3'Остаток для'#13#3'распределения на '#13#3'начало периода'            : [16, #sum_format], protect, Right;
+//***    tTemplanSpec.sumYear  'sdfgh' : [15, #sum_format], protect;
+    [_yearDelta] funGetSumText(funFullDelta, 5)                     #3'Дельта к'#13#3'распределению' : [15, #sum_format], protect, Right, {font = {Color = if(Abs(Round(funFullDelta,6)) <> 0, 10, if(tTempLanSpec.priznak = TPSPEC_KIND_DEFAULT, 2, if(tTempLanSpec.priznak = TPSPEC_KIND_EDITABLE_STBUD, 5, 3)))}};
+    [_yearSum]  funGetSumText(funGetYearSum, 4)                     #3'Всего за период'#13#3'(план с'#13#3'учетом факта)'                   : [15, #sum_format], protect, Right;
+// --------------------------------------------------------------------------------------------------------------------------------------------------------------
+    [quater1]    funGetSumText(tTemplanSpec.sum[1] + tTemplanSpec.sum[2] + tTemplanSpec.sum[3], 10)
+                                                                    #3'1-квартал'#13#3'(план)'          : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    [quater1f]   funGetSumText(tTemplanSpec.sumfact[1] + tTemplanSpec.sumfact[2] + tTemplanSpec.sumfact[3], 11)
+                                                                    #3'1-квартал'#13#3'(факт)'          : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    [quater1d]   funGetSumText(tTemplanSpec.sum[1] + tTemplanSpec.sum[2] + tTemplanSpec.sum[3] - (tTemplanSpec.sumfact[1] + tTemplanSpec.sumfact[2] + tTemplanSpec.sumfact[3]), 12)
+                                                                    #3'1-квартал'#13#3'(дельта)'        : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    mon1                                                            #3'Январь'#13#13#3'(план)'          : [15, #sum_format], noprotect;
+    monfact1                                                        #3'Январь'#13#3'(факт)'             : [15, #sum_format], protect;
+    [mondelta1]  (mon1-monfact1)                                    #3'Январь'#13#3'(дельта)'           : [15, #sum_format], protect;
+    mon2                                                            #3'Февраль'#13#13#3'(план)'         : [15, #sum_format], noprotect;
+    monfact2                                                        #3'Февраль'#13#3'(факт)'            : [15, #sum_format], protect;
+    [mondelta2]  (mon2-monfact2)                                    #3'Февраль'#13#3'(дельта)'          : [15, #sum_format], protect;
+    mon3                                                            #3'Март'#13#13#3'(план)'            : [15, #sum_format], noprotect;
+    monfact3                                                        #3'Март'#13#3'(факт)'               : [15, #sum_format], protect;
+    [mondelta3]  (mon3-monfact3)                                    #3'Март'#13#3'(дельта)'             : [15, #sum_format], protect;
+// --------------------------------------------------------------------------------------------------------------------------------------------------------------
+    [quater2]    funGetSumText(tTemplanSpec.sum[4] + tTemplanSpec.sum[5] + tTemplanSpec.sum[6],20)
+                                                                    #3'2-квартал'#13#13#3'(план)'       : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    [quater2f]   funGetSumText(tTemplanSpec.sumfact[4] + tTemplanSpec.sumfact[5] + tTemplanSpec.sumfact[6],21)
+                                                                    #3'2-квартал'#13#3'(факт)'          : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    [quater2d]   funGetSumText(tTemplanSpec.sum[4] + tTemplanSpec.sum[5] + tTemplanSpec.sum[6] - (tTemplanSpec.sumfact[4] + tTemplanSpec.sumfact[5] + tTemplanSpec.sumfact[6]),22)
+                                                                    #3'2-квартал'#13#3'(дельта)'        : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    mon4                                                            #3'Апрель'#13#13#3'(план)'          : [15, #sum_format], noprotect;
+    monfact4                                                        #3'Апрель'#13#3'(факт)'             : [15, #sum_format], protect;
+    [mondelta4]  (mon4-monfact4)                                    #3'Апрель'#13#3'(дельта)'           : [15, #sum_format], protect;
+    mon5                                                            #3'Май'#13#13#3'(план)'             : [15, #sum_format], noprotect;
+    monfact5                                                        #3'Май'#13#3'(факт)'                : [15, #sum_format], protect;
+    [mondelta5]  (mon5-monfact5)                                    #3'Май'#13#3'(дельта)'              : [15, #sum_format], protect;
+    mon6                                                            #3'Июнь'#13#13#3'(план)'            : [15, #sum_format], noprotect;
+    monfact6                                                        #3'Июнь'#13#3'(факт)'               : [15, #sum_format], protect;
+    [mondelta6]  (mon6-monfact6)                                    #3'Июнь'#13#3'(дельта)'             : [15, #sum_format], protect;
+// --------------------------------------------------------------------------------------------------------------------------------------------------------------
+    [quater3]    funGetSumText(tTemplanSpec.sum[7] + tTemplanSpec.sum[8] + tTemplanSpec.sum[9],30)
+                                                                    #3'3-квартал'#13#3'(план)'          : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    [quater3f]   funGetSumText(tTemplanSpec.sumfact[7] + tTemplanSpec.sumfact[8] + tTemplanSpec.sumfact[9],31)
+                                                                    #3'3-квартал'#13#3'(факт)'          : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    [quater3d]   funGetSumText(tTemplanSpec.sum[7] + tTemplanSpec.sum[8] + tTemplanSpec.sum[9] - (tTemplanSpec.sumfact[7] + tTemplanSpec.sumfact[8] + tTemplanSpec.sumfact[9]),32)
+                                                                    #3'3-квартал'#13#3'(дельта)'        : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    mon7                                                            #3'Июль'#13#13#3'(план)'            : [15, #sum_format], noprotect;
+    monfact7                                                        #3'Июль'#13#3'(факт)'               : [15, #sum_format], protect;
+    [mondelta7]  (mon7-monfact7)                                    #3'Июль'#13#3'(дельта)'             : [15, #sum_format], protect;
+    mon8                                                            #3'Август'#13#13#3'(план)'          : [15, #sum_format], noprotect;
+    monfact8                                                        #3'Август'#13#3'(факт)'             : [15, #sum_format], protect;
+    [mondelta8]  (mon8-monfact8)                                    #3'Август'#13#3'(дельта)'           : [15, #sum_format], protect;
+    mon9                                                            #3'Сентябрь'#13#13#3'(план)'        : [15, #sum_format], noprotect;
+    monfact9                                                        #3'Сентябрь'#13#3'(факт)'           : [15, #sum_format], protect;
+    [mondelta9]  (mon9-monfact9)                                    #3'Сентябрь'#13#3'(дельта)'         : [15, #sum_format], protect;
+// --------------------------------------------------------------------------------------------------------------------------------------------------------------
+    [quater4]    funGetSumText(tTemplanSpec.sum[10] + tTemplanSpec.sum[11] + tTemplanSpec.sum[12],40)
+                                                                    #3'4-квартал'#13#3'(план)'          : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    [quater4f]   funGetSumText(tTemplanSpec.sumfact[10] + tTemplanSpec.sumfact[11] + tTemplanSpec.sumfact[12],41)
+                                                                    #3'4-квартал'#13#3'(факт)'          : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    [quater4d]   funGetSumText(tTemplanSpec.sum[10] + tTemplanSpec.sum[11] + tTemplanSpec.sum[12] - (tTemplanSpec.sumfact[10] + tTemplanSpec.sumfact[11] + tTemplanSpec.sumfact[12]),42)
+                                                                    #3'4-квартал'#13#3'(дельта)'        : [15, #sum_format], protect, skip, Right, {font = {backColor = 8}};
+    mon10                                                           #3'Октябрь'#13#13#3'(план)'         : [15, #sum_format], noprotect;
+    monfact10                                                       #3'Октябрь'#13#3'(факт)'            : [15, #sum_format], protect;
+    [mondelta10] (mon10-monfact10)                                  #3'Октябрь'#13#3'(дельта)'          : [15, #sum_format], protect;
+    mon11                                                           #3'Ноябрь'#13#13#3'(план)'          : [15, #sum_format], noprotect;
+    monfact11                                                       #3'Ноябрь'#13#3'(факт)'             : [15, #sum_format], protect;
+    [mondelta11] (mon11-monfact11)                                  #3'Ноябрь'#13#3'(дельта)'           : [15, #sum_format], protect;
+    mon12                                                           #3'Декабрь'#13#13#3'(план)'         : [15, #sum_format], noprotect;
+    monfact12                                                       #3'Декабрь'#13#3'(факт)'            : [15, #sum_format], protect;
+    [mondelta12] (mon12-monfact12)                                  #3'Декабрь'#13#3'(дельта)'          : [15, #sum_format], protect;
+    [_yearIshod] funGetSumText(tTemplanSpec.sumSaldo + funGetYearSum, 2)
+                                                                    #3'Незавершённое'#13#3'производство на '#13#3'конец периода'          : [16, #sum_format], protect, Right;
+    [_NextPer]   funGetSumText(tTemplanSpec.sumObj - tTemplanSpec.sumSaldo - funGetYearSum, 3)
+                                                                    #3'Остаток для'#13#3'распределения на '#13#3'конец периода'           : [16, #sum_format], protect, Right;
+  end;  // tree trTemPlan
+
+// Инициализация процедур и функций сделана выше
+// Функция для расчёт выводимых значений в зависимости от статей
+function funGetSumByField (_aField : word) : double;
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ function funGetSumByField (_aField : word) : double;                                                       │
+│ _aField - Номер поля:                                                                                      │
+│   1 - Остаток, подлежащий распределению на 01 Января 2015                                                  │
+│   2 - Незавершённое производство по заказу на 31 Декабря 2015                                              │
+│   3 - Остаток, подлежащий распределению на 2016 год                                                        │
+│   4 - Год                                                                                                  │
+│   5 - Дельта к распределению                                                                               │
+│   Кварталы: I - номер квартала, II - 0 - план, 1 - факт, 2 - Дельта                                        │
+│   10 - Квартал1 План                                                                                       │
+│   11 - Квартал1 Факт                                                                                       │
+│   12 - Квартал1 Дельта                                                                                     │
+│   20 - Квартал2 План                                                                                       │
+│   21 - Квартал2 Факт                                                                                       │
+│   22 - Квартал1 Дельта                                                                                     │
+│   30 - Квартал3 План                                                                                       │
+│   31 - Квартал3 Факт                                                                                       │
+│   32 - Квартал1 Дельта                                                                                     │
+│   40 - Квартал4 План                                                                                       │
+│   41 - Квартал5 Факт                                                                                       │
+│   42 - Квартал1 Дельта                                                                                     │
+│                                                                                                            │
+│ Возвращает Значение, рассчитанное по формуле, зависящей от номера поля. Нужно для замены стандартных формул│
+│ суммирования по полям, на специализированные, когда приходится анализировать другие записи. К примеру      │
+│ статьи рассчитывающие % или среднюю з/п                                                                    │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+  result := 0;
+  case _aField of
+    1:  result := tTemplanSpec.sumObj - tTemplanSpec.sumSaldo;
+    4:  result := funGetYearSum;
+    2:  result := tTemplanSpec.sumSaldo + funGetYearSum;
+    3:  result := tTemplanSpec.sumObj - tTemplanSpec.sumSaldo - funGetYearSum;
+    5:  result := funFullDelta;
+    10: result := tTemplanSpec.sum[1]      + tTemplanSpec.sum[2]      + tTemplanSpec.sum[3];
+    11: result := tTemplanSpec.sumfact[1]  + tTemplanSpec.sumfact[2]  + tTemplanSpec.sumfact[3];
+    12: result := tTemplanSpec.sum[1]      + tTemplanSpec.sum[2]      + tTemplanSpec.sum[3] - (tTemplanSpec.sumfact[1] + tTemplanSpec.sumfact[2] + tTemplanSpec.sumfact[3]);
+    20: result := tTemplanSpec.sum[4]      + tTemplanSpec.sum[5]      + tTemplanSpec.sum[6];                                                                                ;
+    21: result := tTemplanSpec.sumfact[4]  + tTemplanSpec.sumfact[5]  + tTemplanSpec.sumfact[6];                                                                            ;
+    22: result := tTemplanSpec.sum[4]      + tTemplanSpec.sum[5]      + tTemplanSpec.sum[6] - (tTemplanSpec.sumfact[4] + tTemplanSpec.sumfact[5] + tTemplanSpec.sumfact[6]);;
+    30: result := tTemplanSpec.sum[7]      + tTemplanSpec.sum[8]      + tTemplanSpec.sum[9];                                                                                ;
+    31: result := tTemplanSpec.sumfact[7]  + tTemplanSpec.sumfact[8]  + tTemplanSpec.sumfact[9];                                                                            ;
+    32: result := tTemplanSpec.sum[7]      + tTemplanSpec.sum[8]      + tTemplanSpec.sum[9] - (tTemplanSpec.sumfact[7] + tTemplanSpec.sumfact[8] + tTemplanSpec.sumfact[9]);;
+    40: result := tTemplanSpec.sum[10]     + tTemplanSpec.sum[11]     + tTemplanSpec.sum[12];                                                                                ;
+    41: result := tTemplanSpec.sumfact[10] + tTemplanSpec.sumfact[11] + tTemplanSpec.sumfact[12];                                                                            ;
+    42: result := tTemplanSpec.sum[10]     + tTemplanSpec.sum[11]     + tTemplanSpec.sum[12] - (tTemplanSpec.sumfact[10] + tTemplanSpec.sumfact[11] + tTemplanSpec.sumfact[12]);;
+  end;
+}
+function funGetSumText (_aSum : double; _aField : word = 0; aTipSum : boolean = False) : string;
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ funGetSumText (_aSum : double; _aField : word = 0; aTipSum : boolean = False) : string                     │
+│ aSum - Сумма передаваемая для "анализа"                                                                    │
+│ _aField - номер колонки (значения - константы)                                                             │
+│ aTipSum - тип формируемой суммы: true - для Excel / false - для Галактики                                  │
+│                                                                                                            │
+│ Возвращает Значение, рассчитанное по формулам, зависящим от номера поля и статьи бюджета. Нужно для замены │
+│ стандартных формул суммирования по полям, на специализированные, когда приходится анализировать другие     │
+│ записи. К примеру статьи рассчитывающие % или среднюю з/п. Вызывает функцию funGetSumByField               │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+  var obj1, obj2, obj3 : oTemplanSpecObject;
+  var _Sum1, _Sum2, _Sum3 : double;
+  _Sum1 := 0; _Sum2 := 0; _Sum3 := 0;
+  obj1 := NullRef; obj2 := NullRef; obj3 := NullRef;
+  result := '-';
+  case tTemplanSpec.cMean of
+    comp(STBUD_PROCZENT_PRIBILI):
+      {
+        TreePushPos(trTemPlan);
+        obj1 := tsManager.GetTemplanSpecStBud(STBUD_PRIBIL_OT_REALIZACZII_ZAKAZA);
+        obj2 := tsManager.GetTemplanSpecStBud(STBUD_POLNAYA_SEBESTOIMOSTI);
+        if obj1 != NullRef and obj2 != NullRef then
+          {
+            TreeJumpToRecord(trTemPlan, obj1.nrec);
+            _Sum1 := funGetSumByField(_aField);
+            TreeJumpToRecord(trTemPlan, obj2.nrec);
+            _Sum2 := funGetSumByField(_aField);
+            if _aField <> 0 then if _Sum2 <> 0 then result := ((_Sum1/_Sum2)*100) else result := 0;
+          }
+        TreePopPos(trTemPlan);
+      }   // STBUD_PROCZENT_PRIBILI
+
+    comp(STBUD_PROZCENT_SOBSTVENNIH_RABOT):
+      {
+        TreePushPos(trTemPlan);
+        obj1 := tsManager.GetTemplanSpecStBud(STBUD_OBJEM_SOBSTVENNIH_RABOT);
+        obj2 := tsManager.GetTemplanSpecStBud(STBUD_OBJEM_RABOT);
+        if obj1 != NullRef and obj2 != NullRef then
+          {
+            TreeJumpToRecord(trTemPlan, obj1.nrec);
+            _Sum1 := funGetSumByField(_aField);
+            TreeJumpToRecord(trTemPlan, obj2.nrec);
+            _Sum2 := funGetSumByField(_aField);
+            if _aField <> 0 then if _Sum2 <> 0 then result := ((_Sum1/_Sum2)*100) else result := 0;
+          }   // STBUD_PROZCENT_SOBSTVENNIH_RABOT
+        TreePopPos(trTemPlan);
+      }
+
+    comp(STBUD_PROCZENT_DOP_ZP):
+      {
+        TreePushPos(trTemPlan);
+        obj1 := tsManager.GetTemplanSpecStBud(STBUD_DOPOLNITELNAYA_ZP);
+        obj2 := tsManager.GetTemplanSpecStBud(STBUD_OSNOVNAYA_ZARPLATA);
+        if obj1 != NullRef and obj2 != NullRef then
+          {
+            TreeJumpToRecord(trTemPlan, obj1.nrec);
+            _Sum1 := funGetSumByField(_aField);
+            TreeJumpToRecord(trTemPlan, obj2.nrec);
+            _Sum2 := funGetSumByField(_aField);
+            if _aField <> 0 then if _Sum2 <> 0 then result := ((_Sum1/_Sum2)*100) else result := 0;
+          }
+        TreePopPos(trTemPlan);
+      }   // STBUD_PROCZENT_DOP_ZP
+
+    comp(STBUD_PROCZENT_OTCHISLENII):
+      {
+        TreePushPos(trTemPlan);
+        obj1 := tsManager.GetTemplanSpecStBud(STBUD_OTCHISLENYA_NA_SOCZ_NUGDI);
+        obj2 := tsManager.GetTemplanSpecStBud(STBUD_DOPOLNITELNAYA_ZP);
+        obj3 := tsManager.GetTemplanSpecStBud(STBUD_OSNOVNAYA_ZARPLATA);
+        if obj1 != NullRef and obj2 != NullRef and obj3 != NullRef then
+          {
+            TreeJumpToRecord(trTemPlan, obj1.nrec);
+            _Sum1 := funGetSumByField(_aField);
+            TreeJumpToRecord(trTemPlan, obj2.nrec);
+            _Sum2 := funGetSumByField(_aField);
+            TreeJumpToRecord(trTemPlan, obj3.nrec);
+            _Sum3 := funGetSumByField(_aField);
+            if _aField <> 0 then if (_Sum2 + _Sum3) <> 0 then result := ((_Sum1/(_Sum2+_Sum3))*100) else result := 0;
+          }
+        TreePopPos(trTemPlan);
+      } // STBUD_PROCZENT_OTCHISLENII
+
+    comp(STBUD_PROCZENT_NAKLADNIH_RASHODOV):
+      {
+        TreePushPos(trTemPlan);
+        obj1 := tsManager.GetTemplanSpecStBud(STBUD_OBSHEHOZYASTVENNII_ZATRATI);
+        obj2 := tsManager.GetTemplanSpecStBud(STBUD_OSNOVNAYA_ZARPLATA);
+        if obj1 != NullRef and obj2 != NullRef then
+          {
+            TreeJumpToRecord(trTemPlan, obj1.nrec);
+            _Sum1 := funGetSumByField(_aField);
+            TreeJumpToRecord(trTemPlan, obj2.nrec);
+            _Sum2 := funGetSumByField(_aField);
+            if _aField <> 0 then if _Sum2 <> 0 then result := ((_Sum1/_Sum2)*100) else result := 0;
+          }
+        TreePopPos(trTemPlan);
+      }   // STBUD_PROCZENT_NAKLADNIH_RASHODOV
+
+    comp(STBUD_SREDNYAY_ZP_V_TCH):
+      {
+        TreePushPos(trTemPlan);
+        if tTemplanSpec.GrKau = word(20) then
+          {
+            obj1 := tsManager.GetTemplanSpecStBud(STBUD_OSNOVNAYA_ZARPLATA);
+            obj2 := tsManager.GetTemplanSpecStBud(STBUD_TRUDOEMKOST);
+          } else
+              {
+                obj1 := tsManager.GetTemplanSpecStBudKau(STBUD_OSNOVNAYA_ZARPLATA, tTemplanSpec.GrKau, tTemplanSpec.cKau);
+                obj2 := tsManager.GetTemplanSpecStBudKau(STBUD_TRUDOEMKOST, tTemplanSpec.GrKau, tTemplanSpec.cKau);
+              }
+        if obj1 != NullRef and obj2 != NullRef then
+          {
+            TreeJumpToRecord(trTemPlan, obj1.nrec);
+            _Sum1 := funGetSumByField(_aField);
+            TreeJumpToRecord(trTemPlan, obj2.nrec);
+            _Sum2 := funGetSumByField(_aField);
+            if _aField <> 0 then if Abs(Round(_Sum2,6)) <> 0 then result := (_Sum1/_Sum2) else result := 0;
+          }
+        TreePopPos(trTemPlan);
+      }   // STBUD_SREDNYAY_ZP_V_TCH
+    comp(STBUD_SREDNYAY_ZP_PO_ZAKAZU_NIOKR): result := '-';
+    comp(STBUD_SREDNYAY_ZP_NA_OBEKTOVIE_RABOTI): result := '-';
+    comp(STBUD_SREDNYAY_ZP_NA_OBESPECHIVAUSHIE_RABOTI): result := '-';
+    else
+      {
+        result := _aSum;
+      }
+  end; // end of Case
+  if aTipSum = false then
+    {
+      if result <> '-' then
+        {
+          result := DoubleToStr(result, #sum_format);
+        }
+    }
+/*  if _aField = 0 then
+        result := if((tTemplanSpec.cMean = comp(STBUD_PROCZENT_PRIBILI)                 or tTemplanSpec.cMean = comp(STBUD_PROZCENT_SOBSTVENNIH_RABOT) or
+                      tTemplanSpec.cMean = comp(STBUD_PROCZENT_NAKLADNIH_RASHODOV)      or tTemplanSpec.cMean = comp(STBUD_SREDNYAY_ZP_V_TCH)  or
+                      tTemplanSpec.cMean = comp(STBUD_SREDNYAY_ZP_PO_ZAKAZU_NIOKR)      or tTemplanSpec.cMean = comp(STBUD_SREDNYAY_ZP_NA_OBESPECHIVAUSHIE_RABOTI) or
+                      tTemplanSpec.cMean = comp(STBUD_SREDNYAY_ZP_NA_OBEKTOVIE_RABOTI)  or tTemplanSpec.cMean = comp(STBUD_PROCZENT_DOP_ZP) or
+                      tTemplanSpec.cMean = comp(STBUD_PROCZENT_OTCHISLENII)), '-' , DoubleToStr(_sum, #sum_format));//*/
+}
+// Процедура заполнения значениями текущей ячейки до конца периода планирования
+procedure FillCellCurrentValue(aMon : byte; aSum : double);
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ procedure funFillCellCurrentValue (aMon : byte; aSum : double);                                            │
+│ aMmon - номер месяца, с которого начинается пересчёт                                                       │
+│ aSum - сумма для тиражирования                                                                             │
+│                                                                                                            │
+│ Процедура заполняет переданным значением плановые значения с переданного месяца (если переданный месяц     │
+│ меньше начала планирования, то с месяца начала планирования) до конца периода планирования.                │
+│ ПРИМЕЧАНИЕ: Текущее значение поля в таблице не учитывается, а просто заменяется                            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+    if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) <> tsOK)  and (_redakt <> false)) then
+      {
+        var _flLog : boolean;
+        _flLog := false;
+        _Log++;
+        var _iMon : integer;
+        var obj : oTemplanSpecObject;
+        obj := tsManager.GetTemplanSpec(tTemplanSpec.Nrec);
+        if obj != NullRef
+          {
+            for (_iMon := if(aMon >= _mmBeg + 1, aMon + 1, _mmBeg + 1); _iMon <= (_mmEnd + 1); _iMon++)       // aMon + 1 - чтобы не обновлять текущее значение
+              {
+                if obj.GetVal(_iMon) <> aSum then     // Не будем передавать пустое значение
+                  {
+                   doRecord(tTemplanSpec.Nrec, _iMon, obj.GetVal(_iMon), aSum);
+                   obj.SetVal(_iMon, aSum);
+                   _flLog := true;
+                  }
+              }
+            obj.Save;
+          }
+        if _flLog = false then _Log--;
+        var _fl : boolean;
+        _fl := true;
+        if RedrawCurrentAndGo(trTemPlan, true) = false then {RedrawCurrentAndGo(trTemPlan, false); _fl := false;}
+        if _fl = false then RedrawCurrentAndGo(trTemPlan, true) else RedrawCurrentAndGo(trTemPlan, false);
+        ReReadRecord(#tTemplanSpec);
+      }
+}
+// Процедура пропорционального распределения Дельты по статье
+procedure FillCellBySumRaspred (aSum : double);
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ procedure funFillCellBySumRaspred (aSum : double);                                                         │
+│ aSum - сумма для распределения (нужно передать Дельта к распределению или остаток распределения на конец   │
+│ месяца и т.п.)                                                                                             │
+│                                                                                                            │
+│ Процедура прибавляет значения суммы распределения к оставшимся месяцам распределения с учётом оставшегося  │
+│ количества месяцев для планирования.                                                                       │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+    if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) <> tsOK)  and (_redakt <> false)) then
+      {
+        var _flLog : boolean;
+        _flLog := true;
+        _Log++;
+        var _iMon : integer;
+        var _SumRaspred : double;
+        _SumRaspred := (aSum / (_mmEnd + 1 - _mmBeg));
+        var obj : oTemplanSpecObject;
+        obj := tsManager.GetTemplanSpec(tTemplanSpec.Nrec);
+
+        if obj != NullRef
+          {
+            for (_iMon := _mmBeg + 1; _imon <= (_mmEnd + 1); _iMon++)
+              {
+                if doRecord(tTemplanSpec.Nrec, _iMon, obj.GetVal(_iMon), (obj.GetVal(_iMon) + _SumRaspred)) = true then
+                  {
+                    obj.SetVal(_iMon, (obj.GetVal(_iMon) + _SumRaspred));
+                  } else
+                    {
+                      _flLog := false;
+                    }
+              }
+            obj.Save;
+          }
+        if _flLog = false then _Log--;
+        var _fl : boolean;
+        _fl := true;
+        if RedrawCurrentAndGo(trTemPlan, true) = false then {RedrawCurrentAndGo(trTemPlan, false); _fl := false;}
+        if _fl = false then RedrawCurrentAndGo(trTemPlan, true) else RedrawCurrentAndGo(trTemPlan, false);
+        ReReadRecord(#tTemplanSpec);
+      }
+}
+
+tableEvent table tTemplanSpec
+//  Обработка дерева
+    cmTreeTop       : ParentNrec := 0;
+    cmTreeUp        : ParentNrec := tTemplanSpec.cParent;
+    cmTreeDown      : ParentNrec := tTemplanSpec.nrec;
+    cmTreeNodeType  : if (TreeIsTerminal(trTemPlan)) then if ((tTemplanSpec.priznak = TPSPEC_KIND_KAU_NEW) or (tTemplanSpec.priznak = TPSPEC_KIND_KAU)) then TreeSetNodeType(trTemPlan, 2, 'bmpOK') else TreeSetNodeType(trTemPlan, ntfText);
+    cmTreeNeedOwner : TreeJumpToRecord(trTemPlan, tTemplanSpec.cParent);
+//  Не переносить в handleevent - там не срабатывает событие
+    cmCheckField    :
+      {
+        if (tTemplanSpec.priznak = TPSPEC_KIND_DEFAULT) then protect_mon(true) else protect_mon(false);
+// Дальнейший расчёт будет производиться только по не вычисляемым полям.
+        if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) <> tsOK)  and (_redakt <> false)) then
+          {
+            var _Sum : double;
+            var _Mon : byte;
+            _Sum := 0;
+            _Mon := -1;
+            case curfield of
+              #mon1  : {_Sum := tTemplanSpec.sum[1];  _Mon := 1;}
+              #mon2  : {_Sum := tTemplanSpec.sum[2];  _Mon := 2;}
+              #mon3  : {_Sum := tTemplanSpec.sum[3];  _Mon := 3;}
+              #mon4  : {_Sum := tTemplanSpec.sum[4];  _Mon := 4;}
+              #mon5  : {_Sum := tTemplanSpec.sum[5];  _Mon := 5;}
+              #mon6  : {_Sum := tTemplanSpec.sum[6];  _Mon := 6;}
+              #mon7  : {_Sum := tTemplanSpec.sum[7];  _Mon := 7;}
+              #mon8  : {_Sum := tTemplanSpec.sum[8];  _Mon := 8;}
+              #mon9  : {_Sum := tTemplanSpec.sum[9];  _Mon := 9;}
+              #mon10 : {_Sum := tTemplanSpec.sum[10]; _Mon := 10;}
+              #mon11 : {_Sum := tTemplanSpec.sum[11]; _Mon := 11;}
+              #mon12 : {_Sum := tTemplanSpec.sum[12]; _Mon := 12;}
+              else exit;  //  Предотвратим несанкционированное и неконтролируемое обновление
+            end; // end of case
+// Произведем суммирование всех зависящих объектов по изменяемой записи
+            if _Sum <> double(OldFieldValue) then
+              {
+                var obj: oTemplanSpecObject;
+                obj := tsManager.GetTemplanSpec(tTemplanSpec.Nrec);
+                if obj != NullRef
+                  {
+                    _Log++;
+                    doRecord(tTemplanSpec.nrec, _Mon, double(OldFieldValue), _Sum);
+                    obj.SetVal(_Mon, _Sum);
+                    obj.Save;
+                  }
+              }
+          } // if эта запись не расчётная
+// *** Данные по заполнению годового плана. Убрал за отсутствием необходимости. При возврате данной возможности - перенести перед обработкой данных по месяцам
+/* ***       if curfield = #_YearPlan then
+          {
+            if tPeriod.getfirst fpperiod where ((_ctperYear == fpperiod.ctper and date(01, 01,_yEnd) == fpperiod.dBeg and date(31, 12, _yEnd) == fpperiod.dEnd)) = tsOK then
+            {
+              if getfirst iTP1 where ((tTemplanSpec.nrec == iTP1.ctempTP and tPeriod.fpperiod.nrec == iTP1.cperiod)) = tsOK then
+                  {
+                   if tTemplanSpec.sumYear <> double(OldFieldValue) then
+                      {
+                        iTP1.sum := Round(iTP1.sum - (double(OldFieldValue) - tTemplanSpec.sumYear), 6);
+                        if abs(Round(iTP1.sum,6)) <> 0 then update current iTP1 else delete current iTP1;
+                      }
+                  } else
+                      {
+                        ClearBuffer(#iTP);
+                        iTP.ctempTP  := tTemplanSpec.nRec;
+                        iTP.cperiod  := tPeriod.fpperiod.nrec;
+                        iTP.sum      := Round(tTemplanSpec.sumYear - double(OldFieldValue), 6);
+                        if abs(Round(iTP.sum,6)) <> 0 then insert current iTP;
+                      }
+             update current tTemplanSpec;
+            } else message('Годовой период отсутствует в таблице.',0);
+          }*/
+        ReReadRecord(#tTemplanSpec);
+      }
+//  Изменение позиции
+    cmPositionChanged:
+      {
+       // Блокировка ввода, если это наименование не редактируемой статьи
+       if (tTemplanSpec.priznak = TPSPEC_KIND_DEFAULT) then protect_mon(true) else protect_mon(false);
+      }
+end; // tableEvent
+
+handleevent
+    cmOpenAllGroups:
+    {
+      TreePushPos(trTemPlan);
+      TreeGetFirst(trTemPlan);
+      do {
+           TreeOpenNode(trTemPlan);
+         } while TreeGetNext(trTemPlan);
+      TreePopPos(trTemPlan);
+      rereadrecord(#tTemplanSpec);
+    }
+    cmCloseAllGroups:
+    {
+      TreeCloseAllOpenedNode(trTemPlan);
+      rereadrecord(#tTemplanSpec);
+    }
+// -----------------------------------------------------------------------------------------------------------
+// Обработка пунктов контекстного меню по скрытию/отображению полей
+    cmHideQauters:
+      {
+        ClearFieldState(#quater1,  sfVisible);
+        ClearFieldState(#quater2,  sfVisible);
+        ClearFieldState(#quater3,  sfVisible);
+        ClearFieldState(#quater4,  sfVisible);
+        ClearFieldState(#quater1f, sfVisible);
+        ClearFieldState(#quater2f, sfVisible);
+        ClearFieldState(#quater3f, sfVisible);
+        ClearFieldState(#quater4f, sfVisible);
+        ClearFieldState(#quater1d, sfVisible);
+        ClearFieldState(#quater2d, sfVisible);
+        ClearFieldState(#quater3d, sfVisible);
+        ClearFieldState(#quater4d, sfVisible);
+      }
+    cmHideMonths:
+      {
+        ClearFieldState(#mon1,  sfVisible);
+        ClearFieldState(#mon2,  sfVisible);
+        ClearFieldState(#mon3,  sfVisible);
+        ClearFieldState(#mon4,  sfVisible);
+        ClearFieldState(#mon5,  sfVisible);
+        ClearFieldState(#mon6,  sfVisible);
+        ClearFieldState(#mon7,  sfVisible);
+        ClearFieldState(#mon8,  sfVisible);
+        ClearFieldState(#mon9,  sfVisible);
+        ClearFieldState(#mon10, sfVisible);
+        ClearFieldState(#mon11, sfVisible);
+        ClearFieldState(#mon12, sfVisible);
+
+        PutCommand(cmHideFactDelta);
+      }
+    cmHideFactDelta:
+      {
+        ClearFieldState(#monfact1,  sfVisible);
+        ClearFieldState(#monfact2,  sfVisible);
+        ClearFieldState(#monfact3,  sfVisible);
+        ClearFieldState(#monfact4,  sfVisible);
+        ClearFieldState(#monfact5,  sfVisible);
+        ClearFieldState(#monfact6,  sfVisible);
+        ClearFieldState(#monfact7,  sfVisible);
+        ClearFieldState(#monfact8,  sfVisible);
+        ClearFieldState(#monfact9,  sfVisible);
+        ClearFieldState(#monfact10, sfVisible);
+        ClearFieldState(#monfact11, sfVisible);
+        ClearFieldState(#monfact12, sfVisible);
+        ClearFieldState(#mondelta1,  sfVisible);
+        ClearFieldState(#mondelta2,  sfVisible);
+        ClearFieldState(#mondelta3,  sfVisible);
+        ClearFieldState(#mondelta4,  sfVisible);
+        ClearFieldState(#mondelta5,  sfVisible);
+        ClearFieldState(#mondelta6,  sfVisible);
+        ClearFieldState(#mondelta7,  sfVisible);
+        ClearFieldState(#mondelta8,  sfVisible);
+        ClearFieldState(#mondelta9,  sfVisible);
+        ClearFieldState(#mondelta10, sfVisible);
+        ClearFieldState(#mondelta11, sfVisible);
+        ClearFieldState(#mondelta12, sfVisible);
+      }
+    cmShowQauters:
+      {
+        SetFieldState(#quater1,  sfVisible);
+        SetFieldState(#quater2,  sfVisible);
+        SetFieldState(#quater3,  sfVisible);
+        SetFieldState(#quater4,  sfVisible);
+        SetFieldState(#quater1f, sfVisible);
+        SetFieldState(#quater2f, sfVisible);
+        SetFieldState(#quater3f, sfVisible);
+        SetFieldState(#quater4f, sfVisible);
+        SetFieldState(#quater1d, sfVisible);
+        SetFieldState(#quater2d, sfVisible);
+        SetFieldState(#quater3d, sfVisible);
+        SetFieldState(#quater4d, sfVisible);
+      }
+    cmShowMonths:
+      {
+        SetFieldState(#mon1,  sfVisible);
+        SetFieldState(#mon2,  sfVisible);
+        SetFieldState(#mon3,  sfVisible);
+        SetFieldState(#mon4,  sfVisible);
+        SetFieldState(#mon5,  sfVisible);
+        SetFieldState(#mon6,  sfVisible);
+        SetFieldState(#mon7,  sfVisible);
+        SetFieldState(#mon8,  sfVisible);
+        SetFieldState(#mon9,  sfVisible);
+        SetFieldState(#mon10, sfVisible);
+        SetFieldState(#mon11, sfVisible);
+        SetFieldState(#mon12, sfVisible);
+
+        PutCommand(cmShowFactDelta);
+      }
+    cmShowFactDelta:
+      {
+        if _mmBeg <> 0 then
+          {
+            i := 1;//_mmBeg+1;
+            do
+              {
+               case i of
+                  1 :  { SetFieldState(#monfact1,  sfVisible); SetFieldState(#mondelta1,  sfVisible); }
+                  2 :  { SetFieldState(#monfact2,  sfVisible); SetFieldState(#mondelta2,  sfVisible); }
+                  3 :  { SetFieldState(#monfact3,  sfVisible); SetFieldState(#mondelta3,  sfVisible); }
+                  4 :  { SetFieldState(#monfact4,  sfVisible); SetFieldState(#mondelta4,  sfVisible); }
+                  5 :  { SetFieldState(#monfact5,  sfVisible); SetFieldState(#mondelta5,  sfVisible); }
+                  6 :  { SetFieldState(#monfact6,  sfVisible); SetFieldState(#mondelta6,  sfVisible); }
+                  7 :  { SetFieldState(#monfact7,  sfVisible); SetFieldState(#mondelta7,  sfVisible); }
+                  8 :  { SetFieldState(#monfact8,  sfVisible); SetFieldState(#mondelta8,  sfVisible); }
+                  9 :  { SetFieldState(#monfact9,  sfVisible); SetFieldState(#mondelta9,  sfVisible); }
+                  10 : { SetFieldState(#monfact10, sfVisible); SetFieldState(#mondelta10, sfVisible); }
+                  11 : { SetFieldState(#monfact11, sfVisible); SetFieldState(#mondelta11, sfVisible); }
+                  12 : { SetFieldState(#monfact12, sfVisible); SetFieldState(#mondelta12, sfVisible); }
+               end;  // end of case
+               i++;
+              } while i <= _mmBeg;
+          }
+      }
+    cmHideTillPlan:
+      {
+        if _mmBeg <> 0 then
+          {
+            i := 1;//_mmBeg+1;
+            do
+              {
+               case i of
+                  1 :  {ClearFieldState(#mon1,  sfVisible); ClearFieldState(#monfact1,  sfVisible); ClearFieldState(#mondelta1,  sfVisible); }
+                  2 :  {ClearFieldState(#mon2,  sfVisible); ClearFieldState(#monfact2,  sfVisible); ClearFieldState(#mondelta2,  sfVisible); }
+                  3 :  {ClearFieldState(#mon3,  sfVisible); ClearFieldState(#monfact3,  sfVisible); ClearFieldState(#mondelta3,  sfVisible); }
+                  4 :  {ClearFieldState(#mon4,  sfVisible); ClearFieldState(#monfact4,  sfVisible); ClearFieldState(#mondelta4,  sfVisible); }
+                  5 :  {ClearFieldState(#mon5,  sfVisible); ClearFieldState(#monfact5,  sfVisible); ClearFieldState(#mondelta5,  sfVisible); }
+                  6 :  {ClearFieldState(#mon6,  sfVisible); ClearFieldState(#monfact6,  sfVisible); ClearFieldState(#mondelta6,  sfVisible); }
+                  7 :  {ClearFieldState(#mon7,  sfVisible); ClearFieldState(#monfact7,  sfVisible); ClearFieldState(#mondelta7,  sfVisible); }
+                  8 :  {ClearFieldState(#mon8,  sfVisible); ClearFieldState(#monfact8,  sfVisible); ClearFieldState(#mondelta8,  sfVisible); }
+                  9 :  {ClearFieldState(#mon9,  sfVisible); ClearFieldState(#monfact9,  sfVisible); ClearFieldState(#mondelta9,  sfVisible); }
+                  10 : {ClearFieldState(#mon10, sfVisible); ClearFieldState(#monfact10, sfVisible); ClearFieldState(#mondelta10, sfVisible); }
+                  11 : {ClearFieldState(#mon11, sfVisible); ClearFieldState(#monfact11, sfVisible); ClearFieldState(#mondelta11, sfVisible); }
+                  12 : {ClearFieldState(#mon12, sfVisible); ClearFieldState(#monfact12, sfVisible); ClearFieldState(#mondelta12, sfVisible); }
+               end;  // end of case
+               i++;
+              }
+            while i <= _mmBeg;
+          }
+      }
+    cmShowTillPlan:
+      {
+        i := 1;//_mmBeg+1;
+        do
+          {
+           case i of
+              1 :  {SetFieldState(#mon1,  sfVisible); SetFieldState(#monfact1,  sfVisible); SetFieldState(#mondelta1,  sfVisible); }
+              2 :  {SetFieldState(#mon2,  sfVisible); SetFieldState(#monfact2,  sfVisible); SetFieldState(#mondelta2,  sfVisible); }
+              3 :  {SetFieldState(#mon3,  sfVisible); SetFieldState(#monfact3,  sfVisible); SetFieldState(#mondelta3,  sfVisible); }
+              4 :  {SetFieldState(#mon4,  sfVisible); SetFieldState(#monfact4,  sfVisible); SetFieldState(#mondelta4,  sfVisible); }
+              5 :  {SetFieldState(#mon5,  sfVisible); SetFieldState(#monfact5,  sfVisible); SetFieldState(#mondelta5,  sfVisible); }
+              6 :  {SetFieldState(#mon6,  sfVisible); SetFieldState(#monfact6,  sfVisible); SetFieldState(#mondelta6,  sfVisible); }
+              7 :  {SetFieldState(#mon7,  sfVisible); SetFieldState(#monfact7,  sfVisible); SetFieldState(#mondelta7,  sfVisible); }
+              8 :  {SetFieldState(#mon8,  sfVisible); SetFieldState(#monfact8,  sfVisible); SetFieldState(#mondelta8,  sfVisible); }
+              9 :  {SetFieldState(#mon9,  sfVisible); SetFieldState(#monfact9,  sfVisible); SetFieldState(#mondelta9,  sfVisible); }
+              10 : {SetFieldState(#mon10, sfVisible); SetFieldState(#monfact10, sfVisible); SetFieldState(#mondelta10, sfVisible); }
+              11 : {SetFieldState(#mon11, sfVisible); SetFieldState(#monfact11, sfVisible); SetFieldState(#mondelta11, sfVisible); }
+              12 : {SetFieldState(#mon12, sfVisible); SetFieldState(#monfact12, sfVisible); SetFieldState(#mondelta12, sfVisible); }
+           end;  // end of case
+           i++;
+          }
+        while i <= _mmBeg;
+      }
+// -----------------------------------------------------------------------------------------------------------
+// Обработка пунктов контекстного меню по расчету статей
+    cmFillCellCurrentValue:
+      {
+        case CurField of
+          #mon1  : FillCellCurrentValue (1,  tTemplanSpec.sum[1]);
+          #mon2  : FillCellCurrentValue (2,  tTemplanSpec.sum[2]);
+          #mon3  : FillCellCurrentValue (3,  tTemplanSpec.sum[3]);
+          #mon4  : FillCellCurrentValue (4,  tTemplanSpec.sum[4]);
+          #mon5  : FillCellCurrentValue (5,  tTemplanSpec.sum[5]);
+          #mon6  : FillCellCurrentValue (6,  tTemplanSpec.sum[6]);
+          #mon7  : FillCellCurrentValue (7,  tTemplanSpec.sum[7]);
+          #mon8  : FillCellCurrentValue (8,  tTemplanSpec.sum[8]);
+          #mon9  : FillCellCurrentValue (9,  tTemplanSpec.sum[9]);
+          #mon10 : FillCellCurrentValue (10, tTemplanSpec.sum[10]);
+          #mon11 : FillCellCurrentValue (11, tTemplanSpec.sum[11]);
+          #mon12 : FillCellCurrentValue (12, tTemplanSpec.sum[12]);
+        end; // end of case
+      }
+    cmFillCellByDelta:
+      {
+        if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) <> tsOK)  and (_redakt <> false)) then
+          {
+            FillCellBySumRaspred(funFullDelta());
+          }
+      }
+    cmFillCellByOstatok:
+      {
+        if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) <> tsOK)  and (_redakt <> false)) then
+          {
+            var _Ostatok : double;
+            _Ostatok := 0;
+
+            PushPos(#tTemplanSpec);
+            var _cParent : comp;
+            _cParent := tTemplanSpec.cParent;
+
+            if _cParent <> comp(0) then
+              {
+                if getfirst tTemplanSpec where ((_cParent == tTemplanSpec.nrec)) = tsOK then
+                  {
+                    _Ostatok := (tTemplanSpec.sumObj - tTemplanSpec.sumSaldo - funGetYearSum);
+                  } else {PopPos(#tTemplanSpec); exit;}              // Избавимся от ошибки отсутствия родителя
+                PopPos(#tTemplanSpec);
+
+                FillCellBySumRaspred(_Ostatok);
+              }
+          }
+      }
+    cmFillCellBySumRaspred:
+      {
+        if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) <> tsOK)  and (_redakt <> false)) then
+          {
+            var _SumDialog, _Ostatok : double;
+            PushPos(#tTemplanSpec);
+            var _cParent : comp;
+            _cParent := tTemplanSpec.cParent;
+
+            if _cParent <> comp(0) then
+              {
+                if getfirst tTemplanSpec where ((_cParent == tTemplanSpec.nrec)) = tsOK then
+                  {
+                    _Ostatok := (tTemplanSpec.sumObj - tTemplanSpec.sumSaldo - funGetYearSum);
+                  } else {PopPos(#tTemplanSpec); exit;}               //  Избавимся от ошибки отсутствия родителя
+                PopPos(#tTemplanSpec);
+                if RunDialog(dlgInputSum, _SumDialog) <> cmCancel then
+                  {
+                    if (_Ostatok - _SumDialog) >= 0 then
+                      {
+                        FillCellBySumRaspred(_SumDialog);
+                      } else Message('Сумма для распределения не должна превышать остатка к распределению');
+                  }
+              }
+          }
+      }
+    cmFillCellByFutureOstatok:
+      {
+        if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) <> tsOK)  and (_redakt <> false)) then
+          {
+            var _SumDialog, _Ostatok : double;
+            PushPos(#tTemplanSpec);
+            var _cParent : comp;
+            _cParent := tTemplanSpec.cParent;
+
+            if _cParent <> comp(0) then
+              {
+                if getfirst tTemplanSpec where ((_cParent == tTemplanSpec.nrec)) = tsOK then
+                  {
+                    _Ostatok := (tTemplanSpec.sumObj - tTemplanSpec.sumSaldo - funGetYearSum);
+                  } else {PopPos(#tTemplanSpec); exit;}               //  Избавимся от ошибки отсутствия родителя
+                PopPos(#tTemplanSpec);
+                if RunDialog(dlgInputSum, _SumDialog) <> cmCancel then
+                  {
+                    FillCellBySumRaspred(_Ostatok - _SumDialog);
+                  }
+              }
+          }
+      }
+// -----------------------------------------------------------------------------------------------------------
+// Обработка пунктов контекстного меню по расчету ОЗП
+    cmOZPsohrSredZP:
+      {
+/****        if _mmBeg <> 0 then         // Без факта смысла распределять нет
+          {
+// Сохраним все значения
+            var obj_OZP, obj_SredZP, obj_Trud : oTemplanSpecObject;
+            var _sumYearOld, _sumYear : double;
+            obj_OZP    := tsManager.GetTemplanSpecStBudKau(STBUD_OSNOVNAYA_ZARPLATA, tTemplanSpec.GrKau, tTemplanSpec.cKau);
+            obj_SredZP := tsManager.GetTemplanSpecStBudKau(STBUD_SREDNYAY_ZP_PO_ZAKAZU_NIOKR, tTemplanSpec.GrKau, tTemplanSpec.cKau);
+            obj_Trud   := tsManager.GetTemplanSpecStBudKau(STBUD_TRUDOEMKOST_NA_NIOKR, tTemplanSpec.GrKau, tTemplanSpec.cKau);
+            if obj_OZP != NullRef and obj_SredZP != NullRef and obj_Trud != NullRef then
+              {
+                TreePushPos(trTemPlan);
+                TreeJumpToRecord(trTemPlan, obj_OZP.nRec);
+                _sumYearOld := funGetYearSum + funFullDelta;
+                TreePopPos(trTemPlan);
+    // Произведём пересчёт
+                TreePushPos(trTemPlan);
+                TreeJumpToRecord(trTemPlan, obj_Trud.nRec);
+
+                if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) <> tsOK)  and (_redakt <> false)) then
+                  {
+                    FillCellBySumRaspred(funFullDelta());
+                  }
+
+                TreeJumpToRecord(trTemPlan, obj_OZP.nRec);
+                _sumYear := funGetYearSum;
+                message(string(tTemplanSpec.nrec,0,0) + '     ' + _sumYear + '  +  ' + _sumYearOld + '  =  ' + (_sumYearOld - _sumYear));
+                if _sumYear <> _sumYearOld then
+                  {
+                    message(_sumYear + '    ' + _sumYearOld);
+                  }
+
+///*TreeJumpToRecord(trTemPlan, obj_SredZP.nRec);
+//if ((getfirst tTemplanLink where ((tTemplanSpec.Nrec == tTemplanLink.DstNrec)) <> tsOK)  and (_redakt <> false)) then
+//  {
+//    FillCellBySumRaspred(_SumYear - _SumYearOld);
+//  }
+                var i : byte;
+                for (i := _mmBeg + 1; i <= _mmEnd + 1; i++)
+                  {
+//      ***   Доделать сам алгоритм
+                  }
+
+                TreePopPos(trTemPlan);
+                ReReadRecord(#tTemplanSpec);
+              }  else           // Не NullRef
+                  {
+                    Message('Не удаётся найти запись для вычислений.'#13#3'Данные не будут обработаны.', 2);
+                  } // Не NullRef
+          }*/
+      }
+// -----------------------------------------------------------------------------------------------------------
+// Дополнение стандартных обработчиков
+    cmInit:
+      {
+        _FixCAn := ContAnInit;      // Создадим контейнер
+        PutCommand(cmHideQauters);
+        PutCommand(cmHideMonths);
+        PutCommand(cmShowMonths);
+//        PutCommand(cmOpenAllGroups);//***
+      }
+
+cmHotkeys:
+{
+  if isModified exit;         // Сделано для того, чтобы не было возможности разносить изменённую дату, но не сохранённую в БД. Иначе возникает ошибка, когда не обновилось значение OldFieldValue и в БД заносится необновлённое значение.
+  var _Menu : string;
+  _Menu := 'AGAT::mnuAGAT_ITEMPPLAN';
+
+  if tTemplanSpec.priznak = TPSPEC_KIND_KAU or tTemplanSpec.priznak = TPSPEC_KIND_KAU_NEW then
+    {
+      if tTemplanSpec.cMean = STBUD_SREDNYAY_ZP_PO_ZAKAZU_NIOKR or tTemplanSpec.cMean = STBUD_TRUDOEMKOST_NA_NIOKR then
+        {
+          _Menu := _Menu + ';' + 'AGAT::mnuAGAT_ITEMPPLAN_ZP';
+        } else
+            {
+              _Menu := _Menu + ';' + 'AGAT::mnuAGAT_ITEMPPLAN_KAU';
+            }
+    } else
+      {
+        _Menu := _Menu + ';' + 'AGAT::mnuAGAT_ITEMPPLAN_ALL';
+      }
+
+  _Menu := _Menu + ';' + 'AGAT::mnuAGAT_ITEMPPLAN_VID';
+  PutHotCommand(RunDynMenu(_Menu));
+}
+
+cmDone:
+  {
+    if RecordsInTable(#iTP) <> 0 then
+      {
+        if message('Есть не сохраненные данные. Вы уверены, что хотите выйти?', YesNo+Confirmation+mfSwapButtons) != cmYes
+        {
+          Abort;
+          exit;
+        }
+      }
+    ContAnDone(_FixCAn);
+    EnableCommand(cmValue1);
+    EnableCommand(cmPick);
+    _RedaktPlan := 0;
+  }
+cmInsert:
+  {
+
+    if (((tTemplanSpec.kodgrkau <> 0) or (tTemplanSpec.code = '')) and (_redakt <> false) and (tTemplanSpec.redakt = byte(0))) then
+      {
+        var _cParent : comp;
+        _cParent := tTemplanSpec.nrec;
+        if tTemplanSpec.code = '' then _cParent := tTemplanSpec.cParent;
+
+        // Проверим временную таблицу на наличие существующей аналитики и в случае её привязки перейдем на соответствующую запись в таблице
+        if getfirst ttp1 where ((_cParent == ttp1.nrec))= tsOK then
+          {
+            _c := 0;
+            iGetKAU.GetCodeKau(1, ttp1.kodgrkau, _c);
+
+            // Проверим наличие аналитики и при необходимости добавим позицию ко всем записям во временной таблицы
+            if getfirst ttp2 where ((ttp1.nrec == ttp2.cParent and ttp1.KodGrKau == ttp2.KodGrKau and _c == ttp2.ckau and (TPSPEC_KIND_DEFAULT <> ttp2.priznak and TPSPEC_KIND_EDITABLE_STBUD <> ttp2.priznak))) = tsOK then
+              {
+                message('Данная аналитика уже указана');
+                TreeJumpToRecord(trTemPlan, ttp2.nrec);
+              } else
+                  {
+                    ClearBuffer(#tAnalit);
+                    tAnalit.GrKau   := ttp1.KodGrKau;
+                    tAnalit.cSloj   := ttp1.cSloj;
+                    tAnalit.cKau    := _c;
+                    insert current tAnalit;
+                    tsManager.AddKAU(tAnalit.Nrec, TPSPEC_KIND_KAU_NEW);
+                  }
+            if getfirst ttp2 where ((_cParent == ttp2.cParent and tTemplanSpec.KodGrKau == ttp2.GrKau and _c == ttp2.cKau)) = tsOK then TreeJumpToRecord(trTemPlan, ttp2.nrec);
+          }
+        reReadRecord(#tTemplanSpec);
+      }
+    stop;
+  }
+
+cmDelete:
+  {
+    if tTemplanSpec.priznak = TPSPEC_KIND_KAU_NEW then if message('Вы уверены, что хотите удалить данную запись?',YesNo+Confirmation) = cmYes then
+      {
+        if getfirst tAnalit where ((tTemplanSpec.cSloj == tAnalit.cSloj and tTemplanSpec.GrKau == tAnalit.GrKau and tTemplanSpec.cKau == tAnalit.cKau))=tsOK then tsManager.DeleteKau(tAnalit.nrec);
+// Обновим визуализацию
+        ReReadRecord(#tTemplanSpec);
+        delete all iTPLog;
+        _Log := 0;
+        _LogMax := 0;
+        DisableCommand(cmBack);
+        DisableCommand(cmForward);
+      }
+    stop;
+  }
+
+cmValue3:
+  {
+//Определить spsloj == spsloj родителя
+    if message('Вы уверены, что хотите актуализировать данные?',YesNo+Confirmation) = cmYes then
+      {
+        StartNewVisual(vtIndicatorVisual, vfTimer, 'Импорт данных', RecordsInTable(#iTP));
+        _loop iTP
+          {
+            if iTP.sum <> 0 then
+              {
+               if getfirst ttp1 where ((iTP.ctempTP == ttp1.nrec))=tsOK then
+                  {
+                    _cmean := ttp1.cmean;
+// В БД будут загружаться только записи, которые не равны 0 при округлении до 6 знаков и взятые по модулю
+                    if abs(Round(iTP.sum, 6)) <> 0 then
+                      {
+//////////////////////////////////////////////////
+//      Добавим запись в таблицу FpOborot
+                       ClearBuffer(#fp);
+                       fp.descr     := sgettune('USER.DESCR');    // дескриптор к номеру документа
+                       fp.desgr     := sgettune('USER.DESGR');    // код группы пользователей
+                       fp.datob     := cur_date;                  // Дата операции
+// Номер вводим любой. Для оптимизации записей номер будем вводить в формате YYYYMM от текущей даты
+                       fp.nodoc     := (string(year(_Date))+if(month(_Date)<10,('0'+string(month(_Date))),string(month(_Date))));          // номер документа
+                       fp.tidkgal   := _TIDK;                     // тип документа системный
+                       fp.tidk      := _TIDK;                     // тип первичного документа
+                       fp.cplanssch := _cplanssch;                // Ссылка на регистр учета
+                       fp.kodreg    := _KodReg;                   // Код регистра учета
+                       fp.cperiod   := iTP.cperiod;               // Ссылка на период планирования
+                       fp.cco       := _cco;                      // Ссылка на центр ответственности
+                       fp.cstbud    := _cmean;                    // Ссылка на статью бюджета
+                       fp.summa     := iTP.sum;                   // Сумма операции в НДЕ
+                       // Проставим ссылку и разрез аналитики
+                       _c := ttp1.csloj;
+                       _kodkau._loop sps1 where ((_c == sps1.cmain)) ordered by npp
+                         {
+                          case _kodkau.sps1.KodGrKau of
+                            40:
+                                {
+                                 fp.candoc[_kodkau.sps1.npp] := comp(cZakaz);               // Ссылки на аналитику док-та[n]
+                                 fp.wandoc[_kodkau.sps1.npp] := word(40);                   // Разрезы аналитики док-та[n]
+                                 //fp.canbud[_kodkau.sps1.npp] := comp(cZakaz);               // Ссылки на аналитику статьи[n] - Предположительно
+                                 //fp.wanbud[_kodkau.sps1.npp] := word(40);                   // Разрезы аналитики статьи[n] - не должны отличаться от аналитики документа
+                                }
+                            else
+                                {
+                                  if _kodkau.sps1.KodGrKau = ttp1.GrKau then
+                                    {
+                                     fp.candoc[_kodkau.sps1.npp] := comp(ttp1.cKau);         // Ссылки на аналитику док-та[n]
+                                     fp.wandoc[_kodkau.sps1.npp] := word(ttp1.GrKau);        // Разрезы аналитики док-та[n]
+                                     //fp.canbud[_kodkau.sps1.npp] := comp(0000000000000001h); // Ссылки на аналитику статьи[n] - Предположительно
+                                     //fp.wanbud[_kodkau.sps1.npp] := word(ttp1.GrKau);        // Разрезы аналитики статьи[n] - не должны отличаться от аналитики документа
+                                    }
+                                    else
+                                        {
+                                         fp.candoc[_kodkau.sps1.npp] := comp(0);             // Ссылки на аналитику док-та[n]
+                                         fp.wandoc[_kodkau.sps1.npp] := word(0);             // Разрезы аналитики док-та[n]
+                                         //fp.canbud[_kodkau.sps1.npp] := comp(0);             // Ссылки на аналитику статьи[n] - Предположительно
+                                         //fp.wanbud[_kodkau.sps1.npp] := word(0);             // Разрезы аналитики статьи[1] - не должны отличаться от аналитики документа
+                                        }
+                                }
+                          end; // end of case
+                         }
+                       fp.chashdoc := funGetHashAn(ttp1.cSloj, ttp1.cKau, ttp1.GrKau);                                  // Аналитика документа
+                       insert current fp;
+                       fp.csoprdoc := fp.nrec;                    // ссылка на первичный документ
+                       update current fp;
+                     }
+//      Добавим запись в таблицу FpOborot
+//////////////////////////////////////////////////
+                  }
+              }
+            NextVisual;
+          } // _loop iTP
+        StopVisual('',0);
+        delete all iTP;
+        delete all iTPLog;
+        _Log := 0;
+        _LogMax := 0;
+        DisableCommand(cmBack);
+        DisableCommand(cmForward);
+        ReReadRecord(#iTP);
+      }
+  }
+
+cmBack:
+  {
+    if getfirst iTPLog where ((_Log == iTPLog.num)) = tsOK then
+      {
+        var obj : oTemplanSpecObject;
+        obj := tsManager.GetTemplanSpec(iTPLog.ctempTP);
+        do
+          {
+            obj.SetVal(iTPLog.mon, (obj.GetVal(iTPLog.mon) - iTPLog.sum));
+            var _iMon : byte;
+            _iMon := iTPLog.mon;
+// Отредактируем значение разностных показателей
+            if tPeriod.getfirst fpperiod where ((_CTPER == fpperiod.ctper and date(1, _iMon, _yEnd) == fpperiod.dBeg and date(Last_Day(date(1, _iMon,_yEnd)), _iMon, _yEnd) == fpperiod.dEnd)) = tsOK then
+              {
+                if getfirst iTP1 where ((iTPLog.ctempTP == iTP1.ctempTP and tPeriod.fpperiod.nrec == iTP1.cperiod)) = tsOK then
+                  {
+                   iTP1.sum := iTP1.sum - iTPLog.sum;
+                   if abs(Round(iTP1.sum,6)) <> 0 then update current iTP1 else delete current iTP1;
+                  } else
+                      {
+                        ClearBuffer(#iTP);
+                        iTP.ctempTP  := iTPLog.ctempTP;
+                        iTP.cperiod  := tPeriod.fpperiod.nrec;
+                        iTP.sum      := - iTPLog.sum;
+                        if abs(Round(iTP.sum,6)) <> 0 then insert current iTP;
+                      }
+              }
+          } while getNext iTPLog where ((_Log == iTPLog.num)) = tsOK
+        obj.Save;
+        _Log--;
+        ReReadRecord(#tTemplanSpec);
+        EnableCommand(cmForward);
+        if _Log <= 0 then DisableCommand(cmBack);
+      }
+  }
+
+cmForward:
+  {
+    _Log++;
+    if getfirst iTPLog where ((_Log == iTPLog.num)) = tsOK then
+      {
+        var obj : oTemplanSpecObject;
+        obj := tsManager.GetTemplanSpec(iTPLog.ctempTP);
+        do
+          {
+            obj.SetVal(iTPLog.mon, (obj.GetVal(iTPLog.mon) + iTPLog.sum));
+            var _iMon : byte;
+            _iMon := iTPLog.mon;
+// Отредактируем значение разностных показателей
+            if tPeriod.getfirst fpperiod where ((_CTPER == fpperiod.ctper and date(1, _iMon, _yEnd) == fpperiod.dBeg and date(Last_Day(date(1, _iMon,_yEnd)), _iMon, _yEnd) == fpperiod.dEnd)) = tsOK then
+              {
+                if getfirst iTP1 where ((iTPLog.ctempTP == iTP1.ctempTP and tPeriod.fpperiod.nrec == iTP1.cperiod)) = tsOK then
+                  {
+                   iTP1.sum := iTP1.sum + iTPLog.sum;
+                   if abs(Round(iTP1.sum,6)) <> 0 then update current iTP1 else delete current iTP1;
+                  } else
+                      {
+                        ClearBuffer(#iTP);
+                        iTP.ctempTP  := iTPLog.ctempTP;
+                        iTP.cperiod  := tPeriod.fpperiod.nrec;
+                        iTP.sum      := iTPLog.sum;
+                        if abs(Round(iTP.sum,6)) <> 0 then insert current iTP;
+                      }
+              }
+          } while getNext iTPLog where ((_Log == iTPLog.num)) = tsOK
+        obj.Save;
+        ReReadRecord(#tTemplanSpec);
+        EnableCommand(cmBack);
+        if _Log = _LogMax then DisableCommand(cmForward);
+      }
+  }
+
+cmExcel:
+  {
+    If RecordsInTable(#iTP) <> 0 then { message('Сохраните внесенные изменения перед получением отчета'); exit; }
+    StartNewVisual(vtIndicatorVisual, vfTimer, 'Загрузка данных', RecordsInTable(#tTemplanSpec));
+    SetVisualTitle('Формировнаие файла');
+    filename := 'TemPlan.xls';
+    var wCol, wRow : longint;
+    wCol := 1; wRow := 1;
+    xlCreateExcel(filename, true);
+//  Отключим сообщения
+    xlDisplayAlerts(false);
+//  Сформируем шапку отчёта
+    xlSetSheetName(1, 'План по заказу');
+    xlSetCellStringValue('Перечень статей', wRow, wCol, wRow, wCol);
+    xlMergeCells(wRow, wCol, wRow + 3, wCol);
+    xlSetColumnWidth(50, wRow, wCol, wRow, wCol);
+    wCol++;
+    xlSetCellStringValue('Структура цены из объекта строительства', wRow, wCol, wRow, wCol);
+    xlMergeCells(wRow, wCol, wRow + 3, wCol);
+    wCol++;
+    xlSetCellStringValue('Незавершённое производство по заказу на ' + DateToStr(Date(01, 01, _yEnd),'DD Mon YYYY'), wRow, wCol, wRow, wCol);
+    xlMergeCells(wRow, wCol, wRow + 3, wCol);
+    wCol++;
+    xlSetCellStringValue('Остаток, подлежащий распределению на ' + DateToStr(Date(01, 01, _yEnd),'DD Mon YYYY'), wRow, wCol, wRow, wCol);
+    xlMergeCells(wRow, wCol, wRow + 3, wCol);
+    wCol++;
+    xlSetCellStringValue(String(_YEnd), wRow, wCol, wRow, wCol);
+    wRow++;
+    xlSetCellStringValue('План на отчетный период, всего', wRow, wCol, wRow, wCol);
+    xlMergeCells(wRow, wCol, wRow + 2, wCol);
+// Добавим массивы колонок
+    var _list : array[1..16] of string;
+      _list[1]  := 'Плановые данные за 1-квартал,  всего';
+      _list[2]  := 'Январь';
+      _list[3]  := 'Февраль';
+      _list[4]  := 'Март';
+      _list[5]  := 'Плановые данные за 2-квартал,  всего';
+      _list[6]  := 'Апрель';
+      _list[7]  := 'Май';
+      _list[8]  := 'Июнь';
+      _list[9]  := 'Плановые данные за 3-квартал,  всего';
+      _list[10] := 'Июль';
+      _list[11] := 'Август';
+      _list[12] := 'Сентябрь';
+      _list[13] := 'Плановые данные за 4-квартал,  всего';
+      _list[14] := 'Октябрь';
+      _list[15] := 'Ноябрь';
+      _list[16] := 'Декабрь';
+    var _list2 : array[1..4] of string;
+      _list2[1]  := '1 квартал';
+      _list2[2]  := '2 квартал';
+      _list2[3]  := '3 квартал';
+      _list2[4]  := '4 квартал';
+    var _list3 : array[1..3] of string;
+      _list3[1] := 'План';
+      _list3[2] := 'Факт';
+      _list3[3] := 'Дельта';
+    var i, i1, i2, j, k : integer;
+    i1 := 0;
+    i2 := 0;          // Будем высчитывать месяцы
+    wCol++;
+    for (k:=1; k <= 4; k++)             // кварталы
+      {
+        var wColPlusKvartal : longint;
+        wColPlusKvartal := 0;
+        xlSetCellStringValue(_list2[k], wRow, wCol, wRow, wCol);
+//        xlMergeCells(wRow, wCol, wRow, wCol + 11);
+        wRow++;
+        for (i:=1; i <= 4; i++)         // месяц + кварталы
+          {
+            i1++;
+            if i <> 1 then i2++;
+            xlSetCellStringValue(_list[i1], wRow, wCol, wRow, wCol);
+
+            var wColPlus : longint;
+            wColPlus := 0;
+            if i2 <= _mmBeg then wColPlus := 2;
+            if (i1 = 1 or i1 = 5 or i1 = 9 or i1 = 13) and i2 = _mmBeg then wColPlus := 0;
+            xlMergeCells(wRow, wCol, wRow, wCol + wColPlus);
+
+            wRow++;
+            for (j:=1; j<=3; j++)       // план/факт/дельта
+              {
+               wColPlusKvartal++;
+               xlSetCellStringValue(_list3[j], wRow, wCol, wRow, wCol);
+               wCol++;
+               if (i1 = 1 or i1 = 5 or i1 = 9 or i1 = 13) and i2 = _mmBeg then j := 3;
+               if i2 > _mmBeg then j := 3;
+              }
+            wRow--;
+          }
+        wRow--;
+        xlMergeCells(wRow, wCol - wColPlusKvartal, wRow, wCol - 1); //wColPlusKvartal);
+      }
+    wRow--;
+    xlSetCellStringValue('Незавершённое производство по заказу на ' + DateToStr(date(Last_day(date(01, _mmEnd+1, _YEnd)), _mmEnd+1, _YEnd),'DD Mon YYYY'), wRow, wCol, wRow, wCol);
+    xlMergeCells(wRow, wCol, wRow + 3, wCol);
+    wCol++;
+    xlSetCellStringValue('Остаток, подлежащий распределению на ' + (_yEnd + 1) + ' год', wRow, wCol, wRow, wCol);
+    xlMergeCells(wRow, wCol, wRow + 3, wCol);
+    xlMergeCells(wRow, 5, wRow, wCol - 2);      // Объединим ячейки года
+    wRow := wRow + 3;
+
+    xlAlignCellsEx(-4108, -4108, 1, 1, wRow, wCol);
+    xlWrapText(1, 1, wRow, wCol);
+    xlSetFontStyle(1, 1, 1, 4, wCol+1);         // Сделаем жирным шапку
+// Создадим матрицу значений и загрузим её в Excel
+    wRow := 1;
+    wCol := 1;
+    XlCreateMatrix(RecordsInTable(#tTemplanSpec)+1, 56);
+    TreePushPos(trTemPlan);
+    TreeGetFirstEx(trTemPlan);
+    var _text : string;
+    do
+      {
+        wCol := 1;
+        xlSetCellIndentLevel(TreeLevel(trTemPlan)*2, wRow+4, wCol, wRow+4, wCol);
+        xlSetCellStringValue(tTemplanSpec.name, wRow+4, wCol, wRow+4, wCol);
+        xlStWriteToMatrix(wRow, wCol, tTemplanSpec.sumObj);
+        wCol++;
+        xlStWriteToMatrix(wRow, wCol, tTemplanSpec.sumSaldo);
+        wCol++;
+        xlStWriteToMatrix(wRow, wCol, funGetSumText(tTemplanSpec.sumObj - tTemplanSpec.sumSaldo, 1, True));
+        wCol++;
+        xlStWriteToMatrix(wRow, wCol, funGetSumText(funGetYearSum, 4, True));
+
+        var i, i1, j : integer;
+        i1:=0;
+        for (j:=1; j <= 4; j++)
+          {
+            wCol++;
+            xlStWriteToMatrix(wRow, wCol, funGetSumText(tTemplanSpec.sum[i1+1] + tTemplanSpec.sum[i1+2] + tTemplanSpec.sum[i1+3], string(j)+'0', True));
+            if i1 < _mmBeg  then
+              {
+                wCol++;
+                xlStWriteToMatrix(wRow, wCol, funGetSumText(tTemplanSpec.sumfact[i1+1] + tTemplanSpec.sumfact[i1+2] + tTemplanSpec.sumfact[i1+3], string(j) + '1', True));
+                wCol++;
+//                xlStWriteToMatrix(wRow, wCol, funGetSumText('=RC[-2]-RC[-1]'));
+                xlStWriteToMatrix(wRow, wCol, funGetSumText((tTemplanSpec.sum[i1+1] + tTemplanSpec.sum[i1+2] + tTemplanSpec.sum[i1+3])-(tTemplanSpec.sumfact[i1+1] + tTemplanSpec.sumfact[i1+2] + tTemplanSpec.sumfact[i1+3]), string(j)+'2', True));
+              }
+            for (i:=1; i <= 3; i++)
+              {
+                i1++;
+                wCol++;
+                xlStWriteToMatrix(wRow, wCol, tTemplanSpec.sum[i1]);
+                if i1 < _mmBeg + 1 then       //  +1 из-за отсчета не с нуля
+                  {
+                    wCol++;
+                    xlStWriteToMatrix(wRow, wCol, tTemplanSpec.sumfact[i1]);
+                    wCol++;
+                    xlStWriteToMatrix(wRow, wCol, (tTemplanSpec.sum[i1] - tTemplanSpec.sumfact[i1]));
+                  }
+              }
+          }
+          wCol++;
+          xlStWriteToMatrix(wRow, wCol, funGetSumText(tTemplanSpec.sumSaldo + funGetYearSum, 2, True));
+          wCol++;
+          xlStWriteToMatrix(wRow, wCol, funGetSumText(tTemplanSpec.sumObj - tTemplanSpec.sumSaldo - funGetYearSum, 3, True));
+          wCol++;
+//          wCol := 56;
+          xlStWriteToMatrix(wRow, 56, (if((tTemplanSpec.priznak = 1 or tTemplanSpec.priznak = 10), 1, 0)));     // Для того, чтобы сделать раскраску аналитики через макрос
+          wRow++;
+//          wCol--;
+          NextVisual;
+      } while TreeGetNextEx(trTemPlan);// and NextVisual;
+
+     StartNewVisual(vtRotateVisual, vfTimer, 'Обработка данных', 0);
+
+     xlWriteMatrixToExcel(5,2);
+     xlFreeMatrix;
+
+// Вернём позицию дерева
+    TreePopPos(trTemPlan);
+
+    xlFrameCells(63, 2, 1, 0, 1, 1, wRow + 3, wCol);
+    xlSetNumberFormat('# ##0,00', 5, 2, wRow + 3, wCol);
+    xlSetColumnWidth(16, 1, 2, wRow + 3, wCol);
+    xlAlignCellsEx(-4152, -4108, 5, 2, wRow + 3, wCol);
+    xlSetFontName('Times New Roman', 1, 1, wRow + 3, wCol+1);
+    xlSetFontSize(8, 1, 1, wRow + 3, wCol+1);
+    xlFreeze(5, 2);
+
+// Запишем макрос в Excel-файл
+    var fName : string;
+    fName := CreateTmpFileName;
+    _try
+      {
+        mFile.OpenFile(fName, stCreate)
+      }
+    _except
+       on ExFileNotFound     : message('Ошибка обработки файла',2);
+       on ExPathNotFound     : message('Ошибка обработки файла',2);
+       on ExFileAlreadyExist : message('Ошибка обработки файла',2);
+       on ExFileNotOpened    : message('Ошибка обработки файла',2);
+    _finally
+
+    mFile.WriteLn('Sub TemPlan_Paint()');
+    mFile.WriteLn('    Range("A5:BD1218").Select');
+    mFile.WriteLn('    Selection.FormatConditions.Add Type:=xlExpression, Formula1:="=$BE5=1"');
+    mFile.WriteLn('    Selection.FormatConditions(Selection.FormatConditions.Count).SetFirstPriority');
+    mFile.WriteLn('    With Selection.FormatConditions(1).Font');
+    mFile.WriteLn('        .ThemeColor = xlThemeColorAccent3');
+    mFile.WriteLn('        .TintAndShade = -0.249946592608417');
+    mFile.WriteLn('    End With');
+    mFile.WriteLn('    Selection.FormatConditions(1).StopIfTrue = False');
+    mFile.WriteLn('    Columns("BE:BE").Select');
+    mFile.WriteLn('    Selection.EntireColumn.Hidden = True');
+    mFile.WriteLn('End Sub');
+
+    mFile.WriteLn('Sub TemPlan_Group()');
+    mFile.WriteLn('    Dim wRow, wLast_Row, wStart');
+    mFile.WriteLn('    Dim Cur_cell As Worksheet');
+    mFile.WriteLn('    Set Cur_cell = Worksheets(1)');
+    mFile.WriteLn('    max_Lenth_Otchet = 57');
+    mFile.WriteLn('    Set ws = ActiveSheet');
+    mFile.WriteLn('    ws.UsedRange.ClearOutline');
+    mFile.WriteLn('    wRow = 5');
+    mFile.WriteLn('    wStart = 0');
+    mFile.WriteLn('    i = 2');
+    mFile.WriteLn('    While Cur_cell.Cells(wRow, 1).Value <> ""');
+    mFile.WriteLn('        If Cur_cell.Cells(wRow, 1).IndentLevel = i And wStart = 0 Then');
+    mFile.WriteLn('            wLast_Row = wRow');
+    mFile.WriteLn('            wStart = 1');
+    mFile.WriteLn('        End If');
+    mFile.WriteLn('        If Cur_cell.Cells(wRow, 1).IndentLevel = i And wStart <> 0 Then');
+    mFile.WriteLn('            If wRow - wLast_Row < 2 Then');
+    mFile.WriteLn('                wLast_Row = wRow');
+    mFile.WriteLn('            Else');
+    mFile.WriteLn('                Range(Cells(wLast_Row + 1, 1), Cells(wRow - 1, max_Lenth_Otchet)).Select');
+    mFile.WriteLn('                Selection.Rows.Group');
+    mFile.WriteLn('            End If');
+    mFile.WriteLn('            wLast_Row = wRow');
+    mFile.WriteLn('        End If');
+    mFile.WriteLn('        wRow = wRow + 1');
+    mFile.WriteLn('    Wend');
+    mFile.WriteLn('    Range(Cells(wLast_Row + 1, 1), Cells(wRow - 1, max_Lenth_Otchet)).Select');
+    mFile.WriteLn('    Selection.Rows.Group');
+    mFile.WriteLn('    wRow = 11');
+    mFile.WriteLn('    wLast_Row = 11');
+    mFile.WriteLn('    While Cur_cell.Cells(wRow, 1).Value <> ""');
+    mFile.WriteLn('        wRow = wRow + 1');
+    mFile.WriteLn('        If Cur_cell.Cells(wRow, max_Lenth_Otchet).Value <> "0" Then');
+    mFile.WriteLn('            If wLast_Row <> wRow Then');
+    mFile.WriteLn('               Range(Cells(wLast_Row, 1), Cells(wRow, max_Lenth_Otchet)).Select');
+    mFile.WriteLn('               Selection.Rows.Group');
+    mFile.WriteLn('               wLast_Row = wRow');
+    mFile.WriteLn('            End If');
+    mFile.WriteLn('        End If');
+    mFile.WriteLn('    Wend');
+// Сгруппируем колонки
+    mFile.WriteLn('    wCol = 6');
+    mFile.WriteLn('    wStart = 0');
+    mFile.WriteLn('    wCol1 = 0');
+    mFile.WriteLn('    wCol2 = 0');
+    mFile.WriteLn('    While Cur_cell.Cells(4, wCol).Value <> ""');
+    mFile.WriteLn('        If Cur_cell.Cells(3, wCol).Value <> "" Then');
+    mFile.WriteLn('            wStart = wStart + 1');
+    mFile.WriteLn('            If wStart = 2 Then');
+    mFile.WriteLn('                wCol1 = wCol');
+    mFile.WriteLn('            End If');
+    mFile.WriteLn('            If wStart = 5 Then');
+    mFile.WriteLn('                wCol2 = wCol');
+    mFile.WriteLn('                wStart = 1');
+    mFile.WriteLn('                Range(Cells(10, wCol1), Cells(10, wCol2 - 1)).Select');
+    mFile.WriteLn('                Selection.Columns.Group');
+    mFile.WriteLn('            End If');
+    mFile.WriteLn('        End If');
+    mFile.WriteLn('        wCol = wCol + 1');
+    mFile.WriteLn('    Wend');
+    mFile.WriteLn('    Range(Cells(10, wCol1), Cells(10, wCol - 1)).Select');
+    mFile.WriteLn('    Selection.Columns.Group');
+    mFile.WriteLn('    Range(Cells(5, 1), Cells(5, 1)).Select');
+    mFile.WriteLn('End Sub');
+    mFile.Close;
+
+    xlImportModule(fName);
+    xlRunMacro('TemPlan_Paint()');
+    xlRunMacro('TemPlan_Group()');
+
+    xlKillExcel;
+    StopVisual('',0);
+    StopVisual('',0);
+    DeleteFile(fName);
+  }
+end;  // handleevent
+end;  // window
+// Описание событий
+handleevent
+//  Обработка кнопки выбора
+cmInit:
+{
+  _Date   := cur_date;
+//  _date   := date(17,06,2017); // ***
+  _YEnd   := year(cur_date);
+  _mmBeg  := month(cur_date)-1;
+//  _mmBeg  := 3; // ***
+  _mmEnd  := 11;
+
+  ReadMyDSK(tfb,    'AGAT_TemPlan_tfb',True);
+  ReadMyDSK(cZakaz, 'AGAT_TemPlan_cZakaz',True);
+}
+cmPick:
+{
+  case curfield of
+    #ftp:
+       {
+          runinterface(F_FPBUDGET::GETTFORM, 1, 0, tfb); // 2-й параметр выводит всё дерево, при указании comp - только значения внутри этой ветки. Если потребуется, то установим этот NREC comp(0001000000000046h)
+       }
+    #zak:
+	     {
+            cZakaz := comp(0);
+            iGetKAU.GetCodeKau(1, 40, cZakaz);
+            ReReadRecord;      // Для обновления полей Заказа
+            if tCentrOt.getfirst Katstroy = tsOK then
+              {_cco := tCentrOt.fpco.nrec;
+               _cKatPodr := tCentrOt.fpco.cmean;
+              } else
+                  {
+                    _cco := comp(0001000000000003h);
+                    _cKatPodr := comp(0);
+                  }
+	     }
+  end; // end of case
+} // cmPick
+// Описание кнопки Сформировать
+cmValue1:
+{
+// Разблокируем редактирование ячейки
+//***  if _RedaktPlan = word(1) then ClearFieldOption(#_YearPlan,  ofProtected) else setfieldoption(#_YearPlan,  ofProtected);
+  // Зададим значения для ЦО и Подразделения
+  if tCentrOt.getfirst Katstroy = tsOK then
+    {_cco := tCentrOt.fpco.nrec;
+     _cKatPodr := tCentrOt.fpco.cmean;
+    } else
+        {
+          _cco := comp(0001000000000003h);
+          _cKatPodr := comp(0);
+        }
+
+  _redakt := true;            // По умолчанию редактирование будет открыто
+
+// Запрет на редактирование данных, если уже есть проводки
+  if tFpOborotCheck.getfirst fpoborot = tsOK then
+    {
+     _redakt := false;
+     DisableCommand(cmValue3);
+     DisableCommand(cmInsert);
+     DisableCommand(cmDelete);
+//           DisableCommand(cmPick);
+     protect_mon(false);
+     message('Данные закрыты для редактирования.'#13#3+'Присутствуют документы с более поздней датой.');
+    }
+// Проверка на заполнение всех обязательных полей
+  if ((_mmBeg > _mmEnd) or (ftp = '') or (zak = '') or (_YEnd < 1950) or (_YEnd > 3000)) then
+    {
+      Message('Не заполнены все обязательные поля',2);
+    } else
+      {
+        if tfb <> comp(0) then
+          {
+           EnableCommand(cmValue3);    // По умолчанию добавление в БД будет открыто
+           EnableCommand(cmInsert);
+           EnableCommand(cmDelete);
+           DisableCommand(cmValue1);   // Запретим пересобирать таблицу
+           DisableCommand(cmPick);     // Уберем возможность перевыбирать КАУ
+           DisableCommand(cmBack);     // По умолчанию нам нечего отменять
+           DisableCommand(cmForward);     // По умолчанию нам восстанавливать
+
+           StartNewVisual(vtRotateVisual, vfTimer, 'Загрузка данных', 0);
+           SetVisualTitle('Формировнаие интерфейса');
+
+           // работа с переменными
+           _dBeg  := date(01, _mmBeg+1, _YEnd);
+           _dEnd  := date(last_day(date(01,_mmEnd+1,_YEnd)), _mmEnd+1, _YEnd);
+           _Log   := 0; // Обнулим лог
+
+           // очищаем временные таблицы на случай повторного запуска интерфейса
+           tsManager.Clear;
+           // Заполним временную таблицу требуемыми данными
+           tsManager.Load(tfb, cZakaz, _dBeg, _dEnd, _Date);
+
+           _loop tTPS
+             {
+               var i : byte;
+               tTPS.sumYear := 0;
+               for (i := 1; i <= 12; i++)
+                {
+                  tTPS.sumYear := tTPS.sumYear + tTPS.sum[i];
+                }
+               update current tTPS;
+             }
+           StopVisual('',0);
+          }
+        // Обновим визуализацию окна
+        RunWindow(wTemPlan);
+        SetWindowTitle(wTemPlan, 'План по заказу ' + if(GetAnyKau(0, 40, cZakaz), givenanname(1), '') + ' на ' + _YEnd + ' год');
+        reReadRecord(#tTemplanSpec);
+      }
+}
+cmDone:
+{
+    EnableCommand(cmValue1);
+    EnableCommand(cmPick);
+    SaveMyDSK(tfb,    'AGAT_TemPlan_tfb');
+    SaveMyDSK(czakaz, 'AGAT_TemPlan_czakaz');
+}
+end; // Описание событий
+end.
+
+// Контекстное меню с раскрытием/закрытием всех веток дерева и т.д. Меню является составным в зависимости от параметров
+mnuAGAT_ITEMPPLAN Menu
+{
+  - 'Раскрыть все папки', cmOpenAllGroups, , , , , sci1Esc;
+  - 'Свернуть все папки', cmCloseAllGroups, , , , , sci1Esc;
+}
+
+mnuAGAT_ITEMPPLAN_VID Menu
+{
+  = 'Видимость полей';
+  {
+      - 'Скрыть информацию по кварталам',           cmHideQauters, , , , , sci1Esc;
+      - 'Скрыть информацию по месяцам',             cmHideMonths, , , , , sci1Esc;
+      - 'Скрыть информацию факт/дельта',            cmHideFactDelta, , , , , sci1Esc;
+      - 'Скрыть информацию до даты планирования',   cmHideTillPlan, , , , , sci1Esc;
+      - Separator;
+      - 'Показать информацию по кварталам',         cmShowQauters, , , , , sci1Esc;
+      - 'Показать информацию по месяцам',           cmShowMonths, , , , , sci1Esc;
+      - 'Показать информацию факт/дельта',          cmShowFactDelta, , , , , sci1Esc;
+      - 'Показать информацию до даты планирования', cmShowTillPlan, , , , , sci1Esc;
+  }
+}
+
+mnuAGAT_ITEMPPLAN_ALL Menu
+{
+  = 'Расчет статей';
+  {
+      - 'Заполнить ячейки текущим значением до конца периода планирования', cmFillCellCurrentValue, , , , , sci1Esc;
+      - 'Произвести пропорциональное распределение Дельты по статье до конца периода планирования', cmFillCellByDelta, , , , , sci1Esc;
+  }
+}
+
+mnuAGAT_ITEMPPLAN_KAU Menu
+{
+  = 'Расчет статей';
+  {
+      - 'Заполнить ячейки текущим значением до конца периода планирования', cmFillCellCurrentValue, , , , , sci1Esc;
+      - 'Произвести пропорциональное распределение Дельты по статье до конца периода планирования', cmFillCellByDelta, , , , , sci1Esc;
+      - 'Произвести пропорциональное распределение Остатка, подлежащего распределению', cmFillCellByOstatok, , , , , sci1Esc;
+      - 'Произвести пропорциональное распределение Остатка, подлежащего распределению, с указанием остатка на будущие периоды', cmFillCellByFutureOstatok, , , , , sci1Esc;
+      - 'Произвести пропорциональное распределение Суммы, подлежащей распределению', cmFillCellBySumRaspred, , , , , sci1Esc;
+  }
+}
+
+mnuAGAT_ITEMPPLAN_ZP Menu
+{
+  = 'Расчет статей';
+  {
+      - 'Заполнить ячейки текущим значением до конца периода планирования', cmFillCellCurrentValue, , , , , sci1Esc;
+      - 'Произвести пропорциональное распределение Дельты по статье до конца периода планирования', cmFillCellByDelta, , , , , sci1Esc;
+//***      - 'Выдержать план по ОЗП с сохранением средней величины заработной платы', cmOZPsohrSredZP, , , , , sci1Esc;
+  }
+}
+
+// Добавим отчет в отчеты пользователя
+VipInterface UserReport_Templan Implements IUserReport licensed(free);
+Interface UserReport_Templan;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::iTemPlan);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'План по заказу';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '*';
+//    case Ind of
+//      1 : VisibleInModule := 'BUDGET';
+//    end;
+  end;
+end.
+
+dlgInputSum dialog
+  fields
+    field2 : double;
+  buttons
+    cmOk, default,,'OK';
+    cmCancel,,,'Отменить распределение';
+<< 'Ввод данных'
+  Введите Сумму для распределения: .@@@@@@@@@@@@@@@@
+        <. OK .>                      <. Выход .>
+>>
