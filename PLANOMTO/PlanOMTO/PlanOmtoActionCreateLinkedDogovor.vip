@@ -1,0 +1,319 @@
+#include PlanOmto.vih
+#include RunDSel.vih
+#include DOFuns.vih
+#include nalogfun.vih
+
+#component "AGAT"
+
+interface PlanOmtoActionCreateLinkedDogovor;
+
+var
+  _docSel: L_DOGOVOR::RunDocSelections;
+  _nalogFun: NalogFun;
+
+create view
+var
+  _dogovorNrec: comp;
+  _viddogNrec: comp;
+  _date: date;
+  _number: string;
+  _dateStart: date;
+  _dateEnd: date;
+as select (if(getanykau(1, 14, _dogovorNrec), givenAnName(1), '')) (fieldname=DogovorField)
+
+from dogovor dog, dogovor topdog, katbank, soprhoz sh, specmtr sm, katmc mc, katvidd, attrdog, spdocs spd
+
+where ((
+  _dogovorNrec == topdog.nrec and
+  _viddogNrec == katvidd.nrec
+));
+
+var
+  _po: IPlanOmto;
+
+create view v
+as select *
+from _po;
+
+window wCreateDogovorParams 'Параметры формирования договора/доп.согл.', escClose, doAccept;
+show(,,54,8);
+screen sc1;
+fields
+  DogovorField: protect, pickButton;
+  katvidd.name: protect, pickButton;
+  _date: noprotect;
+  _number: noprotect;
+  _dateStart: noprotect;
+  _dateEnd: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Вышестоящий договор` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Вид договора`        .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Дата`                .@@@@@@@@@@ `Номер`.@@@@@@@@@@
+`Период действия с`   .@@@@@@@@@@ `по`   .@@@@@@@@@@
+
+                       <. Продолжить .> <. Отмена .>
+>>
+end;
+procedure SaveParams;
+{
+  Savemydsk(_dogovorNrec, 'PlanOmtoActionCreateLinkedBasedoc_dogovorNrec');
+  Savemydsk(_viddogNrec, 'PlanOmtoActionCreateLinkedBasedoc_viddogNrec');
+  Savemydsk(_dateStart, 'PlanOmtoActionCreateLinkedBasedoc_dateStart');
+  Savemydsk(_dateEnd, 'PlanOmtoActionCreateLinkedBasedoc_dateEnd');
+  Savemydsk(_number, 'PlanOmtoActionCreateLinkedBasedoc_number');
+  Savemydsk(_date, 'PlanOmtoActionCreateLinkedBasedoc_date');
+}
+handleevent
+  cmDefault:  SaveParams;
+  cmDoOk: putcommand(cmDefault);
+  cmPick:
+  {
+    case curfield of
+      #DogovorField:
+      {
+        SaveMyDsk(word(2+4), 'GetDAK_Status'  ); // разрешен выбор только из исполняемых или приостановленных
+        SaveMyDsk(byte(1+2+4), 'GetDAK_Status_e'); // К договорам и соглашениям
+
+        var _dogovorNrecOld: comp;
+        _dogovorNrecOld := _dogovorNrec;
+
+        if (_docSel.F3(_dogovorNrec, 0, 0, 1, longint(vcGetDog_Status), 1) = cmCancel)
+          _dogovorNrec := _dogovorNrecOld;
+        else
+        {
+          if getfirst dog where ((_dogovorNrec == dog.nrec)) = tsOk
+          {
+            _viddogNrec := dog.cviddog;
+            _dateStart := dog.dbeg;
+            _dateEnd := dog.dend;
+            _number := dog.nodoc;
+            _date := dog.ddoc;
+          }
+          rereadrecord(#katvidd);
+          rereadrecord;
+        }
+      }
+      #katvidd.name:
+      {
+        var curVidDog, curDirect: word;
+        var curKatviddNrec: comp;
+        curViddog := katvidd.viddog;
+        curDirect := katvidd.direct;
+        curKatviddNrec := katvidd.nrec;
+        if runinterface(L_DOGOVOR::GetSomVidDEx, curViddog, curDirect, 1, curKatviddNrec, 0, 0) = cmDefault
+        {
+          _viddogNrec := curKatviddNrec;
+          rereadrecord(#katvidd);
+        }
+      }
+    end;
+  }
+end;
+end; //window
+
+handleevent
+cmDelOnProtect:
+{
+  case curfield of
+    #DogovorField: { _dogovorNrec := 0;}
+  end;
+  rereadrecord;
+}
+end;
+
+function getOrgNrecFromPlanomto: comp;
+{
+  result := 0;
+  pushpos(#v._po);
+  v._loop _po
+  {
+    if _po.DeliverOrgNrec != 0
+    {
+      result := v._po.DeliverOrgNrec;
+      break;
+    }
+  }
+  poppos(#v._po)
+}
+
+function getBankFromOrg(orgNrec: comp): comp;
+{
+  if getfirst katbank where ((orgNrec == katbank.corg and 1 == katbank.aktiv)) = tsOk and orgNrec != 0
+    result := katbank.nrec;
+  else
+    result := 0;
+}
+
+procedure InitParams;
+{
+  if not readmydsk(_dogovorNrec, 'PlanOmtoActionCreateLinkedBasedoc_dogovorNrec', false) _dogovorNrec := 0;
+  if not readmydsk(_viddogNrec, 'PlanOmtoActionCreateLinkedBasedoc_viddogNrec', false) _viddogNrec := 000100000000008Eh;   // 2016. Виды договоров / Расходные договоры / Прочая деятельность / Поставка
+  if not readmydsk(_dateStart, 'PlanOmtoActionCreateLinkedBasedoc_dateStart', false) _dateStart := cur_date;
+  if not readmydsk(_dateEnd, 'PlanOmtoActionCreateLinkedBasedoc_dateEnd', false) _dateEnd := add_months(_dateStart, 1);
+  if not readmydsk(_number, 'PlanOmtoActionCreateLinkedBasedoc_number', false) _number := '000000';
+  if not readmydsk(_date, 'PlanOmtoActionCreateLinkedBasedoc_date', false) _date := cur_date;
+}
+
+function ShowParamsUi: word;
+{
+  result := runwindowmodal(wCreateDogovorParams);
+}
+
+function DoAction(aPlanOmto: IPlanOmto; params: objref = nullref): word;
+{
+  params := params;
+
+  if _viddogNrec = 0 _viddogNrec := 000100000000008Eh; // 2016. Виды договоров / Расходные договоры / Прочая деятельность / Поставка
+
+  _po := aPlanOmto;
+
+  clearbuffer(#dog);
+
+  if getfirst topdog = tsOk
+  {
+    dog.cdogovor  := topdog.nrec;
+    dog.cmyorg    := topdog.cmyorg;
+    dog.corg      := topdog.corg;
+    dog.tidk      := 401;
+    dog.cbankplat := topdog.cbankplat;
+    dog.cbankpol  := topdog.cbankpol;
+  }
+  else
+  {
+    dog.cmyorg    := cogettune('MYORG');
+    dog.cbankplat := cogettune('MYBANK');
+    dog.corg      := getOrgNrecFromPlanomto;
+    dog.cbankpol  := getBankFromOrg(dog.corg);
+    dog.tidk      := 400;
+  }
+
+  dog.cplat     := dog.cmyorg;
+  dog.cpol      := dog.corg;
+  dog.cgrotp    := dog.corg;
+  dog.cgrpol    := dog.cmyorg;
+
+  dog.cnote     := 0001000000000034h;
+  dog.dbeg      := _dateStart;
+  dog.ddoc      := _date;
+  dog.dend      := _dateEnd;
+  dog.descr     := sgettune('USER.DESCR');
+  dog.desgr     := sgettune('USER.DESGR');
+  dog.dinput    := cur_date;
+  dog.nodoc     := _number;
+  dog.tipmoney  := 1;
+  dog.vhodnal   := 1;
+
+  if getfirst katvidd = tsOk
+  {
+    dog.cviddog := katvidd.nrec;
+    dog.direct  := katvidd.direct;
+    dog.viddog  := katvidd.viddog;
+  }
+
+  insert current dog;
+
+  if getfirst attrdog where ((dog.nrec == attrdog.cdogovor)) != tsOk
+  {
+    clearbuffer(#attrdog);
+    attrdog.cdogovor := dog.nrec;
+    attrdog.cpodr := 0001000000000003h;
+    insert current attrdog;
+  }
+
+  if getfirst sh where ((dog.tidk == sh.tipdoc and dog.nrec == sh.csoprdoc)) != tsOk
+  {
+    clearbuffer(#sh);
+    sh.cdogovor := if(dog.cdogovor != 0, dog.cdogovor, dog.nrec);
+    sh.datob    := dog.ddoc;
+    sh.csoprdoc := dog.nrec;
+    sh.tipdoc   := dog.tidk;
+    sh.tidkgal  := dog.tidk;
+    sh.nodoc    := dog.nodoc;
+    sh.descr    := dog.descr;
+    sh.desgr    := dog.desgr;
+    sh.corg     := dog.corg;
+    insert current sh;
+  }
+
+  var spcode: string = '0000';
+  var totalSum: double = 0;
+  var totalNds: double = 0;
+
+  v._loop _po
+  {
+    spcode := nextnumstr(spcode);
+
+    clearbuffer(#spd);
+    spd.code     := spcode;
+    spd.tidk     := dog.tidk;
+    spd.cdoc     := dog.nrec;
+    spd.cotvpodr := attrdog.cpodr;
+    spd.dfrom    := dog.dbeg;
+    spd.dto      := dog.dend;
+    spd.prmc     := 1;
+
+    if getfirst mc where ((_po.KatmcNrec == mc.nrec)) = tsOk
+    {
+      spd.cgrmcusl := mc.cgroupmc;
+      spd.cgrnal   := mc.cgrnal;
+      spd.cmcusl   := mc.nrec;
+    }
+
+    spd.cotped  := _po.OtpedNrec;
+    spd.direct  := dog.direct;
+    spd.empty   := 1;
+    spd.kol     := _po.ClaimQty - _po.RegradeQty - _po.BasedocQty;
+    spd.ostatok := spd.kol;
+    spd.price   := _po.ClaimPrice;
+    spd.summa   := spd.kol * spd.price;
+
+    insert current spd;
+
+    _nalogFun.CountBasePrice_(dog.nrec
+                              , spd.nrec
+                              , 1000 + dog.tidk
+                              , spd.cgrnal
+                              , dog.corg
+                              , spd.kol
+                              , spd.cotped
+                              , dog.ddoc
+                              , dog.cVal
+                              , 0
+                              , 0
+                              , spd.summa
+                              , dog.cpayment);
+
+    totalSum += spd.summa + spd.sumnds;
+    totalNds += spd.sumnds;
+
+    if getfirst sm where ((0001000000000001h == sm.csaldtune and 1723 == sm.cotable and spd.nrec == sm.cspec)) != tsOk
+    {
+      clearbuffer(#sm);
+      sm.cotable := 1723;
+      sm.cspec := spd.nrec;
+      sm.csaldtune := 0001000000000001h;
+      insert current sm;
+    }
+
+    sm.cobj := _po.KatstroyNrec;
+    sm.ckau[4] := _po.IndentNrec;
+    update current sm;
+  }
+
+  dog.summa := totalSum;
+  dog.sumnds := totalNds;
+  update current dog;
+
+  sh.summa := dog.summa;
+  update current sh;
+
+  runinterfacenomodal(L_DOGOVOR::DOGOVOR, 0, 0, 0, 0, if(dog.cdogovor = 0, dog.nrec, dog.cdogovor), if(dog.cdogovor = 0, 0, dog.nrec));
+
+  result := PlanOmtoActionSuccess;
+}
+
+end.
