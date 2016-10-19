@@ -1,0 +1,871 @@
+#include oTemplan.vih
+
+#component "AGAT"
+
+interface iTemplanSpecManager;
+
+// Таблица для сопоставления обектов в зависимости от параметров
+// Не выносим в VIH, чтобы эта таблица была доступна только для конкретного объекта
+table struct tIfc
+(
+  IfcName: string,
+  KauCode: word,
+  Key: string
+) with index
+    (
+      i01 = KauCode + Key
+    )
+;
+
+var
+  DefaultIfcName : string;                // Значение по умолчанию для результата функции GetIfcName
+  _cZakaz        : comp;                  // Ссылка на заказ
+//  tsManager      : iTemplanSpecManager;   // "Менеджер" таблицы
+  qm             : vipQueryManager;       // Для прямого SQL запроса
+
+create view
+as Select *
+from tIfc, tTemplanSpec, tTemplanSpec tTPS, tTemplanSpec tTPS1, iTP, tTemplanLink, tAnalit, tAddedKau, iTPLog;
+
+// Таблица для заполнения структуры цены
+create view tKatstroySum
+as select *
+from
+        addsumobj, addsumtune
+where
+        ((
+          word(2101)            == addsumobj.COTABLE and
+          _cZakaz               == addsumobj.ckatstroy and
+          (addsumobj.sumcur <> 0) and
+          addsumobj.caddsumtune == addsumtune.nrec
+        ))
+;
+
+// Таблица соответствий статей бюджета
+create view tFpImpRel
+as select * from fpimprel
+where
+    ((
+      IMPSTBUD == fpimprel.cmain
+    ))
+;
+
+// Прямой SQL запрос на добавление данных во временную таблицу
+// Измененный запрос ниже
+/*
+SQL query q1 =
+select fpoborot.cstbud, coalesce(kau.npp, 0), coalesce(kau.kodgrkau, 0), fpspaxtf.csloj, coalesce(kau40.npp, 0), fpoborot.cperiod, fpperiod.dbeg, fpoborot.chashdoc, sum(fpoborot.summa) as summa
+
+from fpaxtf
+
+join fpspaxtf on fpaxtf.nrec = fpspaxtf.cmain and 20 = fpspaxtf.kodgrkau
+// min(npp) - выбираем минимальную аналитику, т.к. более 1-й аналитике, кроме заказа, не должно быть по ТЗ
+left join ( select cmain, kodgrkau, min(npp) as npp
+            from spsloj
+            where kodgrkau <> word(40)
+            group by cmain, kodgrkau
+          ) kau on fpspaxtf.csloj = kau.cmain
+// Добавляем в отбор только статьи, где существует КАУ заказ
+left join ( select cmain, min(npp) as npp
+            from spsloj
+            where kodgrkau = word(40)
+            group by cmain
+          ) kau40 on fpspaxtf.csloj = kau40.cmain
+
+join fpperiod on #comp(0001000000000005h) = fpperiod.ctper and fpperiod.dbeg <= ? and fpperiod.dend >= ?
+
+join fpoborot on fpperiod.nrec = fpoborot.cperiod and #comp(000100000000000Ah) = fpoborot.cplanssch and fpspaxtf.cmean = fpoborot.cstbud
+
+where ? = fpaxtf.cmain and 1 = fpaxtf.waxisxy
+
+group by fpoborot.cstbud, kau.npp, kau.grkau, kau40.npp, fpoborot.cperiod, fpperiod.dbeg, fpoborot.chashdoc
+;
+*/
+SQL query qtps=
+//month(datetime(oborot.datob,0))
+//select fpstbud.nrec, coalesce(kau.npp, 0), coalesce(kau.KodGrKau, 0), fpspaxtf.csloj, coalesce(kau40.npp40, 0), fpoborot.cperiod, fpperiod.dbeg, fpperiod.dend,
+select fpstbud.nrec, coalesce(kau.npp, 0), coalesce(kau.KodGrKau, 0), fpspaxtf.csloj, coalesce(kau40.npp40, 0), fpoborot.cperiod, month(datetime(fpperiod.dbeg,0)),
+       case coalesce(kau.npp,0)
+         when 1 then coalesce(hashan.canalit[1],#comp(0))
+         when 2 then coalesce(hashan.canalit[2],#comp(0))
+         when 3 then coalesce(hashan.canalit[3],#comp(0))
+         when 4 then coalesce(hashan.canalit[4],#comp(0))
+         when 5 then coalesce(hashan.canalit[5],#comp(0))
+         else #comp(0)
+       end as cAnalit,
+       sum(fpoborot.summa) as summa
+
+from fpaxtf
+
+join fpspaxtf on fpaxtf.nrec = fpspaxtf.cmain and 20 = fpspaxtf.kodgrkau
+
+left join ( select cmain, kodgrkau, min(npp) as npp
+            from spsloj
+            where kodgrkau <> 40
+            group by cmain, kodgrkau
+          ) kau on fpspaxtf.csloj = kau.cmain
+
+left join ( select cmain, min(npp) as npp40
+            from spsloj
+            where kodgrkau = 40
+            group by cmain
+          ) kau40 on fpspaxtf.csloj = kau40.cmain
+
+join fpperiod on #comp(0001000000000005h) = fpperiod.ctper and fpperiod.dbeg <= :dEnd and fpperiod.dend >= :dBeg
+
+join fpoborot on fpperiod.nrec = fpoborot.cperiod and #comp(000100000000000Ah) = fpoborot.cplanssch and fpspaxtf.cmean = fpoborot.cstbud and fpoborot.datob <= :dOtchet
+
+join fpstbud on fpoborot.cstbud = fpstbud.nrec
+
+join hashan on fpoborot.chashdoc = hashan.nrec and
+                    case kau40.npp40
+                         when 1 then hashan.canalit[1]
+                         when 2 then hashan.canalit[2]
+                         when 3 then hashan.canalit[3]
+                         when 4 then hashan.canalit[4]
+                         when 5 then hashan.canalit[5]
+                         else #comp(0)
+                    End = :cZakaz
+
+where :FormNrec = fpaxtf.cmain and 1 = fpaxtf.waxisxy
+
+//group by fpstbud.nrec, kau.npp, kau.kodgrkau, fpspaxtf.csloj, kau40.npp40, fpoborot.cperiod, fpperiod.dbeg, fpperiod.dend,
+group by fpstbud.nrec, kau.npp, kau.kodgrkau, fpspaxtf.csloj, kau40.npp40, fpoborot.cperiod, month(datetime(fpperiod.dbeg,0)),
+         case coalesce(kau.npp,0)
+         when 1 then coalesce(hashan.canalit[1],#comp(0))
+         when 2 then coalesce(hashan.canalit[2],#comp(0))
+         when 3 then coalesce(hashan.canalit[3],#comp(0))
+         when 4 then coalesce(hashan.canalit[4],#comp(0))
+         when 5 then coalesce(hashan.canalit[5],#comp(0))
+         else #comp(0)
+         end
+;
+
+/* ***SQL query qtpsYear=
+//month(datetime(oborot.datob,0))
+//select fpstbud.nrec, coalesce(kau.npp, 0), coalesce(kau.KodGrKau, 0), fpspaxtf.csloj, coalesce(kau40.npp40, 0), fpoborot.cperiod, fpperiod.dbeg, fpperiod.dend,
+select fpstbud.nrec, coalesce(kau.npp, 0), coalesce(kau.KodGrKau, 0), fpspaxtf.csloj, coalesce(kau40.npp40, 0),
+       case coalesce(kau.npp,0)
+         when 1 then coalesce(hashan.canalit[1],#comp(0))
+         when 2 then coalesce(hashan.canalit[2],#comp(0))
+         when 3 then coalesce(hashan.canalit[3],#comp(0))
+         when 4 then coalesce(hashan.canalit[4],#comp(0))
+         when 5 then coalesce(hashan.canalit[5],#comp(0))
+         else #comp(0)
+       end as cAnalit,
+       sum(fpoborot.summa) as summa
+
+from fpaxtf
+
+join fpspaxtf on fpaxtf.nrec = fpspaxtf.cmain and 20 = fpspaxtf.kodgrkau
+
+left join ( select cmain, kodgrkau, min(npp) as npp
+            from spsloj
+            where kodgrkau <> 40
+            group by cmain, kodgrkau
+          ) kau on fpspaxtf.csloj = kau.cmain
+
+left join ( select cmain, min(npp) as npp40
+            from spsloj
+            where kodgrkau = 40
+            group by cmain
+          ) kau40 on fpspaxtf.csloj = kau40.cmain
+
+join fpperiod on #comp(0001000000000004h) = fpperiod.ctper and fpperiod.dbeg = :dBeg and fpperiod.dend = :dEnd
+
+join fpoborot on fpperiod.nrec = fpoborot.cperiod and #comp(000100000000000Ah) = fpoborot.cplanssch and fpspaxtf.cmean = fpoborot.cstbud and fpoborot.datob <= :dOtchet
+
+join fpstbud on fpoborot.cstbud = fpstbud.nrec
+
+join hashan on fpoborot.chashdoc = hashan.nrec and
+                    case kau40.npp40
+                         when 1 then hashan.canalit[1]
+                         when 2 then hashan.canalit[2]
+                         when 3 then hashan.canalit[3]
+                         when 4 then hashan.canalit[4]
+                         when 5 then hashan.canalit[5]
+                         else #comp(0)
+                    End = :cZakaz
+
+where :FormNrec = fpaxtf.cmain and 1 = fpaxtf.waxisxy
+
+//group by fpstbud.nrec, kau.npp, kau.kodgrkau, fpspaxtf.csloj, kau40.npp40, fpoborot.cperiod, fpperiod.dbeg, fpperiod.dend,
+group by fpstbud.nrec, kau.npp, kau.kodgrkau, fpspaxtf.csloj, kau40.npp40,
+         case coalesce(kau.npp,0)
+         when 1 then coalesce(hashan.canalit[1],#comp(0))
+         when 2 then coalesce(hashan.canalit[2],#comp(0))
+         when 3 then coalesce(hashan.canalit[3],#comp(0))
+         when 4 then coalesce(hashan.canalit[4],#comp(0))
+         when 5 then coalesce(hashan.canalit[5],#comp(0))
+         else #comp(0)
+         end
+;
+*/ //***
+// Функция возвращает значение по связке в зависимости от параметров (сначала смотрятся два параметра, потом один)
+function GetIfcName(aKauCode: word; aKey: string): string;
+{
+  result := DefaultIfcName;
+  if getfirst tIfc where ((aKauCode == tIfc.KauCode and aKey == tIfc.Key)) = tsOk
+    result := tIfc.IfcName
+  else if getfirst tIfc where ((aKauCode == tIfc.KauCode and '' == tIfc.Key)) = tsOk
+    result := tIfc.IfcName;
+}
+
+// Функция суммирования веток дерева перенесена в секцию с методами объектов
+procedure summation (_Parent :comp; _sum : double);
+/*
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ procedure summation (_Parent :comp; _sum : double);                                                        │
+│ _Parent - ссылка на родителя                                                                               │
+│ _sum    - сумма для суммирования                                                                           │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+*/
+{
+  if _Parent <> 0 then
+    {
+      if getfirst tTPS where ((_Parent == tTPS.nrec)) = tsOK then
+        {
+         tTPS.sumObj := tTPS.sumObj + _sum;
+         update current tTPS;
+
+         if getfirst tTPS1 where ((tTPS.cParent == tTPS1.nrec)) = tsOK then summation(tTPS.cParent, _sum);
+        }
+    }
+} // procedure summation (_nrec :comp);
+
+// Функция добавления записи
+function oTemplanSpecManager.CreateTemplanSpec(aCParent: comp; aGrKau: word; aCMean: comp): oTemplanSpecObject;
+{
+  result := nullRef;
+  var newObj: oTemplanSpecObject;
+  if not LoadVipRef(newObj, GetIfcName(aGrKau, string(aCMean,0,0)))
+  {
+    message('Ошибка инициализации интерфейса "'+GetIfcName(aGrKau, string(aCMean,0,0))+'"');
+    exit;
+  }
+  var buf: TemplanSpecType;
+  buf.CParent := aCParent;
+  buf.GrKau   := aGrKau;
+  buf.cMean   := aCMean;
+  newObj.InitObject(buf, true);
+  result := newObj;
+}
+
+// Функция выстраивает связки между статьями
+function oTemplanSpecManager.GetTemplanSpec(aNrec: comp): oTemplanSpecObject;
+{
+  result := nullRef;
+  if getfirst tTemplanSpec where ((aNrec == tTemplanSpec.Nrec)) = tsOk
+  {
+    var obj: oTemplanSpecObject;
+    var ifcName: string;
+    ifcName := GetIfcName(tTemplanSpec.GrKau, string(tTemplanSpec.cmean,0,0));    // cmean == crec   // GrKau == KauCode
+    if (ifcName = '') exit;
+    if  (not LoadVipRef(obj, ifcName))
+    {
+      message('Ошибка инициализации интерфейса "'+ifcName+'"');
+      exit;
+    }
+    obj.InitObject(TemplanSpecType(tTemplanSpec.buffer), false);
+    result := obj;
+  }
+}
+
+// Метод получить объект по родителю и КАУ
+function oTemplanSpecManager.GetTemplanSpecKau(aParent: comp; aGrKau: word; aKau: comp): oTemplanSpecObject;
+{
+  result := nullRef;
+  if getfirst tTemplanSpec where ((aParent == tTemplanSpec.cParent and aGrKau == tTemplanSpec.GrKau and aKau == tTemplanSpec.cKau)) = tsOk
+  {
+    var obj: oTemplanSpecObject;
+    var ifcName: string;
+    ifcName := GetIfcName(tTemplanSpec.GrKau, string(tTemplanSpec.cmean,0,0));    // cmean == crec   // GrKau == KauCode
+    if (ifcName = '') exit;
+    if  (not LoadVipRef(obj, ifcName))
+    {
+      message('Ошибка инициализации интерфейса "'+ifcName+'"');
+      exit;
+    }
+    obj.InitObject(TemplanSpecType(tTemplanSpec.buffer), false);
+    result := obj;
+  }
+}
+
+// Метод получить объект по статье бюджета и КАУ
+function oTemplanSpecManager.GetTemplanSpecStBudKau(aStBud: comp; aGrKau: word; aKau: comp): oTemplanSpecObject;
+{
+  result := nullRef;
+  if getfirst tTPS where ((aStBud == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOK
+     {
+      if getfirst tTPS1 where ((tTPS.Nrec == tTPS1.cParent and aGrKau == tTPS1.GrKau and aKau == tTPS1.cKau)) = tsOk
+          {
+            var obj: oTemplanSpecObject;
+            var ifcName: string;
+            ifcName := GetIfcName(tTPS1.GrKau, string(tTPS1.cMean,0,0));    // cmean == crec   // GrKau == KauCode
+            if (ifcName = '') exit;
+            if  (not LoadVipRef(obj, ifcName))
+            {
+              message('Ошибка инициализации интерфейса "'+ifcName+'"');
+              exit;
+            }
+            obj.InitObject(TemplanSpecType(tTPS1.buffer), false);
+            result := obj;
+          }
+     }
+}
+
+// Метод получить КАУ "вышестоящего" родителя
+function oTemplanSpecManager.GetTemplanSpecParentKau(aParent: comp; aGrKau: word; aKau: comp): oTemplanSpecObject;
+{
+  result := nullRef;
+  var cParent : comp;
+  if getfirst tTPS where ((aParent == tTPS.nrec)) = tsOK then cParent := tTPS.cParent else cParent := comp(0);
+  if cParent <> comp(0) then
+    {
+      if getfirst tTPS where ((cParent == tTPS.cParent and aGrKau == tTPS.GrKau and aKau == tTPS.cKAU)) = tsOK
+        {
+          var obj: oTemplanSpecObject;
+          var ifcName: string;
+          ifcName := GetIfcName(tTPS.GrKau, string(tTPS.cMean,0,0));
+          if (ifcName = '') exit;
+            if  (not LoadVipRef(obj, ifcName))
+            {
+              message('Ошибка инициализации интерфейса "'+ifcName+'"');
+              exit;
+            }
+            obj.InitObject(TemplanSpecType(tTPS.buffer), false);
+            result := obj;
+        }
+    }
+
+}
+
+// Метод получить объект по статье бюджета
+function oTemplanSpecManager.GetTemplanSpecStBud(aStBud: comp): oTemplanSpecObject;
+{
+  result := nullRef;
+  if getfirst tTPS where ((aStBud == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk
+  {
+    var obj: oTemplanSpecObject;
+    var ifcName: string;
+    ifcName := GetIfcName(tTPS.GrKau, string(tTPS.cmean,0,0));    // cmean == crec   // GrKau == KauCode
+    if (ifcName = '') exit;
+    if  (not LoadVipRef(obj, ifcName))
+    {
+      message('Ошибка инициализации интерфейса "'+ifcName+'"');
+      exit;
+    }
+    obj.InitObject(TemplanSpecType(tTPS.buffer), false);
+    result := obj;
+  }
+}
+
+// *** Функция удаляет запись из временной таблицы
+/* Нет необходимости в данном событии
+function oTemplanSpecManager.Remove(TemplanSpecNrec: comp): boolean;
+{
+  result := false;
+  if getfirst tTemplanSpec where ((TemplanSpecNrec == tTemplanSpec.Nrec)) = tsOk
+  {
+    var obj: oTemplanSpecObject;
+    obj := GetTemplanSpec(TemplanSpecNrec);
+    if obj != nullref
+    {
+      result := obj.RemoveObject;
+    }
+  }
+}
+*/
+// Функция очистки временных таблиц (таблиц в памяти)
+function oTemplanSpecManager.Clear: boolean;
+{
+  delete all tTemplanLink;
+  delete all iTP;
+  delete all tAnalit;
+  delete all iTPLog;
+  result := delete all tTemplanSpec = tsOk;
+}
+
+// Метод удаления нового КАУ ко всем статьям
+function oTemplanSpecManager.DeleteKAU(atAnalit: comp): boolean;
+{
+ var _prizn : boolean;
+ _prizn := true;
+ if getfirst tAnalit where ((atAnalit == tAnalit.Nrec))=tsOK then
+    {
+     _loop tTPS where ((tAnalit.cSloj == tTPS.cSloj and tAnalit.GrKau == tTPS.GrKau and tAnalit.cKau == tTPS.cKau))
+        {
+         var i : byte;
+         for (i := 1; i <= 12; i++)
+            {
+              if tTPS.sum[i] <> 0 then _prizn := false;
+            }
+         clearbuffer(#tAddedKau);
+         tAddedKAu.cTTPS := tTPS.nrec;
+         insert current tAddedKau;
+        }
+    }
+
+ if _prizn = true then
+    {
+      // Удалить записи
+      _loop tAddedKau
+        {
+          var obj : oTemplanSpecObject;
+          obj := GetTemplanSpec(tAddedKau.cTTPS);
+          obj.RemoveObject;
+        }
+      delete all tAnalit where ((atAnalit == tAnalit.nrec));
+    } else message('Нельзя удалить запись, т.к. она имеет значение');
+ delete all tAddedKau;
+ result := true;
+ reReadRecord;
+}
+
+// Метод добавления нового КАУ ко всем статьям
+function oTemplanSpecManager.AddKAU(atAnalit: comp; aPriznak: word): boolean;
+{
+  _loop tTemplanSpec where (word(20) = tTemplanSpec.GrKau and word(0) <> tTemplanSpec.KodGrKau)
+    {
+      if getfirst tAnalit where ((atAnalit == tAnalit.nrec)) = tsOK then
+        {
+         if tTemplanSpec.cSloj = tAnalit.cSloj and tTemplanSpec.KodGrKau = tAnalit.GrKau then
+          {
+           if getfirst tTPS where ((tTemplanSpec.Nrec == tTPS.cParent and tAnalit.GrKau == tTPS.GrKau and tAnalit.cKau == tTPS.cKau)) <> tsOK then
+            {
+              clearbuffer(#tTPS);
+              tTPS.cmean    := tTemplanSpec.cmean;
+              tTPS.name     := if(GetAnyKau(0, tAnalit.GrKau, tAnalit.cKau), givenanname(1), '');//tAnalit.name;
+              tTPS.code     := '';
+              tTPS.cParent  := tTemplanSpec.nrec;
+              tTPS.KodGrKau := tTemplanSpec.KodGrKau;
+              tTPS.cKau     := tAnalit.cKau;
+              tTPS.GrKau    := tTemplanSpec.KodGrKau;
+//                tTPS.priznak  := TPSPEC_KIND_KAU_NEW;
+              tTPS.priznak  := aPriznak;
+              tTPS.csloj    := tTemplanSpec.csloj;
+              tTPS.npp      := tTemplanSpec.npp;
+              insert current tTPS;
+              clearbuffer(#tAddedKau);
+              tAddedKau.cTTPS := tTPS.nRec;
+              insert current tAddedKau;
+            }
+          }
+        }
+    } // _loot tTemplanSpec
+
+// Проставим связи для всех вновь созданных объектов.
+  _loop tAddedKau
+    {
+      if getfirst tTPS where ((tAddedKau.cTTPS == tTPS.Nrec)) = tsOK then
+        {
+          var obj : oTemplanSpecObject;
+          obj := GetTemplanSpec(tTPS.nrec);
+          if obj != NullRef then obj.InitLinks;
+        } else message('Ошибка инициализации связей у добавленной аналитики');
+    }
+  delete all tAddedKau;
+
+  result := true;
+} //
+
+// Функция заполнения временной таблицы данными из типовой формы бюджета
+function oTemplanSpecManager.Load(FpTFormNrec: comp; cZakaz: comp; _dbeg: date; _dend: date; dOtchet: date): boolean;
+{
+  _cZakaz := cZakaz;      // Нужно для запроса tKatstroySum
+// Первый проход для заполнения данных статей типового бюджета через Insert ... Secect, где в ... описываются по порядку поля, которые в select потом будут вставляться.
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  insert tTemplanSpec (Nrec, cmean, name, code, LevelCode, cParent, GrKau, KodGrKau, csloj, npp, priznak)
+  select
+        fpspaxtf.nrec,
+        fpspaxtf.cmean,
+        fpspaxtf.name,
+        fpspaxtf.code,
+        fpspaxtf.levelcode,
+        fpspaxtf.cnode,
+        Word(20),
+        spsloj.kodgrkau,
+        cMain40,
+        spsloj.npp,
+        TPSPEC_KIND_DEFAULT
+  from
+      fpaxtf, fpspaxtf,// fpstbud,
+(
+ select min(_sps1.npp) (fieldname = npp40), first(_sps1.cMain) (fieldname = cMain40)
+ from spsloj _sps1
+ where
+    ((
+      Fpspaxtf.csloj /== _sps1.cmain and
+      (_sps1.kodgrkau = word(40))
+    ))
+) _kau40,
+      (
+       select min(_sps.npp) (fieldname = npp)    // fieldname = npp - единственное возвращаемое поле
+       from spsloj _sps
+       where
+          ((
+            fpspaxtf.csloj /== _sps.cmain and
+            (_sps.kodgrkau <> word(40))
+          ))
+      ) _kau, spsloj, spsloj spsloj40
+  where
+  ((
+     FpTFormNrec    /== fpaxtf.cmain and
+//***     Comp(281474976710976) /== fpaxtf.cmain and
+     word(1)        /== fpaxtf.waxisxy and
+     fpaxtf.nrec    /== fpspaxtf.cmain and
+     word(20)       /== fpspaxtf.kodgrkau and
+
+//     fpspaxtf.cmean == fpstbud.nrec and
+     fpspaxtf.csloj == spsloj.cmain and
+     _kau.npp       == spsloj.npp and
+
+     fpspaxtf.csloj /== spsloj40.cmain and
+     _kau40.npp40   /== spsloj40.npp
+  ));
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+   SetVisualHeader('Загрузка структуры цены объекта');
+   tKatstroySum._loop addsumobj
+    {
+     tKatstroySum._loop addsumtune
+        {
+          if tFpImpRel.getfirst fpimprel where ((IMPSTBUD == fpimprel.cmain and (tKatstroySum.addsumobj.caddsumtune = fpimprel.CMEAN))) = tsOK then
+            {
+              if getfirst tTemplanSpec where ((tFpImpRel.FpImpRel.cImpMean == tTemplanSpec.cMean and (word(20) = tTemplanSpec.GrKau))) = tsOK then
+                {
+                 tTemplanSpec.sumObj := tTemplanSpec.sumObj + tKatstroySum.addsumobj.sumcur;
+                 update current tTemplanSpec;
+
+                 summation(tTemplanSpec.cParent, tKatstroySum.addsumobj.sumcur);
+                }
+            } //else message('Соответствие значения статьи "' + tKatstroySum.addsumtune.name + '" не установлено.');
+        }
+    }
+//  Рассчитаем значения % статей
+  var _Sum1, _Sum2, _Sum3 : double;
+  _Sum1 := 0; _Sum2 := 0; _Sum3 := 0;
+//1.
+  if getfirst tTPS where ((STBUD_PRIBIL_OT_REALIZACZII_ZAKAZA == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum1 := tTPS.sumObj;
+  if getfirst tTPS where ((STBUD_POLNAYA_SEBESTOIMOSTI == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum2 := tTPS.sumObj;
+  if _Sum2 <> 0 then
+    {
+      if getfirst tTPS where ((STBUD_PROCZENT_PRIBILI == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then
+        {
+          tTPS.sumObj := _Sum1/_Sum2*100;
+          update current tTPS;
+        }
+    }
+  _Sum1 := 0; _Sum2 := 0;
+//2.
+  if getfirst tTPS where ((STBUD_OBJEM_SOBSTVENNIH_RABOT == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum1 := tTPS.sumObj;
+  if getfirst tTPS where ((STBUD_OBJEM_RABOT == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum2 := tTPS.sumObj;
+  if _Sum2 <> 0 then
+    {
+      if getfirst tTPS where ((STBUD_PROZCENT_SOBSTVENNIH_RABOT == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then
+        {
+          tTPS.sumObj := _Sum1/_Sum2*100;
+          update current tTPS;
+        }
+    }
+  _Sum1 := 0; _Sum2 := 0;
+//3.
+  if getfirst tTPS where ((STBUD_DOPOLNITELNAYA_ZP == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum1 := tTPS.sumObj;
+  if getfirst tTPS where ((STBUD_OSNOVNAYA_ZARPLATA == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum2 := tTPS.sumObj;
+  if _Sum2 <> 0 then
+    {
+      if getfirst tTPS where ((STBUD_PROCZENT_DOP_ZP == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then
+        {
+          tTPS.sumObj := _Sum1/_Sum2*100;
+          update current tTPS;
+        }
+    }
+  _Sum1 := 0; _Sum2 := 0;
+//4.
+  if getfirst tTPS where ((STBUD_OTCHISLENYA_NA_SOCZ_NUGDI == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum1 := tTPS.sumObj;
+  if getfirst tTPS where ((STBUD_DOPOLNITELNAYA_ZP == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum2 := tTPS.sumObj;
+  if getfirst tTPS where ((STBUD_OSNOVNAYA_ZARPLATA == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum3 := tTPS.sumObj;
+  if (_Sum2+_Sum3) <> 0 then
+    {
+      if getfirst tTPS where ((STBUD_PROCZENT_OTCHISLENII == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then
+        {
+          tTPS.sumObj := _Sum1/(_Sum2+_Sum3)*100;
+          update current tTPS;
+        }
+    }
+  _Sum1 := 0; _Sum2 := 0; _Sum3 := 0;
+//5.
+  if getfirst tTPS where ((STBUD_OBSHEHOZYASTVENNII_ZATRATI == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum1 := tTPS.sumObj;
+  if getfirst tTPS where ((STBUD_OSNOVNAYA_ZARPLATA == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then _Sum2 := tTPS.sumObj;
+  if (_Sum2+_Sum3) <> 0 then
+    {
+      if getfirst tTPS where ((STBUD_PROCZENT_NAKLADNIH_RASHODOV == tTPS.cMean and (word(20) = tTPS.GrKau))) = tsOk then
+        {
+          tTPS.sumObj := _Sum1/_Sum2*100;
+          update current tTPS;
+        }
+    }
+  _Sum1 := 0; _Sum2 := 0;
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//  Загрузим и произведем расчет факта
+  var tfManager : iTemplanFactManager;
+  tfManager.Load(FpTFormNrec, cZakaz, _dbeg, _dend, dOtchet);
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  SetVisualHeader('Построение структуры связей');
+// Пройдёмся по временной таблице и построим связи зависящих объектов.
+  _loop tTemplanSpec
+    {
+      var obj: oTemplanSpecObject;
+      obj := GetTemplanSpec(tTemplanSpec.Nrec);
+      if obj != NullRef
+      {
+        obj.InitLinks;
+      }
+      else
+      {
+        message('Ошибка инициализации связей в'+tTemplanSpec.name);
+      }
+    }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Заполнение значениями аналитик и простановка сумм
+/*
+  Второй вариант работы с прямым SQL. ВНИМАНИЕ, пока не освободиться SQL (sqlFreeStmt) не хочет работать GetAnyKau!
+// Заполнение значениями аналитик и простановка сумм
+  var stmt: longint;
+  stmt := sqlAllocStmt;
+// Инициализация запроса
+  sqlPrepare(stmt, qtps);
+// Передача параметров в запрос, в самом запросе вместо наименования переменных указывается знак вопроса "?"
+  sqlBindParam(stmt, 1, _dEnd);
+  sqlBindParam(stmt, 2, _dBeg);
+  sqlBindParam(stmt, 3, tfb);//FpTFormNrec);
+// Инициализация принимающих переменных с привязкой к колонкам в запросе
+  var _cStbud,                 : comp;
+  var _npp, _npp40, _KodGrKau  : word;
+  sqlBindCol(stmt, 1,  _cStbud);
+  sqlBindCol(stmt, 2,  _npp);
+  sqlBindCol(stmt, 3,  _KodGrKau); // и т.д. по порядку запроса
+// цикл по запросу с заполнением полей
+  if (sqlExecute(stmt) = tsOk)
+    {
+      while sqlFetch(stmt) = tsOk
+      {
+//      Тут пишется необходимый обработчик по заполнению таблицы или вычислению полей
+      }
+// Освобождение "запроса"
+      sqlFreeStmt(stmt);
+    }
+      else
+        {
+          message('Ошибка выборки финансовых операций');
+        }
+*/
+  SetVisualHeader('Загрузка плановых показателей');
+// Загрузка годовых показателей
+  var query1 : IQuery;
+/* ***
+// Инициализация запроса
+  query1 := qm.createQuery(qtpsYear);
+// Передача параметров в запрос
+  query1.setParam('dbeg', date(01,01,Year(_dBeg)));
+  query1.setParam('dend', date(31,12,Year(_dBeg)));
+  query1.setParam('FormNrec', FpTFormNrec);
+  query1.setParam('cZakaz', cZakaz);
+  query1.setParam('dOtchet', dOtchet);
+// Переменная для получения данных из запроса
+*/  var rs: IResultSet;
+
+/* ***   rs := query1.getResultSet;
+// Цикл по результатам SQL запроса
+  if (rs.getFirst = tsOk) then
+      {
+        do
+        {
+        // Инициализация переменных, принимающих значения из запроса
+          var _cStbud, _cSloj, _cAnalit : comp;
+          var _cParent                  : comp;
+          var _npp, _npp40, _KodGrKau   : word;
+          var _summa                    : double;
+        // Инициализация принимающих переменных с привязкой к колонкам в запросе
+          _cStbud   := rs.row.valat(1);
+          _npp      := rs.row.valat(2);
+          _KodGrKau := rs.row.valat(3);
+          _cSloj    := rs.row.valat(4);
+          _npp40    := rs.row.valat(5);
+          _cAnalit  := rs.row.valat(6);
+          _summa    := rs.row.valat(7);
+
+          if _KodGrKau = 0 then
+            {
+              if (getfirst tTPS where ((_cStbud == tTPS.cmean and (word(20) = tTPS.GrKau))) = tsOk) then                                         // Определяем ссылку на статью Бюджета
+                  {
+                    tTPS.sumYear := tTPS.sumYear + _summa;
+                    update current tTPS;
+                  }
+            } else
+                {
+                  if (getfirst tTPS where ((_cStbud == tTPS.cmean and (word(20) = tTPS.GrKau))) = tsOk) then _cParent := tTPS.nrec else _cParent := comp(0);   // Определяем ссылку на родителя
+                  if _cAnalit = comp(0) then
+                    {
+                     tTPS.sumYear := tTPS.sumYear + _summa;
+                     update current tTPS;
+                    } else
+                        {
+                          if _cParent <> comp(0) then                                                                                       // Если родителя нет, то просто отбрасываем запись!!!
+                            {
+                              if (getfirst tTPS where ((_cParent == tTPS.cParent and _KodGrKau == tTPS.KodGrKau and _cAnalit == tTPS.cKau)) = tsOK) then                       // Определяем конкретную запись Аналитики с привязкой к родителю
+                                {
+                                  tTPS.sumYear := tTPS.sumYear + _summa;
+                                  update current tTPS;
+                                } else
+                                    {
+                                      ClearBuffer(#tAnalit);
+                                      tAnalit.GrKau   := _KodGrKau;
+                                      tAnalit.cSloj   := tTPS.cSloj;
+                                      tAnalit.cKau    := _cAnalit;
+                                      insert current tAnalit;
+                                      AddKAU(tAnalit.Nrec, TPSPEC_KIND_KAU);
+
+                                      if (getfirst tTPS where ((_cParent == tTPS.cParent and _KodGrKau == tTPS.KodGrKau and _cAnalit == tTPS.cKau)) = tsOK) then
+                                         {
+                                          tTPS.sumYear := tTPS.sumYear + _summa;
+                                          update current tTPS;
+                                         }
+                                    } // else if (getfirst tTPS where ((_cParent == tTPS.cParent and _cAnalit == tTPS.cKau)) = tsOK) then
+                            }  // if _cParent <> comp(0) then
+                        }
+                } // else if KodGrKau = 0;
+        } while (rs.getNext = tsOk)
+      } // if (rs.getFirst = tsOk)
+*///***
+// Загрузка плана по месяцам
+// Инициализация запроса
+  query1 := qm.createQuery(qtps);
+// Передача параметров в запрос
+  query1.setParam('dbeg', date(01,01,Year(_dBeg)));
+  query1.setParam('dend', _dEnd);
+  query1.setParam('FormNrec', FpTFormNrec);
+  query1.setParam('cZakaz', cZakaz);
+  query1.setParam('dOtchet', dOtchet);
+// Переменная для получения данных из запроса
+  rs := query1.getResultSet;
+// Цикл по результатам SQL запроса
+  if (rs.getFirst = tsOk) then
+      {
+        do
+        {
+        // Инициализация переменных, принимающих значения из запроса
+          var _cStbud, _cSloj, _cPeriod, _cAnalit   : comp;
+          var _cParent                              : comp;
+          var _npp, _npp40, _KodGrKau, _Month       : word;
+          var _summa                                : double;
+        // Инициализация принимающих переменных с привязкой к колонкам в запросе
+          _cStbud   := rs.row.valat(1);
+          _npp      := rs.row.valat(2);
+          _KodGrKau := rs.row.valat(3);
+          _cSloj    := rs.row.valat(4);
+          _npp40    := rs.row.valat(5);
+          _cPeriod  := rs.row.valat(6);
+          _Month    := rs.row.valat(7);
+          _cAnalit  := rs.row.valat(8);
+          _summa    := rs.row.valat(9);
+
+  if Abs(Round(_summa, 6)) <> 0 then
+    {
+          if _KodGrKau = 0 then
+            {
+              if (getfirst tTPS where ((_cStbud == tTPS.cmean and (word(20) = tTPS.GrKau))) = tsOk) then                                         // Определяем ссылку на статью Бюджета
+                  {
+                    var obj: oTemplanSpecObject;
+                    obj := GetTemplanSpec(tTPS.nrec);
+                    obj.priznak := TPSPEC_KIND_EDITABLE_STBUD;
+                    obj.SetVal(_Month, (obj.GetVal(_Month) + _summa));
+                    obj.Save;
+                  }
+            } else
+                {
+                  if (getfirst tTPS where ((_cStbud == tTPS.cmean and (word(20) = tTPS.GrKau))) = tsOk) then _cParent := tTPS.nrec else _cParent := comp(0);   // Определяем ссылку на родителя
+                  if _cParent <> comp(0) then                                                                                       // Если родителя нет, то просто отбрасываем запись!!!
+                    {
+                      if (getfirst tTPS where ((_cParent == tTPS.cParent and _KodGrKau == tTPS.KodGrKau and _cAnalit == tTPS.cKau)) = tsOK) then                       // Определяем конкретную запись Аналитики с привязкой к родителю
+                        {
+                          var obj: oTemplanSpecObject;
+                          obj := GetTemplanSpec(tTPS.nrec);
+                          obj.SetVal(_Month, (obj.GetVal(_Month) + _summa));
+                          obj.Save;
+                        } else
+                            {
+                              ClearBuffer(#tAnalit);
+                              tAnalit.GrKau   := _KodGrKau;
+                              tAnalit.cSloj   := tTPS.cSloj;
+                              tAnalit.cKau    := _cAnalit;
+                              insert current tAnalit;
+                              AddKAU(tAnalit.Nrec, TPSPEC_KIND_KAU);
+
+                              if (getfirst tTPS where ((_cParent == tTPS.cParent and _KodGrKau == tTPS.KodGrKau and _cAnalit == tTPS.cKau)) = tsOK) then
+                                 {
+                                  var obj: oTemplanSpecObject;
+                                  obj := GetTemPlanSpec(tTPS.Nrec);
+                                  obj.SetVal(_Month, _summa);
+                                  obj.Save;
+                                 }
+                            } // else if (getfirst tTPS where ((_cParent == tTPS.cParent and _cAnalit == tTPS.cKau)) = tsOK) then
+                    }  // if _cParent <> comp(0) then
+                } // else if KodGrKau = 0;
+  } // if округление до 6 знаков, чтобы избежать минимальных значений
+        } while (rs.getNext = tsOk)
+      } // if (rs.getFirst = tsOk)
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Проставим признак редактируемой статьи при условии, что эта статься не имеет веток в дереве и к ней не может быть привязана аналитика
+// Добавил суммирование плана для установки плановых показателей на год
+  _loop tTPS
+  {
+    if (tTPS.priznak = TPSPEC_KIND_DEFAULT and tTPS.KodGrKau = 0) then
+      {
+        var _Nrec : comp;     _Nrec := tTPS.Nrec;
+        if (getfirst tTPS1 where ((_Nrec == tTPS1.cParent)) <> tsOK) then tTPS.Priznak := TPSPEC_KIND_EDITABLE_STBUD;
+        update current tTPS;
+      }
+  }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  result := true;
+}
+
+constructor Init;
+{
+  DefaultIfcName := '';
+  if( LoadImplementationList('AGAT::oTemplanSpecObject', 'iTemplanSpecObject_') )
+  {
+    delete all tIfc;
+    var obj: oTemplanSpecObject;
+    var ifcName :string;
+    var i, cnt: integer;
+    cnt := GetImplementationCount;
+    for( i := 0; i < cnt; i++ )
+    {
+      var s, s1 : string;
+      var KC, KC1 : string
+      clearbuffer(#tIfc);
+      tIfc.IfcName :=  GetImplementationName(i);
+      GetVipRef(obj, tIfc.IfcName);
+      tIfc.KauCode := obj.GetKauCode;
+
+      s := obj.GetKey;
+      while inStr (', ', s) <> 0 do
+        {
+          s1 := SubStr (s, 1, 17);
+          tIfc.Key  := s1;
+          insert current tIfc;
+          s := replace(s, s1+', ','');
+        }
+      s1 := SubStr (s, 1, 17);
+      tIfc.Key  := s1;
+      insert current tIfc;
+
+      if (tIfc.KauCode = 0 and tIfc.Key = '') DefaultIfcName := tIfc.IfcName;
+    };
+  };
+  UnLoadImplementationList;
+  result := true;
+}
+
+end.

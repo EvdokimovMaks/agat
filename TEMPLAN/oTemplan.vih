@@ -1,0 +1,1127 @@
+#ifndef __oTemplanSpec__
+#define __oTemplanSpec__
+
+#component "AGAT"
+
+
+//#include "InsFpOb.Vih"                   // vInsertFpOborot
+//#include "FpEOb.Vih"                     // vInsertFpOborot 2-й вариант + vExtFpOborot
+
+// Описание структуры временной таблицы для записи всех оборотов
+table struct tTemplanSpec               // Бывшая tempTP
+(
+  nrec        : comp,                   // Уникальная ссылка на запись
+  cMean       : comp,                   // Ссылка на статью бюджета          // CRec
+  name        : string,                 // Наименование статьи
+  code        : string,                 // Код статьи                        // fpstbud.code - Смысл подключать эту таблицу?
+// *** Уточнить необходимость наличия данного кода
+  levelcode   : string,                 // Код статьи на уровне
+  cParent     : comp,                   // Ссылка на родителя                // cParent поменял на CParent
+  KodGrKau    : word,                   // Код группы аналитики на статье, если аналитика, то код аналитики             // ClildKauCode
+  cKau        : comp,                   // Ссылка на аналитику
+  GrKau       : word,                   // Действительный код аналитики. Группа КАУ 20 - статья            // KauCode
+  priznak     : word,                   // Признак аналитики: 0 - не аналитика, 1 - аналитика, 2 - редактируемая статья, 10 - новая аналитика       // Kind
+  csloj       : comp,                   // Ссылка на слой
+  npp         : word,                   // Порядковый номер аналитики
+  redakt      : byte,                   // Признак редактируемой аналитики  (0 - редактирование строки разрешено, 1 - редактирование строки запрещено)
+  sumObj      : double,                 // Суммы статей в структуре цены объекта строительства
+  sumSaldo    : double,                 // Сумма незавершенного производства (Сальдо входящее)
+  sumYear     : double,                 // Сумма к распределению на год
+  sum         : array[1..12] of double, // Суммы по месяцам План
+  sumfact     : array[1..12] of double  // Суммы по месяцам Факт
+) with index (
+  i1 = nrec (Unique, surrogate),
+  i11 = cParent + GrKau + nRec, // Индекс для сортировки
+  i2 = nrec + KodGrKau + cKau,
+  i3 = cParent + KodGrKau + cKau,
+  i4 = Nrec + GrKau + cKau,
+  i6 = cParent + GrKau + cKau,
+  i7 = cSloj + GrKau + cKau,
+  i5 = cMean
+);
+
+table struct tAddedKau
+(
+  nrec        : comp,       // Уникальная ссылка на запись
+  cTTPS       : comp        // Ссылка на TempTP (tTemplanSpec)
+) with index (
+  i1 = nrec (Unique, surrogate),
+  i2 = cTTPS
+);
+
+// Описание структуры временной таблицы для добавления внесённых изменений в оборотах
+table struct iTP
+(
+  nrec        : comp,       // Уникальная ссылка на запись
+  ctempTP     : comp,       // Ссылка на TempTP (tTemplanSpec)
+  cperiod     : comp,       // Ссылка на fpperiod
+  sum         : double      // Сумма
+) with index (
+  i1 = nrec (Unique, surrogate),
+  i2 = ctempTP + cperiod
+);
+
+table struct iTPLog
+(
+  nrec        : comp,       // Уникальная ссылка на запись
+  ctempTP     : comp,       // Ссылка на TempTP (tTemplanSpec)
+  cperiod     : comp,       // Ссылка на fpperiod
+  sum         : double,     // Сумма
+  num         : integer,    // порядковый номер изменения
+  mon         : byte        // месяц изменения
+) with index (
+  i1 = nrec (Unique, surrogate),
+  i2 = num
+);
+
+// Таблица связей
+table struct tTemplanLink (
+  Nrec: comp,
+  SrcNrec: comp,
+  DstNrec: comp
+) with index (
+  i00 = Nrec (unique, surrogate),
+  i01 = SrcNrec + Nrec,
+  i02 = DstNrec + Nrec,
+  i03 = SrcNrec + DstNrec
+);
+
+// Таблица для хранения аналитики
+table struct tAnalit
+(
+  nrec    : comp,
+  GrKau   : word,
+  cSloj   : comp,
+  cKau    : comp
+) with index
+  (
+    i1 = nrec (Unique, surrogate),
+    i2 = csloj + GrKau + cKau
+  );
+
+const
+  _ctper     : comp = 0001000000000005h; // Период для бюджетов (месяц)
+  _ctperYear : comp = 0001000000000004h; // Период для бюджетов (год)
+  _cplanssch : comp = 000100000000000Ah; // Книга плановых операций
+  _TIDK      : word = 499;               // Тип документа системный/первичный
+  _cSoprHoz  : comp = 0000000000000000h; // Ссылка на первичный документ (0, потом подставится соответствующий NREC)
+  _KodReg    : word = 150;               // Код регистра учета: 150 - План, 151 - Факт, 152 - Резерв, 153 - "по данным БухУчета"
+
+  IMPSTBUD   : comp = 0001000000000041H; // Nrec на таблицу связей Статей бюджета ТемПлан - Статьи СтруктураЦены
+  TPSPEC_KIND_DEFAULT           = 0;        // Не аналитика
+  TPSPEC_KIND_KAU               = 1;        // аналитика
+  TPSPEC_KIND_EDITABLE_STBUD    = 2;        // редактируемая статья
+  TPSPEC_KIND_KAU_NEW           = 10;       // новая аналитика
+// Перечисление констант Nrec статьи бюджета
+  STBUD_POLNAYA_SEBESTOIMOSTI                             : comp = 0001000000000005h;     // "Полная себестоимость"
+  STBUD_DOPOLNITELNAYA_ZP                                 : comp = 0001000000000008h;     // "Дополнительная зарплата"
+  STBUD_ZATRATI_NA_MATERIALI                              : comp = 000100000000001Ah;     // "Затраты на материалы"
+  STBUD_ZATRATI_NA_OPLATY_TRUDA                           : comp = 000100000000001Ch;     // "Затраты на оплату труда"
+  STBUD_OBJEM_RABOT                                       : comp = 000100000000001Dh;     // "Объем работ"
+  STBUD_OTCHISLENYA_NA_SOCZ_NUGDI                         : comp = 0001000000000020h;     // "Отчисления на социальные нужды"
+  STBUD_TRUDOEMKOST                                       : comp = 0001000000000027h;     // "Трудоемкость в т.ч."
+  STBUD_PRIBIL_OT_REALIZACZII_ZAKAZA                      : comp = 0001000000000032h;     // "Прибыль от реализации Заказа"
+  STBUD_OSNOVNAYA_ZARPLATA                                : comp = 0001000000000039h;     // "Основная зарплата"
+  STBUD_SIRIE_I_MATERIALI                                 : comp = 000100000000003Ah;     // "Сырье и материалы"
+  STBUD_POKUPNIE_KOMPLEKTUUSHIE_IZDELIYA                  : comp = 000100000000003BH;     // "Покупные комплектующие изделия"
+  STBUD_POKUPNIE_POLUFABRIKATI                            : comp = 000100000000003CH;     // "Покупные полуфабрикаты"
+  STBUD_RABITI_I_USLUGI_STORONNIH_ORG_PROIZVODS_HARAKTERA : comp = 000100000000003Dh;     // "Работы и услуги сторонних организаций производственного характера"
+  STBUD_VOZVRATNIE_OTHODI                                 : comp = 000100000000003FH;     // "Возвратные отходы (вычитаются)"
+  STBUD_TRANSPORTNO_ZAGOTOVITELNIE_RASHODI                : comp = 0001000000000040H;     // "Транспортно-заготовительные расходы"
+  STBUD_TOPLIVO_NA_TEHNOLOGICHESKIE_CZELI                 : comp = 0001000000000041H;     // "Топливо на технологические цели"
+  STBUD_ENERGIYA_NA_TEHNOLOGICHESKIE_CZELI                : comp = 0001000000000042H;     // "Энергия на технологические цели"
+  STBUD_TARA_NEVOZVRATNAYA_UPAKOVKA                       : comp = 0001000000000043H;     // "Тара (невозвратная) и упаковка"
+  STBUD_TRUDOEMKOST_NA_OBEKTOVIE_RABOTI                   : comp = 0001000000000047h;     // "Трудоемкость на объектовые работы"
+  STBUD_TRUDOEMKOST_NA_NIOKR                              : comp = 0001000000000046h;     // "Трудоемкость на НИОКР, поставку"
+  STBUD_SREDNYAY_ZP_PO_ZAKAZU_NIOKR                       : comp = 000100000000004Ch;     // "Средняя заработная плата по заказу (НИОКР, поставка:)"
+  STBUD_TRUDOEMKOST_NA_OBESPECHIVAUSHIE_RABOTI            : comp = 0001000000000083h;     // "Трудоемкость на обеспечивающие работы"
+  STBUD_SREDNYAY_ZP_NA_OBESPECHIVAUSHIE_RABOTI            : comp = 0001000000000085h;     // "Средняя заработная плата на объектовые обеспечивающие работы"
+  STBUD_SREDNYAY_ZP_NA_OBEKTOVIE_RABOTI                   : comp = 0001000000000086h; 	  // "Средняя заработная плата на объектовые работы"
+  STBUD_DOLZHNOSTNOJ_OKLAD                                : comp = 0001000000000087h;     // Должностной оклад
+  STBUD_PREMIYA_EGEMESYACHNAYA                            : comp = 0001000000000088h;     // Премия ежемесячная
+  STBUD_PREMIYA_KVARTALNAYA                               : comp = 0001000000000089h;     // Премия квартальная
+  STBUD_PREMIYA_GODOVAYA                                  : comp = 000100000000008Ah;     // Премия годовая
+  STBUD_DOPLATA_ZA_RABOTY_NA_OBJEKTE                      : comp = 000100000000008Bh;     // Доплата за работу на объекте
+  STBUD_ZP_STORONNIH_LICZ                                 : comp = 000100000000008Ch;     // Заработная плата сторонних лиц
+  STBUD_BOLNICHNIE_ZA_SCHET_RABOTODATELYA                 : comp = 000100000000008Dh;     // Больничные за счет работодателя
+  STBUD_OCZENOCHNOE_OBYAZATELSTVO_PO_OPLATE_OTPUSKOV      : comp = 000100000000008Eh;     // Оценочное обязательство по оплате отпусков
+  STBUD_PROCHIE_VIPLATI_PO_DZP                            : comp = 000100000000008Fh;     // Прочие выплаты по ДЗП
+  STBUD_STRAHOVIE_VZNOSI                                  : comp = 0001000000000090h;     // Страховые взносы
+  STBUD_PROFRISK                                          : comp = 0001000000000091h;     // Профриск
+  STBUD_SPECZIALNIE_ZATRATI                               : comp = 0001000000000092h;     // "Специальные затраты"
+  STBUD_ZATRATI_NA_KOMANDIROVKI                           : comp = 0001000000000093h;     // "Затраты на командировки"
+  STBUD_PROCHIE_PRYAMIE_ZATRATI                           : comp = 0001000000000094h;     // "Прочие прямые затраты"
+  STBUD_OBSHEPROIZVODSTVENNIE_ZATRATI                     : comp = 0001000000000095h;     // "Общепроизводственные затраты"
+  STBUD_OBSHEHOZYASTVENNII_ZATRATI                        : comp = 0001000000000096h;     // "Общехозяйственные затраты"
+  STBUD_ZATRATI_NA_IZDELIYA_SOBSTVENNOGO_PROIZV           : comp = 0001000000000097h;     // "Затраты на изделия собственного производства"
+  STBUD_ZATRATI_PO_RABOTAM_SOISPOLNITELEJ                 : comp = 0001000000000098h;     // "Затраты по работам соисполнителей"
+  STBUD_BILETI                                            : comp = 0001000000000099h;     // "Билеты"
+  STBUD_PROCZIVANIE                                       : comp = 000100000000009Ah;     // "Проживание"
+  STBUD_SUTOCHNIE_RF                                      : comp = 000100000000009Bh;     // "Суточные (на территории РФ)"
+  STBUD_PROCHIE_KOMANDIROVOCHNIE_RASHODI                  : comp = 000100000000009Ch;     // "Прочие командировочные расходы"
+  STBUD_PROCZENT_NAKLADNIH_RASHODOV                       : comp = 000100000000009Dh;     // "% накладных расходов"
+  STBUD_PROCZENT_PRIBILI                                  : comp = 00010000000000C1h;     // "% прибыли"
+  STBUD_PROCZENT_DOP_ZP                                   : comp = 00010000000000C2h;     // "% дополнительной заработной платы"
+  STBUD_PROCZENT_OTCHISLENII                              : comp = 00010000000000C3h;     // "% отчислений"
+  STBUD_OBJEM_SOBSTVENNIH_RABOT                           : comp = 00010000000000C4h;     // "Объем собственных работ"
+  STBUD_PROZCENT_SOBSTVENNIH_RABOT                        : comp = 00010000000000C5h;     // "% собственных работ"
+  STBUD_SREDNYAY_ZP_V_TCH                                 : comp = 00010000000000C6h; 	  // "Средняя заработная плата в т.ч."
+  STBUD_PROCHIE_VIPLATI_PO_OZP                            : comp = 00010000000000C7h;     // "Прочие выплаты по ОЗП"
+  STBUD_SUTOCHNIE_NOT_RF                                  : comp = 00010000000000C8h;     // "Суточные (за территорией РФ)"
+  STBUD_POLUFABRIKARI_SOBSTVENNOGO_PROIZVODSTVA           : comp = 00010000000000CBH;     // "Полуфабрикаты собственного производства"
+  STBUD_KOMPLEKTUUSHIE_IZDELIYA_SOBSTVENNOGO_PROIZVODSTVA : comp = 00010000000000CCH;     // "Комплектующие изделия собственного производства"
+  STBUD_OPLATA_ZA_VREMYA_KOMANDIROVKI                     : comp = 00010000000000CDh;     // Оплата за время командировки
+  STBUD_ROEZD                                             : comp = 00010000000008B0h;     // "Проезд"
+  STBUD_SPEC_ZATRATI_PODR                                 : comp = 0001000000000918h;     // Специальные затраты (расходы подразделений)
+  STBUD_SPEC_ZATRATI_ORG                                  : comp = 0001000000000919h;     // Специальные затраты (сторонние организации)
+  STBUD_SODERGANIE_SPEC_SLUZB_PODR                        : comp = 000100000000091Ah;     // Содержание специальных служб и объектов (расходы подразделений)
+  STBUD_RASHODI_NA_PROVEDENIE_ISPITANIJ_PODR              : comp = 000100000000091Bh;     // Расходы на проведение испытаний (расходы подразделений)
+  STBUD_RASHODI_NA_PERIODICHESKIE_ISPITANIYA_PODR         : comp = 000100000000091Ch;     // Расходы на переодические испытания (расходы подразделений)
+  STBUD_SODERGANIE_SPEC_SLUZB_ORG                         : comp = 000100000000091Dh;     // Содержание специальных служб и объектов (сторонние организации)
+  STBUD_RASHODI_NA_PROVEDENIE_ISPITANIJ_ORG               : comp = 000100000000091Eh;     // Расходы на проведение испытаний (сторонние организации)
+  STBUD_RASHODI_NA_PERIODICHESKIE_ISPITANIYA_ORG          : comp = 000100000000091Fh;     // Расходы на переодические испытания (сторонние организации)
+  STBUD_SPEC_TEHNICHESKAYA_POMOSH_STORONNIH_ORG           : comp = 0001000000000920h;     // Специальная техническая помощь сторонних организаций
+  STBUD_ZATRATI_NA_SPEC_TEHNOLOG_OSNASTKU                 : comp = 0001000000000921h;     // "Затраты на специальную технологическую оснастку"
+  STBUD_ZATRATI_NA_PODGOTOVKU_I_OSVOENIE                  : comp = 0001000000000922h;     // "Затраты на подготовку и освоение производства"
+  STBUD_ZATRATI_NA_SPEC_TEHNOLOG_OSNASTKU_PODR            : comp = 0001000000000923h;     // "Затраты на специальную технологическую оснастку (расходы подразделений)"
+  STBUD_ZATRATI_NA_SPEC_TEHNOLOG_OSNASTKU_ORG             : comp = 0001000000000924h;     // "Затраты на специальную технологическую оснастку (сторонние организации)"
+  STBUD_ZATRATI_NA_PODGOTOVKU_I_OSVOENIE_PODR             : comp = 0001000000000925h;     // "Затраты на подготовку и освоение производства (расходы подразделений)"
+  STBUD_ZATRATI_NA_PODGOTOVKU_I_OSVOENIE_ORG              : comp = 0001000000000926h;     // "Затраты на подготовку и освоение производства (сторонние организации)"
+end;
+
+type TemplanSpecType = record as table tTemplanSpec;
+
+// Инициализация объектного интерфейса с функциями, которые в нём доступны
+objinterface oTemplanLinkManager;
+  procedure NotifyLinkedForUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+  procedure NotifyLinkedFactForUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+  procedure NotifyLinkedForRemove(buf: TemplanSpecType);
+  procedure NotifyLinkedForCreate(buf: TemplanSpecType);
+  procedure NotifyLinkedFactForCreate(buf: TemplanSpecType);
+  function AddLink(aSrcNrec: comp; aDstNrec: comp): boolean;
+//  function RemoveLink(aSrcNrec: comp; aDstNrec: comp): boolean;
+  function ClearLinks(aSrcNrec: comp): boolean;
+end;
+
+// Инициализация объектного интерфейса с функциями, которые в нём доступны
+objinterface oTemplanLink;
+  property SrcNrec: comp read;
+  property DstNrec: comp read;
+  index i01 = SrcNrec, DstNrec;
+  index i02 = DstNrec, SrcNrec;
+end;
+
+// Инициализация класса iTemplanLink
+vipinterface iTemplanLink implements oTemplanLink licensed(free);
+
+// Инициализация класса iTemplanLinkManager
+vipinterface iTemplanLinkManager implements oTemplanLinkManager licensed(free);
+
+// Инициализация объектного интерфейса с функциями, которые в нём доступны
+objinterface oTemplanSpecObject;
+  function GetVal(ValFieldNumber: word): double;                        // ValFieldNumber: byte
+  function SetVal(ValFieldNumber: word; aValue: double): boolean;
+
+  function InitObject(aBuf: TemplanSpecType; aIsNew: boolean): boolean;
+  function InitLinks: boolean;
+  function RemoveObject: boolean;
+  function Save: boolean;
+
+  procedure OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+  procedure OnLinkedRemove(buf: TemplanSpecType);
+  procedure OnLinkedCreate(buf: TemplanSpecType);
+
+  function GetKauCode: word;
+  function GetKey: string;
+
+// Описание свойств Объекта oTemplanSpecObject (нужно для возможности модификации, добавления записи)
+property Nrec        : comp read;
+property cMean       : comp;
+property Name        : string;
+property Code        : string;
+property cParent     : comp read;
+property KodGrKau    : word;
+property cKau        : comp;
+property GrKau       : word;
+property Priznak     : word;
+property cSloj       : comp;
+property Npp         : word;
+property Buf         : TemplanSpecType read;
+
+end;
+
+// Инициализация объектного интерфейса с функциями, которые в нём доступны
+objinterface oTemplanSpecManager;
+    // Создание буфера новой записи
+    function CreateTemplanSpec(aCParent: comp; aGrKau: word; aCMean: comp): oTemplanSpecObject;
+    // Получение буфера записи
+    function GetTemplanSpec(aNrec: comp): oTemplanSpecObject;
+    // Метод получить объект по родителю и КАУ
+    function GetTemplanSpecKau(aParent: comp; aGrKau: word; aKau: comp): oTemplanSpecObject;
+    // Метод получить объект по статье бюджета и его КАУ
+    function GetTemplanSpecStBudKau(aStBud: comp; aGrKau: word; aKau: comp): oTemplanSpecObject;
+    // Метод получить КАУ "вышестоящего" родителя
+    function GetTemplanSpecParentKau(aParent: comp; aGrKau: word; aKau: comp): oTemplanSpecObject;
+    // Метод получить объект по статье бюджета
+    function GetTemplanSpecStBud(aStBud: comp): oTemplanSpecObject;
+//    function Remove(TemplanSpecNrec: comp): boolean;
+    // Удаление всех записей
+    function Clear: boolean;
+    // Загрузка необходимых данных
+    function Load(FpTFormNrec: comp; cZakaz: comp; _dbeg: date; _dend: date; dOtchet: date): boolean;
+    // Удаление новой аналитики
+    function DeleteKAU(atAnalit: comp): boolean;
+    // Проставление КАУ для всех статей бюджетов
+    function AddKAU(atAnalit: comp; aPriznak: word): boolean;
+end;
+
+// Инициализация класса iTemplanSpecObject_Common
+vipinterface iTemplanSpecObject_Common implements oTemplanSpecObject licensed(free);
+
+// Инициализация класса iTemplanFactObject_Common
+vipinterface iTemplanFactObject_Common (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.GetVal(ValFieldNumber: word): double;                        // ValFieldNumber: byte
+    function oTemplanSpecObject.SetVal(ValFieldNumber: word; aValue: double): boolean;
+
+    function oTemplanSpecObject.InitObject(aBuf: TemplanSpecType; aIsNew: boolean): boolean;
+    function oTemplanSpecObject.InitLinks: boolean;
+//    function oTemplanSpecObject.RemoveObject: boolean;
+    function oTemplanSpecObject.Save: boolean;
+
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+//    procedure oTemplanSpecObject.OnLinkedRemove(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+
+
+/*
+//
+//
+// Описание поведения КАУ для Плана
+//
+//
+*/
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Инициализация класса iTemplanSpecObject_Kau для стандартного КАУ с линком на родителя //
+vipinterface iTemplanSpecObject_KAU_2 (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+end;
+
+vipinterface iTemplanSpecObject_KAU_1 (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+end;
+// Инициализация класса iTemplanSpecObject_Kau для стандартного КАУ с линком на родителя //
+///////////////////////////////////////////////////////////////////////////////////////////
+
+// Описание поведения КАУ статей
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статьи бюджета Сырье и материалы                                //
+//  Инициализация экземпляра класса для статьи бюджета Покупные полуфабрикаты                           //
+//  Инициализация экземпляра класса для статьи бюджета Полуфабрикаты собственного производства          //
+//  Инициализация экземпляра класса для статьи бюджета Покупные комплектующие изделия                   //
+//  Инициализация экземпляра класса для статьи бюджета Комплектующие изделия собственного производства  //
+//  Инициализация экземпляра класса для статьи бюджета Транспортно-заготовительные расходы              //
+//  Инициализация экземпляра класса для статьи бюджета Топливо на технологические цели                  //
+//  Инициализация экземпляра класса для статьи бюджета Энергия на технологические цели                  //
+//  Инициализация экземпляра класса для статьи бюджета Тара (невозвратная) и упаковка                   //
+//  Инициализация экземпляра класса для статьи бюджета Возвратные отходы (вычитаются)                   //
+//  Инициализация экземпляра класса для статьи бюджета Работы и услуги сторонних организаций производственного характера //*/
+vipinterface iTemplanSpecObject_Sirie_i_materiali_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function  oTemplanSpecObject.InitLinks:  boolean;
+    function  oTemplanSpecObject.GetKey:     string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Сырье и материалы                                //
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+/*// Инициализация экземпляра класса для статьи бюджета Трудоемкость на обеспечивающие работы //
+// Инициализация экземпляра класса для статьи бюджета Трудоемкость на объектовые работы     //
+// Инициализация экземпляра класса для статьи бюджета Трудоемкость на НИОКР, поставку       //*/
+vipinterface iTemplanSpecObject_Trudoemkost_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function  oTemplanSpecObject.InitLinks:  boolean;
+    function  oTemplanSpecObject.GetKey:     string;
+end;
+// Инициализация экземпляра класса для статьи бюджета Трудоемкость на обеспечивающие работы //
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата по заказу (НИОКР, поставка:)        //
+//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата на объектовые обеспечивающие работы //
+//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата на объектовые работы                //*/
+vipinterface iTemplanSpecObject_Srednyay_ZP_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function  oTemplanSpecObject.InitLinks:  boolean;
+    function  oTemplanSpecObject.GetKey:     string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата по заказу (НИОКР, поставка:)        //
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Основная зарплата  //
+vipinterface iTemplanSpecObject_Osnovnaya_zarplata_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function  oTemplanSpecObject.InitLinks:  boolean;
+    function  oTemplanSpecObject.GetKey:     string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Основная зарплата  //
+////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Дополнительна зарплата  //
+vipinterface iTemplanSpecObject_Dopolnitelnyay_zarplata_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function  oTemplanSpecObject.InitLinks:  boolean;
+    function  oTemplanSpecObject.GetKey:     string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Дополнительна зарплата  //
+/////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Отчисления на социальные нужды  //
+vipinterface iTemplanSpecObject_Otchisleniya_na_socz_nugdi_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function  oTemplanSpecObject.InitLinks:  boolean;
+    function  oTemplanSpecObject.GetKey:     string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Отчисления на социальные нужды  //
+/////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статьи бюджета Билеты                          //
+//  Инициализация экземпляра класса для статьи бюджета Проезд                          //
+//  Инициализация экземпляра класса для статьи бюджета Проживание                      //
+//  Инициализация экземпляра класса для статьи бюджета Суточные (на территории РФ)     //
+//  Инициализация экземпляра класса для статьи бюджета Суточные (за территорией РФ)    //
+//  Инициализация экземпляра класса для статьи бюджета Прочие командировочные расходы  //*/
+vipinterface iTemplanSpecObject_Prochie_komandirovochnie_rashodi_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Билеты                          //
+/////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статьи бюджета Премия ежемесячная              //
+//  Инициализация экземпляра класса для статьи бюджета Премия квартальная              //
+//  Инициализация экземпляра класса для статьи бюджета Премия годовая                  //
+//  Инициализация экземпляра класса для статьи бюджета Доплата за работу на объекте    //
+//  Инициализация экземпляра класса для статьи бюджета Заработная плата сторонних лиц  //
+//  Инициализация экземпляра класса для статьи бюджета Прочие выплаты по ОЗП           //
+//  Инициализация экземпляра класса для статьи бюджета Оплата за время командировки    //*/
+vipinterface iTemplanSpecObject_Premiya_ezhemesyachnaya_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Премия ежемесячная              //
+/////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статьи бюджета Содержание специальных служб и объектов (расходы подразделений)  //
+//  Инициализация экземпляра класса для статьи бюджета Расходы на проведение испытаний (расходы подразделений)          //
+//  Инициализация экземпляра класса для статьи бюджета Расходы на переодические испытания (расходы подразделений)       //*/
+vipinterface iTemplanSpecObject_Spec_Zatrati_podr_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Содержание специальных служб и объектов (расходы подразделений)  //
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статьи бюджета Содержание специальных служб и объектов (сторонние организации)  //
+//  Инициализация экземпляра класса для статьи бюджета Расходы на проведение испытаний (сторонние организации)          //
+//  Инициализация экземпляра класса для статьи бюджета Расходы на переодические испытания (сторонние организации)       //
+//  Инициализация экземпляра класса для статьи бюджета Специальная техническая помощь сторонних организаций             //*/
+vipinterface iTemplanSpecObject_Spec_Zatrati_org_KAU (iTemplanSpecObject_KAU_1);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Содержание специальных служб и объектов (сторонние организации)  //
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Должностной оклад  //
+vipinterface iTemplanSpecObject_Dolzhnostnoj_oklad_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Должностной оклад  //
+////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Прочие выплаты по ДЗП  //
+vipinterface iTemplanSpecObject_Prochie_viplati_po_DZP_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Прочие выплаты по ДЗП  //
+////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статьи бюджета Больничные за счет работодателя             //
+//  Инициализация экземпляра класса для статьи бюджета Оценочное обязательство по оплате отпусков  //*/
+vipinterface iTemplanSpecObject_Bolnichnie_za_schet_rabotodatelya_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Больничные за счет работодателя             //
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Профриск  //
+vipinterface iTemplanSpecObject_Profrisk_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Профриск  //
+///////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Страховые взносы  //
+vipinterface iTemplanSpecObject_Strahovie_vznosi_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Страховые взносы  //
+///////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата в т.ч.  //
+vipinterface iTemplanSpecObject_SREDNYAY_ZP_V_TCH_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата в т.ч.  //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+/*
+//
+//
+// Описание поведения статей для Плана
+//
+//
+*/
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Инициализация экземпляра класса для Статей, которым необходим линк на вышестоящего родителя: //
+/*//    Затраты на подготовку и освоение производства (расходы подразделений)                     //
+//    Затраты на подготовку и освоение производства (сторонние организации)                     //
+//    Затраты на специальную технологическую оснастку (сторонние организации)                   //
+//    Затраты на специальную технологическую оснастку (расходы подразделений)                   //
+//    Специальные затраты (сторонние организации)                                               //
+//    Специальные затраты (расходы подразделений)                                               //*/
+vipinterface iTemplanSpecObject_GrKau_20 (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+// Инициализация экземпляра класса для Статей, которым необходим линк на вышестоящего родителя: //
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статьи бюджета % накладных расходов                                       //
+//  Инициализация экземпляра класса для статьи бюджета Основная зарплата (Остальные изменения делаются через КАУ) //*/
+vipinterface iTemplanSpecObject_Prozenti_Nakladnih_rashodov (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета % накладных расходов                                       //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Общехозяйственные затраты  //
+vipinterface iTemplanSpecObject_Obshehozyaistvennie_zatrati (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Общехозяйственные затраты  //
+////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статей бюджета Прочие прямые затраты                        //
+//  Инициализация экземпляра класса для статей бюджета Общепроизводственные затраты                 //
+//  Инициализация экземпляра класса для статей бюджета Затраты на командировки                      //
+//  Инициализация экземпляра класса для статей бюджета Специальные затраты                          //
+//  Инициализация экземпляра класса для статей бюджета Затраты на изделия собственного производства //
+//  Инициализация экземпляра класса для статей бюджета Затраты на оплату труда                      //
+//  Инициализация экземпляра класса для статей бюджета Затраты на подготовку и освоение производства//
+//  Инициализация экземпляра класса для статей бюджета Затраты на специальную технологическую оснастку //*/
+vipinterface iTemplanSpecObject_Prochie_pryamie_zatrati (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Прочие прямые затраты и т.д.                 //
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Затраты на материалы                         //
+vipinterface iTemplanSpecObject_Zatrati_na_materiali_KAU (iTemplanSpecObject_KAU_2);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Затраты на материалы                         //
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Затраты по работам соисполнителей //
+vipinterface iTemplanSpecObject_Zatrati_po_rabotam_soispolnitelej (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Затраты по работам соисполнителей //
+///////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Полная себестоимость //
+vipinterface iTemplanSpecObject_Polnaya_sebestoimost (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Полная себестоимость //
+//////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета % прибыли //
+vipinterface iTemplanSpecObject_Proczent_pribili (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета % прибыли //
+///////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Прибыль от реализации Заказа //
+vipinterface iTemplanSpecObject_Pribil_ot_realizaczii_zakaza (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Прибыль от реализации Заказа //
+//////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Объем собственных работ //
+vipinterface iTemplanSpecObject_Objem_sobstvennih_rabot (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Объем собственных работ //
+/////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета % собственных работ //
+vipinterface iTemplanSpecObject_Proczent_sobstvennih_rabot (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета % собственных работ //
+/////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Объем работ //
+vipinterface iTemplanSpecObject_Obiem_rabot (iTemplanSpecObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Объем работ //
+/////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата в т.ч.  //
+vipinterface iTemplanSpecObject_SREDNYAY_ZP_V_TCH (iTemplanSpecObject_Common);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата в т.ч.  //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+/*
+//
+//
+// Описание поведения КАУ для Факта
+//
+//
+*/
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Инициализация класса iTemplanSpecObject_Kau для стандартного КАУ с линком на родителя //
+vipinterface iTemplanFactObject_Kau_2 (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+end;
+// Инициализация класса iTemplanSpecObject_Kau для стандартного КАУ с линком на родителя //
+///////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Инициализация класса iTemplanSpecObject_Kau для стандартного КАУ с линком на родителя //
+vipinterface iTemplanFactObject_Kau_1 (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+end;
+// Инициализация класса iTemplanSpecObject_Kau для стандартного КАУ с линком на родителя //
+///////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для "простых статей" со ссылкой на КАУ 1 "вышестоящего уровня"                     //
+//                                                                                                                     //
+//  Инициализация экземпляра класса для статей бюджета Специальная техническая помощь сторонних организаций            //
+//  Инициализация экземпляра класса для статей бюджета Расходы на переодические испытания (сторонние организации)      //
+//  Инициализация экземпляра класса для статей бюджета Расходы на проведение испытаний (сторонние организации)         //
+//  Инициализация экземпляра класса для статей бюджета Содержание специальных служб и объектов (сторонние организации) //*/
+vipinterface iTemplanFactObject_Parent_Parent_KAU_1 (iTemplanFactObject_KAU_1);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для "простых статей" со ссылкой на КАУ 1 "вышестоящего уровня"                     //
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для "простых статей" со ссылкой на КАУ "вышестоящего уровня"                         //
+/*
+//1.  Инициализация экземпляра класса для статьи бюджета Сырье и материалы                                               //
+//2.  Инициализация экземпляра класса для статьи бюджета Покупные полуфабрикаты                                          //
+//3.  Инициализация экземпляра класса для статьи бюджета Полуфабрикаты собственного производства                         //
+//4.  Инициализация экземпляра класса для статьи бюджета Покупные комплектующие изделия                                  //
+//5.  Инициализация экземпляра класса для статьи бюджета Комплектующие изделия собственного производства                 //
+//6.  Инициализация экземпляра класса для статьи бюджета Транспортно-заготовительные расходы                             //
+//7.  Инициализация экземпляра класса для статьи бюджета Топливо на технологические цели                                 //
+//8.  Инициализация экземпляра класса для статьи бюджета Энергия на технологические цели                                 //
+//9.  Инициализация экземпляра класса для статьи бюджета Тара (невозвратная) и упаковка                                  //
+//10. Инициализация экземпляра класса для статьи бюджета Возвратные отходы (вычитаются)                                  //
+//11. Инициализация экземпляра класса для статьи бюджета Должностной оклад                                               //
+//12. Инициализация экземпляра класса для статьи бюджета Премия ежемесячная                                              //
+//13. Инициализация экземпляра класса для статьи бюджета Премия квартальная                                              //
+*/
+vipinterface iTemplanFactObject_Parent_Parent_KAU_2__1 (iTemplanFactObject_Kau_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+
+/*
+///1.  Инициализация экземпляра класса для статьи бюджета Премия годовая                                                  //
+//2.  Инициализация экземпляра класса для статьи бюджета Доплата за работу на объекте                                    //
+//3.  Инициализация экземпляра класса для статьи бюджета Заработная плата сторонних лиц                                  //
+//4.  Инициализация экземпляра класса для статьи бюджета Прочие выплаты по ОЗП                                           //
+//5.  Инициализация экземпляра класса для статьи бюджета Оплата за время командировки                                    //
+//6.  Инициализация экземпляра класса для статьи бюджета Больничные за счет работодателя                                 //
+//7.  Инициализация экземпляра класса для статьи бюджета Оценочное обязательство по оплате отпусков                      //
+//8.  Инициализация экземпляра класса для статьи бюджета Прочие выплаты по ДЗП                                           //
+//9.  Инициализация экземпляра класса для статьи бюджета Страховые взносы                                                //
+//10. Инициализация экземпляра класса для статьи бюджета Профриск                                                        //
+//11. Инициализация экземпляра класса для статьи бюджета Билеты                                                          //
+//12. Инициализация экземпляра класса для статьи бюджета Проезд                                                          //
+//13. Инициализация экземпляра класса для статьи бюджета Проживание                                                      //*/
+vipinterface iTemplanFactObject_Parent_Parent_KAU_2__2 (iTemplanFactObject_Parent_Parent_KAU_2__1);
+  public:
+    function oTemplanSpecObject.GetKey: string;
+end;
+
+/*
+//1.  Инициализация экземпляра класса для статьи бюджета Суточные (на территории РФ)                                     //
+//2.  Инициализация экземпляра класса для статьи бюджета Суточные (за территорией РФ)                                    //
+//3.  Инициализация экземпляра класса для статьи бюджета Прочие командировочные расходы                                  //
+//4.  Инициализация экземпляра класса для статьи бюджета Содержание специальных служб и объектов (расходы подразделений) //
+//5.  Инициализация экземпляра класса для статьи бюджета Расходы на проведение испытаний (расходы подразделений)         //
+//6.  Инициализация экземпляра класса для статьи бюджета Расходы на переодические испытания (расходы подразделений)      //
+//7.  Инициализация экземпляра класса для статьи бюджета Трудоемкость на НИОКР, поставку                                 //
+//8.  Инициализация экземпляра класса для статьи бюджета Трудоемкость на обеспечивающие работы                           //
+//9.  Инициализация экземпляра класса для статьи бюджета Трудоемкость на объектовые работы                               //
+//10. Инициализация экземпляра класса для статьи бюджета Работы и услуги сторонних организаций производственного характера //*/
+vipinterface iTemplanFactObject_Parent_Parent_KAU_2__3 (iTemplanFactObject_Parent_Parent_KAU_2__1);
+  public:
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для "простых статей" со ссылкой на КАУ "вышестоящего уровня"                         //
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Затраты на материалы                         //
+vipinterface iTemplanFactObject_Zatrati_na_materiali_KAU (iTemplanFactObject_Kau_2);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Затраты на материалы                         //
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статей бюджета Отчисления на социальные нужды  //
+//  Инициализация экземпляра класса для статей бюджета Дополнительная зарплата         //*/
+vipinterface iTemplanFactObject_Otchisleniya_na_socz_nugdi_KAU (iTemplanFactObject_Kau_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Отчисления на социальные нужды  //
+/////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Трудоемкость в т.ч.  //
+vipinterface iTemplanFactObject_Trudoemkost_v_tch_KAU (iTemplanFactObject_Kau_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Трудоемкость в т.ч.  //
+//////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Основная зарплата  //
+vipinterface iTemplanFactObject_Osnovnaya_ZP_KAU (iTemplanFactObject_Kau_2);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Основная зарплата  //
+////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Средняя заработная плата в т.ч.  //
+vipinterface iTemplanFactObject_Srednyaya_ZP_V_TCH_KAU (iTemplanFactObject_Kau_2);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Средняя заработная плата в т.ч.  //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+/*
+//
+//
+// Описание поведения статей для Факта
+//
+//
+*/
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//               Инициализация класса  для стандартной статьи с линком на родителя                                             //
+//                                                                                                                             //
+//  Инициализация экземпляра класса для статей бюджета Затраты на подготовку и освоение производства (сторонние организации)   //
+//  Инициализация экземпляра класса для статей бюджета Затраты на подготовку и освоение производства (расходы подразделений)   //
+//  Инициализация экземпляра класса для статей бюджета Затраты на специальную технологическую оснастку (сторонние организации) //
+//  Инициализация экземпляра класса для статей бюджета Затраты на специальную технологическую оснастку (расходы подразделений) //
+//  Инициализация экземпляра класса для статей бюджета Специальные затраты (сторонние организации)                             //
+//  Инициализация экземпляра класса для статей бюджета Специальные затраты (расходы подразделений)                             //*/
+vipinterface iTemplanFactObject_StBud_Parent (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//               Инициализация класса  для стандартной статьи с линком на родителя                                             //
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*//  Инициализация экземпляра класса для статей бюджета Затраты на материалы                            //
+//  Инициализация экземпляра класса для статей бюджета Затраты на подготовку и освоение производства   //
+//  Инициализация экземпляра класса для статей бюджета Затраты на специальную технологическую оснастку //
+//  Инициализация экземпляра класса для статей бюджета Затраты на изделия собственного производства    //
+//  Инициализация экземпляра класса для статей бюджета Прочие прямые затраты                           //
+//  Инициализация экземпляра класса для статей бюджета Общепроизводственные затраты                    //
+//  Инициализация экземпляра класса для статей бюджета Затраты на командировки                         //
+//  Инициализация экземпляра класса для статей бюджета Специальные затраты                             //*/
+vipinterface iTemplanFactObject_Zatrati_na_materiali (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Затраты на материалы                            //
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Затраты по работам соисполнителей  //
+vipinterface iTemplanFactObject_Zatrati_po_rabotam_soispolnitelej (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Затраты по работам соисполнителей  //
+////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Основная зарплата  //
+vipinterface iTemplanFactObject_Osnovnaya_zarplata (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Основная зарплата  //
+////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Дополнительная зарплата  //
+vipinterface iTemplanFactObject_Dopolnitelnaya_zarplata (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Дополнительная зарплата  //
+//////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Отчисления на социальные нужды  //
+vipinterface iTemplanFactObject_Otchisleniya_na_socz_nugdi (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Отчисления на социальные нужды  //
+/////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Общехозяйственные затраты  //
+vipinterface iTemplanFactObject_Obshehozyastvennii_zatrati (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Общехозяйственные затраты  //
+////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Полная себестоимость         //
+vipinterface iTemplanFactObject_Polnaya_Sebestoimosti (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Полная себестоимость         //
+//////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета % дополнительной заработной платы   //
+vipinterface iTemplanFactObject_Proczent_dop_ZP (iTemplanFactObject_Common);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета % дополнительной заработной платы   //
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета % отчислений   //
+vipinterface iTemplanFactObject_Proczent_otchislenii (iTemplanFactObject_Common);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета % отчислений   //
+////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета % накладных расходов   //
+vipinterface iTemplanFactObject_Proczent_nakladnih_rashodov (iTemplanFactObject_Common);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета % накладных расходов   //
+////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Прибыль от реализации Заказа //
+vipinterface iTemplanFactObject_Pribil_ot_realizaczii_zakaza (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Прибыль от реализации Заказа //
+//////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Объем работ //
+vipinterface iTemplanFactObject_Objem_rabot (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Объем работ //
+/////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета Объем собственных работ //
+vipinterface iTemplanFactObject_Objem_sobstvennih_rabot (iTemplanFactObject_Common);
+  public:
+    function oTemplanSpecObject.InitLinks: boolean;
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета Объем собственных работ //
+/////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета % собственных работ     //
+vipinterface iTemplanFactObject_Prozcent_sobstvennih_rabot (iTemplanFactObject_Common);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета % собственных работ     //
+/////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статей бюджета % прибыли     //
+vipinterface iTemplanFactObject_Prozcent_pribili (iTemplanFactObject_Common);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статей бюджета % прибыли     //
+///////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата в т.ч.  //
+vipinterface iTemplanFactObject_SREDNYAY_ZP_V_TCH (iTemplanFactObject_Common);
+  public:
+    procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+    procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+    function oTemplanSpecObject.GetKauCode: word;
+    function oTemplanSpecObject.GetKey: string;
+end;
+//  Инициализация экземпляра класса для статьи бюджета Средняя заработная плата в т.ч.  //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+/*
+//
+//
+// Инициализация Менеджеров
+//
+//
+*/
+
+// Инициализация класса iTemplanSpecManager
+vipinterface iTemplanSpecManager implements oTemplanSpecManager licensed(free);
+  public:
+    constructor Init;     // перекрытие конструктора Init
+end; // public
+
+// Инициализация класса iTemplanFactManager
+vipinterface iTemplanFactManager (iTemplanSpecManager);
+  public:
+    function oTemplanSpecManager.Load(FpTFormNrec: comp; cZakaz: comp; _dbeg: date; _dend: date; dOtchet: date): boolean;
+    constructor Init;
+end;
+
+/*
+//???
+objinterface oTemplanSpec;
+  property Nrec        : comp       read;
+  property CParent     : comp       read;
+  property Name        : string     read;
+  property Code        : string[20] read;
+  property CRec        : comp       read;
+  property KauCode     : word       read;
+  property ChildKauCode: word       read;
+  property Kind        : word       read;
+  property Val1        : double     read;
+  property Val2        : double     read;
+  property Val3        : double     read;
+  property Val4        : double     read;
+  property Val5        : double     read;
+  property Val6        : double     read;
+  property Val7        : double     read;
+  property Val8        : double     read;
+  property Val9        : double     read;
+  property Val10       : double     read;
+  property Val11       : double     read;
+  property Val12       : double     read;
+  property ValTotal    : double     read;
+
+  index i01 = Nrec;
+  index i02 = CParent, Name;
+  index i03 = Code;
+end;
+*/
+//???
+//vipinterface iTemplanSpec implements oTemplanSpec licensed(free);
+
+#end // Конец файла oTemplan.vih
