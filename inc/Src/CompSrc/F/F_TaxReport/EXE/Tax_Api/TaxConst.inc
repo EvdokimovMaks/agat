@@ -24,6 +24,12 @@ cgsTaxCat_KodVidOper = 'TaxCatalog_KodVidOper';
 cgiTaxCat_Zem = 6;
 cgsTaxCat_Zem = 'TaxCatalog_Zem';
 
+cgiTaxCat_NDS_R3P1 = 7;
+cgsTaxCat_NDS_R3P1 = 'TaxCatalog_NDS_R3P1';
+
+cgiTaxCat_KodOperNDS = 8;
+cgsTaxCat_KodOperNDS = 'TaxCatalog_KodOperNDS';
+
 //константы для отбора объектов-справочников
 cgsTax_IfcPrefixCat  = 'TaxCatalog_';
 cgsTax_ObjIfcNameCat = 'F_TaxReport::oTaxCatalog';

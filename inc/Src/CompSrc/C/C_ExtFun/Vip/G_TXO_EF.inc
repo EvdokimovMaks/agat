@@ -91,6 +91,8 @@ function  TxoProtokolType : Word;                                               
 procedure TxoSetProtokolLevel(word);                                                     external 'G_TXO.DLL';
 procedure TxoSetProtokolType(word);                                                      external 'G_TXO.DLL';
 procedure TxoProtokolMsg(Word, String, String);                                          external 'G_TXO.DLL';
+procedure TxoProtokolStruct_PutEvent(Word);                                              external 'G_TXO.DLL';
+procedure TxoProtokolStruct_WriteStr(String);                                            external 'G_TXO.DLL';
 procedure TxoAddFormulaForCheck(String, String, String, String, String);                 external 'G_TXO.DLL';
 procedure TxoAddCycleFilterForCheck(String);                                             external 'G_TXO.DLL';
 function  TxoFormulaCheck : boolean;                                                     external 'G_TXO.DLL';
@@ -191,6 +193,7 @@ function  TxoSetSchetNrec(word, comp) : boolean;                                
 function  TxoSetSchet(word, string, string, boolean) : boolean;                          external 'G_TXO.DLL';
 function  GetKauMcUsl(comp, comp, byte, comp) : comp;                                    external 'G_TXO.DLL';
 function  TxoGetCursVal(string, date, word) : double;                                                        external 'G_TXO.DLL';
+function  TxoGetCursValByNrec(comp, date, word) : double;                                external 'G_TXO.DLL';
 function  TxoSetStatus(comp) : boolean;                                                  external 'G_TXO.DLL';
 function  TxoAddCycle(word, word, string) : boolean;                                     external 'G_TXO.DLL';
 //------------------------------------------------------------------------------------------------------------

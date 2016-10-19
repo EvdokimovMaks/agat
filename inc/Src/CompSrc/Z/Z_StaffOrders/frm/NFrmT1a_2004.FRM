@@ -42,6 +42,9 @@ PostLeader_RP
 
 DopInfoMemo
 
+contract_begin
+contract_end
+
 ДолжнРук
 ФиоРук
 
@@ -54,6 +57,7 @@ DopInfoMemo
 ^ ^
 ^ ^ ^ ^
 ^
+^ ^
 .}
 ^ ^
 

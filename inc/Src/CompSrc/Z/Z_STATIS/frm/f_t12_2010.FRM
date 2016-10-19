@@ -156,6 +156,7 @@ p4QuantityCurMonthAll  ^ ^ ^ ^ ^ ^ ^ ^
 
 .fields
  Босс
+ БоссДолжность
  ГлвБух
  день1 месяц1 год1
  Dolg_Isp
@@ -163,6 +164,7 @@ p4QuantityCurMonthAll  ^ ^ ^ ^ ^ ^ ^ ^
  email1
 .endfields
 // Подножие
+^
 ^
 ^
 ^ ^ ^

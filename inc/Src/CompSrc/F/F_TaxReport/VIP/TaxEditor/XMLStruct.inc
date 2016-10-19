@@ -38,6 +38,7 @@ const
   lc_ModifyOwner_Def  : word = 0;  // по умолчанию
   lc_ModifyOwner_Usr  : word = 1;  // пользователь
   lc_ModifyOwner_Alg  : word = 2;  // алгоритм
+  lc_ModifyOwner_Frm  : word = 3;  // формула
 
   // признак выгружаемый
   lc_XMapVis_Yes      : word = 0;  // выгружаемый

@@ -90,7 +90,8 @@
   tREQ_PLAT        = 831; // Платежная заявка
   tCREDIT_PUT      =  85; // Выданный кредит
   tCREDIT_GET      =  86; // Полученный кредит
-  tEND             = tREQ_PRDPRIHOD; // последняя константа
+  tREESTR          = 742; // Реестр
+  tEND             = tREQ_PLAT; // последняя константа
 
   cgDefDocReq      = 800; // cgOfp_Req- константы
   cgDefAktOfp      = 820; // cgOfp_Akt- константы
@@ -113,6 +114,7 @@
   rsREQUEST        =   3; // заявка обычная
   rsREQUEST_PRD    =   4; // заявка на периодический приход/расход
   rsGRAFKRED       =   5; // график получения/выдачи/погашения кредита
+  rsREESTR         =   9; // реестр по перечислениям
   rsTRq_MTO_Ent    =   6; // Обобщенная заявка МТО (План снабжения)
   rsPlatDoc        =   7; // Платежный документ
   rsUNKNOWN        =  10; // для ветки else
@@ -129,6 +131,7 @@
   rsDogovorAlg = 7; // Договор
   rsSoprHozAlg = 8; // Хозоперация
   rsCreditAlg  = 9; // ЭПГ
+  rsReestrAlg  = 10;// Реестр
 
   // тип фин.операции
   ctNODEF          =   0; // неопределенный
@@ -462,6 +465,7 @@
   cgOfpTable_GrafKred  =  12;
   cgOfpTable_SoprHoz   =  13;
   cgOfpTable_PlPor     =  14;
+  cgOfpTable_SbBan     =  15;
   // подсчет сумм факта
   shNOT_PAID      =   0;
   shPAID          =   1;
@@ -797,6 +801,7 @@
   cgOp_AppMakeFo         = 97; // формирование ФОБ по Соглашениям
   cgOp_PlanMakeFo        = 98; // формирование ФОБ по ПКП
   cgOp_DistrAktOfp       = 99; // распределение ФОБ по ДО
+  cgOp_ReestrMakeFo      = 100;// формирование ФОБ по реестрам
 
   //-------------------------------------------------------
   // НАСТРОЙКИ МОДУЛЯ
@@ -839,7 +844,10 @@
   cgTuneOfp_WayFpOborotAsAktOfp = 6; // ФинПроводками по ФОБ (не реализовано)
   cgTuneOfp_WayFpOborotAsFpOb   = 1; // ФинПроводками по ФОП
   cgTuneOfp_WayFpOborotAsDocReq = 5; // ФинПроводками по заявкам
-
+  // автоматически передавать данные в регистры
+  cgTuneOfp_BudRegNo            = 0; // не передавать
+  cgTuneOfp_BudRegAll           = 1; // План, Факт, Резерв
+  cgTuneOfp_BudRegFactRez       = 2; // Факт, Резерв
   // "Книга финпроводок ведется по документам" Фоп/ФО/Заявкам
   // GetTune_Budget_ByDocs
   cgTuneOfp_BudByFop            = 1;
@@ -944,6 +952,7 @@
   cgModul_Snab         =  2;
   cgModul_Sbyt         =  3;
   cgModul_Stroy        =  4;
+  cgModul_Plat         =  5;
   //-------------------------------------------------------
 
   cgOfp_CheckConvert = 'конвертация';

@@ -13,12 +13,12 @@ end; // const
 
 // константы режимов распределения агрегата
 const
-  lc_AgrRaspMode_AgrToOther      = 0;  // 'А - на "прочие", П - равномерно'               
-  lc_AgrRaspMode_AgrByNewOld     = 1;  // 'А, П - пропорционально прежнему'                           
-  lc_AgrRaspMode_AgrByBaseCoeff  = 2;  // 'А - согласно весам другого агрегата'           
-  lc_AgrRaspMode_AgrByUserCoeff  = 3;  // 'А - согласно заданным весам'                   
+  lc_AgrRaspMode_AgrToOther      = 0;  // 'А - на "прочие", П - равномерно'
+  lc_AgrRaspMode_AgrByNewOld     = 1;  // 'А, П - пропорционально прежнему'
+  lc_AgrRaspMode_AgrByBaseCoeff  = 2;  // 'А - согласно весам другого агрегата'
+  lc_AgrRaspMode_AgrByUserCoeff  = 3;  // 'А - согласно заданным весам'
   lc_AgrRaspMode_OtherByNewOld   = 4;  // 'А - "прочие" согласно текущему уровню аналитик'
-  lc_AgrRaspMode_OtherUserCoeff  = 5;  // 'А - "прочие" согласно заданным весам'          
+  lc_AgrRaspMode_OtherUserCoeff  = 5;  // 'А - "прочие" согласно заданным весам'
                                                                                           
 
   lc_AgrRaspName_AgrToOther      = 'А - на "прочие", П - равномерно'               ;
@@ -44,4 +44,3 @@ const
   lc_HierRaspName_LeafAsLeaf : string = 'не распределять, т.к. это "лист"';
 
 end; // const
-

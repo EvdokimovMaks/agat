@@ -14,6 +14,7 @@
 .{
 .fields
 
+ PrihRashOrd  : string
  NumPPSklOrd  : longint
  SklOrderNrec : comp
 
@@ -47,7 +48,7 @@
  N_DO
 
 .endfields
- ^ ^
+ ^ ^ ^
  ^ ^
  ^ ^
  ^ ^ ^ ^
@@ -119,7 +120,6 @@
 Форма М-4
 #end
 .linkform 'М-4' prototype is 'FormM4'
-//.group 'Приходный ордер 1'
 .group 'Country' subGroup 'Russia'
 .DEFP PA4
 .P 40
@@ -149,6 +149,7 @@ KodMain     : string;
 .endvar
 .{
 .fields
+PrihRashOrd
 NOrder Tire CurDocIndex OrgName OrgOKPO PodrName
 DOrder SkladName OrgBName OrgBCode InsureCo SchMain KodMain
 N_SoprDoc N_BaseFin
@@ -204,7 +205,7 @@ End.
                                                                                                            Типовая межотраслевая форма № М-4
                                                                                                            Утвержденная постановлением Госкомстата России
                                                                                                            от 30.10.97 № 71а
-                                              ПРИХОДНЫЙ ОРДЕР №  Д@@@@@@@@ @ @#@@@ Д
+                                              @@@@@@@@@ ОРДЕР №  Д@@@@@@@@ @ @#@@@ Д
                                                                                                                                        ┌─────────────────┐
                                                                                                                                        │     Коды        │
                                                                                                                                        ├─────────────────┤
@@ -331,7 +332,6 @@ End.
 Форма М-4
 #end
 .linkform 'М-4 для наличных расчетов' prototype is 'FormM4'
-//.group 'Приходный ордер 1'
 .group 'Country' subGroup 'Russia'
 .DEFP PA4
 .P 40
@@ -365,6 +365,7 @@ KodMain        : string;
 .ENDVAR
 .{
 .fields
+PrihRashOrd
 NOrder Tire CurDocIndex OrgName OrgOKPO PodrName
 DOrder SkladName OrgBName OrgBCode InsureCo SchMain KodMain
 N_SoprDoc N_BaseFin
@@ -428,7 +429,7 @@ End.
                                                                                                            Типовая межотраслевая форма № М-4
                                                                                                            Утвержденная постановлением Госкомстата России
                                                                                                            от 30.10.97 № 71а
-                                              ПРИХОДНЫЙ ОРДЕР №  Д@@@@@@@@ @ @#@@@ Д
+                                              @@@@@@@@@ ОРДЕР №  Д@@@@@@@@ @ @#@@@ Д
                                                                                                                                        ┌─────────────────┐
                                                                                                                                        │     Коды        │
                                                                                                                                        ├─────────────────┤

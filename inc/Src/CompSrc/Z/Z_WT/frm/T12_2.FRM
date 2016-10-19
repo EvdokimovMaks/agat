@@ -10,6 +10,7 @@
 .hide
 .fields
   LinesPerPage: integer
+  EnumeratePages: boolean
   Структурное_подразделение
 
   //Дни смещенного периода расчета
@@ -39,7 +40,7 @@
   Tarif: Double
   WorkingWeekendHours AbsenceDays Weekends
 .endfields
-^ ^
+^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .{ ved12_2_page
 
@@ -72,14 +73,12 @@
   LineCount:  integer
   WorkerName: string
   PageNum:    integer
-  StartPage : integer
 .endvar
 .begin
-  ReadMyDsk(StartPage, 'Vedt12fc_StartPage', false);
-  PageNum := StartPage;
+  PageNum := 1;
   LineCount := 0;
 end.
- Ш.{?internal;(StartPage > 0);
+ Ш.{?internal;(EnumeratePages);
 .fields
   pagenum
 .endfields
@@ -128,7 +127,7 @@ end.
 .begin
 LineCount:=0;
 end.
-.{?internal;(StartPage > 0);
+.{?internal;(EnumeratePages);
 .fields
   pagenum
 .endfields

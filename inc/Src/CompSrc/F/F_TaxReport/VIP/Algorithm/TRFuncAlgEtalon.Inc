@@ -36,19 +36,24 @@ const
 
   // группа и алгоритм по сведениям о затратах на производство и реализацию продукции
   lc_TRAlg_ZatrNaProizv_Grp_GUID = 'DE18E146-7D9B-448C-8016-34BF975DD62E';
-    lc_TRAlg_ZatrNaProizv_Alg_G2014_GUID = '1D071CC0-3CCE-4D8D-9EA2-3402BBA9771E'; //2014 г.
-    lc_TRAlg_ZatrNaProizv_Alg_G2015_GUID = 'C01833EE-2201-4724-AACE-A223ED575B75'; //2015 г.
+    lc_TRAlg_ZatrNaProizv_Alg_G2014_GUID    = '1D071CC0-3CCE-4D8D-9EA2-3402BBA9771E';
+    lc_TRAlg_ZatrNaProizv_Alg_G2015_GUID    = 'C01833EE-2201-4724-AACE-A223ED575B75';
+    lc_TRAlg_ZatrNaProizv_Alg_G2016_GUID    = 'C72604AA-4A99-4A70-8E61-1850DD443B5F';
+    lc_TRAlg_ZatrNaProizv_Alg_G2016Add_GUID = 'FC9989D8-7AAD-4E00-8875-4B2322D5A009';
 
   // группа и алгоритм по сведениям о финансовом состоянии организации
   lc_TRAlg_FinSost_Grp_GUID = 'EBE09504-7C1B-4823-BD8E-5C7CF44E6283';
-    lc_TRAlg_FinSost_Alg_G2014_GUID = '138ABA74-96A4-434F-B775-915D1EB67E37';
-    lc_TRAlg_FinSost_Alg_G2015_GUID = '288D5A50-1AA5-496E-80AB-E4AB46C7BC01';
+    lc_TRAlg_FinSost_Alg_G2014_GUID    = '138ABA74-96A4-434F-B775-915D1EB67E37';
+    lc_TRAlg_FinSost_Alg_G2015_GUID    = '288D5A50-1AA5-496E-80AB-E4AB46C7BC01';
+    lc_TRAlg_FinSost_Alg_G2017_GUID    = 'A31D69EA-944C-4DE3-AA84-DF17B6698B11';
+    lc_TRAlg_FinSost_Alg_G2017Add_GUID = '2CE68C06-EC15-4FD8-A703-AC5C7289D042';
 
   // группа и алгоритм по просроченной задолженности по ЗП
   lc_TRAlg_ZadolPoZP_Grp_GUID = '9024B3EC-A4E2-48D0-9BC1-E2FAF11C6587';
     lc_TRAlg_ZadolPoZP_Alg_G2014_GUID = '9A74FFB8-FB66-439A-861C-70FB8055388E';
     lc_TRAlg_ZadolPoZP_Alg_G2015_GUID = '64C210D9-91E5-4215-9F83-5BAD1DF3BAF6';
     lc_TRAlg_ZadolPoZP_Alg_G2016_GUID = '56C220G1-97J5-4283-8FD3-651G25K4563B';
+    lc_TRAlg_ZadolPoZP_Alg_G2017_GUID = '3A28F91F-E0EE-46DC-9EA6-F0D5B01151E7';
 
   // группа и алгоритм по налогу на прибыль
   lc_TRAlg_Pri_Grp_GUID = '6FA6FA8D-90F8-4EBA-B4FB-75AE02EE5061';
@@ -91,7 +96,12 @@ const
 
   // группа и алгоритм по налогу по УСН
   lc_TRAlg_USN_Grp_GUID = '81223EBB-C301-4D3F-81A1-D6DB417C767D';
-    lc_TRAlg_USN_Alg_GUID = 'DD452333-497A-4D1D-9015-3D87635CC2CB';
+    lc_TRAlg_USN_Alg_G2014_GUID = 'DD452333-497A-4D1D-9015-3D87635CC2CB';
+    lc_TRAlg_USN_Alg_G2016_GUID = 'A4FF0928-BAF8-4AE4-BBA3-5EF8C74643CB';
+
+  // группа и алгоритм по водному налогу
+  lc_TRAlg_VodaNal_Grp_GUID = '08C7F205-BA70-4D14-BB4C-9FE166F032F9';
+    lc_TRAlg_VodaNal_Alg_G2016_GUID = '2F8A51C8-0E1C-43AD-96C2-1614E7137308';
 
   // группа и алгоритм по косвенным налогам
   lc_TRAlg_KNTMSZ_Grp_GUID = '8BB7BCAA-4E36-4717-81B1-659CD935BC00';
@@ -108,7 +118,8 @@ const
 
   // Ответ на сообщение (с требованием представления пояснений)
   lc_TRAlg_OTTRNDS_Grp_GUID = '302238BB-C301-6D3F-81A1-D6DB4125637D';
-    lc_TRAlg_OTTRNDS_Alg_GUID = 'HY452543-497A-4D1D-9015-3D876JH122CB';
+    lc_TRAlg_OTTRNDS_Alg_G2015_guid = 'HY452543-497A-4D1D-9015-3D876JH122CB';
+    lc_TRAlg_OTTRNDS_Alg_G2016_guid = '18B5BFE1-82C6-428D-9E81-E5D83777EF5A';
 
   // Ответ на сообщение (с требованием представления пояснений)
   lc_TRAlg_BOUPR_Grp_GUID = 'E8BE4B1F-BDD0-404F-8730-73AD07A497DB';
@@ -118,6 +129,14 @@ const
   // группа и алгоритм по ЕСХН
   lc_TRAlg_ESHN_Grp_GUID = '1BAFFA6D-85EF-4B46-9C8D-2133D23F75F5';
     lc_TRAlg_ESHN_Alg_G2016_GUID = 'D8319D0B-8474-4AB3-BE49-0B8D6BE1D83B';
+
+  // группа и алгоритм по акцизам на автомобильный бензин
+  lc_TRAlg_AKCAVNEF_Grp_GUID = '07B353E0-F5A6-49AE-B0B6-5EFDF284A293';
+    lc_TRAlg_AKCAVNEF_Alg_G2016_GUID = '578F740F-51B6-4A53-8019-1D17BBD70D48';
+
+  // группа и алгоритм по акцизам на этиловый спирт, алкогольную и (или) подакцизную спиртосодержащую продукцию (1151090)
+  lc_TRAlg_AKCALK_Grp_GUID = '56321ED8-409C-447F-B5A0-88B5FB256B67';
+    lc_TRAlg_AKCALK_Alg_G2016_GUID = 'E5D16351-BBA9-409A-9C4B-4209AE6F2D08';
   //#endregion НАЛОГОВАЯ ОТЧЕТНОСТЬ
   //****************************************************************************
 
@@ -128,9 +147,10 @@ const
   // Статистическая отчетность
   lc_TRAlg_Sys_Stat_Grp_GUID = 'A2B3F9B7-9C1F-4BE9-92C6-70813F2CC01F';
 
-   // группа и алгоритм по неполной занятости и движении работников
+   // группа и алгоритм "Сведения о неполной занятости и движении работников (П-4 (НЗ))"
   lc_TRAlg_NepolZanIDvijRabot_Grp_GUID = '50CF61B0-D2E9-42C2-9CAF-8CBD84251C01';
-    lc_TRAlg_NepolZanIDvijRabot_Alg_GUID = 'D5A66FE0-95FF-448D-B9F2-F311D267535C';
+    lc_TRAlg_NepolZanIDvijRabot_Alg_G2015_GUID = 'D5A66FE0-95FF-448D-B9F2-F311D267535C';
+    lc_TRAlg_NepolZanIDvijRabot_Alg_G2016_GUID = '1DB4705E-A3A2-41E0-986C-2C17BE84DB6D';
 
   // группа и алгоритм по отгруженной продукции
   lc_TRAlg_OtgrProd_Grp_GUID = '50CF61B0-D2E9-42C2-9CAF-8CBD84251C00';
@@ -138,7 +158,8 @@ const
 
   // группа и алгоритм по финансовым вложениям
   lc_TRAlg_FinVlog_Grp_GUID = 'BEF34FF2-F393-48B5-83F1-FB82F1810954';
-    lc_TRAlg_FinVlog_Alg_GUID = '5CDCB553-05B8-4EC7-994E-3E29FFA90850';
+    lc_TRAlg_FinVlog_Alg_G2015_GUID = '5CDCB553-05B8-4EC7-994E-3E29FFA90850';
+    lc_TRAlg_FinVlog_Alg_G2017_GUID = '497B43C9-1E3C-4B59-BBE7-747018CE09F6';
 
   // группа и алгоритм по инвестициям в нефинансовые активы и средствах на долевое строительство
   lc_TRAlg_InvAndDolSt_Grp_GUID = '5C4FE929-CE55-4427-A8CA-197D95E85743';
@@ -154,7 +175,8 @@ const
 
   // группа и алгоритм по использованию денежных средств
   lc_TRAlg_IspDenSr_Grp_GUID = 'CC51C4D9-3A5F-4F2C-9049-86ECC04C0D80';
-    lc_TRAlg_IspDenSr_Alg_GUID = '387E340B-DA85-43F9-8C52-7561BF4BE7A2';
+    lc_TRAlg_IspDenSr_Alg_G2014_GUID = '387E340B-DA85-43F9-8C52-7561BF4BE7A2';
+    lc_TRAlg_IspDenSr_Alg_G2016_GUID = 'D31D6AF6-9B86-4186-94F5-471D2391154D';
 
   //#endregion СТАТИСТИЧЕСКАЯ ОТЧЕТНОСТЬ
   //****************************************************************************

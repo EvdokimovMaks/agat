@@ -337,19 +337,19 @@ end.
 !=============================================================================
 .function WriteInForm(_sum : double; prizn: word) : string;
 begin
-   WriteInForm := ' ';
-   if (_sum <> 0)
-     WriteInForm := DoubleToStr(_sum,'[|-]366666666666')
-   else if (_sum = 0) and (prizn = 1)
-     WriteInForm := DoubleToStr(0,'[|-]366666666666')
+  WriteInForm := '0,00';
+  if (_sum <> 0)
+    WriteInForm := DoubleToStr(_sum,'[|-]36666666666667,8899')
+  else if (_sum = 0) and (prizn = 1)
+    WriteInForm := '0,00';
 end.
 .function WriteInFormPr(_sum : double; prizn: word) : string;
 begin
-   WriteInFormPr := ' ';
-   if (_sum <> 0)
-     WriteInFormPr := DoubleToStr(_sum,'[|-]366666666666~99')
-   else if (_sum = 0) and (prizn = 1)
-     WriteInFormPr := DoubleToStr(0,'[|-]366666666666~99')
+  WriteInFormPr := '0';
+  if (_sum <> 0)
+    WriteInFormPr := DoubleToStr(_sum,'[|-]366666666666~99')
+  else if (_sum = 0) and (prizn = 1)
+    WriteInFormPr := DoubleToStr(0,'[|-]366666666666~99')
 end.
 !=============================================================================
 .function SpaceOfZeroForTotal(_categ: string): string;
@@ -388,9 +388,9 @@ if(CharF = 0, 'И',if(CharF = 1, 'К', if(CharF = 2, 'О', if(CharF = 3, 'П',' ')))
 if(квартал = 1,1,if(квартал = 12, 2, if(квартал = 123, 3, if(квартал = 1234, 4,' '))))
 God
 
-if(CharF<>2, DoubleToStr(Pach_NachItog,'[|-]3666666666666'),' ')
-if(CharF<>2, DoubleToStr(Pach_VzItog,'[|-]3666666666666'),' ')
-if(CharF<>2, DoubleToStr(Pach_VzItogUpl,'[|-]3666666666666'),' ')
+if(CharF<>2, DoubleToStr(Pach_NachItog,'[|-]36666666666667,8899'),' ')
+if(CharF<>2, DoubleToStr(Pach_VzItog,'[|-]36666666666667,8899'),' ')
+if(CharF<>2, DoubleToStr(Pach_VzItogUpl,'[|-]36666666666667,8899'),' ')
 if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
 .endfields
 ЗГЛВ=1.5=
@@ -425,8 +425,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum13 <> 0)
  or (PrizSum1 = 1)  then
   begin
-    SumNach:= SumNach + Trunc(double(Sum11));
-    SumVz  := SumVz + Trunc(Sum13);
+    SumNach:= SumNach + double(Sum11);
+    SumVz  := SumVz + Sum13;
     KolNach:= KolNach+1;
     InPrizSum1 := true;
   end;
@@ -434,8 +434,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum23 <> 0)
  or (PrizSum2 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum21);
-    SumVz  := SumVz +   Trunc(Sum23);
+    SumNach:= SumNach + Sum21;
+    SumVz  := SumVz +   Sum23;
     KolNach:= KolNach+1;
     InPrizSum2 := true;
   end;
@@ -443,8 +443,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum33 <> 0)
  or (PrizSum3 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum31);
-    SumVz  := SumVz +   Trunc(Sum33);
+    SumNach:= SumNach + Sum31;
+    SumVz  := SumVz +   Sum33;
     KolNach:= KolNach+1;
     InPrizSum3 := true;
   end;
@@ -452,8 +452,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum43 <> 0)
  or (PrizSum4 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum41);
-    SumVz  := SumVz +   Trunc(Sum43);
+    SumNach:= SumNach + Sum41;
+    SumVz  := SumVz +   Sum43;
     KolNach:= KolNach+1;
     InPrizSum4 := true;
   end;
@@ -461,8 +461,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum53 <> 0)
  or (PrizSum5 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum51);
-    SumVz  := SumVz +   Trunc(Sum53);
+    SumNach:= SumNach + Sum51;
+    SumVz  := SumVz +   Sum53;
     KolNach:= KolNach+1;
     InPrizSum5 := true;
   end;
@@ -470,8 +470,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum63 <> 0)
  or (PrizSum6 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum61);
-    SumVz  := SumVz +   Trunc(Sum63);
+    SumNach:= SumNach + Sum61;
+    SumVz  := SumVz +   Sum63;
     KolNach:= KolNach+1;
     InPrizSum6 := true;
   end;
@@ -479,8 +479,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum73 <> 0)
  or (PrizSum7 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum71);
-    SumVz  := SumVz +   Trunc(Sum73);
+    SumNach:= SumNach + Sum71;
+    SumVz  := SumVz +   Sum73;
     KolNach:= KolNach+1;
     InPrizSum7 := true;
   end;
@@ -488,8 +488,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum83 <> 0)
  or (PrizSum8 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum81);
-    SumVz  := SumVz +   Trunc(Sum83);
+    SumNach:= SumNach + Sum81;
+    SumVz  := SumVz +   Sum83;
     KolNach:= KolNach+1;
     InPrizSum8 := true;
   end;
@@ -497,8 +497,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum93 <> 0)
  or (PrizSum9 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum91);
-    SumVz  := SumVz +   Trunc(Sum93);
+    SumNach:= SumNach + Sum91;
+    SumVz  := SumVz +   Sum93;
     KolNach:= KolNach+1;
     InPrizSum9 := true;
   end;
@@ -506,8 +506,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum103 <> 0)
  or (PrizSum10 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum101);
-    SumVz  := SumVz +   Trunc(Sum103);
+    SumNach:= SumNach + Sum101;
+    SumVz  := SumVz +   Sum103;
     KolNach:= KolNach+1;
     InPrizSum10 := true;
   end;
@@ -515,8 +515,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum113 <> 0)
  or (PrizSum11 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum111);
-    SumVz  := SumVz +   Trunc(Sum113);
+    SumNach:= SumNach + Sum111;
+    SumVz  := SumVz +   Sum113;
     KolNach:= KolNach+1;
     InPrizSum11 := true;
   end;
@@ -524,8 +524,8 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
  or (Sum123 <> 0)
  or (PrizSum12 = 1) then
   begin
-    SumNach:= SumNach + Trunc(Sum121);
-    SumVz  := SumVz +   Trunc(Sum123);
+    SumNach:= SumNach + Sum121;
+    SumVz  := SumVz +   Sum123;
     KolNach:= KolNach+1;
     InPrizSum12 := true;
   end;
@@ -564,11 +564,11 @@ if(Trim(Страховой_номер)<>'',Trim(Страховой_номер),' ')
 if(Trim(Фамилия)  <> '' ,UpCase(Trim(Фамилия)),' ')
 if(Trim(Initial1 )<> '',UpCase(Trim(Initial1)),' ')
 if(Trim(Initial2) <> '',UpCase(Trim(Initial2)),' ')
-if(максимальный_процент <> 0.00, DoubleToStr(максимальный_процент, '\2p[|-]3666 666 666 666 666 667.8'), ' ')
+if(максимальный_процент <> 0.00, DoubleToStr(максимальный_процент, '\2p[|-]3666 666 666 666 666 667,8'), ' ')
 
-if((CharF <> 2)and(ISum1 <> 0),DoubleToStr(ISum1,'[|-]3666666666666'), SpaceOfZeroForTotal(HP))
-if((CharF <> 2)and(ISum2 <> 0),DoubleToStr(ISum2,'[|-]3666666666666'), SpaceOfZeroForTotal(HP))
-if((CharF <> 2)and(ISum3 <> 0),DoubleToStr(ISum3,'[|-]3666666666666'), SpaceOfZeroForTotal(HP))
+if((CharF <> 2)and(ISum1 <> 0),DoubleToStr(ISum1,'[|-]36666666666667,8899'), SpaceOfZeroForTotal(HP))
+if((CharF <> 2)and(ISum2 <> 0),DoubleToStr(ISum2,'[|-]36666666666667,8899'), SpaceOfZeroForTotal(HP))
+if((CharF <> 2)and(ISum3 <> 0),DoubleToStr(ISum3,'[|-]36666666666667,8899'), SpaceOfZeroForTotal(HP))
 if(CharF <> 2,KolNach,' ')
 KolStag
 curdate

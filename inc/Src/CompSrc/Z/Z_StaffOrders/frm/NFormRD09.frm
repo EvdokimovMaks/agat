@@ -44,6 +44,13 @@ DateEnd
 priznak : word
 !.}
 
+Основание
+Appendix1
+Appendix2
+Appendix3
+Appendix4
+Appendix5
+
 ДолжнРук
 ФиоРук
 
@@ -75,6 +82,13 @@ DateBeg                       ^
 DateEnd                       ^
 priznak                       ^
 .}
+
+Основание                     ^
+Appendix1                     ^
+Appendix2                     ^
+Appendix3                     ^
+Appendix4                     ^
+Appendix5                     ^
 
 ДолжнРук                      ^
 ФиоРук                        ^

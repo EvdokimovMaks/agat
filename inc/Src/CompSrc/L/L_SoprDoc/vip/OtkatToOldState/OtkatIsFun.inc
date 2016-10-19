@@ -26,6 +26,7 @@ Const
   otsCommission     = 17;               // подписанты и прочие данные в отчете
   otsKatOrgName     = 18;               // контрагент
   otsBarKodAndState = 19;               // штрихкод
+  otsKDKolDiff      = 20;               // количество в корректировочном документе
 end;
 
 #end

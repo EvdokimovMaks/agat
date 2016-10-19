@@ -19,13 +19,11 @@
 .hide
 .fields
   Pred
-  OKPO
   DATAO : date
   Day1 Day2 Mes1 God1
   NaimK8 NaimK9 NaimK10 NaimK14
   DataOtch: date
 .endfields
- ^
  ^
  ^
  ^^^^

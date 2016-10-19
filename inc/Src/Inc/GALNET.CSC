@@ -292,6 +292,9 @@ sci178EnFiltrIns  =  9041;
 sci13478EscTreePlus= 9042;
 sci1478EscTreePlus = 9045;
 
+sci1378EscExTreeA =  9046;
+sci178EscExTreeA1 =  9047;
+
 sct1347           =  7000;
 sct1347Esc        =  7001;
 sct13478          =  7002;
@@ -331,6 +334,7 @@ sciMBPNst148EnEsc =  7407;
 sciSFOEscIns      =  7410;
 sciSFO1389Esc     =  7411;
 sciSFO1Ins        =  7412;
+sciSFO1KolIns     =  7413;
 
 scIntClass        =  8000;
 scDialog          = 20000;

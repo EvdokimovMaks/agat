@@ -28,6 +28,7 @@ const
   lc_DocInfoExtAttrName_TaxpayerShare = 'TaxpayerShare';  // Доля налогоплательщика
   lc_DocInfoExtAttrName_sDoljaNPChsl  = 'sDoljaNPChsl' ;  // Доля налогоплательщика (числитель)
   lc_DocInfoExtAttrName_sDoljaNPZnam  = 'sDoljaNPZnam' ;  // Доля налогоплательщика (знаменатель)
+  lc_DocInfoExtAttrName_IsNotObjTax   = 'IsNotObjTax'  ;  // Не является объектом налогообложения для земельного налога
 
   // учет в налоговом органе
   lc_DocInfoExtAttrName_wFNSOrg       = 'wFNSOrg'      ;   // Режим учета в налоговом органе

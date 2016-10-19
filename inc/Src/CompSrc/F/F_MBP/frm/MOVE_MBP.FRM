@@ -63,12 +63,13 @@
   sumpr     :double       // 15
   oldSumPr  :double       // 16
   SrokExp   :string       // 17
+  IznKoef   :double       // 18
 .endfields
 //-------- Spec ----------
 WokerFIO  - ^
 WokerTabN - ^
 ^^^^^^^^^^^^^^
-^^
+^^^
 //--------endSpec ----------
 .}
 .fields

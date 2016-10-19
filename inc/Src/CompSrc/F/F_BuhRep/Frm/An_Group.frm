@@ -400,7 +400,7 @@ cDas_pdvk   дельта между расчетным и фактическим по кредиту  ^
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -599,7 +599,7 @@ FrmUserName
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -771,7 +771,7 @@ FrmUserName
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -945,7 +945,7 @@ FrmUserName
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -1117,7 +1117,7 @@ FrmUserName
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -1322,7 +1322,7 @@ FrmUserName
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -1500,7 +1500,7 @@ FrmUserName
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader

@@ -100,4 +100,5 @@ Const
 #include DocRef.inc     // Константы для таблицы DocRef
 #include ExcelFormat.inc // Константы для форматов Excel (решена проблемма 102.31867)
 #include AllStaff.inc    // Константы для таблицы SpAllStaff
+#include DelRaise.inc    // Константы для таблицы DelRaise
   

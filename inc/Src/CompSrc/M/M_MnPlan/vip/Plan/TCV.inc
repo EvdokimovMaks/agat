@@ -252,7 +252,7 @@ end;
     FldModeRef_Doc      : word;              // константы cntFlagModeDoc_ в этом же файле (Видимо этот флажок можно исрользовать только для ингридиетов)
     TypeDoc             : word;              // Тип документа
     cDoc                : comp;              // ссылка на документ
-    cTmplDoc            : comp;              // ссылка на шаблон документа
+    cTmplDoc            : comp;             // ссылка на шаблон документа
     cTCVHead            : comp;              // ссылка на документ
     TypeRecFld          : word;
   end; // type StructTCVPrmIO

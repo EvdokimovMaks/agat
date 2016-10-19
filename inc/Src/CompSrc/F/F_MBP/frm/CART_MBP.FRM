@@ -74,9 +74,11 @@
   InOperTxt             // 26
   InSrok:string         // 27
   InDatePost:date       // 28
+  InDgr:string          // 29
+  InNameOrg: string     // 30
 .endfields
 12345678901234567890123456
-^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^ ^^^ ^^^^
+^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^ ^^^ ^^^^^^
 .{fMbpOut CheckEnter
 .fields
   OutNRec:Comp          //
@@ -99,6 +101,7 @@
   OutOperTxt            // 16
   OutPrichKod
   OutPrichName
+  OutNameOrg:string
 ! Перевод в утиль
   USNRec   : Comp
   UDPodrF  : String
@@ -111,7 +114,7 @@
 .endfields
 
 1234567890123456
-^^^^^^^^^^^  ^^^  ^^^^ ^^^^^^^^
+^^^^^^^^^^^  ^^^  ^^^^^ ^^^^^^^^
 .}
 .}
 .}
@@ -161,7 +164,7 @@ end.
   MbpName
   MbpNum
   MbpEd
-  MbpDgr
+  InDgr
 .endfields
 .{?Internal;(HeadPrih = 1)
  Б ^
@@ -293,7 +296,7 @@ end.
   MbpName
   MbpNum
   MbpEd
-  MbpDgr
+  InDgr
 .endfields
 .{?Internal;(HeadPrih = 1)
  Б ^
@@ -955,7 +958,7 @@ end.
 .{fMbpOut CheckEnter
 .fields
  CommonFormHeader
- OutNumDoc  NameOrg  ОКПО
+ OutNumDoc  OutNameOrg  ОКПО
  InPodr
  DateToStr(OutDate, 'DD/MM/YYYY')
  InPodr

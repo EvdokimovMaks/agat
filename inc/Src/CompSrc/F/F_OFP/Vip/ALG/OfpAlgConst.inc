@@ -20,7 +20,7 @@ Const
   nAlg_dInput    = 3; // дата документа
   nAlg_dBegPlat  = 4; // период оплаты
   nAlg_dEndPlat  = 5; // период оплаты
-  nAlg_dFirst    = 6; // первоначальная дата
+//nAlg_dFirst    = 6; // первоначальная дата
   nAlg_dDoc      = 7; // планируемая дата погашения
   nAlg_doSumma   = 8; // сумма
   nAlg_cKatOrg   = 9; // организация
@@ -44,35 +44,66 @@ Const
   nAlg_wPlatDoc  = 27;// Тип документа
   nAlg_cPerson   = 28;// подотчетное лицо
   nAlg_cGroup    = 29;// группа ФОБ
+  nAlg_cKatBank  = 30;// банк
 
-  // поля интерфейса групповой модификации
-  cgGrPos_Descr     = 0;
-  cgGrPos_DesGr     = 1;
-  cgGrPos_cDogovor  = 2;
-  cgGrPos_cAppDog   = 3;
-  cgGrPos_cCalPlan  = 4;
-  cgGrPos_cBaseDoc  = 5;
-  cgGrPos_cDocReq   = 6;
-  cgGrPos_cCredit   = 6;
-  cgGrPos_wPrior    = 7;
-  cgGrPos_dInput    = 8;
-  cgGrPos_dDate1    = 9;
-  cgGrPos_dDate2    = 10;
-  cgGrPos_doSumma   = 11;
-  cgGrPos_cKatOrg   = 12;
-  cgGrPos_cKatStroy = 13;
-  cgGrPos_cCO       = 14;
-  cgGrPos_cStBud    = 15;
-  cgGrPos_cCurator  = 16;
-  cgGrPos_cPurpose  = 17;
-  cgGrPos_wComment  = 18;
-  cgGrPos_cNalog    = 19;
-  cgGrPos_wMeanType = 20;
-  cgGrPos_cPlatMean = 21;
-  cgGrPos_wPlatDoc  = 22;
-  cgGrPos_wCurse    = 23;
-  cgGrPos_wVidPlat  = 24;
-  cgGrPos_cGroup    = 25;
+  // поля интерфейса групповой модификации заявок
+  cgReqPos_Descr     = 0;
+  cgReqPos_DesGr     = 1;
+  cgReqPos_cDogovor  = 2;
+  cgReqPos_cAppDog   = 3;
+  cgReqPos_cCalPlan  = 4;
+  cgReqPos_cBaseDoc  = 5;
+  cgReqPos_cDocReq   = 6;
+  cgReqPos_cCredit   = 6;
+  cgReqPos_wPrior    = 7;
+  cgReqPos_dInput    = 8;
+  cgReqPos_dBeg      = 9;
+  cgReqPos_dEnd      = 10;
+  cgReqPos_doSumma   = 11;
+  cgReqPos_cKatOrg   = 12;
+  cgReqPos_cKatBank  = 13;
+  cgReqPos_cKatStroy = 14;
+  cgReqPos_cCO       = 15;
+  cgReqPos_cStBud    = 16;
+  cgReqPos_cCurator  = 17;
+  cgReqPos_cPurpose  = 18;
+  cgReqPos_wComment  = 19;
+  cgReqPos_cNalog    = 20;
+  cgReqPos_wMeanType = 21;
+  cgReqPos_cPlatMean = 22;
+  cgReqPos_wPlatDoc  = 23;
+  cgReqPos_wCurse    = 24;
+  cgReqPos_wVidPlat  = 25;
+  cgReqPos_cGroup    = 26;
+
+  // поля интерфейса групповой модификации обязательств
+  cgAktPos_Descr     = 0;
+  cgAktPos_DesGr     = 1;
+  cgAktPos_cDogovor  = 2;
+  cgAktPos_cAppDog   = 3;
+  cgAktPos_cCalPlan  = 4;
+  cgAktPos_cBaseDoc  = 5;
+  cgAktPos_cDocReq   = 6;
+  cgAktPos_cCredit   = 6;
+  cgAktPos_wPrior    = 7;
+  cgAktPos_dInput    = 8;
+  cgAktPos_dDoc      = 9;
+  cgAktPos_doSumma   = 10;
+  cgAktPos_cKatOrg   = 11;
+  cgAktPos_cKatBank  = 12;
+  cgAktPos_cKatStroy = 13;
+  cgAktPos_cCO       = 14;
+  cgAktPos_cStBud    = 15;
+  cgAktPos_cCurator  = 16;
+  cgAktPos_cPurpose  = 17;
+  cgAktPos_wComment  = 18;
+  cgAktPos_cNalog    = 19;
+  cgAktPos_wMeanType = 20;
+  cgAktPos_cPlatMean = 21;
+  cgAktPos_wPlatDoc  = 22;
+  cgAktPos_wCurse    = 23;
+  cgAktPos_wVidPlat  = 24;
+  cgAktPos_cGroup    = 25;
 
   // поля интерфейса формирования ФОБ на основании ПД
   cgBySHPos_Descr     = 0;
@@ -81,10 +112,10 @@ Const
   cgBySHPos_wStatus   = 3;
   cgBySHPos_wPrior    = 4;
   cgBySHPos_dInput    = 5;
-  cgBySHPos_dDate1    = 6;
-  cgBySHPos_dDate2    = 7;
-  cgBySHPos_doSumma   = 8;
-  cgBySHPos_cKatOrg   = 9;
+  cgBySHPos_dDoc      = 6;
+  cgBySHPos_doSumma   = 7;
+  cgBySHPos_cKatOrg   = 8;
+  cgBySHPos_cKatBank  = 9;
   cgBySHPos_cKatStroy = 10;
   cgBySHPos_cCO       = 11;
   cgBySHPos_cStBud    = 12;
@@ -109,9 +140,9 @@ Const
   wAlgDate_CurDate                 = 4;    // текущая дата
   wAlgDate_OpenDate                = 5;    // дата открытого периода
   wAlgDate_AktOfp_dInput           = 6;    // дата формирования документа
-  wAlgDate_AktOfp_dFirst           = 7;    // первоначальная дата погашения
+  wAlgDate_AktOfp_dFirst           = 7;    // первоначальная дата погашения (алгоритм дублирует wAlgDate_AktOfp_dInput, т.к. для поля "первоначальная дата" реализована новая логика)
   wAlgDate_AktOfp_dInput_AddSrok   = 8;    // дата формирования документа + срок погашения
-  wAlgDate_AktOfp_dFirst_AddSrok   = 9;    // первоначальная дата погашения + срок погашения
+  wAlgDate_AktOfp_dFirst_AddSrok   = 9;    // первоначальная дата погашения + срок погашения (алгоритм дублирует wAlgDate_AktOfp_dInput_AddSrok, т.к. для поля "первоначальная дата" реализована новая логика)
   wAlgDate_AktOfp_dDoc             = 10;   // дата документа
   wAlgDate_DocReq_dDoc             = 11;   // дата создания заявки
   wAlgDate_DocReq_dBegPlat         = 12;   // планируемая дата начала оплаты заявки
@@ -137,13 +168,16 @@ Const
   wAlgDate_PlPor_DatVip            = 32;   // дата выписки платежного документа
   wAlgDate_PlPor_DatOb             = 33;   // дата оплаты платежного документа
   wAlgDate_AktOfp_dInput_AddAgeOrg = 34;   // дата формирования ФОБ + максимальный возраст задолженности по контрагенту
-  wAlgDate_AktOfp_dFirst_AddAgeOrg = 35;   // первоначальная дата погашения ФОБ + максимальный возраст задолженности по контрагенту
+  wAlgDate_AktOfp_dFirst_AddAgeOrg = 35;   // первоначальная дата погашения ФОБ + максимальный возраст задолженности по контрагенту (алгоритм дублирует wAlgDate_AktOfp_dInput_AddAgeOrg, т.к. для поля "первоначальная дата" реализована новая логика)
   wAlgDate_DocReq_dDoc_AddAgeOrg   = 36;   // дата формирования заявки + максимальный возраст задолженности по контрагенту
   wAlgDate_DocReq_dBegPl_AddAgeOrg = 37;   // первоначальная дата погашения заявки + максимальный возраст задолженности по контрагенту
   wAlgDate_AktOfp_dValCurse        = 38;   // дата курса ФОБ
   wAlgDate_GrafKred_dDoc           = 39;   // дата ЭПГ
   wAlgDate_GrafKred_dOpl           = 40;   // срок платежа по кредиту
   wAlgDate_BaseDoc_dSopr_AddDayPl  = 41;   // дата накладной + количество дней отсрочки
+  wAlgDate_SbBan_dForm             = 42;   // дата формирования реестра
+  wAlgDate_SbBan_DataN             = 43;   // дата принятия к обработке реестра
+  wAlgDate_SbBan_DatOk             = 44;   // дата закрытия реестра
   // DOUBLE ( 100 - 199 )
   wAlgSumma_DocReq_Summa           = 100;  // Сумма заявки
   wAlgSumma_BaseDoc_Summa          = 101;  // Сумма по ДО
@@ -170,6 +204,7 @@ Const
   wAlgSumma_GrafKred_Summa         = 123;  // Сумма по ЭПГ
   wAlgSumma_BaseDoc_NoOpl          = 124;  // Остаток к исполнению по
   wAlgSumma_DocReq_NoOpl           = 125;  // Остаток к исполнению по договору
+  wAlgSumma_SbBan_Summa            = 126;  // Сумма по реестру
   // COMP ( 200 - 299 )
   wAlgRef_Def_CO                   = 200;  // ЦО по умолчанию (из настройки)
   wAlgRef_Def_Person               = 201;  // Куратор по умолчанию
@@ -252,8 +287,12 @@ Const
   wAlgRef_DocReq_PlatMean          = 278;  // платежное средство по заявке
   wAlgRef_BaseDoc_PlatMean         = 279;  // платежное средство по ДО
   wAlgRef_Def_Group                = 280;  // группа ФОБ по умолчанию
-  wAlgRef_Def_AktOfp_Bank          = 281;  // банк по умолчанию
-  wAlgRef_Def_DocReq_Bank          = 282;  // банк по умолчанию
+  wAlgRef_KatOrg_Def_Bank          = 281;  // банк контрагента по умолчанию
+  wAlgRef_KatOrg_Get_Bank          = 282;  // выбор из каталога счетов контрагента
+  wAlgRef_SbBan_Pol                = 283;  // получатель платежей по реестру
+  wAlgRef_SbBan_BankPol            = 284;  // банк получателя платежей по реестру
+  wAlgRef_SbBan_Person             = 285;  // сотрудник по реестру
+  wAlgRef_GrafKred_Tip             = 286;  // тип этапа погашения кредита
   // WORD ( 300 - 399 )
   wAlgWord_Def_Vid_Avans           = 300;  // явно - аванс
   wAlgWord_Def_Vid_Fakt            = 301;  // явно - факт
@@ -345,6 +384,9 @@ Const
   wAlgWord_DocReq_MeanType         = 387;  // тип платежного средства по заявке
   wAlgWord_DocReq_PlatDoc          = 388;  // тип документа по заявке
   wAlgWord_BaseDoc_MeanType        = 389;  // тип платежного средства по ДО
+  wAlgWord_GrafKred_Tip            = 390;  // тип этапа погашения кредита
+  wAlgWord_Val                     = 391;  // по валюте
+  wAlgWord_SbBan_MeanType          = 392;  // тип платежного средства по реестру
   // шаблоны для настройки ( 400 - 499 )
   wAlgDate_Manual_Date             = 400;  // дата документа явно
   wAlgSumm_Manual_Summa            = 401;  // сумма явно

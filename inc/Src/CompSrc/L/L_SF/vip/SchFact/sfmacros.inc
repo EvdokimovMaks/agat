@@ -21,21 +21,6 @@
     }
 #end
 
-#declare UpdateRest(dblRest, bDop = FALSE)
-  if (not #bDop)
-    {
-      set SpSchf.dblRest  := #dblRest;
-      set SpSchf.wPrRest := if (SpSchf.dblRest > vSF.doMinKol, ZK_EXIST, ZK_NEXIST)
-                          + if (SchFact.Direct = cwDirect_Sell, Word(1), Word(0));
-    }
-  else
-    {
-      set vSSp.SSp.dblRest  := #dblRest;
-      set vSSp.SSp.wPrRest := if (vSSp.SSp.dblRest > vSF.doMinKol, ZK_EXIST, ZK_NEXIST)
-                            + if (vSF.SF.Direct = cwDirect_Sell, Word(1), Word(0));
-    }
-#end
-
 // Для использования в сторонних компонентах и отдельных интерфейсах,
 // чтобы, в отличае от funIsClosedPeriod, не задавать переменные с значениями настроек
 #declare IsClosedPeriod(dReg, bMes = True)

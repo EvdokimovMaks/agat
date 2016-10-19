@@ -140,7 +140,7 @@ end.
 ÿˆ.{ PlVedP CheckEnter
 .fields
  KolList
- GetStrSummaExt(true, true, SumList)
+  GetStrSummaExt(true, true, SumList)
  DoubleToString(0, SumList)
  Npp KodPodr TabN FIO
  GetStrSummaExt(true, true, Summa) PrizDep Fio2

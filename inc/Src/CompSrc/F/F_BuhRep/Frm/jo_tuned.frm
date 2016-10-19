@@ -126,7 +126,7 @@ SchSubName  - наименование счета/субсчета       - ^
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -217,7 +217,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -310,7 +310,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -400,7 +400,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -493,7 +493,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -584,7 +584,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -675,7 +675,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -767,7 +767,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -857,7 +857,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -948,7 +948,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1038,7 +1038,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1130,7 +1130,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1221,7 +1221,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1314,7 +1314,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1409,7 +1409,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1497,7 +1497,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1587,7 +1587,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1679,7 +1679,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1769,7 +1769,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1860,7 +1860,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -1952,7 +1952,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader
@@ -2044,7 +2044,7 @@ RepUserName
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader

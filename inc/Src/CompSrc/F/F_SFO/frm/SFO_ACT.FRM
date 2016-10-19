@@ -33,9 +33,9 @@
 ! Для Акта группового выбытия
   WorkerFIO : String  WorkerTabN : String
 ! Ссылка на текущую спецификацию документа
-  sfoRec : Comp
+  sfoRec : Comp iznKoef : Double
 .endFields
- ^ ^ ^ ^ ^ ^ ^ ^ ^  ^ ^  ^ ^ ^  ^ ^  ^
+ ^ ^ ^ ^ ^ ^ ^ ^ ^  ^ ^  ^ ^ ^  ^ ^  ^  ^
 .}
 .}
 .endForm

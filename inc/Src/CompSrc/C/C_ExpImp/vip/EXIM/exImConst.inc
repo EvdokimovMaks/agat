@@ -26,4 +26,8 @@ const
   // принадлежность поля
   lHeader            = 0;//шапка
   lSpec              = 1;// спецификация
-end;   
+
+  lDosKodirovka = 0;
+  lWinKodirovka = 1;
+  lUtfKodirovka = 2;
+end;

@@ -21,8 +21,16 @@
  Nachisl
  Neobl
  FondDn FondCh
+ FondStr
+ FondDn FondCh
+ FondStr_2
+ FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr
+ PlanDn PlanCh
+ PlanStr_2
+ PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Itogo
  Msru Kodud Nudr Summaud
@@ -173,6 +181,7 @@ end.
     <td align="right" width="530"><strong>‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ...</strong></td>
     <td align="right" width="145"><p><strong>&'&&&&&&&&&&&&&.&&</strong></p></td>
 </tr>
+.{?Internal; FondTime2 = false
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -180,6 +189,23 @@ end.
     <td align="right" width="530"> ”„ ‚…Œ…ˆ...</td>
     <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
 </tr>
+.}
+.{?Internal; FondTime2 = true
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
+</tr>
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
+</tr>
+.}
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -188,6 +214,7 @@ end.
     <td align="right" width="145"> &&.& „. &&&&.&& —.</td>
 </tr>
 .if CRPlanDays
+.{?Internal; PlanTime2 = false
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -195,6 +222,23 @@ end.
     <td align="right" width="530"> ‹€‚… ‚…ŒŸ ...</td>
     <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
 </tr>
+.}
+.{?Internal; PlanTime2 = true
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
+</tr>
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
+</tr>
+.}
 .end
 .if CRPaidDays
 <tr><td align="right" width="5"><p></p></td>
@@ -574,8 +618,16 @@ end.
  Nachisl
  Neobl
  FondDn FondCh
+ FondStr
+ FondDn FondCh
+ FondStr_2
+ FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr
+ PlanDn PlanCh
+ PlanStr_2
+ PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Msru Kodud Nudr tag1 Summaud tag2
  Uder
@@ -703,6 +755,7 @@ end.
     <td align="right" width="530"><strong>‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ...</strong></td>
     <td align="right" width="145"><p><strong>&'&&&&&&&&&&&&&.&&</strong></p></td>
 </tr>
+.{?Internal; FondTime2 = false
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -710,6 +763,23 @@ end.
     <td align="right" width="530"> ”„ ‚…Œ…ˆ...</td>
     <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
 </tr>
+.}
+.{?Internal; FondTime2 = true
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
+</tr>
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
+</tr>
+.}
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -718,6 +788,7 @@ end.
     <td align="right" width="145"> &&.& „. &&&&.&& —.</td>
 </tr>
 .if CRPlanDays
+.{?Internal; PlanTime2 = false
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -725,6 +796,23 @@ end.
     <td align="right" width="530"> ‹€‚… ‚…ŒŸ ...</td>
     <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
 </tr>
+.}
+.{?Internal; PlanTime2 = true
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
+</tr>
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& „. &&&&.&& —.</p></td>
+</tr>
+.}
 .end
 .if CRPaidDays
 <tr><td align="right" width="5"><p></p></td>

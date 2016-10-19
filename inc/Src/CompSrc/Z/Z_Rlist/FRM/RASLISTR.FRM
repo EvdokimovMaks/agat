@@ -13,6 +13,8 @@
  zagol
  zagol2
  NPred
+ WorkingTimeIs
+ RazbNewRab
  ˆ¥à àå¨ï®¤à §¤¥«¥­¨©
  PDO_PeriodBeginning : date
  PDO_PeriodEnding: date
@@ -32,11 +34,19 @@
  OplPeriod
  ’ à¨ä
  Nachisl OblNal Neobl
+ FondStr
  FondDn FondCh
+ FondTime2 : boolean
+ FondStr_2
+ FondDn_2 FondCh_2
  FaktDn FaktCh
  FaktDnR FaktChR
+ PlanStr
  PLanDn PLanCh
- PaidDn PaidCh
+ PlanTime2 : boolean
+ PlanStr_2
+ PLanDn_2 PLanCh_2
+ PaidStr PaidDn PaidCh
  TypeUd
  Msru
  UYear_Za
@@ -81,7 +91,7 @@
  ¯¨á ­¨¥ Š®¤ „­¨ — áë „ â _á „ â _¯®
 .endfields
 ^ ^ 
- à¥¤¯à¨ïâ¨¥ : @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ à¥¤¯à¨ïâ¨¥ : @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ ^ ^
 .{ RListMainLoop CheckEnter
 .if cc0r
  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -103,12 +113,19 @@
 .}
 ³   ³       ³      ³    ³      ³                          €—ˆ‘‹…....³&'&&&&&&&&&&&&&&³ ^
 ³   ³       ³      ³    ³      ³       ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ....³&'&&&&&&&&&&&&&&³
+  €ˆŒ…‚€ˆ… ”„€ ‚…Œ…ˆ: ^
 ³                                                       ”„ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³
+  ˆ‡€Š …—€’ˆ 2 ‘’ ”„ ‚…Œ…ˆ: ^
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³
 ³                                      ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ ^^
 .if CRPlanDays
+  €ˆŒ…‚€ˆ… ‹€‚ƒ ‚…Œ…ˆ: ^
                                                       ‹€‚… ‚…ŒŸ....   ^^
+   ˆ‡€Š …—€’ˆ 2 ‘’ ‹€‚… ‚…ŒŸ: ^
+ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@    ^^
 .end
 .if CRPaidDays
+  €ˆŒ…‚€ˆ… ‹€—…‚€…Œƒ ‚…Œ…ˆ ^
 ^^
 .end
 .{ RListUderLoop CheckEnter
@@ -238,8 +255,16 @@ end.
  Msro Koldn Kolch KolchB Kod à®æ¥­â  ’ à¨ä Nopl Summaop //à®æ¥­â„®¯«
  Nachisl Neobl
  FondDn FondCh
+ FondStr : "p:r"
+ FondDn FondCh
+ FondStr_2 : "p:r"
+ FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr : "p:r"
+ PlanDn PlanCh
+ PlanStr_2 : "p:r"
+ PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Msru Kodud Nudr Summaud
  Uder
@@ -305,10 +330,22 @@ end.
 .}
 ÿ˜³   ³       ³       ³       ³    ³      ³                                          ÿ€—ˆ‘‹…....³&'&&&&&&&&&&&&&&ÿ³ÿ˜
 ÿ˜³   ³       ³       ³       ³    ³      ³                       ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ....ÿ³ÿ&'&&&&&&&&&&&&&&³ÿ˜
+.{?Internal; FondTime2 = false
 ÿ˜³                                                                               ”„ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ˜
+.}
+.{?Internal; FondTime2 = true
+ÿ˜³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ˜
+ÿ˜³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ˜
+.}
 ÿ˜³                                                              ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ˜
 .if CRPlanDays
+.{?Internal; PlanTime2 = false
 ÿ˜³                                                                            ‹€‚…  ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ˜
+.}
+.{?Internal; PlanTime2 = true
+ÿ˜³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ˜
+ÿ˜³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ˜
+.}
 .end
 .if CRPaidDays
 ÿ˜³                                                                         ‹€—ˆ‚€…Œ… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ˜
@@ -426,8 +463,12 @@ CommonFormHeader
  Nachisl
  Neobl
  FondDn FondCh
+ FondStr : "p:r" FondDn FondCh
+ FondStr_2 : "p:r" FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr : "p:r" PlanDn PlanCh
+ PlanStr_2 : "p:r" PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Itogo
  Msru Kodud Nudr Summaud
@@ -497,10 +538,22 @@ end.
 ÿˆ³   ³       ³       ³    ³                        ÿ€—ˆ‘‹…...³&'&&&&&&&&&&&&&&&&ÿ³ÿˆ
 ÿˆÃÄÄÄÁÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÁÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´ÿˆ
 ÿˆ³                              ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ...³&'&&&&&&&&&&&&&&&&³ÿˆ
+.{?Internal; FondTime2 = false
 ÿˆ³                                              ”„ ‚…Œ…ˆ...³&&.&& „.&&&.&& —.³ÿˆ
+.}
+.{?Internal; FondTime2 = true
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&.&& „.&&&.&& —.³ÿˆ
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&.&& „.&&&.&& —.³ÿˆ
+.}
 ÿˆ³                             ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...³&&.&& „.&&&.&& —.³ÿˆ
 .if CRPlanDays
+.{?Internal; PlanTime2 = false
 ÿˆ³                                            ‹€‚… ‚…ŒŸ...³&&.&& „.&&&.&& —.³ÿˆ
+.}
+.{?Internal; PlanTime2 = true
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&.&& „.&&&.&& —.³ÿˆ
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&.&& „.&&&.&& —.³ÿˆ
+.}
 .end
 .if CRPaidDays
 ÿˆ³                                        ‹€—ˆ‚€…Œ… ‚…ŒŸ...³&&.&& „.&&&.&& —.³ÿˆ
@@ -632,7 +685,7 @@ end.
 .group 'fullone'
 .nameinlist'®«­ ï, ¡¥§ à §¤¥«  ¯¥à¥ç¨á«¥­¨©'
 .var
-  PeriodStr : string;
+  PeriodStr, sRazrFio : string;
 .endvar
 .fields
 CommonFormHeader
@@ -649,8 +702,12 @@ CommonFormHeader
  Nachisl
  Neobl
  FondDn FondCh
+ FondStr : "p:r" FondDn FondCh
+ FondStr_2 : "p:r" FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr : "p:r" PlanDn PlanCh
+ PlanStr_2 : "p:r" PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Msru Kodud Nudr Summaud
  Uder
@@ -687,10 +744,20 @@ CommonFormHeader
  ESN_NAME  ESN_SUMVIPL ESN_SUMNAL
  ¯¨á ­¨¥ Š®¤ „­¨ — áë „ â _á „ â _¯®
 .endfields
+.begin
+ sRazrFio := '';
+end.
 
 ÿˆ à¥¤¯à¨ïâ¨¥ : @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿˆ
 .{ RListMainLoop CheckEnter
 .if cc0r
+.{?internal; sRazrFio <> FIO and sRazrFio <> '' and RazbNewRab = 1;
+ÿˆ -RAZR-ÿˆ
+.}
+.begin
+ if sRazrFio <> FIO
+   sRazrFio := FIO;
+end.
 ÿˆÚÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿ÿˆ
 .begin
   if(PDO_PeriodEnding = Date(Last_Day(PDO_PeriodEnding), month(PDO_PeriodEnding), year(PDO_PeriodEnding)))
@@ -712,10 +779,22 @@ end.
 .}
 ÿˆ³   ³       ³       ³    ³                         ÿ€—ˆ‘‹…....³&'&&&&&&&&&&&&&&ÿ³ÿˆ
 ÿˆ³   ³       ³       ³    ³      ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ....ÿ³ÿ&'&&&&&&&&&&&&&&³ÿˆ
+.{?Internal; FondTime2 = false
 ÿˆ³                                               ”„ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿˆ
+.}
+.{?Internal; FondTime2 = true
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿˆ
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿˆ
+.}
 ÿˆ³                              ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿˆ
 .if CRPlanDays
+.{?Internal; PlanTime2 = false
 ÿˆ³                                             ‹€‚… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿˆ
+.}
+.{?Internal; PlanTime2 = true
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿˆ
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿˆ
+.}
 .end
 .if CRPaidDays
 ÿˆ³                                         ‹€—ˆ‚€…Œ… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿˆ
@@ -831,8 +910,12 @@ CommonFormHeader
  Nachisl
  Neobl
  FondDn FondCh
+ FondStr : "p:r" FondDn FondCh
+ FondStr_2 : "p:r" FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr : "p:r" PlanDn PlanCh
+ PlanStr_2 : "p:r" PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Msru Kodud Nudr Summaud
  Uder
@@ -894,10 +977,22 @@ end.
 .}
 ÿ˜³   ³       ³       ³    ³                     ÿ€—ˆ‘‹…....³&'&&&&&&&&&&&&&ÿ³ÿ˜
 ÿ˜³   ³       ³       ³    ³  ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ....³&'&&&&&&&&&&&&&³ÿ˜
+.{?Internal; FondTime2 = false
 ÿ˜³                                          ”„ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ˜
+.}
+.{?Internal; FondTime2 = true
+ÿ˜³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ˜
+ÿ˜³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ˜
+.}
 ÿ˜³                         ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ˜
 .if CRPlanDays
+.{?Internal; PlanTime2 = false
 ÿ˜³                                        ‹€‚… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ˜
+.}
+.{?Internal; PlanTime2 = true
+ÿ˜³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ˜
+ÿ˜³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ˜
+.}
 .end
 .if CRPaidDays
 ÿ˜³                                    ‹€—ˆ‚€…Œ… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ˜
@@ -1011,8 +1106,12 @@ CommonFormHeader
  Msro Koldn Kolch Kod Nopl Summaop
  Nachisl Neobl
  FondDn FondCh
+ FondStr : "p:r" FondDn FondCh
+ FondStr_2 : "p:r" FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr : "p:r" PlanDn PlanCh
+ PlanStr_2 : "p:r" PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Msru Kodud Nudr Summaud
  Uder
@@ -1048,10 +1147,22 @@ end.
 .}
 ÿˆ³   ³       ³       ³    ³                         ÿ€—ˆ‘‹…....³&'&&&&&&&&&&&&&&ÿ³ÿˆ
 ÿˆ³   ³       ³       ³    ³      ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ....ÿ³ÿ&'&&&&&&&&&&&&&&³ÿˆ
+.{?Internal; FondTime2 = false
 ÿˆ³                                               ”„ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿˆ
+.}
+.{?Internal; FondTime2 = true
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿˆ
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿˆ
+.}
 ÿˆ³                              ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿˆ
 .if CRPlanDays
+.{?Internal; PlanTime2 = false
 ÿˆ³                              ÿ               ÿ‹€‚… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿˆ
+.}
+.{?Internal; PlanTime2 = true
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿˆ
+ÿˆ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿˆ
+.}
 .end
 .if CRPaidDays
 ÿˆ³                              ÿ           ÿ‹€—ˆ‚€…Œ… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿˆ
@@ -1338,8 +1449,12 @@ CommonFormHeader
  Nachisl Nachisl
  Neobl Neobl
  FondDn FondCh FondDn FondCh
+ FondStr : "p:r" FondDn FondCh FondStr : "p:r" FondDn FondCh
+ FondStr_2 : "p:r" FondDn_2 FondCh_2 FondStr_2 : "p:r" FondDn_2 FondCh_2
  FaktDn FaktCh FaktDn FaktCh
  PlanDn PlanCh PlanDn PlanCh
+ PlanStr : "p:r" PlanDn PlanCh PlanStr : "p:r" PlanDn PlanCh
+ PlanStr_2 : "p:r" PlanDn_2 PlanCh_2 PlanStr_2 : "p:r" PlanDn_2 PlanCh_2
  PaidDn PaidCh PaidDn PaidCh
  Msru Kodud Nudr Summaud Msru Kodud Nudr Summaud
  Uder Uder
@@ -1401,10 +1516,22 @@ end.
 .}
 ³   ³       ³       ³    ³                    ÿ €—ˆ‘‹…....³&'&&&&&&&&&&&&&³³   ³       ³       ³    ³                     €—ˆ‘‹…....³&'&&&&&&&&&&&&&ÿ³
 ³   ³       ³       ³    ³  ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ....³&'&&&&&&&&&&&&&³³   ³       ³       ³    ³  ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ....³&'&&&&&&&&&&&&&³
+.{?Internal; FondTime2 = false
 ³                                           ”„ ‚…Œ…ˆ..&&.&& „.&&&.&& —.³³                                           ”„ ‚…Œ…ˆ..&&.&& „.&&&.&& —.³
+.}
+.{?Internal; FondTime2 = true
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³
+.}
 ³                          ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ..&&.&& „.&&&.&& —.³³                          ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ..&&.&& „.&&&.&& —.³
 .if CRPlanDays
+.{?Internal; FondTime2 = false
 ³                                         ‹€‚… ‚…ŒŸ..&&.&& „.&&&.&& —.³³                                         ‹€‚… ‚…ŒŸ..&&.&& „.&&&.&& —.³
+.}
+.{?Internal; PlanTime2 = true
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³
+.}
 .end
 .if CRPaidDays
 ³                                     ‹€—ˆ‚€…Œ… ‚…ŒŸ..&&.&& „.&&&.&& —.³³                                     ‹€—ˆ‚€…Œ… ‚…ŒŸ..&&.&& „.&&&.&& —.³
@@ -1520,8 +1647,12 @@ CommonFormHeader
  Nachisl Nachisl
  Neobl Neobl
  FondDn FondCh FondDn FondCh
+ FondStr : "p:r" FondDn FondCh FondStr : "p:r" FondDn FondCh
+ FondStr_2 : "p:r" FondDn_2 FondCh_2 FondStr_2 : "p:r" FondDn_2 FondCh_2
  FaktDn FaktCh FaktDn FaktCh
  PlanDn PlanCh PlanDn PlanCh
+ PlanStr : "p:r" PlanDn PlanCh PlanStr : "p:r" PlanDn PlanCh
+ PlanStr_2 : "p:r" PlanDn_2 PlanCh_2 PlanStr_2 : "p:r" PlanDn_2 PlanCh_2
  PaidDn PaidCh PaidDn PaidCh
  Msru Kodud Nudr Summaud Msru Kodud Nudr Summaud
  Uder Uder
@@ -1556,10 +1687,22 @@ end.
 .}
 ³   ³       ³       ³    ³                    ÿ €—ˆ‘‹…....³&'&&&&&&&&&&&&&³³   ³       ³       ³    ³                     €—ˆ‘‹…....³&'&&&&&&&&&&&&&ÿ³
 ³   ³       ³       ³    ³  ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ....³&'&&&&&&&&&&&&&³³   ³       ³       ³    ³  ‘“ŒŒ€, … ‹€ƒ€…Œ€Ÿ €‹ƒŒ....³&'&&&&&&&&&&&&&³
+.{?Internal; FondTime2 = false
 ³                                           ”„ ‚…Œ…ˆ..&&.&& „.&&&.&& —.³³                                           ”„ ‚…Œ…ˆ..&&.&& „.&&&.&& —.³
+.}
+.{?Internal; FondTime2 = true
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³
+.}
 ³                          ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ..&&.&& „.&&&.&& —.³³                          ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ..&&.&& „.&&&.&& —.³
 .if CRPlanDays
+.{?Internal; PlanTime2 = false
 ³                                         ‹€‚… ‚…ŒŸ..&&.&& „.&&&.&& —.³³                                         ‹€‚… ‚…ŒŸ..&&.&& „.&&&.&& —.³
+.}
+.{?Internal; PlanTime2 = true
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³
+.}
 .end
 .if CRPaidDays
 ³                                     ‹€—ˆ‚€…Œ… ‚…ŒŸ..&&.&& „.&&&.&& —.³³                                     ‹€—ˆ‚€…Œ… ‚…ŒŸ..&&.&& „.&&&.&& —.³

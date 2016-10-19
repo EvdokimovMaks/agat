@@ -31,7 +31,10 @@ const
   // пути на данные разделов
   lc_YearDeclR01NodePath : string = 'Файл/Документ/ИмущНД/СумНалПУ';
 
-//  lc_QuartRepR01NodePath : string = 'Файл/ПризнНал8-12';
+  // режим определения даты принятия ОС на учет
+  lc_OSDBegFldMode_DatOk : word = 0;  // Дата поступления
+  lc_OSDBegFldMode_DatEk : word = 1;  // Дата ввода в эксплуатацию
+
 end; // const
 
 #endif//__TRNImuKatOS_Inc__

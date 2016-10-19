@@ -12,6 +12,7 @@ type
     WSOME          : Boolean;         { wSome                                 }
     WGSCH          : Comp;            { wGSch                                 }
     WISPICGR       : Boolean;         { wIsPicGr                              }
+    BONEEDKILLPICK : Boolean;         { boNeedKillPick                        }
     ISPICGR        : Boolean;         { IsPicGr                               }
     ONELEVEL       : Boolean;         { OneLevel                              }
     ISREPORT       : Boolean;         { IsReport                              }
@@ -26,9 +27,8 @@ type
     WASRESET       : Boolean;         { WasReset                              }
     NEEDBACK       : Boolean;         { NeedBack                              }
     ISFILTRKONTR   : Boolean;         { isFiltrKontr                          }
-    FORMAT         : Word;            { format                                }
+    WFORMAT        : Word;            { wFormat                               }
     VIDDOG         : Comp;            { VidDog                                }
-    IEXTATTR       : TReferenceBuf;   { iExtAttr                              }
     ISPICKED       : Boolean;         { Выражение номер 0                     }
     PICKEDLABEL    : String;          { Выражение номер 1                     }
     NAME           : String120;       { наим.группы                           }
@@ -43,51 +43,55 @@ type
 {$ENDIF}
 {$IFDEF __CONSTANTS__}
 const
-    TNBASEDOC=11;
-    TNBASEDOC2=15;
-    TNCALPLAN=19;
-    TNDOGOVOR=7;
-    TNDOGOVOR1=8;
+    TNBASEDOC=12;
+    TNBASEDOC2=17;
+    TNCALPLAN=22;
+    TNDOGOVOR=8;
+    TNDOGOVOR1=9;
     TNGROUPSCH=0;
     TNGROUPSCH2=3;
-    TNKATNOTES=9;
-    TNKATNOTES1=10;
-    TNKATNOTESBDOC=17;
-    TNKATNOTESBDOC2=18;
+    TNKATNOTES=10;
+    TNKATNOTES1=11;
+    TNKATNOTESBDOC=19;
+    TNKATNOTESBDOC2=20;
+    TNKATNOTESPLPOR=21;
     TNKATORG=4;
     TNKATORG1=5;
-    TNKATORG2=16;
+    TNKATORG2=18;
     TNPICK=6;
-    TNPICKREP=21;
-    TNSPGRSCH=12;
-    TNSPGRSCH2=13;
-    TNSPGRSCH3=14;
+    TNPICK2=7;
+    TNPICKREP=24;
+    TNPLPOR=25;
+    TNSPGRSCH=13;
+    TNSPGRSCH2=14;
+    TNSPGRSCH3=15;
+    TNSPGRSCH4=16;
     TNSUBKAT=1;
     TNSUBKAT2=2;
-    TNUSERDESKREP=20;
-    TCGRSCHVIDDOG=68;
-    FNFORMAT=20;
-    FNIEXTATTR=22;
-    FNISFILTRKONTR=19;
-    FNISPICGR=6;
+    TNUSERDESKREP=23;
+    TCGRSCHVIDDOG=75;
+    FNBONEEDKILLPICK=6;
+    FNISFILTRKONTR=20;
+    FNISPICGR=7;
     FNISPICKED=24;
-    FNISREPORT=8;
-    FNKOD=66;
-    FNNAME=65;
-    FNNEEDBACK=18;
-    FNNODE=9;
-    FNONELEVEL=7;
+    FNISREPORT=9;
+    FNKOD=73;
+    FNNAME=72;
+    FNNEEDBACK=19;
+    FNNODE=10;
+    FNONELEVEL=8;
     FNPICKEDLABEL=25;
-    FNREC=16;
-    FNTEK1=12;
-    FNTEK2=13;
-    FNTEKLEN=14;
-    FNTEMPS=15;
-    FNTMPCOMP=10;
-    FNTMPCOMP_1=11;
-    FNVIDDOG=21;
-    FNWASRESET=17;
+    FNREC=17;
+    FNTEK1=13;
+    FNTEK2=14;
+    FNTEKLEN=15;
+    FNTEMPS=16;
+    FNTMPCOMP=11;
+    FNTMPCOMP_1=12;
+    FNVIDDOG=22;
+    FNWASRESET=18;
     FNWCURFRMT=2;
+    FNWFORMAT=21;
     FNWGSCH=4;
     FNWISPICGR=5;
     FNWMODE=0;
@@ -100,8 +104,11 @@ const
     tbGROUPSCH_4_MODIF_1=262144;
     tbPICK_4_MODIF_0=65542;
     tbPICK_4_MODIF_1=131078;
-    tbPICKREP_4_MODIF_0=21;
-    tbUSERDESKREP_4_MODIF_0=20;
+    tbPICK2_4_MODIF_0=7;
+    tbPICK2_4_MODIF_1=65543;
+    tb4_MODIF_2=131079;
+    tbPICKREP_4_MODIF_0=24;
+    tbUSERDESKREP_4_MODIF_0=23;
 {$ENDIF}
 {$IFDEF __Type__}
 type

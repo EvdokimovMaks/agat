@@ -31,6 +31,7 @@ const
 	reTrgAn8   		= 2022;
 	reTrgAn9   		= 2023;
 	reTrgAn10   	= 2024;
+  reSoprHoz	= 2025;
 
   reName        = 3000;
   reNumDoc      = 3001;

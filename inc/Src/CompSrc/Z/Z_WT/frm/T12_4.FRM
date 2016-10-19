@@ -11,11 +11,12 @@
 .uniqueconsts
 .hide
 .fields
+  EnumeratePages: boolean
   Структурное_подразделение
   Col64 Col65 Col66 Col67 Col68 Col69 Col70 Col71 Col72 Col73 Col74
   Col75 Col76 Col77 Col78 Col79 Col80 Col81 Col82 Col83 Col84
 .endfields
-^
+^^
 .{
 ^^^^^^^^^^^^^^^^^^^^^
 .if Flag4
@@ -40,14 +41,12 @@
 .linkform 'UnifiedFormT12_FourthPage_link' prototype is 'UnifiedFormT12_FourthPage'
 .nameinlist '4-я страница'
 .var
-  StartPage : integer;
   PageNum : integer;
 .endvar
 .begin
-  ReadMyDsk(StartPage, 'Vedt12fc_StartPage', false);
-  PageNum := StartPage;
+  PageNum := 1;
 end.
- Ш.{?internal;(StartPage > 0);
+ Ш.{?internal;(EnumeratePages);
 .fields
   pagenum
 .endfields

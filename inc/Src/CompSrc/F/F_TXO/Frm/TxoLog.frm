@@ -11,12 +11,31 @@
 .nameinlist 'Протокол расчета по ТХО (Базовая форма)'
 .hide
 .fields
+  TypeMsg       : string
+  CodeMistake   : string
+  NameMistake   : string
+  DescrMistake  : string
+
   TxoTag
   TxoMesage
 .endfields
 .{
-   TxoTag     ^
-   TxoMesage  ^
+.case
+.when SqlCheckEnd
+  Окончание
+.when SqlCheckTitle
+  Заголовок таблицы с ошибками
+.when SqlCheck
+  SQL проверка:
+  Тип сообщения: ^
+  Код ошибки: ^
+  Наименование ошибки: ^
+  Описание ошибки: ^
+.when SqlCheckTitleEnd
+  Окончание заголовка
+.when DebugMessageLn
+ @@@@@@@@@@@ ^
+.end
 .}
 .endform
 
@@ -28,6 +47,12 @@
 .nameinlist 'Протокол расчета по ТХО'
 .fields
   CommonFormHeader
+
+  TypeMsg
+  CodeMistake
+  NameMistake
+  DescrMistake
+
   TxoTag
   TxoMesage
 .endfields
@@ -38,6 +63,19 @@
    Тег        │   Сообщение
  ─────────────┼─────────────────────────────────────────────────────────────────────────────────
 .{
+.case
+.when SqlCheckEnd
+ ─────────────┴─────────────────────────────────────────────────────────────────────────────────
+.when SqlCheckTitle
+ ┌─────┬────────────┬─────────────────────┬────────────────────────────────────────────────────┐
+ │ Тип │ Код ошибки │ Наименование ошибки │ Описание ошибки                                    │
+ └─────┴────────────┴─────────────────────┴────────────────────────────────────────────────────┘
+.when SqlCheck
+ │@@@@@│@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│
+.when SqlCheckTitleEnd
+ └─────┴────────────┴─────────────────────┴────────────────────────────────────────────────────┘
+.when DebugMessageLn
  @@@@@@@@@@@@ │ ^
+.end
 .}
 .endform

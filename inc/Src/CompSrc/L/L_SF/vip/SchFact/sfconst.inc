@@ -11,6 +11,16 @@ const
   // Направление
   cwDirect_Sell  : Word = 1;
   cwDirect_Buy   : Word = 2;
+  cwDirect_Import: Word = 1010;
+
+  // РБ. Статус отправки ЭСЧФ (StatusEDO.Status)
+  st_IN_PROGRESS         = 0; // В разработке
+  st_IN_PROGRESS_ERROR   = 1; // В разработке. Ошибка
+  st_COMPLETED           = 2; // Выставлен
+  st_ON_AGREEMENT        = 3; // На согласовании
+  st_COMPLETED_SIGNED    = 4; // Выставлен. Подписан получателем
+  st_CANCELLED           = 5; // Аннулирован
+  st_ON_AGREEMENT_CANCEL = 6; // Выставлен. Аннулирован поставщиком
 
   cwBrowserView  : Word = 0;
   cwEditDocView1 : Word = 1;
@@ -199,6 +209,10 @@ const
   cwTypeSF_Sell_Physical           : Word = 7239;  // Счет-фактура по физическим лицам
   cwTypeSF_Sell_Consumer_Build     : Word = 7247;  // Счет-фактура заказчика-застройщика
   cwTypeSF_Sell_Physical_Avans     : Word = 7248;  // Счет-фактура, оплата, предоплата по физическим лицам
+  cwTypeSF_Sell_Bel_InMov          : Word = 7249;  // Накладная, НВП (Беларусь)
+  cwTypeSF_Sell_Bel_OtgrRozn       : Word = 7250;  // Накладная, отгрузка-розница (Беларусь)
+  cwTypeSF_Sell_Bel_Compens        : Word = 7251;  // Возмещение затрат (Беларусь)
+  cwTypeSF_Sell_Consumer_SelfZ     : Word = 7252;  // Счет-фактура заказчика с собственными затратами
 
   //---------------------------------------------------------------------------------------------
   // Снабжение, СФ поставщика, SchFact.TipUser
@@ -242,6 +256,8 @@ const
   cwTypeSF_Buy_Builder              : Word = 7347;  // Счет-фактура застройщика
   cwTypeSF_Buy_Physical             : Word = 7348;  // Счет-фактура поставщика по физическим лицам
   cwTypeSF_Buy_Mediator_Build       : Word = 7349;  // Счет-фактура посредника-застройщика
+  cwTypeSF_Buy_OtgrInoOrg           : Word = 7350;  // Счет-фактура поставщика, отгрузка иностранной организации (Беларусь)
+  cwTypeSF_Buy_Mediator_SelfZ       : Word = 7351;  // Счет-фактура посредника с собственными затратами
 
   //---------------------------------------------------------------------------------------------
   // Поле BookPrZk.TipUser
@@ -286,6 +302,8 @@ const
   cwTypeBK_Sell_Physical                : Word = 7439;  // Регистрация СФ по физическим лицам
   cwTypeBK_Sell_Commiss                 : Word = 7447;  // Регистрация СФ, комиссия
   cwTypeBK_Sell_OtgrExport              : Word = 7448;  // Регистрация СФ, экспорт
+  cwTypeBK_Sell_Bel_InMov               : Word = 7431;  // Регистрация НВП, книга продаж (Беларусь)
+  cwTypeBK_Sell_Bel_OtgrRozn            : Word = 7433;  // Регистрация СФ, отгрузка-розница (Беларусь)
 
   //---------------------------------------------------------------------------------------------
   // Снабжение, книга покупок, BookPrZk.TipUser
@@ -340,6 +358,9 @@ const
   cwTypeBK_Buy_Correcting_NotReg       : Word = 7553;  // Нерегистрируемая корректирующая запись (книга покупок)
   cwTypeBK_Buy_DelayGTD                : Word = 7555;  // Отложенная регистрация ГТД
   cwTypeBK_Buy_OtgrRegistr_Mediator    : Word = 7556;  // Регистрация СФ поставщика, от посредника
+  cwTypeBK_Buy_CorrExportOut           : Word = 7557;  // Корректирующая запись поставщика на внешний рынок
+  cwTypeBK_Buy_Bel_InMov               : Word = 7558;  // Регистрация НВП, книга покупок (Беларусь)
+  cwTypeBK_Buy_OtgrRegistr_Mediator_SelfZ : Word = 7559;  // Регистрация СФ посредника с собственными затратами
 
   //---------------------------------------------------------------------------------------------
   // Поле BookPrZk.SubTip
@@ -391,6 +412,7 @@ const
   cwTotal_TypeSF_Vozvrat_MC   : Word =  8;  // Возврат товара
   cwTotal_TypeSF_Vozvrat_Plat : Word = 27;  // Возврат платежей
   cwTotal_TypeSF_Kazah        : Word = 32;  // Счет-фактура для Казахстана
+  cwTotal_TypeSF_GTD          : Word = 32;  // ГТД
   cwTotal_TypeSF_Correct      : Word = 64;  // Корректирующий счет-фактура, текущим законодательством не используется
   cwTotal_TypeSF_Plat         : Word = 17;  // Платеж по счету-фактуре, Оплата СФ поставщика
   cwTotal_TypeSF_PlatNoStorno : Word = 19;  // Платеж, прочие расходы и т.п.
@@ -409,9 +431,13 @@ const
   sAttrKatOrg_Resident  = 'Резидент';
   sNotResident          = 'НЕТ';
 
-  // Код стран
+  // Код стран по стандарту ISO 3166-1
   sKod_Russ = '643';
   sKod_Bel  = '112';
+  sKod_Kaz  = '398';
+  sKod_Arm  = '051'; // Армения
+  sKod_Arm_ = '51';  // Армения
+  sKod_Kgz  = '417'; // Киргизия
 
   // Резервирование номеров. Разделитель по умолчанию между основной и дополнительной частью номера.
   Slash_Default = '\';
@@ -499,10 +525,11 @@ const
   // Пользовательские типы
   cwUserType_Min : Word = 10000;
 
-  cwGroupTipsSf_Standard : Word = 0;
-  cwGroupTipsSf_CorrV    : Word = 1;
-  cwGroupTipsSf_Ispr     : Word = 2;
-  cwGroupTipsSf_IsprCorr : Word = 3;
+  cwGroupTipsSF_Standard : Word = 0;
+  cwGroupTipsSF_CorrV    : Word = 1;
+  cwGroupTipsSF_Ispr     : Word = 2;
+  cwGroupTipsSF_IsprCorr : Word = 3;
+  cwGroupTipsSF_FullNach : Word = 4;
 end;
 
 
@@ -609,7 +636,7 @@ function Is_RegOtgr_BK(aTipUser : Word) : Boolean;
 function Is_RegOtgr_Export_BK(aTipUser : Word) : Boolean;
 {
   Result := ((aTipUser = cwTypeBK_Sell_OtgrRegistr) or (aTipUser = cwTypeBK_Buy_OtgrRegistr) or
-             (aTipUser = cwTypeBK_Buy_Export_Out));
+             (aTipUser = cwTypeBK_Buy_Export_Out) or (aTipUser = cwTypeBK_Buy_CorrExportOut));
 }
 
 // Проверка, является ли СФ штрафом
@@ -651,7 +678,7 @@ function Is_Consumer(aTipUser : Word) : Boolean;
   Result := ((aTipUser = cwTypeSF_Sell_Consumer          ) or (aTipUser = cwTypeSF_Sell_Consumer_Avans) or
              (aTipUser = cwTypeSF_Sell_CorrV_Consumer    ) or (aTipUser = cwTypeSF_Sell_Ispr_Consumer ) or
              (aTipUser = cwTypeSF_Sell_IsprCorrV_Consumer) or (aTipUser = cwTypeSF_Sell_Consumer_Sv   ) or
-             (aTipUser = cwTypeSF_Sell_Consumer_Build));
+             (aTipUser = cwTypeSF_Sell_Consumer_Build)     or (aTipUser = cwTypeSF_Sell_Consumer_SelfZ));
 }
 
 // Проверка на тип СФ посредника
@@ -660,7 +687,7 @@ function Is_Mediator(aTipUser : Word) : Boolean;
   Result := ((aTipUser = cwTypeSF_Buy_Mediator          ) or (aTipUser = cwTypeSF_Buy_Mediator_Avans) or
              (aTipUser = cwTypeSF_Buy_CorrV_Mediator    ) or (aTipUser = cwTypeSF_Buy_Ispr_Mediator ) or
              (aTipUser = cwTypeSF_Buy_IsprCorrV_Mediator) or (aTipUser = cwTypeSF_Buy_Mediator_Sv)    or
-             (aTipUser = cwTypeSF_Buy_Mediator_Build));
+             (aTipUser = cwTypeSF_Buy_Mediator_Build)     or (aTipUser = cwTypeSF_Buy_Mediator_SelfZ));
 }
 
 
@@ -679,12 +706,14 @@ function Is_MedCons_Avans(aTipUser : Word) : Boolean;
 // Проверка на отгрузочный посреднический тип СФ
 function Is_MedCons_Otgr(aTipUser : Word) : Boolean;
 {
-  Result := ((aTipUser = cwTypeSF_Sell_Consumer)      or (aTipUser = cwTypeSF_Sell_CorrV_Consumer)     or
-             (aTipUser = cwTypeSF_Sell_Ispr_Consumer) or (aTipUser = cwTypeSF_Sell_IsprCorrV_Consumer) or
-             (aTipUser = cwTypeSF_Sell_Consumer_Sv)   or (aTipUser = cwTypeSF_Sell_Consumer_Build)     or
-             (aTipUser = cwTypeSF_Buy_Mediator)       or (aTipUser = cwTypeSF_Buy_CorrV_Mediator)      or
-             (aTipUser = cwTypeSF_Buy_Ispr_Mediator)  or (aTipUser = cwTypeSF_Buy_IsprCorrV_Mediator)  or
-             (aTipUser = cwTypeSF_Buy_Mediator_Sv)    or (aTipUser = cwTypeSF_Buy_Mediator_Build));
+  Result := ((aTipUser = cwTypeSF_Sell_Consumer)       or (aTipUser = cwTypeSF_Sell_CorrV_Consumer)     or
+             (aTipUser = cwTypeSF_Sell_Ispr_Consumer)  or (aTipUser = cwTypeSF_Sell_IsprCorrV_Consumer) or
+             (aTipUser = cwTypeSF_Sell_Consumer_Sv)    or (aTipUser = cwTypeSF_Sell_Consumer_Build)     or
+             (aTipUser = cwTypeSF_Sell_Consumer_SelfZ) or
+             (aTipUser = cwTypeSF_Buy_Mediator)        or (aTipUser = cwTypeSF_Buy_CorrV_Mediator)      or
+             (aTipUser = cwTypeSF_Buy_Ispr_Mediator)   or (aTipUser = cwTypeSF_Buy_IsprCorrV_Mediator)  or
+             (aTipUser = cwTypeSF_Buy_Mediator_Sv)     or (aTipUser = cwTypeSF_Buy_Mediator_Build)      or
+             (aTipUser = cwTypeSF_Buy_Mediator_SelfZ));
 }
 
 // Проверка на тип СФ заказчика, отгрузка
@@ -693,7 +722,7 @@ function Is_Consumer_Otgr(aTipUser : Word) : Boolean;
   Result := ((aTipUser = cwTypeSF_Sell_Consumer          ) or
              (aTipUser = cwTypeSF_Sell_CorrV_Consumer    ) or (aTipUser = cwTypeSF_Sell_Ispr_Consumer ) or
              (aTipUser = cwTypeSF_Sell_IsprCorrV_Consumer) or (aTipUser = cwTypeSF_Sell_Consumer_Sv   ) or
-             (aTipUser = cwTypeSF_Sell_Consumer_Build));
+             (aTipUser = cwTypeSF_Sell_Consumer_Build)     or (aTipUser = cwTypeSF_Sell_Consumer_SelfZ));
 }
 
 // Проверка на тип СФ заказчика, аванс
@@ -708,7 +737,13 @@ function Is_Mediator_Otgr(aTipUser : Word) : Boolean;
   Result := ((aTipUser = cwTypeSF_Buy_Mediator          ) or
              (aTipUser = cwTypeSF_Buy_CorrV_Mediator    ) or (aTipUser = cwTypeSF_Buy_Ispr_Mediator ) or
              (aTipUser = cwTypeSF_Buy_IsprCorrV_Mediator) or (aTipUser = cwTypeSF_Buy_Mediator_Sv)    or
-             (aTipUser = cwTypeSF_Buy_Mediator_Build));
+             (aTipUser = cwTypeSF_Buy_Mediator_Build)     or (aTipUser = cwTypeSF_Buy_Mediator_SelfZ));
+}
+
+// Проверка на тип СФ посредника с собственными/несобственными позициями спецификации
+function Is_Mediator_WithNotSelf(aTipUser : Word) : Boolean;
+{
+  Result := ((aTipUser = cwTypeSF_Buy_Mediator) or (aTipUser = cwTypeSF_Buy_Mediator_SelfZ));
 }
 
 // Проверка на тип СФ посредника, аванс
@@ -736,28 +771,77 @@ function Is_CorrAvans_BK(aTipUser : Word) : Boolean;
   Result := ((aTipUser = cwTypeBK_Sell_CorrAvans) or (aTipUser = cwTypeBK_Buy_CorrAvans));
 }
 
+// Проверка, является ли запись сторно или возвратом аванса
+function Is_MinusAvans_BK(aTipUser : Word) : Boolean;
+{
+  Result := ((aTipUser = cwTypeBK_Sell_RegAvansInMomentOtgr) or (aTipUser = cwTypeBK_Buy_RegAvansInMomentOtgr) or
+             (aTipUser = cwTypeBK_Sell_RegVozvrAvans) or (aTipUser = cwTypeBK_Buy_RegVozvrAvans));
+}
+
 // Рассматриваемые группы типов СФ: корректировочная, исправления, исправления корректировки, стандартная
 function GetGroup4TipSF(TipSF, wFlag : Word) : Word;
 {
   if (Is_IsprCorrV_SF(TipSF))
   {
-    result := cwGroupTipsSf_IsprCorr;
+    Result := cwGroupTipsSF_IsprCorr;
     Exit;
   }
 
   if (Is_IsprSF(TipSF, wFlag))
   {
-    result := cwGroupTipsSf_Ispr;
+    Result := cwGroupTipsSF_Ispr;
     Exit;
   }
 
   if (Is_CorrV_SF(TipSF))
   {
-    result := cwGroupTipsSf_CorrV;
+    Result := cwGroupTipsSF_CorrV;
     Exit;
   }
 
-  result := cwGroupTipsSf_Standard;
+  if (boGetTune('Doc.SD.FastClose.Use'))
+    if ((TipSF = cwTypeSF_Sell_Otgr_FullNach) or (TipSF = cwTypeSF_Buy_Otgr_FullNach))
+    {
+      Result := cwGroupTipsSF_FullNach;
+      Exit;
+    }
+
+  Result := cwGroupTipsSF_Standard;
+}
+
+function GetGroup4TipSF_String(TipSF, wFlag : Word) : String;
+{
+  if (Is_IsprCorrV_SF(TipSF))
+  {
+    Result := 'типов исправления корректировки';
+    Exit;
+  }
+
+  if (Is_IsprSF(TipSF, wFlag))
+  {
+    Result := 'исправительных типов';
+    Exit;
+  }
+
+  if (Is_CorrV_SF(TipSF))
+  {
+    Result := 'корректировочных типов';
+    Exit;
+  }
+
+  if (boGetTune('Doc.SD.FastClose.Use'))
+    if ((TipSF = cwTypeSF_Sell_Otgr_FullNach) or (TipSF = cwTypeSF_Buy_Otgr_FullNach))
+    {
+      Result := 'типов полного начисления';
+      Exit;
+    }
+
+  Result := 'стандартных типов';
+}
+
+Function IsRoznSF(wType: word): boolean;
+{
+  Result := (wType = 919) or (wType = 911);
 }
 
 // Для новых типов СФ заводить коды операций.

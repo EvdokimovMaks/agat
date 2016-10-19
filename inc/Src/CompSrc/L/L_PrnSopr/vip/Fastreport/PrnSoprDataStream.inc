@@ -5,11 +5,13 @@ var SignersCount: longint;
 Datastream fr_prndata
 (
   [TTNPrimaryList]  wGetTune('Doc.SD.PrnNakl.TTNPrimaryList');
-  [DopOtpRaz]      boGetTune('DOC.SD.PRNNAKL.OTPRAZTTN');
-  [isNumNakl]      boGetTune('Doc.SD.PrnNakl.NumNakl');
-  [isNumOsnOtp]     wGetTune('Doc.SD.PrnNakl.OsnOtp') <> 0;
-  [isMassaZero]     sGetTune('Doc.SD.AbbrField.MassaZero');
-  [nu_gruz]         sGetTune('Doc.SD.AbbrField.Gruz');
+  [DopOtpRaz     ]  boGetTune('DOC.SD.PRNNAKL.OTPRAZTTN');
+  [isNumNakl     ]  boGetTune('Doc.SD.PrnNakl.NumNakl');
+  [isNumOsnOtp   ]  wGetTune('Doc.SD.PrnNakl.OsnOtp') <> 0;
+  [isMassaZero   ]  sGetTune('Doc.SD.AbbrField.MassaZero');
+  [nu_gruz       ]  sGetTune('Doc.SD.AbbrField.Gruz');
+  [wFillCol10    ]  wGetTune('Doc.SD.PrnNakl.Torg12Col10');
+  [bSymbolEAC    ]  wGetTune('Doc.SD.PrintEAC');
 
   //округления
   Table fr_rounds
@@ -250,6 +252,8 @@ Datastream fr_prndata
     [prGrpol             ] oPrnSoprFun.GetPrGrpol(fr_dochead.KatSoprNRec);
     [nplomba             ] oPrnSoprFun.GetPlomba (fr_dochead.KatSoprNRec);
     [isSumOtpEd          ] oPrnSoprFun.IsSumOtpEd(fr_dochead.KatSoprNRec);
+    [IGK                 ] oPrnSoprFun.GetFullIGK(fr_dochead.KatSoprNRec);
+    [CMR                 ] oPrnSoprFun.Write_CMR (fr_dochead.KatSoprNRec);
 ! Поля для универсального передаточного документа
 //продавец
     [SchFactPostName     ] oPrnSoprFun.GetOrgFullName(oPrnSoprFun.GetSchFactOrgNRec(fr_dochead.SchFact_NRec, 0), 8, 0, fr_dochead.KatSopr_dSopr);
@@ -274,6 +278,9 @@ Datastream fr_prndata
 //номер счета-фактуры для корректировочного УПД
     [SchNom              ] oPrnSoprFun.GetSchFactNum (fr_dochead.KatSoprNRec);
     [SchDate             ] oPrnSoprFun.GetSchFactDate(fr_dochead.KatSoprNRec);
+//Руководитель и реквизиты для ИП
+    [Check_IP            ] oPrnSoprFun.Check_IP(fr_dochead.KatSoprNRec, 1);
+    [Write_IP            ] oPrnSoprFun.Write_IP(fr_dochead.KatSoprNRec, 1);
   )
   ;
 
@@ -778,6 +785,8 @@ Datastream fr_prndata
     [TTN_pogr_dend       ] oPrnSoprFun.GetDateInF(fr_docTTN.PunktPDateOut);
     [TTN_pogr_tend       ] oPrnSoprFun.GetTimeInF(fr_docTTN.PunktPTimeOut);
     [TTN_pogr_tDopOp     ] oPrnSoprFun.GetTimeInF(fr_docTTN.PunktPDopTime);
+! для приложения- 4 стоимость услуг по транспортировке с валютой
+    [TTN_stoim_transp    ] oPrnSoprFun.GetStTransp(fr_dochead.KatSoprNRec);
   )
   ;
 

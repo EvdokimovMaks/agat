@@ -16,22 +16,21 @@
   Окончание_отчетного_периода
   Месяц
   Год
+  EnumeratePages: boolean
 .endfields
-^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^
 .endform
 
 .linkform UnifiedFormT12_FirstPage_link1 prototype is 'UnifiedFormT12_FirstPage'
 .group 'Т12'
 .nameinlist '1-я страница'
 .var
-  StartPage : integer;
   PageNum : integer;
 .endvar
 .begin
-  ReadMyDsk(StartPage, 'Vedt12fc_StartPage', false);
-  PageNum := StartPage;
+  PageNum := 1;
 end.
- И.{?internal;(StartPage > 0);
+ И.{?internal;(EnumeratePages);
 .fields
   pagenum
 .endfields
