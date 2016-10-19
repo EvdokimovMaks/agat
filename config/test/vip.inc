@@ -17,7 +17,7 @@
   password=argument
 
 [Vip]
-  DefaultEnv=GalNet_OAV
+  DefaultEnv=GalNet_galpatch
 
 [licparam]
   LicFileName='%ConfigDir%%ConfigSubDir%\vip.lic'
