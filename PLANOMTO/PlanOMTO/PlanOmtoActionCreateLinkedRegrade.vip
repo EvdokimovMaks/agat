@@ -1,0 +1,76 @@
+#include PlanOmto.vih
+#include Stock.vih
+#include DistrMatByStock.vih
+
+#component "AGAT"
+
+interface PlanOmtoActionCreateLinkedRegrade;
+
+var
+  _distrMatByStock: IDistrMatByStock(DistrMatByStock) new;
+  _regradeDocManager: RegradeDocManager;
+  _po: IPlanOmto;
+
+create view
+as select *
+from _po;
+
+procedure IPlanOmtoActionWithParamsUI.InitParams;
+{
+
+}
+
+function IPlanOmtoActionWithParamsUI.ShowParamsUi: word;
+{
+  result := cmDefault;
+}
+
+function IPlanOmtoActionWithParamsUI.DoAction(aPlanOmto: IPlanOmto; params: objref = nullref): word;
+{
+  _po := aPlanOmto;
+
+  var kau: tSpecmtrKau;
+  kau[1] := 0; kau[2] := 0; kau[3] := 0; kau[5] := 0; kau[6] := 0; kau[7] := 0; kau[8] := 0; kau[9] := 0;
+
+  var indentNumbers, indentNumber: string = '';
+
+  _distrMatByStock.ClearWarehousePartsForDistr;
+
+  var qty: double = 0;
+  _loop _po
+  {
+    qty := _po.ClaimQty - _po.RegradeQty - _po.BasedocQty;
+    if qty > 0
+    {
+      kau[4] := _po.IndentNrec;
+      _distrMatByStock.AddWarehousePartForDistr(0, 0, _po.KatstroyNrec, _po.KatmcNrec, kau, qty);
+      indentNumber := if(getanykau(1, 26, _po.IndentNrec), givenanname(6), '');
+      if indentNumber != '' and pos(indentNumber, indentNumbers) = 0
+        indentNumbers += if(indentNumbers<>'',',','') + indentNumber;
+    }
+  }
+
+  if _distrMatByStock.PrepareOnDate(cur_date)
+  {
+    _distrMatByStock.AutoDistribute;
+    if _distrMatByStock.ShowUI('Распределение') = cmDefault
+    {
+      var aMoveSet: AGAT::IMatMoveSet;
+      aMoveSet := _distrMatByStock.GetMatMoveSet;
+
+      var a: tCompArray;
+      a := _regradeDocManager.CreateRegradeDocs(aMoveSet, cur_date, 'РЗ'+IndentNumbers);
+      if Count(a) > 0
+        runinterfacenomodal(L_SKLAD::Peresort, 630, a[0]);
+
+      result := PlanOmtoActionSuccess;
+    }
+    else
+      result := PlanOmtoActionCanceled;
+  }
+  else
+    result := PlanOmtoActionError;
+
+}
+
+end.
