@@ -1,0 +1,129 @@
+#include System.vih
+#include GlobalParts.vih
+#include GlobalPartsConverter.vih
+#include GlobalMatch.vih
+#include MCCollectionFiller.vih
+#include MCPartsCollection.vih
+#include AtlProtocol.vih
+
+#component "M_MNPLAN"
+
+VipInterface Algoritm_5117 Implements oAlgoritm_Sys;
+Interface Algoritm_5117 '' (,hcNoContext,) EscClose, Cyan;
+
+var
+  _f: IMCCollectionFiller;
+
+create view
+var
+  _IndentNrec: comp;
+as select *
+from indent, claim
+where ((
+  _IndentNrec == indent.nrec and
+  indent.nrec == claim.cindent
+))
+;
+
+function InitObjects: boolean;
+{
+  result := getvipref(_f, 'AGAT::MCCollectionFillerIndent');
+}
+
+Function RunInter(wflag: word; var pt: TRecAcc): boolean;
+{
+  _IndentNrec := pt.cpNrec;
+
+  var gt: IGlobalTunes(GlobalTunes) new;
+  var gdpp: IGlobalDataProviderParts noauto;
+  var gps: GlobalPartsSelector noauto;
+  var gpc: IGlobalPartsConverter(GlobalPartsConverter) new;
+  var c, c_leaf, c_matches: ICollection;
+
+  gdpp := IGlobalDataProviderParts(new(GlobalDataProviderParts, GlobalDataProviderBase(gt)));
+  gps := new(GlobalPartsSelector, GlobalPartsSelector(gdpp));
+  c := ICollection(new(System::Collection));
+
+  var prot: IAtlProtocol(AtlProtocol) new;
+  prot.LogStartVisual('Заполнение заявки из состава изделия Global ERP', 0);
+
+  gps.SetNameFilter('даеи');
+  if gps.ShowUI = cmDefault
+  {
+    gps.FillCollectionWithSelectedParts(c);
+
+    c_leaf := gpc.PartsToGoodsMarkedCollection(c, PARTS_MARKED, PARTS_LEAF);
+
+    c_matches := ICollection(new(Collection));
+
+    var en: IEnumerator;
+    en := c_leaf.GetEnumerator;
+    var gg: IGlobalGoodsCollectionItem;
+    var ml: IMatchLoaderMCByGoods;
+    ml := IMatchLoaderMCByGoods(new(MatchLoaderMCByGoods));
+
+    var c_filler: ICollection;
+    c_filler := ICollection(new(Collection));
+
+    while en.movenext
+    {
+      gg := IGlobalGoodsCollectionItem(en.current);
+      c_matches := ml.LoadMatches(gg.Goods);
+      if c_matches.Count > 0
+      {
+        var mc: IMC;
+        mc := IMC(c_matches.First);
+        c_filler.Add(
+          new(MCPartsCollectionItem, CreateMCCollectionItem(mc.nrec, gg.Qty))
+        );
+        prot.LogLine(APE_INFO, 'МЦ "' + gg.Goods.GoodsName + '" добавлена в заявку');
+      }
+      else
+      {
+        prot.LogLine(APE_WARNING, 'МЦ "' + gg.Goods.GoodsName + '" не найдено сопоставление');
+      }
+    }
+    _f.FillDoc(_IndentNrec, c_filler);
+    prot.LogCommit;
+  }
+  prot.LogStopVisual;
+  prot.Visible := true;
+  result := true;
+}
+
+function InitInter(var pt: TRecAcc): boolean;
+{
+  result := InitObjects;
+  if _f = nullref
+    message('Ошибка инициализации (_f: IMCCollectionFiller)');
+}
+
+Function DoneInter(var pt: TRecAcc): boolean;
+{
+  pt.Position := pt.Position;
+  DoneInter := true;
+}
+
+function GetNum: word;
+{
+  GetNum := 5117;
+}
+
+function GetName: string; {
+  GetName := 'АГАТ. Заполнение заявки из состава изделия Global ERP';
+}
+
+function GetMemo (st:oSteckCommonString): boolean; {
+  GetMemo := true;
+  st.push(string(''));
+}
+
+function GetNameInter: string; {
+  GetNameInter := 'Algoritm_5117' ;
+}
+
+function GetNameInterPr: string; {
+  GetNameInterPr := '' ;
+}
+
+end.

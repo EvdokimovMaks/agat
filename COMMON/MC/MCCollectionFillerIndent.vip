@@ -1,0 +1,79 @@
+#include MCPartsCollection.vih
+#include MCCollectionFiller.vih
+#include system.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface MCCollectionFillerIndent; //заполнение заявки МЦ из коллекции
+
+create view
+as select *
+from claim;
+
+create view vMCClaim
+var _indentNrec: comp;
+as select *
+from claim
+where ((
+  _indentNrec == claim.cindent
+));
+
+sql query qClaim =
+select count(i.nrec) as CNT
+from indent i
+join claim c on c.cindent = i.nrec
+where i.nrec = :indentNrec
+group by i.nrec
+;
+
+procedure IMCCollectionFiller.FillDoc(aDocNrec: comp; aCollection: ICollection);
+{
+  var enum: IEnumerator;
+  enum := aCollection.GetEnumerator;
+
+  var rs: IResultSet;
+  rs := queryManager.createquery(qClaim).setparam('indentNrec', aDocNrec).getresultset;
+
+  var cnt: word = 0;
+  if rs != nullref
+    cnt := rs.row.val('CNT');
+  var i: word;
+  if cnt = 0
+    i := 1
+  else
+    i := cnt + 1;
+  vMCClaim._indentNrec := aDocNrec;
+  while enum.MoveNext
+  {
+    var CurMCNrec: comp;
+    var mci: IMCPartsCollectionItem;
+    mci := IMCPartsCollectionItem(enum.Current);
+    CurMCNrec := mci.MC.Nrec;
+
+    if vMCClaim.getfirst claim where ((aDocNrec  == claim.cindent and
+                                       1         == claim.prmc    and
+                                       CurMCNrec == claim.cmcusl)) != tsOk //инсертим
+    {
+      ClearBuffer(#claim);
+      vMCClaim.claim.wpos    := i;
+      vMCClaim.claim.prmc    := 1;
+      vMCClaim.claim.cindent := aDocNrec;
+      vMCClaim.claim.CMCUSL  := CurMCNrec;
+      vMCClaim.claim.CGROUP  := mci.MC.GroupmcNrec;
+      vMCClaim.claim.cotped  := mci.OtpEd;
+      vMCClaim.claim.kol     := mci.Qty;
+      vMCClaim.claim.cstate  := 00010000000000F2h;
+      vMCClaim.claim.state   := 1;
+      vMCClaim.insert current claim;
+      i++;
+    }
+    else //апдейтим только кол-во
+    {
+      vMCClaim.claim.kol += mci.Qty;
+      vMCClaim.update current claim; // or vMCClaim.update current claim;
+    }
+  } //while MoveNext
+}
+
+end.

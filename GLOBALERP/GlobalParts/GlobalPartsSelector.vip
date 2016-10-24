@@ -39,6 +39,7 @@ var
   _selectQty               : double;
   _brpartsMarker           : longint;
   _nameFilter              : string;
+  _contentFilter           : string;
 
 create view
 var
@@ -54,7 +55,10 @@ where ((
   _parentId      == brParts.ParentId and
   brParts.DocId  == brChildParts.DocId and
   brParts.SpecId == brChildParts.ParentId
-));
+))
+condition byPartsFilter = if(brParts.VersionId = comp(0),
+                             InStr(locase(_contentFilter), locase(brParts.GoodsName)) > 0,
+                             true);
 
 create view vMarkParts
 var
@@ -64,9 +68,15 @@ as select *
 from tParts curParts, tParts childParts
 where ((
   _docId  == curParts.DocId and
-  _specId == curParts.SpecId and
+  _specId == curParts.SpecId and (if( _contentFilter = '', true,
+                                      if(curParts.VersionId = comp(0),
+                                         InStr(locase(_contentFilter), locase(curParts.GoodsName)) > 0,
+                                         true) )) and
   _docId  == childParts.DocId and
-  _specId == childParts.ParentId
+  _specId == childParts.ParentId and (if( _contentFilter = '', true,
+                                         if(childParts.VersionId = comp(0),
+                                            InStr(locase(_contentFilter), locase(childParts.GoodsName)) > 0,
+                                            true) ))
 ));
 
 procedure FillParts(aDocId: comp; aParentId: comp; aVersionId: comp; aParentQty: double = 1; isRecursive: boolean = false);     //aParentId: comp;
@@ -102,8 +112,8 @@ procedure MarkParts(pickMarker: longint; aDocId: comp; mSpecs: longint; aValue: 
 
       if markHierarhically and vMarkParts.curParts.VersionId != 0
       {
-        if vMarkParts.getFirst fastfirstrow childParts != tsOk
-          FillParts(vMarkParts.curParts.DocId, vMarkParts.curParts.SpecId, vMarkParts.curParts.VersionId, vMarkParts.curParts.FullQty, true);
+//        if vMarkParts.getFirst fastfirstrow childParts != tsOk
+//          FillParts(vMarkParts.curParts.DocId, vMarkParts.curParts.SpecId, vMarkParts.curParts.VersionId, vMarkParts.curParts.FullQty, true);
         vMarkParts._loop childParts { insertmarker(mSpecs, vMarkParts.childParts.SpecId); }
       }
     }
@@ -171,15 +181,26 @@ function SetNameFilter(aNameFilter: string): longint;
   result := recordsintable(#tdocs);
 }
 
+procedure OpenAllNodes; forward;
+
 window wSelectGlobalGoods 'Выбор МЦ из состава изделий Global ERP', escclose;
   screen sc1 (,,Sci1EnEsc);
-    show(,,,3) fixed_y;
+    show(,,50,3) fixed_y;
     fields
       _nameFilter: noprotect;
+<<
+
+`Фильтр по изделию`.@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+  end;
+  screen sc2 (,,Sci1EnEsc);
+    show(51,,,3) fixed_y;
+    fields
+      _contentFilter: noprotect;
       _selectQty: noprotect;
 <<
 
-`Фильтр:`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ `Количество`.@@@@@@@@
+`Фильтр по сост.`.@@@@@@@@@@@@@@@@@@@@ `Количество`.@@@@@@@@
 >>
   end;
   browse browseDocs (,,Sci1EnEsc);
@@ -218,7 +239,13 @@ window wSelectGlobalGoods 'Выбор МЦ из состава изделий Global ERP', escclose;
     cmTreeNodeType : if (brParts.VersionId=0) TreeSetNodeType(treeParts, ntfText);
   end;
   tableevent table brDocs;
-    cmPositionChanged: CurDocChanged;
+    cmPositionChanged:
+    {
+      CurDocChanged;
+      PopCondition(tcbyPartsFilter);
+      _contentFilter := '';
+      OpenAllNodes;
+    }
   end;
   handleevent
     cmDoMarkUnmark :
@@ -275,16 +302,51 @@ window wSelectGlobalGoods 'Выбор МЦ из состава изделий Global ERP', escclose;
           SelectField(#BRPARTS.GOODSNAME);
         }
         #_selectQty: rereadrecord(#brParts);
+        #_contentFilter:
+        {
+          if _contentFilter != ''
+          {
+            PushCondition(tcbyPartsFilter);
+            rereadrecord(#brParts);
+            ClearMarker(_brPartsMarker);
+          }
+          else
+          {
+            PopCondition(tcbyPartsFilter);
+            rereadrecord(#brParts);
+          }
+        }
       else
         closewindowex(wSelectGlobalGoods, cmDefault);
       end;
     }
-    cmInit: { clearmarker(_brPartsMarker); rereadrecord(#brDocs); }
+    cmInit:
+    {
+      clearmarker(_brPartsMarker);
+      rereadrecord(#brDocs);
+      PopCondition(tcbyPartsFilter);
+    }
     cmAlt1: { SelectFormat(sc1);        SelectField(#_nameFilter); }
     cmAlt2: { SelectFormat(browseDocs); SelectField(#brDocs.GoodsName);  }
     cmAlt3: { SelectFormat(treeParts);  SelectField(#brParts.GoodsName); }
   end;
 end;
+
+procedure OpenAllNodes;
+{
+  TreePushPos(treeParts);
+  TreeGetFirstEx(treeParts);
+  do {
+    TreeOpenNode(treeParts);
+    if brParts.VersionId != 0
+    {
+      if getfirst fastfirstrow brChildParts != tsOk
+        FillParts(brParts.DocId, brParts.SpecId, brParts.VersionId, brParts.FullQty);
+      rereadrecord(#brParts);
+    }
+  } while TreeGetNextEx(treeParts);
+  TreePopPos(treeParts);
+}
 
 handleevent
   cmCheckField:
