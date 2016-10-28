@@ -77,9 +77,10 @@ where h.cizd = :mcNrec and (h.active = 1 or (h.dtbeg < :dDate and (h.dtend > :dD
 ;
 
 var
-  _nameFilter: string;
-  _selectQty: integer;
-  _brPartsMarker: longint;
+  _nameFilter    : string;
+  _selectQty     : integer;
+  _brPartsMarker : longint;
+  _contentFilter : string;
 
 table struct tHDRPS (
   HDRPSNrec : comp,
@@ -96,7 +97,7 @@ table struct tParts (
   Nrec      : comp,
   HDRPSNrec : comp, //DocID
   ParentId  : comp,
-  HavePS    : boolean, // true if it have ProductionSpecification, MTHFCKR
+  HavePS    : boolean, // true! if it have ProductionSpecification, MTHFCKR
   CurHDRPS  : comp,
   Kol       : decimal,
   MeasureId : comp, //link to katotped
@@ -123,7 +124,10 @@ where ((
   _parentId         == brParts.ParentId and
   brParts.HDRPSNrec == brChildParts.HDRPSNrec and
   brParts.Nrec      == brChildParts.ParentId
-));
+))
+condition byPartsFilter = if(not brParts.HavePS, //brParts.VersionId = comp(0),
+                             InStr(locase(_contentFilter), locase(brParts.MCName)) > 0,
+                             true);
 
 create view vMarkParts
 var
@@ -133,9 +137,15 @@ as select *
 from tParts curParts, tParts childParts
 where ((
   _HDRPSNrec == curParts.HDRPSNrec and
-  _Nrec      == curParts.Nrec and
+  _Nrec      == curParts.Nrec and (if( _contentFilter = '', true,
+                                       if(not curParts.HavePS, //VersionId = comp(0),
+                                          InStr(locase(_contentFilter), locase(curParts.MCName)) > 0,
+                                          true) )) and
   _HDRPSNrec == childParts.HDRPSNrec and
-  _Nrec      == childParts.ParentId
+  _Nrec      == childParts.ParentId and (if( _contentFilter = '', true,
+                                             if(not childParts.HavePS, //VersionId = comp(0),
+                                                InStr(locase(_contentFilter), locase(childParts.MCName)) > 0,
+                                                true) ))
 ));
 
 create view vOtpEd
@@ -200,6 +210,7 @@ procedure FillParts(aHDRPSNrec: comp; aCurHDRPS: comp; aParentId: comp; isRecurs
     } while (rs.getNext = tsOk);
   }
 }
+
 procedure MarkParts(pickMarker: longint; aHDRPSNrec: comp; mSpecs: longint; aValue: boolean; markHierarhically: boolean = true);
 {
   var i: longint; i := 0;
@@ -217,14 +228,15 @@ procedure MarkParts(pickMarker: longint; aHDRPSNrec: comp; mSpecs: longint; aVal
 
       if markHierarhically and vMarkParts.curParts.HavePS
       {
-        if vMarkParts.getFirst fastfirstrow childParts != tsOk
-          FillParts(vMarkParts.curParts.HDRPSNrec, vMarkParts.curParts.CurHDRPS, vMarkParts.curParts.Nrec, true);
+//        if vMarkParts.getFirst fastfirstrow childParts != tsOk
+//          FillParts(vMarkParts.curParts.HDRPSNrec, vMarkParts.curParts.CurHDRPS, vMarkParts.curParts.Nrec, true);
         vMarkParts._loop childParts { insertmarker(mSpecs, vMarkParts.childParts.Nrec); }
       }
     }
     i++;
   }
 }
+
 function InitObjectsByDefaultIfNull: boolean;
 {
   result := true;
@@ -232,14 +244,17 @@ function InitObjectsByDefaultIfNull: boolean;
     _brPartsMarker := initmarker('',8,100,100);
   result := result and (_brPartsMarker!=0);
 }
+
 constructor Init;
 {
   result := InitObjectsByDefaultIfNull;
 }
+
 destructor Done;
 {
   doneMarker(_brPartsMarker,'');
 }
+
 function replaceSymbols(s: string; srcSymbols: string; dstSymbols: string): string;
 {
   var i: integer;
@@ -247,6 +262,7 @@ function replaceSymbols(s: string; srcSymbols: string; dstSymbols: string): stri
     s := replace(s, srcSymbols[i], dstSymbols[i]);
   result := s;
 }
+
 function getNameFilter: string;
 {
   var s: string;
@@ -254,6 +270,7 @@ function getNameFilter: string;
   while pos('%%', s) > 0 do s := replace(s,'%%','%');
   result := s;
 }
+
 procedure RefreshDocsTable;
 {
   delete all tHDRPS;
@@ -267,15 +284,26 @@ procedure RefreshDocsTable;
     sqlCopyInto(rs, #tHDRPS, true);
 }
 
+procedure OpenAllNodes; forward;
+
 window wSelectMC 'Состав изделий МЦ Галактики', escclose;
   screen sc1 (,,Sci1EnEsc);
-    show(,,,3) fixed_y;
+    show(,,50,3) fixed_y;
     fields
       _nameFilter: noprotect;
+<<
+
+`Фильтр по изделию`.@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+  end;
+  screen sc2 (,,Sci1EnEsc);
+    show(51,,,3) fixed_y;
+    fields
+      _contentFilter: noprotect;
       _selectQty: noprotect;
 <<
 
-`Фильтр:`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ `Количество`.@@@@@@@@
+`Фильтр по сост.`.@@@@@@@@@@@@@@@@@@@@ `Количество`.@@@@@@@@
 >>
   end;
   browse browseDocs (,,Sci1EnEsc);
@@ -295,101 +323,140 @@ window wSelectMC 'Состав изделий МЦ Галактики', escclose;
       brParts.Measure 'Ед-ца измерения' : [5], protect;
   end;
 
-procedure CurDocChanged;
+  procedure CurDocChanged;
+  {
+    clearmarker(_brPartsMarker);
+    _parentId := 0;
+    if getfirst brParts != tsOk
+      FillParts(brHDRPS.HDRPSNrec, brHDRPS.HDRPSNrec, 0, false);
+    if getfirst brParts = tsOk
+      TreeJumpToRecord(treeParts, brParts.Nrec);
+    rereadrecord(#brParts);
+  }
+  tableevent table brHDRPS;
+    cmPositionChanged:
+    {
+      CurDocChanged;
+      PopCondition(tcbyPartsFilter);
+      _contentFilter := '';
+      OpenAllNodes;
+    }
+  end;
+  tableevent table brParts;
+    cmTreeTop      : { _parentId := 0; }                                          //перейти в корень дерева
+    cmTreeUp       : { _parentId := brParts.ParentId;}                            //перейти вверх по дереву
+    cmTreeDown     : { _parentId := brParts.Nrec;}                                //перейти вниз по дереву
+    cmTreeNeedOwner: { TreeJumpToRecord(treeParts, brParts.ParentId); }           //рекурсивный обход дерева
+    cmTreeNodeType : if (not brParts.HavePS) TreeSetNodeType(treeParts, ntfText); //установить тип узла
+  end;
+  handleevent
+  cmDoMarkUnmark:     //пометить (Ins)
+  {
+    var mSpecs: longint;
+    mSpecs := initmarker('', 8, 1, 100, false);
+    insertmarker(mSpecs, brParts.Nrec);
+    MarkParts(_brpartsMarker, brParts.HDRPSNrec, mSpecs, not brPartsMarked);
+    donemarker(mSpecs,'');
+    redrawcurrentandgo(treeParts, true);
+    rescanpanel(#brParts);
+  }
+  cmSelAll:
+  {
+    var mSpecs: longint;
+    mSpecs := initmarker('', 8, 100, 100, false);
+    _loop tParts where ((brHDRPS.HDRPSNrec == tParts.HDRPSNrec and 0 == tParts.ParentId))
+      insertmarker(mSpecs, tParts.Nrec);
+    MarkParts(_brpartsMarker, brParts.HDRPSNrec, mSpecs, not brPartsMarked);
+    donemarker(mSpecs,'');
+    rescanpanel(#brParts);
+  }
+  cmUnSelAll:
+  {
+    clearmarker(_brPartsMarker);
+    rescanpanel(#brParts);
+  }
+  cmTreeOpenNode:
+  {
+    if getfirst fastfirstrow brChildParts != tsOk
+      FillParts(brParts.HDRPSNrec, brParts.CurHDRPS, brParts.Nrec);
+    rereadrecord(#brParts);
+  }
+  cmDefault:
+  {
+    case CurField of
+      #_nameFilter: {
+        RefreshDocsTable;
+        rereadrecord(#tHDRPS);
+        if getfirst brHDRPS = tsOk
+        {
+          SelectFormat(browseDocs);
+          SelectField(#tHDRPS.MCName);
+          CurDocChanged;
+        }
+      }
+      #_selectQty: {
+        rereadrecord(#brParts);
+      }
+      #_contentFilter:
+      {
+        if _contentFilter != ''
+        {
+          PushCondition(tcbyPartsFilter);
+          rereadrecord(#brParts);
+          ClearMarker(_brPartsMarker);
+        }
+        else
+        {
+          PopCondition(tcbyPartsFilter);
+          rereadrecord(#brParts);
+        }
+      }
+    else
+      closewindowex(wSelectMC, cmDefault);
+    end;
+  }
+  cmInit:
+  {
+    var q: IQuery;
+    q := queryManager.createQuery(qProductionSpecifications);
+    q.setParam('dDate', Cur_Date);
+    q.setParam('fltr', '%');
+    var rs: IResultSet;
+    rs := q.getResultSet;
+    if rs != nullref and getfirst tHDRPS != tsOk
+      sqlCopyInto(rs, #tHDRPS, true);
+    SelectFormat(browseDocs);
+    CurDocChanged;
+
+    clearmarker(_brPartsMarker);
+    rereadrecord(#brHDRPS);
+    PopCondition(tcbyPartsFilter);
+  }
+  end;
+end; //window
+
+procedure OpenAllNodes;
 {
-  clearmarker(_brPartsMarker);
-  _parentId := 0;
-  if getfirst brParts != tsOk
-    FillParts(brHDRPS.HDRPSNrec, brHDRPS.HDRPSNrec, 0, false);
-  if getfirst brParts = tsOk
-    TreeJumpToRecord(treeParts, brParts.Nrec);
-  rereadrecord(#brParts);
+  TreePushPos(treeParts);
+  TreeGetFirstEx(treeParts);
+  do {
+    TreeOpenNode(treeParts);
+    if brParts.HavePS         // если производственная спецификация (папка)
+    {
+      if getfirst fastfirstrow brChildParts != tsOk
+        FillParts(brParts.HDRPSNrec, brParts.CurHDRPS, brParts.Nrec);
+      rereadrecord(#brParts);
+    }
+  } while TreeGetNextEx(treeParts);
+  TreePopPos(treeParts);
 }
 
 handleevent
-cmInit:
-{
-  var q: IQuery;
-  q := queryManager.createQuery(qProductionSpecifications);
-  q.setParam('dDate', Cur_Date);
-  q.setParam('fltr', '%');
-  var rs: IResultSet;
-  rs := q.getResultSet;
-  if rs != nullref and getfirst tHDRPS != tsOk
-    sqlCopyInto(rs, #tHDRPS, true);
-  SelectFormat(browseDocs);
-  CurDocChanged;
-}
-cmDoMarkUnmark:     //пометить (Ins)
-{
-  var mSpecs: longint;
-  mSpecs := initmarker('', 8, 1, 100, false);
-  insertmarker(mSpecs, brParts.Nrec);
-  MarkParts(_brpartsMarker, brParts.HDRPSNrec, mSpecs, not brPartsMarked);
-  donemarker(mSpecs,'');
-  redrawcurrentandgo(treeParts, true);
-  rescanpanel(#brParts);
-}
-cmSelAll:
-{
-  var mSpecs: longint;
-  mSpecs := initmarker('', 8, 100, 100, false);
-  _loop tParts where ((brHDRPS.HDRPSNrec == tParts.HDRPSNrec and 0 == tParts.ParentId))
-    insertmarker(mSpecs, tParts.Nrec);
-  MarkParts(_brpartsMarker, brParts.HDRPSNrec, mSpecs, not brPartsMarked);
-  donemarker(mSpecs,'');
-  rescanpanel(#brParts);
-}
-cmUnSelAll:
-{
-  clearmarker(_brPartsMarker);
-  rescanpanel(#brParts);
-}
-cmTreeOpenNode:
-{
-  if getfirst fastfirstrow brChildParts != tsOk
-    FillParts(brParts.HDRPSNrec, brParts.CurHDRPS, brParts.Nrec);
-  rereadrecord(#brParts);
-}
-cmDefault:
-{
-  case CurField of
-    #_nameFilter: {
-      RefreshDocsTable;
-      rereadrecord(#tHDRPS);
-      if getfirst brHDRPS = tsOk
-      {
-        SelectFormat(browseDocs);
-        SelectField(#tHDRPS.MCName);
-        CurDocChanged;
-      }
-    }
-    #_selectQty: {
-      rereadrecord(#brParts);
-    }
-  else
-    closewindowex(wSelectMC, cmDefault);
-  end;
-}
-cmCheckField:
-{
-  if CurField = #_selectQty rereadrecord(#brParts);
-}
+  cmCheckField:
+  {
+    if curfield = #_selectQty rereadrecord(#brParts);
+  }
 end;
-
-tableevent table brHDRPS;
-  cmPositionChanged: CurDocChanged;
-end;
-
-tableevent table brParts;
-  cmTreeTop      : { _parentId := 0; }                                          //перейти в корень дерева
-  cmTreeUp       : { _parentId := brParts.ParentId;}                            //перейти вверх по дереву
-  cmTreeDown     : { _parentId := brParts.Nrec;}                                //перейти вниз по дереву
-  cmTreeNeedOwner: { TreeJumpToRecord(treeParts, brParts.ParentId); }           //рекурсивный обход дерева
-  cmTreeNodeType : if (not brParts.HavePS) TreeSetNodeType(treeParts, ntfText); //установить тип узла
-end;
-
-end; //window
 
 //#region MCPartsSelector
 
@@ -411,10 +478,10 @@ procedure FillCollectionWithSelectedParts(aCol: ICollection);
   var mcobj: IMCPartsCollectionItem;
   while GetMarker(_brpartsMarker, i, c) //берем маркер и по нему собираем инфу
   {
-    if getfirst brParts where ((c == brParts.Nrec)) = tsOk
+    if getfirst brParts where ((c == brParts.Nrec and (not brParts.HavePS))) = tsOk
     {
       cnrec := brParts.MCNrec;
-      kolvo := brParts.Kol;
+      kolvo := brParts.Kol * _selectQty;
       oed   := brParts.MeasureId;
       mcobj := IMCPartsCollectionItem(new(MCPartsCollectionItem, CreateMCCollectionItem(cnrec, kolvo)));
       mcobj.OtpEd := oed;
