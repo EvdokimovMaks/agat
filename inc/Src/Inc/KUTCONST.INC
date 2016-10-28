@@ -9,33 +9,32 @@
 !║ Используют :                                                        ║
 !╚═════════════════════════════════════════════════════════════════════╝
 // Типы перемещений
-  RZKUT       = 900;    // Карточка учета товара - номера приходов
-  RZRASH      = 920;    // Карточка учета товара - номера расходов
-// Тип приходов
-  FROM_ORG    = 901;    // Приход от поставщика (также применяется как тип расхода при созданиии
-                        //                       ручных расходов в интерфейсе кут по мц)
-  FROM_PODR   = 902;    // Приход с оптового склада
-  FROM_PEREO  = 903;    // Дооценка (приходы и расходы)
-  FROM_INVENT = 904;    // Инвентаризация излишков (приходы и расходы)
-  FROM_KASSA  = 905;    // пришло из кассы
-  FROM_NAR    = 906;    // пришло от покупателя в текущюю смену
-  FROM_NAROD  = 907;    // пришло от покупателя после закрытия смены
-  FROM_TO_OTDEL  = 908; // Внутрирозничное перемещение (приходы и расходы)
+  RZKUT         = 900; // Карточка учета товара - номера приходов
+  RZRASH        = 920; // Карточка учета товара - номера расходов
 
-  ST_INVENT  = 910;    // стоимостная ннвентаризация (супер документ)
+// Тип приходов
+  FROM_ORG      = 901; // Приход от поставщика (также применяется как тип расхода при созданиии
+                       //                       ручных расходов в интерфейсе кут по мц)
+  FROM_PODR     = 902; // Приход с оптового склада
+  FROM_PEREO    = 903; // Дооценка (приходы и расходы)
+  FROM_INVENT   = 904; // Инвентаризация излишков (приходы и расходы)
+  FROM_KASSA    = 905; // пришло из кассы
+  FROM_NAR      = 906; // пришло от покупателя в текущюю смену
+  FROM_NAROD    = 907; // пришло от покупателя после закрытия смены
+  FROM_TO_OTDEL = 908; // Внутрирозничное перемещение (приходы и расходы)
+
+  ST_INVENT     = 910; // стоимостная ннвентаризация (супер документ)
 
 // Тип расходов
-  TO_ORG     = 911;    // Отправили поставщику
-  TO_PODR    = 912;    // Отправили на оптовый склад
-  TO_PEREO   = 913;    // Уценка (приходы и расходы)
-  TO_INVENT  = 914;    // Инвентаризация недостачи (приходы и расходы)
-  TO_KASSA   = 915;    // отправили в кассы
-  TO_SPIS    = 917;    // акты на списание
-  TO_BYSHOP  = 918;    // продали покупателю через кассы
-  TO_NAROD   = 919;    // продали покупателю
+  TO_ORG        = 911; // Отправили поставщику
+  TO_PODR       = 912; // Отправили на оптовый склад
+  TO_PEREO      = 913; // Уценка (приходы и расходы)
+  TO_INVENT     = 914; // Инвентаризация недостачи (приходы и расходы)
+  TO_KASSA      = 915; // отправили в кассы
+  TO_SPIS       = 917; // акты на списание
+  TO_BYSHOP     = 918; // продали покупателю через кассы
+  TO_NAROD      = 919; // продали покупателю
 
-!  cmEditSopr         = 18992;
-!  cmSortMC           = 18993;
   cmCFG              = 18993;
   cmMakeDO           = 18994;
   cmEditMC           = 18995;
@@ -43,30 +42,25 @@
   cmExtendetInfoRash = 18997;
   cmMakeKut          = 18998;
   cmExtendetInfoAct  = 18999;
-!  cmDoSelField       = 199997;
-!  cmCheckSumma       = 199998;
-!  ercInsertSklOrder  = 1000;
-!  ercSoprHoz         = 1001;
-!  ercInsertSpOrder   = 1002;
 
 // кассы и режимы экспорта
-  extGALAXY   = 0;
-  extECell    = 1;
-  extIPSPOS   = 2;
-  extPWP      = 3;
-  extOMRON    = 4;
-  extTusson   = 5;
-  extOmron28  = 6;
-  extShtrih_M = 7;
-  extBerlio   = 8;
-  extRDA      = 9;
+  extGALAXY   =  0;
+  extECell    =  1;
+  extIPSPOS   =  2;
+  extPWP      =  3;
+  extOMRON    =  4;
+  extTusson   =  5;
+  extOmron28  =  6;
+  extShtrih_M =  7;
+  extBerlio   =  8;
+  extRDA      =  9;
   extTusson2  = 10;
 
-  wayPRICE  = 0;
-  wayMOL    = 1;
-  wayPODR   = 2;
-  wayOTPED  = 3;
-  wayMC     = 4;
+  wayPRICE    = 0;
+  wayMOL      = 1;
+  wayPODR     = 2;
+  wayOTPED    = 3;
+  wayMC       = 4;
 
 
 // Nazgul для передачи параметров в интерфейс GetDocs
@@ -101,17 +95,17 @@ vcGetDog_KatStatusSogl =  67108864;
 vcGetDog_CurPodr       = 134217728;
 vcGetDog_Theme         = 268435456;
 
-koShortName           = 1;
-koFullName            = 2;
-koFullNameReverse     = 3;
-koTipOrg              = 4;
-koOnTune              = 5;
-koOnBank              = 6;
-koOnKauStruct         = 7;
-koAltName             = 8;
-koAltName_Name        = 9;
-koName_AltName        = 10;
-
+koShortName            =  1;
+koFullName             =  2;
+koFullNameReverse      =  3;
+koTipOrg               =  4;
+koOnTune               =  5;
+koOnBank               =  6;
+koOnKauStruct          =  7;
+koAltName              =  8;
+koAltName_Name         =  9;
+koName_AltName         = 10;
+koTip_Name_AltName     = 11;
 
 cgCount_Forward  = False; // прямой счет
 cgCount_Backward = True;  // обратный счет

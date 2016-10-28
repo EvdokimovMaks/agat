@@ -236,9 +236,9 @@ function InitDutyDistr(string): boolean; external 'G_ZARPL.DLL';
 procedure DoneDutyCalc; external 'G_ZARPL.DLL';
 procedure DoneDutyDistr; external 'G_ZARPL.DLL';
 function CalcDuty(comp, string): boolean; external 'G_ZARPL.DLL';
-function CalcDuties(longint, string): boolean; external 'G_ZARPL.DLL';
-function DistrDuty(comp, longint, string): boolean; external 'G_ZARPL.DLL';
-function DistrDuties(longint, string): boolean; external 'G_ZARPL.DLL';
+function CalcDuties(#TPtr, string): boolean; external 'G_ZARPL.DLL';
+function DistrDuty(comp, #TPtr, string): boolean; external 'G_ZARPL.DLL';
+function DistrDuties(#TPtr, string): boolean; external 'G_ZARPL.DLL';
 function ReCalcAddPayments(comp, comp): double; external 'G_ZARPL.DLL';
 function NAR_LOWDOP: double; external 'G_ZARPL.DLL';
 function NAR_DOPCHVO(word): double; external 'G_ZARPL.DLL';
@@ -351,6 +351,7 @@ function GetNextDay: string; external 'G_ZARPL.DLL';
 function StavNinOkl(Integer, word): Double; external 'G_ZARPL.DLL';
 function StavNinRaz(Integer, word): Double; external 'G_ZARPL.DLL';
 function BaseSalary(Integer, Word): longint; external 'G_ZARPL.DLL';
+function BaseSalaryWithKop(Integer, Word): double; external 'G_ZARPL.DLL';
 function Tarif(word, word, word, date, Double, Double): boolean; external 'G_ZARPL.DLL';
 function TarS(word, word, word, date): double; external 'G_ZARPL.DLL';
 function DnB: word; external 'G_ZARPL.DLL';
@@ -571,3 +572,77 @@ function IsUCH_KOR: Boolean; external 'G_ZARPL.DLL';
 
 //------------------------------------------------------------------------------
 function CalcChildAverageSum(comp, word): double; external 'G_ZARPL.DLL';
+
+//------------------------------------------------------------------------------
+#ifndef Gal10
+#doc
+Предварительная разноска. Устаревшая реализация с передачей параметров через dsk и настройки, будет исключена из поставки с релиза 10.0. Вместо этого метода использовать RunRaznoska.
+#end
+procedure RunDistributionProcess; external 'G_SUMDIVIDE.DLL';
+#endif
+
+#doc
+Предварительная разноска
+#end
+function RunRaznoska(_distr: word    // #docl Режим распределенного расчета (константы cgDistr_... из Money.ccm)
+                   , _param: longint // #docl Параметры разноски (константы cgRaznoska_..., cgDivide_... и cgWhence_... из Money.ccm)
+                   , _beg: date      // #docl Начало периода (при расчете за период (cgRaznoska_Period)
+                   , _end: date      // #docl Окончание периода (при расчете за период (cgRaznoska_Period)
+                   , _activity: comp // #docl Дополнительный параметр для функционала НИОКР
+                    ): boolean       // #docl false - процесс прерван пользователем
+                  ; external 'G_SumDivide.dll#RunRaznoska';
+
+#doc
+Количество обработанных разноской лицевых счетов
+#end
+function Raznoska_Count: longint; external 'G_SumDivide.dll#Raznoska_Count';
+
+#doc
+Инициализация предварительной разноски (при вызове через сервер приложений)
+#end
+function Raznoska_Init(_param: longint  // #docl параметры предварительной разноски, описанные в inc\Money.ccm, как cgRaznoska_...
+                     , _beg: date       // #docl Дата начала разноски
+                     , _end: date       // #docl Дата окончания разноски
+                      ): word           // #docl Код ошибки (0 - успешно)
+                    ; external 'G_SumDivide.dll#Raznoska_Init';
+
+#doc
+Предварительная разноска для заданного лицевого счета (при вызове через сервер приложений)
+#end
+function Raznoska_One(_ls: comp // #docl Ссылка на лицевой счет (LSchet.NRec)
+                     ): word    // #docl Код ошибки (0 - успешно)
+                   ; external 'G_SumDivide.dll#Raznoska_One';
+
+#ifndef Gal10
+#doc
+Расчет зарплаты. Устаревшая реализация с передачей параметров через dsk и настройки, будет исключена из поставки с релиза 10.0. Вместо этого метода использовать RunPayroll.
+#end
+procedure RunSalaryCalculationProcess; external 'G_ZARPL.DLL';
+#endif
+
+#doc
+Расчет зарплаты
+#end
+function RunPayroll(_distr: word    // #docl Режим распределенного расчета (константы cgDistr_... из Money.ccm)
+                  , _param: longint // #docl Параметры расчета (константы cgPayroll_... и cgWhence_... из Money.ccm)
+                   ): boolean       // #docl Код ошибки (0 - успешно)
+                 ; external 'G_Zarpl.dll#RunPayroll';
+
+#doc
+Количество посчитанных лицевых счетов
+#end
+function Payroll_Count: longint; external 'G_Zarpl.dll#Payroll_Count';
+
+#doc
+Инициализация перед расчетом зарплаты (при вызове через сервер приложений)
+#end
+function Payroll_Init(_param: longint // #docl Параметры расчета (константы cgPayroll_... и cgWhence_... из Money.ccm)
+                     ): word;         // #docl Код ошибки (0 - успешно)
+                     external 'G_Zarpl.dll#Payroll_Init';
+
+#doc
+Расчет зарплаты для заданного лицевого счета (при вызове через сервер приложений)
+#end
+function Payroll_One(_ls: comp // #docl Ссылка на лицевой счет (LSchet.NRec)
+                    ): word    // #docl Код ошибки (0 - успешно)
+                  ; external 'G_Zarpl.dll#Payroll_One';

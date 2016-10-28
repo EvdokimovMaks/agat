@@ -1,0 +1,245 @@
+#include PlanOmto.vih
+#include Query.vih
+#include marker.vih
+#include GetKau.vih
+
+#component "AGAT"
+
+interface PlanOmtoView;
+
+var
+  _po: IPlanOmto;
+  _marker: IMarker(Marker) new;
+  _getkau: GetKau;
+  _helper: PlanOmtoHelper;
+
+create view
+as select ('№' + indent.noind + ' от ' + indent.dind + ', строка ' + claim.wpos) (fieldname=ClaimName),
+          _helper.GetLinkedBasedocsString(_po.IndentNrec, _po.KatmcNrec)         (fieldname=LinkedBasedocs),
+          (_po.ClaimQty - _po.RegradeQty)                                        (fieldname=QtyToDeliver),
+          (_po.ClaimQty - _po.RegradeQty - _po.DeliveredQty)                     (fieldname=DeficitPurchaseQty),
+          (_po.ClaimQty - _po.IssuedQty)                                         (fieldname=DeficitIndentQty)
+from _po, claim, indent, katnotes, katorg, katstroy, persons,
+     katmc device, groupmc, katmc mc, katotped oe, katpodr podr
+where ((
+  _po.ClaimNrec      == claim.nrec and
+  _po.IndentNrec     == indent.nrec and
+  _po.ClaimStateNrec == katnotes.nrec and
+  _po.DeliverOrgNrec == katorg.nrec and
+  _po.KatstroyNrec   == katstroy.nrec and
+  _po.PersonNrec     == persons.nrec and
+  _po.DeviceNrec     == device.nrec and
+  _po.GroupmcNrec    == groupmc.nrec and
+  _po.KatmcNrec      == mc.nrec and
+  _po.OtpedNrec      == oe.nrec and
+  _po.KatpodrNrec    == podr.nrec
+));
+
+browse brPlanOMTO (,,sci14InsPMEnEsc);
+table _po;
+recMarker = _marker { _po.ClaimNrec };
+fields
+  groupmc.name           ' '#13'Группа'                 : [10], protect;
+  mc.name                ' '#13'Матценность'            : [30], protect, pickbutton;
+  mc.obozn               ' '#13'Обозначение'            : [20], protect;
+  _po.Tu                 ' '#13'ТУ'                     : [10], protect;
+  _po.Description        ' '#13'Примечания'             : [10], noprotect;
+  oe.name                ' '#13'Ед.изм.'                : [5 ], protect;
+  _po.ClaimQty           'По'#13'заявке'                : [8 ], protect;
+  _po.SaldoQty           'Свободный'#13'остаток'        : [8 ], protect;
+  _po.RegradeQty         'Кол-во'#13'перенесено'        : [8 ], protect;
+  QtyToDeliver           'Кол-во'#13'к закупке'         : [8 ], protect;
+  _po.BasedocQty         'Кол-во'#13'заказано'          : [8 ], protect;
+  _po.BasedocSum         'Сумма'#13'заказано'           : [8 ], protect;
+  _po.PaidSum            'Сумма'#13'оплачено'           : [8 ], protect;
+  _po.DeliveredQty       'Кол-во'#13'закуплено'         : [8 ], protect;
+  _po.IssuedQty          'Кол-во'#13'выдано'            : [8 ], protect;
+  DeficitPurchaseQty     'Дефицит'#13'по закупке'       : [8 ], protect;
+  DeficitIndentQty       'Дефицит'#13'по заявке'        : [8 ], protect;
+  katnotes.name          ' '#13'Статус'                 : [10], protect;
+  //_po.PriorName    ' '#13'Приоритет'              : [10], protect;
+  _po.IndentDate         'Заявка'#13'от'                : [10], protect;
+  _po.IndentDeliverDate  'Требуемая дата'#13'поставки'  : [10], protect;
+  _po.ClaimAcceptDate    'Дата'#13'принятия в работу'   : [10], protect;
+  _po.DeliverDatePlan    'Дата поставки'#13'расчетная'  : [10], protect; //, {font={backColor=if(_poDeliveryOverdate, COLOR_WARN, 0);}};
+  _po.DeliverDateChanged 'Дата поставки'#13'измененная' : [10], noprotect;
+  _po.DeliverDateFact    'Дата поставки'#13'фактическая': [10], protect; //, {font={backColor=if(_poDeliveryOverdate, COLOR_WARN, 0);}};
+  _po.DeliverClaimNumber 'Заявка'#13'поставщику'        : [10], noprotect;
+  _po.BasedocDate        'Дата'#13'счета'               : [10], protect; //, {font={backColor=if(_poUnpaidBasedoc, COLOR_WARN, 0);}};
+  _po.PaidDate           'Дата оплаты'#13'счета'        : [10], protect; //, {font={backColor=if(_poUnpaidBasedoc, COLOR_WARN, 0);}};
+  LinkedBasedocs         'Счет'#13'номер'               : [10], protect;
+  podr.name              ' '#13'Заказчик'               : [10], protect;
+  katorg.name            ' '#13'Поставщик'              : [10], protect, pickbutton;
+  katstroy.name          ' '#13'Заказ'                  : [10], protect, pickbutton;
+  ClaimName              ' '#13'Заявка'                 : [10], protect;
+  persons.fio            'Ответственный'#13'сотрудник'  : [10], protect;
+end;
+
+#declare IterateMarked(Callback, QuestionText)
+  var iterationMarker: longint;
+  iterationMarker := initmarker('', 8, 10, 100, false);
+  _marker.ExportTo(iterationMarker);
+  if getmarkercount(iterationMarker) > 0
+  {
+    if (if(#QuestionText='', true, message(#QuestionText, YesNo) = cmYes))
+    {
+      pushpos(#_po);
+      _loop _po where foundmarker(iterationMarker, _po.ClaimNrec)
+      {
+        #Callback;
+      }
+      poppos(#_po);
+    }
+  }
+  else
+    #Callback;
+  donemarker(iterationMarker, '');
+#end
+
+procedure SetDeliverDateChanged(value: date);
+{
+  _po.DeliverDateChanged := value;
+  update current _po;
+  _po.SaveData;
+}
+
+procedure SetDeliverClaimNumber(value: string);
+{
+  _po.DeliverClaimNumber := value;
+  update current _po;
+  _po.SaveData;
+}
+
+procedure SetKatstroy(value: comp);
+{
+  _po.KatstroyNrec := value;
+  update current _po;
+  _po.SaveData;
+}
+
+procedure SetDeliverOrg(value: comp);
+{
+  _po.DeliverOrgNrec := value;
+  update current _po;
+  _po.SaveData;
+}
+
+tableevent table _po;
+  cmCheckField:
+  {
+    case curfield of
+      #_po.DeliverDateChanged:
+      {
+        var d: date;
+        d := _po.DeliverDateChanged;
+        #IterateMarked(SetDeliverDateChanged(d), 'Установить измененную дату поставки для помеченных позиций?')
+        Refresh;
+      }
+      #_po.DeliverClaimNumber:
+      {
+        var s: string;
+        s := _po.DeliverClaimNumber;
+        #IterateMarked(SetDeliverClaimNumber(s), 'Установить номер заявки поставщику для помеченных позиций?')
+      }
+    end;
+  }
+  cmPick:
+  {
+    case curfield of
+      #katstroy.name:
+      {
+        var c: comp = 0;
+        if _getkau.GetCodeKau(1, 40, c) > 0
+        {
+          #IterateMarked(SetKatstroy(c), 'Установить заказ для помеченных позиций?')
+          Refresh;
+        }
+      }
+      #katorg.name:
+      {
+        var c: comp = 0;
+        if _getkau.GetCodeKau(1, 1, c) > 0
+        {
+          #IterateMarked(SetDeliverOrg(c), 'Установить поставщика для помеченных позиций?')
+          Refresh;
+        }
+      }
+    end;
+  }
+  cmIdle: OnHandleevent(cmIdle);
+end;
+
+handleevent
+  cmHotkeys      : OnHandleevent(cmHotkeys     );
+  cmCalcUslParam : OnHandleevent(cmCalcUslParam);
+  cmOpenFile     : OnHandleevent(cmOpenFile    );
+  cmNal          : OnHandleevent(cmNal         );
+  cmOneRec       : OnHandleevent(cmOneRec      );
+  cmPlansNo      : OnHandleevent(cmPlansNo     );
+  cmAccording    : OnHandleevent(cmAccording   );
+  cmDocBas       : OnHandleevent(cmDocBas      );
+  cmIEHist       : OnHandleevent(cmIEHist      );
+  cmRecalcAllSums: OnHandleevent(cmRecalcAllSums);
+end;
+
+procedure SetCurrentAccept(value: boolean);
+{
+  _po.SetAccept(value);
+  _po.SaveData;
+}
+
+procedure SetDeliverOrgByBasedoc;
+{
+  var q: IQuery;
+  q := _helper.GetLinkedBasedocsQuery(_po.IndentNrec, _po.KatmcNrec);
+
+  var c: comp = 0;
+
+  if q.execute.errorCode = tsOk
+    while q.fetch.errorCode = tsOk and c = 0
+      c := q.row.val('corg');
+
+  if c != 0
+  {
+    _po.DeliverOrgNrec := c;
+    _po.SaveData;
+  }
+}
+
+procedure FillPlanOmtoWithMarkedPositions(p: IPlanOmto);
+{
+  #iterateMarked(p.InsertWithBuffer(_po.PlanOmtoBuffer), '');
+}
+
+procedure SetDeliverOrgByBasedocMarked;
+{
+  #iterateMarked(SetDeliverOrgByBasedoc, 'Установить поставщика из ДО по помеченным позициям?')
+  Refresh;
+}
+
+procedure SetAcceptMarked;
+{
+  #iterateMarked(SetCurrentAccept(true), 'Установить статус "Принята к исполнению" у помеченных позиций?')
+  Refresh;
+}
+
+procedure UnsetAcceptMarked;
+{
+  #iterateMarked(SetCurrentAccept(false), 'Установить статус "Оформляемый" у помеченных позиций?')
+  Refresh;
+}
+
+procedure Refresh;
+{
+  rereadrecord(#_po);
+}
+
+constructor Create(aPlanOmto: IPlanOmto);
+{
+  _po := aPlanOmto;
+  result := _po != nullref;
+}
+
+property PlanOmto: IPlanOmto absolute _po;
+
+end.

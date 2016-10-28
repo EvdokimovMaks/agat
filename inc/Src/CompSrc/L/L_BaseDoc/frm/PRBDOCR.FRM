@@ -18,6 +18,13 @@ if (trim(#str_) = '', '-', #str_)
 .linkform 'PRBDOCR_0' prototype is 'PRBDOCR'
 .NameInList 'Счет СТАНДАРТНЫЙ - А4'
 .group 'Устаревшие формы (продажа)'
+.create view vBD
+from
+  BaseDoc
+where
+((
+    BaseDocNrec == BaseDoc.nRec
+));
 .FIELDS
   CommonFormHeader
   nomer ddoc
@@ -62,7 +69,10 @@ if (trim(#str_) = '', '-', #str_)
   FRoundRub5 (i2 - if(Акциз_в_цене, c2, 0) - if(НДС_в_цене, n2, 0) - ItogSumNalProd)
 .ENDFIELDS
  Ш                                                                                     Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &'&&&&&&&&&&&&&&&&&&.&& Д Ш
-.{?Internal;(SumSkidPos>0)
+.begin
+  if (vBD.GetFirst BaseDoc = tsOk) {}
+ end.
+.{?Internal;(SumSkidPos>0)and((vBD.BaseDoc.Direct != 1) or (vBD.BaseDoc.cNalog != 2))
 ! Никогда не работает  Maks
 .FIELDS
   SumSkidPos (FRoundRub5(i2-SumSkidPos))

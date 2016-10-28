@@ -154,22 +154,23 @@ end.
 
   PersonalAccount := T1.PRNARYAD.CLSCH;
   Surname := GetSurnameWithInitials(T1.PERSONS.FIO);
-  ActualHours := T1.PRNARYAD.CHASF;
-  Tariff := T1.PRNARYAD.TARIF;
-  KTU := T1.PRNARYAD.KTY;
-  PaymentSum := 0;
-  ActualHoursSumTotal := ActualHoursSumTotal + T1.PRNARYAD.CHASF;
+  Tariff  := T1.PRNARYAD.TARIF;
+  KTU     := T1.PRNARYAD.KTY;
+  ActualHours := 0;
+  PaymentSum  := 0;
+  while (T1.PRNARYAD.CLSCH = PersonalAccount) and (Res = 0)
+  {
+    ActualHours := ActualHours + T1.PRNARYAD.CHASF;
+    PaymentSum  := PaymentSum + T1.PRNARYAD.SUMMA;
+    Res := T1.GetNext ViewTable;
+  }
+  ActualHoursSumTotal := ActualHoursSumTotal + ActualHours;
+  PaymentSumTotal     := PaymentSumTotal + PaymentSum;
 
   TariffSum := ActualHours * Tariff;
   TariffSumVsKTU := TariffSum * KTU;
   TariffSumVsKTUTotal := TariffSumVsKTUTotal + TariffSumVsKTU;
 
-  while (T1.PRNARYAD.CLSCH = PersonalAccount) and (Res = 0)
-  {
-    PaymentSum := PaymentSum + T1.PRNARYAD.SUMMA;
-    PaymentSumTotal := PaymentSumTotal + T1.PRNARYAD.SUMMA;
-    Res := T1.GetNext ViewTable;
-  }
 end.
 ˇê∫&&&&&&≥@@@@@@@@@@@@@@@@@@@@@@@@@≥&&&&&.&&≥&'&&&&&&&&&&&.&&≥&&&.&&≥&'&&&&&&&&&&&.&&≥&'&&&&&&&&&&&.&&≥&'&&&&&&&&&&&.&&∫ˇê
 .}

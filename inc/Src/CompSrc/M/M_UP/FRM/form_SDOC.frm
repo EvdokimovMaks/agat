@@ -86,6 +86,8 @@ KorSchetKAU                         //13
 .Hide
 .NameInList 'Акт на дополнительный отпуск'
 .Fields
+DocCRec
+DocType
 OrgOKUD                             //1
 OrgOKULP                            //2
 NameOrganization                    //3
@@ -117,7 +119,7 @@ KorSchetKAU                         //13
 
 
 .{
-
+^ ^
 @@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@
@@ -134,5 +136,4 @@ KorSchetKAU                         //13
 
 .}
 .endform
-
 

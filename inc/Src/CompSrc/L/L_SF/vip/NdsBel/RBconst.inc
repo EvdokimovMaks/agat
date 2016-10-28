@@ -5,13 +5,18 @@
 //******************************************************************************
 
 const
-  FLT_DATE       = 0001h;
-  FLT_STATUS     = 0002h;
-  FLT_AGENT      = 0004h;
-  FLT_DOC        = 0008h;
-  FLT_DOC_TYPE   = 0010h;
-  FLT_NOT_PAY    = 0020h;
-  FLT_CURRENCY   = 0040h;
+  FLT_DATE           = 0001h;
+  FLT_STATUS         = 0002h;
+  FLT_AGENT          = 0004h;
+  FLT_DOC            = 0008h;
+  FLT_DOC_TYPE       = 0010h;
+  FLT_NOT_PAY        = 0020h;
+  FLT_CURRENCY       = 0040h;
+  FLT_STATUS_INVOICE = 0080h;
+  FLT_DESCR          = 0100h;
+  FLT_DESGR          = 0200h;
+
+  FLT_ALL            = 03ffh;
 
   ID_FILT_BKPR : word = 65501;
   ID_FILT_BKZK : word = 65502;

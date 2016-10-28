@@ -79,7 +79,7 @@
 .defo portrait
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   Myorg

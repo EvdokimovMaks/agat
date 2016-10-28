@@ -145,6 +145,12 @@ const
   dtComPay       = 124;
   dtAttrHist     = 125;
   dtRents        = 126;
+  dtFpCO         = 127;
+  dtPropSpMn     = 128;
+  dtKatMol       = 129;
+  dtStZatr       = 130;
+  dtGroupMc      = 131;
+  dtKitKau       = 132;
 
   dtNothing    = 0ffffh;
   dtFree       = 0fffeh;

@@ -95,7 +95,7 @@ c1_p2v                           ^
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -179,7 +179,7 @@ FrmUserName
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -262,7 +262,7 @@ FrmUserName
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader

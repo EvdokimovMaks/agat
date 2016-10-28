@@ -1,0 +1,301 @@
+#include PlanOmto.vih
+#include L_Dogovor.vil
+#include RunDSel.vih
+#include DOFuns.vih
+#include nalogfun.vih
+
+#component "AGAT"
+
+interface PlanOmtoActionCreateLinkedBasedoc;
+
+var
+  _docSel: L_DOGOVOR::RunDocSelections;
+  _nalogFun: NalogFun;
+
+create view
+var
+  _dogovorNrec: comp;
+  _dsNrec: comp;
+  _cpNrec: comp;
+  _date: date;
+  _number: string;
+as select (if(getanykau(1, 14, _dogovorNrec), givenAnName(1), '')) (fieldname=DogovorField),
+          (if(getanykau(1, 14, _dsNrec), givenAnName(1), '')) (fieldname=DsField),
+          (if(getanykau(1, 5022, _cpNrec), givenAnName(1), '')) (fieldname=CpField)
+
+from basedoc bd, dogovor dog, katbank, ttndoc, stepdoc sd, soprhoz sh, spstep sps, specmtr sm, katmc mc;
+
+var
+  _po: IPlanOmto;
+
+create view v
+as select *
+from _po;
+
+window wCreateBasedocParams 'Параметры формирования ДО', escClose, doAccept;
+show(,,42,8);
+screen sc1;
+fields
+  DogovorField: protect, pickButton;
+  DsField: protect, pickButton;
+  CpField: protect, pickButton;
+  _date: noprotect;
+  _number: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+`Договор` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`ДС`      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`ПКП`     .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Дата`    .@@@@@@@@@@ `Номер`.@@@@@@@@@@
+
+           <. Продолжить .> <. Отмена .>
+>>
+end;
+procedure SaveParams;
+{
+  Savemydsk(_dogovorNrec, 'PlanOmtoActionCreateLinkedBasedoc_dogovorNrec');
+  Savemydsk(_dsNrec, 'PlanOmtoActionCreateLinkedBasedoc_dsNrec');
+  Savemydsk(_cpNrec, 'PlanOmtoActionCreateLinkedBasedoc_cpNrec');
+  Savemydsk(_number, 'PlanOmtoActionCreateLinkedBasedoc_number');
+  Savemydsk(_date, 'PlanOmtoActionCreateLinkedBasedoc_date');
+}
+handleevent
+  cmDefault:  SaveParams;
+  cmDoOk: putcommand(cmDefault);
+  cmPick:
+  {
+    case curfield of
+      #DogovorField, #DsField, #CpField:
+      {
+        var isSelect: word = 0;
+        isSelect += case(curfield; #DogovorField : 1, #DsField : 2, #CpField : 4; 0);
+
+        SaveMyDsk(word(2+4), 'GetDAK_Status'  ); // разрешен выбор только из исполняемых или приостановленных
+        SaveMyDsk(byte(1+2+4), 'GetDAK_Status_e'); // К договорам и соглашениям
+
+        var _dogovorNrecOld, _dsNrecOld, _cpNrecOld: comp;
+        _dogovorNrecOld := _dogovorNrec;
+        _dsNrecOld := _dsNrec;
+        _cpNrecOld := _cpNrec;
+
+        if (_docSel.F3(_dogovorNrec, _dsNrec, _cpNrec,
+                          isSelect,  // откуда вызвали: 1 - договора 2 - соглашение 4 - товарные ПКП 32 - все ПКП
+                          0FFFFh, // longint(vcGetDog_Status), // по умолчанию ( = 0) фильтр только по исполняемым
+                          1 // wDirect
+                         ) = cmCancel)
+        {
+          _dogovorNrec := _dogovorNrecOld;
+          _dsNrec := _dsNrecOld;
+          _cpNrec := _cpNrecOld;
+        }
+      }
+    end;
+    rereadrecord;
+  }
+end;
+end; //window
+
+handleevent
+cmDelOnProtect:
+{
+  case curfield of
+    #DogovorField: { _dogovorNrec := 0; _dsNrec := 0; _cpNrec := 0; }
+    #DsField: { _dsNrec := 0; _cpNrec := 0; }
+    #CpField: { _cpNrec := 0; }
+  end;
+  rereadrecord;
+}
+end;
+
+function getOrgNrecFromDogovor(dogovorNrec: comp): comp;
+{
+  if getfirst dog where ((dogovorNrec == dog.nrec)) = tsOk
+    result := dog.corg;
+  else
+    result := 0;
+}
+
+function getBankNrecFromDogovor(dogovorNrec: comp): comp;
+{
+  if getfirst dog where ((dogovorNrec == dog.nrec)) = tsOk
+    result := dog.cbankpol;
+  else
+    result := 0;
+}
+
+function getOrgNrecFromPlanomto: comp;
+{
+  result := 0;
+  pushpos(#v._po);
+  v._loop _po
+  {
+    if _po.DeliverOrgNrec != 0
+    {
+      result := v._po.DeliverOrgNrec;
+      break;
+    }
+  }
+  poppos(#v._po)
+}
+
+function getBankFromOrg(orgNrec: comp): comp;
+{
+  if getfirst katbank where ((orgNrec == katbank.corg and 1 == katbank.aktiv)) = tsOk and orgNrec != 0
+    result := katbank.nrec;
+  else
+    result := 0;
+}
+
+procedure InitParams;
+{
+  if not readmydsk(_dogovorNrec, 'PlanOmtoActionCreateLinkedBasedoc_dogovorNrec', false) _dogovorNrec := 0;
+  if not readmydsk(_dsNrec, 'PlanOmtoActionCreateLinkedBasedoc_dsNrec', false) _dsNrec := 0;
+  if not readmydsk(_cpNrec, 'PlanOmtoActionCreateLinkedBasedoc_cpNrec', false) _cpNrec := 0;
+  if not readmydsk(_number, 'PlanOmtoActionCreateLinkedBasedoc_number', false) _number := '000000';
+  if not readmydsk(_date, 'PlanOmtoActionCreateLinkedBasedoc_date', false) _date := cur_date;
+}
+
+function ShowParamsUi: word;
+{
+  result := runwindowmodal(wCreateBasedocParams);
+}
+
+function DoAction(aPlanOmto: IPlanOmto; params: objref = nullref): word;
+{
+  params := params;
+
+  _po := aPlanOmto;
+
+  clearbuffer(#bd);
+  bd.descr := sgettune('USER.DESCR');
+  bd.desgr := sgettune('USER.DESGR');
+  bd.vhodnal := 1;
+  bd.status := 1;
+  bd.cnote := 40009D44C1790C6Bh;
+  bd.viddoc := 101;
+  bd.dform := _date;
+  bd.ddoc := bd.dform;
+  bd.nodoc := _number;
+  bd.yeardoc := year(bd.dform);
+  bd.koldn := 3;
+  bd.dend := add_day(bd.dform,3);
+  bd.cmybank := cogettune('MYBANK');
+  bd.cgrpol := cogettune('MYORG');
+  bd.direct := 2;
+  bd.tipmoney := 1;
+  bd.prior := 99;
+  bd.cotvpodr := 0001000000000003h;
+  bd.cdogovor := _dogovorNrec;
+  bd.cappdogovor := _dsNrec;
+  bd.ccalplan := _cpNrec;
+
+  bd.corg := getOrgNrecFromDogovor(_dsNrec);
+  if bd.corg = 0
+    bd.corg := getOrgNrecFromDogovor(_dogovorNrec);
+  if bd.corg = 0
+    bd.corg := getOrgNrecFromPlanomto;
+
+  bd.cgrotpr := bd.corg;
+
+  bd.cbank := getBankNrecFromDogovor(_dsNrec);
+  if bd.cbank = 0
+    bd.cbank := getBankNrecFromDogovor(_dogovorNrec);
+  if bd.cbank = 0
+    bd.cbank := getBankFromOrg(bd.corg);
+
+  insert current bd;
+
+  if getfirst ttndoc where ((1102 == ttndoc.wtable and bd.nrec == ttndoc.cdoc)) != tsOk
+  {
+    clearbuffer(#ttndoc);
+    ttndoc.wtable := 1102;
+    ttndoc.cdoc := bd.nrec;
+    insert current ttndoc;
+  }
+
+  if getfirst sd where ((bd.nrec == sd.cbasedoc)) != tsOk
+  {
+    clearbuffer(#sd);
+    sd.cbasedoc := bd.nrec;
+    sd.nstep := 1;
+    sd.dstart := bd.dform;
+    sd.dend := bd.dend;
+    sd.status := 1;
+    insert current sd;
+  }
+
+  if getfirst sh where ((41 == sh.tipdoc and bd.nrec == sh.csoprdoc)) != tsOk
+  {
+    clearbuffer(#sh);
+    sh.cstepdoc    := sd.nrec;
+    sh.datob       := bd.ddoc;
+    sh.csoprdoc    := bd.nrec;
+    sh.tipdoc      := 41;
+    sh.tidkgal     := 41;
+    sh.nodoc       := bd.nodoc;
+    sh.descr       := bd.descr;
+    sh.desgr       := bd.desgr;
+    sh.direct      := bd.direct;
+    sh.cdogovor    := bd.cdogovor;
+    sh.cappdogovor := bd.cappdogovor;
+    sh.ccalplan    := bd.ccalplan;
+    insert current sh;
+  }
+
+  var spstepNpp: longint = 0;
+
+  v._loop _po
+  {
+    clearbuffer(#sps);
+    spstepNpp++;
+    sps.npp      := spstepNpp;
+    sps.prmc     := 1;
+    sps.cmcusl   := _po.KatmcNrec;
+    sps.cotped   := _po.OtpedNrec;
+    sps.price    := _po.ClaimPrice;
+    sps.kol      := _po.ClaimQty - _po.RegradeQty - _po.BasedocQty;
+    sps.summa    := sps.price * sps.kol;
+    sps.ddoc     := bd.ddoc;
+    sps.cstepdoc := sd.nrec;
+    sps.kolskl   := sps.kol;
+    if getfirst mc where ((sps.cmcusl == mc.nrec)) = tsOk
+      sps.cgrnal := mc.cgrnal;
+    insert current sps;
+
+    _nalogFun.CountBasePrice_(bd.NRec
+                              , sps.NRec
+                              , 1101
+                              , sps.cgrnal
+                              , bd.cOrg
+                              , sps.Kol
+                              , sps.cOtpEd
+                              , bd.ddoc
+                              , bd.cVal
+                              , 0
+                              , 0
+                              , sps.summa
+                              , bd.cPayment);
+
+    if getfirst sm where ((0001000000000001h == sm.csaldtune and 1104 == sm.cotable and sps.nrec == sm.cspec)) != tsOk
+    {
+      clearbuffer(#sm);
+      sm.cotable := 1104;
+      sm.cspec := sps.nrec;
+      sm.csaldtune := 0001000000000001h;
+      insert current sm;
+    }
+
+    sm.cobj := _po.KatstroyNrec;
+    sm.ckau[4] := _po.IndentNrec;
+    update current sm;
+  }
+
+  runinterfacenomodal(L_BASEDOC::VSCHETB, bd.nrec);
+
+  result := PlanOmtoActionSuccess;
+}
+
+end.

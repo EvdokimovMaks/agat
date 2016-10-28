@@ -126,7 +126,7 @@ SumSchCursK кредит(валюта на курс)^
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -213,7 +213,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -298,7 +298,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader
@@ -387,7 +387,7 @@ if(Подписант_Роль <> '', Подписант_Роль, Подписант_должность)
 .nonextheader
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
 CommonFormHeader

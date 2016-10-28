@@ -11,14 +11,76 @@
 
 //------------------------------------------------------------------------------
 // ieLib.pas
-function  TemporaryDirectory                             : string;  external 'G_ExpImp.dll';
-procedure GetFileInfo          ( string, var date, var time, var longint ); external 'G_ExpImp.dll';
-function  SaveTuneToFile       ( comp, string )          : boolean; external 'G_ExpImp.dll';
-function  RestoreTuneFromFile  ( string, word, word )    : comp;    external 'G_ExpImp.dll';
-function  IsEmptyMemo          ( var anytype )           : boolean; external 'G_ExpImp.dll';
-function  ExtractFormName      ( string )                : string;  external 'G_ExpImp.dll';
-function  LoadResource         ( string )                : boolean; external 'G_ExpImp.dll';
-function  ieTextFormInit       ( comp, string )          : integer; external 'G_ExpImp.dll';
+#doc
+  </brief>
+  <p>
+    Возвращает локальную директорию для создания временных файлов.
+  </p>
+#end
+function TemporaryDirectory: string;  external 'G_ExpImp.dll';
+#doc
+  <brief>
+    Получает информацию о файле.
+  </brief>
+
+  <p>
+    Получает:<br>
+    - Дату изменения файла;<br>
+    - Время изменения файла;<br>
+    - Размер файла.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sFileName</code> - полное имя файла;</li>
+    <li><code>pfDate</code> - дата изменения файла;</li>
+    <li><code>pfTime</code> - время изменения файла;</li>
+    <li><code>pfSize</code> - размер файла.</li>
+  </ul>
+#end
+procedure GetFileInfo(sFileName: string, var pfDate: date, var pfTime: time, var pfSize: longint ); external 'G_ExpImp.dll';
+function SaveTuneToFile(cIEHead: comp, sFileName: string): boolean; external 'G_ExpImp.dll';
+function RestoreTuneFromFile(sFileName: string, wExpImp: word, wDocType: word): comp; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Проверяет наличие формы в настройке.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>pfMemo</code> - проверяемое поле.</li>
+  </ul>
+#end
+function IsEmptyMemo(var pfMemo: anytype): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Определяет имя формы, находящейся в файле.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sFileName</code> - полное имя файла.</li>
+  </ul>
+#end
+function ExtractFormName(sFileName: string ): string; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Подключает ресурс по имени, если он еще не подключен.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sFileName</code> - полное имя ресурса.</li>
+  </ul>
+#end
+function LoadResource(asFileName: string): boolean; external 'G_ExpImp.dll';
+function ieTextFormInit        ( comp, string )          : integer; external 'G_ExpImp.dll';
 procedure ieTextFormDone;                                           external 'G_ExpImp.dll';
 function  ieTextFormFindFirstRecord ( boolean )          : boolean; external 'G_ExpImp.dll';
 function  ieTextFormFindNextRecord  ( boolean )          : boolean; external 'G_ExpImp.dll';
@@ -26,24 +88,234 @@ function  ieTextFormImportField     ( boolean, word, var anytype ) : boolean; ex
 function  ieTextFormSetFileName     ( string )           : boolean; external 'G_ExpImp.dll';
 function  ieTextFormValidTopology   ( comp )             : boolean; external 'G_ExpImp.dll';
 function  ieTextFormNumberOfRecords                      : longint; external 'G_ExpImp.dll';
-function  GroupOfWords         ( string, string )        : string;  external 'G_ExpImp.dll';
-function  GroupOfWordsFrom     ( string, string, string, string, string, string ) : string;  external 'G_ExpImp.dll';
-function  GroupOfWordsRem      ( string, string )        : string;  external 'G_ExpImp.dll';
-function  GroupOfWordsFromRem  ( string, string, string, string, string, string ) : string;  external 'G_ExpImp.dll';
-function  GetBoundedSubString  ( string, char, char, byte ) : string;  external 'G_ExpImp.dll';
-function  UndoFileName         ( string )                : string;  external 'G_ExpImp.dll';
-function  CurrencyName         ( comp )                  : string;  external 'G_ExpImp.dll';
-function  DelClassVal          ( boolean )               : integer; external 'G_ExpImp.dll';
-function  DelAttrVal           ( boolean )               : integer; external 'G_ExpImp.dll';
-function  FileExist            ( string )                : boolean; external 'G_ExpImp.dll';
-function  IsDirectory          ( string )                : boolean; external 'G_ExpImp.dll';
-function  CreateUniqueFileName ( string )                : string;  external 'G_ExpImp.dll';
-function  AddSlashToPath       ( string )                : string;  external 'G_ExpImp.dll';
-function  VerifyPathName       ( string , boolean)       : boolean; external 'G_ExpImp.dll';
-function  StartPathName                                  : string;  external 'G_ExpImp.dll';
-function  ExtractDelimitedWord ( string, byte, string )  : string;  external 'G_ExpImp.dll';
-function  ParseWord ( string, byte, char )               : string;  external 'G_ExpImp.dll';
-function  GetEnvString         ( string )                : string;  external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает группу слов для одной строки.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sSource</code> - исходная строка;</li>
+    <li><code>sHistory</code> - длина для проверки вхождения группы слов.</li>
+  </ul>
+#end
+function GroupOfWords(sSource: string, sHistory: string): string; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает группу слов для пяти строк.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sSource1</code> - исходная строка 1;</li>
+    <li><code>sSource2</code> - исходная строка 2;</li>
+    <li><code>sSource3</code> - исходная строка 3;</li>
+    <li><code>sSource4</code> - исходная строка 4;</li>
+    <li><code>sSource5</code> - исходная строка 5;</li>
+    <li><code>sHistory</code> - длины для проверки вхождения группы слов, через разделитель.</li>
+  </ul>
+#end
+function GroupOfWordsFrom(sSource1: string, sSource2: string, sSource3: string, sSource4: string, sSource5: string, sHistory: string) : string;  external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает остаток от группы слов для одной строки.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sSource</code> - исходная строка ;</li>
+    <li><code>sHistory</code> - длина для проверки вхождения группы слов.</li>
+  </ul>
+#end
+function GroupOfWordsRem(sSource: string, sHistory: string): string; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает остаток от группы слов для пяти строк.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sSource1</code> - исходная строка 1;</li>
+    <li><code>sSource2</code> - исходная строка 2;</li>
+    <li><code>sSource3</code> - исходная строка 3;</li>
+    <li><code>sSource4</code> - исходная строка 4;</li>
+    <li><code>sSource5</code> - исходная строка 5;</li>
+    <li><code>sHistory</code> - длины для проверки вхождения группы слов, через разделитель.</li>
+  </ul>
+#end
+function GroupOfWordsFromRem(sSource1: string, sSource2: string, sSource3: string, sSource3: string, sSource4: string, sHistory: string): string; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает первую подстроку sSource, ограниченную 2 - мя символоми cLeftBound и cRightBound
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sSource</code> - исходная строка;</li>
+    <li><code>cLeftBound</code> - символ левой границы;</li>
+    <li><code>cRightBound</code> - символ правой границы;</li>
+    <li><code>nTypeBound</code> - тип ограничения:<br>
+      <p>
+        1 - до первого правого разделителя;<br>
+        2 - до последнего правого разделителя.
+      </p>
+    </li>
+  </ul>
+#end
+function GetBoundedSubString(sSource: string, cLeftBound: char, cRightBound: char, nTypeBound: byte): string; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Конвертировать маску файлов для экспорта в DOS - маску для импорта
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sFileName</code> - имя файла.</li>
+  </ul>
+#end
+function UndoFileName(sFileName: string): string; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает наименование валюты по nRec-у.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>cKlVal</code> - NRec валюты.</li>
+  </ul>
+#end
+function CurrencyName(cKlVal: comp): string; external 'G_ExpImp.dll';
+function DelClassVal(sost: boolean): integer; external 'G_ExpImp.dll';
+function DelAttrVal(sost: boolean): integer; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает результат наличия файла по имени.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sName</code> - имя проверяемого файла.</li>
+  </ul>
+#end
+function FileExist(sName: string): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Проверяет является ли указанный путь каталогом.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sPath</code> - проверяемый путь.</li>
+  </ul>
+#end
+function IsDirectory(sPath: string): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Генерирует уникальное имя файла, по указанному каталогу.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>Path</code> - каталог для создания.</li>
+  </ul>
+#end
+function CreateUniqueFileName(Path: string): string; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Добавляет слэш в конец пути если он отсутствует.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>DirName</code> - путь.</li>
+  </ul>
+#end
+function AddSlashToPath(DirName: string): string; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Проверяет валидность пути, в возможностью его создания.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>iPath</code> - проверяемый путь.</li>
+    <li><code>NeedCreate</code> - создавать ли при отсутствии путь.</li>
+  </ul>
+#end
+function VerifyPathName(iPath: string, NeedCreate: boolean): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает путь запускаемой программы со слэшем в конце.
+  </p>
+#end
+function StartPathName: String;  external 'G_ExpImp.dll';
+#doc
+  <brief>
+    Возвращает слово по индексу из строки ограниченное разделителем.
+  </brief>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sSource</code> - исходная строка;</li>
+    <li><code>byWordIndex</code> - индекс искомого слова;</li>
+    <li><code>sDelimiters</code> - строка разделителей.</li>
+  </ul>
+#end
+function ExtractDelimitedWord(sSource: string, byWordIndex: byte, sDelimiters: string): string; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает слово с указанным номером ограниченное разделителем.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sSource</code> - исходная строка;</li>
+    <li><code>byWordIndex</code> - индекс искомого слова;</li>
+    <li><code>sDelimiters</code> - строка разделителей.</li>
+  </ul>
+#end
+function ParseWord(sSource: string, byWordIndex: byte, Delimiter: char): string;  external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает значение указанной переменной окружения.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sName</code> - переменная окружения.</li>
+  </ul>
+#end
+function GetEnvString(sName: string): string;  external 'G_ExpImp.dll';
 
 //------------------------------------------------------------------------------
 // Xml_Func.pas
@@ -340,6 +612,20 @@ Function MemoryStream_GetSize(#TPtr) : longint; external 'G_ExpImp.dll';
 function XMLDOMDoc_New                                                     : #TPtr; external 'G_ExpImp.dll';
 
 #doc
+Загрузка DOMDocument из файла c возможностью отключения сообщения парсинга
+</breaf>
+<br>
+Параметры:
+<ul>
+<li>адрес указателя на DOMDocument
+<li>имя файла, может быть URL
+</ul>
+Результат:<br>
+True - если успешно
+#end
+function XMLDOMDoc_LoadEx                        (#TPtr, string, boolean)           : boolean; external 'G_ExpImp.dll';
+
+#doc
 Загрузка DOMDocument из файла
 </breaf>
 <br>
@@ -430,6 +716,7 @@ function XMLDOMDoc_CreateCDataSection          (#TPtr, string)           : #TPtr
 <ul>
 <li>адрес указателя на DOMDocument
 <li>текст комментария
+</ul>
 Результат:<br>
 адрес указателя на XMLDOMComment
 #end
@@ -443,6 +730,7 @@ function XMLDOMDoc_CreateComment               (#TPtr, string)           : #TPtr
 <ul>
 <li>адрес указателя на DOMDocument
 <li>текст комментария (более 255 символов)
+</ul>
 Результат:<br>
 адрес указателя на XMLDOMComment
 #end
@@ -702,6 +990,7 @@ function XMLDOMNode_AppendChild                (#TPtr, #TPtr)          : #TPtr; 
 Параметры:
 <ul>
 <li>адрес указателя на XMLDOMNode
+</ul>
 Результат:<br>
 адрес указателя на XMLDOMNodeList
 #end
@@ -742,6 +1031,18 @@ function XMLDOMNode_get_NodeType               (#TPtr)                   : integ
 значение
 #end
 function XMLDOMNode_get_NodeName               (#TPtr)                   : string;  external 'G_ExpImp.dll';
+
+#doc
+Чтение NodeText для узла "Node" как короткую строку
+</breaf>
+Параметры:
+<ul>
+<li>адрес указателя на XMLDOMNode
+</ul>
+Результат:<br>
+значение
+#end
+function XMLDOMNode_Get_text               (#TPtr)                   : string;  external 'G_ExpImp.dll';
 
 #doc
  Освобождение ссылки на XMLDOMNode
@@ -835,14 +1136,164 @@ function XMLDOMDoc_GetElementsByTagName        (#TPtr, string)           : #TPtr
 function XMLDOMDoc_Done                        (#TPtr)                   : boolean; external 'G_ExpImp.dll';
 
 //------------------------------------------------------------------------------
-function InitMAPIMessage : longint; external 'G_ExpImp.dll';
-function DoneMAPIMessage(longint) : boolean; external 'G_ExpImp.dll';
-function SetMAPIMessageSubject(string, longint) : boolean; external 'G_ExpImp.dll';
-function SetMAPIMessageType(string, longint) : boolean; external 'G_ExpImp.dll';
-function AddStringToMailBody(string, longint) : boolean; external 'G_ExpImp.dll';
-function AddRecipientToMail(string, string, longint) : boolean; external 'G_ExpImp.dll';
-function AddAttachedFileToMail(string, string, longint) : boolean; external 'G_ExpImp.dll';
-function SendGalMail(longint) : longint; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Функция для инициализации структуры TMapiMessage.
+  </p>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Указатель на созданную структуру.
+  </p>
+#end
+function InitMAPIMessage: longint; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Освобождает память, выделенную под структуру TMapiMessage.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>hMAPIMessage</code> - указатель на структуру.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Результат освобождения памяти.
+  </p>
+#end
+function DoneMAPIMessage(hMAPIMessage: longint): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Устанавливает тему письма(TMapiMessage.lpszSubject).
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>Subject</code> - тема письма;</li>
+    <li><code>hMAPIMessage</code> - указатель на структуру.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Результат установки темы сообщения.
+  </p>
+#end
+function SetMAPIMessageSubject(Subject: string, hMAPIMessage: longint): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Устанавливает тип сообщения(TMapiMessage.lpszMessageType).
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>Subject</code> - тип письма;</li>
+    <li><code>hMAPIMessage</code> - указатель на структуру.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Результат установки типа сообщения.
+  </p>
+#end
+function SetMAPIMessageType(MessageType: string, hMAPIMessage: longint): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Добавляет в конец тела письма строку.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>BodyLine</code> - добавляемая строка;</li>
+    <li><code>hMAPIMessage</code> - указатель на структуру.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Результат добавления строки.
+  </p>
+#end
+function AddStringToMailBody(BodyLine: string, hMAPIMessage: longint): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Добавляет E-Mail получателя письма.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>Name</code> - имя получателя;</li>
+    <li><code>BodyLine</code> - E-Mail адрес получателя;</li>
+    <li><code>hMAPIMessage</code> - указатель на структуру.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Результат добавления получателя.
+  </p>
+#end
+function AddRecipientToMail(Name: string, Address: string, hMAPIMessage: longint) : boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Привязывает файл к письму.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>PathName</code> - путь файла;</li>
+    <li><code>FileName</code> - имя файла;</li>
+    <li><code>hMAPIMessage</code> - указатель на структуру.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Результат привязки файла к письму.
+  </p>
+#end
+function AddAttachedFileToMail(PathName: string, FileName: string, hMAPIMessage: longint): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Отправляет письмо.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>hMAPIMessage</code> - указатель на заполненную структуру.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Результат отправки письма.
+  </p>
+#end
+function SendGalMail(hMAPIMessage: longint): longint; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Возвращает версию и номер сборки операционной системы.
+  </p>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Версия и номер сборки операционной системы.
+  </p>
+#end
 function GetOsVersion : string; external 'G_ExpImp.dll';
 
 function  _sGetPrivProf(string, string, string): string; external 'G_ExpImp.dll';
@@ -857,11 +1308,88 @@ function  Set_TableField(longint, var AnyType, word, word) : boolean; external '
 
 //------------------------------------------------------------------------------
 // ieFileFinder.pas
-function  FindFirstFile        ( string , var anytype )  : boolean; external 'G_ExpImp.dll';
-function  FindNextFile         ( var anytype )           : boolean; external 'G_ExpImp.dll';
-function  FindFirstFileCli     ( string , var anytype )  : boolean; external 'G_ExpImp.dll';
-function  FindNextFileCli      ( var anytype )           : boolean; external 'G_ExpImp.dll';
-procedure DoneFileFinderCli;                                        external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Находит файл по заданной маске.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sSearchMask</code> - маска для поиска;</li>
+    <li><code>pfSearchResult</code> - структура SearchResult.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Успешность поиска файла. Результат поиска будет записан в pfSearchResult.
+  </p>
+#end
+function FindFirstFile(sSearchMask: string , var pfSearchResult: anytype): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Найти следующий файл.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>pfSearchResult</code> - структура SearchResult.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Успешность поиска файла. Результат поиска будет записан в pfSearchResult.
+  </p>
+#end
+function FindNextFile(var anytype): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Находит файл на клиентской машине, по заданной маске.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>sSearchMask</code> - маска для поиска;</li>
+    <li><code>pfSearchResult</code> - структура SearchResult.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Успешность поиска файла. Результат поиска будет записан в pfSearchResult.
+  </p>
+#end
+function FindFirstFileCli(string, var anytype): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Найти следующий файл на клиентской машине.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>pfSearchResult</code> - структура SearchResult.</li>
+  </ul>
+
+  <h3>Возвращаемое значение:</h3>
+  <p>
+    Успешность поиска файла. Результат поиска будет записан в pfSearchResult.
+  </p>
+#end
+function FindNextFileCli(var anytype): boolean; external 'G_ExpImp.dll';
+#doc
+  </brief>
+
+  <p>
+    Освобождает память выделенную под pFileFinder
+  </p>
+#end
+procedure DoneFileFinderCli; external 'G_ExpImp.dll';
 
 #ifNdef Gal9_1
 //------------------------------------------------------------------------------

@@ -22,10 +22,14 @@
  Msro NYEARK
  Koldn Kolch Kod  Nopl Summaop
  Nachisl
- FondDn FondCh
+ FondStr FondDn FondCh
+ FondTime2 : boolean
+ FondStr_2 FondDn_2 FondCh_2
  FaktDn FaktCh
- PlanDn PlanCh
- PaidDn PaidCh
+ PlanStr PlanDn PlanCh
+ PlanTime2 : boolean
+ PlanStr_2 PlanDn_2 PlanCh_2
+ PaidStr PaidDn PaidCh
  TypeUd
  Msru UYEARK
  Kodud Nudr Summaud
@@ -51,14 +55,18 @@
   ^ ^ ^ ^ ^ ^ ^
 .end
 .}
- ^
- ^ ^
+ ^ 
+ ^ ^ ^ 
+ ^  
+ ^ ^ ^
  ^ ^
 .if CPlanDays
- ^ ^
+ ^ ^ ^ 
+ ^
+ ^ ^ ^
 .end
 .if CPaidDays
- ^ ^
+ ^ ^ ^
 .end
 .{
 .if cc2
@@ -135,8 +143,16 @@ CommonFormHeader
  Msro Koldn Kolch Kod Nopl Summaop
  Nachisl
  FondDn FondCh
+ FondStr : "p:r"
+ FondDn FondCh
+ FondStr_2 : "p:r"
+ FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr : "p:r"
+ PlanDn PlanCh
+ PlanStr_2 : "p:r"
+ PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Itogo
  Msru Kodud Nudr Summaud
@@ -175,10 +191,22 @@ end.
 .}
 ³   ³       ³       ³    ³                        ÿ€—ˆ‘‹…...³&'&&&&&&&&&&&&&&&&³ÿ
 ÃÄÄÄÁÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÁÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
+.{?Internal; FondTime2 = false
 ³                                              ”„ ‚…Œ…ˆ...³&&.&& „.&&&.&& —.³
+.}
+.{?Internal; FondTime2 = true
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&.&& „.&&&.&& —.³
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&.&& „.&&&.&& —.³
+.}
 ³                             ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...³&&.&& „.&&&.&& —.³
 .if CPlanDays
+.{?Internal; PlanTime2 = false
 ³                                            ‹€‚… ‚…ŒŸ...³&&.&& „.&&&.&& —.³
+.}
+.{?Internal; PlanTime2 = true
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&.&& „.&&&.&& —.³
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&.&& „.&&&.&& —.³
+.}
 .end
 .if CPaidDays
 ³                                        ‹€—ˆ‚€…Œ… ‚…ŒŸ...³&&.&& „.&&&.&& —.³
@@ -272,8 +300,16 @@ CommonFormHeader
  Msro Koldn Kolch Kod Nopl Summaop
  Nachisl
  FondDn FondCh
+ FondStr : "p:r"
+ FondDn FondCh
+ FondStr_2 : "p:r"
+ FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr : "p:r"
+ PlanDn PlanCh
+ PlanStr_2 : "p:r"
+ PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Msru Kodud Nudr Summaud
  Uder
@@ -300,10 +336,22 @@ CommonFormHeader
 .end
 .}
 ³   ³       ³       ³    ³                         ÿ€—ˆ‘‹…....³&'&&&&&&&&&&&&&&³ÿ
+.{?Internal;  FondTime2 = false
 ³                                               ÿ”„ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ
+.}
+.{?Internal;  FondTime2 = true
+³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ
+³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ
+.}
 ³                              ÿ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ
 .if CPlanDays
+.{?Internal;  PlanTime2 = false
 ³                              ÿ               ‹€‚… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ
+.}
+.{?Internal;  PlanTime2 = true
+³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ
+³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ
+.}
 .end
 .if CPaidDays
 ³                              ÿ           ‹€—ˆ‚€…Œ… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ
@@ -501,8 +549,22 @@ CommonFormHeader
  Msro Koldn Kolch Kod Nopl Summaop Msro Koldn Kolch Kod Nopl Summaop
  Nachisl Nachisl
  FondDn FondCh FondDn FondCh
+ FondStr : "p:r" 
+ FondDn FondCh 
+ FondStr : "p:r" FondDn FondCh
+ FondStr_2 : "p:r" 
+ FondDn_2 FondCh_2 
+ FondStr_2 : "p:r" FondDn_2 FondCh_2
  FaktDn FaktCh FaktDn FaktCh
  PlanDn PlanCh PlanDn PlanCh
+ PlanStr : "p:r" 
+ PlanDn PlanCh 
+ PlanStr : "p:r" 
+ PlanDn PlanCh
+ PlanStr_2 : "p:r" 
+ PlanDn_2 PlanCh_2 
+ PlanStr_2 : "p:r" 
+ PlanDn_2 PlanCh_2
  PaidDn PaidCh PaidDn PaidCh
  Msru Kodud Nudr Summaud Msru Kodud Nudr Summaud
  Uder Uder
@@ -529,10 +591,22 @@ CommonFormHeader
 .end
 .}
 ³   ³       ³       ³    ³                         ÿ€—ˆ‘‹…....³&'&&&&&&&&&&&&&&³ÿ   ³   ³       ³       ³    ³                         ÿ€—ˆ‘‹…....³&'&&&&&&&&&&&&&&³ÿ
+.{?Internal;  FondTime2 = false
 ³                                               ÿ”„ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ   ³                                               ÿ”„ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ
+.}
+.{?Internal;  FondTime2 = true
+³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ   ³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ
+³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ   ³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ
+.}
 ³                              ÿ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ   ³                              ÿ”€Š’ˆ—…‘Šˆ ’€’€ ‚…Œ…ˆ...&&.&& „.&&&.&& —.³ÿ
 .if CPlanDays
+.{?Internal;  PlanTime2 = false
 ³                                   ÿ          ‹€‚… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ   ³                              ÿ               ‹€‚… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ
+.}
+.{?Internal;  PlanTime2 = true
+³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ   ³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ
+³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ   ³ÿ@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &&.&& „.&&&.&& —.³ÿ
+.}
 .end
 .if CPaidDays
 ³                              ÿ           ‹€—ˆ‚€…Œ… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ   ³                              ÿ           ‹€—ˆ‚€…Œ… ‚…ŒŸ...&&.&& „.&&&.&& —.³ÿ

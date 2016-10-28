@@ -1,0 +1,267 @@
+#include PlanOmto.vih
+#include ClaimLinkedDocs.vih
+
+#component "AGAT"
+
+interface PlanOmtoMain 'План ОМТО';
+
+var
+  _filters       : PlanOmtoFilters noauto;
+  _queryText     : ISqlString;
+  _dataProvider  : IPlanOmtoDataProvider;
+  _dataSaver     : IPlanOmtoDataSaver;
+  _planOmto      : IPlanOmto;
+  _linkedDocs    : IClaimLinkedDocs;
+  _planOmtoView  : PlanOmtoView noauto;
+  _filtersView   : PlanOmtoFiltersView noauto;
+  _linkedDocsView: ClaimLinkedDocsView noauto;
+  _helper        : PlanOmtoHelper;
+  _deliverClaimCreator: DeliverClaimCreator;
+  _linkedDocsManager: PlanOmtoLinkedDocsManager new;
+
+embedded embFilters 'Фильтры' interface _filtersView;
+show (,,45,) fixed_x;
+end;
+
+embedded embPlanOmto '' interface _planOmtoView;
+show (46,,,15);
+end;
+
+embedded embLinkedDocs '' interface _linkedDocsView;
+show (46,16,,) fixed_y;
+end;
+
+procedure RefreshPlanOmto;
+{
+  var c: comp;
+  c := _planOmto.ClaimNrec;
+  _planOmto.LoadData;
+  if c != 0
+    _planOmto.JumpToClaimNrec(c);
+  _planOmtoView.Refresh;
+}
+
+procedure RefreshLinkedDocs;
+{
+  _linkedDocs.Load(_planOmto.ClaimNrec);
+  _linkedDocsView.Refresh;
+}
+
+procedure Refresh;
+{
+  RefreshPlanOmto;
+  RefreshLinkedDocs;
+}
+
+function GetMarkedPlanOmto: IPlanOmto;
+{
+  var p: IPlanOmto;
+  p := IPlanOmto(new(PlanOmto, Create(_dataProvider, _dataSaver)));
+  _planOmtoView.FillPlanOmtoWithMarkedPositions(p);
+  result := p;
+}
+
+procedure CreateDeliverClaim;
+{
+  if _deliverClaimCreator.ShowConfig = cmDefault
+  {
+    var p: IPlanOmto;
+    p := GetMarkedPlanOmto;
+    _deliverClaimCreator.CreateDeliverClaim(p);
+    freevipinterface(p);
+    Refresh;
+  }
+}
+
+procedure CreateLinkedDoc(tidkgal: word);
+{
+  var p: IPlanOmto;
+  p := GetMarkedPlanOmto;
+  if _linkedDocsManager.CreateLinkedDoc(tidkgal, p) = PlanOmtoActionSuccess
+    Refresh;
+  freevipinterface(p);
+}
+
+procedure CreateLinkedBasedoc;
+{
+  CreateLinkedDoc(41);
+}
+
+procedure CreateLinkedDogovor;
+{
+  CreateLinkedDoc(400);
+}
+
+procedure CreateLinkedRegrade;
+{
+  CreateLinkedDoc(630);
+}
+
+procedure LinkBasedoc;
+{
+  var p: IPlanOmto;
+  p := GetMarkedPlanOmto;
+  if _linkedDocsManager.LinkDoc(41, p) = PlanOmtoActionSuccess
+    Refresh;
+  freevipinterface(p);
+}
+
+procedure OnFiltersClickRefresh;
+{
+  refresh;
+}
+
+procedure toggleFiltersPanelVisiblity;
+{
+  if cfsGetCurrentContainerSelf != 0
+  {
+    var isVisible: boolean;
+    if cfsGetProp('EMBFILTERS', 'Visible', isVisible) = cfOk
+    {
+      cfsSetProp('EMBFILTERS', 'Hidden' , isVisible);
+      cfsSetProp('EMBFILTERS', 'Visible', not isVisible);
+      cfsSetProp('EMBPLANOMTO', 'RectA_X', if(not isVisible, 46, 1));
+      cfsSetProp('EMBLINKEDDOCS', 'RectA_X', if(not isVisible, 46, 1));
+    }
+  }
+}
+
+procedure OnHandleevent(cmd: word); forward;
+
+procedure AddLinkedDocsMenu(m: longint; lm: TLinkedDocsMenu; DocTypeName: string);
+{
+  if lm.ItemsCount = 1
+    ConcatMenu(m, lm.MenuId);
+  else if lm.ItemsCount = 0
+    AddMenuItem(m, 'Не сформированы ' + DocTypeName, word(-1));
+  else if lm.ItemsCount > 1
+    AddSubmenu(m, lm.MenuId, 'Открыть ' + DocTypeName, '', hcNoContext);
+}
+
+procedure OnCmHotkeys;
+{
+  var m: longint;
+  m := LoadMenu('mnuAgatPlanOmtoView', false);
+  AddMenuItem(m, 'separator', word(-1));
+  AddLinkedDocsMenu(m, _helper.GetLinkedBasedocsMenu(_planOmto.IndentNrec, _planOmto.KatmcNrec), 'ДО');
+  AddLinkedDocsMenu(m, _helper.GetLinkedIncomeKatsoprsMenu(_planOmto.IndentNrec, _planOmto.KatmcNrec),
+                    'приходные накладные');
+  AddLinkedDocsMenu(m, _helper.GetLinkedRegradeKatsoprsMenu(_planOmto.IndentNrec, _planOmto.KatmcNrec),
+                    'акты на пересортицу');
+  AddLinkedDocsMenu(m, _helper.GetLinkedIssueKatsoprsMenu(_planOmto.IndentNrec, _planOmto.KatmcNrec),
+                    'накладные на отпуск в пр-во');
+  OnHandleevent(RunLoadMenu(m));
+}
+
+procedure OnHandleevent(cmd: word);
+{
+  case cmd of
+    cmHotkeys     : OnCmHotkeys;
+    cmCalcUslParam: _planOmtoView.SetAcceptMarked;     //Alt+W  Принять к исполнению помеченные
+    cmOpenFile    : _planOmtoView.UnsetAcceptMarked;   //Alt+R  Отменить прием к исполнению помеченных
+    cmNal         : toggleFiltersPanelVisiblity;       //Alt+F  Показать/скрыть настройки
+    cmOneRec      : _planOmtoView.SetDeliverOrgByBasedocMarked; //Alt+K  Установить поставщика из ДО
+    cmPlansNo     : CreateDeliverClaim;                //Alt+P  Создать заявку поставщику
+    cmAccording   : CreateLinkedBasedoc;               //Alt+S  Создать связанный счет
+    cmDocBas      : CreateLinkedDogovor;               //Alt+D  Создать связанный договор / доп.соглашение
+    cmRecalcAllSums: CreateLinkedRegrade;              //Alt+G  Создать связанный акт на пересортицу
+    cmIEHist      : LinkBasedoc;                       //Alt+H  Привязать ДО к помеченным позициям
+    cmIdle        : RefreshLinkedDocs;
+  end;
+}
+
+handleevent
+
+cmInit:
+{
+  _filters        := new(PlanOmtoFilters);
+  _queryText      := ISqlString(new(PlanOmtoQueryText, PlanOmtoQueryText(_filters)));
+  _dataProvider   := IPlanOmtoDataProvider(new(PlanOmtoDataProvider, Create(_queryText)));
+  _dataSaver      := IPlanOmtoDataSaver(new(PlanOmtoDataSaverCurrent));
+  _planOmto       := IPlanOmto(new(PlanOmto, Create(_dataProvider, _dataSaver)));
+  _planOmtoView   := new(PlanOmtoView, Create(_planOmto));
+  _filtersView    := new(PlanOmtoFiltersView, Create(_filters));
+  _linkedDocs     := IClaimLinkedDocs(new(ClaimLinkedDocs));
+  _linkedDocsView := new(ClaimLinkedDocsView, Create(_linkedDocs));
+
+  _linkedDocsManager
+    .RegisterCreateAction(41, IPlanOmtoActionWithParamsUI(new(PlanOmtoActionCreateLinkedBasedoc)))
+    .RegisterCreateAction(400, IPlanOmtoActionWithParamsUI(new(PlanOmtoActionCreateLinkedDogovor)))
+    .RegisterCreateAction(630, IPlanOmtoActionWithParamsUI(new(PlanOmtoActionCreateLinkedRegrade)))
+    .RegisterLinkAction(41, IPlanOmtoActionWithParamsUI(new(PlanOmtoActionLinkBasedoc)))
+  ;
+
+  bindEvent(OnFiltersClickRefresh, _filtersView.OnClickRefresh);
+  bindEvent(OnHandleevent, _planOmtoView.OnHandleevent);
+  bindEvent(OnHandleevent, _filtersView.OnHandleevent);
+
+  _filters.InitFilter;
+
+  refresh;
+}
+
+cmDone:
+{
+  _filters.DoneFilter;
+}
+
+end;
+
+end.
+
+#include UserReport.vih
+
+VipInterface UserReport_PlanOmtoMain Implements IUserReport licensed(free);
+Interface UserReport_PlanOmtoMain;
+  create view dummy;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::PlanOmtoMain);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'Агат. План ОМТО';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'SUPPLYPLAN';
+    end;
+  }
+end.
+
+
+mnuAgatPlanOmtoView Menu
+{
+- 'Показать/скрыть настройки', cmNal, 'Показать/скрыть панель с фильтрами', , 'Alt+F', kbAltF, sci1Esc;
+- 'Принять к исполнению помеченные', cmCalcUslParam,
+  'Установить статус "Принята к исполнению" у помеченных позиций', , 'Alt+W', kbAltW, sci1Esc;
+- 'Отменить прием к исполнению помеченных', cmOpenFile,
+  'Установить статус "Оформляемый" у помеченных позиций', , 'Alt+R', kbAltR, sci1Esc;
+- 'Установить поставщика из ДО у помеченных позиций', cmOneRec,
+  '', , 'Alt+K', kbAltK, sci1Esc;
+- 'Сформировать заявку поставщику по помеченным позициям', cmPlansNo,
+  '', , 'Alt+P', kbAltP, sci1Esc;
+- 'Сформировать счет на закупку по помеченным позициям', cmAccording,
+  '', , 'Alt+S', kbAltS, sci1Esc;
+- 'Сформировать договор/доп.согл. по помеченным позициям', cmDocBas,
+  '', , 'Alt+D', kbAltD, sci1Esc;
+- 'Сформировать акт на пересорт. по помеченным позициям', cmRecalcAllSums,
+  '', , 'Alt+G', kbAltG, sci1Esc;
+- 'Привязать ДО к помеченным позициям', cmIEHist,
+  '', , 'Alt+H', kbAltH, sci1Esc;
+}

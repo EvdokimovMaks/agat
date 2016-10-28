@@ -18,7 +18,6 @@
 .hide
 .fields
  Pred
- OkpoName
  Podr
  MesN MesK GOD
  DataO:date
@@ -41,7 +40,6 @@ NameColumn17
 NameColumn18
 !-----------------------------------
 .endfields
- ^
  ^
  ^
  ^^^^

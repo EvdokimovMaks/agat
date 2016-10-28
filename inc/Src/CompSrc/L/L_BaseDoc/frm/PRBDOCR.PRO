@@ -105,7 +105,7 @@
   sdoc srub
   UnnName
   MFOBIK
-  BaseDocNrec
+  BaseDocNrec:comp
   mnd nomer ddoc
   RealSkidPercent:double
   FIOman
@@ -126,7 +126,7 @@
   Акциз_в_цене : boolean
 
 ! - Спецификация -
-  np AtrSpSopr PosNrec PrMCUS barkod mc edname massa sizex sizey sizez remmc barkod2
+  np AtrSpSopr PosNrec:comp PrMCUS barkod mc edname massa sizex sizey sizez remmc barkod2
   zavMC MaxProc kodpart namepart godnpart zavpart
   dAnalPart nAnalPart dSertPart nSertPart
   attr1 attr2 attr3 attr4 attr5

@@ -1,0 +1,190 @@
+#include oTemplan.vih
+
+#component "AGAT"
+
+interface iTemplanFactObject_Common;
+
+var
+   tfManager : iTemplanFactManager;        // Менеджер объектов для факта (вызываются методы)
+
+function oTemplanSpecObject.InitObject(aBuf: TemplanSpecType; aIsNew: boolean): boolean;
+{
+  _buf := aBuf;
+  _oldbuf := aBuf;
+  _isNew := aIsNew;
+  _isModified := false;
+  _isRemoved := false;
+  result := _isNew or (getfirst tTemplanSpec where (( _buf.Nrec == tTemplanSpec.Nrec )) = tsOk);
+}
+
+// Функция необходима для удаления записи из временной таблицы
+/*
+function oTemplanSpecObject.RemoveObject: boolean;
+{
+  result := false;
+  if _isNew exit;
+  if delete tTemplanSpec where ((_buf.Nrec == tTemplanSpec.Nrec )) = tsOk
+  {
+    _linkManager.NotifyLinkedForRemove(_buf);
+    _isRemoved := true;
+    _linkManager.ClearLinks(_buf.Nrec);
+    result := true;
+  }
+}
+*/
+procedure oTemplanSpecObject.OnLinkedUpdate(oldBuf: TemplanSpecType; newBuf: TemplanSpecType);
+{
+  var i: byte;
+  for(i:=1 ;i<=12 ;i++)
+  {
+/*    if (newBuf.sum[i] != oldBuf.sum[i])
+      SetVal(i, GetVal(i)+newBuf.sum[i]-oldBuf.sum[i]);*/
+    if (newbuf.sumFact[i] != oldBuf.sumFact[i])
+        SetVal(i, GetVal(i) + newBuf.sumFact[i] - oldBuf.sumFact[i]);
+  }
+  if (newbuf.sumSaldo != oldBuf.sumSaldo) then
+    {
+      SetVal(0, GetVal(0) + newBuf.sumSaldo - oldBuf.sumSaldo);
+    }
+}
+
+// Событие при удалении связи
+/*
+procedure oTemplanSpecObject.OnLinkedRemove(buf: TemplanSpecType);
+{
+  var i: byte;
+  for(i:=1; i<=12; i++)
+  {
+    if (buf.sumfact[i] <> 0)
+      SetVal(i, GetVal(i)-buf.sumFact[i]);
+  }
+}
+*/
+// Событие при создании связи
+procedure oTemplanSpecObject.OnLinkedCreate(buf: TemplanSpecType);
+{
+  var i: byte;
+  for(i:=1; i<=12; i++)
+  {
+/*    if (buf.sum[i] <> 0)
+        SetVal(i, GetVal(i)+buf.sum[i]);*/
+    if (buf.sumfact[i] <> 0)
+        SetVal(i, GetVal(i) + buf.sumFact[i]);
+  }
+  if (buf.sumSaldo <> 0) then
+    {
+      SetVal(0, GetVal(0) + buf.sumSaldo);
+    }
+}
+
+function oTemplanSpecObject.GetKauCode: word;
+{
+  result := 0;
+}
+
+function oTemplanSpecObject.GetKey: string;
+{
+  result := '';
+}
+
+// Функция инициализации связей
+function oTemplanSpecObject.InitLinks: boolean;
+{
+  result := true;
+// *** Временно уберём. При наличии этой строчки суммирование идёт по всем родителям, нам это пока не нужно, будем для каждой связи писать свой обработчик
+/*
+  if (_buf.CParent != 0 and _buf.Nrec != 0)
+  {
+    result := _linkManager.AddLink(_buf.Nrec, _buf.CParent);
+  }*/
+}
+
+function oTemplanSpecObject.Save: boolean;
+{
+  result := false;
+  if (_isRemoved) exit;
+  tTemplanSpec.buffer := _buf;
+  if _isNew
+  {
+    if (insert current tTemplanSpec = tsOk)
+    {
+      _buf    := TemplanSpecType(tTemplanSpec.buffer);
+      _oldbuf := _buf;
+      _isNew  := false;
+      InitLinks;
+      _linkManager.NotifyLinkedFactForCreate(_buf);
+      result  := true;
+    }
+  }
+  else if _isModified and ( getfirst tTemplanSpec where (( _buf.Nrec == tTemplanSpec.Nrec )) = tsOk )
+  {
+    tTemplanSpec.buffer := _buf;
+    if (update current tTemplanSpec = tsOk)
+    {
+      _linkManager.NotifyLinkedFactForUpdate(_oldbuf, _buf);
+      _oldbuf     := _buf;
+      _isModified := false;
+      result      := true;
+    }
+  }
+}
+
+function oTemplanSpecObject.GetVal(ValFieldNumber: word): double;
+{
+  if ValFieldNumber >= 1 and ValFieldNumber <= 12 then
+    {
+     result := _buf.SumFact[ValFieldNumber]
+    }
+  else if ValFieldNumber = 0 then
+    {
+     result := _buf.sumSaldo;
+    } else result := 0;
+}
+
+function oTemplanSpecObject.SetVal(ValFieldNumber: word; aValue: double): boolean;
+{
+  if ValFieldNumber >= 1 and ValFieldNumber <= 12
+  {
+    if (not _isModified) _isModified := _buf.sumFact[ValFieldNumber] != aValue;
+    _buf.sumFact[ValFieldNumber] := aValue;
+
+    result := true;
+  } else
+      if ValFieldNumber = 0 then
+          {
+           if (not _isModified) _isModified := _buf.sumSaldo != aValue;
+            _buf.sumSaldo := aValue;
+          }
+            else
+            {
+              result := false;
+            }
+}
+
+/*
+// Описание процедур, вызываемых при записи объекта
+procedure SetCmean       (aValue:string    ); { _isModified := _buf.cMean       != aValue; _buf.cMean       := aValue; }
+procedure SetName        (aValue:string    ); { _isModified := _buf.Name        != aValue; _buf.Name        := aValue; }
+procedure SetCode        (aValue:string    ); { _isModified := _buf.Code        != aValue; _buf.Code        := aValue; }
+procedure SetKodGrKau    (aValue:string    ); { _isModified := _buf.KodGrKau    != aValue; _buf.KodGrKau    := aValue; }
+procedure SetCKau        (aValue:string    ); { _isModified := _buf.cKau        != aValue; _buf.cKau        := aValue; }
+procedure SetGrKau       (aValue:string    ); { _isModified := _buf.GrKau       != aValue; _buf.GrKau       := aValue; }
+procedure SetPriznak     (aValue:string    ); { _isModified := _buf.Priznak     != aValue; _buf.Priznak     := aValue; }
+procedure SetCSloj       (aValue:string    ); { _isModified := _buf.cSloj       != aValue; _buf.cSloj       := aValue; }
+procedure SetNpp         (aValue:word      ); { _isModified := _buf.Npp         != aValue; _buf.Npp         := aValue; }
+
+// Описание свойств Объекта oTemplanSpecObject (нужно для возможности модификации, добавления записи) с действиями при чтении \ записи объекта
+property oTemplanSpecObject.Nrec        : comp            read _buf.Nrec;
+property oTemplanSpecObject.cMean       : comp            read _buf.cMean       write SetCmean(result);
+property oTemplanSpecObject.Name        : string          read _buf.Name        write SetName(result);
+property oTemplanSpecObject.Code        : string          read _buf.Code        write SetCode(result);
+property oTemplanSpecObject.cParent     : comp            read _buf.cParent
+property oTemplanSpecObject.KodGrKau    : word            read _buf.KodGrKau    write SetKodGrKau(result);
+property oTemplanSpecObject.cKau        : comp            read _buf.cKau        write SetCKau(result);
+property oTemplanSpecObject.GrKau       : word            read _buf.GrKau       write SetGrKau(result);
+property oTemplanSpecObject.Priznak     : word            read _buf.Priznak     write SetPriznak(result);
+property oTemplanSpecObject.cSloj       : comp            read _buf.cSloj       write SetCSloj(result);
+property oTemplanSpecObject.Npp         : word            read _buf.Npp         write SetNpp(result);
+property oTemplanSpecObject.Buf         : TemplanSpecType read _buf;
+*/
+end.

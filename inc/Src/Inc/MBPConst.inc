@@ -35,6 +35,7 @@ Const
   mbpPMovDoc =  12;  // Перевод в другое подразделение
   mbpUtilDoc =  13;  // Акт перевода в утиль
   mbpChgPDoc =  14;  // Изменение параметров
+  mbpSizeDoc =  15;  // Изменение размеров
   mbpInMCDoc = 604;  // Возврат на склад МЦ
   mbpFrMCDoc = 602;  // Передача МЦ в Спецоснастку, значение KatSopr.VidSopr
 

@@ -39,6 +39,11 @@ myType
 dat1
 dat2
 sFoundation
+FIO_Req
+FIO_VP_Req
+TabN_Req
+подразделение_Req
+должность_Req
 !.{ myDopOtpCycle CheckEnter
 FIO_
 FIO_VP_
@@ -88,6 +93,11 @@ myType                    ^
 dat1                      ^
 dat2                      ^
 sFoundation               ^
+FIO_Req                   ^
+FIO_VP_Req                ^
+TabN_Req                  ^
+подразделение_Req         ^
+должность_Req             ^
 .{ myDopOtpCycleA_04 CheckEnter
 FIO_                      ^
 FIO_VP_                   ^

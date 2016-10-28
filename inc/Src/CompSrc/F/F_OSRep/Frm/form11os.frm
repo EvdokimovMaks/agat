@@ -10,6 +10,9 @@
 
 .Set Name='Form11'
 .Hide
+.var
+  iEF : ExcelFormat;
+.endvar
 .Fields
 CurrFormat : string
 CurrFormatUkr : string

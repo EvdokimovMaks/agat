@@ -31,6 +31,7 @@
 #include DDE_FUN.inc       // DDELIB.dll
 #include G_Calc_EF.inc     // G_Zarpl.dll
 #include G_PayRep_EF.inc   // G_Zarpl.dll
+#include SiLogFuncs.inc    // SiLog.dll
 #define __GetKolZnakZar__
 #include G_Sredn_EF.inc    // G_SumDivide.dll
 #undef __GetKolZnakZar__
@@ -39,6 +40,7 @@
 #include G_RLFun.inc
 #include G_Scales.inc
 #include Scales.inc
+#include ZarDistribute.inc // ZarDistribute.dll
 
 //вывод картинки в rtf документ: путь к rtf файлу, имя rtf файла, высота картинки, два параметра положение на листе
 procedure InsFoto(string, string, longInt, longInt, longInt); external 'InsFoto.dll';

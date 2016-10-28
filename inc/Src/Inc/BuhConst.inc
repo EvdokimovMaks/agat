@@ -356,8 +356,9 @@
 // Константы для Курсовых разниц:
 //          ! Когда умрет паскаль с расчетом курсовых - перенести в DiffRate.vih
 // Valut.[D]ay[M]on
-  dmMonth = 0;
-  dmDay   = 1;
+  dmMonth   = 0;
+  dmDay     = 1;
+  dmControl = 2;
 // Valut.[V]id[O]b - см. Valut.vip - List для Valut.VidOb
   vo_All     =  0;
   vo_Oborot  =  1;

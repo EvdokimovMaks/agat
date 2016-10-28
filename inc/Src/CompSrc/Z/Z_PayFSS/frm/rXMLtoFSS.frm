@@ -367,6 +367,8 @@ end.
 !-------расчетный период-------------- для разных версий
   Year1            //  Год на кот заменили 1
   Year2            //  Год на кот заменили 2
+  Year1            //  Год на кот заменили 1
+  Year2            //  Год на кот заменили 2
   BaseSum1         //  Сумма заработка за год 1
   BaseSum2         //  Сумма заработка за год 2
 !
@@ -382,6 +384,7 @@ end.
   ReturnDateLpu    //  Дата выхода на работу
   BaseAvgSal       //  Средний заработок
   RoleWage         //  Должностной оклад
+  BaseCalcDays     //  Число календарных дней
   BaseCalcDays     //  Число календарных дней
   InsurYY          //  Стаж страховой год
   InsurMM          //  Стаж страховой месяц
@@ -640,12 +643,21 @@ end.
     <YEAR2_OLD>^</YEAR2_OLD>
 .}
 .}
-.} // ( CalcMetod = 1 )
 !-------расчетный период--------------
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild )
     <YEAR1>^</YEAR1>
     <YEAR2>^</YEAR2>
 .}
+.} // ( CalcMetod = 1 )
+!-------расчетный период--------------
+.{?INTERNAL; ( Version = '1.7.2' )
+.{?INTERNAL; ( CalcMetod = 0 )
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild )
+    <YEAR1>^</YEAR1>
+    <YEAR2>^</YEAR2>
+.}
+.} // ( CalcMetod = 0 )
+.} // 1.7.2
 !
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma )
     <BASE_SUM1>^</BASE_SUM1>
@@ -693,6 +705,12 @@ end.
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem )
     <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
 .}
+!
+.{?INTERNAL; ( Version = '1.7.3' )
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
+    <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
+.}
+.} // 1.7.3
 !------------ Стаж ---------------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
     <INSUR_YY>^</INSUR_YY>
@@ -1079,6 +1097,7 @@ end.
   WorkConFinish    //  дата окончания
   RoleWage         //  Должностной оклад
   BaseCalcDays     //  Число календарных дней
+  BaseCalcDays     //  Число календарных дней
   BaseAvgSal       //  Средний заработок
   AvgSal           //  среднемесячный заработок
   Multipatr        //  одновременный уход за несколькими детьми
@@ -1087,6 +1106,8 @@ end.
   Year1Old         //  Год 1 изменения
   Year2Old         //  Год 2 изменения
 !-------расчетный период-------------- для разных версий
+  Year1            //  Год на кот заменили 1
+  Year2            //  Год на кот заменили 2
   Year1            //  Год на кот заменили 1
   Year2            //  Год на кот заменили 2
   BaseSum1         //  Сумма заработка за год 1
@@ -1341,6 +1362,11 @@ end.
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem )
     <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
 .}
+.{?INTERNAL; ( Version = '1.7.3' )
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
+    <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
+.}
+.} // 1.7.3
 !----------- средний заработок ---------------------------
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma )
     <BASE_AVG_SAL>^</BASE_AVG_SAL>
@@ -1361,12 +1387,21 @@ end.
     <YEAR1_OLD>^</YEAR1_OLD>
     <YEAR2_OLD>^</YEAR2_OLD>
 .}
-.} // ( CalcMetod = 1 )
-!------------ Отметка о замене годов для расчета
+!-------расчетный период--------------
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild )
     <YEAR1>^</YEAR1>
     <YEAR2>^</YEAR2>
 .}
+.} // ( CalcMetod = 1 )
+!------------ Отметка о замене годов для расчета
+.{?INTERNAL; ( Version = '1.7.2' )
+.{?INTERNAL; ( CalcMetod = 0 )
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild )
+    <YEAR1>^</YEAR1>
+    <YEAR2>^</YEAR2>
+.}
+.} // ( CalcMetod = 0 )
+.} // 1.7.2
 !
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma )
     <BASE_SUM1>^</BASE_SUM1>
@@ -1681,5 +1716,4 @@ end.
 .begin
  rXMLtoFSS.fExit;
 end.
-
 .endform

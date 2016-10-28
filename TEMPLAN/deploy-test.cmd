@@ -1,0 +1,1 @@
+@call ../config/deploy.cmd test Templan %%%%startpath%%%%_Argument\ _ARGUMENT

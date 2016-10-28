@@ -40,7 +40,6 @@
 
 !!!! Третий раздел
 NameGr38 NameGr39 NameGr40 NameGr41 NameGr42 NameGr43 NameGr44 NameGr45
-NameGr28 NameGr29 NameGr30 NameGr31 NameGr32
 Kod35 Kod28 Kod29 Kod30 Kod31 Kod32 Kod33
 
 Месяц24 Код25_1 Кол26_1 Код27_1 Кол28_1 Сум29 Сум30 Сум31 Сум32 Сум33 Сум34
@@ -74,8 +73,7 @@ Kod35 Kod28 Kod29 Kod30 Kod31 Kod32 Kod33
 .}
 ! Третий раздел
 ^^^^^^^^
-^^^^^
-^ ^^^^^^
+^^^^^^^
 .{ T54P1 CheckEnter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .{ T54P2 CheckEnter

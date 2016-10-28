@@ -70,6 +70,10 @@ const
   reAnaliticParam3 = 6005;
   reAnaliticParam4 = 6006;
 
+  // вставка и удаление записи
+  reDeleteCurrent = 6101;
+  reInsertRecord  = 6102;
+
   reNameParam    = 7001;
   reCodeParam    = 7002;
   reConstrParam  = 7003;

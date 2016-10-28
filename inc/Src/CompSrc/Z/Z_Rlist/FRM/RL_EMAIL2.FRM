@@ -17,8 +17,16 @@
  Msro Koldn Kolch Kod Nopl Summaop
  Nachisl
  FondDn FondCh
+ FondStr
+ FondDn FondCh
+ FondStr_2
+ FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr
+ PlanDn PlanCh
+ PlanStr_2
+ PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Itogo
  Msru Kodud Nudr Summaud
@@ -107,7 +115,7 @@ function show(div){
     <td width="5" class="bgrColor"><p><strong>Кол.дн</strong></p></td>
     <td width="5" class="bgrColor"><p><strong>Часов</strong></p></td>
     <td width="10" class="bgrColor"><p><strong>Код</strong></p></td>
-    <td width="530" class="bgrColor"><strong>Наименование вида оплат(удержаний)</strong></td>
+    <td width="530" class="bgrColor"><strong>Наименование вида оплат</strong></td>
     <td width="145" class="bgrColor"><strong>Сумма</strong></td>
 </tr>
 .{
@@ -130,6 +138,7 @@ function show(div){
     <td align="right" width="530" class="bgrColor"><strong>НАЧИСЛЕНО...</strong></td>
     <td align="right" width="145" class="bgrColor"><p><strong>&'&&&&&&&&&&&&&.&&</strong></p></td>
 </tr>
+.{?Internal; FondTime2 = false
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -137,6 +146,23 @@ function show(div){
     <td align="right" width="530"> ФОНД ВРЕМЕНИ...</td>
     <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
 </tr>
+.}
+.{?Internal; FondTime2 = true
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
+</tr>
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
+</tr>
+.}
 <tr><td align="left" width="5"><p></p></td>
     <td align="left" width="5"><p></p></td>
     <td align="left" width="5"><p></p></td>
@@ -145,6 +171,7 @@ function show(div){
     <td align="right" width="145"> &&.& ДН. &&&&.&& Ч.</td>
 </tr>
 .if CPlanDays
+.{?Internal; PlanTime2 = false
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -152,6 +179,23 @@ function show(div){
     <td align="right" width="530"> ПЛАНОВОЕ ВЕРМЯ ...</td>
     <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
 </tr>
+.}
+.{?Internal; PlanTime2 = true
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
+</tr>
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
+</tr>
+.}
 .end
 .if CPaidDays
 <tr><td align="right" width="5"><p></p></td>
@@ -344,8 +388,16 @@ end.
  Msro Koldn Kolch Kod Nopl Summaop
  Nachisl
  FondDn FondCh
+ FondStr
+ FondDn FondCh
+ FondStr_2
+ FondDn_2 FondCh_2
  FaktDn FaktCh
  PlanDn PlanCh
+ PlanStr
+ PlanDn PlanCh
+ PlanStr_2
+ PlanDn_2 PlanCh_2
  PaidDn PaidCh
  Msru Kodud Nudr tag1 Summaud tag2
  Uder
@@ -430,6 +482,7 @@ function show(div){
     <td align="right" width="530"><strong>НАЧИСЛЕНО...</strong></td>
     <td align="right" width="145"><p><strong>&'&&&&&&&&&&&&&.&&</strong></p></td>
 </tr>
+.{?Internal; FondTime2 = false
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -437,6 +490,23 @@ function show(div){
     <td align="right" width="530"> ФОНД ВРЕМЕНИ...</td>
     <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
 </tr>
+.}
+.{?Internal; FondTime2 = true
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
+</tr>
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
+</tr>
+.}
 <tr><td align="left" width="5"><p></p></td>
     <td align="left" width="5"><p></p></td>
     <td align="left" width="5"><p></p></td>
@@ -445,6 +515,7 @@ function show(div){
     <td align="right" width="145"> &&.& ДН. &&&&.&& Ч.</td>
 </tr>
 .if CPlanDays
+.{?Internal; PlanTime2 = false
 <tr><td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
     <td align="right" width="5"><p></p></td>
@@ -452,6 +523,23 @@ function show(div){
     <td align="right" width="530"> ПЛАНОВОЕ ВЕРМЯ ...</td>
     <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
 </tr>
+.}
+.{?Internal; PlanTime2 = true
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
+</tr>
+<tr><td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="5"><p></p></td>
+    <td align="right" width="10"><p></p></td>
+    <td align="right" width="530"> ^</td>
+    <td align="right" width="145"><p> &&.& ДН. &&&&.&& Ч.</p></td>
+</tr>
+.}
 .end
 .if CPaidDays
 <tr><td align="right" width="5"><p></p></td>

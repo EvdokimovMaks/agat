@@ -13,6 +13,7 @@
 .Fields
   Tune_Part
   Tune_Name Tune_Value
+  ChangeTune_Name
   DelTune_Name
   PluginInter
   DublNumberTune
@@ -26,6 +27,11 @@
 .}
 .end
 .if Show_DelTune
+.{
+^
+.}
+.end
+.if Show_ChangeType
 .{
 ^
 .}
@@ -48,6 +54,7 @@
   CommonFormHeader
   Tune_Part
   Tune_Name Tune_Value
+  ChangeTune_Name
   DelTune_Name
   PluginInter
   DublNumberTune
@@ -73,6 +80,16 @@
 .if Show_DelTune
 
                             “¤ «¥­ë ­ áâà®©ª¨
+
+ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.{
+³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³
+.}
+ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+.end
+.if Show_ChangeType
+
+                            ˆ§¬¥­¥­ â¨¯ ­ áâà®¥ª
 
 ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
 .{

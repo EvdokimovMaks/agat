@@ -26,10 +26,13 @@ const
   reToPodr    = 3004;
   reToParty   = 3005;
 
+  reInsertRecord = 3006;
+
   // параметры
   recSoprDocParam = 4001;
   recSpSoprParam  = 4002;
   recMcParam      = 4003;
   recPodrParam    = 4004;
   recPartyParam   = 4005;
+  recMolParam     = 4006;
 end

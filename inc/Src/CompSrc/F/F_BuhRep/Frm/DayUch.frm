@@ -37,6 +37,7 @@
 .hide
 .var
   ShowDigit : word
+  ShowKurs  : word
   wKau      : tTabKau
   cKau      : tGetKau
   iSchet26  : ShowSchet26
@@ -45,6 +46,7 @@
 .endvar
 .begin
   ShowDigit := wGetTune('Fin.ShowDigit');
+  ShowKurs  := wGetTune('Fin.ShowDigitCurs');
 end.
 .fields
 ! интервал

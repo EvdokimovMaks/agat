@@ -139,7 +139,7 @@ Npp         - номер разреза по порядку          - ^
 .defo landscape
 .var
   MyOrg   :string;
-  oHistory : iOldHistory;
+  oHistory : iHistory;
 .endvar
 .fields
   CommonFormHeader

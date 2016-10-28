@@ -15,22 +15,18 @@
   DayBeginPeriod MonthBeginPeriod YearBeginPeriod
   DayEndPeriod  MonthEndPeriod YearEndPeriod
   sum1 sum2
-  ItogSum
   mes Sum
   DayFormir MonthFormir YearFormir
-  FIO_Sost Tel_Sost
   FioDirektor FioGlBuh
 .endfields
 .{ SprChildNewSotrCycle checkenter 
 ^ ^ ^ ^ ^
 ^ ^
 ^ ^ ^  ^ ^ ^ 
-^ ^ ^
+^ ^
 .{ SprChildMes checkenter
 ^   .{.?SprChildGod; ^ .}
 .}
-^ ^ ^
-^ ^
-^ ^
+^ ^ ^ ^ ^
 .}
 .endform

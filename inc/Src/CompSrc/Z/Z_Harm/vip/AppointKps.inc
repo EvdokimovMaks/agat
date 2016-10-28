@@ -5,6 +5,9 @@
 // с назначениями и ставками ШР
 //------------------------------------------------------------------------------
 
+#ifndef _APPOINTKPS_INC_INCLUDED_
+#define _APPOINTKPS_INC_INCLUDED_
+
 const
   // Константы значений поля InfPsn3.LastUser, определяющие на какую таблицу ссылается поле InfPsn3.cPers
   cgKpsType_Staff = 1;
@@ -24,3 +27,5 @@ const
   cgSex_Female  = date(2, 1, 2010);  // женский пол
   cgSex_Unknown = date(1, 1, 2010);  // неопределенный пол
 end;
+
+#end

@@ -11,6 +11,7 @@
 .hide
 .fields
   LinesPerPage: integer
+  EnumeratePages: boolean
   Структурное_подразделение
   ChargeCode1 ChargeName1
   ChargeCode2 ChargeName2
@@ -29,7 +30,7 @@
   ChargeCode6 Account6 Sum6 HD6
 
 .endfields
- ^^
+ ^^^
  ^^
  ^^
  ^^
@@ -63,7 +64,6 @@
   HD3Str:           string;
   HD4Str:           string;
   HD6Str:           string;
-  StartPage:        integer;
   PageNum:          integer;
   TabNStr:          string;
 .endvar
@@ -73,11 +73,10 @@
   ChargeName3Str := ChargeName3;
   ChargeName4Str := ChargeName4;
   ChargeName5Str := ChargeName5;
-  ReadMyDsk(StartPage, 'Vedt12fc_StartPage', false);
-  PageNum := StartPage;
+  PageNum := 1;
   LineCount := 0;
 end.
- Ш.{?internal;(StartPage > 0);
+ Ш.{?internal;(EnumeratePages);
 .fields
   pagenum
 .endfields
@@ -164,7 +163,7 @@ end.
 .begin
 LineCount:=0;
 end.
-.{?internal;(StartPage > 0);
+.{?internal;(EnumeratePages);
 .fields
   pagenum
 .endfields

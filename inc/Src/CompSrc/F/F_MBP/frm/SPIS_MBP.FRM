@@ -13,6 +13,7 @@
 .NameInList 'Базовая форма для групповых документов на списание МБП'
 .hide
 .fields
+  DocTiDk  : Word
   DocNRec  : Comp     //
   Nom      : String   // 01
   Dat      : Date     // 02
@@ -44,8 +45,8 @@
   UDSum    : Double
 .endfields
 .{
-1234
-^^^^^^^^^^^^^
+  1234
+^^^^^^^^^^^^^^
 #CommissionBody(SpisMBPProt)
 ^ ^^^^^^^^^^^^^^
 .{SpSpis CheckEnter

@@ -1,13 +1,8 @@
-/*
- ÉÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ»
- º                     (c) 1994,2000 ª®à¯®à æ¨ï ƒ€‹€Š’ˆŠ€                    º
- º à®¥ªâ        : ƒ€‹€Š’ˆŠ€                                                 º
- º ‘¨áâ¥¬        : ‡ à ¡®â­ ï ¯« â                                           º
- º ‚¥àá¨ï        : 5.70                                                      º
- º  §­ ç¥­¨¥    : ¥¥áâàë ¯® ¯¥à¥ç¨á«¥­¨ï¬ ¢ á¡¥à¡ ­ª                       º
- º â¢¥âáâ¢¥­­ë© : Œ á« ª®¢  ’ âìï­  ‚« ¤¨¬¨à®¢­                             º
- ÈÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼
-*/
+//-----------------------------------------------------------------------------
+//                                                      (á) ª®à¯®à æ¨ï ƒ « ªâ¨ª 
+// ƒ « ªâ¨ª  9.1 - ‡ à ¡®â­ ï ¯« â 
+// ¥¥áâàë ¯® ¯¥à¥ç¨á«¥­¨ï¬ ¢ á¡¥à¡ ­ª (¯¥ç â­ë¥ ä®à¬ë)
+//-----------------------------------------------------------------------------
 #doc
 ¥¥áâàë ¯® ¯¥à¥ç¨á«¥­¨ï¬ ¢ á¡¥à¡ ­ª
 #end
@@ -101,13 +96,13 @@
   Nom_lsh            // ®¬¥à «¨æ¥¢®£® áç¥â 
   NomCard            // ®¬¥à ª àâ®çª¨
   FIO                // ”ˆ
-  Sum_Per            // ‘ã¬¬  ¯¥à¥ç¨á«¥­¨ï
-  Sum_PerU           // ‘ã¬¬  ã¤¥à¦ ­¨ï
-  Sum_Sbor           // ‘ã¬¬  á¡®à 
-  ‘â¢ª „‘:word      // ‘â ¢ª  „‘
-  ‘ã¬„‘             // ‘ã¬¬  „‘
-  Sum_Ud             // ˆâ®£® áã¬¬  ¯® á®âàã¤­¨ªã
-  cPersons  : comp   // nRec ááë«ª¨ ­  á®âàã¤­¨ª 
+  Sum_Per  : double  // ‘ã¬¬  ¯¥à¥ç¨á«¥­¨ï
+  Sum_PerU : double  // ‘ã¬¬  ã¤¥à¦ ­¨ï
+  Sum_Sbor : double  // ‘ã¬¬  á¡®à 
+  ‘â¢ª „‘ : word    // ‘â ¢ª  „‘
+  ‘ã¬„‘   : double  // ‘ã¬¬  „‘
+  Sum_Ud   : double  // ˆâ®£® áã¬¬  ¯® á®âàã¤­¨ªã
+  cPersons : comp    // nRec ááë«ª¨ ­  á®âàã¤­¨ª 
   P_seria            //  á¯®àâ­ë¥ ¤ ­­ë¥ ‘¥à¨ï
   P_number           //  á¯®àâ­ë¥ ¤ ­­ë¥ ®¬¥à
   OldFio             // à¥¤ë¤ãé ï ä ¬¨«¨ï
@@ -153,37 +148,29 @@
 .p 60
 .var KolList   : integer
      SumList1  : double
-     St1       : string
      ItogSumma1: double
-     ItSt1     : string
-     ItSumSt1  : string
      SummaStr1 : string
      SummaStr2 : string
      SummaStr3 : string
-     cur_per   : string
-     delimit   : string
  .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        ItogSumma1:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
-        end.
-
+.begin
+  KolList := 0;
+  SumList1 := 0;
+  ItogSumma1 := 0;
+end.
 .{
 .{
 .[h OverWrite
-.begin KolList:=KolList+1 end.
+.begin
+  KolList:=KolList+1
+end.
 .fields
- XarName
- ReesName
- Rab_Name
- Rab_Schet Rab_OKPO
- Rab_Bknm
- Rab_Mfo Mes God
+  XarName
+  ReesName
+  Rab_Name
+  Rab_Schet Rab_OKPO
+  Rab_Bknm
+  Rab_Mfo Mes God
 .endFields
 ÿ à¥¤¯à¨ïâ¨¥ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ
 ÿ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ
@@ -197,60 +184,46 @@
 ÿÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ
 .]h
 .{
-.begin SumList1  := SumList1 + Double(Sum_Per)
-       ItogSumma1:= ItogSumma1 + Double(Sum_Per)
-       if RoundSum=1
-        cur_per:= DoubleToStr(Double(sum_per),'666''666''666''666''667')+ delimit
-       else
-        begin
-        cur_per:= GetStrSummaExt(true, true, Double(Sum_Per));
-        end;
+.begin
+  SumList1 := SumList1 + Sum_Per;
+  ItogSumma1 := ItogSumma1 + Sum_Per;
  end.
 .fields
- Npp Nom_lsh FIO cur_per
+  Npp Nom_lsh FIO GetStrSummaExt(true, true, Sum_Per)
 .endFields
 ÿ&&&&³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&&&&&&&&&&&&&&&&ÿ
 .}
 .[f OverWrite
-.begin
-if RoundSum=1
-begin
-  SumList1 := Round(SumList1);
-  St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-end
-else
-  St1 := GetStrSummaExt(true, true, SumList1);
-end.
 .fields
- KolList
- St1
- SummaStr2
- SummaStr3
- „®«¦_àãª
- ãª_¯à¥¤
- „®«¦_¡ãå£
- trim(GlavBuh_SignDoc)
- ƒ«_¡ãå£
+  KolList
+  GetStrSummaExt(true, true, SumList1)
+  SummaStr2
+  SummaStr3
+  „®«¦_àãª
+  ãª_¯à¥¤
+  „®«¦_¡ãå£
+  trim(GlavBuh_SignDoc)
+  ƒ«_¡ãå£
 .endfields
 ÿÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ
 ÿ ˆâ®£® ¯® «¨áâã &&&:                                                       &'#&&&&&&&&&&&&&&&&ÿ
 .begin
   //áã¬¬  ¯à®¯¨áìî ¯® «¨áâã
-  SummaStr2:= '';
-  SummaStr3:= '';
-  SummaStr1:= DoubleToString(KodVal,SumList1);
+  SummaStr2 := '';
+  SummaStr3 := '';
+  SummaStr1 := DoubleToString(KodVal,SumList1);
   if length(SummaStr1) > 93
-   {
+  {
     SummaStr2:= GetPartStr(SummaStr1,93);
     if Trim(SummaStr2)=''
      SummaStr2:=substr(SummaStr1,1,93);
      SummaStr3:= substr(SummaStr1,length(SummaStr2)+1,93);
-   }
+  }
   else
-   {
+  {
      SummaStr2:= SummaStr1;
      SummaStr3:= '';
-   }
+  }
 end.
 ÿ ÿ„@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ„
  ÿ„@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ„
@@ -264,22 +237,12 @@ end.
 .begin SumList1:=0 end.
 .]f
 .}
-.begin
-if RoundSum=1
-begin
-  ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-  ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-end
-else
-  ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-  //DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667.88')
-end.
 .fields
- KolList
- ItSumSt1
- SummaStr2
- SummaStr3
-'true':'s'
+  KolList
+  GetStrSummaExt(true, true, ItogSum_Reestr1)
+  SummaStr2
+  SummaStr3
+ 'true':'s'
 .endFields
 ÿ Š®«-¢® «¨áâ®¢ &&&                     ‚‘…ƒ Š ……—ˆ‘‹…ˆ               &'&&&&&&&&&&&&&&&&&&ÿ
 .begin
@@ -288,17 +251,17 @@ end.
   SummaStr3:= '';
   SummaStr1:= DoubleToString(KodVal,ItogSum_Reestr1);
   if length(SummaStr1) > 93
-   {
+  {
     SummaStr2:= GetPartStr(SummaStr1,93);
     if Trim(SummaStr2)=''
      SummaStr2:=substr(SummaStr1,1,93);
      SummaStr3:= substr(SummaStr1,length(SummaStr2)+1,93);
-   }
+  }
   else
-   {
-     SummaStr2:= SummaStr1;
-     SummaStr3:= '';
-   }
+  {
+    SummaStr2:= SummaStr1;
+    SummaStr3:= '';
+  }
 end.
 ÿ ÿ„@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ„
  ÿ„@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ„
@@ -309,65 +272,45 @@ end.
 ^
 .end
 .}
-!
 .endForm
-!
 !
 !
 .Linkform 'reesBvip_02' Prototype is 'reesBvip'
 .nameinlist '®«­ ï ä®à¬  à¥¥áâà®¢'
 .group '¥¥áâàë ¯® ¯¥à¥ç¨á«¥­¨î ¢ á¡¥à¡ ­ª'
 .p 60
-.var KolList        : integer
-     SumList1       : double
-     SumList2       : double
-     SumList3       : double
-     St1      : string
-     St2      : string
-     St3      : string
-     ItogSumma1     : double
-     ItogSumma2     : double
-     ItogSumma3     : double
-     ItSt1      : string
-     ItSt2      : string
-     ItSt3      : string
-
-     ItSumSt1   : string
-     ItSumSt2   : string
-     ItSumSt3   : string
+.var KolList    : integer
+     SumList1   : double
+     SumList2   : double
+     SumList3   : double
+     ItogSumma1 : double
+     ItogSumma2 : double
+     ItogSumma3 : double
      SummaStr1 : string
      SummaStr2 : string
      SummaStr3 : string
-     cur_per   : string
-     cur_Sbor  : string
-     cur_Ud    : string
-     delimit   : string
 .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        SumList2  := 0
-        SumList3  := 0
-        ItogSumma1:= 0
-        ItogSumma2:= 0
-        ItogSumma3:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
-   end.
+.begin
+  KolList   := 0
+  SumList1  := 0
+  SumList2  := 0
+  SumList3  := 0
+  ItogSumma1:= 0
+  ItogSumma2:= 0
+  ItogSumma3:= 0
+end.
 
 .{
 .{
 .[h OverWrite
 .begin KolList:=KolList+1 end.
 .fields
- XarName
- ReesName
- Rab_Name
- Rab_Schet Rab_OKPO
- Rab_Bknm
- Rab_Mfo Mes God
+  XarName
+  ReesName
+  Rab_Name
+  Rab_Schet Rab_OKPO
+  Rab_Bknm
+  Rab_Mfo Mes God
 .endFields
 ÿ  à¥¤¯à¨ïâ¨¥ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -381,60 +324,32 @@ end.
 ÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ
 .]h
 .{
-.begin SumList1:= SumList1+double(Sum_Per)
-       SumList2:= SumList2+Double(Sum_Sbor)
-       SumList3:= SumList3+Double(Sum_Ud)
-       ItogSumma1:= ItogSumma1+Double(Sum_Per)
-       ItogSumma2:= ItogSumma2+Double(Sum_Sbor)
-       ItogSumma3:= ItogSumma3+Double(Sum_Ud)
-       if RoundSum= 1
-        begin
-        Cur_per:= DoubleToStr(Double(Sum_per),'666''666''666''666''667')+ delimit;
-        Cur_Sbor:= DoubleToStr(Double(Sum_Sbor),'666''666''666''666''667')+ delimit;
-        Cur_Ud:= DoubleToStr(Double(Sum_Ud),'666''666''666''666''667')+ delimit;
-        end
-       else
-        begin
-        Cur_per := GetStrSummaExt(true, true, Double(Sum_per));
-        Cur_Sbor:= GetStrSummaExt(true, true, Double(Sum_Sbor));
-        Cur_Ud  := GetStrSummaExt(true, true, Double(Sum_Ud));
-        end
+.begin
+  SumList1 := SumList1 + Sum_Per;
+  SumList2 := SumList2 + Sum_Sbor;
+  SumList3 := SumList3 + Sum_Ud;
+  ItogSumma1 := ItogSumma1 + Sum_Per;
+  ItogSumma2 := ItogSumma2 + Sum_Sbor;
+  ItogSumma3 := ItogSumma3 + Sum_Ud;
  end.
 .fields
- Npp Nom_lsh FIO Cur_Per Cur_Sbor Cur_Ud
+ Npp Nom_lsh FIO GetStrSummaExt(true, true, Sum_per) GetStrSummaExt(true, true, Sum_Sbor) GetStrSummaExt(true, true, Sum_Ud)
 .endFields
 ÿ&&&&³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&&&&&&&&&&&&&&&³&&&&&&&&&&&³&&&&&&&&&&&&&&&&ÿ
 .}
 .[f OverWrite
-.begin
-if RoundSum=1
-begin
-  SumList1 := Round(SumList1);
-  St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-  SumList2 := Round(SumList2);
-  St2 := DoubleToStr(SumList2,'666''666''666''666''667')+ delimit
-  SumList3 := Round(SumList3);
-  St3 := DoubleToStr(SumList3,'666''666''666''666''667')+ delimit
-end
-else
-  begin
-  St1 := GetStrSummaExt(true, true, SumList1);//DoubleToStr(SumList1,'666''666''666''666''667.88')
-  St2 := GetStrSummaExt(true, true, SumList2);
-  St3 := GetStrSummaExt(true, true, SumList3);
-  end
-end.
 .fields
- KolList
- St1
- St2
- St3
- SummaStr2
- SummaStr3
- „®«¦_àãª
- ãª_¯à¥¤
- „®«¦_¡ãå£
- trim(GlavBuh_SignDoc)
- ƒ«_¡ãå£
+  KolList
+  GetStrSummaExt(true, true, SumList1)
+  GetStrSummaExt(true, true, SumList2)
+  GetStrSummaExt(true, true, SumList3)
+  SummaStr2
+  SummaStr3
+  „®«¦_àãª
+  ãª_¯à¥¤
+  „®«¦_¡ãå£
+  trim(GlavBuh_SignDoc)
+  ƒ«_¡ãå£
 .endfields
 ÿÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
  ˆâ®£® ¯® «¨áâã &&&:                                                  &'&&&&&&&&&&&&&&&&  &'&&&&&&&& &'&&&&&&&&&&&&&&
@@ -444,17 +359,17 @@ end.
   SummaStr3:= '';
   SummaStr1:= DoubleToString(KodVal,SumList1);
   if length(SummaStr1) > 112
-   {
+  {
     SummaStr2:= GetPartStr(SummaStr1,112);
     if Trim(SummaStr2)=''
      SummaStr2:=substr(SummaStr1,1,112);
      SummaStr3:= substr(SummaStr1,length(SummaStr2)+1,112);
-   }
+  }
   else
-   {
-     SummaStr2:= SummaStr1;
-     SummaStr3:= '';
-   }
+  {
+    SummaStr2:= SummaStr1;
+    SummaStr3:= '';
+  }
 end.
 ÿ ÿ„@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ„
  ÿ„@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ„
@@ -471,29 +386,14 @@ end.
 end.
 .]f
 .}
-.begin
-if RoundSum=1
-begin
-  ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-  ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-  ItogSum_Reestr2 := Round(ItogSum_Reestr2);
-  ItSumSt2 := DoubleToStr(ItogSum_Reestr2,'666''666''666''666''667')+ delimit
-  ItogSum_Reestr3 := Round(ItogSum_Reestr3);
-  ItSumSt3 := DoubleToStr(ItogSum_Reestr3,'666''666''666''666''667')+ delimit
-end
-else
-  begin
-  ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-  ItSumSt2 := GetStrSummaExt(true, true, ItogSum_Reestr2);
-  ItSumSt3 := GetStrSummaExt(true, true, ItogSum_Reestr3);
-  end;
-end.
 .fields
- KolList
- ItSumSt1 ItSumSt2 ItSumSt3
- SummaStr2
- SummaStr3
-'true':'s'
+  KolList
+  GetStrSummaExt(true, true, ItogSum_Reestr1)
+  GetStrSummaExt(true, true, ItogSum_Reestr2)
+  GetStrSummaExt(true, true, ItogSum_Reestr3)
+  SummaStr2
+  SummaStr3
+ 'true':'s'
 .endFields
 ÿŠ®«¨ç¥áâ¢® «¨áâ®¢ &&&     ‚‘…ƒ Š ……—ˆ‘‹…ˆ                        &'&&&&&&&&&&&&&&&&  &'&&&&&&&& &'&&&&&&&&&&&&&&
 ÿ.begin
@@ -526,31 +426,21 @@ end.
 .endform
 !
 !
-!
 .Linkform 'reesBvip_03' Prototype is 'reesBvip'
 .nameinlist 'Šà âª ï ä®à¬  à¥¥áâà®¢ ¯®çâ®¢ëå ¯¥à¥¢®¤®¢'
 .group '¥¥áâàë ¯®çâ®¢ëå ¯¥à¥¢®¤®¢'
 .p 60
 .var KolList   : integer
      SumList1  : double
-     St1       : string
      ItogSumma1: double
-     ItSt1     : string
-     ItSumSt1  : string
      SummaStr1 : string
      SummaStr2 : string
      SummaStr3 : string
-     cur_per   : string
-     delimit   : string
 .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        ItogSumma1:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
+.begin
+  KolList   := 0
+  SumList1  := 0
+  ItogSumma1:= 0
 end.
 
 .{
@@ -574,31 +464,19 @@ end.
 .]h
 .{
 .fields
- Npp Nom_lsh FIO cur_Per
+  Npp Nom_lsh FIO GetStrSummaExt(true, true, Sum_Per)
 .endfields
-.begin SumList1:= SumList1+Double(Sum_Per)
-     ItogSumma1:= ItogSumma1+Double(Sum_Per)
-     if RoundSum=1
-        cur_per:= DoubleToStr(Double(sum_per),'666''666''666''666''667')+ delimit
-     else
-        cur_per:= GetStrSummaExt(true, true, Double(Sum_Per));
+.begin
+  SumList1 := SumList1 + Sum_Per;
+  ItogSumma1 := ItogSumma1 + Sum_Per;
  end.
  &&&&³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@             ³
      ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&&&&&&&&&&&&&&&
 .}
 .[f OverWrite
-.begin
-if RoundSum=1
-begin
-  SumList1 := Round(SumList1);
-  St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-end
-else
-  St1 := GetStrSummaExt(true, true, SumList1);
-end.
 .fields
   KolList
-  St1
+  GetStrSummaExt(true, true, SumList1)
   SummaStr2
   SummaStr3
   „®«¦_àãª
@@ -640,21 +518,12 @@ end.
 end.
 .]f
 .}
-.begin
-if RoundSum=1
-begin
-  ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-  ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-end
-else
-  ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-end.
 .fields
- KolList
- ItSumSt1
-ÿ SummaStr2
- SummaStr3
-ÿ'true':'s'
+  KolList
+  GetStrSummaExt(true, true, ItogSum_Reestr1)
+  SummaStr2
+  SummaStr3
+  'true':'s'
 .endFields
 Š®«¨ç¥áâ¢® «¨áâ®¢ &&&     ‚‘…ƒ Š ……—ˆ‘‹…ˆ              &'&&&&&&&&&&&&&&&&&&&&&
 ÿ.begin
@@ -687,53 +556,30 @@ end.
 .endform
 !
 !
-!
 .Linkform 'reesBvip_04' Prototype is 'reesBvip'
 .nameinlist '®«­ ï ä®à¬  à¥¥áâà®¢ ¯®çâ®¢ëå ¯¥à¥¢®¤®¢'
 .group '¥¥áâàë ¯®çâ®¢ëå ¯¥à¥¢®¤®¢'
 .p 60
-.var KolList   : integer
-     SumList1       : double
-     SumList2       : double
-     SumList3       : double
-
-     St1      : string
-     St2      : string
-     St3      : string
-
-     ItogSumma1     : double
-     ItogSumma2     : double
-     ItogSumma3     : double
-
-    ItSt1      : string
-    ItSt2      : string
-    ItSt3      : string
-
-     ItSumSt1   : string
-     ItSumSt2   : string
-     ItSumSt3   : string
-     SummaStr1 : string
-     SummaStr2 : string
-     SummaStr3 : string
-     cur_per   : string
-     cur_Sbor  : string
-     cur_Ud    : string
-     delimit   : string
+.var KolList    : integer
+     SumList1   : double
+     SumList2   : double
+     SumList3   : double
+     ItogSumma1 : double
+     ItogSumma2 : double
+     ItogSumma3 : double
+     SummaStr1  : string
+     SummaStr2  : string
+     SummaStr3  : string
 .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        SumList2  := 0
-        SumList3  := 0
-        ItogSumma1:= 0
-        ItogSumma2:= 0
-        ItogSumma3:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
-
-   end.
+.begin
+  KolList   := 0
+  SumList1  := 0
+  SumList2  := 0
+  SumList3  := 0
+  ItogSumma1:= 0
+  ItogSumma2:= 0
+  ItogSumma3:= 0
+end.
 .{
 .{
 .[h OverWrite
@@ -755,60 +601,32 @@ end.
 .]h
 .{
 .fields
- Npp Nom_lsh FIO Cur_Per Cur_Sbor Cur_Ud
+ Npp Nom_lsh FIO GetStrSummaExt(true, true, Sum_per) GetStrSummaExt(true, true, Sum_Sbor) GetStrSummaExt(true, true, Sum_Ud)
 .endfields
-.begin SumList1:= SumList1+Double(Sum_Per)
-       SumList2:= SumList2+Double(Sum_Sbor)
-       SumList3:= SumList3+Double(Sum_Ud)
-       ItogSumma1:= ItogSumma1+Double(Sum_Per)
-       ItogSumma2:= ItogSumma2+Double(Sum_Sbor)
-       ItogSumma3:= ItogSumma3+Double(Sum_Ud)
-       if RoundSum= 1
-        begin
-        Cur_per:= DoubleToStr(Double(Sum_per),'666''666''666''666''667')+ delimit;
-        Cur_Sbor:= DoubleToStr(Double(Sum_Sbor),'666''666''666''666''667')+ delimit;
-        Cur_Ud:= DoubleToStr(Double(Sum_Ud),'666''666''666''666''667')+ delimit;
-        end
-       else
-        begin
-        Cur_per := GetStrSummaExt(true, true, Double(Sum_per));
-        Cur_Sbor:= GetStrSummaExt(true, true, Double(Sum_Sbor));
-        Cur_Ud  := GetStrSummaExt(true, true, Double(Sum_Ud));
-        end
+.begin
+  SumList1 := SumList1 + Sum_Per;
+  SumList2 := SumList2 + Sum_Sbor;
+  SumList3 := SumList3 + Sum_Ud;
+  ItogSumma1 := ItogSumma1 + Sum_Per;
+  ItogSumma2 := ItogSumma2 + Sum_Sbor;
+  ItogSumma3 := ItogSumma3 + Sum_Ud;
  end.
  &&&&³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@             ³                ³          ³ÿ
 ÿ     ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&&&&&&&&&&&&&&&³&&&&&&&&&&³&&&&&&&&&&&&&&&&
 .}
 .[f OverWrite
-.begin
-if RoundSum=1
-begin
-  SumList1 := Round(SumList1);
-  St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-  SumList2 := Round(SumList2);
-  St2 := DoubleToStr(SumList2,'666''666''666''666''667')+ delimit
-  SumList3 := Round(SumList3);
-  St3 := DoubleToStr(SumList3,'666''666''666''666''667')+ delimit
-end
-else
-  begin
-  St1 := GetStrSummaExt(true, true, SumList1);//DoubleToStr(SumList1,'666''666''666''666''667.88')
-  St2 := GetStrSummaExt(true, true, SumList2);
-  St3 := GetStrSummaExt(true, true, SumList3);
-  end
-end.
 .fields
- KolList
- St1
- St2
- St3
- SummaStr2
- SummaStr3
- „®«¦_àãª
- ãª_¯à¥¤
- „®«¦_¡ãå£
- trim(GlavBuh_SignDoc)
- ƒ«_¡ãå£
+  KolList
+  GetStrSummaExt(true, true, SumList1)
+  GetStrSummaExt(true, true, SumList2)
+  GetStrSummaExt(true, true, SumList3)
+  SummaStr2
+  SummaStr3
+  „®«¦_àãª
+  ãª_¯à¥¤
+  „®«¦_¡ãå£
+  trim(GlavBuh_SignDoc)
+  ƒ«_¡ãå£
 .endfields
  ÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ
 ÿ ˆâ®£® ¯® «¨áâã &&&:                                             &'&&&&&&&&&&&&&&&&  &'&&&&&&& &'&&&&&&&&&&&&&&ÿ
@@ -845,29 +663,14 @@ end.
 end.
 .]f
 .}
-.begin
-if RoundSum=1
-begin
-  ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-  ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-  ItogSum_Reestr2 := Round(ItogSum_Reestr2);
-  ItSumSt2 := DoubleToStr(ItogSum_Reestr2,'666''666''666''666''667')+ delimit
-  ItogSum_Reestr3 := Round(ItogSum_Reestr3);
-  ItSumSt3 := DoubleToStr(ItogSum_Reestr3,'666''666''666''666''667')+ delimit
-end
-else
-  begin
-  ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-  ItSumSt2 := GetStrSummaExt(true, true, ItogSum_Reestr2);
-  ItSumSt3 := GetStrSummaExt(true, true, ItogSum_Reestr3);
-  end;
-end.
 .fields
- KolList
- ItSumSt1 ItSumSt2 ItSumSt3
-ÿ SummaStr2
- SummaStr3
-ÿ'true':'s'
+  KolList
+  GetStrSummaExt(true, true, ItogSum_Reestr1)
+  GetStrSummaExt(true, true, ItogSum_Reestr2)
+  GetStrSummaExt(true, true, ItogSum_Reestr3)
+  SummaStr2
+  SummaStr3
+  'true':'s'
 .endFields
  Š®«¨ç¥áâ¢® «¨áâ®¢ &&&                ‚‘…ƒ Š ……—ˆ‘‹…ˆ       &'&&&&&&&&&&&&&&&& &'&&&&&&&& &'&&&&&&&&&&&&&&
 ÿ.begin
@@ -905,27 +708,15 @@ end.
 .p 60
 .var KolList   : integer
      SumList1  : double
-     St1       : string
-     OtGod    : word
-     OtDay    : string
-     OtMon    : string
      ItogSumma1: double
-     ItSt1      : string
-     ItSumSt1   : string
      SummaStr1 : string
      SummaStr2 : string
      SummaStr3 : string
-     cur_per   : string
-     delimit   : string
 .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        ItogSumma1:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
+.begin
+  KolList   := 0
+  SumList1  := 0
+  ItogSumma1:= 0
 end.
 
 .{
@@ -940,10 +731,10 @@ end.
 .[h OverWrite
 .begin KolList:=KolList+1 end.
 .fields
- ‚¨¤ë¯« â
- Rab_Bknm
- XarName
- Mes  God
+  ‚¨¤ë¯« â
+  Rab_Bknm
+  XarName
+  Mes  God
 .endFields
 ÿ  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ
 ÿ  ¯¥à¥ç¨á«¥­¨© ¢ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ
@@ -955,39 +746,27 @@ end.
 ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ˜
 .]h
 .{
-.begin SumList1  := SumList1+Double(Sum_Per)
-       ItogSumma1:= ItogSumma1+Double(Sum_Per)
-      if RoundSum=1
-        cur_per:= DoubleToStr(Double(sum_per),'666''666''666''666''667')+ delimit
-     else
-        cur_per:= GetStrSummaExt(true, true, Double(Sum_Per));
+.begin
+  SumList1 := SumList1 + Sum_Per;
+  ItogSumma1 := ItogSumma1 + Sum_Per;
  end.
 .fields
-RTabN
-Nom_lsh FIO cur_per
+  RTabN
+  Nom_lsh FIO GetStrSummaExt(true, true, Sum_Per)
 .endFields
 ÿ™&&&&&&&&&&&&&&ÿ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³ÿ&&&&&&&&&&&&&&&&&ÿ™
 .}
 .[f OverWrite
-.begin
-if RoundSum=1
-begin
-  SumList1 := Round(SumList1);
-  St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-end
-else
-  St1 := GetStrSummaExt(true, true, SumList1);
-end.
 .fields
- KolList
- St1
- SummaStr2
- SummaStr3
- „®«¦_àãª
- ãª_¯à¥¤
- „®«¦_¡ãå£
- trim(GlavBuh_SignDoc)
- ƒ«_¡ãå£
+  KolList
+  GetStrSummaExt(true, true, SumList1)
+  SummaStr2
+  SummaStr3
+  „®«¦_àãª
+  ãª_¯à¥¤
+  „®«¦_¡ãå£
+  trim(GlavBuh_SignDoc)
+  ƒ«_¡ãå£
 .endfields
 ÿ˜ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ˜
 ÿ˜ ÿˆâ®£® ¯® «¨áâãÿ ÿ…&&&ÿ:ÿ„                                                              ÿ&'#&&&&&&&&&&&&&&&&&&&ÿ™
@@ -1021,21 +800,12 @@ end.
 .begin SumList1:=0 end.
 .]f
 .}
-.begin
-if RoundSum=1
-begin
-  ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-  ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-end
-else
-  ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-end.
 .fields
- KolList
- ItSumSt1
- SummaStr2
- SummaStr3
-'true':'s'
+  KolList
+  GetStrSummaExt(true, true, ItogSum_Reestr1)
+  SummaStr2
+  SummaStr3
+ 'true':'s'
 .endFields
 ÿ ÿŠ®«-¢® «¨áâ®¢ &&&ÿ‘     ÿ‘        ‚‘…ƒ Š ……—ˆ‘‹…ˆ            &'&&&&&&&&&&&&&&&&&&&&ÿ‘
 .begin
@@ -1073,61 +843,40 @@ end.
 .nameinlist '®«­ ï ä®à¬  à¥¥áâà®¢ ¯®çâ®¢ëå ¯¥à¥¢®¤®¢(á „‘)'
 .group '¥¥áâàë ¯®çâ®¢ëå ¯¥à¥¢®¤®¢'
 .p 60
-.var KolList   : integer
-     SumList1       : double
-     SumList2       : double
-     SumList3       : double
-     SummNDS1       : double
-     St1            : string
-     St2            : string
-     St3            : string
-     StNDS1          : string
-     ItogSumma1     : double
-     ItogSumma2     : double
-     ItogSumma3     : double
-     ItSummNDS1     : double
-     ItSt1          : string
-     ItSt2          : string
-     ItSt3          : string
-     ItStNDS1       : string
-     ItSumSt1   : string
-     ItSumSt2   : string
-     ItSumSt3   : string
-     ItSumNDS   : string
-     SummaStr1 : string
-     SummaStr2 : string
-     SummaStr3 : string
-     cur_per: string
-     cur_Sbor: string
-     cur_Ud: string
-     cur_NDS: string
-     delimit   : string
+.var KolList    : integer
+     SumList1   : double
+     SumList2   : double
+     SumList3   : double
+     SummNDS1   : double
+     ItogSumma1 : double
+     ItogSumma2 : double
+     ItogSumma3 : double
+     ItSummNDS1 : double
+     ItStNDS1   : string
+     SummaStr1  : string
+     SummaStr2  : string
+     SummaStr3  : string
 .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        SumList2  := 0
-        SumList3  := 0
-        ItogSumma1:= 0
-        ItogSumma2:= 0
-        ItogSumma3:= 0
-        SummNDS1  := 0
-        ItSummNDS1:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
-
-   end.
+.begin
+  KolList   := 0
+  SumList1  := 0
+  SumList2  := 0
+  SumList3  := 0
+  ItogSumma1:= 0
+  ItogSumma2:= 0
+  ItogSumma3:= 0
+  SummNDS1  := 0
+  ItSummNDS1:= 0
+end.
 .{
 .{
 .[h OverWrite
 .begin KolList:=KolList+1 end.
 .fields
- XarName
- ReesName
- Rab_Name
- Mes God
+  XarName
+  ReesName
+  Rab_Name
+  Mes God
 .endFields
 ÿ à¥¤¯à¨ïâ¨¥ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ
 ÿ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ
@@ -1142,64 +891,30 @@ end.
 .]h
 .{
 .fields
- Npp Nom_lsh FIO Cur_Per Cur_Sbor ‘â¢ª „‘ Cur_NDS Cur_Ud
+  Npp Nom_lsh FIO GetStrSummaExt(true, true, Sum_per) GetStrSummaExt(true, true, Sum_Sbor) ‘â¢ª „‘ GetStrSummaExt(true, true, ‘ã¬„‘) GetStrSummaExt(true, true, Sum_Ud)
 .endfields
-.begin SumList1:= SumList1+Double(Sum_Per)
-       SumList2:= SumList2+Double(Sum_Sbor)
-       SummNDS1 := SummNDS1 + Double(‘ã¬„‘)
-       SumList3:= SumList3+Double(Sum_Ud)
-       ItogSumma1:= ItogSumma1+Double(Sum_Per)
-       ItogSumma2:= ItogSumma2+Double(Sum_Sbor)
-       ItogSumma3:= ItogSumma3+Double(Sum_Ud)
-       ItSummNDS1 := ItSummNDS1 + Double(‘ã¬„‘)
-       if RoundSum= 1
-        begin
-        cur_per:= DoubleToStr(Double(Sum_per),'666''666''666''666''667')+ delimit;
-        cur_Sbor:= DoubleToStr(Double(Sum_Sbor),'666''666''666''666''667')+ delimit;
-        cur_Ud:= DoubleToStr(Double(Sum_Ud),'666''666''666''666''667')+ delimit;
-        cur_Nds:= DoubleToStr(Double(‘ã¬„‘),'666''666''666''666''667')+ delimit;
-        end
-       else
-        begin
-        cur_per := GetStrSummaExt(true, true, Double(Sum_per));
-        cur_Sbor:= GetStrSummaExt(true, true, Double(Sum_Sbor));
-        cur_Ud  := GetStrSummaExt(true, true, Double(Sum_Ud));
-        cur_Nds := GetStrSummaExt(true, true, Double(‘ã¬„‘));
-        end
-
+.begin
+  SumList1 := SumList1 + Sum_Per;
+  SumList2 := SumList2 + Sum_Sbor;
+  SummNDS1 := SummNDS1 + ‘ã¬„‘;
+  SumList3 := SumList3 + Sum_Ud;
+  ItogSumma1 := ItogSumma1 + Sum_Per;
+  ItogSumma2 := ItogSumma2 + Sum_Sbor;
+  ItogSumma3 := ItogSumma3 + Sum_Ud;
+  ItSummNDS1 := ItSummNDS1 + ‘ã¬„‘;
  end.
 ÿ˜ &&&&³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³                ³        ³      ³        ³ÿ˜
 ÿ˜     ³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&&&&&&&&&&&&&&&&³&&&&&&&&³&&&&&&³&&&&&&&&³&&&&&&&&&&&&&&&&ÿ˜
 .}
 .[f OverWrite
-.begin
-if RoundSum=1
-begin
-  SumList1 := Round(SumList1);
-  St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-  SumList2 := Round(SumList2);
-  St2 := DoubleToStr(SumList2,'666''666''666''666''667')+ delimit
-  SumList3 := Round(SumList3);
-  St3 := DoubleToStr(SumList3,'666''666''666''666''667')+ delimit
-  SummNDS1 := Round(SummNDS1);
-  StNDS1 := DoubleToStr(SummNDS1,'666''666''666''666''667')+ delimit
-end
-else
-  begin
-  St1 := GetStrSummaExt(true, true, SumList1);//DoubleToStr(SumList1,'666''666''666''666''667.88')
-  St2 := GetStrSummaExt(true, true, SumList2);
-  St3 := GetStrSummaExt(true, true, SumList3);
-  StNDS1 := GetStrSummaExt(true, true, SummNDS1);
-  end
-end.
 .fields
- KolList
- St1
- St2
- StNDS1
- St3
- SummaStr2
- SummaStr3
+  KolList
+  GetStrSummaExt(true, true, SumList1)
+  GetStrSummaExt(true, true, SumList2)
+  GetStrSummaExt(true, true, SummNDS1)
+  GetStrSummaExt(true, true, SumList3)
+  SummaStr2
+  SummaStr3
 ÿ „®«¦_àãª ãª_¯à¥¤ „®«¦_¡ãå£ trim(GlavBuh_SignDoc) ƒ«_¡ãå£ÿ
 .endfields
 ÿ˜ ÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ˜
@@ -1232,36 +947,19 @@ end.
 .begin SumList1:=0
        SumList2:=0
        SumList3:=0
-       SummNDS1 :=0
+       SummNDS1:=0
 end.
 .]f
 .}
-.begin
-if RoundSum=1
-begin
-  ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-  ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-  ItogSum_Reestr2 := Round(ItogSum_Reestr2);
-  ItSumSt2 := DoubleToStr(ItogSum_Reestr2,'666''666''666''666''667')+ delimit
-  ItogSum_Reestr3 := Round(ItogSum_Reestr3);
-  ItSumSt3 := DoubleToStr(ItogSum_Reestr3,'666''666''666''666''667')+ delimit
-  ItSummNDS1 := Round(ItSummNDS1);
-  ItSumNDS := DoubleToStr(ItSummNDS1,'666''666''666''666''667')+ delimit
-end
-else
-  begin
-  ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-  ItSumSt2 := GetStrSummaExt(true, true, ItogSum_Reestr2);
-  ItSumSt3 := GetStrSummaExt(true, true, ItogSum_Reestr3);
-  ItSumNDS := GetStrSummaExt(true, true, ItSummNDS1);
-  end;
-end.
 .fields
- KolList
- ItSumSt1 ItSumSt2  ItSumNDS ItSumSt3
- SummaStr2
- SummaStr3
-'true':'s'
+  KolList
+  GetStrSummaExt(true, true, ItogSum_Reestr1)
+  GetStrSummaExt(true, true, ItogSum_Reestr2)
+  GetStrSummaExt(true, true, ItSummNDS1)
+  GetStrSummaExt(true, true, ItogSum_Reestr3)
+  SummaStr2
+  SummaStr3
+ 'true':'s'
 .endFields
 ÿ˜ ÿŠ®«¨ç¥áâ¢® «¨áâ®¢ÿ &&&     ÿ‚‘…ƒ Š ……—ˆ‘‹…ˆÿ         &'&&&&&&&&&&&& &'&&&&&&       &'&&&&&&&  &'&&&&&&&&&&&&&ÿ˜
 .begin
@@ -1297,7 +995,7 @@ end.
 .Linkform 'reesBvip_101' Prototype is 'reesBvip'
 .nameinlist '«¥ªâà®­­ë© ¢ à¨ ­â à¥¥áâà '
 .var
-path: string[80];
+path: string;
 bool: boolean;
 .endvar
 .group '¥¥áâàë ¯® ¯¥à¥ç¨á«¥­¨î ¢ á¡¥à¡ ­ª'
@@ -1328,7 +1026,7 @@ path
 .Linkform 'reesBvip_FastReport' Prototype is 'reesBvip'
 .nameinlist 'FastReport-ä®à¬ â¥à'
 .var
-path: string[80];
+path: string;
 .endvar
 .group '¥¥áâàë ¯® ¯¥à¥ç¨á«¥­¨î ¢ á¡¥à¡ ­ª'
 .{
@@ -1360,7 +1058,7 @@ path
 .Linkform 'reesBvip_dbf_sberbank' Prototype is 'reesBvip'
 .nameinlist 'dbf/xml-‘¡¥à¡ ­ª, ®áá¨ï'
 .var
-path: string[80];
+path: string;
 .endvar
 .group '¥¥áâàë ¯® ¯¥à¥ç¨á«¥­¨î ¢ á¡¥à¡ ­ª'
 .{
@@ -1393,7 +1091,7 @@ path
 .nameinlist '«¥ªâà®­­ë© ¢ à¨ ­â à¥¥áâà '
 .group '¥¥áâàë ¯®çâ®¢ëå ¯¥à¥¢®¤®¢'
 .var
-path: string[80];
+path: string;
 bool: boolean;
 .endvar
 .group '¥¥áâàë ¯® ¯¥à¥ç¨á«¥­¨î ¢ á¡¥à¡ ­ª'
@@ -1425,25 +1123,16 @@ path
 .p 60
 .var KolList   : integer
      SumList1  : double
-     St1       : string
      ItogSumma1: double
-     ItSt1     : string
-     ItSumSt1  : string
      SummaStr1 : string
      SummaStr2 : string
      SummaStr3 : string
-     cur_per   : string
-     delimit   : string
- .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        ItogSumma1:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
-        end.
+.endvar
+.begin
+  KolList   := 0
+  SumList1  := 0
+  ItogSumma1:= 0
+end.
 
 .{
 .{
@@ -1469,35 +1158,21 @@ path
 ÿÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ
 .]h
 .{
-.begin SumList1  := SumList1 + Double(Sum_Per)
-       ItogSumma1:= ItogSumma1 + Double(Sum_Per)
-       if RoundSum=1
-        cur_per:= DoubleToStr(Double(sum_per),'666''666''666''666''667')+ delimit
-       else
-        begin
-        cur_per:= GetStrSummaExt(true, true, Double(Sum_Per));
-        end;
+.begin
+  SumList1  := SumList1 + Sum_Per;
+  ItogSumma1 := ItogSumma1 + Sum_Per;
  end.
 .fields
- Npp FIO Nom_lsh BornDate p_seria p_Number PCodePodr cur_per
+ Npp FIO Nom_lsh BornDate p_seria p_Number PCodePodr GetStrSummaExt(true, true, Sum_Per)
 .endFields
 ÿ&&&&³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³@@@@@@@@@@@@@@@@@@@@@@@@³&&&&&&&&&&&&³&&&&&&&&&&&³&&&&&&&&&&&³&&&&&&&&&&&³&&&&&&&&&&&&&&ÿ
 .}
 .[f OverWrite
-.begin
-if RoundSum=1
-begin
-  SumList1 := Round(SumList1);
-  St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-end
-else
-  St1 := GetStrSummaExt(true, true, Double(SumList1));
-end.
 .fields
- KolList
- St1
- SummaStr2
- SummaStr3
+  KolList
+  GetStrSummaExt(true, true, SumList1)
+  SummaStr2
+  SummaStr3
 ÿ„®«¦_àãª ãª_¯à¥¤ „®«¦_¡ãå£ trim(GlavBuh_SignDoc) ƒ«_¡ãå£ÿ
 .endfields
 ÿÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ
@@ -1532,21 +1207,12 @@ end.
 .begin SumList1:=0 end.
 .]f
 .}
-.begin
-if RoundSum=1
-begin
-  ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-  ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-end
-else
-  ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-end.
 .fields
- KolList
- ItSumSt1
- SummaStr2
- SummaStr3
-'true':'s'
+  KolList
+  GetStrSummaExt(true, true, ItogSum_Reestr1)
+  SummaStr2
+  SummaStr3
+ 'true':'s'
 .endFields
 ÿ Š®«-¢® «¨áâ®¢ &&&                     ‚‘…ƒ Š ……—ˆ‘‹…ˆ                                        &'&&&&&&&&&&&&&&&&&&ÿ
 .begin
@@ -1584,25 +1250,16 @@ end.
 .p 60
 .var KolList   : integer
      SumList1  : double
-     St1       : string
      ItogSumma1: double
-     ItSt1     : string
-     ItSumSt1  : string
      SummaStr1 : string
      SummaStr2 : string
      SummaStr3 : string
-     cur_per   : string
-     delimit   : string
  .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        ItogSumma1:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
-        end.
+.begin
+  KolList   := 0
+  SumList1  := 0
+  ItogSumma1:= 0
+end.
 
 .{
 .{
@@ -1628,36 +1285,22 @@ end.
 ÿÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ
 .]h
 .{
-.begin SumList1  := SumList1 + Double(Sum_Per)
-       ItogSumma1:= ItogSumma1 + Double(Sum_Per)
-       if RoundSum=1
-        cur_per:= DoubleToStr(Double(sum_per),'666''666''666''666''667')+ delimit
-       else
-        begin
-        cur_per:= GetStrSummaExt(true, true, Double(Sum_Per));
-        end;
+.begin
+  SumList1 := SumList1 + Sum_Per;
+  ItogSumma1 := ItogSumma1 + Sum_Per;
  end.
 .fields
- Npp FIO Nom_lsh BornDate p_seria p_Number PCodePodr cur_per
+  Npp FIO Nom_lsh BornDate p_seria p_Number PCodePodr GetStrSummaExt(true, true, Sum_Per)
 .endFields
 ÿ&&&&³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³@@@@@@@@@@@@@@@@@@@@@@@@³&&&&&&&&&&&&³&&&&&&&&&&&³&&&&&&&&&&&³&&&&&&&&&&&³&&&&&&&&&&&&&&&ÿ
 .}
 .[f OverWrite
-.begin
-if RoundSum = 1
-begin
-  SumList1 := Round(SumList1);
-  St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-end
-else
-  St1 := GetStrSummaExt(true, true, Double(SumList1));
-end.
 .fields
- KolList
- St1
- SummaStr2
- SummaStr3
-ÿ„®«¦_àãª ãª_¯à¥¤ „®«¦_¡ãå£ trim(GlavBuh_SignDoc) ƒ«_¡ãå£ÿ
+  KolList
+  GetStrSummaExt(true, true, SumList1)
+  SummaStr2
+  SummaStr3
+  „®«¦_àãª ãª_¯à¥¤ „®«¦_¡ãå£ trim(GlavBuh_SignDoc) ƒ«_¡ãå£
 .endfields
 ÿÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ
 ÿ ˆâ®£® ¯® «¨áâã &&&:                                                                                           &'#&&&&&&&&&&&&&&&&ÿ
@@ -1691,21 +1334,12 @@ end.
 .begin SumList1:=0 end.
 .]f
 .}
-.begin
-if RoundSum=1
-begin
-  ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-  ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-end
-else
-  ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-end.
 .fields
- KolList
- ItSumSt1
- SummaStr2
- SummaStr3
-'true':'s'
+  KolList
+  GetStrSummaExt(true, true, ItogSum_Reestr1)
+  SummaStr2
+  SummaStr3
+ 'true':'s'
 .endFields
 ÿ Š®«-¢® «¨áâ®¢ &&&                     ‚‘…ƒ Š ……—ˆ‘‹…ˆ                                                   &'&&&&&&&&&&&&&&&&&&ÿ
 .begin
@@ -1743,37 +1377,28 @@ end.
 .p 60
 .var KolList   : integer
      SumList1  : double
-     St1       : string
      ItogSumma1: double
-     ItSt1     : string
-     ItSumSt1  : string
      SummaStr1 : string
      SummaStr2 : string
      SummaStr3 : string
-     cur_per   : string
-     delimit   : string
  .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        ItogSumma1:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
-        end.
+.begin
+  KolList   := 0
+  SumList1  := 0
+  ItogSumma1:= 0
+end.
 
 .{
 .{
 .[h OverWrite
 .begin KolList:=KolList+1 end.
 .fields
- XarName
- ReesName
- Rab_Name
- Rab_Schet Rab_OKPO
- Rab_Bknm
- Rab_Mfo Mes God
+  XarName
+  ReesName
+  Rab_Name
+  Rab_Schet Rab_OKPO
+  Rab_Bknm
+  Rab_Mfo Mes God
 .endFields
 ÿ à¥¤¯à¨ïâ¨¥ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ
 ÿ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ
@@ -1787,35 +1412,21 @@ end.
 ÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿÄ
 ÿ.]h
 .{
-.begin SumList1  := SumList1 + Double(Sum_Per)
-       ItogSumma1:= ItogSumma1 + Double(Sum_Per)
-       if RoundSum=1
-        cur_per:= DoubleToStr(Double(sum_per),'666''666''666''666''667')+ delimit
-       else
-        begin
-        cur_per:= GetStrSummaExt(true, true, Double(Sum_Per));
-        end;
+.begin
+   SumList1  := SumList1 + Sum_Per;
+   ItogSumma1:= ItogSumma1 + Sum_Per;
  end.
 .fields
- Npp NomCard Nom_lsh FIO cur_per
+ Npp NomCard Nom_lsh FIO GetStrSummaExt(true, true, Sum_Per)
 .endFields
 &&&&³@~@@@@@@@@@@@@@@@@@³@~@@@@@@@@@@@@@@@@@@@@@@@@@@@³@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³&'#&&&&&&&&&&&&&&&&ÿ
 ÿ.}
 .[f OverWrite
-.begin
-if RoundSum=1
-begin
-  SumList1 := Round(SumList1);
-  St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-end
-else
-  St1 := GetStrSummaExt(true, true, Double(SumList1));
-end.
 .fields
- KolList
- St1
- SummaStr2
- SummaStr3
+  KolList
+  GetStrSummaExt(true, true, SumList1)
+  SummaStr2
+  SummaStr3
 ÿ‘„®«¦_àãª ãª_¯à¥¤ „®«¦_¡ãå£ trim(GlavBuh_SignDoc) ƒ«_¡ãå£ÿ‘
 .endfields
 ÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
@@ -1850,21 +1461,12 @@ end.
 ÿ.begin SumList1:=0 end.
 .]f
 .}
-.begin
-if RoundSum=1
-begin
-  ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-  ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-end
-else
-  ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-end.
 .fields
- KolList
- ItSumSt1
- SummaStr2
- SummaStr3
-'true':'s'
+  KolList
+  GetStrSummaExt(true, true, ItogSum_Reestr1)
+  SummaStr2
+  SummaStr3
+ 'true':'s'
 .endFields
  Š®«-¢® «¨áâ®¢ &&&                     ‚‘…ƒ Š ……—ˆ‘‹…ˆ                                          &'#&&&&&&&&&&&&&&&&ÿ
 ÿ.begin
@@ -1902,25 +1504,15 @@ end.
 .p 60
 .var KolList   : integer
      SumList1  : double
-     St1       : string
      ItogSumma1: double
-     ItSt1     : string
-     ItSumSt1  : string
      SummaStr1 : string
      SummaStr2 : string
      SummaStr3 : string
-     cur_per   : string
-     cur_perU  : string
-     delimit   : string
 .endvar
-.begin  KolList   := 0
-        SumList1  := 0
-        ItogSumma1:= 0
-    case wGetTune('Fin.Simvol') of
-      3,4,6: delimit := '=';
-      else
-        delimit  := '';
-    end;
+.begin
+  KolList := 0;
+  SumList1:= 0;
+  ItogSumma1 := 0;
 end.
 
 .{
@@ -1968,40 +1560,20 @@ end.
 .]h
 .{
 .begin
-  SumList1  := SumList1 + Double(Sum_Per) + Double(Sum_PerU)
-  ItogSumma1:= ItogSumma1 + Double(Sum_Per)  + Double(Sum_PerU)
-
-  if RoundSum=1
-  {
-    cur_per := DoubleToStr(Double(sum_per),'666''666''666''666''667')+ delimit ;
-    cur_perU:= DoubleToStr(Double(sum_perU),'666''666''666''666''667')+ delimit ;
-  }
-  else
-  {
-    cur_per := GetStrSummaExt(true, true, Double(Sum_Per));
-    cur_perU:= GetStrSummaExt(true, true, Double(Sum_PerU));
-  };
+  SumList1  := SumList1 + Sum_Per + Sum_PerU;
+  ItogSumma1:= ItogSumma1 + Sum_Per  + Sum_PerU;
 end.
 .fields
- Npp FIO Nom_lsh cur_perU cur_per
+ Npp FIO Nom_lsh GetStrSummaExt(true, true, Sum_PerU) GetStrSummaExt(true, true, Sum_Per)
 .endFields
 &&&&³@@@@@@@@@@@@@@@@@@@@@@@@@@@@³@@@@@@@@@@@@@@@@@@³&&&&&&&&&&&&&&&&&&&&³&&&&&&&&&&&&&&&&&&&&
 .}
 .[f OverWrite
-.begin
-  if RoundSum=1
-  {
-    SumList1 := Round(SumList1);
-    St1 := DoubleToStr(SumList1,'666''666''666''666''667')+ delimit
-  }
-  else
-    St1 := GetStrSummaExt(true, true, SumList1);
-end.
 .fields
- KolList
- St1
- SummaStr2
- SummaStr3
+  KolList
+  GetStrSummaExt(true, true, SumList1)
+  SummaStr2
+  SummaStr3
 .endfields
 ÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
  ˆâ®£® ¯® «¨áâã &&&:                                                      &'#&&&&&&&&&&&&&&&&&
@@ -2029,33 +1601,24 @@ end.
 .begin SumList1:=0 end.
 .]f
 .}
-.begin
-  if RoundSum=1
-  {
-    ItogSum_Reestr1 := Round(ItogSum_Reestr1);
-    ItSumSt1 := DoubleToStr(ItogSum_Reestr1,'666''666''666''666''667')+ delimit
-  }
-  else
-    ItSumSt1 := GetStrSummaExt(true, true, ItogSum_Reestr1);
-end.
 .fields
- KolList
- SummaStr2
- SummaStr3
- „®«¦_¡ãå£
- ƒ«_¡ãå£
- „®«¦_àãª
- ãª_¯à¥¤
-'true':'s'
+  KolList
+  SummaStr2
+  SummaStr3
+  „®«¦_¡ãå£
+  ƒ«_¡ãå£
+  „®«¦_àãª
+  ãª_¯à¥¤
+ 'true':'s'
 .endFields
  Š®«¨ç¥áâ¢® «¨áâ®¢ &&&
 
  ¡é ï áã¬¬  ¯¥à¥ç¨á«ï¥¬ëå áà¥¤áâ¢ á®áâ ¢«ï¥â
 .begin
   //áã¬¬  ¯à®¯¨áìî ¢á¥£® ª ¯¥à¥ç¨á«¥­¨î
-  SummaStr2:= '';
-  SummaStr3:= '';
-  SummaStr1:= DoubleToString(KodVal,ItogSum_Reestr1);
+  SummaStr2 := '';
+  SummaStr3 := '';
+  SummaStr1 := DoubleToString(KodVal,ItogSum_Reestr1);
   if length(SummaStr1) > 93
   {
     SummaStr2:= GetPartStr(SummaStr1,93);
@@ -2086,4 +1649,4 @@ end.
 ^
 .end
 .}
-.endFormÿ
+.endForm

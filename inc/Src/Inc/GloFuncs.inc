@@ -18,6 +18,7 @@
 #include KatOrg.vih
 #include StaticSF.vih
 #include ExtAttrClassInfo.vih
+#include Cache_KatMC.vih
 
 Global F_KatDoc::KatDocName
      , F_KatDoc::TiDkInfo
@@ -33,4 +34,5 @@ Global F_KatDoc::KatDocName
      , L_KatOrg::KatOrg
      , L_SF::viStaticSF
      , C_ExtClass::iExtAttrClassInfo
+     , L_MCU::Cache_KatMC
      ;

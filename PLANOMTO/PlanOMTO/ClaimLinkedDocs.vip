@@ -1,0 +1,113 @@
+#include ClaimLinkedDocs.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface ClaimLinkedDocs;
+
+//#region Query
+
+sql query queryClaimLinkedDocs =
+  select distinct
+         case when bd.viddoc = 111 then 43 else 41 end as tidkgal,
+         bd.nrec as nrec,
+         bd.corg as corg,
+         bd.nodoc as number,
+         bd.ddoc as datedoc,
+         sp.kol as qty,
+         sp.summa as sum,
+         coalesce(tPlat.summa, 0) as sumOpl,
+         coalesce(tPlat.maxddoc, 0) as dateOpl
+  from claim
+  join spstep sp on sp.prmc = 1 and sp.cmcusl = claim.cmcusl
+  join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1104 and sm.cspec = sp.nrec and sm.ckau[4] = claim.cindent
+  join stepdoc sd on sd.nrec = sp.cstepdoc
+  join basedoc bd on bd.nrec = sd.cbasedoc
+  left join ( select cbasedoc, sum(summa) as summa, max(ddoc) as maxddoc, min(ddoc) as minddoc
+              from (select cbasedoc, summa, ddoc
+                    from basefin
+                    where tidkgal = 1 and  cbasedoc <> #comp(0)
+                    union all
+                    select cpredopldo, summa, ddoc
+                    from basefin
+                    where tidkbase = 0 and cpredopldo <> #comp(0) and cpredopldo <> cbasedoc and tidkgal = 1
+                   ) bf
+              group by cbasedoc
+            ) tPlat on tPlat.cbasedoc = bd.nrec
+  where claim.nrec = :claimNrec and claim.cmcusl <> #comp(0)
+
+  union all
+
+  select distinct sps.vidsopr, ks.nrec, ks.corg, ks.nsopr, ks.dsopr, sps.kolfact, ks.summa, 0, 0
+  from claim
+  join spsopr sps on sps.prmc = claim.prmc and sps.cmcusl = claim.cmcusl and sps.vidsopr in (101, 501, 630)
+  join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1110 and sm.cspec = sps.nrec and sm.ckau[4] = claim.cindent
+  join katsopr ks on ks.nrec = sps.csopr
+  where claim.nrec = :claimNrec and claim.cmcusl <> #comp(0)
+
+  union all
+
+  select distinct d.tidk, d.nrec, d.corg,
+                  d.nodoc + case when d1.nrec is not null then ', дог.№'+d1.nodoc+' от '+date2str('%d.%M.%yy',d1.ddoc) else '' end,
+                  d.ddoc, spd.kol, d.summa, 0, 0
+  from claim
+  join spdocs spd on spd.tidk in (400, 401) and spd.prmc = claim.prmc and spd.cmcusl = claim.cmcusl
+  join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1723 and sm.cspec = spd.nrec and sm.ckau[4] = claim.cindent
+  join dogovor d on d.nrec = spd.cdoc
+  left join dogovor d1 on d1.nrec = d.cdogovor
+  where claim.nrec = :claimNrec and claim.cmcusl <> #comp(0)
+;
+
+//#endregion
+
+
+table struct tDocs (
+  tidkgal : word,
+  nrec    : comp,
+  corg    : comp,
+  number  : string[50],
+  dateDoc : date,
+  qty     : double,
+  sum     : double,
+  sumOpl  : double,
+  dateOpl : date
+) with index (
+  i01 = tidkgal + nrec
+);
+
+create view
+as select * from tDocs td
+;
+
+var
+  _query: IQuery;
+
+procedure IClaimLinkedDocs.Load(claimNrec: comp);
+{
+  delete all td;
+  if claimNrec != comp(0)
+  {
+    _query.setParam('claimNrec', claimNrec);
+    sqlCopyInto(_query, #td, true);
+  }
+}
+
+constructor Init;
+{
+  _query := queryManager.createQuery(queryClaimLinkedDocs);
+  result := _query != nullref;
+}
+
+property IClaimLinkedDocs.nrec    : comp       absolute td.nrec    ;
+property IClaimLinkedDocs.corg    : comp       absolute td.corg    ;
+property IClaimLinkedDocs.tidkgal : word       absolute td.tidkgal ;
+property IClaimLinkedDocs.number  : string[50] absolute td.number  ;
+property IClaimLinkedDocs.dateDoc : date       absolute td.dateDoc ;
+property IClaimLinkedDocs.qty     : double     absolute td.qty     ;
+property IClaimLinkedDocs.sum     : double     absolute td.sum     ;
+property IClaimLinkedDocs.sumOpl  : double     absolute td.sumOpl  ;
+property IClaimLinkedDocs.dateOpl : date       absolute td.dateOpl ;
+
+index i01 auto;
+
+end.

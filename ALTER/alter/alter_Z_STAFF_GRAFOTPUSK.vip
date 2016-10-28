@@ -7,33 +7,39 @@ overload
   function GetRestCur: word;
 end;
 
-sql query queryOtziv =
-select sum(otpotz.koldn) as otzKolDn
-from factotpusk
-join otpusk on otpusk.cfactotpusk = factotpusk.nrec
-join otpotz on otpotz.cotpusk = factotpusk.nrec
-left join contdoc transfersContdoc on transfersContdoc.TypeOper=40
-                                  and transfersContdoc.Person=otpotz.cperson
-                                  and transfersContdoc.objnrec=otpotz.nrec
-where factotpusk.cPlanOtpusk = :PlanotpuskNrec
-  and otpusk.filialno = 0 //отпуск не полностью отозван (галактика при расчете остатков учитывает такие отпуска)
-  and transfersContdoc.nrec is null; //нет переноса отпуска
+sql query qGetRestCur =
+select p.duration as PlanDays,
+       coalesce(f.duration,0) as VacationDays,
+       p.duration - coalesce(f.duration,0) as RestDays
+from planotpusk p
+left join (select f.cplanotpusk, sum(v.duration) as duration
+           from factotpusk f
+           join vacations v on v.cfactotpusk = f.nrec
+           where f.cplanotpusk <> #comp(0)
+           group by f.cplanotpusk
+          ) f on f.cplanotpusk = p.nrec
+where p.nrec = :PlanotpuskNrec;
 
 var
-  qOtz: IQuery;
-
-function GetOtzivKolDn(aPlanotpuskNrec: comp): word;// cacheable;
-{
-  if qOtz = nullref
-  qOtz := queryManager.CreateQuery(queryOtziv);
-  result := qOtz.setParam('PlanotpuskNrec', aPlanotpuskNrec).getResultValue;
-}
+  qRest: IQuery;
 
 function GetRestCur: word;
 {
-  var d: word;
-  d := inherited::GetRestCur;
-  d += GetOtzivKolDn(Planotpusk.Nrec);
-  result := d;
+  inherited::GetRestCur;
+
+  if qRest = nullref
+    qRest := queryManager.CreateQuery(qGetRestCur);
+
+  var rs: IResultSet;
+  rs := qRest.setParam('PlanotpuskNrec', Planotpusk.Nrec).getResultSet;
+
+  if rs.getfirst = tsOk
+  {
+    var rd: double;
+    rd := rs.row.val('RestDays');
+    result := rd;
+  }
+  else
+    result := 0;
 }
 end.

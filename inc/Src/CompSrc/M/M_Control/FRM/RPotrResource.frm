@@ -20,11 +20,24 @@ Sum
 SumEi
 Kol_Podr
 Sum_Podr
+NameRes_Bold
+NameEi_Bold
+Kol_Bold
+Sum_Bold
+SumEi_Bold
+Kol_Podr_Bold
+Sum_Podr_Bold
 .endfields
 ^ ^ ^ ^ ^
      .{.?stPodrPotr; ^.}
      .{.?stKolSumPodrPotr; .}
 .{
+
+.if boPrintStat_Rpotr
  ^^^^^ .{.?stKolSumTek; ^ ^.}
+.else
+ ^^^^^ .{.?stKolSumTek_Bold; ^ ^.}
+.end
+
 .}
 .endform
