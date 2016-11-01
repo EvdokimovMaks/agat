@@ -1,0 +1,59 @@
+#include DeflatorResolver.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface iDeflatorResolver;
+
+//запрос выборки коэффициентов-дефляторов из плана с коэффициентами дефляторами :MnplanNrec
+//для группы дефляторов :DeflatorsGroupNrec за период с :Dbeg по :Dend из представления "период",
+//тип периода = :FptperNrec
+sql query qGetDeflators =
+select vsp.kol
+from fpperiod per
+join spmnplan spm on :MnplanNrec = spm.cmnplan and 1 = spm.typeizd and #comp(0) = spm.cizd and :DeflatorsGroupNrec = spm.canval1
+join spmnpl spl on spm.nrec = spl.cspmnplan and 1 = spl.wkolan and 21 = spl.wkodgr4 and per.nrec = spl.canval4 and 0 = spl.wkodgr5 and #comp(0) = spl.canval5
+join valspmnp vsp on spl.nrec = vsp.cspmnpl
+where per.ctper = :FptperNrec and per.dbeg > :Dbeg and per.dbeg <= :Dend;
+
+var
+  _deflatorMnplanNrec  : comp;             //нрек плана с индексами дефляторами
+  _deflatorFptperNrec  : comp;             //нрек типа периода в котором лежат коэффициенты дефляторы
+
+procedure InitDeflators(deflatorMnplanNrec: comp; deflatorFptperNrec: comp);
+{
+  _deflatorMnplanNrec   := deflatorMnplanNrec;
+  _deflatorFptperNrec   := deflatorFptperNrec;
+}
+
+function GetDeflator(DeflatorsGroupNrec: comp; IndexYear: word; ForecastYear: word): double;
+{
+  //по умолчанию коэффициент = 1
+  var factor: double;
+  factor := 1;
+  //готовим запрос выборки коэффициентов-дефляторов из плана с коэффициентами дефляторами за годы IndexYear - ForecastYear
+  var q: IQuery;
+  q := queryManager.createQuery(qGetDeflators);
+  q.setParam('MnplanNrec'        , _deflatorMnplanNrec);
+  q.setParam('DeflatorsGroupNrec', DeflatorsGroupNrec);
+  q.setParam('FptperNrec'        , _deflatorFptperNrec);
+  q.setParam('Dbeg'              , date(1,1,IndexYear));
+  q.setParam('Dend'              , date(31,12,ForecastYear));
+  var rs: IResultSet;
+  rs := q.GetResultSet;
+  if rs != NullRef
+  {
+    if rs.getFirst = tsOk
+    {
+      do
+      {
+        //в цикле перемножаем коэффициенты за года из периода IndexYear - ForecastYear
+        factor := factor * rs.row.valat(1);
+      }
+      while rs.getNext = tsOk;
+    }
+  }
+  result := factor;
+}
+
+end.

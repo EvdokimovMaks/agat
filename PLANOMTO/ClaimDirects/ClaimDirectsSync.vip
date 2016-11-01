@@ -1,0 +1,679 @@
+#include ClaimDirects.vih
+#include Query.vih
+#include AtlProtocol.vih
+
+#component "AGAT"
+
+interface ClaimDirectsSync;
+
+sql query querySelectIncomeIndents =
+
+select claim.nrec       as ClaimNrec,
+       claim.wpos       as ClaimNumber,
+       claim.prmc       as ItemType,
+       claim.cmcusl     as ItemNrec,
+       claim.cvalkau[3] as PriceStructNrec,
+       claim.cvalkau[4] as DeviceNrec,
+       claim.kol        as Qty,
+       claim.price      as Price,
+       case when claim.dfinish > 0 then claim.dfinish
+            when claim.dstart > 0 then claim.dstart
+            when indent.dplan > 0 then indent.dplan
+            else indent.dind
+       end              as Date,
+       coalesce(spm.Nrec, #comp(0)) as SpmnplanNrec,
+       outOa.nrec       as OutObjacctNrec,
+       outSpoa.nrec     as OutSpobjaccNrec
+
+from objacct oa
+
+join indent on indent.nrec = oa.cobject
+
+join claim on claim.cindent = indent.nrec and claim.prmc = 1
+
+join  (select typeizd as ItemType,
+              cizd as ItemNrec,
+              canval3 as DeviceNrec,
+              max(nrec) as Nrec
+       from spmnplan
+       where cmnplan = :MnplanNrec and typeizd <> #comp(0) and cizd <> #comp(0)
+       group by typeizd, cizd, canval3
+      ) as spm on spm.ItemType = claim.prmc
+              and spm.ItemNrec = claim.cmcusl
+              and spm.DeviceNrec = claim.cvalkau[4]
+
+left join objacct outOa on outOa.typeown = 3
+                       and indent.nrec = outOa.cowner
+                       and outOa.typeobj = 29
+                       and outOa.cobject = :MnplanNrec
+
+left join spobjacc outSpoa on outSpoa.typeobj = 13
+                          and outSpoa.cobject = claim.nrec
+                          and outSpoa.cobjacct = outOa.nrec
+                          and outSpoa.typehier = 1
+where oa.typeown = 29
+  and oa.cowner  = :MnplanNrec
+  and oa.typeobj = 3
+order by indent.nrec, claim.nrec
+;
+
+sql query qMaxCurNum =
+select max(noind) as MaxNum
+from indent
+;
+
+var
+  _log: IAtlProtocol;
+
+create view
+as select *
+from indent, claim;
+
+create view vInputIndents
+var
+  _mnplanNrec: comp;
+as select *
+from objacct oa, indent
+where ((
+  29          /== oa.typeown and
+  _mnplanNrec /== oa.cowner  and
+  3           /== oa.typeobj and
+  oa.cobject  /== indent.nrec
+));
+
+create view vIndent
+var
+  _indentNrec: comp;
+as select *
+from indent, claim
+where ((
+  _indentNrec == indent.nrec and
+  _indentNrec == claim.cindent
+));
+
+create view vClaim
+var
+  _claimNrec: comp;
+as select *
+from claim, indent
+where ((
+  _claimNrec == claim.nrec and
+  claim.cindent == indent.nrec
+));
+
+create view vMc
+var
+  _katmcNrec: comp;
+as select *
+from katmc
+where ((
+  _katmcNrec == katmc.nrec
+));
+
+create view vUsl
+var
+  _katuslNrec: comp;
+as select *
+from katusl
+where ((
+  _katuslNrec == katusl.nrec
+));
+
+create view vPer
+var
+  _fpperiodNrec: comp;
+as select *
+from fpperiod
+where ((
+  _fpperiodNrec == fpperiod.nrec
+));
+
+create view vLinkClaim
+var
+  _spmnplanNrec: comp;
+  _claimNrec: comp;
+as select *
+from claim,
+     spmnplan spm, mnplan mnp, mnanal, spmnpl spl, valspmnp vsp,
+     objacct oa, spobjacc spoa1, spobjacc spoa2
+where ((
+  _claimNrec      == claim.nrec and
+  _spmnplannrec   == spm.nrec   and
+  spm.cmnplan     == mnp.nrec   and
+
+  mnp.csloj       == mnanal.csloj and
+  0               == mnanal.cblock and
+  0               == mnanal.fldan1 and
+  mnp.nrec        == mnanal.fldan2 and
+
+  spm.nrec        == spl.cspmnplan and
+  25              == spl.wkolan    and
+  29              == spl.wkodgr4   and
+  spm.cmnplan     == spl.canval4   and
+
+  spl.nrec        == vsp.cspmnpl and
+  1               == vsp.num and
+
+  3               == oa.typeown and
+  claim.cindent   == oa.cowner  and
+  29              == oa.typeobj and
+  spm.cmnplan     == oa.cobject and
+
+  31              == spoa1.typepos and
+  spl.nrec        == spoa1.cpos and
+  oa.nrec         == spoa1.cobjacct and
+  0               == spoa1.typehier and
+
+  13              == spoa2.typeobj and
+  claim.nrec      == spoa2.cobject and
+  oa.nrec         == spoa2.cobjacct and
+  1               == spoa2.typehier and
+  spoa1.nrec      == spoa2.cspobjacc and
+  31              == spoa2.typepos and
+  spl.nrec        == spoa2.cpos
+));
+
+create view vCreateIndent
+var
+  _sq: ISelectQty;
+  _sp: IClaimDirectsSp;
+as select *
+from _sq, _sp
+where ((
+  _sq.crec == _sp.nrec
+));
+
+type tfpperiod = record as table fpperiod;
+type tclaim = record as table claim;
+
+function MaxCurNum: string;
+{
+  var rs: IResultSet;
+  rs := queryManager.createQuery(qMaxCurNum).getResultSet;
+  if rs.getFirst = tsOk
+    result := rs.row.val('MaxNum');
+}
+
+function GetCGroupNrec(aType: word; aNrec: comp): comp;
+{
+  if aType = 2
+  {
+    vUsl._katuslNrec := aNrec;
+    if vUsl.getfirst katusl = tsOk {
+      result := vUsl.katusl.CGROUPUSL;
+    }
+    else result := 0;
+  }
+  else
+  {
+    vMc._katmcNrec := aNrec;
+    if vMc.getfirst katmc = tsOk {
+      result := vMc.katmc.CGROUPMC;
+    }
+    else result := 0;
+  }
+}
+
+function GetFpPeriodBuf(fpperiodNrec: comp): tfpperiod;
+{
+  vPer._fpperiodNrec := fpperiodNrec;
+  if vPer.getfirst fpperiod = tsOk
+    result := tfpperiod(vPer.fpperiod.buffer);
+  else
+  {
+    var buf: tfpperiod;
+    clearadvrecord(buf);
+    result := buf;
+  }
+}
+
+function FindSp(sp: IClaimDirectsSp;
+                itemType: word;
+                itemNrec: comp;
+                pricestructNrec: comp = comp(-1);
+                deviceNrec: comp = comp(-1) ): ttClaimDirectsSp;
+{
+  var buf: ttClaimDirectsSp;
+  buf := sp.GetBufferByFields(ClaimDirectsSpKindMcUsl,
+                              ClaimDirectsCostitemPki,
+                              comp(-1), itemType, itemNrec, pricestructNrec, deviceNrec);
+  if buf.nrec = 0
+    buf := sp.GetBufferByFields(ClaimDirectsSpKindMcUsl,
+                                ClaimDirectsCostitemMateriali,
+                                comp(-1), itemType, itemNrec, pricestructNrec, deviceNrec);
+  if buf.nrec = 0
+    buf := sp.GetBufferByFields(ClaimDirectsSpKindMcUsl,
+                                ClaimDirectsCostitemPolufabrikati,
+                                comp(-1), itemType, itemNrec, pricestructNrec, deviceNrec);
+  result := buf;
+}
+
+function GetCostitemNrecForMc(katmcNrec: comp): comp;
+{
+  result := ClaimDirectsCostitemPki;
+  vMc._katmcNrec := katmcNrec;
+  if vMc.getfirst katmc = tsOk
+    case vMc.katmc.ctype of
+      0001000000000017h: result := ClaimDirectsCostitemMateriali;
+      000100000000001Ch: result := ClaimDirectsCostitemPolufabrikati;
+    end;
+}
+
+function CreateNewSpWithClaimBuffer(sp: IClaimDirectsSp; claimBuf: tclaim; monthNum: byte): TtClaimDirectsSp;
+{
+  var buf: TtClaimDirectsSp;
+  buf := sp.GetCostitemSpBuffer(GetCostitemNrecForMc(claimBuf.cmcusl));
+  var i: byte;
+  for(i:=1;i<=12;i++)
+  {
+    buf.monthQty[i] := 0;
+    buf.monthSum[i] := 0;
+  }
+  buf.ParentNrec      := buf.Nrec;
+  buf.Nrec            := 0;
+  buf.Kind            := ClaimDirectsSpKindMcUsl;
+  buf.AllowAddChild   := false;
+  buf.ItemType        := claimBuf.prmc;
+  buf.ItemNrec        := claimBuf.cmcusl;
+  buf.PriceStructNrec := claimBuf.cvalkau[3];
+  buf.DeviceNrec      := claimBuf.cvalkau[4];
+  buf.SpmnplanNrec    := 0;
+  buf.OtpedNrec       := claimBuf.cotped;
+  buf.monthQty[monthNum] := claimBuf.kol;
+  result := sp.InsertNewWithBuffer(buf);
+}
+
+procedure SyncSpWithIndentClaim(sp: IClaimDirectsSp; claimNrec: comp; log: IAtlProtocol = nullref);
+{
+  if log = nullref
+    log := _log;
+
+  var periodBuf: tfpperiod;
+  periodBuf := GetFpPeriodBuf(sp.Claim.PeriodNrec);
+
+  vClaim._claimNrec := claimNrec;
+  if vClaim.getfirst claim = tsOk
+  {
+    log.LogMessage(
+      APE_INFO,
+      'Строка №' + vIndent.claim.wpos + ' '
+      + if(getanykau(1, if(vIndent.claim.prmc=2, 5, 4), vIndent.claim.cmcusl), givenanname(1), '')
+      + ' - ' + vIndent.claim.kol
+    );
+
+    if vClaim.getfirst indent != tsOk
+      log.LogLine(APE_ERROR, 'Не найден заголовок заявки');
+    else if vClaim.claim.prmc != 1
+      log.LogLine(APE_WARNING, 'Не МЦ. Строка пропущена');
+    else
+    {
+      var dClaim: date;
+      if vClaim.claim.dfinish      != 0 dClaim := vClaim.claim.dfinish
+      else if vClaim.claim.dstart  != 0 dClaim := vClaim.claim.dstart
+      else if vClaim.indent.dplan  != 0 dClaim := vClaim.indent.dplan
+      else                              dClaim := vClaim.indent.dind;
+
+      if dClaim < periodBuf.dbeg or dClaim > periodBuf.dend
+        log.LogLine(APE_WARNING, 'Дата строки ' + datetostr(dClaim, 'DD.MM.YYYY')
+                                 + 'не попадает в период годовой заявки. Строка пропущена');
+      else
+      {
+        var spBuf: ttClaimDirectsSp;
+        spBuf := FindSp(sp, vClaim.claim.prmc, vClaim.claim.cmcusl, comp(-1), vClaim.claim.cvalkau[4]);
+
+        if spBuf.Nrec > 0
+        {
+          spBuf.monthQty[month(dClaim)] += vClaim.claim.kol;
+          if sp.SearchAndUpdateWithBuffer(spBuf)
+            log.LogLine(APE_INFO, 'В годовой заявке найдена позиция. Установлено количество');
+          else
+            log.LogLine(APE_ERROR, 'В годовой заявке найдена позиция. Ошибка установки количества');
+        }
+        else
+        {
+          CreateNewSpWithClaimBuffer(sp, tClaim(vClaim.claim.buffer),month(dClaim));
+          log.LogLine(APE_INFO, 'Сформирована новая позиция в годовой заявке');
+        }
+      }
+    }
+
+    log.LogCommit;
+  }
+
+
+}
+
+procedure SyncSpWithIndent(sp: IClaimDirectsSp; indentNrec: comp; log: IAtlProtocol = nullref);
+{
+  if log = nullref
+    log := _log;
+
+  vIndent._indentNrec := indentNrec;
+  if vIndent.getfirst indent = tsok
+  {
+
+    log.LogMessage(
+      APE_INFO,
+      'Заявка №' + vIndent.indent.noind
+      + ' от ' + vIndent.indent.dind
+    );
+
+    vIndent._loop claim
+      SyncSpWithIndentClaim(sp, vIndent.claim.nrec, log);
+
+    log.LogCommit;
+
+  }
+}
+
+procedure SyncClaimWithInputIndents(claimDirects: IClaimDirects; log: IAtlProtocol = nullref);
+{
+  if log = nullref
+    log := _log;
+
+  vInputIndents._mnplanNrec := claimDirects.MnplanNrec;
+  vInputIndents._loop oa
+  {
+    SyncSpWithIndent(claimDirects.Sp, vInputIndents.indent.nrec, log);
+  }
+
+  /*
+  _sp := claim.Sp;
+
+  var claimPeriod: tfpperiod;
+  claimPeriod := GetFpPeriodBuf(claim.PeriodNrec);
+
+  if claimPeriod.nrec = 0
+  {
+    log.logLine(APE_ERROR, 'Не указан период в заголовке годовой заявки');
+    exit;
+  }
+
+  var logMessageId: longint = 0;
+
+  var rs: IResultSet;
+  rs := queryManager.createQuery(querySelectIncomeIndents)
+                    .setParam('MnplanNrec', claim.MnplanNrec)
+                    .getResultSet;
+
+  if rs.getFirst = tsOk do {
+
+    var r: IResultRow;
+    r := rs.row;
+
+    logMessageId := log.LogMessage(APE_INFO, 'Заявка №' + r.val('IndentNumber')
+                                           + ' от ' + r.val('IndentDate')
+                                           + '; Строка №' + r.val('ClaimNumber')
+                                           + ' ' + r.val('ItemName')
+                                           + ' - ' + r.val('Qty'));
+
+    var spmnplanNrec: comp;
+    spmnplanNrec := r.val('SpmnplanNrec');
+
+    if spmnplanNrec = 0
+      spmnplanNrec := CreateSpmnplan(r.val('ItemType'), r.val('ItemNrec'));
+
+  } while rs.getNext = tsOk;  */
+}
+
+procedure LinkOutputIndentClaim(spmnplanNrec: comp; claimNrec: comp; log: IAtlProtocol = nullref);
+{
+  if log = nullref
+    log := _log;
+
+  vLinkClaim._spmnplanNrec := spmnplanNrec;
+  if vLinkClaim.getFirst spm != tsOk
+  {
+    log.LogLine(APE_ERROR, 'Не найдена позиция годовой заявки. Nrec=' + string(spmnplanNrec,0,0));
+    exit;
+  }
+
+  vLinkClaim._claimNrec := claimNrec;
+  if vLinkClaim.getFirst claim != tsOk
+  {
+    log.LogLine(APE_ERROR, 'Не найдена позиция заявки. Nrec=' + string(claimNrec,0,0));
+    exit;
+  }
+
+  if vLinkClaim.getfirst mnp != tsOk
+  {
+    log.LogLine(APE_ERROR, 'Не найден заголовок годовой заявки');
+    exit;
+  }
+
+  log.LogMessage(APE_INFO, 'Заявка текущая "'
+                           + if(getanykau(1, 26, vLinkClaim.claim.cindent), givenanname(1), '')
+                           + '", строка №'+vLinkClaim.claim.wpos);
+
+  if vLinkClaim.getfirst mnanal != tsOk
+  {
+    vLinkClaim.clearbuffer(#vLinkClaim.mnanal);
+    vLinkClaim.mnanal.csloj  := vLinkClaim.mnp.csloj;
+    vLinkClaim.mnanal.cblock := 0;
+    vLinkClaim.mnanal.fldan1 := 0;
+    vLinkClaim.mnanal.fldan2 := vLinkClaim.mnp.nrec;
+    vLinkClaim.insert current mnanal;
+  }
+
+  if vLinkClaim.getfirst spl != tsOk
+  {
+    vLinkClaim.clearbuffer(#vLinkClaim.spl);
+    vLinkClaim.spl.cspmnplan := vLinkClaim.spm.nrec;
+    vLinkClaim.spl.wkolan    := 25;
+    vLinkClaim.spl.crolean4  := 400174D9C8CF511Eh;
+    vLinkClaim.spl.wkodgr4   := 29;
+    vLinkClaim.spl.canval4   := vLinkClaim.spm.cmnplan;
+    vLinkClaim.spl.cRoleAn1  := vLinkClaim.spm.cRoleAn1;
+    vLinkClaim.spl.wKodGr1   := vLinkClaim.spm.wKodGr1;
+    vLinkClaim.spl.cAnVal1   := vLinkClaim.spm.cAnVal1;
+    vLinkClaim.spl.cRoleAn2  := vLinkClaim.spm.cRoleAn2;
+    vLinkClaim.spl.wKodGr2   := vLinkClaim.spm.wKodGr2;
+    vLinkClaim.spl.cAnVal2   := vLinkClaim.spm.cAnVal2;
+    vLinkClaim.spl.cRoleAn3  := vLinkClaim.spm.cRoleAn3;
+    vLinkClaim.spl.wKodGr3   := vLinkClaim.spm.wKodGr3;
+    vLinkClaim.spl.cAnVal3   := vLinkClaim.spm.cAnVal3;
+    vLinkClaim.spl.wKodGr8   := vLinkClaim.spm.wKodGr4;
+    vLinkClaim.spl.cAnVal8   := vLinkClaim.spm.cAnVal4;
+    vLinkClaim.spl.typeizd   := vLinkClaim.spm.TypeIzd;
+    vLinkClaim.spl.cRoleIzd  := vLinkClaim.spm.cRoleIzd;
+    vLinkClaim.spl.cIzd      := vLinkClaim.spm.cIzd;
+    vLinkClaim.spl.cOtpEd    := vLinkClaim.spm.cOtpEd;
+    vLinkClaim.spl.NumSort   := vLinkClaim.spm.NumSort;
+    vLinkClaim.spl.Number    := vLinkClaim.spm.Number;
+    vLinkClaim.spl.cSloj     := vLinkClaim.spm.cSloj;
+    vLinkClaim.spl.cMnPlan   := vLinkClaim.spm.cmnplan;
+    vLinkClaim.spl.cVal1     := vLinkClaim.spm.cVal1;
+    vLinkClaim.spl.cMnAnal   := vLinkClaim.mnanal.nrec;
+    vLinkClaim.insert current spl;
+  }
+
+  if vLinkClaim.getfirst oa != tsOk
+  {
+    vLinkClaim.clearbuffer(#vLinkClaim.oa);
+    vLinkClaim.oa.typeown := 3;
+    vLinkClaim.oa.cowner  := vLinkClaim.claim.cindent;
+    vLinkClaim.oa.typeobj := 29;
+    vLinkClaim.oa.cobject := vLinkClaim.spm.cmnplan;
+    vLinkClaim.oa.kindrec := 1;
+    vLinkClaim.insert current oa;
+    log.LogLine(APE_INFO, 'Заявка добавлена в "исходящие" годовой заявки');
+  }
+
+  if vLinkClaim.getfirst spoa1 != tsOk
+  {
+    vLinkClaim.clearbuffer(#vLinkClaim.spoa1);
+    vLinkClaim.spoa1.typepos  := 31;
+    vLinkClaim.spoa1.cpos     := vLinkClaim.spl.nrec;
+    vLinkClaim.spoa1.cobjacct := vLinkClaim.oa.nrec;
+    vLinkClaim.spoa1.typehier := 0;
+    vLinkClaim.spoa1.kindrec  := 1;
+    vLinkClaim.spoa1.kolcpos  := vLinkClaim.claim.kol; //if(vLinkClaim.getfirst vsp = tsOk, vLinkClaim.vsp.kol, 0);
+    vLinkClaim.spoa1.kolcfact := vLinkClaim.spoa1.kolcpos;
+    vLinkClaim.spoa1.typeed   := 1;
+    vLinkClaim.spoa1.typenorm := 1;
+    vLinkClaim.insert current spoa1;
+  }
+
+  if vLinkClaim.getfirst spoa2 != tsOk
+  {
+    vLinkClaim.clearbuffer(#vLinkClaim.spoa2);
+    vLinkClaim.spoa2.typeobj   := 13;
+    vLinkClaim.spoa2.cobject   := vLinkClaim.claim.nrec;
+    vLinkClaim.spoa2.cobjacct  := vLinkClaim.oa.nrec;
+    vLinkClaim.spoa2.typehier  := 1;
+    vLinkClaim.spoa2.cspobjacc := vLinkClaim.spoa1.nrec;
+    vLinkClaim.spoa2.typepos   := 31;
+    vLinkClaim.spoa2.cpos      := vLinkClaim.spl.nrec;
+    vLinkClaim.spoa2.cotped    := vLinkClaim.claim.cotped;
+    vLinkClaim.spoa2.kindrec   := 1;
+    vLinkClaim.spoa2.kolcpos   := vLinkClaim.claim.kol;
+    vLinkClaim.insert current spoa2;
+    log.LogLine(APE_INFO, 'Позиция добавлена в "исходящие" годовой заявки ');
+  }
+  else
+  {
+    log.LogLine(APE_INFO, 'Позиция уже находится в "исходящих" годовой заявки');
+  }
+
+  log.LogCommit;
+}
+
+procedure SyncOutputLinksWithInputLinks(claimDirects: IClaimDirects; log: IAtlProtocol = nullref);
+{
+  if log = nullref
+    log := _log;
+
+  var rs: IResultSet;
+  rs := queryManager.createQuery(querySelectIncomeIndents)
+                    .setParam('MnplanNrec', claimDirects.MnplanNrec)
+                    .getResultSet;
+
+  if rs.getFirst = tsOk do {
+    LinkOutputIndentClaim(rs.row.val('SpmnplanNrec'), rs.row.val('ClaimNrec'), log);
+  } while rs.getNext = tsOk;
+}
+
+procedure CreateOutputIndent(aSp: IClaimDirectsSp; aSelQty: ISelectQty; log: IAtlProtocol = nullref);
+{
+  if log = nullref
+    log := _log;
+
+  ClearBuffer(#indent);
+  indent.descr       := sgettune('USER.DESCR');
+  indent.desgr       := sgettune('USER.DESGR');
+  indent.noind       := nextnumstr(MaxCurNum);
+  indent.DIND        := Cur_Date;
+  indent.CSTATE      := 00010000000000F2h;
+  indent.STATE       := 1;
+  indent.CTYPE       := 0001000000000004h;
+  indent.PRIORITY    := 0001000000000005h;
+  indent.CORDER      := aSp.Claim.KatpodrNrec;
+  indent.CPERFORM    := 40000EAF977C078Ah;
+  indent.SUMMA       := 0;
+  indent.VHODNAL     := 2;
+  indent.RULE01      := 3;
+  indent.WCODEKAU[1] := 10005;
+  indent.WCODEKAU[2] := 10005;
+  indent.WCODEKAU[3] := 10005;
+  indent.CROLEKAU[1] := 0001000000000022h;
+  indent.CROLEKAU[2] := 0001000000000023h;
+  indent.CROLEKAU[3] := 0001000000000021h;
+  indent.CROLEKAU[4] := 40016EE4408C5A55h;
+  indent.CVALKAU[1]  := 00010000000001CFh;
+  indent.CVALKAU[2]  := 00010000000001CFh;
+  indent.CVALKAU[3]  := 00010000000001CFh;
+  indent.name        := 'Заявка №' + indent.noind + ' Подр. ' +
+                        if(getanykau(0, 2, indent.CORDER),givenanname(1),'') +
+                        ' от ' + indent.DIND;
+
+  log.LogStartVisual('Формирование текущей заявки №' + indent.noind, 0);
+
+  log.LogMessage(APE_INFO, 'Формирование заголовка');
+  if insert current indent = tsOk
+    log.LogLine(APE_INFO, 'Заголовок сформирован');
+  else
+  {
+    log.LogLine(APE_ERROR, 'Формирование заголовка завершено с ошибкой');
+    log.LogCommit;
+    exit;
+  }
+  log.LogCommit;
+
+
+  vCreateIndent._sq := aSelQty;
+  vCreateIndent._sp := aSp;
+
+  var k: integer = 1;
+  vCreateIndent._loop viewtable
+  {
+    ClearBuffer(#claim);
+    claim.CINDENT     := indent.nrec;
+    claim.KOL         := vCreateIndent._sq.SelectedQty;
+    claim.PRICE       := vCreateIndent._sp.Price;
+    claim.SUMMA       := claim.KOL * claim.PRICE;
+    claim.ADVDO[1]    := vCreateIndent._sp.PercentNds;
+    claim.DSTART      := indent.DIND;
+    claim.WPOS        := k;
+    claim.CSTATE      := indent.CSTATE;
+    claim.STATE       := indent.STATE;
+    claim.PRMC        := vCreateIndent._sp.ItemType;
+    claim.CMCUSL      := vCreateIndent._sp.ItemNrec;
+    claim.CGROUP      := GetCGroupNrec(vCreateIndent._sp.ItemType, vCreateIndent._sp.ItemNrec);
+    claim.COTPED      := vCreateIndent._sp.OtpedNrec;
+    claim.WCODEKAU[1] := 40;
+    claim.WCODEKAU[3] := 73;
+    claim.WCODEKAU[4] := 4;
+    claim.CROLEKAU[1] := 0001000000000001h;
+    claim.CROLEKAU[2] := 0001000000000024h;
+    claim.CROLEKAU[3] := 0001000000000002h;
+    claim.CROLEKAU[4] := 0001000000000036h;
+    claim.CROLEKAU[5] := 400111A5C92CBBF8h;
+    claim.CVALKAU[1]  := vCreateIndent._sp.Claim.KatstroyNrec;   //заказ
+    claim.CVALKAU[3]  := vCreateIndent._sp.PriceStructNrec;      //статьи затрат объектов строительства
+    claim.CVALKAU[4]  := vCreateIndent._sp.DeviceNrec;           //МЦ
+
+    log.LogMessage(APE_INFO, 'Формирование позиции спецификации №' + claim.WPOS);
+    if insert current claim = tsOk
+      log.LogLine(APE_INFO, 'Позиция сформирована');
+    else
+    {
+      log.LogLine(APE_ERROR, 'Ошибка');
+      log.LogCommit;
+      break;
+    }
+    log.LogCommit;
+
+    k++;
+    log.LogMessage(APE_INFO, 'Установка связи позиции спецификации №' + claim.WPOS + ' с позицией годовой заявки');
+    LinkOutputIndentClaim(vCreateIndent._sp.SpmnplanNrec, claim.nrec, log);
+    log.LogCommit;
+    indent.SUMMA := indent.SUMMA + claim.SUMMA;
+  }
+  update current indent;
+  log.LogCommit;
+  log.LogStopVisual;
+  log.Visible := true;
+}
+
+procedure InitObjects;
+{
+  if _log = nullref
+    _log := IAtlProtocol(new(AtlProtocol));
+}
+
+constructor Init;
+{
+  InitObjects;
+  result := true;
+}
+
+constructor Create(aProtocol: IAtlProtocol);
+{
+  _log := aProtocol;
+  InitObjects;
+  result := true;
+}
+
+property Protocol: IAtlProtocol absolute _log;
+
+end.

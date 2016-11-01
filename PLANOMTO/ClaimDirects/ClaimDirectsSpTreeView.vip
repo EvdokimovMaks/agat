@@ -1,0 +1,924 @@
+#include ClaimDirects.vih
+#include Mc.vih
+#include McPartsCollection.vih
+#include McPartsSelector.vih
+#include MonthSelector.vih
+#include MCIncome.vih
+#include DeflatorResolver.vih
+#include System.vih
+#include GetKau.vih
+#include Query.vih
+#include Marker.vih
+#include oEdIzm.vih
+#include McUslHelper.vih
+#include GlobalParts.vih
+#include GlobalPartsConverter.vih
+#include GlobalMatch.vih
+
+#component "AGAT"
+
+interface ClaimDirectsSpTreeView;
+
+var
+  _sp: IClaimDirectsSp (ClaimDirectsSp) new;
+  _getkau: GetKau;
+  _marker: longint;
+  _mcPartsSelector: MCPartsSelector;
+  _ei: EdIzm;
+  _setAttrDialog: SetClaimDirectsSpAttributesDialog;
+  _monthSelector: MonthSelector;
+  _mcIncomeHelper: MCIncomeHelper;
+  _mcUslHelper: McUslHelper;
+  _deflatorResolver: oDeflatorResolver;
+
+table struct tCostitems (
+  SpNrec: comp,
+  CostitemNrec: comp,
+  CostitemName: string
+) with index (
+  i01 = SpNrec
+);
+
+create view
+var
+  _parentNrec: comp;
+as select
+  if(_sp.IsCostItem,
+     fpstbud.Name,
+     if(_sp.ItemType = 2, 'Усл', 'МЦ') ) (fieldname=CostitemName),
+  if(_sp.ItemType = 2, katusl.name, katmc.name) (fieldname=ItemName),
+  if(_sp.ItemType = 2, katusl.OBOZN, katmc.OBOZN) (fieldname=OboznName),
+  katotped.abbr (fieldname=OtpedName),
+  (_sp.Qty - _sp.OrderedQty) (fieldname=SaldoQty),
+  _sp.MonthQty(1 ) (fieldname=MonthQty1 ),
+  _sp.MonthQty(2 ) (fieldname=MonthQty2 ),
+  _sp.MonthQty(3 ) (fieldname=MonthQty3 ),
+  _sp.MonthQty(4 ) (fieldname=MonthQty4 ),
+  _sp.MonthQty(5 ) (fieldname=MonthQty5 ),
+  _sp.MonthQty(6 ) (fieldname=MonthQty6 ),
+  _sp.MonthQty(7 ) (fieldname=MonthQty7 ),
+  _sp.MonthQty(8 ) (fieldname=MonthQty8 ),
+  _sp.MonthQty(9 ) (fieldname=MonthQty9 ),
+  _sp.MonthQty(10) (fieldname=MonthQty10),
+  _sp.MonthQty(11) (fieldname=MonthQty11),
+  _sp.MonthQty(12) (fieldname=MonthQty12),
+  _sp.MonthSum(1 ) (fieldname=MonthSum1 ),
+  _sp.MonthSum(2 ) (fieldname=MonthSum2 ),
+  _sp.MonthSum(3 ) (fieldname=MonthSum3 ),
+  _sp.MonthSum(4 ) (fieldname=MonthSum4 ),
+  _sp.MonthSum(5 ) (fieldname=MonthSum5 ),
+  _sp.MonthSum(6 ) (fieldname=MonthSum6 ),
+  _sp.MonthSum(7 ) (fieldname=MonthSum7 ),
+  _sp.MonthSum(8 ) (fieldname=MonthSum8 ),
+  _sp.MonthSum(9 ) (fieldname=MonthSum9 ),
+  _sp.MonthSum(10) (fieldname=MonthSum10),
+  _sp.MonthSum(11) (fieldname=MonthSum11),
+  _sp.MonthSum(12) (fieldname=MonthSum12),
+  katorg.Name      (fieldname=KatorgName),
+  device.Name      (fieldname=DeviceName),
+  priceStruct.Name (fieldname=PriceStructName),
+  foundmarker(_marker, _sp.nrec) (fieldname=IsMarked)
+from _sp,
+     fpstbud,
+     katusl,
+     katmc,
+     katotped,
+     katorg,
+     katmc device,
+     addsumtune priceStruct,
+     tCostitems
+where ((
+  _sp.costitemNrec    == fpstbud.nrec and
+  _sp.ItemNrec        == katusl.nrec and
+  _sp.ItemNrec        == katmc.nrec and
+  _sp.OtpedNrec       == katotped.nrec and
+  _sp.KatorgNrec      == katorg.nrec and
+  _sp.DeviceNrec      == device.nrec and
+  _sp.PriceStructNrec == priceStruct.nrec
+))
+bounds byParent = _parentNrec == _sp.ParentNrec
+;
+
+create view vPer
+var
+  _fpperiodNrec: comp;
+as select *
+from fpperiod
+where ((
+  _fpperiodNrec == fpperiod.nrec
+));
+
+#define QtyFieldFormat [8, '\4p[|-]36666666666666666~9999']
+
+#define SumFieldFormat [12, '\2p[|-]3666`666`666`666`666~88']
+
+tree 1 tr1 ( ,,sci1478EscExInsTree);
+excelColumns;
+table _sp;
+fixedLeft(IsMarkedField, CostitemName, ItemName, OboznName, OtpedName, _sp.Description,
+          KatorgName, DeviceName, PriceStructName,
+          SaldoQty, _sp.Qty, _sp.Price, _sp.Sum, _sp.PercentNds, _sp.SumWithNds);
+fields
+  {font={bold=_sp.IsCostitem;color=if(IsMarked, ColorMark, 0);}};
+  [IsMarkedField] if(IsMarked,'V','') ''      : [1], skip, noautosize;
+  CostitemName     'Наименование'             : [30] , protect;
+  ItemName         'Матценность/Услуга'       : [30] , protect, pickbutton;
+  OboznName        'Конструкторское'#13'обозначение' : [20] , protect;
+  OtpedName        'Ед.изм'                   : [8]  , protect, noautosize;
+  _sp.Description  'Содержание'               : [10] , noprotect;
+  KatorgName       'Поставщик'                : [10] , protect, pickbutton;
+  DeviceName       'Прибор'                   : [10] , protect, pickbutton;
+  PriceStructName  'Статья'#13'структуры цены': [10] , protect, pickbutton;
+  _sp.Qty          'Всего'#13'кол-во'         : #QtyFieldFormat  , protect;
+  SaldoQty         'Остаток'#13'кол-во'       : #QtyFieldFormat  , protect;
+  _sp.Price        'Цена'                     : #SumFieldFormat  , noprotect;
+  _sp.Sum          'Сумма'                    : #SumFieldFormat  , protect;
+  _sp.PercentNds   '%'#13'НДС'                : [5], noprotect;
+  //_sp.SumNds       'Сумма'#13'НДС'            : #SumFieldFormat  , protect;
+  _sp.SumWithNds   'Сумма'#13'с НДС'          : #SumFieldFormat  , protect;
+  MonthQty1        'Январь  '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum1        'Январь  '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty2        'Февраль '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum2        'Февраль '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty3        'Март    '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum3        'Март    '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty4        'Апрель  '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum4        'Апрель  '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty5        'Май     '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum5        'Май     '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty6        'Июнь    '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum6        'Июнь    '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty7        'Июль    '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum7        'Июль    '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty8        'Август  '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum8        'Август  '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty9        'Сентябрь'#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum9        'Сентябрь'#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty10       'Октябрь '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum10       'Октябрь '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty11       'Ноябрь  '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum11       'Ноябрь  '#13'Сумма'       : #SumFieldFormat  , protect;
+  MonthQty12       'Декабрь '#13'Кол-во'      : #QtyFieldFormat  , noprotect;
+  //MonthSum12       'Декабрь '#13'Сумма'       : #SumFieldFormat  , protect;
+end;
+
+constructor Init;
+{
+  _marker := InitMarker('',8, 10, 20, false);
+  result := _marker != 0;
+}
+
+destructor Done;
+{
+  UnsetTreeBounds;
+  donemarker(_marker,'');
+}
+
+procedure OpenAllNodes;
+{
+  TreePushPos(tr1);
+  TreeGetFirstEx(tr1);
+  do {
+    TreeOpenNode(tr1);
+  } while TreeGetNextEx(tr1);
+  TreePopPos(tr1);
+}
+
+procedure CloseAllNodes;
+{
+  if TreeGetFirstEx(tr1)
+    TreeCloseAllOpenedNode(tr1);
+  rereadrecord(#_sp);
+}
+
+function  JumpToFirst: boolean;
+{
+  result := TreeGetFirstEx(tr1);
+  rereadrecord(#_sp);
+}
+
+procedure UnsetTreeBounds;
+{
+  if BoundActive(tbByParent)
+    SubBounds(tbByParent);
+}
+
+procedure SetTreeBounds;
+{
+  AddBounds(tbByParent);
+}
+
+function GetDeflatorResolver: oDeflatorResolver;
+{
+  if _deflatorResolver = nullref
+  {
+    var manager: DeflatorResolverManager;
+    _deflatorResolver := manager.GetDeflatorResolverForMnplan(_sp.Claim.MnplanNrec);
+  }
+  result := _deflatorResolver;
+}
+
+function GetFpPeriodYear(aFpPeriodNrec: comp): word; cacheable;
+{
+  vPer._fpperiodNrec := aFpPeriodNrec;
+  if vPer.getfirst fpperiod = tsOk
+    result := year(vPer.fpperiod.dbeg)
+  else
+    result := 0;
+}
+
+procedure SetSp(aSp: IClaimDirectsSp);
+{
+  UnsetTreeBounds;
+  _sp := aSp;
+  _deflatorResolver := nullref;
+  SetTreeBounds;
+  TreeGetFirstEx(tr1);
+  rereadrecord(#_sp);
+}
+
+function AllowEditSp: boolean;
+{
+  result := _sp.Kind = ClaimDirectsSpKindMcUsl;
+}
+
+procedure SetSpDefaultPercentNds;
+{
+  set _sp.PercentNds := _mcUslHelper.GetPercentNds(_sp.ItemType, _sp.ItemNrec);
+}
+
+procedure SetSpIncomeInfo(useDeflators: boolean = true);
+{
+
+  var incomeInfo: IMcIncomeInfo;
+  incomeInfo := _mcIncomeHelper.GetMCIncomeInfo(_sp.ItemNrec);
+
+  set _sp.KatorgNrec := incomeInfo.KatorgNrec;
+  set _sp.PercentNds := incomeInfo.PercentNds;
+
+  var deflator: double = 1;
+
+  if useDeflators
+    deflator := _mcIncomeHelper.GetDeflator(incomeInfo,
+                                            date(31,12,GetFpPeriodYear(_sp.Claim.PeriodNrec)),
+                                            GetDeflatorResolver).IndexDeflator;
+
+  set _sp.Price := incomeInfo.Price * deflator;
+
+  if _sp.PercentNds = 0
+    SetSpDefaultPercentNds;
+}
+
+procedure SetSpDefaultOtpEd;
+{
+  _sp.OtpedNrec := _ei.GetAktOtpEdNRec(_sp.ItemNrec, _sp.ItemType);
+}
+
+procedure UpdateSp;
+{
+  if AllowEditSp UpdateTable;
+}
+
+function  AddSpToChildLevel: comp;
+{
+  result := _sp.nrec;
+
+  if (_sp.AllowAddChildren)
+  {
+    UpdateSp;
+
+    var buf: TtClaimDirectsSp;
+    ClearAdvRecord(buf);
+
+    buf.ParentNrec    := _sp.Nrec;
+    buf.Kind          := ClaimDirectsSpKindMcUsl;
+    buf.AllowAddChild := false;
+    buf.ItemType      := _sp.ItemType;
+    buf.CostitemNrec  := _sp.CostitemNrec;
+
+    result := _sp.InsertNewWithBuffer(buf).Nrec;
+  }
+
+}
+
+function  AddSpToCurrentLevel: comp;
+{
+  result := _sp.Nrec;
+
+  if _sp.ParentNrec = 0 exit;
+
+  var parentBuf: TtClaimDirectsSp;
+  parentBuf := _sp.GetBuffer(_sp.ParentNrec);
+
+  if parentBuf.allowAddChild
+  {
+    UpdateSp;
+
+    var buf: TtClaimDirectsSp;
+    ClearAdvRecord(buf);
+
+    buf.ParentNrec    := parentBuf.nrec;
+    buf.Kind          := ClaimDirectsSpKindMcUsl;
+    buf.AllowAddChild := false;
+    buf.ItemType      := parentBuf.itemType;
+    buf.CostitemNrec  := parentBuf.costitemNrec;
+    result := _sp.InsertNewWithBuffer(buf).Nrec;
+  }
+}
+
+function DeleteCurrentSp: boolean;
+{
+  result := false;
+
+  if AllowEditSp
+    if isValid(#_sp)
+      result := (delete current _sp) = tsOk;
+}
+
+function  PickItemFromCatalog: boolean;
+{
+  result := false;
+
+  var c: comp;
+  c := _sp.ItemNrec;
+
+  var curItemType: word;
+  curItemType := _sp.ItemType;
+
+  var kodgrkau: word;
+  kodgrkau := word(if(curItemType=2, 5, 4));
+
+  if _getkau.GetCodeKau(2, kodgrkau, c) > 0
+  {
+    var l: longint;
+    l := initmarker(_getkau.GetMarkerName(kodgrkau), 8, 10, 100, false);
+
+    var i: longint;
+    for(i := 0; getmarker(l, i, c); i++)
+    {
+      if i > 0
+        treejumptorecord(tr1, AddSpToCurrentLevel);
+
+      _sp.ItemType := curItemType;
+      _sp.ItemNrec := c;
+      if curItemType = 1
+        SetSpIncomeInfo;
+      else
+        SetSpDefaultPercentNds;
+      SetSpDefaultOtpEd;
+      update current _sp;
+    }
+
+    donemarker(l,'');
+    result := true;
+  }
+}
+
+procedure SetSpFromMCCollectionItem(aMcPartsCollectionItem: IMcPartsCollectionItem; aMontNumber: byte);
+{
+  _sp.ItemType  := 1;
+  _sp.ItemNrec  := aMcPartsCollectionItem.MC.Nrec;
+  _sp.OtpedNrec := aMcPartsCollectionItem.OtpEd;
+  _sp.SetMonthQty(aMontNumber, aMcPartsCollectionItem.Qty);
+}
+
+function GetCostitemNrecByKatmcType(aKatmcType: comp): comp;
+{
+  case aKatmcType of
+    0001000000000017h: result := ClaimDirectsCostitemMateriali;
+    000100000000001Ch: result := ClaimDirectsCostitemPolufabrikati;
+  else
+    result := ClaimDirectsCostitemPki;
+  end;
+}
+
+function GetSpNrecByCostitemNrec(aCostitemNrec: comp): comp;
+{
+  result := _sp.GetCostitemSpBuffer(aCostitemNrec).nrec;
+}
+
+function AddItemsFromParts: boolean;
+{
+  result := false;
+
+  if _mcPartsSelector.ShowUI = cmDefault
+  {
+    _monthSelector.Title := 'В какой месяц записать количества';
+    if _monthSelector.ShowUI != cmDefault exit;
+
+    var col: ICollection;
+    col := ICollection(new(Collection));
+    _mcPartsSelector.FillCollectionWithSelectedParts(col);
+
+    var enum: IEnumerator;
+    enum := col.GetEnumerator;
+
+    while enum.MoveNext
+    {
+      var item: IMcPartsCollectionItem;
+      item := IMcPartsCollectionItem(enum.current);
+
+      if item.HasPs continue;
+
+      treejumptorecord(tr1, GetSpNrecByCostitemNrec(GetCostitemNrecByKatmcType(item.Mc.TypemcNrec)));
+      treejumptorecord(tr1, AddSpToChildLevel);
+      SetSpFromMCCollectionItem(item, _monthSelector.SelectedMonth);
+      SetSpIncomeInfo;
+
+      update current _sp;
+    }
+
+    result := true;
+  }
+}
+
+function PickAn(wkodgrkau: word; var cRec: comp): boolean;
+{
+  result := false;
+  var c: comp;
+  if _getkau.GetCodeKau(1, wkodgrkau, c) > 0
+  {
+    cRec := c;
+    result := true;
+  }
+}
+
+function  PickKatorg: boolean;
+{
+  if PickAn(1, _sp.KatorgNrec)
+  {
+    update current _sp;
+    result := true;
+  }
+  else
+    result := false;
+}
+
+function  PickDevice: boolean;
+{
+  if PickAn(4, _sp.DeviceNrec)
+  {
+    update current _sp;
+    result := true;
+  }
+  else
+    result := false;
+}
+
+function  PickPriceStruct: boolean;
+{
+  if PickAn(73, _sp.PriceStructNrec)
+  {
+    update current _sp;
+    result := true;
+  }
+  else
+    result := false;
+}
+
+procedure SetMonthQty(monthIndex: byte; value: double);
+{
+  _sp.SetMonthQty(monthIndex, value);
+  update current _sp;
+  rereadrecord(#_sp);
+}
+
+tableevent table _sp
+  cmTreeTop      : _parentNrec := 0;
+  cmTreeUp       : _parentNrec := _sp.ParentNrec;
+  cmTreeDown     : _parentNrec := _sp.Nrec;
+  cmTreeNeedOwner: treejumptorecord(tr1, _sp.ParentNrec);
+  cmTreeNodeType : if not _sp.IsCostItem and TreeIsTerminal(tr1) TreeSetNodeType(tr1, ntfText);
+
+  cmUpdateRecord :
+  {
+    if AllowEditSp
+      update current _sp;
+    else
+    {
+      message('Редактирование текущей строки запрещено', error);
+      abort;
+    }
+  }
+
+  cmCheckField   :
+  {
+    if AllowEditSp
+    {
+      case curfield of
+        #_sp.price,
+        #_sp.Description,
+        #_sp.PercentNds: { update current _sp; }
+      end;
+    }
+    else
+    {
+      message('Редактирование текущей строки запрещено', error);
+      setmodified(false);
+    }
+    rereadrecord(#_sp);
+  }
+
+  cmExprFieldChanged:
+  {
+    if AllowEditSp
+    {
+      case curfield of
+        #MonthQty1 : SetMonthQty(1 , ExprFieldValue);
+        #MonthQty2 : SetMonthQty(2 , ExprFieldValue);
+        #MonthQty3 : SetMonthQty(3 , ExprFieldValue);
+        #MonthQty4 : SetMonthQty(4 , ExprFieldValue);
+        #MonthQty5 : SetMonthQty(5 , ExprFieldValue);
+        #MonthQty6 : SetMonthQty(6 , ExprFieldValue);
+        #MonthQty7 : SetMonthQty(7 , ExprFieldValue);
+        #MonthQty8 : SetMonthQty(8 , ExprFieldValue);
+        #MonthQty9 : SetMonthQty(9 , ExprFieldValue);
+        #MonthQty10: SetMonthQty(10, ExprFieldValue);
+        #MonthQty11: SetMonthQty(11, ExprFieldValue);
+        #MonthQty12: SetMonthQty(12, ExprFieldValue);
+      end;
+    }
+    else
+    {
+      message('Редактирование текущей строки запрещено', error);
+      rereadrecord(#_sp);
+    }
+  }
+
+  cmDoMarkUnMark:
+  {
+    InvertMarker(_marker, _sp.nrec);
+    RedrawCurrentAndGo(tr1, true);
+  }
+
+  cmSelAll:
+  {
+    TreePushPos(tr1);
+    if TreeGetFirstEx(tr1) do
+    {
+      InsertMarker(_marker, _sp.nrec);
+    } while TreeGetNextEx(tr1);
+    TreePopPos(tr1);
+    rereadrecord(#_sp);
+  }
+
+  cmUnSelAll:
+  {
+    ClearMarker(_marker);
+    rereadrecord(#_sp);
+  }
+
+end;
+
+window wSelectCostitem 'Выбор статьи', escclose, doaccept;
+  show at (,,50, 10);
+  browse brCostitems;
+  table tCostitems;
+  fields
+    tCostitems.CostitemName 'Наименование': [30], protect;
+  end;
+  handleevent
+    cmInit:
+    {
+      delete all tCostitems;
+      pushpos(#_sp);
+      resetbounds(#_sp);
+      _loop _sp
+      {
+        if _sp.IsCostitem and _sp.AllowAddChildren
+        {
+          clearbuffer(#tCostitems);
+          tCostitems.SpNrec := _sp.nrec;
+          tCostitems.CostitemNrec := _sp.costitemNrec;
+          tCostitems.CostitemName := costitemName;
+          insert current tCostitems;
+        }
+      }
+      setbounds(#_sp);
+      poppos(#_sp);
+      rereadrecord(#tCostitems);
+    }
+  end;
+end;
+
+handleevent
+
+  cmPick:
+  {
+    case curfield of
+      #CostitemName, #ItemName:
+      {
+        if AllowEditSp
+          if PickItemFromCatalog
+            rereadrecord(#_sp);
+      }
+      #KatorgName:
+      {
+        if AllowEditSp
+          if PickKatorg
+            rereadrecord(#_sp);
+      }
+      #DeviceName:
+      {
+        if AllowEditSp
+          if PickDevice
+            rereadrecord(#_sp);
+      }
+      #PriceStructName:
+      {
+        if AllowEditSp
+          if PickPriceStruct
+            rereadrecord(#_sp);
+      }
+    end;
+  }
+
+  cmInsLevel:
+  {
+    treejumptorecord(tr1, AddSpToChildLevel);
+    rereadrecord(#_sp);
+    stop;
+  }
+
+  cmAddNewRec:
+  {
+    treejumptorecord(tr1, AddSpToCurrentLevel);
+    rereadrecord(#_sp);
+    stop;
+  }
+
+  cmDelete:
+  {
+    if getmarkercount(_marker) > 0
+    {
+      treePushPos(tr1);
+      if treeGetFirstEx(tr1) do {
+        if foundmarker(_marker, _sp.Nrec)
+        {
+          var c: comp;
+          c := _sp.Nrec;
+          if DeleteCurrentSp
+            deletemarker(_marker, c);
+        }
+      } while treeGetNextEx(tr1);
+      treePopPos(tr1);
+      rereadrecord(#_sp);
+    }
+    else
+      if DeleteCurrentSp
+      {
+        rereadrecord(#_sp);
+        if not isValid(#_sp)
+        {
+          redrawcurrentandgo(tr1, false);
+          rereadrecord(#_sp);
+        }
+      }
+    stop;
+  }
+
+  cmHotkeys:
+  {
+    PutHotCommand(RunLoadMenu(LoadMenu('ClaimDirectsSpTreeViewMenu')));
+  }
+
+  cmAccording:   //Alt+S Добавить позиции из состава изделий
+  {
+    if AddItemsFromParts
+      rereadrecord(#_sp);
+  }
+
+  cmPickAttr:    // Alt+A Установка атрибутов для помеченных позиций
+  {
+    if _setAttrDialog.ShowUI = cmDefault
+    {
+      treePushPos(tr1);
+      if treeGetFirstEx(tr1) do {
+        if AllowEditSp and foundmarker(_marker, _sp.Nrec)
+        {
+          if _setAttrDialog.IsSetPriceStruct
+            _sp.PriceStructNrec := _setAttrDialog.PriceStructNrec;
+          if _setAttrDialog.IsSetDevice
+            _sp.DeviceNrec := _setAttrDialog.DeviceNrec;
+          if _setAttrDialog.IsSetKatorg
+            _sp.KatorgNrec := _setAttrDialog.KatorgNrec;
+          update current _sp;
+        }
+      } while treeGetNextEx(tr1);
+      treePopPos(tr1);
+      rereadrecord(#_sp);
+    }
+  }
+
+  cmPickClass: //Alt+C Подбор цен и контрагентов по последним поступлениям
+  {
+    var useDeflators: boolean = false;
+    if message('Учитывать индексы-дефляторы?', YesNo) = cmYes
+      useDeflators := true;
+
+    if getmarkercount(_marker) > 0
+    {
+      treePushPos(tr1);
+      if treeGetFirstEx(tr1) do {
+        if AllowEditSp and _sp.ItemType = 1 and foundmarker(_marker, _sp.Nrec)
+        {
+          SetSpIncomeInfo(useDeflators);
+          update current _sp;
+        }
+      } while treeGetNextEx(tr1);
+      treePopPos(tr1);
+    }
+    else
+      if AllowEditSp and _sp.ItemType = 1
+      {
+        SetSpIncomeInfo(useDeflators);
+        update current _sp;
+      }
+    rereadrecord(#_sp);
+  }
+
+  cmValue9: //Изменить статью для помеченных записей
+  {
+    if runwindowmodal(wSelectCostitem) = cmDefault
+    {
+      var lParents: longint;
+      lParents := initmarker('', 8, 10, 20, false);
+
+      pushpos(#_sp);
+      resetbounds(#_sp);
+
+      var c: comp = 0;
+      _loop _sp
+      {
+        if not _sp.IsCostitem and foundmarker(_marker, _sp.nrec)
+        {
+          insertmarker(lParents, _sp.ParentNrec);
+          c := _sp.nrec;
+          _sp.parentNrec   := tCostitems.SpNrec;
+          _sp.costitemNrec := tCostitems.CostitemNrec;
+          update current _sp;
+        }
+      }
+
+      _loop _sp
+      {
+        if foundmarker(lParents, _sp.nrec)
+          update current _sp;
+      }
+      donemarker(lParents,'');
+
+      setbounds(#_sp);
+      poppos(#_sp);
+
+      TreeJumpToRecord(tr1, c);
+      rereadrecord(#_sp);
+    }
+  }
+
+  cmDocBas: //Alt+D Сформировать текущие заявки
+  {
+    var cdssqv: ClaimDirectsSpSelectQtyView noauto;
+    var sq: ISelectQty(SelectQty) new;
+
+    pushpos(#_sp);
+    resetbounds(#_sp);
+    _loop _sp
+    {
+      if not _sp.IsCostitem and foundmarker(_marker, _sp.nrec)
+        sq.Add(_sp.nrec, (_sp.Qty - _sp.OrderedQty));
+    }
+    cdssqv := new(ClaimDirectsSpSelectQtyView, ClaimDirectsSpSelectQtyView(_sp, sq));
+    if cdssqv.ShowUi = cmDefault
+    {
+      var prtcl: IAtlProtocol(AtlProtocol) new;
+      var cds: ClaimDirectsSync;
+      cds.CreateOutputIndent(_sp, sq, prtcl);
+    }
+    setbounds(#_sp);
+    poppos(#_sp);
+  }
+
+  cmNal: //Alt+F Сформировать заявку из состава Глобала
+  {
+    var gt: IGlobalTunes(GlobalTunes) new;
+    var gdpp: IGlobalDataProviderParts noauto;
+    var gps: GlobalPartsSelector noauto;
+    var gpc: IGlobalPartsConverter(GlobalPartsConverter) new;
+    var c, c_leaf, c_matches: ICollection;
+
+    gdpp := IGlobalDataProviderParts(new(GlobalDataProviderParts, GlobalDataProviderBase(gt)));
+    gps := new(GlobalPartsSelector, GlobalPartsSelector(gdpp));
+    c := ICollection(new(System::Collection));
+
+    gps.SetNameFilter('даеи');
+    if gps.ShowUI = cmDefault
+    {
+      gps.FillCollectionWithSelectedParts(c);
+
+      c_leaf := gpc.PartsToGoodsMarkedCollection(c, PARTS_MARKED, PARTS_LEAF);
+
+      c_matches := ICollection(new(Collection));
+
+      var en, en1: IEnumerator;
+      en := c_leaf.GetEnumerator;
+
+/*      while en.MoveNext
+        c_matches.add(IGoodsMatches(new(GoodsMatches, GoodsMatches(en.current))));
+
+      var mm: MatchesManager new;
+      mm.LoadMatches(c_matches);
+
+      en.reset;
+      en1 := c_matches.GetEnumerator;
+
+      while en.MoveNext and en1.MoveNext
+      {
+        var match: IGoodsMatch;
+        match := IGoodsMatch(en1.current);
+
+        var goodsColItem: IGlobalGoodsCollectionItem;
+        goodsColItem := IGlobalGoodsCollectionItem(en.Current);
+
+        treejumptorecord(tr1, GetSpNrecByCostitemNrec(GetCostitemNrecByKatmcType(match.mc.TypemcNrec)));
+        treejumptorecord(tr1, AddSpToChildLevel);
+        SetSpFromMCCollectionItem(
+          IMcPartsCollectionItem(new(McPartsCollectionItem, CreateMCCollectionItem(match.mc.nrec, goodsColItem.Qty))),
+          1
+        );
+        SetSpIncomeInfo;
+        update current _sp;
+
+      }
+    }    */
+
+      var gg: IGlobalGoodsCollectionItem;
+      var ml: IMatchLoaderMCByGoods;
+      ml := IMatchLoaderMCByGoods(new(MatchLoaderMCByGoods));
+
+      _monthSelector.Title := 'В какой месяц записать количества';
+      if _monthSelector.ShowUI != cmDefault exit;
+
+      while en.movenext
+      {
+        gg := IGlobalGoodsCollectionItem(en.current);
+        c_matches := ml.LoadMatches(gg.Goods);
+        if c_matches.Count = 0
+        {
+          //обработка ситуации, когда не найдено сопоставление
+        }
+        else
+        {
+          var mc: IMC;
+          mc := IMC(c_matches.First);
+          treejumptorecord(tr1, GetSpNrecByCostitemNrec(GetCostitemNrecByKatmcType(mc.TypemcNrec)));
+          treejumptorecord(tr1, AddSpToChildLevel);
+          SetSpFromMCCollectionItem(
+            IMcPartsCollectionItem(new(McPartsCollectionItem, CreateMCCollectionItem(mc.nrec, gg.Qty))),
+            _monthSelector.SelectedMonth
+          );
+          SetSpIncomeInfo;
+          SetSpDefaultOtpEd;
+          update current _sp;
+        }
+      }
+    }
+  }
+
+  cmRecalcAllSums:  //Alt+G Выполнить сопоставление МЦ Галактика/Global
+  {
+    pushpos(#_sp);
+    resetbounds(#_sp);
+
+    var col: IList(Collection) new;
+
+    _loop _sp
+    {
+      if not _sp.IsCostitem and foundmarker(_marker, _sp.nrec)
+      {
+        col.add(new(GoodsMatches, GoodsMatches(nullref, IMC(new(MC, LoadByNrec(_sp.ItemNrec))))));
+      }
+    }
+
+    var mm: IMatchesManager(MatchesManager) new;
+    mm.LoadMatches(col);
+    mm.ShowUIEditMatches(col);
+
+    setbounds(#_sp);
+    poppos(#_sp);
+  }
+
+end;
+
+end.
+
+
+ClaimDirectsSpTreeViewMenu Menu
+{
+  - 'Изменить статью для помеченных записей', cmValue9, , , , , sci1Esc;
+  - 'Добавить позиции из состава изделий', cmAccording, , , 'Alt+S', kbAltS, sci1Esc;
+  - 'Установка атрибутов для помеченных позиций', cmPickAttr, , , 'Alt+A', kbAltA, sciEsc;
+  - 'Подбор цен и контрагентов по последним поступлениям', cmPickClass, , , 'Alt+C', kbAltC, sciEsc;
+  - 'Сформировать текущую заявку по помеченным позициям', cmDocBas, , , 'Alt+D', kbAltD, sciEsc;
+  - 'Добавить позиции из состава Global ERP', cmNal, , , 'Alt+F', kbAltF, sciEsc;
+  - 'Выполнить сопоставление МЦ Галактика/Global', cmRecalcAllSums, , , 'Alt+G', kbAltG, sciEsc;
+}
