@@ -225,6 +225,7 @@ end.
   sqlBindCol(stmt, 3, GosKontrakt);
   sqlExecute(stmt);
   var str1, str2, str3: string;
+  str1 := ''; str2 := ''; str3 := '';
   while sqlFetch(stmt) = tsOk
   {
     str1 := RSName;
