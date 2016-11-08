@@ -1,6 +1,9 @@
 .linkform AgatClaim1 prototype is Claim
 .nameinlist 'Агат. Служебная записка'
 .f 'NUL'
+.declare
+#include globalifc.vih
+.endDeclare
 .var
   pXL: XLSRepBuilder;
   sXLSFileName, sXLTFileName: string;
@@ -151,8 +154,91 @@ end.
   }
 
   sqlFreeStmt(stmt);
+  //дальше действовать буду я!
+  //мутим терь поиск игк и договора, чтобы ПОТОМ найти РАСЧЕТНЫЙ, мать его, СЧЁТ!
+  sqlFreeStr(s);
+  sqlAddStr(s, 'select distinct c.cvalkau[1] as OrderNrec,                                                             ');
+  sqlAddStr(s, '                igk.vcomp    as IGKNrec                                                                ');
+  sqlAddStr(s, 'from claim c                                                                                           ');
+  sqlAddStr(s, 'join katstroy k on k.nrec = c.cvalkau[1]                                                               ');
+  sqlAddStr(s, 'join attrval igk on igk.wtable = 2101 and igk.crec = k.nrec and igk.cattrnam = #comp(00010000000004CCh)');
+  sqlAddStr(s, 'where c.cindent =  #comp('+_IndNRec+')                                                                 ');
+
+  //делаем GetDogovorByKatstroy
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, s);
+  var OrderNrec, IGKNrec, dogovorNrec: comp;
+  sqlBindCol(stmt, 1, OrderNrec);
+  sqlBindCol(stmt, 2, IGKNrec);
+  sqlExecute(stmt);
+  var GDBK: agatglobalifc;
+  while sqlFetch(stmt) = tsOk
+  {
+    dogovorNrec := GDBK.GetDogovorByKatstroy(OrderNrec);
+  }
+  sqlFreeStmt(stmt);
+
+  //ищем расчетный счет
+  sqlFreeStr(s);
+  sqlAddStr(s, 'select rsbank.name as RSName,                                                      ');
+  sqlAddStr(s, '       igk.name    as IGK,                                                         ');
+  sqlAddStr(s, '       ecsDog.name as GosKontrakt                                                  ');
+  sqlAddStr(s, 'from spcash spc                                                                                    ');
+  sqlAddStr(s, 'left join spkau igk on igk.nrec = case when spc.tblos[1] = 10527 then spc.kauos[1]                 ');
+  sqlAddStr(s, '                                       when spc.tblos[2] = 10527 then spc.kauos[2]                 ');
+  sqlAddStr(s, '                                       when spc.tblos[3] = 10527 then spc.kauos[3]                 ');
+  sqlAddStr(s, '                                       when spc.tblos[4] = 10527 then spc.kauos[4]                 ');
+  sqlAddStr(s, '                                       when spc.tblos[5] = 10527 then spc.kauos[5]                 ');
+  sqlAddStr(s, '                                       when spc.tblos[6] = 10527 then spc.kauos[6] end             ');
+  sqlAddStr(s, 'left join spkau rsbank on rsbank.nrec = case when spc.tblos[1] = 10545 then spc.kauos[1]           ');
+  sqlAddStr(s, '                                             when spc.tblos[2] = 10545 then spc.kauos[2]           ');
+  sqlAddStr(s, '                                             when spc.tblos[3] = 10545 then spc.kauos[3]           ');
+  sqlAddStr(s, '                                             when spc.tblos[4] = 10545 then spc.kauos[4]           ');
+  sqlAddStr(s, '                                             when spc.tblos[5] = 10545 then spc.kauos[5]           ');
+  sqlAddStr(s, '                                             when spc.tblos[6] = 10545 then spc.kauos[6] end       ');
+  sqlAddStr(s, 'left join dogovor d on d.nrec = case when spc.tblos[1] = 14 then spc.kauos[1]                      ');
+  sqlAddStr(s, '                                     when spc.tblos[2] = 14 then spc.kauos[2]                      ');
+  sqlAddStr(s, '                                     when spc.tblos[3] = 14 then spc.kauos[3]                      ');
+  sqlAddStr(s, '                                     when spc.tblos[4] = 14 then spc.kauos[4]                      ');
+  sqlAddStr(s, '                                     when spc.tblos[5] = 14 then spc.kauos[5]                      ');
+  sqlAddStr(s, '                                     when spc.tblos[6] = 14 then spc.kauos[6] end                  ');
+  sqlAddStr(s, 'left join exclassval GKDog on GKDog.classcode = 179 and GKDog.wtable = 1707 and GKDog.crec = d.nrec');
+  sqlAddStr(s, 'left join exclassseg ecsDog on ecsDog.nrec = GKDog.cclassseg                                       ');
+  sqlAddStr(s, 'where (case when spc.tblos[1] = 10527 then spc.kauos[1]                                            ');
+  sqlAddStr(s, '            when spc.tblos[2] = 10527 then spc.kauos[2]                                            ');
+  sqlAddStr(s, '            when spc.tblos[3] = 10527 then spc.kauos[3]                                            ');
+  sqlAddStr(s, '            when spc.tblos[4] = 10527 then spc.kauos[4]                                            ');
+  sqlAddStr(s, '            when spc.tblos[5] = 10527 then spc.kauos[5]                                            ');
+  sqlAddStr(s, '            when spc.tblos[6] = 10527 then spc.kauos[6] end) = #comp(' + IGKNrec + ') and          ');
+  sqlAddStr(s, '      (case when spc.tblos[1] = 14 then spc.kauos[1]                                               ');
+  sqlAddStr(s, '            when spc.tblos[2] = 14 then spc.kauos[2]                                               ');
+  sqlAddStr(s, '            when spc.tblos[3] = 14 then spc.kauos[3]                                               ');
+  sqlAddStr(s, '            when spc.tblos[4] = 14 then spc.kauos[4]                                               ');
+  sqlAddStr(s, '            when spc.tblos[5] = 14 then spc.kauos[5]                                               ');
+  sqlAddStr(s, '            when spc.tblos[6] = 14 then spc.kauos[6] end) = #comp(' + dogovorNrec + ')             ');
+
+  stmt := sqlAllocStmt;
+  sqlPrepare(stmt, s);
+  var RSName, IGK, GosKontrakt: string;
+  sqlBindCol(stmt, 1, RSName);
+  sqlBindCol(stmt, 2, IGK);
+  sqlBindCol(stmt, 3, GosKontrakt);
+  sqlExecute(stmt);
+  var str1, str2, str3: string;
+  str1 := ''; str2 := ''; str3 := '';
+  while sqlFetch(stmt) = tsOk
+  {
+    str1 := RSName;
+    str2 := IGK;
+    str3 := GosKontrakt;
+  }
+  sqlFreeStmt(stmt);
+  //пока до сюда
 
   pXL.SetStringVar('Контракты', contracts);
+  pXL.SetStringVar('РасчетныйСчет', str1);
+  pXL.SetStringVar('ИГК', str2);
+  pXL.SetStringVar('ГосКонтракт', str3);
 
   pXL.PublishVar;
 
