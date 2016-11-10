@@ -22,7 +22,8 @@ var
   _dateEnd: date;
 as select (if(getanykau(1, 14, _dogovorNrec), givenAnName(1), '')) (fieldname=DogovorField)
 
-from dogovor dog, dogovor topdog, katbank, soprhoz sh, specmtr sm, katmc mc, katvidd, attrdog, spdocs spd, ierdog
+from dogovor dog, dogovor topdog, katbank, soprhoz sh, specmtr sm, katmc mc, katvidd, attrdog,
+     spdocs spd, ierdog, spdocs spd1, indent, katotped oe
 
 where ((
   _dogovorNrec == topdog.nrec and
@@ -271,6 +272,8 @@ function DoAction(aPlanOmto: IPlanOmto; params: objref = nullref): word;
 
   v._loop _po
   {
+    if v._po.ClaimQty - v._po.RegradeQty - v._po.BasedocQty <= 0 continue;
+
     spcode := nextnumstr(spcode);
 
     clearbuffer(#spd);
@@ -282,20 +285,38 @@ function DoAction(aPlanOmto: IPlanOmto; params: objref = nullref): word;
     spd.dto      := dog.dend;
     spd.prmc     := 1;
 
-    if getfirst mc where ((_po.KatmcNrec == mc.nrec)) = tsOk
+    if getfirst mc where ((v._po.KatmcNrec == mc.nrec)) = tsOk
     {
       spd.cgrmcusl := mc.cgroupmc;
       spd.cgrnal   := mc.cgrnal;
       spd.cmcusl   := mc.nrec;
     }
 
-    spd.cotped  := _po.OtpedNrec;
+    spd.cotped  := v._po.OtpedNrec;
+    if spd.cotped = 0
+      if getfirst oe where (( spd.prmc == oe.prmc and spd.cmcusl == oe.cmcusl and 1 == oe.akt )) = tsOk
+        spd.cotped := oe.nrec;
+
     spd.direct  := dog.direct;
     spd.empty   := 1;
-    spd.kol     := _po.ClaimQty - _po.RegradeQty - _po.BasedocQty;
+    spd.kol     := v._po.ClaimQty - v._po.RegradeQty - v._po.BasedocQty;
     spd.ostatok := spd.kol;
-    spd.price   := _po.ClaimPrice;
+    spd.price   := v._po.ClaimPrice;
     spd.summa   := spd.kol * spd.price;
+
+    if dog.tidk = 401
+    {
+      if getfirst spd1 where ((400 == spd1.tidk
+                           and dog.cdogovor == spd1.cdoc
+                           and spd.direct == spd1.direct
+                           and spd.prmc == spd1.prmc and (spd1.cmcusl = spd.cmcusl) )) = tsOk
+      {
+        spd1.ostatok := if(spd1.ostatok < spd.kol, 0, spd1.ostatok - spd.kol);
+        if (spd1.ostatok = 0) spd1.empty := 0;
+        update current spd1;
+        spd.cupdoc := spd1.nrec;
+      }
+    }
 
     insert current spd;
 
@@ -325,7 +346,10 @@ function DoAction(aPlanOmto: IPlanOmto; params: objref = nullref): word;
       insert current sm;
     }
 
-    sm.cobj := _po.KatstroyNrec;
+    sm.cobj    := _po.KatstroyNrec;
+    sm.ckau[1] := _po.CostitemNrec;
+    if getfirst indent where ((_po.IndentNrec == indent.nrec)) = tsOk
+      sm.ckau[2] := indent.corder;
     sm.ckau[4] := _po.IndentNrec;
     update current sm;
   }

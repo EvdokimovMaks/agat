@@ -23,7 +23,8 @@ as select (if(getanykau(1, 14, _dogovorNrec), givenAnName(1), '')) (fieldname=Do
           (if(getanykau(1, 14, _dsNrec), givenAnName(1), '')) (fieldname=DsField),
           (if(getanykau(1, 5022, _cpNrec), givenAnName(1), '')) (fieldname=CpField)
 
-from basedoc bd, dogovor dog, katbank, ttndoc, stepdoc sd, soprhoz sh, spstep sps, specmtr sm, katmc mc;
+from basedoc bd, dogovor dog, katbank, ttndoc, stepdoc sd, soprhoz sh, spstep sps, specmtr sm, katmc mc,
+     indent, spdocs spd, spdocnal spdn, katotped oe;
 
 var
   _po: IPlanOmto;
@@ -249,20 +250,49 @@ function DoAction(aPlanOmto: IPlanOmto; params: objref = nullref): word;
 
   v._loop _po
   {
+    if _po.ClaimQty - _po.RegradeQty - _po.BasedocQty <= 0 continue;
+
     clearbuffer(#sps);
     spstepNpp++;
     sps.npp      := spstepNpp;
     sps.prmc     := 1;
     sps.cmcusl   := _po.KatmcNrec;
+
     sps.cotped   := _po.OtpedNrec;
+    if sps.cotped = 0
+      if getfirst oe where (( sps.prmc == oe.prmc and sps.cmcusl == oe.cmcusl and 1 == oe.akt )) = tsOk
+        sps.cotped := oe.nrec;
+
     sps.price    := _po.ClaimPrice;
     sps.kol      := _po.ClaimQty - _po.RegradeQty - _po.BasedocQty;
-    sps.summa    := sps.price * sps.kol;
     sps.ddoc     := bd.ddoc;
     sps.cstepdoc := sd.nrec;
     sps.kolskl   := sps.kol;
+
     if getfirst mc where ((sps.cmcusl == mc.nrec)) = tsOk
       sps.cgrnal := mc.cgrnal;
+
+    if bd.cdogovor != 0 or bd.cappdogovor != 0
+    {
+      var spdTidk: word; spdTidk := if(bd.cappdogovor != 0, 401, 400);
+      var spdCdoc: comp; spdCdoc := if(bd.cappdogovor != 0, bd.cappdogovor, bd.cdogovor);
+      if getfirst spd where (( spdTidk  == spd.tidk
+                           and spdCdoc  == spd.cdoc
+                           and 2        == spd.direct
+                           and sps.prmc == spd.prmc and (spd.cmcusl = sps.cmcusl) )) = tsOk
+      {
+        spd.ostatok := if(spd.ostatok < sps.kol, 0, spd.ostatok - sps.kol);
+        if spd.ostatok = 0 spd.empty := 0;
+        update current spd;
+
+        sps.price   := spd.price;
+        sps.cspdocs := spd.nrec;
+      }
+    }
+
+    sps.summa    := sps.price * sps.kol;
+    sps.koldop   := sps.summa;
+
     insert current sps;
 
     _nalogFun.CountBasePrice_(bd.NRec
@@ -289,9 +319,42 @@ function DoAction(aPlanOmto: IPlanOmto; params: objref = nullref): word;
     }
 
     sm.cobj := _po.KatstroyNrec;
+    sm.ckau[1] := _po.CostitemNrec;
+    if getfirst indent where ((_po.IndentNrec == indent.nrec)) = tsOk
+            sm.ckau[2] := indent.corder;
     sm.ckau[4] := _po.IndentNrec;
     update current sm;
+
+    if bd.corg != 0
+    {
+      v._po.DeliverOrgNrec := bd.corg;
+      v.update current _po;
+      _po.SaveData;
+    }
   }
+
+  //итоги по суммам и налогам строк и заголовка
+  bd.total := 0;
+  bd.nds := 0;
+  _loop sps where ((sd.nrec == sps.cstepdoc))
+  {
+    sps.nds := 0;
+    _loop spdn where ((sps.nrec == spdn.cspdoc and 1101 == spdn.tipdoc))
+      sps.nds += spdn.sumnal;
+    update current sps;
+
+    bd.total += sps.summa;
+    bd.nds += sps.nds;
+  }
+
+  bd.totalnde := bd.total;
+  bd.summa := bd.total;
+  update current bd;
+
+  sd.summa := bd.total;
+  update current sd;
+
+  //открываем интерфейс до на редактирование
 
   runinterfacenomodal(L_BASEDOC::VSCHETB, bd.nrec);
 
