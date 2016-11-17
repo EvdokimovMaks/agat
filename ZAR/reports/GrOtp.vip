@@ -1,0 +1,189 @@
+#include Query.vih
+#include ComFiltr.vih
+
+#component "AGAT"
+
+interface GrOtp 'Агат. График отпусков' escclose, doaccept;
+show (,,80,14);
+
+//#region Запросы
+
+sql query queryPersonInfo =
+select p.tabnmb,
+       p.fio,
+       p.appdate,
+       coalesce(ostatok_osn.value, 0) as ostatok_osn,
+       coalesce(ostatok_dop.value, 0) as ostatok_dop,
+       coalesce(catDep.code, '') as DepCode,
+       coalesce(catPost.name, '') as PostName
+from persons p
+
+left join catalogs catDep on catDep.nrec = p.department
+
+left join (select cperson, sum(wdaycount - coalesce(v.duration, 0)) as value
+           from putvacation
+           left join (select cputvac, sum(duration) as duration
+                      from vacations
+                      where cputvac <> #comp(0)
+                      group by cputvac
+                     ) v on nrec = v.cputvac
+           where cklotpusk = #comp(2)                    //Очередной отпуск
+           group by cperson
+          ) ostatok_osn on ostatok_osn.cperson = p.nrec
+
+left join (select cperson, sum(wdaycount - coalesce(v.duration, 0)) as value
+           from putvacation
+           left join (select cputvac, sum(duration) as duration
+                      from vacations
+                      where cputvac <> #comp(0)
+                      group by cputvac
+                     ) v on nrec = v.cputvac
+           where cklotpusk = #comp(40014EEE2053A03Dh)    //Ежегодный дополнительный отпуск
+           group by cperson
+          ) ostatok_dop on ostatok_dop.cperson = p.nrec
+
+left join appointments app on app.nrec = p.appointcur
+
+left join catalogs catPost on catPost.nrec = app.post
+
+where p.nrec = :PersonNrec
+;
+
+//#endregion
+
+var
+  _year: word;
+  _cf: CommonFiltr new;
+  _qPersonInfo: IQuery;
+  _personsMarker: longint;
+
+form frm('AgatGrOtp.out', 'AgatGrOtp');
+
+create view
+as select *
+from persons p, planotpusk po
+where ((
+  p.nrec == po.person and
+  _year == po.year_vac
+)) and foundmarker(_personsMarker, p.nrec);
+
+screen sc1
+show(,1,,3);
+fields
+  _year: noprotect, spinbutton [1, 1900, 2100];
+<<
+
+`Год` .@@@@@@@@@@
+>>
+end;
+
+embedded sc2 interface _cf;
+show at (,4,,10);
+end;
+
+screen sc3;
+show at (,11,,13);
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+                                    <.    Продолжить    .> <.    Отмена    .>
+>>
+end;
+
+procedure formWriteStringField(value: string); { frm.write(value); }
+procedure formWriteWordField(value: word); { frm.write(value); }
+procedure formWriteDateField(value: date); { frm.write(value); }
+procedure formWriteCompField(value: comp); { frm.write(value); }
+
+handleevent
+cmDefault:
+{
+  _cf.EndSelect;
+  if _cf.GetPsnCount = 0 _cf.SelectAllPsn;
+
+  _personsMarker := _cf.GetPersonsMarker;
+
+  frm.write(_year);
+
+  _loop p
+  {
+    frm.PutEventById(feDoLoop, fcCyclePerson);
+
+    var rs: IResultSet;
+    rs := _qPersonInfo.setParam('PersonNrec', p.nrec).getResultSet;
+    if rs.getFirst != tsOk continue;
+
+
+    formWriteCompField(p.nrec);
+    formWriteWordField(rs.row.val('tabnmb'));
+    formWriteStringField(rs.row.val('fio'));
+    formWriteDateField(rs.row.val('appdate'));
+    formWriteStringField(rs.row.val('DepCode'));
+    formWriteStringField(rs.row.val('PostName'));
+    formWriteWordField(rs.row.val('ostatok_osn'));
+    formWriteWordField(rs.row.val('ostatok_dop'));
+
+    _loop po
+    {
+      frm.PutEventById(feDoLoop, fcCyclePlanOtpusk);
+      formWriteCompField(po.nrec);
+      formWriteDateField(po.planyearbeg);
+      formWriteDateField(po.planyearend);
+      formWriteWordField(po.duration);
+    }
+  }
+
+  if (frm.error)
+    frm.abortForm;
+  else
+    frm.ShowFile('');
+}
+cmDoOk: putcommand(cmDefault);
+cmInit:
+{
+  if not readmydsk(_year, 'GrOtp_year', false) _year := year(cur_date);
+  _cf.ObjInit;
+  _qPersonInfo := queryManager.createQuery(queryPersonInfo);
+}
+cmDone:
+{
+  savemydsk(_year, 'GrOtp_year');
+}
+end;
+
+end.
+
+VipInterface UserReport_GrOtp Implements IUserReport licensed(free);
+Interface UserReport_GrOtp;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::GrOtp);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. График отпусков';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    Level := Level;
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'STAFFMAINMENU';
+    end;
+  end;
+end.
