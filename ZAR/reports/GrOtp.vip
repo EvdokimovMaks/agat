@@ -12,14 +12,30 @@ sql query queryPersonInfo =
 select p.tabnmb,
        p.fio,
        p.appdate,
-       coalesce(ostatok_osn.value, 0) as ostatok_osn,
-       coalesce(ostatok_dop.value, 0) as ostatok_dop,
+       coalesce(ss.vacation, 0) as otpusk_osn,
+       coalesce(otpusk_dop.value, 0) as otpusk_dop,
        coalesce(catDep.code, '') as DepCode,
        coalesce(catPost.name, '') as PostName
 from persons p
 
 left join catalogs catDep on catDep.nrec = p.department
 
+left join (select cpersons, sum(wcountday) as value
+           from persvacation
+           where ckotpus = 9 and cpersons = :PersonNrec  //Ежегодный дополнительный отпуск
+           group by cpersons
+          ) otpusk_dop on otpusk_dop.cpersons = p.nrec
+
+left join appointments app on app.nrec = p.appointcur
+
+left join staffstruct ss on ss.nrec = app.staffstr
+
+left join catalogs catPost on catPost.nrec = app.post
+
+where p.nrec = :PersonNrec
+;
+
+/*
 left join (select cperson, sum(wdaycount - coalesce(v.duration, 0)) as value
            from putvacation
            left join (select cputvac, sum(duration) as duration
@@ -41,12 +57,21 @@ left join (select cperson, sum(wdaycount - coalesce(v.duration, 0)) as value
            where cklotpusk = #comp(40014EEE2053A03Dh)    //Ежегодный дополнительный отпуск
            group by cperson
           ) ostatok_dop on ostatok_dop.cperson = p.nrec
+*/
 
-left join appointments app on app.nrec = p.appointcur
-
-left join catalogs catPost on catPost.nrec = app.post
-
-where p.nrec = :PersonNrec
+sql query queryWpInfo =
+select wp.nrec as cworkperiod,
+       sum(coalesce(pv.wdaycount,0)) as plan,
+       sum(coalesce(v.duration,0)) as fact
+from workperiod wp
+left join putvacation pv on pv.cworkperiod = wp.nrec
+left join (select cputvac, sum(duration) as duration
+           from vacations
+           where person = :PersonNrec and cputvac <> #comp(0)
+           group by cputvac
+          ) v on v.cputvac = pv.nrec
+where wp.cperson = :PersonNrec and wp.cworkperiod = #comp(0)
+group by wp.nrec
 ;
 
 //#endregion
@@ -55,6 +80,7 @@ var
   _year: word;
   _cf: CommonFiltr new;
   _qPersonInfo: IQuery;
+  _qWpInfo: IQuery;
   _personsMarker: longint;
 
 form frm('AgatGrOtp.out', 'AgatGrOtp');
@@ -65,7 +91,8 @@ from persons p, planotpusk po
 where ((
   p.nrec == po.person and
   _year == po.year_vac
-)) and foundmarker(_personsMarker, p.nrec);
+)) and foundmarker(_personsMarker, p.nrec)
+order by p.isemployee, p.fio;
 
 screen sc1
 show(,1,,3);
@@ -107,24 +134,71 @@ cmDefault:
 
   frm.write(_year);
 
+  //цикл по сотрудникам из фильтра
   _loop p
   {
+    //сообщаем форме, что происходит очередная итерация цикла
     frm.PutEventById(feDoLoop, fcCyclePerson);
 
+    //получаем инфу по сотруднику
     var rs: IResultSet;
     rs := _qPersonInfo.setParam('PersonNrec', p.nrec).getResultSet;
     if rs.getFirst != tsOk continue;
 
+    //пишем в переменные сколько сотруднику полагается дней отпуска в рабочем периоде
+    var otpusk_osn, otpusk_dop, otpusk: word;
+    otpusk_osn := rs.row.val('otpusk_osn');  //полагается дней основного отпуска
+    otpusk_dop := rs.row.val('otpusk_dop');  //полагается дней доп. отпуска
+    otpusk := otpusk_osn + otpusk_dop;       //полагается дней всего
 
+    //рассчитываем количество использованных отпусков
+    //готовим переменные
+    var otpusk_used_periods: word = 0;   //количество рабочих периодов, в которых все полагающиеся отпуска использованы
+    var otpusk_used_days: word = 0;      //количество дней фактических отпусков, в рабочих периодах, в которых не все полагающиеся отпуска использованы
+    var otpusk_used_rest_days: word = 0; //остаток рабочих дней после закрытия не полностью закрытых рабочих периодов днями otpusk_used_days
+
+    otpusk_used_periods := 0;
+    otpusk_used_days := 0;
+    otpusk_used_rest_days := 0;
+
+    //получаем информацию по полагающимся и фактическим дням отпусков сотрудников в разрезе рабочих периодов
+    var rsWp: IResultSet;
+    rsWp := _qWpInfo.setParam('PersonNrec', p.nrec).getResultSet;
+
+    //цикл по рабочим периодам сотрудника
+    if rsWp.getFirst = tsOk do
+    {
+
+      //получаем количества полагающихся и фактических дней отпуска в периоде
+      var plan, fact: word;
+      plan := rsWp.row.val('plan');
+      fact := rsWp.row.val('fact');
+
+      if plan > fact                   //если не все дни полагающегося отпуска использованы - добавляем факт к использованным дням отпусков в незакрытых периодах
+        otpusk_used_days += fact;
+      else                             //иначе добавляем единичку к использованным периодам
+        otpusk_used_periods++;
+
+    } while rsWp.getNext = tsOk;
+
+    //вычисляем сколько периодов мы можем закрыть днями otpusk_used_days и добавляем их к otpusk_used_periods
+    otpusk_used_periods += otpusk_used_days div otpusk;
+    //остаток дней после этого пишем в otpusk_used_rest_days
+    otpusk_used_rest_days := otpusk_used_days mod otpusk;
+
+    //передаем поля в форму
     formWriteCompField(p.nrec);
     formWriteWordField(rs.row.val('tabnmb'));
     formWriteStringField(rs.row.val('fio'));
     formWriteDateField(rs.row.val('appdate'));
     formWriteStringField(rs.row.val('DepCode'));
     formWriteStringField(rs.row.val('PostName'));
-    formWriteWordField(rs.row.val('ostatok_osn'));
-    formWriteWordField(rs.row.val('ostatok_dop'));
+    formWriteWordField(otpusk_osn);
+    formWriteWordField(otpusk_dop);
+    formWriteWordField(otpusk_used_periods);
+    formWriteWordField(otpusk_used_rest_days);
 
+    //цикл по плановым отпускам сотрудника из плана-графика
     _loop po
     {
       frm.PutEventById(feDoLoop, fcCyclePlanOtpusk);
@@ -135,6 +209,7 @@ cmDefault:
     }
   }
 
+  //выводим отчет на печать или прерываем
   if (frm.error)
     frm.abortForm;
   else
@@ -146,6 +221,7 @@ cmInit:
   if not readmydsk(_year, 'GrOtp_year', false) _year := year(cur_date);
   _cf.ObjInit;
   _qPersonInfo := queryManager.createQuery(queryPersonInfo);
+  _qWpInfo := queryManager.createQuery(queryWpInfo);
 }
 cmDone:
 {

@@ -1,16 +1,18 @@
 .form AgatGrOtp
 .hide
 .fields
-  ConfigYear    : word
+  ConfigYear         : word
 
-  PersonNrec    : comp
-  PersonTabnmb  : word
-  PersonFio     : string
-  PersonAppDate : date
-  PersonDepCode : string
-  PersonPostName: string
-  OstatokOsnOtp : word
-  OstatokDopOtp : word
+  PersonNrec         : comp
+  PersonTabnmb       : word
+  PersonFio          : string
+  PersonAppDate      : date
+  PersonDepCode      : string
+  PersonPostName     : string
+  OtpuskDaysOsn      : word
+  OtpuskDaysDop      : word
+  OtpuskUsedPeriods  : word
+  OtpuskUsedRestDays : word
 
   PlanOtpuskNrec     : comp
   PlanOtpuskStartDate: date
@@ -22,14 +24,16 @@
 
 Цикл по сотрудникам:
 .{ checkenter CyclePerson
-  PersonNrec    : ^
-  PersonTabnmb  : ^
-  PersonFio     : ^
-  PersonAppDate : ^
-  PersonDepCode : ^
-  PersonPostName: ^
-  OstatokOsnOtp : ^
-  OstatokDopOtp : ^
+  PersonNrec         : ^
+  PersonTabnmb       : ^
+  PersonFio          : ^
+  PersonAppDate      : ^
+  PersonDepCode      : ^
+  PersonPostName     : ^
+  OtpuskDaysOsn      : ^
+  OtpuskDaysDop      : ^
+  OtpuskUsedPeriods  : ^
+  OtpuskUsedRestDays : ^
   Плановые отпуска сотрудника:
 .{ checkenter CyclePlanOtpusk
     PlanOtpuskNrec     : ^
