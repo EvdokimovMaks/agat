@@ -1,4 +1,6 @@
 #include extattr.vih
+#include query.vih
+#include marker.vih
 
 #component "F_MBP"
 
@@ -8,7 +10,48 @@ alter interface inv_mbp;
 //  procedure CntOnDocDate;
 //end;
 
+//#region tables
+
+//таблица для хранения текущих остатков по приходам МБП
+table struct tSaldoMbpin (
+  MbpinNrec: comp,
+  dIn: date,
+  cKatMBP: comp,
+  Name: string,
+  Kod: string[40],
+  Price: double,
+  InExpl: word,
+  Perc: double,
+  InvNom: string[80],
+  pasNom: string[80],
+  cntKol: double,
+  fctKol: double
+) with index (
+  i01 = MbpinNrec,
+  i02 = Name + dIn
+);
+
+//#endregion
+
+//#region Queries
+sql query querySaldoMbpin =
+  select
+  from mbpin
+  join katmbp on katmbp.nrec = mbpin.ckatmbp
+  join attrnam anPlace on anPlace.wtable = 2001
+                      and anPlace.name = %ATTRNAME_MBP_PLACE
+  left join attrval avPlace on avPlace.wtable = 2001
+                           and avPlace.crec = mbpin.nrec
+                           and avPlace.cattrnam = anPlace.nrec
+  where mbpin.cpodr = :katpodrNrec
+    and mbpin.cmol = :katmolNrec
+    and factKol > 0
+;
+//#endregion
+
 var _extattr: iextattr;
+  _qMbpinSaldo: IQuery;    //запрос для расчета сальдо по поступлениям МБП
+  _saldoMbpinMarker: IMarker(Marker) new;  //маркер для пометки поступлений в окне выбора остатков МЬП
 
 //#region Функции для отображения дополнительных полей
 
@@ -44,7 +87,8 @@ as select GetMBPInName()(fieldname=MBPInName),
           GetStorePlacePlan()(fieldname=StorePlacePlan),
           GetStorePlaceFact()(fieldname=StorePlaceFact),
           GetPlaceState()(fieldname=PlaceState)
-from mbpin InvMBPIn, katpodr InvMBPInPodr, mbpIn pickMBPIn
+from mbpin InvMBPIn, katpodr InvMBPInPodr, mbpIn pickMBPIn,
+     tSaldoMbpin, tSaldoMbpin brSaldoMbpin
 where ((
   MBPInvs.cRecs[1] == InvMBPIn.nrec and
   InvMBPIn.cPodr == InvMBPInPodr.nrec and
@@ -72,148 +116,70 @@ function GetPlaceState: string;
   end;
 }
 
-//Перекрыта функция заполнения временной таблицы остатками МБП
-/*
-procedure CntOnDocDate;
+procedure FillSaldoMbpin;
 {
-  var sInv, sPas : String[50];
-  var Npp : comp;
-  Npp := 0;
+  if _qMbpinSaldo = nullref
+    _qMbpinSaldo := queryManager.createQuery(querySaldoMbpin)
+                                .setMacro('ATTRNAME_MBP_PLACE', ATTRNAME_MBP_PLACE);
 
-  CorrectOldVersions; // Инициализация поля MBPIn.DateZero
-
-  dForOut := MBPMove.dMove;
-
-  PushBounds(tbInByRaz);
-
-  //if (MBPMove.cRecs[4] <> 0)
-  //  if (not ConditionActiveInLeave(tcInByPers, #MBPIn))
-  //    PushConditionForLeave(tcInByPers, #MBPIn);
-
-  _LOOP MBPIn // Проверка фильтров не нужна - все ограничения в Bounds
-  {
-    NextVisual;
-
-    // Приходы по типу предметов
-    if (MBPMove.wParams[2] > 0)
-    {
-      if (MBPMove.wParams[2] = 1) // включать только спецоснастку
-        if (KatMBP.DesGr = 'SFO') // предмет является СФО
-          continue;
-
-      if (MBPMove.wParams[2] = 2) // включать только СФО
-        if (KatMBP.DesGr <> 'SFO') // предмет не является СФО
-          continue;
-    }
-
-    // Фильтр по группам МЦ
-    if (not CheckFltGrp(KatMBP.cGroupMC))
-      continue;
-
-    GetKolAndPerc;
-    sInv := GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo);
-    sPas := GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo);
-
-    if not vTrans.TryGet(GetFirst MBPInv Where (( MBPMove.NRec == MBPInv.cMove and (MBPIn.NRec = MBPInv.cRecs[1]) )) )
-    {
-      if not vTrans.TryGet( GetFirst tmpGetInvMC Where (( MBPIn.NRec  == tmpGetInvMC.Nrec )) )
-      {
-        ClearBuffer(#tmpGetInvMC);
-        Npp ++;
-        tmpGetInvMC.Nrec    := MBPIn.NRec;
-        tmpGetInvMC.dInv    := MBPMove.dMove;
-        //tmpGetInvMC.cMove   := MBPMove.NRec;
-        tmpGetInvMC.cKatMBP := MBPIn.cMBP;
-        tmpGetInvMC.Name    := KatMBP.Name;
-        tmpGetInvMC.Kod     := KatMBP.NNumber;
-        tmpGetInvMC.Price   := MBPIn.Price;
-        tmpGetInvMC.InExpl  := MBPIn.InEkspl;
-        tmpGetInvMC.Perc    := inPerc;
-        tmpGetInvMC.InvNom  := sInv;
-        tmpGetInvMC.pasNom  := sPas;
-        tmpGetInvMC.cntKol  := inKol;
-        //tmpGetInvMC.fctKol  := inKol;
-        //SetFlagsMC;
-        Insert Current tmpGetInvMC;
-      }
-      //else // Соответствующая группа найдена
-      //  if (tmpGetInvMC.isDDiff = 0) // Не трогать с отличающейся датой!
-      //  {
-      //    tmpGetInvMC.cntKol := tmpGetInvMC.cntKol + inKol;
-      //
-      //    if (tmpGetInvMC.isEqual = 0)
-      //      tmpGetInvMC.fctKol := tmpGetInvMC.cntKol;
-      //
-      //    SetFlagsMC;
-      //    Update Current tmpGetInvMC;
-      //  }
-    }
-    else // Соответствующая группа найдена
-        if (MBPInv.isDDiff = 0) // Не трогать с отличающейся датой!
-        {
-          MBPInv.cntKol := MBPInv.cntKol + inKol;
-
-          if (MBPInv.isEqual = 0)
-            MBPInv.fctKol := MBPInv.cntKol;
-
-          SetFlags;
-          Update Current MBPInv;
-        }
-  }
-
-
-  //if (MBPMove.cRecs[4] <> 0)
-  //  if (ConditionActiveInLeave(tcInByPers, #MBPIn))
-  //    PopConditionForLeave(tcInByPers, #MBPIn);
-
-  PopBounds(tbInByRaz);
+  var rs: IResultSet;
+  rs := _qMbpinSaldo.setParam('katpodrNrec', InvMbpIn.cPodr)
+                    .setParam('katmolNrec', InvMbpIn.cMol)
+                    .getResultSet;
+  sqlCopyInto(rs, #tSaldoMbpin, true);
 }
-*/
 
-//Перекрыт обработчик заполнения инвентаризации остатками МБП:
-Window wiGetInvSpec;
-handleevent
+//#region Окно для выбора текущих остатков по приходам МБП
+window wPickSaldoMbpin 'Выбор остатков спецоснастки' doaccept, escclose;
+browse browseBrSaldoMbpin;
+table brSaldoMbpin;
+recmarker = _saldoMbpinMarker { brSaldoMbpin.MbpinNrec };
+fields
+  brSaldoMbpin.Name    #3'Наименование' ('Наименование предметов') : [14],  Protect;
+  brSaldoMbpin.Kod     #3'Номенкл. №'   ('Номенклатурный номер')   : [12],  Protect, NoAutoSize;
+  brSaldoMbpin.dIn     #3'Дата поступл' ('Дата поступления')       : [10],  Protect, NoAutoSize;
+  brSaldoMbpin.Price   #3'Цена'         ('Цена предметов')         : [12.2],Protect, NoAutoSize;
+  if (brSaldoMbpin.InExpl = Word(0), 'c', 'э')
+                       #3'C'    ('Состояние предметов - на складе или в эксплуатации')           : [2], Protect, NoAutoSize;
+  brSaldoMbpin.cntKol  #3'Учет' ('Наличие предметов по данным учета на дату выявления остатков') : [8.3], Protect, NoAutoSize;
+  brSaldoMbpin.fctKol  #3'Факт' ('Фактическое наличие предметов на дату выявления остатков')     : [8.3], Protect, NoAutoSize;
+end;  //browse
+handleevent // window wPickSaldoMbpin
 cmDefault:
 {
-  //следующий код перестал работать - пропал маркер invmcmarker
-  //InvMCMarker:= InitMarker('', 8, 100, 100, true);
+  //заполняем спецификацию инвентаризации помеченными позициями остатков мбп
+  var l: longint; //маркер с помеченными позициями
+  l := initmarker('', 8, 10, 100, false);
 
-  //if (GetMarkerCount(InvMCMarker) = 0)
-  //  InsertMarker(InvMCMarker, tmpGetInvMC.Nrec);
+  _saldoMbpinMarker.ExportTo(l); //заполняем его из объектного маркера
 
-  //_loop tmpGetInvMC
-  //{
-  //  if not SearchMarker(InvMCMarker, tmpGetInvMC.Nrec, 0)
-  //    delete current tmpGetInvMC;
-  //}
-
-  _loop tmpGetInvMC
+  pushpos(#brSaldoMbpin);
+  _loop brSaldoMbpin where foundmarker(l, brSaldoMbpin.MbpinNrec);    //проходим в цикле по помеченным позициям остатков
   {
+    //добавляем строку в спецификацию инвентаризации
     ClearBuffer( #MBPInv);
-    MBPInv.dInv     := tmpGetInvMC.dInv;
-    MBPInv.cMove    := mbpmove.nrec; //tmpGetInvMC.cMove;
-    MBPInv.cKatMBP  := tmpGetInvMC.cKatMBP;
-    MBPInv.Name     := tmpGetInvMC.Name;
-    MBPInv.Kod      := tmpGetInvMC.Kod;
-    MBPInv.Price    := tmpGetInvMC.Price;
-    MBPInv.InExpl   := tmpGetInvMC.InExpl;
-    MBPInv.Perc     := tmpGetInvMC.Perc;
-    MBPInv.InvNom   := tmpGetInvMC.InvNom;
-    MBPInv.pasNom   := tmpGetInvMC.pasNom;
-    MBPInv.cntKol   := tmpGetInvMC.cntKol;
-    MBPInv.fctKol   := 0; //tmpGetInvMC.fctKol
-    //MBPInv.isEqual  := tmpGetInvMC.isEqual;
-    //MBPInv.isDDiff  := tmpGetInvMC.isDDiff;
-    MBPInv.cRecs[1] := tmpGetInvMC.Nrec;
-    MBPInv.cRecs[2] := _extattr.coGetAttr(2001, MBPInv.cRecs[1], ATTRNAME_MBP_PLACE);
+    MBPInv.dInv     := brSaldoMbpin.dIn;
+    MBPInv.cMove    := brSaldoMbpin.cmove;
+    MBPInv.cKatMBP  := brSaldoMbpin.cKatMBP;
+    MBPInv.Name     := brSaldoMbpin.Name;
+    MBPInv.Kod      := brSaldoMbpin.Kod;
+    MBPInv.Price    := brSaldoMbpin.Price;
+    MBPInv.InExpl   := brSaldoMbpin.InExpl;
+    MBPInv.Perc     := brSaldoMbpin.Perc;
+    MBPInv.InvNom   := brSaldoMbpin.InvNom;
+    MBPInv.pasNom   := brSaldoMbpin.pasNom;
+    MBPInv.cntKol   := brSaldoMbpin.cntKol;
+    MBPInv.fctKol   := 0;
+    MBPInv.cRecs[1] := brSaldoMbpin.MbpinNrec;
+    MBPInv.cRecs[2] := brSaldoMbpin.PlaceNrec;
     Insert Current MBPInv;
   }
+  poppos(#brSaldoMbpin);
 
-  // Освобождение маркера
-  //DoneMarker(InvMCMarker, '');
 }
 end; //handleevent
-end; //Window wiGetInvSpec
+end;  // window
+//#endregion
 
 //Процедура добавления колонки в брауз
 procedure AddBrowseColumn(browseName: string; fldName: string; fldTitle: string; fldIndex: integer; isPickButton: boolean);
@@ -245,6 +211,7 @@ end;
 
 //Перекрыта инициализация окна редактирования инвентаризации:
 //добавлены колонки для отображения, добавлен обработкик Pick поступления
+//перекрыто событие заполнения инвентаризации остатками
 window EditActOfInv;
 handleevent
 cminit:
@@ -296,6 +263,17 @@ cmpick:
   else
     inherited::handleevent(cmpick);
   end;
+}
+cmValue7:
+{
+  if (CanExecute)
+    if (Message('Запустить корректировку строк'#13+
+                'спецификации ? '#13+
+                '(команда "Дополнить из остатков")', Confirmation + YesNo) = cmYes)
+      if (RunWindowModal(wPickSaldoMbpin) = cmDefault)
+        Message('Дополнение успешно выполнено.', Information);
+
+  ReReadRecord(#MBPInvS);
 }
 end;
 
