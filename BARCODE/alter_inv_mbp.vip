@@ -15,17 +15,19 @@ alter interface inv_mbp;
 //таблица для хранения текущих остатков по приходам МБП
 table struct tSaldoMbpin (
   MbpinNrec: comp,
-  dIn: date,
-  cKatMBP: comp,
-  Name: string,
-  Kod: string[40],
-  Price: double,
-  InExpl: word,
-  Perc: double,
-  InvNom: string[80],
-  pasNom: string[80],
-  cntKol: double,
-  fctKol: double
+  PlaceNrec: comp,
+  PlaceName: string,
+  dIn      : date,
+  cKatMBP  : comp,
+  Name     : string,
+  Kod      : string[40],
+  Price    : double,
+  InExpl   : word,
+  Perc     : double,
+  InvNom   : string[80],
+  pasNom   : string[80],
+  cntKol   : double,
+  fctKol   : double
 ) with index (
   i01 = MbpinNrec,
   i02 = Name + dIn
@@ -35,17 +37,27 @@ table struct tSaldoMbpin (
 
 //#region Queries
 sql query querySaldoMbpin =
-  select
+  select mbpin.nrec as MbpinNrec,
+         coalesce(spkPlace.nrec, #comp(0)) as PlaceNrec,
+         coalesce(spkPlace.name, '') as PlaceName,
+         mbpin.din as dIn,
+         katmbp.nrec as cKatMbp,
+         katmbp.name as name,
+         katmbp.nnumber as kod,
+         mbpin.price as price,
+         mbpin.inekspl as InExpl,
+         mbpin.tpercent as Perc,
+         avInvNom.vString as InvNom,
+         mbpin.kolfact as cntKol
   from mbpin
-  join katmbp on katmbp.nrec = mbpin.ckatmbp
-  join attrnam anPlace on anPlace.wtable = 2001
-                      and anPlace.name = %ATTRNAME_MBP_PLACE
-  left join attrval avPlace on avPlace.wtable = 2001
-                           and avPlace.crec = mbpin.nrec
-                           and avPlace.cattrnam = anPlace.nrec
-  where mbpin.cpodr = :katpodrNrec
-    and mbpin.cmol = :katmolNrec
-    and factKol > 0
+  join katmbp on katmbp.nrec = mbpin.cmbp
+  left join attrval avPlace on avPlace.wtable = 2001 and avPlace.crec = mbpin.nrec and avPlace.cattrnam = #comp(0001000000000069h) //Место хранения
+  left join spkau spkPlace on spkPlace.nrec = avPlace.vcomp
+  left join attrval avInvNom on avInvNom.wtable = 2001 and avInvNom.crec = mbpin.nrec and avInvNom.cattrnam = #comp(0001000000000068h) //Инвентарный номер
+  where mbpin.status = 1
+    and mbpin.cpodr  = :katpodrNrec
+    and mbpin.cmol   = :katmolNrec
+    and mbpin.kolfact > 0
 ;
 //#endregion
 
@@ -91,8 +103,8 @@ from mbpin InvMBPIn, katpodr InvMBPInPodr, mbpIn pickMBPIn,
      tSaldoMbpin, tSaldoMbpin brSaldoMbpin
 where ((
   MBPInvs.cRecs[1] == InvMBPIn.nrec and
-  InvMBPIn.cPodr == InvMBPInPodr.nrec and
-  MBPInvs.cKatMBP == pickMBPIn.cMBP
+  InvMBPIn.cPodr   == InvMBPInPodr.nrec and
+  MBPInvs.cKatMBP  == pickMBPIn.cMBP
 ));
 
 function GetMBPInName: string;
@@ -116,15 +128,14 @@ function GetPlaceState: string;
   end;
 }
 
-procedure FillSaldoMbpin;
+procedure FillSaldoMbpin(aKatpodrNrec: comp; aKatmolNrec: comp);
 {
   if _qMbpinSaldo = nullref
-    _qMbpinSaldo := queryManager.createQuery(querySaldoMbpin)
-                                .setMacro('ATTRNAME_MBP_PLACE', ATTRNAME_MBP_PLACE);
+    _qMbpinSaldo := queryManager.createQuery(querySaldoMbpin);
 
   var rs: IResultSet;
-  rs := _qMbpinSaldo.setParam('katpodrNrec', InvMbpIn.cPodr)
-                    .setParam('katmolNrec', InvMbpIn.cMol)
+  rs := _qMbpinSaldo.setParam('katpodrNrec', aKatpodrNrec)
+                    .setParam('katmolNrec', aKatmolNrec)
                     .getResultSet;
   sqlCopyInto(rs, #tSaldoMbpin, true);
 }
@@ -137,14 +148,22 @@ recmarker = _saldoMbpinMarker { brSaldoMbpin.MbpinNrec };
 fields
   brSaldoMbpin.Name    #3'Наименование' ('Наименование предметов') : [14],  Protect;
   brSaldoMbpin.Kod     #3'Номенкл. №'   ('Номенклатурный номер')   : [12],  Protect, NoAutoSize;
+  brSaldoMbpin.InvNom  #3'Инвентарный №'('Инвентарный номер')      : [10],  Protect, NoAutoSize;
   brSaldoMbpin.dIn     #3'Дата поступл' ('Дата поступления')       : [10],  Protect, NoAutoSize;
   brSaldoMbpin.Price   #3'Цена'         ('Цена предметов')         : [12.2],Protect, NoAutoSize;
+  brSaldoMbpin.PlaceName #3'Место хранения' ('Место хранения')     : [10],  Protect;
   if (brSaldoMbpin.InExpl = Word(0), 'c', 'э')
                        #3'C'    ('Состояние предметов - на складе или в эксплуатации')           : [2], Protect, NoAutoSize;
   brSaldoMbpin.cntKol  #3'Учет' ('Наличие предметов по данным учета на дату выявления остатков') : [8.3], Protect, NoAutoSize;
   brSaldoMbpin.fctKol  #3'Факт' ('Фактическое наличие предметов на дату выявления остатков')     : [8.3], Protect, NoAutoSize;
 end;  //browse
 handleevent // window wPickSaldoMbpin
+cmInit:
+{
+  delete all tSaldoMbpin;
+  FillSaldoMbpin(mbpmove.cPodrF, mbpmove.cMolF);
+  rereadrecord(#brSaldoMbpin);
+}
 cmDefault:
 {
   //заполняем спецификацию инвентаризации помеченными позициями остатков мбп
@@ -154,12 +173,12 @@ cmDefault:
   _saldoMbpinMarker.ExportTo(l); //заполняем его из объектного маркера
 
   pushpos(#brSaldoMbpin);
-  _loop brSaldoMbpin where foundmarker(l, brSaldoMbpin.MbpinNrec);    //проходим в цикле по помеченным позициям остатков
+  _loop brSaldoMbpin where foundmarker(l, brSaldoMbpin.MbpinNrec)    //проходим в цикле по помеченным позициям остатков
   {
     //добавляем строку в спецификацию инвентаризации
     ClearBuffer( #MBPInv);
-    MBPInv.dInv     := brSaldoMbpin.dIn;
-    MBPInv.cMove    := brSaldoMbpin.cmove;
+    MBPInv.dInv     := cur_date;
+    MBPInv.cMove    := mbpmove.nrec;
     MBPInv.cKatMBP  := brSaldoMbpin.cKatMBP;
     MBPInv.Name     := brSaldoMbpin.Name;
     MBPInv.Kod      := brSaldoMbpin.Kod;
@@ -178,7 +197,7 @@ cmDefault:
 
 }
 end; //handleevent
-end;  // window
+end;  // window  wPickSaldoMbpin
 //#endregion
 
 //Процедура добавления колонки в брауз
@@ -211,8 +230,8 @@ end;
 
 //Перекрыта инициализация окна редактирования инвентаризации:
 //добавлены колонки для отображения, добавлен обработкик Pick поступления
-//перекрыто событие заполнения инвентаризации остатками
 window EditActOfInv;
+
 handleevent
 cminit:
 {
@@ -264,18 +283,7 @@ cmpick:
     inherited::handleevent(cmpick);
   end;
 }
-cmValue7:
-{
-  if (CanExecute)
-    if (Message('Запустить корректировку строк'#13+
-                'спецификации ? '#13+
-                '(команда "Дополнить из остатков")', Confirmation + YesNo) = cmYes)
-      if (RunWindowModal(wPickSaldoMbpin) = cmDefault)
-        Message('Дополнение успешно выполнено.', Information);
-
-  ReReadRecord(#MBPInvS);
-}
-end;
+end; //handleevent window EditActOfInv
 
 tableevent table mbpmove;
 cmCheckField:
@@ -311,17 +319,42 @@ cmCheckField:
 }
 end; //tableevent table mbpmove
 
-end;
+end; //window EditActOfInv
 
 Panel pnlMBPInv;
   Table MBPInvS;
 
 HandleEvent
-cmCheckRecord:
-{
-
-}
+cmCheckRecord: {}
 end;
 end; //panel pnlMBPInv
+
+//перекрыто событие заполнения инвентаризации остатками
+handleevent
+cmValue1:
+{
+  if (not CanExecute)
+    Exit;
+
+  // Нет прав доступа к документу
+  if (iPermission.GetProtected(MBPMove.DesGr, MBPMove.Descr, ZeroDate, Comp(0), MBPMove.cRecs[5]) <> cgProt_None)
+  {
+    Message(iPermission.GetStrMesProtected, Warning);
+    Exit;
+  }
+
+  if (isValid(#RefDocs))
+    if (Message('По данному документу формировались'#13+
+                'Акты об излишке и/или недостаче. Информация из них'#13+
+                'будет влиять на расчет наличия по данным учета.'#13+
+                'Будете продолжать ?', Warning + YesNo) <> cmYes)
+      Exit;
+
+  if (RunWindowModal(wPickSaldoMbpin) = cmDefault)
+    Message('Дополнение успешно выполнено.', Information);
+
+  ReReadRecord(#MBPInvS);
+}
+end;
 
 end.

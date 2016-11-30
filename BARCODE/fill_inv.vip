@@ -1,0 +1,87 @@
+#include query.vih
+
+#component "AGAT"
+
+//Пакетное заполнение инвентаризаций мбп остатками
+interface inv_fill_sald;
+
+//#region Queries
+sql query querySaldoMbpin =
+  select mbpin.nrec as MbpinNrec,
+         coalesce(spkPlace.nrec, #comp(0)) as PlaceNrec,
+         coalesce(spkPlace.name, '') as PlaceName,
+         mbpin.din as dIn,
+         katmbp.nrec as cKatMbp,
+         katmbp.name as name,
+         katmbp.nnumber as kod,
+         mbpin.price as price,
+         mbpin.inekspl as InExpl,
+         mbpin.tpercent as Perc,
+         avInvNom.vString as InvNom,
+         mbpin.kolfact as cntKol
+  from mbpin
+  join katmbp on katmbp.nrec = mbpin.cmbp
+  left join attrval avPlace on avPlace.wtable = 2001 and avPlace.crec = mbpin.nrec and avPlace.cattrnam = #comp(0001000000000069h) //Место хранения
+  left join spkau spkPlace on spkPlace.nrec = avPlace.vcomp
+  left join attrval avInvNom on avInvNom.wtable = 2001 and avInvNom.crec = mbpin.nrec and avInvNom.cattrnam = #comp(0001000000000068h) //Инвентарный номер
+  where mbpin.status = 1
+    and mbpin.cpodr  = :katpodrNrec
+    and mbpin.cmol   = :katmolNrec
+    and mbpin.kolfact > 0
+;
+//#endregion
+
+create view as select *
+from mbpmove, mbpinv, mbpinvdet
+where ((
+    11               == mbpmove.status
+and date(15,11,2016) == mbpmove.dmove
+));
+
+screen sc1;
+buttons
+  cmdook, default;
+<<
+  <. Выполнить .>
+>>
+end;
+
+handleevent
+cmdook:
+{
+  var q: IQuery;
+  q := querymanager.createquery(querySaldoMbpin);
+  _loop mbpmove
+  {
+    delete all mbpinv where ((mbpmove.nrec == mbpinv.cmove));
+    delete all mbpinvdet where ((mbpmove.nrec == mbpinvdet.cmove));
+    var rs: IResultSet;
+    rs := q.setParam('katpodrNrec', mbpmove.cpodrf)
+           .setParam('katmolNrec', mbpmove.cmolf)
+           .getResultSet;
+    if rs.getfirst = tsOk do
+    {
+      var row: IResultRow;
+      row := rs.row;
+      ClearBuffer(#MBPInv);
+      MBPInv.dInv     := cur_date;
+      MBPInv.cMove    := mbpmove.nrec;
+      MBPInv.cKatMBP  := row.val('cKatMBP');
+      MBPInv.Name     := row.val('Name');
+      MBPInv.Kod      := row.val('Kod');
+      MBPInv.Price    := row.val('Price');
+      MBPInv.InExpl   := row.val('InExpl');
+      MBPInv.Perc     := row.val('Perc');
+      MBPInv.InvNom   := row.val('InvNom');
+      MBPInv.cntKol   := row.val('cntKol');
+      MBPInv.fctKol   := 0;
+      MBPInv.cRecs[1] := row.val('MbpinNrec');
+      MBPInv.cRecs[2] := row.val('PlaceNrec');
+      Insert Current MBPInv;
+
+    } while rs.getnext = tsOk;
+  }
+}
+end;
+
+end.
