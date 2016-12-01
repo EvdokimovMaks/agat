@@ -6,7 +6,7 @@
 interface PlanOmtoHelper;
 
 sql query queryLinkedBasedocs =
-select distinct bd.nrec as DocumentNrec, bd.nodoc as DocumentNumber, bd.ddoc as DocumentDate, bd.corg
+select distinct bd.nrec as DocumentNrec, bd.nodoc as DocumentNumber, bd.ddoc as DocumentDate, bd.corg, bd.viddoc
 from specmtr sm
 join spstep  sp on sp.nrec = sm.cspec and sp.prmc = 1 and sp.cmcusl = :katmcNrec
 join stepdoc sd on sd.nrec = sp.cstepdoc
@@ -14,6 +14,7 @@ join basedoc bd on bd.nrec = sd.cbasedoc
 where sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1104 and sm.ckau[4] = :indentNrec
 ;
 
+/*
 sql query queryLinkedSoprdocs =
 select distinct ks.nrec as DocumentNrec, ks.nsopr as DocumentNumber, ks.dsopr as DocumentDate
 from sporder spo
@@ -22,12 +23,42 @@ join spsopr sps on sps.nrec = spo.cspsopr and sps.vidsopr = :vidsopr
 join katsopr ks on ks.nrec = sps.csopr
 where spo.sp = 0 and spo.vidorder = :vidorder and spo.cmc = :katmcNrec
 ;
+*/
+sql query queryLinkedSoprdocs =
+select distinct ks.nrec as DocumentNrec, ks.nsopr as DocumentNumber, ks.dsopr as DocumentDate
+from katsopr ks
+join spsopr sps on sps.csopr = ks.nrec and sps.prmc = 1 and sps.cmcusl = :katmcNrec
+join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1110 and sm.cspec = sps.nrec and sm.ckau[4] = :indentNrec
+where ks.vidsopr = :vidsopr
+;
 
+sql query queryExecuted =
+select sum(spo.kol) as executedQty
+from claim
+join spsopr on spsopr.vidsopr = 501 and spsopr.cmcusl = claim.cmcusl
+join sporder spo on spo.cspsopr = spsopr.nrec and spo.vidorder = 0
+join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1112 and sm.cspec = spo.nrec and sm.ckau[4] = claim.cindent
+where claim.nrec = :ClaimNrec
+;
 
+const
+  //статусы строк заявок
+  CLAIM_STATUS_PRIN          = 00010000000000F8h; //Принята к исполнению
+  CLAIM_STATUS_PRIN_ZAMEN    = 0001000000000119h; //Заменяющая.Принята к исполнению
+  CLAIM_STATUS_PRINISP       = 00010000000000F8h; //Принята к исполнению
+  CLAIM_STATUS_PRINISP_ZAMEN = 0001000000000119h; //Заменяющая.Принята к исполнению
+  CLAIM_STATUS_ISP           = 00010000000000FAh; //Исполнена
+  CLAIM_STATUS_ISP_ZAMEN     = 0001000000000130h; //Заменяющая.Исполнена
+end;
 
 var
   _queryLinkedBasedocs: IQuery;
   _queryLinkedSoprdocs: IQuery;
+  _queryExecuted: IQuery;
+
+create view
+as select *
+from indent, claim, specmtr, sporder;
 
 //#region Ф-ции получения связанных с заявкой документов
 
@@ -45,7 +76,6 @@ function GetLinkedDocsQuery(indentNrec: comp; katmcNrec: comp; q: IQuery): IQuer
 function GetLinkedDocsString(q: IQuery): string;
 {
   var s: string = '';
-
   if q.execute.errorCode = tsOk
     if q.fetch.errorCode = tsOk
     {
@@ -89,20 +119,35 @@ function GetLinkedBasedocsString(IndentNrec: comp; KatmcNrec: comp): string; cac
 
 function GetLinkedBasedocsMenu(indentNrec: comp; katmcNrec: comp): TLinkedDocsMenu;
 {
-  result := GetLinkedDocsMenu(GetLinkedBasedocsQuery(indentNrec, katmcNrec),
-                              'Открыть ДО ',
-                              'L_BASEDOC::VSCHETB({nrec})');
+  var rslt: TLinkedDocsMenu;
+  rslt.MenuId := CreateMenu;
+  rslt.ItemsCount := 0;
+
+  var rs: IResultSet;
+  rs := GetLinkedBasedocsQuery(indentNrec, katmcNrec).getResultSet;
+
+  rslt.ItemsCount := rs.count;
+  if rs.getFirst = tsOk do
+  {
+      AddMenuItemEx2(rslt.MenuId, if(rs.count = 1, 'Открыть ДО ', '') + GetLinkedDocPresentation(rs.row),
+                     '', hcNoContext, cmRunInterface, 0,
+                     if (
+                       word(rs.row.val('viddoc')) = 111,
+                       'L_BASEDOC::VSCHETB('+rs.row.val('DocumentNrec')+')',
+                       'L_BASEDOC::VSCHETPB('+rs.row.val('DocumentNrec')+')'
+                     ));
+  } while rs.getNext = tsOk;
+  result := rslt;
 }
 
-function GetLinkedKatsoprsQuery(indentNrec: comp; katmcNrec: comp; vidsopr: word; vidorder: word): IQuery;
+function GetLinkedKatsoprsQuery(indentNrec: comp; katmcNrec: comp; vidsopr: word): IQuery;
 {
-  result := GetLinkedDocsQuery(indentNrec, katmcNrec, _queryLinkedSoprdocs).SetParam('vidsopr', vidsopr)
-                                                                           .SetParam('vidorder', vidorder);
+  result := GetLinkedDocsQuery(indentNrec, katmcNrec, _queryLinkedSoprdocs).SetParam('vidsopr', vidsopr);
 }
 
 function GetLinkedIncomeKatsoprsQuery(indentNrec: comp; katmcNrec: comp): IQuery;
 {
-  result := GetLinkedKatsoprsQuery(indentNrec, katmcNrec, 101, 0);
+  result := GetLinkedKatsoprsQuery(indentNrec, katmcNrec, 101);
 }
 
 function GetLinkedIncomeKatsoprsMenu(indentNrec: comp; katmcNrec: comp): TLinkedDocsMenu;
@@ -114,7 +159,7 @@ function GetLinkedIncomeKatsoprsMenu(indentNrec: comp; katmcNrec: comp): TLinked
 
 function GetLinkedRegradeKatsoprsQuery(indentNrec: comp; katmcNrec: comp): IQuery;
 {
-  result := GetLinkedKatsoprsQuery(indentNrec, katmcNrec, 630, 0);
+  result := GetLinkedKatsoprsQuery(indentNrec, katmcNrec, 630);
 }
 
 function GetLinkedRegradeKatsoprsMenu(indentNrec: comp; katmcNrec: comp): TLinkedDocsMenu;
@@ -126,7 +171,7 @@ function GetLinkedRegradeKatsoprsMenu(indentNrec: comp; katmcNrec: comp): TLinke
 
 function GetLinkedIssueKatsoprsQuery(indentNrec: comp; katmcNrec: comp): IQuery;
 {
-  result := GetLinkedKatsoprsQuery(indentNrec, katmcNrec, 501, 0);
+  result := GetLinkedKatsoprsQuery(indentNrec, katmcNrec, 501);
 }
 
 function GetLinkedIssueKatsoprsMenu(indentNrec: comp; katmcNrec: comp): TLinkedDocsMenu;
@@ -136,6 +181,100 @@ function GetLinkedIssueKatsoprsMenu(indentNrec: comp; katmcNrec: comp): TLinkedD
                               'M_UP::IMNFINTRF(501, {nrec})');
 }
 
+//#endregion
+
+//#region привязка строки документа к позиции заявки
+procedure LinkSpecToClaim(wTable: word; SpecNrec: comp; ClaimNrec: comp);
+{
+  if getfirst fastfirstrow claim where ((ClaimNrec == claim.nrec)) = tsOk
+  {
+    if getfirst specmtr where ((0001000000000001h == specmtr.csaldtune
+                            and wTable            == specmtr.cotable
+                            and SpecNrec          == specmtr.cspec)) != tsOk
+    {
+      clearbuffer(#specmtr);
+      specmtr.cotable   := wTable;
+      specmtr.cspec     := SpecNrec;
+      specmtr.csaldtune := 0001000000000001h;
+      insert current specmtr;
+    }
+
+    specmtr.cobj      := claim.cvalkau[1];  //заказ
+    specmtr.ckau[1]   := claim.cvalkau[3];  //статья
+    if getfirst fastfirstrow indent where ((claim.cindent == indent.nrec)) = tsOk
+      specmtr.ckau[2] := indent.corder;     //подразделение
+    specmtr.ckau[4]   := claim.cindent;     //заявка
+    update current specmtr;
+
+    if wTable = 1110
+      _loop sporder where ((SpecNrec == sporder.cspsopr))
+         LinkSpecToClaim(1112, sporder.nrec, claim.nrec);
+  }
+}
+//#endregion
+
+//#region процедуры пересчета статуса позиции заявки
+
+//возвращает истину, если статус позиции заявки является "Заменяющим"
+function ClaimStatusIsZamen(claimStatusNrec: comp): boolean;
+{
+  result := claimStatusNrec = CLAIM_STATUS_PRIN_ZAMEN
+         or claimStatusNrec = CLAIM_STATUS_PRINISP_ZAMEN
+         or claimStatusNrec = CLAIM_STATUS_ISP_ZAMEN;
+}
+
+procedure SetClaimStatus(claimNrec: comp; wStatus: word);
+{
+  if getfirst fastfirstrow claim where ((claimNrec == claim.nrec)) = tsOk
+  {
+    var newClaimStatusNrec: comp = 0;
+    var isZamen: boolean;
+    isZamen := ClaimStatusIsZamen(claim.cstate);
+    case wStatus of
+      1: newClaimStatusNrec := if(isZamen, CLAIM_STATUS_PRIN_ZAMEN, CLAIM_STATUS_PRIN);
+      2: newClaimStatusNrec := if(isZamen, CLAIM_STATUS_PRINISP_ZAMEN, CLAIM_STATUS_PRINISP);
+      3: newClaimStatusNrec := if(isZamen, CLAIM_STATUS_ISP_ZAMEN, CLAIM_STATUS_ISP);
+    end;
+    if newClaimStatusNrec != 0 and newClaimStatusNrec != claim.cstate
+    {
+      update current claim set claim.state := wStatus, claim.cstate := newClaimStatusNrec;
+    }
+  }
+}
+
+procedure UpdateClaimStatus(claimNrec: comp);
+{
+  if getfirst claim where ((claimNrec == claim.nrec)) = tsOk
+  {
+    if _queryExecuted = nullref
+      _queryExecuted := queryManager.createQuery(queryExecuted);
+
+    var rs: IResultSet;
+    rs := _queryExecuted.setParam('ClaimNrec', claimNrec)
+                        .getResultSet;
+
+    if rs.getFirst = tsOk
+    {
+      if claim.kol <= double(rs.row.val('executedQty'))
+        SetClaimStatus(claim.nrec, 3)
+      else
+        SetClaimStatus(claim.nrec, 2);
+    }
+  }
+}
+
+procedure UpdateClaimsStatus(indentNrec: comp; katmcNrec: comp);
+{
+  var rs: IResultSet;
+  rs := queryManager.createQuery('select nrec from claim where cindent = :IndentNrec and prmc = 1 and cmcusl = :KatmcNrec')
+                    .setParam('IndentNrec', indentNrec)
+                    .setParam('KatmcNrec', katmcNrec)
+                    .getResultSet;
+  if rs.getFirst = tsOk do
+  {
+    UpdateClaimStatus(rs.row.val('nrec'));
+  } while rs.getNext = tsOk;
+}
 //#endregion
 
 constructor Init;

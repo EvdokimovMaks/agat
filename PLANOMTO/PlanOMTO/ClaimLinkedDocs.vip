@@ -16,8 +16,9 @@ sql query queryClaimLinkedDocs =
          bd.ddoc as datedoc,
          sp.kol as qty,
          (sp.summa
-         + case when bd.vhodnal = 2 then sp.nds else 0 end)
-         * case when bd.viddoc = 111 then bd.procopl / 100 else 1 end as sum,
+            + case when bd.vhodnal = 2 then sp.nds else 0 end)
+            * case when bd.viddoc = 111 then bd.procopl / 100 else 1 end as sumpos,
+         bd.total as sum,
          coalesce(tPlat.summa, 0) as sumOpl,
          coalesce(tPlat.maxddoc, 0) as dateOpl
   from claim
@@ -40,7 +41,9 @@ sql query queryClaimLinkedDocs =
 
   union all
 
-  select distinct sps.vidsopr, ks.nrec, ks.corg, ks.nsopr, ks.dsopr, sps.kolfact, ks.summa, 0, 0
+  select distinct sps.vidsopr, ks.nrec, ks.corg, ks.nsopr, ks.dsopr, sps.kolfact,
+         sps.kolfact * sps.price + case when ks.vhodnal = 2 then sps.sumnds else 0 end,
+         ks.summa, 0, 0
   from claim
   join spsopr sps on sps.prmc = claim.prmc and sps.cmcusl = claim.cmcusl and sps.vidsopr in (101, 501, 630)
   join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1110 and sm.cspec = sps.nrec and sm.ckau[4] = claim.cindent
@@ -51,13 +54,22 @@ sql query queryClaimLinkedDocs =
 
   select distinct d.tidk, d.nrec, d.corg,
                   d.nodoc + case when d1.nrec is not null then ', дог.№'+d1.nodoc+' от '+date2str('%d.%M.%yy',d1.ddoc) else '' end,
-                  d.ddoc, spd.kol, d.summa, 0, 0
+                  d.ddoc, spd.kol, spd.summa, d.summa, 0, 0
   from claim
   join spdocs spd on spd.tidk in (400, 401) and spd.prmc = claim.prmc and spd.cmcusl = claim.cmcusl
   join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1723 and sm.cspec = spd.nrec and sm.ckau[4] = claim.cindent
   join dogovor d on d.nrec = spd.cdoc
   left join dogovor d1 on d1.nrec = d.cdogovor
   where claim.nrec = :claimNrec and claim.cmcusl <> #comp(0)
+
+  union all
+
+  select 1000, indent.nrec, #comp(0), indent.noind + ' ' + coalesce(p.name, ''),
+         indent.dind, claim.kol, claim.kol * claim.price, 0, 0, 0
+  from claim
+  join indent on indent.nrec = claim.cindent
+  left join katpodr p on p.nrec = indent.corder
+  where claim.nrec = :claimNrec
 ;
 
 //#endregion
@@ -71,6 +83,7 @@ table struct tDocs (
   dateDoc : date,
   qty     : double,
   sum     : double,
+  sumPos  : double,
   sumOpl  : double,
   dateOpl : date
 ) with index (
@@ -107,6 +120,7 @@ property IClaimLinkedDocs.number  : string[50] absolute td.number  ;
 property IClaimLinkedDocs.dateDoc : date       absolute td.dateDoc ;
 property IClaimLinkedDocs.qty     : double     absolute td.qty     ;
 property IClaimLinkedDocs.sum     : double     absolute td.sum     ;
+property IClaimLinkedDocs.sumPos  : double     absolute td.sumPos  ;
 property IClaimLinkedDocs.sumOpl  : double     absolute td.sumOpl  ;
 property IClaimLinkedDocs.dateOpl : date       absolute td.dateOpl ;
 

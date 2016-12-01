@@ -86,7 +86,7 @@ select claim.nrec as ClaimNrec,
        indent.corder as KatpodrNrec,
        claim.state as ClaimState,
        claim.cstate as ClaimStateNrec,
-       claim.cvalkau[5] as DeliverOrgNrec,
+       deliverOrg.nrec as DeliverOrgNrec,
        claim.cvalkau[1] as KatstroyNrec,
        claim.cvalkau[2] as PersonNrec,
        claim.cvalkau[3] as CostitemNrec,
@@ -94,6 +94,7 @@ select claim.nrec as ClaimNrec,
        claim.cgroup as GroupmcNrec,
        claim.cmcusl as KatmcNrec,
        claim.cotped as OtpedNrec,
+       coalesce(tBd.basedocNrec, #comp(0)) as BasedocNrec,
        coalesce(avTu.vstring,'') as Tu,
        '' as Description,
        claim.name as DeliverClaimNumber,
@@ -129,6 +130,8 @@ left join (select sm.ckau[4] as indentNrec,
                   sum(case when bd.total > 0 then sp.summa / bd.total else 0 end * coalesce(tPlat.summa, 0)) as sumOpl,
                   sum(sp.kol) as qty,
                   sum(sp.summa) as summa,
+                  max(bd.nrec) as basedocNrec,
+                  max(bd.corg) as katorgNrec,
                   min(bd.ddoc) as minDate,
                   max(bd.ddoc) as maxDate,
                   max(coalesce(tPlat.maxddoc, 0)) as platDate,
@@ -159,6 +162,31 @@ left join (select sm.ckau[4] as indentNrec,
            where sp.prmc = 1 and sp.cmcusl <> #comp(0)
            group by sm.ckau[4], sp.cmcusl
           ) tBd on tBd.indentNrec = indent.nrec and tBd.katmcNrec = claim.cmcusl
+
+//договор
+left join (select indent.nrec as indentNrec, max(dog.corg) as katorgNrec
+           //from spdocs spd
+           //join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1723 and spd.nrec = sm.cspec and sm.ckau[4] <> #comp(0)
+           //join dogovor dog on dog.nrec = spd.cdoc
+           //where spd.tidk in (400, 401)
+           //group by sm.ckau[4]
+           from specmtr sm
+           join spdocs spd on spd.nrec = sm.cspec and spd.tidk in (400, 401)
+           join indent on indent.nrec = sm.ckau[4]
+           join dogovor dog on dog.nrec = spd.cdoc
+           where sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1723 and sm.ckau[4] <> #comp(0)
+           group by indent.nrec
+          ) tDog on tDog.indentNrec = indent.nrec
+
+//поставщик или из заявки или из ДО или из договора/ДС
+left join katorg deliverOrg on deliverOrg.nrec = case when claim.cvalkau[5] = #comp(0)
+                                                      then case when coalesce(tBd.katorgNrec, #comp(0)) = #comp(0)
+                                                                then coalesce(tDog.katorgNrec, #comp(0))
+                                                                else coalesce(tBd.katorgNrec, #comp(0))
+                                                           end
+                                                      else claim.cvalkau[5]
+                                                 end
+
 //свободный остаток
 left join (select tmc.nrec as katmcNrec,
                   sum(case when sporder.vidorder = 0 then 1 else -1 end * sporder.kol) as qty
@@ -276,7 +304,7 @@ constructor PlanOmtoQueryText(filters: PlanOmtoFilters);
                 //По поставщику
                 .Decorate(IQueryTextDecorator(
                   new(WhereFieldWithMarkerFilter,
-                      WhereFieldWithMarkerFilter(_filters.DeliverOrgFilter, 'claim.cvalkau[5]'))
+                      WhereFieldWithMarkerFilter(_filters.DeliverOrgFilter, 'coalesce(deliverOrg.nrec,#comp(0))'))
                 ))
                 //По счету
                 .Decorate(IQueryTextDecorator(
