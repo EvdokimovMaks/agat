@@ -1,0 +1,218 @@
+#include ClaimOverheadsTotal.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface ClaimOverheadsTotalDataReader;
+
+//таблица группировок
+table struct tGroups (
+  level: byte,
+  FieldName: string
+) with index (
+  i01 = level
+);
+
+//результирующий запрос
+sql query queryResultQuery =
+select Nrec, ParentNrec, ItemNrec, Level
+from tHyer;
+
+create view
+as select *
+from tGroups
+;
+
+/*
+Создает временную таблицу tData для хранения данных в неиерархическом виде
+*/
+procedure CreateTmpTableTData;
+{
+  var s: longint = 0;
+  sqlAddStr(s, 'table tData (');
+  sqlAddStr(s, '  CostitemNrec: comp,');
+  sqlAddStr(s, '  KatmcNrec: comp,');
+  sqlAddStr(s, '  KatpodrNrec: comp,');
+  sqlAddStr(s, '  SpmnplanNrec: comp');
+  sqlAddStr(s, ') with index (');
+  sqlAddStr(s, '  i01 = CostitemNrec,');
+  sqlAddStr(s, '  i02 = CostitemNrec + KatmcNrec,');
+  sqlAddStr(s, '  i03 = CostitemNrec + KatmcNrec + KatpodrNrec');
+  sqlAddStr(s, ');');
+  sqlCreateTmpTable(s, ctmNormal);
+}
+
+/*
+Создает временную таблицу tHyer для хранения данных в иерархическом виде
+*/
+procedure CreateTmpTableTHyer;
+{
+  var s: longint = 0;
+  sqlAddStr(s, 'table tHyer (');
+  sqlAddStr(s, '  Nrec: longint,');
+  sqlAddStr(s, '  ParentNrec: longint,');
+  sqlAddStr(s, '  Level: byte,');
+  sqlAddStr(s, '  ItemNrec: comp');
+  sqlAddStr(s, ') with index (');
+  sqlAddStr(s, '  i01 = Nrec (autoinc),');
+  sqlAddStr(s, '  i02 = ParentNrec');
+  sqlAddStr(s, ');');
+  sqlCreateTmpTable(s, ctmNormal);
+}
+
+/*
+Добавляет группу в таблицу группировок
+*/
+procedure AddGroup(aLevel: byte; aFieldName: string);
+{
+  clearbuffer(#tGroups);
+  tGroups.Level := aLevel;
+  tGroups.FieldName := aFieldName;
+  insert current tGroups;
+}
+
+/*
+Возвращает наименование поля группировки на уровне aLevel
+*/
+function GetGroupFieldName(aLevel: byte): string; cacheable;
+{
+  if getfirst tGroups where ((aLevel == tGroups.Level)) = tsOk
+    result := tGroups.FieldName
+  else
+    result := '';
+}
+
+/*
+Создает в таблице tHyer запись
+*/
+function CreateTHyerRow(aParentNrec: longint; aItemNrec: comp; aLevel: byte): longint;
+{
+  result := 0;
+  var s: longint = 0;
+  sqlfreestr(s);
+  sqlAddStr(s, 'insert tHyer (ParentNrec, ItemNrec, Level) values (');
+  sqlAddStr(s, string(aParentNrec)+',');
+  sqlAddStr(s, '#comp('+string(aItemNrec,0,0)+'),');
+  sqlAddStr(s, string(aLevel) + ' )');
+  if sqlExecDirect(s) = tsOk
+    result := queryManager.createQuery('select max(Nrec) from tHyer').getResultValue;
+}
+
+/*
+Заполняет tHyer статьями (1 уровень данных)
+*/
+procedure CreateTHyerCostitems;
+{
+  var nrec1, nrec2, nrec3: longint;
+  nrec1 := CreateTHyerRow(0    , 0001000000000471h, 1);  //Расходы на материально - техническое обеспечение
+  nrec2 := CreateTHyerRow(nrec1, 00010000000005E2h, 1);  //Некапитализируемые затраты (стоимость единицы < 100 000 тыс. руб.)
+  nrec3 := CreateTHyerRow(nrec2, 000100000000031Ch, 1);  //Мебель, бытовая техника и пр.
+           CreateTHyerRow(nrec3, 00010000000009CCh, 1);  //Мебель
+           CreateTHyerRow(nrec3, 00010000000009CDh, 1);  //Бытовая техника
+           CreateTHyerRow(nrec2, 000100000000047Ch, 1);  //Канцелярские принадлежности
+           CreateTHyerRow(nrec2, 000100000000047Dh, 1);  //Материалы для нужд производства
+           CreateTHyerRow(nrec2, 000100000000047Eh, 1);  //Инструменты, оборудование, приборы и пр.
+           CreateTHyerRow(nrec2, 00010000000009A4h, 1);  //Материалы для копировально-множественной техники типографии
+           CreateTHyerRow(nrec2, 000100000000047Fh, 1);  //Прочие материально-производственные запасы
+}
+
+function MySqlAddStr(var s: longint; st: string): longint;
+{
+  LogStrToFile('c:\Temp\Viper\queries.lot', st)
+  sqlAddStr(s, st);
+  result := s;
+}
+
+/*
+Заполняет tHyer данными на уровне aLevel (сами данные берутся из tData)
+*/
+function CreateTHyerDataLevel(aLevel: byte): integer;
+{
+  var s: longint = 0;
+  sqlFreeStr(s);
+  mySqlAddStr(s, 'insert tHyer (ParentNrec, ItemNrec, Level)');
+  mySqlAddStr(s, 'select ParentNrec, ItemNrec, Level from (');
+  mySqlAddStr(s, 'select distinct');
+  mySqlAddStr(s, if(aLevel > 1, 't.Nrec', '0') + ' as ParentNrec,');
+  mySqlAddStr(s, 'tData.' + GetGroupFieldName(aLevel) + ' as ItemNrec,');
+  mySqlAddStr(s, string(aLevel) + ' as Level');
+  mySqlAddStr(s, 'from tData');
+
+  if aLevel > 1 then
+  {
+    var i: byte;
+
+    var prevLevel: byte;
+    prevLevel := aLevel - 1;
+
+    var prevLevelTableAlias: string;
+    prevLevelTableAlias := 'tHyer' + prevLevel;
+
+    mySqlAddStr(s, 'join (select ' + prevLevelTableAlias + '.nrec as Nrec');
+
+    for (i := 1; i < aLevel; i++)
+      mySqlAddStr(s, '             , tHyer' + i + '.ItemNrec as ' + GetGroupFieldName(i));
+
+    mySqlAddStr(s, '      from tHyer ' + prevLevelTableAlias);
+
+    for (i := prevLevel-1; i >= 1; i--)
+      mySqlAddStr(s, '      join tHyer tHyer' + i + ' on tHyer' + i + '.nrec = tHyer' + string(i+1) + '.ParentNrec');
+
+    mySqlAddStr(s, '      where ' + prevLevelTableAlias + '.Level = ' + prevLevel);
+
+    mySqlAddStr(s, ') t on');
+
+    for (i := 1; i < aLevel; i++)
+      mySqlAddStr(s, if(i > 1, ' and ', '') + 't.' + GetGroupFieldName(i) + ' = tData.' + GetGroupFieldName(i));
+  }
+
+  mySqlAddStr(s, ') tLevel');
+
+  result := sqlExecDirect(s);
+}
+
+/*
+Возвращает результат запроса выборки ClaimOverheadsTotal в иерархическом виде
+Наименования полей выборки совпадают с названиями свойств объекта
+*/
+function Load(queryText: ISqlString): IResultSet;
+{
+  result := nullref;
+
+  //Временная таблица tData для хранения данных в неиерархическом виде
+  CreateTmpTableTData;
+
+  //Временная таблица tHyer для хранения данных в иерархическом виде
+  CreateTmpTableTHyer;
+
+  //заполняем таблицу группировок
+  delete all tGroups;
+  AddGroup(1, 'CostitemNrec');
+  AddGroup(2, 'KatmcNrec');
+  AddGroup(3, 'KatpodrNrec');
+  AddGroup(4, 'SpmnplanNrec');
+
+  //заполняем tHyer статьями (1 уровень данных), т.к. он статичен
+  CreateTHyerCostitems;
+
+  //готовим текст запроса для заполнения tData
+  var s: longint = 0;
+  queryText.Create(s);
+
+  //Если заполнение tData прошло успешно
+  if queryManager.createQuery(s).execute.errorCode = tsOk
+  {
+    //заполняем tHyer данными на уровне 2
+    if CreateTHyerDataLevel(2) = tsOk
+      //заполняем tHyer данными на уровне 3
+      if CreateTHyerDataLevel(3) = tsOk
+      {
+        //получаем результирующий запрос
+        result := queryManager.createQuery(queryResultQuery).getResultSet;
+      }
+  }
+  sqlDropTmpTable('tHyer');
+  sqlDropTmpTable('tData');
+}
+
+end.
