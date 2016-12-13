@@ -1,0 +1,118 @@
+#include ClaimOverheadsTotal.vih
+#include QueryTextWithUserFilter.vih
+
+#component "AGAT"
+
+vipinterface ClaimOverheadsTotalQueryTextBase(QueryText);
+public:
+  procedure IQueryText.CreateSelect (var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateFrom   (var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateJoin   (var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateWhere  (var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateGroupBy(var sqlString: longint; params: IParams = nullref);
+  procedure IQueryText.CreateOrderBy(var sqlString: longint; params: IParams = nullref);
+end;
+
+interface ClaimOverheadsTotalQueryTextBase;
+
+//#region Queries
+
+sql query qSelect  = insert tData (CostitemNrec, KatmcNrec, KatpodrNrec, SpmnplanNrec, Qty, Price, Sum,
+                                   Qty1, Sum1, Qty2, Sum2, Qty3, Sum3, Qty4, Sum4, Qty5, Sum5, Qty6, Sum6,
+                                   Qty7, Sum7, Qty8, Sum8, Qty9, Sum9, Qty10, Sum10, Qty11, Sum11, Qty12, Sum12)
+                     select spmnplan.canval1 as CostitemNrec,
+                            katmc.nrec       as KatmcNrec,
+                            katpodr.nrec     as KatpodrNrec,
+                            spmnplan.nrec    as SpmnplanNrec,
+                            valspmnp.kol     as Qty,
+                            valspmnp.price   as Price,
+                            valspmnp.vprice  as Sum;
+
+sql query qFrom    = from mnplan;
+
+sql query qJoin    = join fpperiod on fpperiod.nrec = mnplan.canval1
+                     join katpodr  on katpodr.nrec = mnplan.canval2
+                     join spmnplan on spmnplan.cmnplan = mnplan.nrec and spmnplan.typeizd = 1
+                     join katmc    on katmc.nrec = spmnplan.cizd
+                     left join spmnpl on spmnpl.cspmnplan = spmnplan.nrec and spmnpl.wkolan = 25 and spmnpl.wkodgr4 = 29 and spmnpl.canval4 = mnplan.nrec
+                     left join valspmnp on valspmnp.cspmnpl = spmnpl.nrec and valspmnp.num = 1;
+
+sql query qWhere   = where mnplan.cwayaccou = #comp(00010000000001E3h);
+
+sql query qGroupBy = ;
+
+sql query qOrderBy = ;
+
+//#endregion
+
+procedure IQueryText.CreateSelect (var sqlString: longint; params: IParams = nullref);
+{
+  params := params;
+  sqlAddStr(sqlString, qSelect);
+  var i: byte = 0;
+  for(i := 1; i <= 12; i++)
+    sqlAddStr(sqlString, replace(', coalesce(vsp#.kol, 0) as Qty#, coalesce(vsp#.vprice, 0) as Sum#', '#', i));
+}
+procedure IQueryText.CreateFrom   (var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qFrom); params := params;
+}
+procedure IQueryText.CreateJoin   (var sqlString: longint; params: IParams = nullref);
+{
+  params := params;
+  sqlAddStr(sqlString, qJoin);
+  var i: byte = 0;
+  for(i := 1; i <= 12; i++)
+  {
+    sqlAddStr(sqlString,
+              replace('left join fpperiod per# on per#.cnode = fpperiod.nrec and month(datetime(per#.dbeg,0)) = # and month(datetime(per#.dend,0)) = #',
+                      '#', i));
+    sqlAddStr(sqlString,
+              replace('left join spmnpl spl# on spl#.cspmnplan = spmnplan.nrec and spl#.wkolan = 1 and spl#.wkodgr4 = 21 and spl#.canval4 = per#.nrec',
+                      '#', i));
+    sqlAddStr(sqlString,
+              replace('left join valspmnp vsp# on vsp#.cspmnpl = spl#.nrec and vsp#.num = 1',
+                      '#', i));
+  }
+}
+procedure IQueryText.CreateWhere  (var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qWhere); params := params;
+}
+procedure IQueryText.CreateGroupBy(var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qGroupBy); params := params;
+}
+procedure IQueryText.CreateOrderBy(var sqlString: longint; params: IParams = nullref);
+{
+  sqlAddStr(sqlString, qOrderBy); params := params;
+}
+
+end.
+
+interface ClaimOverheadsTotalQueryText;
+
+var
+  _filters: ClaimOverheadsTotalFilters noauto;
+  _queryText: IQueryText;
+
+constructor ClaimOverheadsTotalQueryText(filters: ClaimOverheadsTotalFilters);
+{
+  result := true;
+  _filters := filters;
+  _queryText := IQueryText(new(ClaimOverheadsTotalQueryTextBase));
+  _queryText := _queryText
+                //По подразделению
+                .Decorate(IQueryTextDecorator(
+                  new(WhereFieldWithMarkerFilter,
+                      WhereFieldWithMarkerFilter(_filters.KatpodrFilter, 'katpodr.nrec'))
+                ));
+
+}
+
+procedure ISqlString.Create(var sqlString: longint; params: IParams = nullref);
+{
+  _queryText.Create(sqlString, params);
+}
+
+end.
