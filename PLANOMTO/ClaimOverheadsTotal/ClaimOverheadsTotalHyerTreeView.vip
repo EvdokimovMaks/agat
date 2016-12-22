@@ -1,0 +1,187 @@
+#include ClaimOverheadsTotal.vih
+
+#component "AGAT"
+
+interface ClaimOverheadsTotalHyerTreeView;
+
+var
+  _model: IClaimOverheadsTotalHyer(ClaimOverheadsTotalHyer) new;
+  _marker: longint;
+
+create view
+var
+  _parentNrec: comp;
+as select case(_model.level; 1: fpstbud.name, 2: katmc.name, 3: katpodr.name; '') (fieldname=FldItemName),
+          _model.MonthQty(1 ) (fieldname=MonthQty1 ),
+          _model.MonthQty(2 ) (fieldname=MonthQty2 ),
+          _model.MonthQty(3 ) (fieldname=MonthQty3 ),
+          _model.MonthQty(4 ) (fieldname=MonthQty4 ),
+          _model.MonthQty(5 ) (fieldname=MonthQty5 ),
+          _model.MonthQty(6 ) (fieldname=MonthQty6 ),
+          _model.MonthQty(7 ) (fieldname=MonthQty7 ),
+          _model.MonthQty(8 ) (fieldname=MonthQty8 ),
+          _model.MonthQty(9 ) (fieldname=MonthQty9 ),
+          _model.MonthQty(10) (fieldname=MonthQty10),
+          _model.MonthQty(11) (fieldname=MonthQty11),
+          _model.MonthQty(12) (fieldname=MonthQty12)
+from _model, fpstbud, katmc, katpodr
+where ((
+  _model.ItemNrec == fpstbud.nrec and
+  _model.ItemNrec == katmc.nrec and
+  _model.ItemNrec == katpodr.nrec
+))
+bounds byParent = _parentNrec == _model.ParentNrec
+;
+
+//#region Вспомогательные функции
+
+function IsMarked: boolean;
+{
+  result := foundmarker(_marker, _model.Nrec);
+}
+
+procedure UnsetTreeBounds;
+{
+  if BoundActive(tbByParent)
+    SubBounds(tbByParent);
+}
+
+procedure SetTreeBounds;
+{
+  AddBounds(tbByParent);
+}
+
+procedure SetModel(value: IClaimOverheadsTotalHyer);
+{
+  UnsetTreeBounds;
+  _model := value;
+  SetTreeBounds;
+  //TreeGetFirstEx(tr1);
+  Refresh;
+}
+
+procedure InitTreeMarker;
+{
+  _marker := initMarker('', sizeOf(longint), 10, 100, false);
+}
+
+//#endregion
+
+//#region редактор иерархии и его обработчики
+
+#define QtyFieldFormat [8, '\4p[|-]36666666666666666~9999']
+
+#define SumFieldFormat [12, '\2p[|-]3666`666`666`666`666~88']
+
+tree 1 tr1 ( ,,sci1478EscExInsTree);
+excelColumns;
+table _model;
+fields
+  {font={bold=_model.Level = 1; color=if(IsMarked, ColorMark, 0);}};
+  [FldIsMarked] if(IsMarked,'V','') ''  : [1], skip, noautosize;
+  FldItemName              'Статья/МЦ/Подразделение': [30], protect;
+  _model.QtyTotal          'Всего кол-во'           : #QtyFieldFormat  , protect;
+  _model.Price             'Цена'                   : #SumFieldFormat  , protect;
+  _model.SumTotal          'Всего сумма'            : #SumFieldFormat  , protect;
+  MonthQty1        'Январь  '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty2        'Февраль '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty3        'Март    '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty4        'Апрель  '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty5        'Май     '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty6        'Июнь    '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty7        'Июль    '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty8        'Август  '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty9        'Сентябрь'#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty10       'Октябрь '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty11       'Ноябрь  '#13'Кол-во'            : #QtyFieldFormat  , protect;
+  MonthQty12       'Декабрь '#13'Кол-во'            : #QtyFieldFormat  , protect;
+end;
+
+procedure SetMarkToChildren(aMark: boolean; aParentNrec: longint);
+{
+  var oldParentNrec: longint;
+  oldParentNrec := _parentNrec;
+  pushPos(#_model);
+  _parentNrec := aParentNrec;
+  _loop _model
+  {
+    if aMark
+    {
+      if not foundmarker(_marker, _model.nrec)
+        insertMarker(_marker, _model.nrec);
+    }
+    else
+      deleteMarker(_marker, _model.nrec);
+    SetMarkToChildren(aMark, _model.nrec);
+  }
+  _parentNrec := oldParentNrec;
+  popPos(#_model);
+}
+
+tableevent table _model
+  cmTreeTop      : _parentNrec := 0;
+  cmTreeUp       : _parentNrec := _model.ParentNrec;
+  cmTreeDown     : _parentNrec := _model.Nrec;
+  cmTreeNeedOwner: treejumptorecord(tr1, _model.ParentNrec);
+  cmTreeNodeType : if _model.Level = 3 TreeSetNodeType(tr1, ntfText);
+  cmDoMarkUnMark:
+  {
+    SetMarkToChildren(not IsMarked, _model.Nrec);
+    InvertMarker(_marker, _model.nrec);
+    if _model.Level < 3
+      Refresh;
+    RedrawCurrentAndGo(tr1, true);
+  }
+
+  cmSelAll:
+  {
+    TreePushPos(tr1);
+    if TreeGetFirstEx(tr1) do
+    {
+      InsertMarker(_marker, _model.nrec);
+    } while TreeGetNextEx(tr1);
+    TreePopPos(tr1);
+    Refresh;
+  }
+
+  cmUnSelAll:
+  {
+    ClearMarker(_marker);
+    Refresh;
+  }
+
+end;
+
+//#endregion
+
+//#region ClaimOverheadsTotalHyerTreeView
+
+constructor Create(aModel: IClaimOverheadsTotalHyer);
+{
+  InitTreeMarker;
+  SetModel(aModel);
+  result := true;
+}
+
+constructor Init;
+{
+  InitTreeMarker;
+  result := true;
+}
+
+destructor Done;
+{
+  UnsetTreeBounds;
+  donemarker(_marker,'');
+}
+
+procedure Refresh;
+{
+  rereadrecord(#_model);
+}
+
+property Model: IClaimOverheadsTotalHyer read _model write SetModel(result);
+
+//#endregion
+
+end.

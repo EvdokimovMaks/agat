@@ -3,85 +3,63 @@
 
 #component "AGAT"
 
-interface TestClaimOverheadsTotal;
-
-table struct t (Nrec: longint, ParentNrec: longint, ItemNrec: comp, Level: byte, Price: double, QtyTotal: double, SumTotal: double,
-                Qty: array[1..12] of double,
-                Sum: array[1..12] of double
-               ) with index (
-                i01 = ParentNrec
-               );
+interface TestClaimOverheadsTotal 'Сводная годовая заявка по накладным расходам';
 
 var
-  _parentNrec: comp;
+  _dataReader : ClaimOverheadsTotalDataReader;
+  _filters    : ClaimOverheadsTotalFilters noauto;
+  _filtersView: ClaimOverheadsTotalFiltersView noauto;
+  _queryText  : ISqlString;
+  _hyer       : IClaimOverheadsTotalHyer;
+  _hyerView   : ClaimOverheadsTotalHyerTreeView noauto;
 
-create view
-as select *
-from t
-where ((_parentNrec == t.ParentNrec));
-
-tree tr1;
-table t;
-fields
-  t.nrec;
-  t.ParentNrec;
-  t.ItemNrec;
-  t.Level;
-  t.Price; t.QtyTotal; t.SumTotal;
-  t.Qty[1] ; t.Sum[1] ;
-  t.Qty[2] ; t.Sum[2] ;
-  t.Qty[3] ; t.Sum[3] ;
-  t.Qty[4] ; t.Sum[4] ;
-  t.Qty[5] ; t.Sum[5] ;
-  t.Qty[6] ; t.Sum[6] ;
-  t.Qty[7] ; t.Sum[7] ;
-  t.Qty[8] ; t.Sum[8] ;
-  t.Qty[9] ; t.Sum[9] ;
-  t.Qty[10]; t.Sum[10];
-  t.Qty[11]; t.Sum[11];
-  t.Qty[12]; t.Sum[12];
+window wConfig 'Сводная годовая заявка по накладным расходам - настройки', escclose;
+show(,,55,7);
+  embedded embClaimOverheadsTotalFilters interface _filtersView;
+  end;
 end;
 
-tableevent table t;
-  cmTreeTop      : _parentNrec := 0;
-  cmTreeUp       : _parentNrec := t.ParentNrec;
-  cmTreeDown     : _parentNrec := t.Nrec;
-  cmTreeNeedOwner: treejumptorecord(tr1, t.ParentNrec);
-  cmTreeNodeType : if TreeIsTerminal(tr1) TreeSetNodeType(tr1, ntfText);
+embedded embClaimOverheadsTotalTree interface _hyerView;
 end;
 
-var
-  _dataReader: ClaimOverheadsTotalDataReader;
-  _filters: ClaimOverheadsTotalFilters new;
-  _queryText: ISqlString;
+procedure FiltersViewOnProceed;
+{
+  StartNewVisual(vtRotateVisual, vfTimer, 'Загрузка', 0);
+  var data: TClaimOverheadsTotalResultSet;
+  data := _dataReader.Load(_queryText);
+  _hyer.Load(data.HyerResultSet);
+  StopVisual('',0);
+  CloseWindowEx(wConfig, cmDefault);
+  _hyerView.Refresh;
+}
+
+procedure FiltersViewOnCancel;
+{
+  CloseInterface(cmCancel);
+}
 
 handleevent
 cminit:
 {
+  _filters := new(ClaimOverheadsTotalFilters);
+  _filters.InitFilter;
+
+  _filtersView := new(ClaimOverheadsTotalFiltersView, Create(_filters));
+  BindEvent(FiltersViewOnProceed, _filtersView.OnProceed);
+  BindEvent(FiltersViewOnCancel, _filtersView.OnCancel);
+
   _queryText := ISqlString(new(ClaimOverheadsTotalQueryText, ClaimOverheadsTotalQueryText(_filters)));
-  var rs: IResultSet;
-  rs := _dataReader.Load(_queryText);
-  delete all t;
-  if rs.getFirst = tsOk do {
-    var r: IResultRow;
-    r := rs.row;
-    clearbuffer(#t);
-    t.Nrec       := r.val('Nrec');
-    t.ParentNrec := r.val('ParentNrec');
-    t.ItemNrec   := r.val('ItemNrec');
-    t.Level      := r.val('Level');
-    t.Price      := r.val('Price');
-    t.QtyTotal   := r.val('QtyTotal');
-    t.SumTotal   := r.val('SumTotal');
-    var i: byte;
-    for(i := 1; i <= 12; i++)
-    {
-      t.Qty[i] := r.val('Qty#'+i+'#');
-      t.Sum[i] := r.val('Sum#'+i+'#');
-    }
-    insert current t;
-  } while rs.getNext = tsOk;
-  rereadrecord(#t);
+
+  _hyer := IClaimOverheadsTotalHyer(new(ClaimOverheadsTotalHyer));
+
+  _hyerView := new(ClaimOverheadsTotalHyerTreeView, Create(_hyer));
+
+  if runwindowmodal(wConfig) != cmDefault
+    FiltersViewOnCancel;
+}
+cmDone:
+{
+  _filters.DoneFilter;
 }
 end;
 end.
