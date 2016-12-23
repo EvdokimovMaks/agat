@@ -1,0 +1,133 @@
+#include ClaimOverheadsTotal.vih
+#include Query.vih
+#include Userreport.vih
+
+#component "AGAT"
+
+interface MainClaimOverheadsTotal 'Сводная годовая заявка по накладным расходам';
+
+var
+  _dataReader : ClaimOverheadsTotalDataReader;
+  _filters    : ClaimOverheadsTotalFilters noauto;
+  _filtersView: ClaimOverheadsTotalFiltersView noauto;
+  _queryText  : ISqlString;
+  _hyer       : IClaimOverheadsTotalHyer;
+  _hyerView   : ClaimOverheadsTotalHyerTreeView noauto;
+  _data       : IClaimOverheadsTotalData;
+  _helper     : ClaimOverheadsTotalHelper;
+
+procedure CreateIndent;
+{
+  var markedMeasures: tCOTMeasuresArray;
+  markedMeasures := _hyerView.GetMarkedMeasures;
+  var data: IClaimOverheadsTotalData;
+  data := _helper.GetClaimOverheadsTotalDataByMeasures(_data, markedMeasures);
+  _helper.CreateIndent(data);
+}
+
+window wConfig 'Сводная годовая заявка по накладным расходам - настройки', escclose;
+show(,,55,7);
+  embedded embClaimOverheadsTotalFilters interface _filtersView;
+  end;
+end;
+
+embedded embClaimOverheadsTotalTree interface _hyerView;
+end;
+
+procedure FiltersViewOnProceed;
+{
+  StartNewVisual(vtRotateVisual, vfTimer, 'Загрузка', 0);
+  var data: TClaimOverheadsTotalResultSet;
+  data := _dataReader.Load(_queryText);
+  _hyer.Load(data.HyerResultSet);
+  _data.Load(data.DataResultSet);
+  StopVisual('',0);
+  CloseWindowEx(wConfig, cmDefault);
+  _hyerView.Refresh;
+}
+
+procedure FiltersViewOnCancel;
+{
+  CloseInterface(cmCancel);
+}
+
+procedure HyerViewOnHandleevent(aCommand: word);
+{
+  case aCommand of
+    cmHotkeys:
+    {
+      var contextMenuCommand: word;
+      contextMenuCommand := RunMenu('mnuClaimOverheadsTotal');
+      case contextMenuCommand of
+        cmValue1: CreateIndent;
+      end;
+    }
+  end;
+}
+
+handleevent
+cminit:
+{
+  _filters := new(ClaimOverheadsTotalFilters);
+  _filters.InitFilter;
+
+  _filtersView := new(ClaimOverheadsTotalFiltersView, Create(_filters));
+  BindEvent(FiltersViewOnProceed, _filtersView.OnProceed);
+  BindEvent(FiltersViewOnCancel, _filtersView.OnCancel);
+
+  _queryText := ISqlString(new(ClaimOverheadsTotalQueryText, ClaimOverheadsTotalQueryText(_filters)));
+
+  _hyer := IClaimOverheadsTotalHyer(new(ClaimOverheadsTotalHyer));
+
+  _data := IClaimOverheadsTotalData(new(ClaimOverheadsTotalData));
+
+  _hyerView := new(ClaimOverheadsTotalHyerTreeView, Create(_hyer));
+  BindEvent(HyerViewOnHandleevent, _hyerView.OnHandleevent);
+
+  if runwindowmodal(wConfig) != cmDefault
+    FiltersViewOnCancel;
+}
+cmDone:
+{
+  _filters.DoneFilter;
+}
+end;
+end.
+
+VipInterface UserReport_MainClaimOverheadsTotal Implements IUserReport licensed(free);
+Interface UserReport_MainClaimOverheadsTotal;
+  create view dummy;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::MainClaimOverheadsTotal);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'Агат. Сводная заявка по накладным расходам';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := Level;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'SUPPLYPLAN';
+      2 : VisibleInModule := 'BUY';
+    end;
+  }
+end.
+
+mnuClaimOverheadsTotal menu {
+  - 'Сформировать текущую заявку по помеченным позициям', cmValue1, , , , , sci1Esc;
+}

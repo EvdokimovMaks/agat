@@ -1,0 +1,437 @@
+#include ClaimOverheadsTotal.vih
+#include Extattr.vih
+
+#component "AGAT"
+
+interface ClaimOverheadsTotalIndentManager;
+
+table struct tSrcMc (
+  KatmcNrec: comp,
+  KatmcName: string,
+  KatmcCode: string,
+  qtyRest: double,
+  qtyOrder: double
+) with index (
+  i01 = KatmcNrec (unique),
+  i02 = KatmcName
+);
+
+table struct tSrcRow (
+  KatmcNrec: comp,
+  KatpodrNrec: comp,
+  KatpodrCode: string[80],
+  SpmnplanNrec: comp,
+  MnplanName: string[150],
+  price: double,
+  qtyRest: double,
+  qtyOrder: double
+) with index (
+  i01 = SpmnplanNrec (unique),
+  i02 = KatmcNrec + KatpodrCode
+);
+
+table struct tSrcMon (
+  SpmnplanNrec: comp,
+  monthIndex: byte,
+  qtyRest: double,
+  qtyOrder: double
+) with index (
+  i01 = SpmnplanNrec + monthIndex
+);
+
+
+var
+  _data: IClaimOverheadsTotalData(ClaimOverheadsTotalData) new;
+  _monthNames: array[1..12] of string[10];
+  _ea: iExtAttr;
+
+create view
+as select *
+from tSrcMc, tSrcRow, tSrcMon, _data, katmc, katpodr, spmnpl, fpperiod, spmnplan, mnplan,
+     indent, claim, objacct, spobjacc, indent indent1, katotped,
+     tSrcMc brSrcMc (i02), tSrcRow brSrcRow (i02), tSrcMon brSrcMon
+where ((
+  brSrcMc.KatmcNrec     == brSrcRow.KatmcNrec and
+  brSrcRow.SpmnplanNrec == brSrcMon.SpmnplanNrec
+));
+
+//#region Интерфейс пользователя Формирование текущей заявки и его обработчики
+
+window wCreateIndent 'Формирование текущей заявки' escclose;
+
+  browse brMc;
+  show(,,,9);
+  table brSrcMc;
+  fields
+    brSrcMc.KatmcName 'Наименование матценности': [30], protect;
+    brSrcMc.KatmcCode 'Код': [10], protect;
+    brSrcMc.qtyRest   'Всего': [8], protect;
+    brSrcMc.qtyOrder  'Выбрано': [8], noprotect;
+  end;
+
+  browse brRow;
+  show(,10,,12);
+  table brSrcRow;
+  fields
+    brSrcRow.KatpodrCode 'Подразделение': [10], protect;
+    brSrcRow.MnplanName  'Годовая заявка': [20], protect;
+    brSrcRow.qtyRest     'Всего': [8], protect;
+    brSrcRow.qtyOrder    'Выбрано': [8], noprotect;
+  end;
+
+  browse brSrcMon;
+  show(,13,,19);
+  table brSrcMon;
+  fields
+    _monthNames[brSrcMon.monthIndex]  'Месяц': [10], skip;
+    brSrcMon.qtyRest                  'Всего': [8], protect;
+    brSrcMon.qtyOrder                 'Выбрано': [8], noprotect;
+  end;
+
+  screen sc1;
+  show(,20,,);
+  buttons
+    cmDoOk;
+    cmCancel;
+<<
+
+                                                                      <. Продолжить .>   <. Отмена .>
+>>
+  end;
+
+  procedure DistributeRowQty(aSpmnplanNrec: comp);
+  {
+    if getfirst tSrcRow where ((aSpmnplanNrec == tSrcRow.SpmnplanNrec)) = tsOk
+    {
+      var distributingQty: double;
+      distributingQty := tSrcRow.qtyOrder;
+      _loop tSrcMon where ((aSpmnplanNrec == tSrcMon.SpmnplanNrec))
+      {
+        if tSrcMon.qtyRest >= distributingQty
+        {
+          update current tSrcMon set tSrcMon.qtyOrder := distributingQty;
+          distributingQty := 0;
+        }
+        else
+        {
+          distributingQty -= tSrcMon.qtyRest;
+          update current tSrcMon set tSrcMon.qtyOrder := tSrcMon.qtyRest;
+        }
+      }
+      if distributingQty > 0
+        update current tSrcMon set tSrcMon.qtyOrder := tSrcMon.qtyOrder + distributingQty;
+    }
+  }
+
+  procedure DistributeMcQty(aKatmcNrec: comp);
+  {
+    if getfirst tSrcMc where ((aKatmcNrec == tSrcMc.KatmcNrec)) = tsOk
+    {
+      var distributingQty: double;
+      distributingQty := tSrcMc.qtyOrder;
+      _loop tSrcRow where ((aKatmcNrec == tSrcRow.KatmcNrec))
+      {
+        if tSrcRow.qtyRest >= distributingQty
+        {
+          update current tSrcRow set tSrcRow.qtyOrder := distributingQty;
+          distributingQty := 0;
+        }
+        else
+        {
+          distributingQty -= tSrcRow.qtyRest;
+          update current tSrcRow set tSrcRow.qtyOrder := tSrcRow.qtyRest;
+        }
+        DistributeRowQty(tSrcRow.SpmnplanNrec);
+      }
+      if distributingQty > 0
+      {
+        update current tSrcRow set tSrcRow.qtyOrder := tSrcRow.qtyOrder + distributingQty;
+        DistributeRowQty(tSrcRow.SpmnplanNrec);
+      }
+    }
+  }
+
+  procedure AgregateMcQty(aKatmcNrec: comp);
+  {
+    if getfirst tSrcMc where ((aKatmcNrec == tSrcMc.KatmcNrec)) = tsOk
+    {
+      tSrcMc.qtyOrder := 0;
+      _loop tSrcRow where ((aKatmcNrec == tSrcRow.KatmcNrec))
+        tSrcMc.qtyOrder += tSrcRow.qtyOrder;
+      update current tSrcMc;
+    }
+  }
+
+  procedure AgregateRowQty(aSpmnplanNrec: comp);
+  {
+    if getfirst tSrcRow where ((aSpmnplanNrec == tSrcRow.SpmnplanNrec)) = tsOk
+    {
+      tSrcRow.qtyOrder := 0;
+      _loop tSrcMon where ((aSpmnplanNrec == tSrcMon.SpmnplanNrec))
+         tSrcRow.qtyOrder += tSrcMon.qtyOrder;
+      update current tSrcRow;
+      AgregateMcQty(tSrcRow.KatmcNrec);
+    }
+  }
+
+  handleevent
+  cmDoOk:
+  {
+    closewindowex(wCreateIndent, cmDefault);
+  }
+  end;
+
+end;
+
+handleevent
+  cmCheckField:
+  {
+    case curfield of
+      #brSrcMc.qtyOrder:
+      {
+        update current brSrcMc;
+        DistributeMcQty(brSrcMc.KatmcNrec);
+      }
+      #brSrcRow.qtyOrder:
+      {
+        update current brSrcRow;
+        AgregateMcQty(brSrcRow.KatmcNrec);
+        DistributeRowQty(brSrcRow.SpmnplanNrec);
+      }
+      #brSrcMon.qtyOrder:
+      {
+        update current brSrcMon;
+        AgregateRowQty(brSrcMon.SpmnplanNrec);
+      }
+    end;
+    rereadrecord(#brSrcMc);
+    rereadrecord(#brSrcRow);
+    rereadrecord(#brSrcMon);
+  }
+end;
+
+//#endregion
+
+//#region Вспомогательные функции
+
+procedure LoadTablesFromData;
+{
+  _loop _data
+  {
+    if getfirst tSrcMc where ((_data.KatmcNrec == tSrcMc.KatmcNrec)) != tsOk
+    {
+      clearbuffer(#tSrcMc);
+      tSrcMc.KatmcNrec := _data.KatmcNrec;
+      if getfirst katmc where ((_data.KatmcNrec == katmc.nrec)) = tsOk
+      {
+        tSrcMc.KatmcName := katmc.name;
+        tSrcMc.KatmcCode := katmc.barkod;
+      }
+      insert current tSrcMc;
+    }
+
+    if getfirst tSrcRow where ((_data.SpmnplanNrec == tSrcRow.SpmnplanNrec)) != tsOk
+    {
+      clearbuffer(#tSrcRow);
+      tSrcRow.KatmcNrec    := _data.KatmcNrec;
+      tSrcRow.KatpodrNrec  := _data.KatpodrNrec;
+      tSrcRow.SpmnplanNrec := _data.SpmnplanNrec;
+      tSrcRow.Price        := _data.Price;
+
+      if getfirst katpodr where ((_data.KatpodrNrec == katpodr.nrec)) = tsOk
+        tSrcRow.KatpodrCode := katpodr.kod;
+
+      if getfirst spmnplan where ((_data.SpmnplanNrec == spmnplan.nrec)) = tsOk
+        if getfirst mnplan where ((spmnplan.cmnplan == mnplan.nrec)) = tsOk
+          tSrcRow.MnplanName := mnplan.name;
+
+
+      insert current tSrcRow;
+    }
+
+    var i: byte;
+    for(i := 1; i <= 12; i++)
+    {
+      if _data.MonthQty(i) = 0 continue;
+
+      if getfirst tSrcMon where (( _data.SpmnplanNrec == tSrcMon.SpmnplanNrec and i == tSrcMon.monthIndex)) != tsOk
+      {
+        clearbuffer(#tSrcMon);
+        tSrcMon.SpmnplanNrec := _data.SpmnplanNrec;
+        tSrcMon.monthIndex := i;
+        insert current tSrcMon;
+      }
+      tSrcMon.qtyRest  += _data.MonthQty(i) - _data.MonthOrdered(i);
+      tSrcMon.qtyOrder += tSrcMon.qtyRest;
+      update current tSrcMon;
+
+      tSrcRow.qtyRest  += tSrcMon.qtyRest;
+      tSrcRow.qtyOrder += tSrcMon.qtyOrder;
+    }
+    update current tSrcRow;
+
+    tSrcMc.qtyRest  += tSrcRow.qtyRest;
+    tSrcMc.qtyOrder += tSrcRow.qtyOrder;
+    update current tSrcMc;
+  }
+}
+
+procedure SetData(value: IClaimOverheadsTotalData);
+{
+  delete all tSrcMc;
+  delete all tSrcRow;
+  delete all tSrcMon;
+  _data := value;
+  LoadTablesFromData;
+}
+
+//#endregion
+
+//#region ClaimOverheadsTotalIndentManager
+
+function CreateIndent: comp;
+{
+  clearbuffer(#indent);
+  indent.descr       := sgettune('USER.DESCR');
+  indent.desgr       := sgettune('USER.DESGR');
+  if getlast indent1 = tsOk
+    indent.noind     := nextnumstr(indent1.noind);
+  indent.dind        := cur_date();
+  indent.cstate      := 00010000000000F2h;
+  indent.state       := 1;
+  indent.ctype       := 0001000000000004h;
+  indent.priority    := 0001000000000005h;
+  indent.corder      := 00010000000125CCh;
+  indent.cperform    := 00010000000125CCh;
+  indent.vhodnal     := 2;
+  indent.rule01      := 3;
+  indent.wcodekau[1] := 10005;
+  indent.wcodekau[2] := 10005;
+  indent.wcodekau[3] := 10005;
+  indent.crolekau[1] := 0001000000000022h;
+  indent.crolekau[2] := 0001000000000023h;
+  indent.crolekau[3] := 0001000000000021h;
+  indent.crolekau[4] := 40016EE4408C5A55h;
+  indent.cvalkau[1]  := 00010000000001CFh;
+  indent.cvalkau[2]  := 00010000000001CFh;
+  indent.cvalkau[3]  := 00010000000013CCh;
+  insert current indent;
+
+  var npp: word = 1;
+  _loop tSrcMc
+  {
+    clearbuffer(#claim);
+    claim.cindent := indent.nrec;
+    claim.kol := tSrcMc.qtyOrder;
+    if getfirst tSrcRow where (( tSrcMc.KatmcNrec == tSrcRow.KatmcNrec and (tSrcRow.price > 0) )) = tsOk
+      claim.price := tSrcRow.price;
+    claim.summa := claim.kol * claim.price;
+    claim.dstart := indent.dind;
+    claim.wpos := npp++;
+    claim.cstate := 00010000000000F3h;
+    claim.state := 1;
+    claim.prmc := 1;
+    claim.cmcusl := tSrcMc.KatmcNrec;
+    if getfirst katmc where (( tSrcMc.KatmcNrec == katmc.nrec )) = tsOk
+    {
+      claim.cgroup := katmc.cgroupmc;
+      claim.cvalkau[3] := _ea.coGetAttrID(1432, claim.cgroup, 000100000000000Dh);
+    }
+    if getfirst katotped where (( 1 == katotped.prmc and tSrcMc.KatmcNrec == katotped.cmcusl and 1 == katotped.akt )) = tsOk
+      claim.cotped := katotped.nrec;
+    claim.wcodekau[1] := 40;
+    claim.wcodekau[3] := 73;
+    claim.crolekau[1] := 0001000000000001h;
+    claim.crolekau[2] := 0001000000000024h;
+    claim.crolekau[3] := 0001000000000002h;
+    claim.crolekau[4] := 0001000000000036h;
+    insert current claim;
+
+    _loop tSrcRow where ((tSrcMc.KatmcNrec == tSrcRow.KatmcNrec))
+    {
+      if getfirst spmnplan where ((tSrcRow.SpmnplanNrec == spmnplan.nrec)) != tsOk continue;
+      if getfirst mnplan where ((spmnplan.cmnplan == mnplan.nrec)) != tsOk continue;
+      if getfirst objacct where ((3 == objacct.typeown and indent.nrec == objacct.cowner and 29 == objacct.typeobj and mnplan.nrec == objacct.cobject)) != tsOk
+      {
+        clearbuffer(#objacct);
+        objacct.typeown := 3;
+        objacct.cowner  := indent.nrec;
+        objacct.kindrec := 1;
+        objacct.typeobj := 29;
+        objacct.cobject := mnplan.nrec;
+        insert current objacct;
+      }
+
+      _loop tSrcMon where ((tSrcRow.SpmnplanNrec == tSrcMon.SpmnplanNrec))
+      {
+        if tSrcMon.qtyOrder <= 0 continue;
+        if getfirst spmnpl where ((spmnplan.nrec  /== spmnpl.cSpmnplan and
+                                   1              /== spmnpl.wkolan  and
+                                   21             /== spmnpl.wkodgr4 and
+                                   spmnpl.canval4 /== fpperiod.nrec  and
+                                   (month(fpperiod.dbeg) = tSrcMon.monthIndex
+                                    and month(fpperiod.dend) = tSrcMon.monthIndex)
+                                   )) = tsOk
+        {
+          clearbuffer(#spobjacc);
+          spobjacc.cobjacct := objacct.nrec;
+          spobjacc.kindrec  := 1;
+          spobjacc.typepos  := 31;
+          spobjacc.cpos     := spmnpl.nrec;
+          spobjacc.cotped   := spmnpl.cotped;
+          spobjacc.kolcpos  := tSrcMon.qtyOrder;
+          insert current spobjacc;
+
+          var spobjaccNrec: comp;
+          spobjaccNrec := spobjacc.nrec;
+
+          clearbuffer(#spobjacc);
+          spobjacc.cobjacct := objacct.nrec;
+          spobjacc.kindrec  := 1;
+          spobjacc.typepos  := 31;
+          spobjacc.cpos     := spmnpl.nrec;
+          spobjacc.cotped   := spmnpl.cotped;
+          spobjacc.kolcpos  := tSrcMon.qtyOrder;
+          spobjacc.typeobj  := 13;
+          spobjacc.cobject  := claim.nrec;
+          spobjacc.typehier := 1;
+          spobjacc.cspobjacc := spobjaccNrec;
+          insert current spobjacc;
+        }
+      }
+
+    }
+
+  }
+
+  result := indent.nrec;
+
+}
+
+function ShowCreateIndentUI: word;
+{
+  result := runwindowmodal(wCreateIndent);
+}
+
+constructor Init;
+{
+  _monthNames[1 ] := 'Январь';
+  _monthNames[2 ] := 'Февраль';
+  _monthNames[3 ] := 'Март';
+  _monthNames[4 ] := 'Апрель';
+  _monthNames[5 ] := 'Май';
+  _monthNames[6 ] := 'Июнь';
+  _monthNames[7 ] := 'Июль';
+  _monthNames[8 ] := 'Август';
+  _monthNames[9 ] := 'Сентябрь';
+  _monthNames[10] := 'Октябрь';
+  _monthNames[11] := 'Ноябрь';
+  _monthNames[12] := 'Декабрь';
+  result := true;
+}
+
+property Data: IClaimOverheadsTotalData read _data write SetData(result);
+
+//#endregion
+
+end.
