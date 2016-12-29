@@ -104,22 +104,110 @@ function CreateTHyerRow(aParentNrec: longint; aItemNrec: comp; aLevel: byte): lo
     result := queryManager.createQuery('select max(Nrec) from tHyer').getResultValue;
 }
 
+type THyerNrecArray = array [0..0] of longint;
 /*
 Заполняет tHyer статьями (1 уровень данных)
 */
-procedure CreateTHyerCostitems;
+function CreateTHyerCostitems: THyerNrecArray;
 {
-  var nrec1, nrec2, nrec3: longint;
-  nrec1 := CreateTHyerRow(0    , 0001000000000471h, 1);  //Расходы на материально - техническое обеспечение
-  nrec2 := CreateTHyerRow(nrec1, 00010000000005E2h, 1);  //Некапитализируемые затраты (стоимость единицы < 100 000 тыс. руб.)
-  nrec3 := CreateTHyerRow(nrec2, 000100000000031Ch, 1);  //Мебель, бытовая техника и пр.
-           CreateTHyerRow(nrec3, 00010000000009CCh, 1);  //Мебель
-           CreateTHyerRow(nrec3, 00010000000009CDh, 1);  //Бытовая техника
-           CreateTHyerRow(nrec2, 000100000000047Ch, 1);  //Канцелярские принадлежности
-           CreateTHyerRow(nrec2, 000100000000047Dh, 1);  //Материалы для нужд производства
-           CreateTHyerRow(nrec2, 000100000000047Eh, 1);  //Инструменты, оборудование, приборы и пр.
-           CreateTHyerRow(nrec2, 00010000000009A4h, 1);  //Материалы для копировально-множественной техники типографии
-           CreateTHyerRow(nrec2, 000100000000047Fh, 1);  //Прочие материально-производственные запасы
+  var rslt: THyerNrecArray;
+  rslt[0] := CreateTHyerRow(0      , 0001000000000471h, 1);  //Расходы на материально - техническое обеспечение
+  rslt[1] := CreateTHyerRow(rslt[0], 00010000000005E2h, 1);  //- Некапитализируемые затраты (стоимость единицы < 100 000 тыс. руб.)
+  rslt[2] := CreateTHyerRow(rslt[1], 000100000000031Ch, 1);  //- Мебель, бытовая техника и пр.
+  rslt[8] := CreateTHyerRow(rslt[2], 00010000000009CCh, 1);  //  - Мебель
+  rslt[9] := CreateTHyerRow(rslt[2], 00010000000009CDh, 1);  //  - Бытовая техника
+  rslt[3] := CreateTHyerRow(rslt[1], 000100000000047Ch, 1);  //- Канцелярские принадлежности
+  rslt[4] := CreateTHyerRow(rslt[1], 000100000000047Dh, 1);  //- Материалы для нужд производства
+  rslt[5] := CreateTHyerRow(rslt[1], 000100000000047Eh, 1);  //- Инструменты, оборудование, приборы и пр.
+  rslt[6] := CreateTHyerRow(rslt[1], 00010000000009A4h, 1);  //- Материалы для копировально-множественной техники типографии
+  rslt[7] := CreateTHyerRow(rslt[1], 000100000000047Fh, 1);  //- Прочие материально-производственные запасы
+  result := rslt;
+}
+
+function SqlStrGetTHyerChildrenSums: longint;
+{
+  var s: longint = 0;
+  sqlAddStr(s, 'select sum(QtyTotal) as QtyTotal, sum(SumTotal) as SumTotal');
+
+  var i: byte = 0;
+  for(i := 1; i <= 12; i++)
+    sqlAddStr(s, replace(', sum(Qty[&]) as Qty&, sum(Sum[&]) as Sum&, sum(Ordered[&]) as Ordered&','&',i));
+  sqlAddStr(s, 'from tHyer where parentnrec = :nrec');
+  result := s;
+}
+
+function SqlStrUpdateTHyerSums: longint;
+{
+  var s: longint = 0;
+  sqlAddStr(s, 'update tHyer set QtyTotal = :QtyTotal, SumTotal = :SumTotal')
+
+  var i: byte = 0;
+  for(i := 1; i <= 12; i++)
+    sqlAddStr(s, replace(', Qty[&] = :Qty&, Sum[&] = :Sum&, Ordered[&] = :Ordered&','&',i));
+  sqlAddStr(s, 'where nrec = :nrec');
+  result := s;
+}
+
+procedure SumTHyerRow(nrec: longint);
+{
+
+  var rs: IResultSet;
+  rs := queryManager.createQuery(SqlStrGetTHyerChildrenSums).setParam('nrec', nrec).getResultSet;
+
+  if rs.getFirst = tsOk
+  {
+    var r: IResultRow;
+    r := rs.row;
+
+    var s: longint = 0;
+    sqlFreeStr(s);
+    sqlAddStr(s, 'update tHyer set QtyTotal = ' + double(r.val('QtyTotal')) + ', SumTotal = ' + double(r.val('SumTotal')));
+
+    var i: byte = 0;
+    for(i := 1; i <= 12; i++)
+    {
+      var sumQty, sumSum, sumOrdered: double;
+      sumQty := r.val('Qty'+i);
+      sumSum := r.val('Sum'+i);
+      sumOrdered := r.val('Ordered'+i);
+      sqlAddStr(s, ', Qty[' + i + '] = ' + sumQty);
+      sqlAddStr(s, ', Sum[' + i + '] = ' + sumSum);
+      sqlAddStr(s, ', Ordered[' + i + '] = ' + sumOrdered);
+    }
+    sqlAddStr(s, 'where nrec = ' + nrec);
+
+    var q: IQuery;
+    q := queryManager.createQuery(s);
+
+    /*
+    var q: IQuery;
+    q := queryManager.createQuery(SqlStrUpdateTHyerSums)
+                     .setParam('nrec', nrec)
+                     .setParam('QtyTotal', double(r.val('QtyTotal')))
+                     .setParam('SumTotal', double(r.val('SumTotal')));
+
+    var i: byte;
+    for(i := 1; i <= 12; i++)
+    {
+      var sumQty, sumSum, sumOrdered: double;
+      sumQty := r.val('Qty'+i);
+      sumSum := r.val('Sum'+i);
+      sumOrdered := r.val('Ordered'+i);
+      q.setParam('Qty'+i, sumQty);
+      q.setParam('Sum'+i, sumSum);
+      q.setParam('Ordered'+i, sumOrdered);
+    }
+    */
+
+    q.execute;
+  }
+}
+
+procedure SumTHyerRows(rows: THyerNrecArray);
+{
+  var i: longint = 0;
+  for(i := count(rows) - 1; i >= 0; i--)
+    SumTHyerRow(rows[i]);
 }
 
 function MySqlAddStr(var s: longint; st: string): longint;
@@ -208,7 +296,8 @@ function Load(queryText: ISqlString): TClaimOverheadsTotalResultSet;
   AddGroup(4, 'SpmnplanNrec');
 
   //заполняем tHyer статьями (1 уровень данных), т.к. он статичен
-  CreateTHyerCostitems;
+  var costitemRows: THyerNrecArray;
+  costitemRows := CreateTHyerCostitems;
 
   //готовим текст запроса для заполнения tData
   var s: longint = 0;
@@ -223,6 +312,8 @@ function Load(queryText: ISqlString): TClaimOverheadsTotalResultSet;
       //заполняем tHyer данными на уровне 3
       if CreateTHyerDataLevel(3) = tsOk
       {
+        //суммируем итоги по статьям
+        SumTHyerRows(costitemRows);
         //получаем результирующий запрос
         rslt.HyerResultSet := queryManager.createQuery('select * from tHyer').getResultSet;
       }

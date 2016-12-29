@@ -16,13 +16,21 @@ var
   _data       : IClaimOverheadsTotalData;
   _helper     : ClaimOverheadsTotalHelper;
 
+procedure RefreshHyer; forward;
+
 procedure CreateIndent;
 {
   var markedMeasures: tCOTMeasuresArray;
   markedMeasures := _hyerView.GetMarkedMeasures;
   var data: IClaimOverheadsTotalData;
   data := _helper.GetClaimOverheadsTotalDataByMeasures(_data, markedMeasures);
-  _helper.CreateIndent(data);
+  if data.GetRecordsCount > 0
+  {
+    _helper.CreateIndent(data);
+    StartNewVisual(vtRotateVisual, vfTimer, 'Обновление', 0);
+    RefreshHyer;
+    StopVisual('',0);
+  }
 }
 
 window wConfig 'Сводная годовая заявка по накладным расходам - настройки', escclose;
@@ -37,13 +45,16 @@ end;
 procedure FiltersViewOnProceed;
 {
   StartNewVisual(vtRotateVisual, vfTimer, 'Загрузка', 0);
+  /*
   var data: TClaimOverheadsTotalResultSet;
   data := _dataReader.Load(_queryText);
   _hyer.Load(data.HyerResultSet);
   _data.Load(data.DataResultSet);
+  */
+  RefreshHyer;
   StopVisual('',0);
   CloseWindowEx(wConfig, cmDefault);
-  _hyerView.Refresh;
+  //_hyerView.Refresh;
 }
 
 procedure FiltersViewOnCancel;
@@ -65,6 +76,52 @@ procedure HyerViewOnHandleevent(aCommand: word);
   end;
 }
 
+procedure RefreshHyer;
+{
+  var nrec: longint = 0;
+
+
+  if not nullVipRef(_hyer)
+  {
+    nrec := _hyer.Nrec;
+    freevipinterface(_hyer);
+  }
+  loadvipref(_hyer, 'AGAT::ClaimOverheadsTotalHyer');
+
+  if not nullVipRef(_data) freevipinterface(_data);
+  loadvipref(_data, 'AGAT::ClaimOverheadsTotalData');
+
+  var data: TClaimOverheadsTotalResultSet;
+  data := _dataReader.Load(_queryText);
+  _hyer.Load(data.HyerResultSet);
+  _data.Load(data.DataResultSet);
+
+  if not nullVipRef(_hyerView)
+  {
+    var ref: ObjRef;
+    if GetEmbeddedInterfaceReference(embClaimOverheadsTotalTree, ref)
+      if ref != nullref
+        UnBindEmbeddedInterface(embClaimOverheadsTotalTree);
+    ref := nullref;
+
+    UnbindAllEvents(_hyerView);
+    freeVipInterface(_hyerView);
+  }
+
+  LoadVipInterface(_hyerView);
+  _hyerView.Model := _hyer;
+  BindEvent(HyerViewOnHandleevent, _hyerView.OnHandleevent);
+  BindEmbeddedInterface(embClaimOverheadsTotalTree, _hyerView);
+
+  _hyerView.Refresh;
+  if nrec = 0
+    _hyerView.JumpToFirstRecord
+  else
+    _hyerView.JumpToRecord(nrec);
+
+  _hyerView.OpenTreeNodes(1);
+}
+
 handleevent
 cminit:
 {
@@ -76,13 +133,6 @@ cminit:
   BindEvent(FiltersViewOnCancel, _filtersView.OnCancel);
 
   _queryText := ISqlString(new(ClaimOverheadsTotalQueryText, ClaimOverheadsTotalQueryText(_filters)));
-
-  _hyer := IClaimOverheadsTotalHyer(new(ClaimOverheadsTotalHyer));
-
-  _data := IClaimOverheadsTotalData(new(ClaimOverheadsTotalData));
-
-  _hyerView := new(ClaimOverheadsTotalHyerTreeView, Create(_hyer));
-  BindEvent(HyerViewOnHandleevent, _hyerView.OnHandleevent);
 
   if runwindowmodal(wConfig) != cmDefault
     FiltersViewOnCancel;
