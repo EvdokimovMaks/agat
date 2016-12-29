@@ -26,25 +26,59 @@ function IMatchSaver.SaveMatches(aMatch: IGoodsMatch): boolean;
   or aMatch.MC.Nrec       = 0
     exit;
 
-  //обновляем или добавляем соответствие
-  var goods: IGlobalGoods;
-  goods := IGlobalGoods(_searcher.LoadMatches(aMatch.MC).First);
+  if aMatch.MeasureCoeff <= 0
+    aMatch.MeasureCoeff := 1;
 
-  if goods != nullref
-  {
-    if goods.GoodsId != aMatch.Goods.GoodsId
-      result := _dataprovider.UpdateMatch(aMatch.Goods.GoodsId, aMatch.MC.Nrec) = tsOk;
-  }
-  else
-    result := _dataprovider.InsertMatch(aMatch.Goods.GoodsId, aMatch.MC.Nrec) = tsOk;
-  //Обновляем обозначение МЦ
+  var katedNrec: comp = 0; //nrec активной единицы измерения МЦ
+  var katedCoeff: double = 1; //коэф-т пересчета активной ед.изм. мц галактики в ед.изм. мц глобала (сколько мц глобала в единице мц галактики)
+
+  //Обновляем обозначение МЦ, определяем nrec единицы измерения мц
   if getfirst katmc where ((aMatch.MC.Nrec == katmc.nrec)) = tsOk
   {
     katmc.obozn := aMatch.Goods.GoodsName;
     update current katmc;
+    if getfirst katotped where (( 1 == katotped.prmc and katmc.nrec == katotped.cmcusl and 1 == katotped.akt)) = tsOk
+      katedNrec := katotped.ckated;
+    else
+      katedNrec := katmc.ced;
   }
 
-  //Обновляем единицы измерения МЦ
+  //Обновляем единицу измерения МЦ
+  //Получаем nrec галактической единицы измерения по id единицы измерения мц глобала
+  var rs: IResultSet;
+  rs := _dataprovider.GetKated(aMatch.Goods.MeasureId);
+  if rs.getFirst = tsOk
+  {
+    var globalKatedNrec: comp;
+    globalKatedNrec := rs.row.val('KatedNrec');
+
+    if globalKatedNrec = katedNrec
+      aMatch.MeasureCoeff := 1;
+    else
+    {
+      if getfirst kated where ((globalKatedNrec == kated.nrec)) = tsOk
+      {
+        if getfirst katotped where ((1 == katotped.prmc and aMatch.MC.Nrec == katotped.cmcusl and kated.nrec == katotped.ckated)) != tsOk
+        {
+          clearbuffer(#katotped);
+          katotped.prmc    := 1;
+          katotped.cmcusl  := aMatch.MC.Nrec;
+          katotped.ckated  := kated.nrec;
+          katotped.name    := kated.name;
+          katotped.diskret := kated.diskret;
+          katotped.abbr    := kated.abbr;
+          katotped.koef    := aMatch.MeasureCoeff;
+          insert current katotped;
+        }
+        else
+        {
+          katotped.koef := aMatch.MeasureCoeff;
+          update current katotped;
+        }
+      }
+    }
+  }
+  /*
   var rs: IResultSet;
   rs :=  _dataprovider.GetMeasures(aMatch.Goods.GoodsId);
   if rs != nullref
@@ -67,19 +101,34 @@ function IMatchSaver.SaveMatches(aMatch: IGoodsMatch): boolean;
         katotped.name    := kated.name;
         katotped.diskret := kated.diskret;
         katotped.abbr    := kated.abbr;
-        katotped.koef    := rs.row.val('nrate') * aMatch.MeasureCoeff;
+        katotped.koef    := double(rs.row.val('nrate')) * if(aMatch.MeasureCoeff>0, aMatch.MeasureCoeff, 1);
         if katotped.koef > 0
           insert current katotped;
       }
     }
     else
     {
-      katotped.koef := rs.row.val('nrate') * aMatch.MeasureCoeff;
+      katotped.koef := double(rs.row.val('nrate')) * if(aMatch.MeasureCoeff>0, aMatch.MeasureCoeff, 1);
       if katotped.koef > 0
         update current katotped;
     }
 
+    katedCoeff := katotped.koef;
+
   } while rs.getNext = tsOk
+  */
+
+  //обновляем или добавляем соответствие
+  var goods: IGlobalGoods;
+  goods := IGlobalGoods(_searcher.LoadMatches(aMatch.MC).First);
+
+  if goods != nullref
+  {
+    //if goods.GoodsId != aMatch.Goods.GoodsId
+    result := _dataprovider.UpdateMatch(aMatch.Goods.GoodsId, aMatch.MC.Nrec, katedNrec, 1 / aMatch.MeasureCoeff) = tsOk;
+  }
+  else
+    result := _dataprovider.InsertMatch(aMatch.Goods.GoodsId, aMatch.MC.Nrec, katedNrec, 1 / aMatch.MeasureCoeff) = tsOk;
 
 }
 
