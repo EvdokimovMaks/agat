@@ -1,0 +1,147 @@
+#include TxoApi.vih
+#component "AGAT"
+vipinterface txo_import_excel_storno_96 Implements ObjTxoIdentPlugin;
+interface txo_import_excel_storno_96;
+
+table struct t (
+  tabnmb: string,
+  podr: string,
+  podgr: string,
+  kateg: string,
+  cperson: comp,
+  cpodr: comp,
+  ckau96: comp,
+  cpodgr: comp,
+  ckateg: comp,
+  sum: double
+);
+
+create view
+as select *
+from t, persons, katpodr, spkau;
+
+window wData doaccept, escclose;
+browse br1;
+table t;
+fields
+  t.tabnmb 'tabnmb': [10], protect;
+  t.podr 'podr': [20], protect;
+  t.podgr 'podgr': [20], protect;
+  if(getanykau(1, 3, t.cperson), givenanname(1), '') 'galperson': [30], protect;
+  if(getanykau(1, 2, t.cpodr), givenanname(1), '') 'galpodr': [20], protect;
+  if(getanykau(1, 151, t.ckau96), givenanname(1), '') 'kau96': [20], protect;
+  if(getanykau(1, 10036, t.ckateg), givenanname(1), '') 'kateg': [10], protect;
+  if(getanykau(1, 10057, t.cpodgr), givenanname(1), '') 'podgr': [10], protect;
+end;
+end;
+
+function GetInfo : string;
+{
+  result := 'Агат. Импорт проводок корректировки 96 счета по учебным отпускам';
+}
+
+function ParamMaster : string;
+{
+  result := '';
+}
+
+function LoadData: boolean;
+{
+  delete all t;
+
+  result := false;
+  var y: longint;
+  var s: string = '';
+
+  if not xlOpenExcel(false)
+  {
+    message('Ошибка открытия Excel', error);
+    exit;
+  }
+  if not  xlOpenWorkBook('d:\kodd96.xls')
+  {
+    message('Ошибка открытия книги Excel', error);
+    exit;
+  }
+
+  y := 2;
+  xlGetCellValue(y, 1, s);
+  while trim(s) <> ''
+  {
+    var curVidoplName: string = '';
+    curVidoplName := trim(locase(s));
+
+    var curPodgr: string = '';
+    xlGetCellValue(y, 33, s);
+    curPodgr := trim(locase(s));
+
+    if (curVidoplName = 'оплата отпуска по учебе будущего месяца (209)' or curVidoplName = 'оплата отпуска по учебе текущего месяца (208)')
+       and (curPodgr = 'нвп' or curPodgr = 'ауп')
+    {
+
+      clearbuffer(#t);
+
+      xlGetCellValue(y, 12, s);
+      t.tabnmb := trim(s);
+
+      t.podgr := curPodgr;
+
+      xlGetCellValue(y, 4, s);
+      t.podr := trim(s);
+
+      xlGetCellValue(y, 34, s);
+      t.kateg := trim(s);
+
+      if getfirst persons where (('С' == persons.isemployee and t.tabnmb == persons.tabnmb)) = tsOk
+        t.cperson := persons.nrec
+      else if getfirst persons where (('У' == persons.isemployee and t.tabnmb == persons.tabnmb)) = tsOk
+        t.cperson := persons.nrec;
+
+      if getfirst katpodr where ((t.podr == katpodr.name)) = tsOk
+        t.cpodr := katpodr.nrec;
+
+      if getfirst spkau where ((10036 == spkau.kodgrkau and t.kateg == spkau.name)) = tsOk
+        t.ckateg := spkau.nrec
+
+      case t.podgr of
+        'птп': { t.ckau96 := 4612065552921976728; t.cpodgr := 281474976713476; }
+        'нвп': { t.ckau96 := 4612236514409459628; t.cpodgr := 281474976713477; }
+        'ауп': { t.ckau96 := 4612169283655566025; t.cpodgr := 281474976713478; }
+      end;
+
+      xlGetCellValue(y, 2, s);
+      t.sum := double(replace(trim(s),',','.'));
+
+      insert current t;
+
+    }
+
+    xlGetCellValue(++y, 1, s);
+  }
+
+  xlCloseWorkBook(0);
+  xlKillExcel;
+
+  result := true;
+}
+
+procedure StoreCycles(hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  if LoadData
+    if runwindowmodal(wdata) = cmDefault
+    {
+      _loop t
+      {
+        TxoBodyClear(hTxo);
+        TxoBodyAddKau(hTxo, 0, 2  , t.cpodr );
+        TxoBodyAddKau(hTxo, 0, 3  , t.cperson);
+        TxoBodyAddKau(hTxo, 0, 151, t.ckau96);
+        TxoBodyAddKau(hTxo, 0, 10036, t.ckateg);
+        TxoBodyAddKau(hTxo, 0, 10057, t.cpodgr);
+        TxoBodySetSum(hTxo, t.sum, 0, 0);
+        TxoBodyInsert(hTxo);
+      }
+    }
+}
+
+end.
