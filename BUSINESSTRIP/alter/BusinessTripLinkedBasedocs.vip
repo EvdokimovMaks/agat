@@ -1,0 +1,125 @@
+#include BusinessTripLinkedBasedocs.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface BusinessTripLinkedBasedocs;
+
+//#region queries
+
+sql query queryLinkedSpsteps =
+  select attrval.vstring as spstepNrec
+  from rashdoc
+  join attrval on attrval.wtable = :coRashdoc
+              and attrval.crec = rashdoc.nrec
+              and attrval.cattrnam = :attrnamNrec
+  where rashdoc.tipdoc = 2
+    and rashdoc.csoprdoc = :spprikazNrec
+;
+
+sql query queryLinkedBasedocs =
+  select distinct
+         basedoc.nrec as nrec,
+         basedoc.nodoc as nodoc,
+         basedoc.ddoc as ddoc,
+         coalesce(katorg.name, '') as katorgName,
+         basedoc.total as sum
+  from spstep
+  join stepdoc on stepdoc.nrec = spstep.cstepdoc
+  join basedoc on basedoc.nrec = stepdoc.cbasedoc
+  left join katorg on katorg.nrec = basedoc.corg
+  where spstep.nrec in ( %SpstepNrecs )
+;
+//#endregion
+
+//#region временные таблицы
+
+table struct tDocs (
+  nrec: comp,
+  nodoc: string[100],
+  ddoc: date,
+  katorgName: string,
+  sum: double
+) with index (
+  i01 = ddoc + nodoc
+);
+
+//#endregion
+
+var
+  _spprikazNrec   : comp;
+  _qLinkedSpsteps : IQuery;
+  _qLinkedBasedocs: IQuery;
+
+create view
+as select *
+from tDocs, spprikaz, prikaz
+where ((
+  _spprikazNrec == spprikaz.nrec and
+  spprikaz.cprikaz == prikaz.nrec
+));
+
+browse brLinkedBasedocs;
+table tDocs;
+fields
+  tDocs.ddoc 'Дата': [10], protect;
+  tDocs.nodoc 'Номер': [10], protect;
+  tDocs.katorgName 'Контрагент': [20], protect;
+  tDocs.sum 'Сумма': [10,2], protect;
+end;
+
+//#region IBusinessTripLinkedBasedocs
+
+procedure IBusinessTripLinkedBasedocs.Refresh;
+{
+  delete all tDocs;
+  if _spprikazNrec != 0
+  {
+    var rs: IResultSet;
+    rs := _qLinkedSpsteps.setParam('attrnamNrec', ATTRNAM_NREC_RASHDOC_SPSTEP_NREC)
+                         .setParam('spprikazNrec', _spprikazNrec)
+                         .setParam('coRashdoc', coRashDoc)
+                         .getResultSet;
+
+    var s: longint = 0;
+    var cnt: longint = 0;
+    sqlFreeStr(s);
+
+    if rs.getFirst = tsOk do
+    {
+      if comp(rs.row.valat(1)) <> 0
+      {
+        cnt++;
+        sqlAddStr(s, if(cnt > 1, ',', '') + '#comp(' + rs.row.valat(1) + ')');
+      }
+    } while rs.getNext = tsOk;
+
+    if cnt > 0
+    {
+      _qLinkedBasedocs := queryManager.createQuery(queryLinkedBasedocs);
+      rs := _qLinkedBasedocs.setMacro('SpstepNrecs', s).getResultSet;
+      sqlCopyInto(rs, #tDocs, true);
+    }
+
+  }
+  rereadrecord(#tDocs);
+}
+
+procedure IBusinessTripLinkedBasedocs.SetSpprikazNrec(aSpprikazNrec: comp);
+{
+  _spprikazNrec := aSpprikazNrec;
+  Refresh;
+}
+
+//#endregion
+
+//#region BusinessTripLinkedBasedocs
+constructor init;
+{
+  _qLinkedSpsteps  := queryManager.createQuery(queryLinkedSpsteps);
+  _qLinkedBasedocs := queryManager.createQuery(queryLinkedBasedocs);
+  result := _qLinkedSpsteps != nullref
+        and _qLinkedBasedocs != nullref;
+}
+//#endregion
+end.

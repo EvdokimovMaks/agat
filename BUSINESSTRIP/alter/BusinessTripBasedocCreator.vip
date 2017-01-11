@@ -1,0 +1,552 @@
+#include BusinessTripBasedocCreator.vih
+#include extattr.vih
+#include Query.vih
+#include SqlHelper.vih
+#include CardHelper.vih
+#include getkau.vih
+#include nalogfun.vih
+
+#component "AGAT"
+
+interface BusinessTripBasedocCreator;
+
+//#region Queries
+
+sql query queryLastBasedocNumberOnDate =
+select top 1 nodoc
+from basedoc
+where viddoc = 101 and ddoc <= :date
+order by ddoc desc, atl_lastdate desc
+;
+
+sql query queryPrikazData =
+select rashdoc.nrec                              as RashdocNrec,
+       spprikaz.clsch                            as LschetNrec,
+       spprikaz.cpersons                         as PersonsNrec,
+       rashdoc.sum                               as Summa,
+       coalesce(avZakazZatrat.vComp  , #comp(0)) as ZakazZatratNrec,
+       coalesce(avVidRashodov.vComp  , #comp(0)) as VidRashodovNrec,
+       coalesce(avRsSpisaniya.vComp  , #comp(0)) as RsSpisaniyaNrec,
+       coalesce(avRejim.vComp        , #comp(0)) as RejimNrec,
+       coalesce(avZakazVibitiya.vComp, #comp(0)) as ZakazVibitiyaNrec,
+       coalesce(avStatya.vComp       , #comp(0)) as StatyaNrec,
+       coalesce(avKontragent.vComp   , #comp(0)) as KontragentNrec,
+       coalesce(avDogovor.vComp      , #comp(0)) as DogovorNrec
+
+from rashdoc
+
+join spprikaz on spprikaz.nrec = rashdoc.csoprdoc
+
+left join attrval avZakazZatrat        on  avZakazZatrat.wtable   = :coPrikaz
+                                       and avZakazZatrat.crec     = spprikaz.cprikaz
+                                       and avZakazZatrat.cattrnam = :AttrnamZakazZatrat
+
+left join attrval avVidRashodov        on  avVidRashodov.wtable   = :coPrikaz
+                                       and avVidRashodov.crec     = spprikaz.cprikaz
+                                       and avVidRashodov.cattrnam = :AttrnamVidRashodov
+
+left join attrval avRsSpisaniya        on  avRsSpisaniya.wtable   = :coRashdoc
+                                       and avRsSpisaniya.crec     = rashdoc.nrec
+                                       and avRsSpisaniya.cattrnam = :AttrnamRsSpisaniya
+
+left join attrval avRejim              on  avRejim.wtable   = :coRashdoc
+                                       and avRejim.crec     = rashdoc.nrec
+                                       and avRejim.cattrnam = :AttrnamRejim
+
+left join attrval avZakazVibitiya      on  avZakazVibitiya.wtable   = :coRashdoc
+                                       and avZakazVibitiya.crec     = rashdoc.nrec
+                                       and avZakazVibitiya.cattrnam = :AttrnamZakazVibitiya
+
+left join attrval avStatya             on  avStatya.wtable   = :coRashdoc
+                                       and avStatya.crec     = rashdoc.nrec
+                                       and avStatya.cattrnam = :AttrnamStatya
+
+left join attrval avKontragent         on  avKontragent.wtable   = :coRashdoc
+                                       and avKontragent.crec     = rashdoc.nrec
+                                       and avKontragent.cattrnam = :AttrnamKontragent
+
+left join attrval avDogovor            on  avDogovor.wtable   = :coRashdoc
+                                       and avDogovor.crec     = rashdoc.nrec
+                                       and avDogovor.cattrnam = :AttrnamDogovor
+
+where rashdoc.nrec in (select t.nrec from %RashdocTmpTableName t) and
+      rashdoc.name like '%суточные%'
+;
+
+//#endregion
+
+//#region tables
+
+table struct tPrikazData (
+  RashdocNrec      : comp,
+  LschetNrec       : comp,
+  PersonsNrec      : comp,
+  Summa            : double,
+  ZakazZatratNrec  : comp,
+  VidRashodovNrec  : comp,
+  RsSpisaniyaNrec  : comp,
+  RejimNrec        : comp,
+  ZakazVibitiyaNrec: comp,
+  StatyaNrec       : comp,
+  KontragentNrec   : comp,
+  DogovorNrec      : comp
+);
+
+//#endregion
+
+const
+  RASHDOC_TMP_TABLE_NAME = 'tRashDocFilter';
+end;
+
+var
+  _rashdocMarker: longint;
+  _basedocNumber: string;
+  _basedocDate  : date;
+  _katorgNrec   : comp;
+  _katbankNrec  : comp;
+  _dogovorNrec  : comp;
+  _lschetNrec   : comp;
+  _personNrec   : comp;
+  _cardNumber   : string;
+  _summa        : double;
+
+  _extattr   : iExtAttr;
+  _sqlHelper : SqlHelper;
+  _cardHelper: CardHelper;
+  _getkau    : getkau;
+  _nalogFun  : NalogFun;
+
+create view
+as select if(getanykau(1, cgKau_KatOrg , _katorgNrec ), givenanname(1), '')(fieldname=KatorgFld),
+          if(getanykau(1, cgKau_Dogovor, _dogovorNrec), givenanname(1), '')(fieldname=DogovorFld),
+          if(getanykau(1, cgKau_KatBank, _katbankNrec), givenanname(1), '')(fieldname=KatbankFld),
+          if(getanykau(1, cgKau_Persons, _personNrec) , givenanname(1), '')(fieldname=PersonFld)
+
+from tPrikazData, rashdoc, spprikaz, prikaz, katbank, lschet, dogovor,
+     basedoc bd, ttndoc, stepdoc sd, soprhoz sh, spstep sps, spdocnal spdn, specmtr sm, katusl usl, katotped oe
+;
+
+//#region Вспомогательные функции
+
+function GetKatbankNrec(aKatorgNrec: comp): comp;
+{
+  //получаем ссылку на р/с организации (katbank) по нреку организации и активному р/с
+  //если не нашли - по нреку организации и по первому попавшемуся р/с
+  result := 0;
+
+  if aKatorgNrec = 0 exit;
+
+  if getfirst katbank where ((aKatorgNrec == katbank.corg and 1 == katbank.aktiv )) = tsOk
+    result := katbank.nrec;
+  else if getfirst katbank where ((aKatorgNrec == katbank.corg )) = tsOk
+    result := katbank.nrec;
+}
+
+function GetKatbankNrecByBikAndRs(aKatorgNrec: comp; bik: string; rs: string): comp;
+{
+  if getfirst katbank where ((aKatorgNrec == katbank.corg and
+                              (katbank.mfo1 = bik and katbank.schet1 = rs) )) = tsOk
+    result := katbank.nrec
+  else
+    result := 0;
+}
+
+function LoadPrikazData: integer;
+{
+  result := 0;
+
+  //очищаем таблицу данных приказа
+  delete all tPrikazData;
+
+  //формируем временную таблицу для отбора строк расшифровки приказа
+  sqlCreateTmpTable('table ' + RASHDOC_TMP_TABLE_NAME + ' (nrec: comp) with index (i01 = nrec);', ctmNormal);
+
+  //заполняем временную таблицу нреками rashdoc из маркера
+  _sqlHelper.FillSqlTmpTableWithMarker(RASHDOC_TMP_TABLE_NAME, _rashdocMarker);
+
+  //получаем результат запроса выборки данных приказа
+  var rs: IResultSet;
+  rs := queryManager.createQuery(queryPrikazData)
+                    .setParam('coPrikaz'            , coPrikaz)
+                    .setParam('AttrnamZakazZatrat'  , ATTRNAM_NREC_PRIKAZ_ZAKAZ_ZATRAT)
+                    .setParam('AttrnamVidRashodov'  , ATTRNAM_NREC_PRIKAZ_VID_RASHODOV)
+                    .setParam('coRashdoc'           , coRashdoc)
+                    .setParam('AttrnamRsSpisaniya'  , ATTRNAM_NREC_RASHDOC_RS_SPISANIYA)
+                    .setParam('AttrnamRejim'        , ATTRNAM_NREC_RASHDOC_REJIM_ISPOLZOVANIYA_SCHETA)
+                    .setParam('AttrnamZakazVibitiya', ATTRNAM_NREC_RASHDOC_ZAKAZ_VIBITIYA)
+                    .setParam('AttrnamStatya'       , ATTRNAM_NREC_RASHDOC_STATYA_STRUKTURI_CENI)
+                    .setParam('AttrnamKontragent'   , ATTRNAM_NREC_RASHDOC_KONTRAGENT)
+                    .setParam('AttrnamDogovor'      , ATTRNAM_NREC_RASHDOC_DOGOVOR)
+                    .setMacro('RashdocTmpTableName' , RASHDOC_TMP_TABLE_NAME)
+                    .getResultSet;
+
+  //заполняем таблицу данных приказа результатом запроса
+  sqlCopyInto(rs, #tPrikazData, true);
+
+  //удаляем временную таблицу с нреками rashdoc
+  sqlDropTmpTable(RASHDOC_TMP_TABLE_NAME);
+
+  //заполняем поля свойств объекта по данным из tPrikazData
+  if getfirst tPrikazData = tsOk
+  {
+    //устанавливаем ссылки на сотрудника и его лицевой счет
+    _personNrec := tPrikazData.PersonsNrec;
+    _lschetNrec := tPrikazData.LschetNrec;
+
+    //устанавливаем дату ДО по дате приказа
+    if getfirst rashdoc where ((tPrikazData.RashdocNrec == rashdoc.nrec)) = tsOk
+      if getfirst spprikaz where ((rashdoc.csoprdoc == spprikaz.nrec)) = tsOk
+        if getfirst prikaz where ((spprikaz.cprikaz == prikaz.nrec)) = tsOk
+          _basedocDate := prikaz.ddoc;
+
+    //устанавливаем новый номер ДО на дату ДО
+    GenerateNextBasedocNumber(_basedocDate);
+
+    //устанавливаем ссылки на организацию и договор из строки расшифровки приказа
+    _katorgNrec := tPrikazData.KontragentNrec;
+    _dogovorNrec := tPrikazData.DogovorNrec;
+
+    //если в качестве контрагента указана собственная организация
+    if _katorgNrec = coGetTune('MyOrg')
+    {
+      //устанавливаем банк с БИК 044525225, р/с 40702810238120003824
+      _katbankNrec := GetKatbankNrecByBikAndRs(_katorgNrec, '044525225', '40702810238120003824');
+
+      //в номер карты устанавливаем корпоративную карту сотрудника
+      _cardNumber := _cardHelper.GetCardNrecByLschet(_lschetNrec);
+    }
+    else //если в качестве контрагента указана организация с наименованием равным ФИО сотрудника
+    {
+      //устанавливаем активный счет организации
+      _katbankNrec := GetKatbankNrec(_katorgNrec);
+
+      //устанавливаем номер карты как номер личной карты сотрудника из его лицевого счета
+      if getfirst lschet where ((_lschetNrec == lschet.nrec)) = tsOk
+        _cardNumber := lschet.nomcard;
+    }
+
+    _summa := tPrikazData.Summa;
+
+    //Проверяем, одинаковые ли контрагенты в строках приказа.
+    //Если нет - возвращаем ошибку; Вычисляем итоговую сумму
+    while getnext tPrikazData = tsOk
+    {
+      if tPrikazData.KontragentNrec != _katorgNrec
+      {
+        result := 1;
+        break;
+      }
+      _summa += tPrikazData.Summa;
+    }
+
+  }
+  else
+    result := 2;
+}
+
+//#endregion
+
+
+window wUI 'Формирование ДО по приказу на командировку', escclose, doaccept;
+  show(,,60,10);
+  screen sc1;
+  fields
+    _basedocDate: noprotect;
+    _basedocNumber: noprotect;
+    KatorgFld: protect, pickbutton;
+    KatbankFld: protect, pickbutton;
+    DogovorFld: protect, pickbutton;
+    PersonFld: protect;
+    _cardNumber: noprotect;
+  buttons
+    cmDoOk, default;
+    cmCancel;
+<<
+
+`Дата`      .@@@@@@@@@@     `Номер`.@@@@@@@@@@@@@@@@@@@@@@
+`Контрагент`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Банк`      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Договор`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Сотрудник` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`№ карты`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                             <. Продолжить .> <. Отмена .>
+>>
+  end;
+  handleevent
+    cmDoOk: putcommand(cmDefault);
+    cmPick:
+    {
+      case curfield of
+        #KatorgFld :
+        {
+          var c: comp;
+          c := _katorgNrec;
+          if _getkau.GetCodeKau(cgiPickKau, cgKau_Katorg, c) > 0 and _katorgNrec != c
+          {
+            _katorgNrec := c;
+            _dogovorNrec := 0;
+            _katbankNrec := GetKatbankNrec(_katorgNrec);
+          }
+          rereadrecord;
+        }
+        #KatbankFld:
+        {
+          var c: comp;
+          c := _katbankNrec;
+          runinterface(L_KATORG::GetBank, _katorgNrec, c);
+          if c != 0 _katbankNrec := c;
+          rereadrecord;
+        }
+        #DogovorFld:
+        {
+          SaveMyDsk(_katorgNrec, 'GetSDog_pKontr2');
+          SaveMyDsk(true       , 'GetSDog_NeedFilterOnKontr2');
+          runinterface(
+            L_DOGOVOR::GetSomeDogovor,
+            0,                 // вид документа - если задан будет установлен фильтр
+            0,                 // битовая маска разрешенных статусов
+            0,                 // 0 - выбирать все;1-только на продажу;2-только на закупку
+            1,                 // 0-выбирать соглашения нельзя, 1-можно, 2-только соглашения
+            false,             // TRUE - групповой выбор FALSE - только один
+            _dogovorNrec,      // возвращаемый указатель на договор
+            false,             // показывать записи одного уровня (true), FALSE - нет
+            0                  // ссылка на владельца уровня (действует если OneLevel = TRUE)
+          );
+        }
+      end;
+    }
+  end;
+end;
+
+//#region IBusinessTripBasedocCreator
+
+function IBusinessTripBasedocCreator.SetRashdocMarker(aRashdocMarker: longint): boolean;
+{
+  _rashdocMarker := aRashdocMarker;
+  result := _rashdocMarker <> 0 and LoadPrikazData = 0;
+}
+
+function  IBusinessTripBasedocCreator.ShowUI: word;
+{
+  result := runwindowmodal(wUI);
+}
+
+function  IBusinessTripBasedocCreator.CreateBasedoc(aRashdocMarker: longint = 0): comp;
+{
+  result := 0;
+
+  if aRashdocMarker != 0
+    if not SetRashdocMarker(aRashdocMarker) exit;
+
+  clearbuffer(#bd);
+  bd.descr := sgettune('USER.DESCR');
+  bd.desgr := sgettune('USER.DESGR');
+  bd.vhodnal := 1;
+  bd.status := 1;
+  bd.cnote := 40009D44C1790C6Bh;
+  bd.viddoc := 101;
+  bd.dform := _basedocDate;
+  bd.ddoc := bd.dform;
+  bd.nodoc := _basedocNumber;
+  bd.yeardoc := year(bd.dform);
+  bd.koldn := 3;
+  bd.dend := add_day(bd.dform,3);
+  bd.cmybank := cogettune('MYBANK');
+  bd.cgrpol := cogettune('MYORG');
+  bd.direct := 2;
+  bd.tipmoney := 1;
+  bd.prior := 99;
+  bd.cotvpodr := 0001000000000003h;
+  if getfirst dogovor where ((_dogovorNrec == dogovor.nrec)) = tsOk
+  {
+    bd.cdogovor    := if(dogovor.cdogovor = 0, dogovor.nrec, dogovor.cdogovor);
+    bd.cappdogovor := if(dogovor.cdogovor = 0, 0           , dogovor.nrec);
+  }
+  bd.ccalplan := 0;
+  bd.corg := _katorgNrec;
+  bd.cgrotpr := bd.corg;
+  bd.cbank := _katbankNrec;
+  insert current bd;
+
+  if getfirst ttndoc where ((1102 == ttndoc.wtable and bd.nrec == ttndoc.cdoc)) != tsOk
+  {
+    clearbuffer(#ttndoc);
+    ttndoc.wtable := 1102;
+    ttndoc.cdoc := bd.nrec;
+    insert current ttndoc;
+  }
+
+  if getfirst sd where ((bd.nrec == sd.cbasedoc)) != tsOk
+  {
+    clearbuffer(#sd);
+    sd.cbasedoc := bd.nrec;
+    sd.nstep := 1;
+    sd.dstart := bd.dform;
+    sd.dend := bd.dend;
+    sd.status := 1;
+    insert current sd;
+  }
+
+  if getfirst sh where ((41 == sh.tipdoc and bd.nrec == sh.csoprdoc)) != tsOk
+  {
+    clearbuffer(#sh);
+    sh.cstepdoc    := sd.nrec;
+    sh.datob       := bd.ddoc;
+    sh.csoprdoc    := bd.nrec;
+    sh.tipdoc      := 41;
+    sh.tidkgal     := 41;
+    sh.nodoc       := bd.nodoc;
+    sh.descr       := bd.descr;
+    sh.desgr       := bd.desgr;
+    sh.direct      := bd.direct;
+    sh.cdogovor    := bd.cdogovor;
+    sh.cappdogovor := bd.cappdogovor;
+    sh.ccalplan    := bd.ccalplan;
+    insert current sh;
+  }
+
+  var spstepNpp: longint = 0;
+
+  _loop tPrikazData
+  {
+    clearbuffer(#sps);
+    spstepNpp++;
+    sps.npp      := spstepNpp;
+    sps.prmc     := 2;
+    sps.cmcusl   := KATUSL_NREC_SUTOCHNIE;
+
+    if getfirst oe where (( sps.prmc == oe.prmc and sps.cmcusl == oe.cmcusl and 1 == oe.akt )) = tsOk
+      sps.cotped := oe.nrec;
+
+    if getfirst usl where ((sps.cmcusl == usl.nrec)) = tsOk
+      sps.cgrnal := usl.cgrnal;
+
+    sps.price    := tPrikazData.Summa;
+    sps.kol      := 1
+    sps.ddoc     := bd.ddoc;
+    sps.cstepdoc := sd.nrec;
+    sps.kolskl   := sps.kol;
+    sps.summa    := sps.price * sps.kol;
+    sps.koldop   := sps.summa;
+
+    insert current sps;
+
+    _extattr.coSetAttrID(
+      coSpstep,
+      sps.nrec,
+      ATTRNAM_NREC_SPSTEP_ZAKAZ_VIBITIYA,
+      tPrikazData.ZakazVibitiyaNrec,
+      if(getanykau(1, cgKau_ObjBuild, tPrikazData.ZakazVibitiyaNrec), givenanname(1), '')
+    );
+
+    _extattr.coSetAttrID(
+      coSpstep,
+      sps.nrec,
+      ATTRNAM_NREC_SPSTEP_RS_SPISANIYA,
+      tPrikazData.ZakazVibitiyaNrec,
+      if(getanykau(1, KODGRKAU_RS, tPrikazData.RsSpisaniyaNrec), givenanname(1), '')
+    );
+
+    _extattr.coSetAttrID(
+      coSpstep,
+      sps.nrec,
+      ATTRNAM_NREC_SPSTEP_REJIM_ISPOLZOVANIYA_SCHETA,
+      tPrikazData.RejimNrec,
+      if(getanykau(1, KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA, tPrikazData.RsSpisaniyaNrec), givenanname(1), '')
+    );
+
+    _extattr.sSetAttrID(
+      coRashDoc,
+      tPrikazData.RashdocNrec,
+      ATTRNAM_NREC_RASHDOC_SPSTEP_NREC,
+      string(sps.nrec, 0, 0)
+    );
+
+    _nalogFun.CountBasePrice_(bd.NRec
+                              , sps.NRec
+                              , 1101
+                              , sps.cgrnal
+                              , bd.cOrg
+                              , sps.Kol
+                              , sps.cOtpEd
+                              , bd.ddoc
+                              , bd.cVal
+                              , 0
+                              , 0
+                              , sps.summa
+                              , bd.cPayment);
+
+    if getfirst sm where ((SALDTUNE_NREC_DEFAULT == sm.csaldtune and coSpstep == sm.cotable and sps.nrec == sm.cspec)) != tsOk
+    {
+      clearbuffer(#sm);
+      sm.cotable := coSpstep;
+      sm.cspec := sps.nrec;
+      sm.csaldtune := SALDTUNE_NREC_DEFAULT;
+      insert current sm;
+    }
+
+    sm.cobj    := tPrikazData.ZakazZatratNrec;
+    sm.ckau[3] := _personNrec;
+    update current sm;
+
+  }
+
+  //итоги по суммам и налогам строк и заголовка
+  bd.total := 0;
+  bd.nds := 0;
+  _loop sps where ((sd.nrec == sps.cstepdoc))
+  {
+    sps.nds := 0;
+    _loop spdn where ((sps.nrec == spdn.cspdoc and 1101 == spdn.tipdoc))
+      sps.nds += spdn.sumnal;
+    update current sps;
+
+    bd.total += sps.summa;
+    bd.nds += sps.nds;
+  }
+
+  bd.totalnde := bd.total;
+  bd.summa := bd.total;
+  update current bd;
+
+  sd.summa := bd.total;
+  update current sd;
+
+  result := bd.nrec;
+}
+
+procedure GenerateNextBasedocNumber(aDate: date = 0);
+{
+  if aDate = 0 aDate := cur_date;
+
+  var lastnumber: string = '';
+
+  _try
+  {
+    lastnumber := queryManager.createQuery(queryLastBasedocNumberOnDate)
+                              .setParam('date', aDate)
+                              .getResultValue;
+  }
+  _except
+    on exNoResult: lastnumber := '';
+
+  if lastnumber = ''
+    _basedocNumber := '000000'
+  else
+    _basedocNumber := nextnumstr(lastnumber);
+
+}
+
+property IBusinessTripBasedocCreator.BasedocNumber: string absolute _basedocNumber;
+property IBusinessTripBasedocCreator.BasedocDate  : date   absolute _basedocDate;
+property IBusinessTripBasedocCreator.KatorgNrec   : comp   absolute _katorgNrec;
+property IBusinessTripBasedocCreator.KatbankNrec  : comp   absolute _katbankNrec;
+property IBusinessTripBasedocCreator.DogovorNrec  : comp   absolute _dogovorNrec;
+property IBusinessTripBasedocCreator.LschetNrec   : comp   read     _lschetNrec;
+property IBusinessTripBasedocCreator.PersonNrec   : comp   read     _personNrec;
+property IBusinessTripBasedocCreator.CardNumber   : string absolute _cardNumber;
+
+//#endregion
+
+end.

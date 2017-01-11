@@ -1,6 +1,7 @@
 #include ExtAttrPicker.vih
 #include ExtAttr.vih
 #include CardHelper.vih
+#include BusinessTripLinkedBasedocs.vih
 
 #component "F_PODOT"
 
@@ -8,57 +9,47 @@
 alter interface GETPRIKAZ;
 
 overload
-  Function PickSpPrikaz: boolean;
+  Procedure Embed_GotoDoc; // перерисовка закладок при переходе между записями (сотрудниками, этапами, приказами)
 end;
 
-extendformats scrEditPrikaz;
+extendformats scrEditPrikaz, brEditSpPrikaz;
+extendTabbedSheets wiPrikaz;
 
 var
   _extAttrPicker: ExtAttrPicker;
   _extAttr: iExtAttr;
   _cardHelper: CardHelper;
+  _businessTripLinkedBasedocs: BusinessTripLinkedBasedocs new;
 
 //Добавляем к базовой вьюхе внешние атрибуты приказа на командировку
 create view
 as select _extAttr.sGetAttrID(coPrikaz, prikaz.nrec, ATTRNAM_NREC_PRIKAZ_ZAKAZ_ZATRAT) (fieldname = ZakazZatratFld),
           _extAttr.sGetAttrID(coPrikaz, prikaz.nrec, ATTRNAM_NREC_PRIKAZ_VID_RASHODOV) (fieldname = VidRashodovFld),
-          _extAttr.sGetAttrID(coPrikaz, prikaz.nrec, ATTRNAM_NREC_PRIKAZ_KORPORATIVNAYA_KARTA) (fieldname = KartaFld)
+          _cardHelper.GetCardValueByLschet(spprikaz.clsch) (fieldname = KartaFld)
 ;
 
 //#region Overload
 
-//При выборе сотрудника копируем номер корпоративной карты лицевого счета сотрудника
-//в номер корпоративной карты приказа
-Function PickSpPrikaz: boolean;
+//При перерисовке закладок при переходе между записями (сотрудниками, этапами, приказами)
+//перерисовываем добавленную нами закладку с документами основаниями
+Procedure Embed_GotoDoc;
 {
-  if inherited::PickSpPrikaz
-  {
-    _extAttr.coSetAttrID(
-      coPrikaz,
-      prikaz.nrec,
-      ATTRNAM_NREC_PRIKAZ_KORPORATIVNAYA_KARTA,
-      _cardHelper.GetCardNrecByLschet(spprikaz.clsch),
-      _cardHelper.GetCardValueByLschet(spprikaz.clsch)
-    );
-
-    rereadrecord(#prikaz);
-
-    result := true;
-  }
+  inherited::Embed_GotoDoc;
+  if (not isValid(#spprikaz))
+    _businessTripLinkedBasedocs.SetSpprikazNrec(0);
   else
-    result := false;
+    _businessTripLinkedBasedocs.SetSpprikazNrec(spprikaz.nrec);
 }
+
 //#endregion
 
 //окно редактирования приказа
 window wiPrikaz;
-  //В скрин шапки приказа на командировку добавляем внешние атрибуты Вид расходов,
-  //Заказ затрат, Корпоративная карта
+  //В скрин шапки приказа на командировку добавляем внешние атрибуты Вид расходов, Заказ затрат
   screen scrEditPrikaz ('', hcKassaIPrikaz, sci1378Esc);
   fields
     VidRashodovFld ('Вид расходов'): protect, pickbutton;
     ZakazZatratFld ('Заказ списания затрат на командировочные расходы'): protect, pickbutton;
-    KartaFld ('Номер корпоративной пластиковой карты работника'): protect, pickbutton;
 <<
 
 
@@ -68,9 +59,23 @@ window wiPrikaz;
 
 
 
-`Вид расходов`.@@@@@@@@@@@@@@@ `Заказ затрат`.@@@@@@@@@@@@@@@ `Корпоративная карта`.@@@@@@@@@@@@@@@@@@@@@@@@@
+`Вид расходов`.@@@@@@@@@@@@@@@ `Заказ затрат`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 >>
   end; //screen scrEditPrikaz
+
+  //В брауз с сотрудниками добавляем внешний атрибут лицевого счета сотрудника "Корпоративная карта"
+  Browse brEditSpPrikaz ('Командированные сотрудники', hcKassaISpPrikaz, sci1378InsPm);
+  Show at (,10,,14);
+  Table SpPrikaz;
+  fields
+    KartaFld 'Корпоративная карта' : [10], protect;
+  end; //browse brEditSpPrikaz
+
+  //в нижнюю панель с закладками добавляем закладку с документами основаниями
+  Tabbedsheet BOTTOM tsWKomUdPrikaz
+    embedded embbrLinkedBasedocs 'Документы основания' interface _businessTripLinkedBasedocs;
+    end;
+  end; // tabbedsheet tsWKomUdPrikaz
 
 end; //window wiPrikaz
 
@@ -100,39 +105,35 @@ procedure ClearVidRashodovFld;
   rereadrecord;
 }
 
-procedure PickKartaFld;
-{
-  _extAttrPicker.PickExtAttr(coPrikaz, prikaz.nrec, ATTRNAM_NREC_PRIKAZ_KORPORATIVNAYA_KARTA);
-  rereadrecord;
-}
-
-procedure ClearKartaFld;
-{
-  _extAttr.DeleteValueID(coPrikaz, prikaz.nrec, ATTRNAM_NREC_PRIKAZ_KORPORATIVNAYA_KARTA);
-  rereadrecord;
-}
 //#endregion
 
 handleevent
-  //обработка очистки заказа затрат, вида расходов, корпоративной карты
+  //при переключении на вкладку со списком привязанных ДО - обновляем данные на этой вкладке
+  cmChangeTabbedSheetFormat:
+  {
+    if target = embbrLinkedBasedocs
+      _businessTripLinkedBasedocs.Refresh;
+    else
+      inherited::handleevent(cmChangeTabbedSheetFormat);
+  }
+
+  //обработка очистки заказа затрат, вида расходов
   cmDelOnProtect:
   {
     case curfield of
       #ZakazZatratFld: ClearZakazZatratFld;
       #VidRashodovFld: ClearVidRashodovFld;
-      #KartaFld      : ClearKartaFld;
     else
       inherited::handleevent(cmPick);
     end;
   }
 
-  //обработка выбора заказа затрат, вида расходов, корпоративной карты
+  //обработка выбора заказа затрат, вида расходов
   cmPick:
   {
     case curfield of
       #ZakazZatratFld: PickZakazZatratFld;
       #VidRashodovFld: PickVidRashodovFld;
-      #KartaFld      : PickKartaFld;
     else
       inherited::handleevent(cmPick);
     end;
