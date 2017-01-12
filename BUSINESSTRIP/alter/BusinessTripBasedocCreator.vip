@@ -23,6 +23,7 @@ sql query queryPrikazData =
 select rashdoc.nrec                              as RashdocNrec,
        spprikaz.clsch                            as LschetNrec,
        spprikaz.cpersons                         as PersonsNrec,
+       rashdoc.kol                               as Qty,
        rashdoc.sum                               as Summa,
        coalesce(avZakazZatrat.vComp  , #comp(0)) as ZakazZatratNrec,
        coalesce(avVidRashodov.vComp  , #comp(0)) as VidRashodovNrec,
@@ -81,6 +82,7 @@ table struct tPrikazData (
   RashdocNrec      : comp,
   LschetNrec       : comp,
   PersonsNrec      : comp,
+  Qty              : double,
   Summa            : double,
   ZakazZatratNrec  : comp,
   VidRashodovNrec  : comp,
@@ -102,6 +104,7 @@ var
   _rashdocMarker: longint;
   _basedocNumber: string;
   _basedocDate  : date;
+  _basedocName  : string;
   _katorgNrec   : comp;
   _katbankNrec  : comp;
   _dogovorNrec  : comp;
@@ -122,7 +125,7 @@ as select if(getanykau(1, cgKau_KatOrg , _katorgNrec ), givenanname(1), '')(fiel
           if(getanykau(1, cgKau_KatBank, _katbankNrec), givenanname(1), '')(fieldname=KatbankFld),
           if(getanykau(1, cgKau_Persons, _personNrec) , givenanname(1), '')(fieldname=PersonFld)
 
-from tPrikazData, rashdoc, spprikaz, prikaz, katbank, lschet, dogovor,
+from tPrikazData, rashdoc, spprikaz, prikaz, katbank, lschet, dogovor, persons,
      basedoc bd, ttndoc, stepdoc sd, soprhoz sh, spstep sps, spdocnal spdn, specmtr sm, katusl usl, katotped oe
 ;
 
@@ -214,6 +217,11 @@ function LoadPrikazData: integer;
 
       //в номер карты устанавливаем корпоративную карту сотрудника
       _cardNumber := _cardHelper.GetCardNrecByLschet(_lschetNrec);
+
+      //устанавливаем назначение
+      _basedocName := 'Перечисление денежных средств на карту №' + _cardNumber + ' '
+                      + if(getfirst persons where ((_personNrec == persons.nrec)) = tsOk, persons.fio, '')
+                      + '. НДС не облагается';
     }
     else //если в качестве контрагента указана организация с наименованием равным ФИО сотрудника
     {
@@ -223,6 +231,9 @@ function LoadPrikazData: integer;
       //устанавливаем номер карты как номер личной карты сотрудника из его лицевого счета
       if getfirst lschet where ((_lschetNrec == lschet.nrec)) = tsOk
         _cardNumber := lschet.nomcard;
+
+      //устанавливаем назначение
+      _basedocName := 'Перечисление денежных средств на расходы по командировке. НДС не облагается';
     }
 
     _summa := tPrikazData.Summa;
@@ -358,6 +369,7 @@ function  IBusinessTripBasedocCreator.CreateBasedoc(aRashdocMarker: longint = 0)
   bd.tipmoney := 1;
   bd.prior := 99;
   bd.cotvpodr := 0001000000000003h;
+  bd.name := _basedocName;
   if getfirst dogovor where ((_dogovorNrec == dogovor.nrec)) = tsOk
   {
     bd.cdogovor    := if(dogovor.cdogovor = 0, dogovor.nrec, dogovor.cdogovor);
@@ -423,7 +435,7 @@ function  IBusinessTripBasedocCreator.CreateBasedoc(aRashdocMarker: longint = 0)
       sps.cgrnal := usl.cgrnal;
 
     sps.price    := tPrikazData.Summa;
-    sps.kol      := 1
+    sps.kol      := tPrikazData.Qty;
     sps.ddoc     := bd.ddoc;
     sps.cstepdoc := sd.nrec;
     sps.kolskl   := sps.kol;
