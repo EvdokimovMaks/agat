@@ -1,0 +1,202 @@
+#include BusinessTripLinks.vih
+#include Params.vih
+#include PickPrikaz.vih
+#include BusinessTripLinks.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface BusinessTripLinker;
+
+//#region Queries
+
+sql query queryGetBasedocPersons =
+  select persons.nrec as nrec
+  from stepdoc
+  join spstep on spstep.cstepdoc = stepdoc.nrec
+  join specmtr sm on sm.csaldtune = :saldtuneNrec and sm.cotable = :cotable and sm.cspec = spstep.nrec
+  join persons on persons.nrec = sm.ckau[3]
+  where stepdoc.cbasedoc = :basedocNrec
+;
+
+//#endregion
+
+var
+  _basedocNrec: comp;
+  _prikazNrec: comp;
+  _spstepFilterMode: byte;
+  _overwriteMode: byte;
+  _matches: IKatuslRashdocMatch(KatuslRashdocMatch) new;
+  _paramsFactory: ParamsFactory;
+  _pickPrikaz: PickPrikaz;
+
+function GetPrikazFld: string; forward;
+function GetBasedocFld: string; forward;
+
+create view
+as select GetPrikazFld() (fieldname=PrikazFld),
+          GetBasedocFld() (fieldname=BasedocFld),
+          if(getanykau(1, cgKau_KatUsl, _matches.KatuslNrec), givenanname(1), '') (fieldname=KatuslFld)
+from prikaz, basedoc _matches
+where ((
+  _prikazNrec == prikaz.nrec and
+  _basedocNrec == basedoc.nrec
+));
+
+//#region Вспомогательные ф-ции и процедуры
+
+function GetPrikazFld: string;
+{
+  if isvalid(#prikaz)
+    result := '№' + prikaz.nodoc + ' от ' + prikaz.ddoc;
+  else
+    result := 'Укажите приказ на командировку';
+}
+
+function GetBasedocFld: string;
+{
+  if isvalid(#basedoc)
+    result := '№' + basedoc.nodoc + ' от ' + basedoc.ddoc;
+  else
+    result := '';
+}
+
+procedure SetBasedocNrec(value: comp);
+{
+  _basedocNrec := value;
+  rereadrecord(#basedoc);
+}
+
+procedure SetPrikazNrec(value: comp);
+{
+  _prikazNrec := value;
+  rereadrecord(#prikaz);
+}
+
+procedure PickPrikaz;
+{
+  var m: longint;
+  m := _pickPrikaz.Filters.PersonsFilter.Marker;
+
+  clearmarker(m);
+
+  var q: IQuery;
+  q := queryManager.createQuery(queryGetBasedocPersons)
+                   .setParam('saldtuneNrec', SALDTUNE_NREC_DEFAULT)
+                   .setParam('coTable', coSpstep)
+                   .setParam('basedocNrec', _basedocNrec);
+
+  if q.execute.errorCode = tsOk
+    while q.fetch.errorCode = tsOk do
+    {
+      insertmarker(m, comp(q.row.valAt(1)));
+    }
+
+  _pickPrikaz.Filters.PersonsFilter.IsSet := true;
+
+  if _pickPrikaz.ShowUI = cmDefault
+  {
+    PrikazNrec := _pickPrikaz.SelectedPrikazNrec;
+    rereadrecord;
+  }
+}
+
+//#endregion
+
+window wUI 'Установка связи ДО с приказом на командировку' doaccept, escclose;
+  show(,,65, 16);
+  screen sc1;
+  show(,,, 8) fixed_y;
+  fields
+    BasedocFld: skip;
+    PrikazFld: protect, pickbutton;
+    _spstepFilterMode: noprotect;
+    _overwriteMode: noprotect;
+<<
+
+`Документ основание `   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Приказ на командировку`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+`Обработка строк ДО`             `Обработка строк приказа`
+ (.) Все строки`                 (.) Все строки                `
+ (.) Только строки без привязки` (.) Только строки без привязки`
+>>
+  end;
+  browse br1 'Соответствия услуг ДО и наименований расходов в приказе на командировку' (,,sci178Esc);
+  show(,9,,13);
+  table _matches;
+  fields
+    KatuslFld 'Услуга ДО': [10], protect, pickbutton;
+    _matches.RashdocNamePattern 'Наименование расходов в приказе на командировку': [30], noprotect;
+  end;
+  screen sc2;
+  show(,14,,);
+  buttons
+    cmDoOk, default;
+    cmCancel;
+<<
+
+                                   <. Продолжить .> <. Отмена .>
+>>
+  end;
+  handleevent
+    cmDoOk: putcommand(cmDefault);
+  end;
+end;
+
+tableevent table _matches;
+  cmUpdateRecord: update current _matches;
+  cmDeleteRecord: delete current _matches;
+  cmInsertRecord: insert current _matches;
+end;
+
+handleevent
+  cmPick:
+  {
+    case curfield of
+      #PrikazFld: pickPrikaz;
+    end;
+  }
+end;
+
+//#region IBusinessTripLinker
+
+procedure IBusinessTripLinker.LinkBasedocWithPrikaz;
+{
+
+}
+
+function IBusinessTripLinker.ShowUI: word;
+{
+  result := runwindowmodal(wUI);
+}
+
+property IBusinessTripLinker.BasedocNrec     : comp read _basedocNrec write SetBasedocNrec(result);
+property IBusinessTripLinker.PrikazNrec      : comp read _prikazNrec write SetPrikazNrec(result);
+property IBusinessTripLinker.SpstepFilterMode: byte absolute _spstepFilterMode;
+property IBusinessTripLinker.OwerwriteMode   : byte absolute _overwriteMode;
+property IBusinessTripLinker.Matches         : IKatuslRashdocMatch read _matches;
+
+//#endregion
+
+//#region
+
+constructor Init;
+{
+  if not readmydsk(_overwriteMode, 'BusinessTripLinker_overwriteMode', false)
+    _overwriteMode := LINKER_OVERWRITE_MODE_DONT_OVERWRITE;
+
+  if not readmydsk(_spstepFilterMode, 'BusinessTripLinker_spstepFilterMode', false)
+    _spstepFilterMode := LINKER_SPSTEP_FILTER_MODE_UNLINKED;
+
+  result := true;
+}
+
+destructor Done;
+{
+  savemydsk(_overwriteMode, 'BusinessTripLinker_overwriteMode');
+  savemydsk(_spstepFilterMode, 'BusinessTripLinker_spstepFilterMode');
+}
+
+//#endregion
+end.

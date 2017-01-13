@@ -1,0 +1,113 @@
+#include BusinessTripLinks.vih
+#include Query.vih
+#include ExtAttr.vih
+
+#component "AGAT"
+
+interface BusinessTripLinkManager;
+
+//#region Queries
+
+sql query queryGetLinkedBasedoc =
+select top 1
+  basedoc.nrec as nrec,
+  'ü' + basedoc.nodoc + ' ®â ' + date2str('%dd.%MM.%yyyy', basedoc.ddoc) as presentation
+from attrval avLinkedSpstep
+join spstep on spstep.nrec = avLinkedSpstep.cRec
+join stepdoc on stepdoc.nrec = spstep.cstepdoc
+join basedoc on basedoc.nrec = stepdoc.cbasedoc
+where avLinkedSpstep.cattrnam = :attrnamNrec and avLinkedSpstep.vString = :rashdocNrec
+;
+
+sql query queryGetLinkedRashdoc =
+select avLinkedRashdoc.vString as rashdocNrec
+from attrval avLinkedRashdoc
+where avLinkedRashdoc.wtable   = :wtable
+  and avLinkedRashdoc.cRec     = :spstepNrec
+  and avLinkedRashdoc.cattrnam = :attrnamNrec
+;
+
+sql query queryGetRashdocPresentation =
+select 'ü' + prikaz.nodoc + ' ®â ' + date2str('%dd.%MM.%yyyy', prikaz.ddoc)
+       + ' / ' + persons.fio + ' / ' + rashdoc.name as presentation
+from rashdoc
+join spprikaz on spprikaz.nrec = rashdoc.csoprdoc
+join persons on persons.nrec = spprikaz.cpersons
+join prikaz on prikaz.nrec = spprikaz.cprikaz
+where rashdoc.nrec = :rashdocNrec
+;
+
+//#endregion
+
+var
+  _qGetLinkedBasedoc: IQuery;
+  _qGetLinkedRashdocNrec: IQuery;
+  _qGetRashdocPresentation: IQuery;
+  _extAttr: IExtAttr;
+
+//#region IBusinessTripLinkManager
+
+function IBusinessTripLinkManager.GetLinkedBasedocPresentation(aRashdocNrec: comp): string;
+{
+  result := '';
+  if _qGetLinkedBasedoc.setParam('attrnamNrec', ATTRNAM_NREC_SPSTEP_RASHDOC_NREC)
+                       .setParam('rashdocNrec', string(aRashdocNrec, 0, 0))
+                       .execute
+                       .errorCode = tsOk
+    if _qGetLinkedBasedoc.fetch.errorCode = tsOk
+      result := _qGetLinkedBasedoc.row.valAt(2);
+}
+
+function IBusinessTripLinkManager.GetLinkedBasedocNrec(aRashdocNrec: comp): comp;
+{
+  result := 0;
+  if _qGetLinkedBasedoc.setParam('rashdocNrec', string(aRashdocNrec, 0, 0)).execute.errorCode = tsOk
+    if _qGetLinkedBasedoc.fetch.errorCode = tsOk
+      result := _qGetLinkedBasedoc.row.valAt(1);
+}
+
+function IBusinessTripLinkManager.GetLinkedRashdocNrec(aSpstepNrec: comp): comp;
+{
+  result := 0;
+  if _qGetLinkedRashdocNrec.setParam('spstepNrec', aSpstepNrec).execute.errorCode = tsOk
+    if _qGetLinkedBasedoc.fetch.errorCode = tsOk
+      result := comp(string(_qGetLinkedBasedoc.row.colAt(1)));
+}
+
+function IBusinessTripLinkManager.GetLinkedRashdocPresentation(aSpstepNrec: comp): string;
+{
+  result := GetRashdocPresentation(GetLinkedRashdocNrec(aSpstepNrec));
+}
+
+function IBusinessTripLinkManager.GetRashdocPresentation(aRashdocNrec: comp): string;
+{
+  result := '';
+  if _qGetRashdocPresentation.setParam('rashdocNrec', aRashdocNrec).execute.errorCode = tsOk
+    if _qGetRashdocPresentation.fetch.errorCode = tsOk
+      result := _qGetRashdocPresentation.row.valAt(1);
+}
+
+procedure IBusinessTripLinkManager.LinkSpstepWithRashdoc(aSpstepNrec: comp; aRashdocNrec: comp);
+{
+  _extAttr.sSetAttrID(coSpstep, aSpstepNrec, ATTRNAM_NREC_SPSTEP_RASHDOC_NREC, string(aRashdocNrec, 0, 0));
+}
+
+//#endregion
+
+constructor Init;
+{
+  _qGetLinkedBasedoc := queryManager.createQuery(queryGetLinkedBasedoc)
+                                    .setParam('attrnamNrec', ATTRNAM_NREC_SPSTEP_RASHDOC_NREC);
+
+  _qGetLinkedRashdocNrec := queryManager.createQuery(queryGetLinkedRashdoc)
+                                        .setParam('wtable', coSpstep)
+                                        .setParam('attrnamNrec', ATTRNAM_NREC_SPSTEP_RASHDOC_NREC);
+
+  _qGetRashdocPresentation := queryManager.createQuery(queryGetRashdocPresentation);
+
+  result := _qGetLinkedBasedoc       != nullref
+        and _qGetLinkedRashdocNrec   != nullref
+        and _qGetRashdocPresentation != nullref;
+}
+
+end.

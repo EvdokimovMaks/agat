@@ -23,12 +23,12 @@ const
   ATTRNAM_NREC_RASHDOC_STATYA_STRUKTURI_CENI      : comp = 0001000000000BB5h; //Статья структуры цены - ссылка на системную аналитику Статьи затрат объектов строительства
   ATTRNAM_NREC_RASHDOC_KONTRAGENT                 : comp = 0001000000000BB6h; //Контрагент - ссылка на системную аналитику Организации
   ATTRNAM_NREC_RASHDOC_DOGOVOR                    : comp = 0001000000000BB7h; //Договор контрагента - ссылка на системную аналитику Договоры
-  ATTRNAM_NREC_RASHDOC_SPSTEP_NREC                : comp = 0001000000000BBAh; //spstep.nrec - строка, nrec на позицию ДО, сформированную по позиции расшифровки
 
   //внешние атрибуты для строк ДО
   ATTRNAM_NREC_SPSTEP_ZAKAZ_VIBITIYA              : comp = 0001000000000A87h; //Заказ выбытия - ссылка на системную аналитику Объекты строительства
   ATTRNAM_NREC_SPSTEP_RS_SPISANIYA                : comp = 0001000000000A86h; //Расчетный счет списания - ссылка на пользовательскую аналитику KODGRKAU_RS
   ATTRNAM_NREC_SPSTEP_REJIM_ISPOLZOVANIYA_SCHETA  : comp = 000100000000079Eh; //Режим использования счета - ссылка на пользовательскую аналитику KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA
+  ATTRNAM_NREC_SPSTEP_RASHDOC_NREC                : comp = 0001000000000BBCh; //яяяRashdoc.nrec - строка, nrec на позицию расшифровки приказа, связанную с позицией ДО
 
   //предопределенные услуги
   KATUSL_NREC_SUTOCHNIE : comp = 0001000000000402h; //Суточные
