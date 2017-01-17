@@ -1,0 +1,197 @@
+#include extattr.vih
+#include extattrPicker.vih
+#include BusinessTripBasedocCreator.vih
+#include BusinessTripLinks.vih
+
+#component "F_PODOT"
+
+//Докомпиляция интерфейса расшифровки приказа на командировки
+alter interface RASHIFR;
+
+var
+  _extAttr: iExtAttr;
+  _extAttrPicker: ExtAttrPicker;
+  _basedocCreator: BusinessTripBasedocCreator;
+  _linkManager: BusinessTripLinkManager;
+
+#declare ExtAttrViewField(AttrnamNrec, FieldName)
+_extAttr.sGetAttrID(coRashDoc, rashdoc.nrec, #AttrnamNrec) (fieldname=#FieldName)
+#end
+
+//Добавляем к базовой вьюхе внешние атрибуты строки расшифровки приказа на командировку и представление присоединенного ДО
+create view
+as select #ExtAttrViewField(ATTRNAM_NREC_RASHDOC_RS_SPISANIYA               , RsSpisaniyaFld),
+          #ExtAttrViewField(ATTRNAM_NREC_RASHDOC_REJIM_ISPOLZOVANIYA_SCHETA , RejimIspolzovaniyaSchetaFld),
+          #ExtAttrViewField(ATTRNAM_NREC_RASHDOC_ZAKAZ_VIBITIYA             , ZakazVibitiyaFld),
+          #ExtAttrViewField(ATTRNAM_NREC_RASHDOC_STATYA_STRUKTURI_CENI      , StatyaStrukturyCeniFld),
+          #ExtAttrViewField(ATTRNAM_NREC_RASHDOC_KONTRAGENT                 , KontragentFld),
+          #ExtAttrViewField(ATTRNAM_NREC_RASHDOC_DOGOVOR                    , DogovorFld),
+          _linkManager.GetLinkedBasedocPresentation(rashdoc.nrec) (fieldname=LinkedBasedocFld)
+
+;
+
+ExtendFormats brRashDocPrikaz, scRashKU_RKO;
+
+//Добавляем в таблицу расшифровки приказа колонки с внешними атрибутами
+browse brRashDocPrikaz (, hcRashDoc, sci1478EnEsc);
+table RashDoc;
+fields
+  RsSpisaniyaFld              'Р/с списания': [10], protect;
+  RejimIspolzovaniyaSchetaFld 'Режим использования счета': [10], protect;
+  ZakazVibitiyaFld            'Заказ выбытия': [10], protect;
+  StatyaStrukturyCeniFld      'Статья структуры цены': [10], protect;
+  KontragentFld               'Контрагент': [10], protect;
+  DogovorFld                  'Договор': [10], protect;
+  LinkedBasedocFld            'Документ основание': [10], protect, editButton;
+end;
+
+window wiEditRashNorm;
+  show(,,, 19);
+
+  Panel pEditRashNorm;
+  Table RashDoc;
+
+  //В окно редактирования расшифровки добавляем поля редактирования внешних атрибутов
+  screen scRashKU_RKO ('Направление расхода', hcRashDoc, sci1378Esc);
+  show(,,,18);
+  fields
+    RsSpisaniyaFld              ('Р/с списания'): [10], protect, pickbutton;
+    RejimIspolzovaniyaSchetaFld ('Режим использования счета'): [10], protect, pickbutton;
+    ZakazVibitiyaFld            ('Заказ выбытия'): [10], protect, pickbutton;
+    StatyaStrukturyCeniFld      ('Статья структуры цены'): [10], protect, pickbutton;
+    KontragentFld               ('Контрагент'): [10], protect, pickbutton;
+    DogovorFld                  ('Договор'): [10], protect, pickbutton;
+<<
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+`Р/с списания` .@@@@@@@@@@@@@@@@@@@@@@@@ `Режим использ. счета` .@@@@@@@@@@@@@@@@@@
+`Заказ выбытия`.@@@@@@@@@@@@@@@@@@@@@@@@ `Статья структуры цены`.@@@@@@@@@@@@@@@@@@
+`Контрагент`   .@@@@@@@@@@@@@@@@@@@@@@@@ `Договор`              .@@@@@@@@@@@@@@@@@@
+>>
+  end; //screen scRashKU_RKO
+
+  end; // panel
+
+end;
+
+//#region Вспомогательные функции обработчика событий
+
+#declare PickAndClearExtAttr(ExtAttrFld, AttrnamNrec)
+  procedure Pick#ExtAttrFld;
+  {
+    if isNew insert current rashdoc;
+    _extAttrPicker.PickExtAttr(coRashDoc, rashdoc.nrec, #AttrnamNrec);
+    rereadrecord;
+  }
+  procedure Clear#ExtAttrFld;
+  {
+    if isNew insert current rashdoc;
+    _extAttr.DeleteValueID(coRashDoc, rashdoc.nrec, #AttrnamNrec);
+    rereadrecord;
+  }
+#end
+
+#PickAndClearExtAttr(RsSpisaniyaFld             , ATTRNAM_NREC_RASHDOC_RS_SPISANIYA              )
+#PickAndClearExtAttr(RejimIspolzovaniyaSchetaFld, ATTRNAM_NREC_RASHDOC_REJIM_ISPOLZOVANIYA_SCHETA)
+#PickAndClearExtAttr(ZakazVibitiyaFld           , ATTRNAM_NREC_RASHDOC_ZAKAZ_VIBITIYA            )
+#PickAndClearExtAttr(StatyaStrukturyCeniFld     , ATTRNAM_NREC_RASHDOC_STATYA_STRUKTURI_CENI     )
+#PickAndClearExtAttr(KontragentFld              , ATTRNAM_NREC_RASHDOC_KONTRAGENT                )
+#PickAndClearExtAttr(DogovorFld                 , ATTRNAM_NREC_RASHDOC_DOGOVOR                   )
+
+//#endregion
+
+handleevent
+  //формирование ДО по помеченным позициям Alt+D
+  cmDocBas:
+  {
+    if CurTable = #rashdoc
+    {
+      //заполняем маркер помеченными строками расшифровки
+      var m: longint;
+      m := initmarker('', 8, 10, 10, false);
+      if pMarker.Count > 0
+        pMarker.ExportTo(m);
+      else
+        insertmarker(m, rashdoc.nrec);
+
+      //формируем ДО
+      if _basedocCreator.SetRashdocMarker(m)
+        if _basedocCreator.ShowUI = cmDefault
+        {
+          var c: comp;
+          c := _basedocCreator.CreateBasedoc;
+          if c != 0
+            runinterfacenomodal(L_BASEDOC::VSCHETB, c);
+        }
+
+      donemarker(m, '');
+    }
+  }
+  //обработка контекстного меню: добавляем функционал по формированию ДО по помеченным позициям
+  cmHotkeys:
+  {
+    if CurTable = #rashdoc
+      PutContextMenuCommand('BusinessTripRashDocContextMenu');
+    else
+      inherited::handleevent(cmHotkeys);
+  }
+  //обработка выбора внешних атрибутов
+  cmPick:
+  {
+    case curfield of
+      #RsSpisaniyaFld              : PickRsSpisaniyaFld             ;
+      #RejimIspolzovaniyaSchetaFld : PickRejimIspolzovaniyaSchetaFld;
+      #ZakazVibitiyaFld            : PickZakazVibitiyaFld           ;
+      #StatyaStrukturyCeniFld      : PickStatyaStrukturyCeniFld     ;
+      #KontragentFld               : PickKontragentFld              ;
+      #DogovorFld                  : PickDogovorFld                 ;
+    else
+      inherited::handleevent(cmPick);
+    end;
+  }
+  //обработка очистки внешних атрибутов
+  cmDelOnProtect:
+  {
+    case curfield of
+      #RsSpisaniyaFld              : ClearRsSpisaniyaFld             ;
+      #RejimIspolzovaniyaSchetaFld : ClearRejimIspolzovaniyaSchetaFld;
+      #ZakazVibitiyaFld            : ClearZakazVibitiyaFld           ;
+      #StatyaStrukturyCeniFld      : ClearStatyaStrukturyCeniFld     ;
+      #KontragentFld               : ClearKontragentFld              ;
+      #DogovorFld                  : ClearDogovorFld                 ;
+    else
+      inherited::handleevent(cmPick);
+    end;
+  }
+  //Обработка открытия на редактирование присоединенного ДО
+  cmEdit:
+  {
+    case curfield of
+      #LinkedBasedocFld: if (_linkManager.GetLinkedBasedocNrec(rashdoc.nrec) != 0)
+                           runinterfacenomodal(L_BASEDOC::VSCHETB, _linkManager.GetLinkedBasedocNrec(rashdoc.nrec));
+    else
+      inherited::handleevent(cmEdit);
+    end;
+  }
+end;
+
+end.
+
+BusinessTripRashDocContextMenu menu
+{
+  - 'Формирование ДО по помеченным позициям', cmDocBas,
+    'Формирование документа основания по помеченным позициям', , 'Alt+D', kbAltD;
+}

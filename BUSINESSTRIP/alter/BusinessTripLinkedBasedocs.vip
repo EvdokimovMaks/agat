@@ -1,0 +1,142 @@
+#include BusinessTripLinkedBasedocs.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface BusinessTripLinkedBasedocs;
+
+//#region queries
+
+sql query queryRashdocNrecs =
+  select nrec as nrec
+  from rashdoc
+  where rashdoc.tipdoc = 2 and rashdoc.csoprdoc = :spprikazNrec
+;
+
+sql query queryLinkedBasedocs =
+  select distinct
+         basedoc.nrec as nrec,
+         basedoc.nodoc as nodoc,
+         basedoc.ddoc as ddoc,
+         basedoc.name as name,
+         coalesce(klval.dollar, '') as valName,
+         coalesce(katorg.name, '') as katorgName,
+         basedoc.total as sum,
+         basedoc.sumval as sumval
+  from attrval avLinkedSpstep
+  join spstep on spstep.nrec = avLinkedSpstep.crec
+  join stepdoc on stepdoc.nrec = spstep.cstepdoc
+  join basedoc on basedoc.nrec = stepdoc.cbasedoc
+  left join katorg on katorg.nrec = basedoc.corg
+  left join klval on klval.nrec = basedoc.cval
+  where avLinkedSpstep.cattrnam = :attrnamNrec
+    and avLinkedSpstep.vString in ( %RashdocNrecs )
+;
+//#endregion
+
+//#region временные таблицы
+
+table struct tDocs (
+  nrec: comp,
+  nodoc: string[100],
+  ddoc: date,
+  name: string,
+  katorgName: string,
+  sum: double,
+  sumVal: double,
+  valName: string[30]
+) with index (
+  i01 = ddoc + nodoc
+);
+
+//#endregion
+
+var
+  _spprikazNrec   : comp;
+  _qRashdocNrecs  : IQuery;
+  _qLinkedBasedocs: IQuery;
+
+create view
+as select *
+from tDocs;
+
+browse brLinkedBasedocs (,,Sci1EnEsc);
+table tDocs;
+fields
+  tDocs.ddoc 'Дата': [10], protect;
+  tDocs.nodoc 'Номер': [10], protect;
+  tDocs.katorgName 'Контрагент': [20], protect;
+  tDocs.name 'Примечание': [30], protect;
+  tDocs.sum 'Сумма в НДЕ': [10,2], protect;
+  tDocs.valName 'Валюта' : [10], protect;
+  tDocs.sumVal 'Сумма в валюте': [10,2], protect;
+end;
+
+handleevent
+  //Обработка ПКМ
+  cmHotkeys: PutContextMenuCommand('BusinessTripLinkedBasedocsMenu');
+  //Обновить
+  cmOpenFile: Refresh;
+  //Открыть ДО
+  cmDefault: if tdocs.nrec != 0 runinterfacenomodal(L_BASEDOC::VSCHETB, tdocs.nrec);
+end;
+
+//#region IBusinessTripLinkedBasedocs
+
+procedure IBusinessTripLinkedBasedocs.Refresh;
+{
+  delete all tDocs;
+  if _spprikazNrec != 0
+  {
+    if _qRashdocNrecs.setParam('spprikazNrec', _spprikazNrec).execute.errorcode = tsOk
+    {
+
+      var s: longint = 0;
+      var cnt: longint = 0;
+      sqlFreeStr(s);
+
+      while _qRashdocNrecs.fetch.errorCode = tsOk do
+      {
+        cnt++;
+        sqlAddStr(s, if(cnt > 1, ',', '') + '''' + string(comp(_qRashdocNrecs.row.valat(1)), 0, 0) + '''');
+      }
+
+      if cnt > 0
+      {
+        var rs: IResultSet;
+        _qLinkedBasedocs := queryManager.createQuery(queryLinkedBasedocs);
+        rs := _qLinkedBasedocs.setMacro('RashdocNrecs', s)
+                              .setParam('attrnamNrec', ATTRNAM_NREC_SPSTEP_RASHDOC_NREC)
+                              .getResultSet;
+        sqlCopyInto(rs, #tDocs, true);
+      }
+
+    }
+  }
+  rereadrecord(#tDocs);
+}
+
+procedure IBusinessTripLinkedBasedocs.SetSpprikazNrec(aSpprikazNrec: comp);
+{
+  _spprikazNrec := aSpprikazNrec;
+  Refresh;
+}
+
+//#endregion
+
+//#region BusinessTripLinkedBasedocs
+constructor init;
+{
+  _qRashdocNrecs   := queryManager.createQuery(queryRashdocNrecs);
+  _qLinkedBasedocs := queryManager.createQuery(queryLinkedBasedocs);
+  result := _qRashdocNrecs   != nullref
+        and _qLinkedBasedocs != nullref;
+}
+//#endregion
+end.
+
+BusinessTripLinkedBasedocsMenu menu
+{
+  - 'Обновить', cmOpenFile,
+    'Обновить', , 'Alt+R', kbAltR;
+}
