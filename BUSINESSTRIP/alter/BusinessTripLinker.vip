@@ -3,6 +3,8 @@
 #include PickPrikaz.vih
 #include BusinessTripLinks.vih
 #include Query.vih
+#include GetKau.vih
+#include AtlProtocol.vih
 
 #component "AGAT"
 
@@ -19,16 +21,29 @@ sql query queryGetBasedocPersons =
   where stepdoc.cbasedoc = :basedocNrec
 ;
 
+sql query queryLinks =
+select rashdoc.nrec as RashdocNrec
+from spstep
+join specmtr sm on sm.csaldtune = :saldtuneNrec and sm.cotable = :cotable and sm.cspec = spstep.nrec
+join persons pers on pers.nrec = sm.ckau[3]
+join oborcfg on oborcfg.vrep = :vrep and oborcfg.inrec[0] = spstep.cmcusl
+join spprikaz on spprikaz.cprikaz = :prikazNrec and spprikaz.cpersons = pers.nrec
+join rashdoc on rashdoc.tipdoc = 2 and rashdoc.csoprdoc = spprikaz.nrec and rashdoc.name like trim(oborcfg.srep[0] + oborcfg.srep[1] + oborcfg.srep[2] + oborcfg.srep[3])
+where spstep.nrec = :spstepNrec
+;
+
 //#endregion
 
 var
   _basedocNrec: comp;
   _prikazNrec: comp;
   _spstepFilterMode: byte;
-  _overwriteMode: byte;
+  _rashdocFilterMode: byte;
   _matches: IKatuslRashdocMatch(KatuslRashdocMatch) new;
   _paramsFactory: ParamsFactory;
   _pickPrikaz: PickPrikaz;
+  _getKau: getkau;
+  _linkManager: IBusinessTripLinkManager(BusinessTripLinkManager);
 
 function GetPrikazFld: string; forward;
 function GetBasedocFld: string; forward;
@@ -37,10 +52,12 @@ create view
 as select GetPrikazFld() (fieldname=PrikazFld),
           GetBasedocFld() (fieldname=BasedocFld),
           if(getanykau(1, cgKau_KatUsl, _matches.KatuslNrec), givenanname(1), '') (fieldname=KatuslFld)
-from prikaz, basedoc _matches
+from prikaz, basedoc, stepdoc, spstep, _matches
 where ((
-  _prikazNrec == prikaz.nrec and
-  _basedocNrec == basedoc.nrec
+  _prikazNrec  == prikaz.nrec and
+  _basedocNrec == basedoc.nrec and
+  _basedocNrec == stepdoc.cbasedoc and
+  stepdoc.nrec == spstep.cstepdoc
 ));
 
 //#region Вспомогательные ф-ции и процедуры
@@ -101,36 +118,50 @@ procedure PickPrikaz;
   }
 }
 
+procedure PickUsl;
+{
+  var c: comp;
+  c := _matches.KatuslNrec;
+  if _getKau.GetCodeKau(cgiPick, cgKau_KatUsl, c) > 0
+  {
+    _matches.KatuslNrec := c;
+    setModified(true);
+    rescanpanel(#_matches);
+  }
+}
+
 //#endregion
 
 window wUI 'Установка связи ДО с приказом на командировку' doaccept, escclose;
-  show(,,65, 16);
+  show(,,65, 18);
   screen sc1;
-  show(,,, 8) fixed_y;
+  show(,,, 9) fixed_y;
   fields
-    BasedocFld: skip;
-    PrikazFld: protect, pickbutton;
-    _spstepFilterMode: noprotect;
-    _overwriteMode: noprotect;
+    BasedocFld        : skip;
+    PrikazFld         : protect, pickbutton;
+    _spstepFilterMode : noprotect;
+    _rashdocFilterMode: noprotect;
 <<
 
 `Документ основание `   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 `Приказ на командировку`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-`Обработка строк ДО`             `Обработка строк приказа`
- (.) Все строки`                 (.) Все строки                `
- (.) Только строки без привязки` (.) Только строки без привязки`
+`Обработка строк ДО`             `Привязка к строкам приказа`
+ (.) Все строки`                 (.) К любым строкам`
+ (.) Только строки без привязки` (.) Только к строкам без привязки`
+
+ Соответствия услуг ДО и наименований расходов в приказах на командировку
 >>
   end;
   browse br1 'Соответствия услуг ДО и наименований расходов в приказе на командировку' (,,sci178Esc);
-  show(,9,,13);
+  show(,10,,14);
   table _matches;
   fields
-    KatuslFld 'Услуга ДО': [10], protect, pickbutton;
-    _matches.RashdocNamePattern 'Наименование расходов в приказе на командировку': [30], noprotect;
+    KatuslFld 'Услуга ДО': [20], protect, pickbutton;
+    _matches.RashdocNamePattern 'Наименование расхода в приказе на командировку': [20], noprotect;
   end;
   screen sc2;
-  show(,14,,);
+  show(,15,,);
   buttons
     cmDoOk, default;
     cmCancel;
@@ -155,15 +186,94 @@ handleevent
   {
     case curfield of
       #PrikazFld: pickPrikaz;
+      #KatuslFld: pickUsl;
     end;
   }
 end;
 
 //#region IBusinessTripLinker
 
-procedure IBusinessTripLinker.LinkBasedocWithPrikaz;
+procedure IBusinessTripLinker.LinkBasedocWithPrikaz(aLogger: IAtlProtocol = nullref);
 {
 
+  var logger: IAtlProtocol;
+  if aLogger = nullref
+    logger := IAtlProtocol(new(AtlProtocol));
+  else
+    logger := aLogger;
+
+  logger.LogMessage(
+    APE_INFO,
+    'Установка связи ДО №' + basedoc.nodoc + ' от ' + basedoc.ddoc
+    + ' и приказа на командировку №' + prikaz.nodoc + ' от ' + prikaz.ddoc
+  );
+
+  var linksCount: integer = 0;
+
+  if getfirst stepdoc = tsOk
+    _loop spstep
+    {
+
+      if _spstepFilterMode = LINKER_SPSTEP_FILTER_MODE_UNLINKED
+        if _linkManager.GetLinkedRashdocNrec(spstep.nrec) != 0
+        {
+          logger.LogLine(
+            APE_INFO,
+            'Строка ДО №' + spstep.npp + ' "' + if(getanykau(1, cgKau_KatUsl, spstep.cmcusl), givenanname(1), '')
+            + '" пропущена, т.к. уже привязана к приказу на командировку     ' + _linkManager.GetLinkedRashdocPresentation(spstep.nrec)
+          );
+          continue;
+        }
+
+      var q: IQuery;
+      q := queryManager.createQuery(queryLinks)
+                       .setParam('saldtuneNrec', SALDTUNE_NREC_DEFAULT)
+                       .setParam('cotable', coSpStep)
+                       .setParam('vrep', OBORCFG_VREP_KATUSL_RASHDOC_MATCH)
+                       .setParam('prikazNrec', _prikazNrec)
+                       .setParam('spstepNrec', spstep.nrec);
+
+      var rs: IResultSet;
+      rs := q.getResultSet;
+
+      var linkCreated: boolean;
+      linkCreated := false;
+
+      if rs.getFirst = tsOk do
+      {
+
+        var rashdocNrec: comp;
+        rashdocNrec := rs.row.valAt(1);
+
+        if _rashdocFilterMode = LINKER_RASHDOC_FILTER_MODE_UNLINKED
+          if _linkManager.GetLinkedBasedocNrec(rashdocNrec) != 0
+            continue;
+
+        _linkManager.LinkSpstepWithRashdoc(spstep.nrec, rashdocNrec);
+
+        linksCount++;
+        linkCreated := true;
+
+        logger.LogLine(
+          APE_INFO,
+          'Установлена связь строки ДО №' + spstep.npp + ' "' + if(getanykau(1, cgKau_KatUsl, spstep.cmcusl), givenanname(1), '')
+          + '" с приказом на командировку     ' + _linkManager.GetRashdocPresentation(rashdocNrec)
+        );
+
+      } while rs.getNext = tsOk and not linkCreated;
+
+      if not linkCreated
+        logger.LogLine(
+          APE_INFO,
+          'Для строки ДО №' + spstep.npp + ' "' + if(getanykau(1, cgKau_KatUsl, spstep.cmcusl), givenanname(1), '')
+          + '" не найдено соответствие в приказе на командировку. Строка пропущена'
+        );
+
+    } //loop spstep
+
+    logger.LogCommit;
+
+    logger.LogLine(APE_INFO, 'Установлено соответствий: ' + linksCount);
 }
 
 function IBusinessTripLinker.ShowUI: word;
@@ -171,11 +281,11 @@ function IBusinessTripLinker.ShowUI: word;
   result := runwindowmodal(wUI);
 }
 
-property IBusinessTripLinker.BasedocNrec     : comp read _basedocNrec write SetBasedocNrec(result);
-property IBusinessTripLinker.PrikazNrec      : comp read _prikazNrec write SetPrikazNrec(result);
-property IBusinessTripLinker.SpstepFilterMode: byte absolute _spstepFilterMode;
-property IBusinessTripLinker.OwerwriteMode   : byte absolute _overwriteMode;
-property IBusinessTripLinker.Matches         : IKatuslRashdocMatch read _matches;
+property IBusinessTripLinker.BasedocNrec      : comp read _basedocNrec write SetBasedocNrec(result);
+property IBusinessTripLinker.PrikazNrec       : comp read _prikazNrec write SetPrikazNrec(result);
+property IBusinessTripLinker.SpstepFilterMode : byte absolute _spstepFilterMode;
+property IBusinessTripLinker.RashdocFilterMode: byte absolute _rashdocFilterMode;
+property IBusinessTripLinker.Matches          : IKatuslRashdocMatch read _matches;
 
 //#endregion
 
@@ -183,8 +293,8 @@ property IBusinessTripLinker.Matches         : IKatuslRashdocMatch read _matches
 
 constructor Init;
 {
-  if not readmydsk(_overwriteMode, 'BusinessTripLinker_overwriteMode', false)
-    _overwriteMode := LINKER_OVERWRITE_MODE_DONT_OVERWRITE;
+  if not readmydsk(_rashdocFilterMode, 'BusinessTripLinker_rashdocFilterMode', false)
+    _rashdocFilterMode := LINKER_RASHDOC_FILTER_MODE_ALL;
 
   if not readmydsk(_spstepFilterMode, 'BusinessTripLinker_spstepFilterMode', false)
     _spstepFilterMode := LINKER_SPSTEP_FILTER_MODE_UNLINKED;
@@ -194,7 +304,7 @@ constructor Init;
 
 destructor Done;
 {
-  savemydsk(_overwriteMode, 'BusinessTripLinker_overwriteMode');
+  savemydsk(_rashdocFilterMode, 'BusinessTripLinker_rashdocFilterMode');
   savemydsk(_spstepFilterMode, 'BusinessTripLinker_spstepFilterMode');
 }
 
