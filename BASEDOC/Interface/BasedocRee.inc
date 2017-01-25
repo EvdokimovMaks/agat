@@ -126,8 +126,15 @@ const
     ATTRNAM_SUBPODR       = 00010000000006BCh; //Nrec атрибута ДО СМП и субподрядчики
     ATTRNAM_DDS           = 000100000000008Fh; //Nrec атрибута ДО Статья ДДС
     ATTRNAM_SUMMPKB       = 00010000000009DDh; //Nrec атрибута ДО Сумма ПКБ
-  ATTRNAM_BDR           = 0001000000000093h;
-  ATTRNAM_USEMODE_PLPOR = 000100000000077Ah; //Nrec атрибута платежки Режим использования счета
+    ATTRNAM_ISK           = 281474976712379;
+    ATTRNAM_SMP           = 281474976712380;
+    ATTRNAM_PRBUH         = 0001000000000097h;
+    ATTRNAM_PRKAZ         = 0001000000000098h;
+    ATTRNAM_PRDIR         = 000100000000009Ah;
+    ATTRNAM_PRPEU         = 0001000000000099h;
+
+    ATTRNAM_BDR           = 0001000000000093h;
+    ATTRNAM_USEMODE_PLPOR = 000100000000077Ah; //Nrec атрибута платежки Режим использования счета
     ATTRNAM_AVANSOK_PLPOR = 00010000000004A5h; //Nrec атрибута платежки Аванс/ок. расчет
     ATTRNAM_VIZABUH_PLPOR = 00010000000004A6h; //Nrec атрибута платежки Виза бухгалтерии
     ATTRNAM_VIZAKAZ_PLPOR = 00010000000004A7h; //Nrec атрибута платежки Виза казначейства
