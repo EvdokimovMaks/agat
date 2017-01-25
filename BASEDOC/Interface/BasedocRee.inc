@@ -33,6 +33,8 @@ table struct tbd (
   sumopl: double,
   cnote : comp,
   reestr: string[20],
+  dVklRee: date,
+  dOpl  : date,
   bdds  : string[11],
   avans : string[20],
   ispoln: string[50],

@@ -12,6 +12,8 @@
 
 interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
 
+//#region Queries
+
   sql query qSelectOpl =
     select distinct plpor.datob
     from basefin bf
@@ -38,6 +40,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   left join attrval um on um.cattrnam = #comp(000100000000079Eh) and um.crec = sps.nrec // use mode
   where bd.nrec = :basedocNrec
   ;
+
+//#endregion
 
   var
     flagVid, flagBDDS, flagAvans, flagDates, flagSums, flagAttr, flagOpl, flagVsbl1, flagVsbl2: word;
@@ -72,6 +76,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     pl: AGAT::iPlatezh new;
     LogFileName: string;
     tf: TriggerFunctions;
+
+//#region Views
 
   create view
   var
@@ -120,6 +126,9 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     attrval.atl_lastuser == x$users.atl_nrec
   ));
 
+//#endregion
+
+//#region Вспомогательные окна выбора
   window wSelectVal 'Выбор валют' EscClose, Doaccept;
     show at (,,40,10);
     browse brSelVal (,,sci1EnIns);
@@ -231,6 +240,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     }
     end; //handleevent
   end; //wSelectViza
+
+//#endregion
 
   TabbedSheet Top tsMain;
   show (,,55,);
@@ -481,6 +492,68 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
                  if(getfirst fastfirstrow brbf1 = tsOk, 'П', ''));
   }
 
+  function isVisaSet(_visaValueNrec: comp): boolean;
+  {
+    result := _visaValueNrec = VIZA_SOGLASOVANO
+           or _visaValueNrec = VIZA_NE_TREBUETSA
+           or _visaValueNrec = VIZA_S_OBSHIH_SCHETOV;
+  }
+
+  function maxDateIn(d1: date; d2: date; d3: date = 0; d4: date = 0; d5: date = 0; d6: date = 0): date;
+  {
+    var d: date; d := 0;
+    if (d1 > d) d := d1;
+    if (d2 > d) d := d2;
+    if (d3 > d) d := d3;
+    if (d4 > d) d := d4;
+    if (d5 > d) d := d5;
+    if (d6 > d) d := d6;
+    result := d;
+  }
+
+  function LastVizaDateExceptPEU: date; //функция возвращает дату последней проставленной визы
+  {
+    if (isVisaSet(brbd.cbuh) and
+        isVisaSet(brbd.ckaz) and
+        isVisaSet(brbd.cdir)) // все визы кроме ПЭУ есть
+      result := maxDateIn(brbd.dbuh, brbd.dkaz, brbd.ddir)
+    else
+      result := 0;
+  }
+
+  function DaysFromLastVizaToVklVReestr: integer; //функция возвращает кол-во дней с последней визы до включения в реестр
+  {
+    var d1, d2: date;
+    d1 := LastVizaDateExceptPEU;
+    if d1 != 0
+    {
+      d2 := if(brbd.dvklree=0, cur_date, brbd.dvklree);
+
+      var preres: integer;
+      preres := CalcDaysBetweenDates(d1, d2, false) - 1;
+
+      if preres < 0
+        result := 0
+      else
+        result := preres;
+    }
+    else
+    {
+      result := 0;
+    }
+  }
+
+  function DaysVklVReestrWithoutVizaPEU: integer; //функция возвращает кол-во дней с "в реестре" до даты визы пэу или до тек.даты, если виза не установлена
+  {
+      var d1, d2: date;
+      d1 := brbd.dvklree;
+      if (not isVisaSet(brbd.cpeu))
+        d2 := if(brbd.cnote = STATUS_OPLACHEN, brbd.dopl, Cur_Date)
+      else
+        d2 := brbd.dpeu;
+      result := if(d2 > d1 and d1 > 0, CalcDaysBetweenDates(d1, d2, false) - 1, 0);
+  }
+
   tree 3 brMain (,,sci1EnIns);
   show (56,,,10);
   table brbd;
@@ -523,6 +596,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     [fldviza3] vizafld(brbd.vkaz,brbd.daykaz)    'Виза казначейства'   : [8]  , protect;
     [fldviza4] vizafld(brbd.vpeu,brbd.daypeu)    'Виза ПЭУ'            : [8]  , protect;
     [fldviza5] vizafld(brbd.vdir,brbd.daydir)    'Виза комм.дир.'      : [8]  , protect;
+    [fldDFLVTR] DaysFromLastVizaToVklVReestr     'Дней до'#13'вкл. в реестр'        : [5], protect;
+    [fldVRWVP] DaysVklVReestrWithoutVizaPEU      'Дней в реестре'#13' без визы ПЭУ' : [5], protect;
   end;
 
   embedded scDO interface;
@@ -637,25 +712,6 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     if bitset(flagVsbl2, 14) SetFieldState(#fldviza4          , sfVisible) else ClearFieldState(#fldviza4          , sfVisible);
     if bitset(flagVsbl2, 15) SetFieldState(#fldviza5          , sfVisible) else ClearFieldState(#fldviza5          , sfVisible);
     rereadrecord(#brbd);
-  }
-
-  function isVisaSet(_visaValueNrec: comp): boolean;
-  {
-    result := _visaValueNrec = VIZA_SOGLASOVANO
-           or _visaValueNrec = VIZA_NE_TREBUETSA
-           or _visaValueNrec = VIZA_S_OBSHIH_SCHETOV;
-  }
-
-  function maxDateIn(d1: date; d2: date; d3: date = 0; d4: date = 0; d5: date = 0; d6: date = 0): date;
-  {
-    var d: date; d := 0;
-    if (d1 > d) d := d1;
-    if (d2 > d) d := d2;
-    if (d3 > d) d := d3;
-    if (d4 > d) d := d4;
-    if (d5 > d) d := d5;
-    if (d6 > d) d := d6;
-    result := d;
   }
 
   procedure PrepareVizaFilter(_v: agat_viza); {
@@ -861,6 +917,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     mysqlAddStr(s, 'CASE WHEN bd.dform=0 THEN bd.atl_lastdate ELSE bd.dform END,');
     mysqlAddStr(s, 'round(bd.summa,2), round(bd.total,2), round(bd.sumval,2), round(COALESCE(bf.summa,0),2) sumfactopl,');
     mysqlAddStr(s, 'bd.cnote, coalesce(statlog.comment,''''),');
+    mysqlAddStr(s, 'COALESCE(date(lastStatlog.dt), 0),');
+    mysqlAddStr(s, 'COALESCE(bf.dopl, 0),');
     mysqlAddStr(s, 'COALESCE(av_bdds.vstring,''''),');
     mysqlAddStr(s, 'SUBSTRING(COALESCE(av_avans.vstring,''''),1,1),');
     mysqlAddStr(s, 'COALESCE(podr_ispoln.kod,''''),');
@@ -888,12 +946,12 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     mysqlAddStr(s, 'COALESCE('+viza6.dskname+'.atl_lastdate,0),');
     mysqlAddStr(s, '0,0,0,0,0,0,0');
     mysqlAddStr(s, 'FROM basedoc bd');
-    mysqlAddStr(s, 'left join (select cbasedoc, sum(summa) as summa');    //tipdoc=10443 - приходные ордера в кассу "Денежные документы"
-    mysqlAddStr(s, '           from (select cbasedoc, summa');
+    mysqlAddStr(s, 'left join (select cbasedoc, sum(summa) as summa, max(ddoc) as dopl');    //tipdoc=10443 - приходные ордера в кассу "Денежные документы"
+    mysqlAddStr(s, '           from (select cbasedoc, summa, ddoc');
     mysqlAddStr(s, '                 from basefin');
     mysqlAddStr(s, '                 where tidkgal = 1 and  cbasedoc<>#comp(0)');
     mysqlAddStr(s, '                 union all');
-    mysqlAddStr(s, '                 select cpredopldo, summa');
+    mysqlAddStr(s, '                 select cpredopldo, summa, ddoc');
     mysqlAddStr(s, '                 from basefin');
     mysqlAddStr(s, '                 where tidkbase = 0 and cpredopldo<>#comp(0) and cpredopldo<>cbasedoc and tidkgal = 1');
     mysqlAddStr(s, '                ) bf');
@@ -1329,6 +1387,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     pXL.CreateTblFld('npp');
     pXL.CreateTblFld('statusName');
     pXL.CreateTblFld('statusComment');
+    pXL.CreateTblFld('daystoree');
+    pXL.CreateTblFld('daysinree');
     if (not isCreateXLT) {
       pushpos(#brbd);
       var _cnt, _npp: longint;
@@ -1431,6 +1491,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
         //else
         //  pXL.SetTblStringFldValue('statusComment', '');
         pXL.SetTblStringFldValue('statusComment', brbd.reestr);
+        pXL.SetTblNumberFldValue('daystoree', DaysFromLastVizaToVklVReestr);
+        pXL.SetTblNumberFldValue('daysinree', DaysVklVReestrWithoutVizaPEU);
 
         pXL.InsTblRow;
       }
