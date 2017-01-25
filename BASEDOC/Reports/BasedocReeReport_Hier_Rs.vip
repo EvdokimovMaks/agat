@@ -25,6 +25,8 @@ table struct tbd (
   nrec        : comp,
   viddoc      : word,
   ddoc        : date,
+  dVklRee     : date,
+  reestr      : string[100],
   nodoc       : string,
   bdds        : string,
   dform       : date,
@@ -148,6 +150,8 @@ select bd.nrec,
        bd.viddoc as viddoc,
        bd.ddoc as ddoc,
        bd.nodoc as nodoc,
+       coalesce(statlog.comment,'') as reestr,
+       coalesce(date(lastStatlog.dt), 0) as dVklRee,
        coalesce(spkBdds.Name,'') as bdds,
        bd.dform as dform,
        tbd.obshiySchet as ObshiySchet,
@@ -298,6 +302,15 @@ left join (select cbasedoc, max(ddoc) as dopl, sum(summa) as summa
                 ) bf
            group by cbasedoc
           ) bfall on bfall.cbasedoc = bd.nrec
+
+left join (select cdoc, max(datetime(doper, timeoper)) as dt
+           from statlog
+           where doctype=40 and cnewnote=#comp(000100000000007Eh)
+           group by cdoc) lastStatlog on lastStatlog.cdoc = bd.nrec  //последний статус "в реестре"
+
+left join statlog on statlog.doctype=40 and statlog.cdoc=bd.nrec and statlog.doper=date(lastStatlog.dt) and statlog.timeoper=time(lastStatlog.dt)
+                     and (bd.cnote = #comp(000100000000007Eh) or bd.cnote = #comp(0001000000000077h)) //и тек. статус ДО "включен в реестр" или "оплачен"
+
 ;
 
 //#endregion
@@ -367,6 +380,68 @@ function isVizaSObshihSchetov(vizaNrec: comp): boolean;
 function isStatusVklVReestr(_statusNrec: comp): boolean;
 {
   result := _statusNrec = STATUS_VKL_V_REESTR or _statusNrec = STATUS_OPLACHEN;
+}
+
+function isVisaSet(_visaValueNrec: comp): boolean;
+{
+  result := _visaValueNrec = VIZA_SOGLASOVANO
+         or _visaValueNrec = VIZA_NE_TREBUETSA
+         or _visaValueNrec = VIZA_S_OBSHIH_SCHETOV;
+}
+
+function maxDateIn(d1: date; d2: date; d3: date = 0; d4: date = 0; d5: date = 0; d6: date = 0): date;
+{
+  var d: date; d := 0;
+  if (d1 > d) d := d1;
+  if (d2 > d) d := d2;
+  if (d3 > d) d := d3;
+  if (d4 > d) d := d4;
+  if (d5 > d) d := d5;
+  if (d6 > d) d := d6;
+  result := d;
+}
+
+function LastVizaDateExceptPEU: date; //функция возвращает дату последней проставленной визы
+{
+  if (isVisaSet(brbd.vizaBUHNrec) and
+      isVisaSet(brbd.vizaKAZNrec) and
+      isVisaSet(brbd.vizaKOMNrec)) // все визы кроме ПЭУ есть
+    result := maxDateIn(brbd.vizaKAZDate, brbd.vizaKOMDate, brbd.vizaBUHDate);
+  else
+    result := 0;
+}
+
+function DaysFromLastVizaToVklVReestr: integer; //функция возвращает кол-во дней с последней визы до включения в реестр
+{
+  var d1, d2: date;
+  d1 := LastVizaDateExceptPEU;
+  if d1 != 0
+  {
+    d2 := if(brbd.dvklree=0, cur_date, brbd.dvklree);
+
+    var preres: integer;
+    preres := CalcDaysBetweenDates(d1, d2, false) - 1;
+
+    if preres < 0
+      result := 0
+    else
+      result := preres;
+  }
+  else
+  {
+    result := 0;
+  }
+}
+
+function DaysVklVReestrWithoutVizaPEU: integer; //функция возвращает кол-во дней с "в реестре" до даты визы пэу или до тек.даты, если виза не установлена
+{
+    var d1, d2: date;
+    d1 := brbd.dvklree;
+    if (not isVisaSet(brbd.vizaPEUNrec))
+      d2 := if(brbasedoc.cnote = STATUS_OPLACHEN, brbd.dopl, Cur_Date)
+    else
+      d2 := brbd.vizaPEUDate;
+    result := if(d2 > d1 and d1 > 0, CalcDaysBetweenDates(d1, d2, false) - 1, 0);
 }
 
 procedure CreateTmpTableForMarker(lMarker: longint; tableName: string);
@@ -544,6 +619,9 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
   pXL.CreateTblFld('npp');
   pXL.CreateTblFld('statusName');
   pXL.CreateTblFld('statusComment');
+  pXL.CreateTblFld('daystoree');
+  pXL.CreateTblFld('daysinree');
+
 
   var _npp: longint = 0;
 
@@ -652,14 +730,14 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
                                                brbasedoc.procopl,
                                                if(brbd.total>0 and brbd.sumopl>0,
                                                   round(brbd.sumopl/brbd.total*100,2),
-                                                  ''
-                                               )
+                                                  '')
                                             ) );
       if getfirst brnote = tsOk
         pXL.SetTblStringFldValue('statusName', brnote.name);
       else
         pXL.SetTblStringFldValue('statusName', '');
 
+      /*
       if isStatusVklVReestr(brbasedoc.cnote)
       {
         if getlast brstatlog = tsOk
@@ -669,6 +747,11 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
       }
       else
         pXL.SetTblStringFldValue('statusComment', '');
+      */
+      pXL.SetTblStringFldValue('statusComment', brbd.reestr);
+
+      pXL.SetTblNumberFldValue('daystoree', DaysFromLastVizaToVklVReestr);
+      pXL.SetTblNumberFldValue('daysinree', DaysVklVReestrWithoutVizaPEU);
 
       pXL.InsTblRow;
     } //loop brbd
