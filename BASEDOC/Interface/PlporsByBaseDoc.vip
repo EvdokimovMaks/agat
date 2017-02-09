@@ -13,6 +13,15 @@ var
   pl: F_PLPOR::PlPorSimple;
   SelectedDate: date;
 
+//#region queries
+
+sql query qLastPlporNumber =
+  select top 1 nodok
+  from plpor
+  where tidk = :tidk and year(datetime(datvip,0)) = :year
+  order by datvip desc, nodok desc
+;
+
 sql query qPlatezh =
   select ko.kodplatnds    as KPP,
          bd.nrec          as BaseDocNrec,
@@ -88,8 +97,8 @@ sql query qPlatezh =
          aDDS.vstring     as sDDS,
          aSUMMPKB.vcomp   as aSUMMPKB,
          aSUMMPKB.vstring as sSUMMPKB,
-         spst.Summa * case when bd.viddoc=111 then bd.procopl/100 else 1 end as Summa,
-         spst.NDS * case when bd.viddoc=111 then bd.procopl/100 else 1 end as NDS,
+         cast((spst.Summa + case when bd.vhodnal = 2 then spst.NDS else 0 end) as double) * case when bd.viddoc=111 then bd.procopl/100 else 1 end as Summa,
+         cast(spst.NDS as double) * case when bd.viddoc=111 then bd.procopl/100 else 1 end as NDS,
          spst.RSFromSpec  as RSFromSpec,
          spst.UserMode    as UserMode,
          spst.UserModeStr as UserModeStr,
@@ -194,9 +203,24 @@ sql query qGetBySpCash =
   where spc.nrec = :SpCashNrec
 ;
 
+//#endregion
+
 create view
 as select *
 from plpor, soprhoz, basefin, nalogfin;
+
+function GetNewPlporNumber(aTidk: word; aYear: word): string;
+{
+  var rs: IResultSet;
+  rs := queryManager.createQuery(qLastPlporNumber)
+                    .setParam('tidk', aTidk)
+                    .setParam('year', aYear)
+                    .getResultSet;
+  if rs.getFirst = tsOk
+    result := NextNumStr(rs.row.valat(1));
+  else
+    result := '000001';
+}
 
 procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp; var aTIDK: word; aLogFileName: string; aSelectedDate: date);
 {
@@ -230,13 +254,16 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
         q1 := queryManager.createQuery(qGetBySpCash);
         q1.setParam('SpCashNrec', aCash);
         rs1 := q1.getResultSet;
-        if rs1 = nullref
+        if rs1.getFirst = tsOk
         {
           message('Не найден общий р/сч', error);
           exit;
         }
-        aBankNrec := rs1.row.val('BankNrec');
-        aTIDK := rs1.row.val('UserType');
+        else
+        {
+          aBankNrec := rs1.row.val('BankNrec');
+          aTIDK := rs1.row.val('UserType');
+        }
       }
       else
       {
@@ -275,7 +302,6 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
     ClearBuffer(#plpor);
     plpor.tidkgal   := 1;
 
-    plpor.nodok     := rs.row.val('Nodoc');
     plpor.descr     := sgettune('USER.DESCR');
     plpor.desgr     := sgettune('USER.DESGR');
     plpor.datvip    := aSelectedDate; //rs.row.val('DateDoc');
@@ -288,10 +314,10 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
 
     plpor.tidk      := rs.row.val('UserDocType');
     if plpor.tidk = 0
-      plpor.tidk      := aTIDK;
+      plpor.tidk    := aTIDK;
 
-    plpor.nodok := pl.PlPor_GetNewNumber(plpor.tidkgal, plpor.tidk, plpor.descr, plpor.datvip);
-
+    //pl.PlPor_GetNewNumber(plpor.tidkgal, plpor.tidk, plpor.descr, plpor.datvip);
+    plpor.nodok     := GetNewPlporNumber(plpor.tidk, year(plpor.datvip));
     plpor.cpol      := rs.row.val('Cpol');
     plpor.cbankpol  := rs.row.val('CBank');
     plpor.cgruzotp  := plpor.cpol;
@@ -354,7 +380,7 @@ procedure CreatePlpors(aBaseDocNrec: comp; var aCash: comp; var aBankNrec: comp;
     soprhoz.cstepdoc := plpor.cstepdoc;
     soprhoz.csoprdoc := plpor.nrec;
     soprhoz.tipdoc   := plpor.tidk;
-    soprhoz.tidkgal  := 1;
+    soprhoz.tidkgal  := plpor.tidkgal;
     soprhoz.nodoc    := plpor.nodok;
     soprhoz.descr    := plpor.descr;
     soprhoz.desgr    := plpor.desgr;
