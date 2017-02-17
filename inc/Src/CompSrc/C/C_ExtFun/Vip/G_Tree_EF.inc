@@ -7,25 +7,25 @@
 
 //------------------------------------------------------------------------------
 // AnUchTr.pas
-function  AnInitTreeBuilder  (Integer,Word,Byte)         : LongInt; external 'G_Tree.dll';
-procedure AnUploadTemp       (Longint,Word)                       ; external 'G_Tree.dll';
-procedure AnUploadTemp_New   (Longint,Word,var AnyType)           ; external 'G_Tree.dll';
+function  AnInitTreeBuilder  (Integer,Word,Byte)         : #TPtr; external 'G_Tree.dll';
+procedure AnUploadTemp       (#TPtr,Word)                       ; external 'G_Tree.dll';
+procedure AnUploadTemp_New   (#TPtr,Word,var AnyType)           ; external 'G_Tree.dll';
 //------------------------------------------------------------------------------
 // RepTree.pas
-function  InitTreeBuilderEx  (Integer,Word,Byte)         : LongInt; external 'G_Tree.dll';
-function  InitTreeBuilder    (Integer)                   : LongInt; external 'G_Tree.dll';
+function  InitTreeBuilderEx  (Integer,Word,Byte)         : #TPtr; external 'G_Tree.dll';
+function  InitTreeBuilder    (Integer)                   : #TPtr; external 'G_Tree.dll';
 //------------------------------------------------------------------------------
 // TreeRep.pas
-procedure DoneTreeBuilder    (Longint)                            ; external 'G_Tree.dll';
-function  SetReportStyles    (LongInt,LongInt,String)    : boolean; external 'G_Tree.dll';
-function  TuneLevel          (Longint,Byte,Word,LongInt,String,Word,LongInt,Word)
+procedure DoneTreeBuilder    (#TPtr)                            ; external 'G_Tree.dll';
+function  SetReportStyles    (#TPtr,LongInt,String)    : boolean; external 'G_Tree.dll';
+function  TuneLevel          (#TPtr,Byte,Word,LongInt,String,Word,LongInt,Word)
                                                          : boolean; external 'G_Tree.dll';
-function  TuneSum            (LongInt,Byte,Byte,LongInt) : boolean; external 'G_Tree.dll';
-function  BuildTunedTree     (LongInt,Word)              : boolean; external 'G_Tree.dll';
-Procedure SetTempIndex       (LongInt,Byte)                       ; external 'G_Tree.dll';
-function  AddSorts           (LongInt,String)            : longint; external 'G_Tree.dll';
-procedure MakeSortsInTempIer (Longint)                            ; external 'G_Tree.dll';
-procedure TuneStructName     (Longint,Byte,Word)                  ; external 'G_Tree.dll';
-function  TuneKAULevel       (Longint,Byte,Word)         : word   ; external 'G_Tree.dll';
-procedure TuneRuleSort       (Longint,Byte,Word)                  ; external 'G_Tree.dll';
+function  TuneSum            (#TPtr,Byte,Byte,LongInt) : boolean; external 'G_Tree.dll';
+function  BuildTunedTree     (#TPtr,Word)              : boolean; external 'G_Tree.dll';
+Procedure SetTempIndex       (#TPtr,Byte)                       ; external 'G_Tree.dll';
+function  AddSorts           (#TPtr,String)            : longint; external 'G_Tree.dll';
+procedure MakeSortsInTempIer (#TPtr)                            ; external 'G_Tree.dll';
+procedure TuneStructName     (#TPtr,Byte,Word)                  ; external 'G_Tree.dll';
+function  TuneKAULevel       (#TPtr,Byte,Word)         : word   ; external 'G_Tree.dll';
+procedure TuneRuleSort       (#TPtr,Byte,Word)                  ; external 'G_Tree.dll';
 //------------------------------------------------------------------------------

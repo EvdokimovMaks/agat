@@ -76,6 +76,7 @@ const
   rewMcProp        = 3033;
   remanualNalUch   = 3034;
 	reCO						 = 3035;
+  reSpSFilial      = 3036;
 
   reNoBound            = 4000;
   reTieToKatSopr       = 4001;
@@ -116,4 +117,3 @@ const
 	reNew    = 5100;
 	reDelCur = 5201;
 end
-

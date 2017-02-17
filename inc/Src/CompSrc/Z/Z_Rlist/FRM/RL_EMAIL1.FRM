@@ -144,7 +144,7 @@ end.
 </tr>
 <tr>
   <td width="100" class="bgrColor"><p><strong>Тарифная ставка/Оклад</strong></p></td>
-  <td width="600"><p>&'&&&&&&&&&&&&&.&&</p></td>
+  <td width="600"><p>@@@@@@@@@@@@@@@@@@@@@@@@@@</p></td>
 </tr>
 </table>
 <table width="700" frame="border" border=1 style="font-size: 8pt;">
@@ -572,13 +572,13 @@ end.
 .{ Short_InfoR CheckEnter
   <tr>
     <td style="font-family:Courier;" width="100"><p>^</p></td>
-    <td style="font-family:Courier;" align="right" width="150"><p>^</p></td>
+    <td style="font-family:Courier;" align="right" width="150"><p>&'&&&&&&&&&&&&&.&&</p></td>
     <td align="left" width="550"><p>  ^</p></td>
   </tr>
 .}
   <tr>
     <td style="font-family:Courier;" width="100"><p>ИТОГО:</p></td>
-    <td style="font-family:Courier;" align="right" width="150"><p>^</p></td>
+    <td style="font-family:Courier;" align="right" width="150"><p>&'&&&&&&&&&&&&&.&&</p></td>
     <td align="left" width="550"><p> </p></td>
   </tr>
 </table>
@@ -718,7 +718,7 @@ end.
 </tr>
 <tr>
   <td width="300"><p>^</p></td>
-  <td align="right" width="400"><strong>Тарифная ставка/Оклад:</strong>   &'&&&&&&&&&&&&&.&&</td>
+  <td align="right" width="400"><strong>Тарифная ставка/Оклад:</strong>   @@@@@@@@@@@@@@@@@@@@@@@@@@</td>
 </tr>
 </table>
 <table width="700" frame="border" border=1 style="font-size: 8pt;">
@@ -1090,13 +1090,13 @@ end.
 .{ Short_InfoR CheckEnter
   <tr>
     <td style="font-family:Courier;" width="100"><p>^</p></td>
-    <td style="font-family:Courier;" align="right" width="150"><p>^</p></td>
+    <td style="font-family:Courier;" align="right" width="150"><p>&'&&&&&&&&&&&&&.&&</p></td>
     <td align="left" width="550"><p>  ^</p></td>
   </tr>
 .}
   <tr>
     <td style="font-family:Courier;" width="100"><p>ИТОГО:</p></td>
-    <td style="font-family:Courier;" align="right" width="150"><p>^</p></td>
+    <td style="font-family:Courier;" align="right" width="150"><p>&'&&&&&&&&&&&&&.&&</p></td>
     <td align="left" width="550"><p> </p></td>
   </tr>
 </table>

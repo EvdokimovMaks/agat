@@ -8,11 +8,11 @@
 #define __FpObjTblMonitoring_Inc__
 
 const
-  lcUMI_CommonPrefix    = 'UserMonitorInt_';                 // префикс всех наших данный из FpLockData.DataID
-  lcUMI_Data            = 'UserMonitorInt_Data_';            // инт-с редактирования данных
-  lcUMI_MetaData        = 'UserMonitorInt_MetaData_';        // инт-с редактирования метаданных
-  lcUMI_ExclusiveAccess = 'UserMonitorInt_ExclusiveAccess';  // монопольный доступ включен
-  lcUMI_PrepareToExclusiveAccess = 'UserMonitorInt_Prepare'; // подготовка к установке монопольного доступа
+  lcUMI_CommonPrefix             = 'UserMonitorInt_';                     // префикс всех наших данный из FpLockData.DataID Length=15
+  lcUMI_Data                     = lcUMI_CommonPrefix+'Data_';            // инт-с редактирования данных
+  lcUMI_MetaData                 = lcUMI_CommonPrefix+'MetaData_';        // инт-с редактирования метаданных
+  lcUMI_ExclusiveAccess          = lcUMI_CommonPrefix+'ExclusiveAccess';  // монопольный доступ включен
+  lcUMI_PrepareToExclusiveAccess = lcUMI_CommonPrefix+'Prepare';          // подготовка к установке монопольного доступа
 
   lcUMI_IsData            = 1;       //типы записей в FpObjTblMonitoring
   lcUMI_IsMetaData        = 2;

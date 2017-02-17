@@ -9,6 +9,7 @@ const
   recPodr   = 3001;
   recMOL    = 3002;
   recParty  = 3004;
+  reFilialDOR = 3005;
 
   // ограничения
   reNoBound  = 6000;

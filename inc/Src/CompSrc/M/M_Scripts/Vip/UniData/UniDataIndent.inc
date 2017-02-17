@@ -32,6 +32,8 @@ const
   reRole4_Indent       = 2014;
   reRole5_Indent       = 2015;
 
+  reFilialIndent       = 2016;
+
   reCode1_Indent       = 2021;
   reCode2_Indent       = 2022;
   reCode3_Indent       = 2023;
@@ -66,4 +68,3 @@ const
 
   reInfo_Indent        = 10000;
 end
-

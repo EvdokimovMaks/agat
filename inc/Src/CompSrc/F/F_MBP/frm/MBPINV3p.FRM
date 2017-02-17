@@ -29,11 +29,12 @@
   endDate : Date
   MolPost : String
   MBPType : Word
+  TipName  : Word
 .endFields
   #CommissionBody(MBPInvProtPlus)
   NRec - ^
   ^ ^  ^ ^ ^ ^  ^ ^  ^ ^ ^  ^
-  ^ ^ ^ ^ ^
+  ^ ^ ^ ^ ^ ^
 .{
 .Fields
   MBPName : String  MBPKod : String
@@ -42,8 +43,9 @@
   PartyKod : String PartyName : String
   State : Word  Izn : Double
   cntKol: Double  fctKol : Double  dOst : Date
+  Sizes : String
 .endFields
-  ^ ^ ^ ^  ^ ^ ^  ^ ^  ^ ^  ^ ^  ^
+  ^ ^ ^ ^  ^ ^ ^  ^ ^  ^ ^  ^ ^  ^  ^
 .}
 
 .endForm
@@ -301,8 +303,11 @@ end.
     if (Izn > 0)
       MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' изн '+ String(Izn)+ '%';
 
-    if (PartyName <> '')
-      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + PartyName;
+    if (PartyName <> '') and (TipName > 0)
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + if (TipName = 2, PartyKod, PartyName);
+
+    if (Sizes <> '')
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' размер: ' + Sizes;
 
     MBPInfo := MBPName + if (MBPInfo = '', '', ' (' + MBPInfo + ')');
   }
@@ -452,7 +457,8 @@ end.
   placeMC
   DateToStr(begDate, '"DD" mon YYYY г.')
   Podr  MOL
-  MBPKod  MBPName  InvNum  PasNum
+  MBPKod  MBPName + if (Sizes = '', '', ' (размер: ' + Sizes + ')')
+  InvNum  PasNum
   PartyName
   if ((MBPName = '') and (MBPKod = ''), '', if (State = 0, 'скл', 'эксп'))
   if (Izn > 0, String(Izn), '')
@@ -493,7 +499,8 @@ end.
   CommonFormHeader
   if (MBPType = 2, 'СФО', 'спецоснастки')
   placeMC  DateToStr(begDate, '"DD" mon YYYY г.')  Podr  MOL
-  MBPKod  MBPName  InvNum  PasNum
+  MBPKod  MBPName + if (Sizes = '', '', ' (размер: ' + Sizes + ')')
+  InvNum  PasNum
   PartyName
   if ((MBPName = '') and (MBPKod = ''), '', if (State = 0, 'скл', 'эксп'))
   if (Izn > 0, String(Izn), '')
@@ -540,7 +547,8 @@ end.
   placeMC
   Podr  MOL  DateToStr(begDate, 'DD/MM/YYYY')
 
-  MBPKod  MBPName  InvNum  PasNum
+  MBPKod  MBPName + if (Sizes = '', '', ' (размер: ' + Sizes + ')')
+  InvNum  PasNum
   PartyName
   if ((MBPName = '') and (MBPKod = ''), '', if (State = 0, 'скл', 'эксп'))
   if (Izn > 0, String(Izn), '')
@@ -759,8 +767,11 @@ end.
     if (Izn > 0)
       MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' изн ' + String(Izn)+ '%';
 
-    if (PartyName <> '')
-      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + PartyName;
+    if (PartyName <> '') and (TipName > 0)
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + if (TipName = 2, PartyKod, PartyName);
+
+    if (Sizes <> '')
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' размер: ' + Sizes;
 
     MBPInfo := MBPName + if (MBPInfo = '', '', ' (' + MBPInfo + ')');
   }
@@ -1068,8 +1079,11 @@ end.
     if (Izn > 0)
       MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' изн ' + String(Izn) + '%';
 
-    if (PartyName <> '')
-      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + PartyName;
+    if (PartyName <> '') and (TipName > 0)
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + if(TipName = 2, PartyKod, PartyName);
+
+    if (Sizes <> '')
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' размер: ' + Sizes;
 
     MBPInfo := MBPName + if (MBPInfo = '', '', ' (' + MBPInfo + ')');
 
@@ -1430,8 +1444,11 @@ end.
     if (Izn > 0)
       MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' изн ' + String(Izn) + '%';
 
-    if (PartyName <> '')
-      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + PartyName;
+    if (PartyName <> '') and (TipName > 0)
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + if (TipName = 2, PartyKod, PartyName);
+
+    if (Sizes <> '')
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' размер: ' + Sizes;
 
     MBPInfo := MBPName + if (MBPInfo = '', '', ' (' + MBPInfo + ')');
 

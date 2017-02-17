@@ -11,6 +11,9 @@ const
   // режимы проверки алгоритмов
   lc_CheckAlgMode_OnlyHead = 0;  // проверить только заголовочные поля
   lc_CheckAlgMode_FullData = 1;  // проверить все данные, в т.ч. V4A-код
+
+  // количество строк разделителя алгоритмов в комплексном алгоритме
+  lc_ComplexAlg_DeviderLineCount : LongInt = 4;
 end; // const
 
 #endif//__TRFuncAlg_Inc__

@@ -168,6 +168,7 @@ Table STRUCT MemRes "Результат распределения"
 , SummN        : tSumma         
 , vSummN       : tSumma         
 , sNameVar     : String         
+, bNotRasp     : boolean // нераспределенная позиция
 )
 With Index
 (

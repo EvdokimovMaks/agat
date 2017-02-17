@@ -17,7 +17,7 @@
   NaimPred BegDate  EndDate
   AnalGroup
 
-   KatMCName KatMCBarKod SoprDopdOpr KatFromName KatEdName
+   KatMCName KatMCBarKod SoprDopdOpr SoprDopdOpr2  KatFromName KatEdName
    PutLstNrec PutLstNPL
    KolVo Price Summa
   AnalItg
@@ -33,7 +33,7 @@
 ^
 
 .{ CheckEnter DocAnalMC
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}
 .{ CheckEnter TotalAnalMC
 ^

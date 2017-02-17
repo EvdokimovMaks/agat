@@ -371,4 +371,30 @@ function ClipboardText_SubStr(aClipText: longint, Index: longint, Count: longint
 #end
 procedure ClipboardText_Free(aClipText: longint); external 'SILog.dll#ClipboardText_Free';
 
+#doc
+  </brief>
+
+  <p>
+    вызывает диалог выбора файла.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>aWildCard</code> - маска.</li>
+    <li><code>ATitle</code> - заголовок окна.</li>
+    <li><code>InputName</code> - заголовок label.</li>
+    <li><code>AOptions</code> - флаги
+        CONST fdOkButton = 1;
+              fdOpenButton    = 2;
+              fdReplaceButton = 4;
+              fdClearButton   = 8;
+              fdHelpButton    = 16;
+              fdSaveButton    = 32.</li>
+    <li><code>HistoryId</code> - флаг hiOpenFileDialog.</li>
+  </ul>
+#end
+function SelFileDialogVip(aWildCard : String, ATitle: String, InputName : String, AOptions: Word, HistoryId : longint,
+                       var OutName : String, var OutFlags : Word): word; external 'G_Common.dll';
+
+
 #end

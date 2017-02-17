@@ -36,7 +36,7 @@
 //    Правило касается как последовательности разделов, так и их оформления.
 //
 // Правило номер 4: Если функция принадлежит какой-либо группе, то:
-//    - в "См. также" должна быть ссылка на статью, посвященную соотв. группе функций
+//    - в "См. также" первая ссылка должна быть на статью, посвященную соотв. группе функций
 //    - в статье, посвященной группе функций, добавляем ссылку на данную функцию (чтобы все узнали о нашей новой функции!)
 //    Ссылка на корневую статью в такой функции НЕ_НУЖНА!
 //
@@ -117,8 +117,7 @@
   <p>
     Табель реализован как контекст. Это значит, что перед использованием тех или иных функций
     требуется предварительно этот контекст настроить. Для инициализации табеля как такового
-    требуется вызвать <code>InitWorkingTable</code> (но лучше
-    <a href="art--WTABELDOC_UsingContexts.htm">использовать прикладной контекст <code>'WorkingTable'</code></a>).
+    следует <a href="art--WTABELDOC_UsingContexts.htm">захватить прикладной контекст <code>'WorkingTable'</code></a>.
     Для загрузки данных по конкретному человеку за определенный
     месяц и год следует вызвать функцию <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code>.
     После этого можно работать с остальными функциями. Некоторые данные, однако, могут
@@ -154,10 +153,13 @@
   <code><a href="exf--InitWorkingTable.htm">InitWorkingTable</a></code> <br />
   <code><a href="exf--DoneWorkingTable.htm">DoneWorkingTable</a></code> <br />
   <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code> <br />
-  <code><a href="exf--ReSetWorkingTable.htm">ReSetWorkingTable</a></code> <br />
-  <code><a href="exf--ReFormWorkingTable.htm">ReFormWorkingTable</a></code> <br />
-  <code><a href="exf--ReCalcWorkingTable.htm">ReCalcWorkingTable</a></code> <br />
+  <code><a href="exf--ResetWorkingTable.htm">ResetWorkingTable</a></code> <br />
+  <code><a href="exf--ReformWorkingTable.htm">ReformWorkingTable</a></code> <br />
+  <code><a href="exf--RecalcWorkingTable.htm">RecalcWorkingTable</a></code> <br />
   <code><a href="exf--RefreshWorkingTable.htm">RefreshWorkingTable</a></code> <br />
+  <code><a href="exf--WT_PersonalAccount.htm">WT_PersonalAccount</a></code> <br />
+  <code><a href="exf--WT_Month.htm">WT_Month</a></code> <br />
+  <code><a href="exf--WT_Year.htm">WT_Year</a></code> <br />
   <code><a href="exf--WT_IsNew.htm">WT_IsNew</a></code> <br />
   <code><a href="exf--WT_GetCurrent.htm">WT_GetCurrent</a></code> <br />
   <code><a href="exf--WT_LoadTunes.htm">WT_LoadTunes</a></code> <br />
@@ -171,19 +173,7 @@
 #doc article WTABELDOC_UsingContexts
   <brief>Инициализация табеля при помощи механизма прикладных контекстов</brief>
   <p>
-    Использование <link objInterface Z_ZAR::IContextList>прикладного контекста</link>
-    <code>'WorkingTable'</code> является предпочтительным и единственно рекомендуемым
-    способом инициализации табельного функционала, поскольку:
-  </p>
-  <ul>
-    <li>С вероятностью 100% гарантирует соблюдение парности вызовов
-      <code><a href="exf--InitWorkingTable.htm">InitWorkingTable</a></code>/<code><a href="exf--DoneWorkingTable.htm">DoneWorkingTable</a></code></li>
-    <li>Снимает с прикладного разработчика необходимость отслеживать согласованность вызовов
-      инициализации/уничтожения</li>
-  </ul>
-  <p>
-    Инициализация табеля при помощи прикладного контекста <code>'WorkingTable'</code>
-    осуществляется следующим образом:
+    Для инициализация табеля нужно проделать следующие шаги:
   </p>
   <pre class="example">
   // 1. Подключить заголовочный файл:
@@ -222,8 +212,21 @@
     Действий 1, 2, 3 достаточно для того, чтобы безбоязненно обращаться к любым табельным функциям
     в коде данного интерфейса. Больше для инициализации табеля ничего добавлять не нужно.
   </p>
+
+  <h3>Подробнее</h3>
   <p>
-    Инициализация табеля (фактический вызов <code><a href="exf--InitWorkingTable.htm">InitWorkingTable</a></code>)
+    Использование <link objInterface Z_ZAR::IContextList>прикладного контекста</link>
+    <code>'WorkingTable'</code> является предпочтительным и единственно рекомендуемым
+    способом инициализации табельного функционала, потому что:
+  </p>
+  <ul>
+    <li>С вероятностью 100% гарантирует соблюдение парности вызовов
+      <code><a href="exf--InitWorkingTable.htm">InitWorkingTable</a></code>/<code><a href="exf--DoneWorkingTable.htm">DoneWorkingTable</a></code></li>
+    <li>Снимает с прикладного разработчика необходимость отслеживать согласованность вызовов
+      инициализации/уничтожения</li>
+  </ul>
+  <p>
+    Фактически вызов инициализатора табеля (функции <code><a href="exf--InitWorkingTable.htm">InitWorkingTable</a></code>)
     происходит при добавлении контекста в сессию:
   </p>
   <pre class="example">
@@ -233,6 +236,13 @@
     Деинициализация табеля (вызов <code><a href="exf--DoneWorkingTable.htm">DoneWorkingTable</a></code>)
     выполнится при уничтожении сессии (переменной <code>CS</code>), которое, в свою очередь,
     осуществляется при выгрузке самого интерфейса.
+  </p>
+
+  <h3>Замечание</h3>
+  <p>
+    Если старый код, содержащий явные вызовы инициализаторов и финализаторов, переписывается под использование
+    механизма прикладных контекстов, то <b>все</b> оставшиеся в коде интерфейса вызовы инициализаторов и финализаторов
+    необходимо стереть.
   </p>
 
   <h3>См. также</h3>
@@ -338,17 +348,19 @@ procedure DoneWorkingTable; external #G_WorkTable;
   </ul>
   <h3>Возвращаемое значение</h3>
   <p><p>
-	  Возвращает <code>-1</code> в случае неудачного завершения или <code>0</code> в противном случае.</p>
+	  Возвращает <code>0</code> в случае удачного завершения, <code>-1</code> &ndash; в случае неудачного завершения.</p>
   </p>
   <h3>Примечание</h3>
   <p>
-	  В случае удачного завершения функция устанавливает контекст, в котором затем работают практически все
-    функции подсчета количества дней/часов.
+	  В случае удачного завершения функция устанавливает контекст (лицевой счет, месяц, год),
+    в котором затем работают все функции подсчета количества дней/часов. Запросить параметры,
+    с которыми был загружен табель, можно при помощи функций <code><a href="exf--WT_PersonalAccount.htm">WT_PersonalAccount</a></code>,
+    <code><a href="exf--WT_Month.htm">WT_Month</a></code> и <code><a href="exf--WT_Year.htm">WT_Year</a></code>.
   </p>
   <p>
-	  Повторный вызов функции с теми же аргументами не выполнит никаких действий, если только текущие лицевой
-    счет, табель или маска ручной корректировки табеля не были модифицированы. Чтобы гарантировать полную
-    загрузку табеля заново, вставьте вызов процедуры <code><a href="exf--ReSetWorkingTable.htm">ReSetWorkingTable</a>
+	  Повторный вызов <code>LoadWorkingTable</code> с теми же аргументами не выполнит никаких действий,
+    если только текущие лицевой счет (LSCHET), табель (LSTAB) или маска ручной корректировки табеля (LSTABMSK)
+    не были модифицированы. Чтобы гарантировать полную загрузку табеля заново, вставьте вызов процедуры <code><a href="exf--ResetWorkingTable.htm">ResetWorkingTable</a>
     </code> перед вызовом <code>LoadWorkingTable</code>.
   </p>
   <h3>Пример</h3>
@@ -366,11 +378,60 @@ procedure DoneWorkingTable; external #G_WorkTable;
   <h3>См. также</h3>
   <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
   <a href="art--WTABELDOC_UsingContexts.htm">Инициализация табеля при помощи механизма прикладных контекстов</a> <br />
-  <code><a href="exf--ReSetWorkingTable.htm">ReSetWorkingTable</a></code> <br />
+  <code><a href="exf--ResetWorkingTable.htm">ResetWorkingTable</a></code> <br />
   <code><a href="exf--ReformWorkingTable.htm">ReformWorkingTable</a></code> <br />
+  <code><a href="exf--WT_PersonalAccount.htm">WT_PersonalAccount</a></code> <br />
+  <code><a href="exf--WT_Month.htm">WT_Month</a></code> <br />
+  <code><a href="exf--WT_Year.htm">WT_Year</a></code> <br />
 	<code><a href="exf--WT_IsNew.htm">WT_IsNew</a></code>
 #end
 function LoadWorkingTable(Account: comp, Month: word, Year: word): integer; external #G_WorkTable;
+
+#doc
+  <brief>Возвращает лицевой счет, для которого загружен табель</brief>
+  <p>
+    Возвращает <code>nRec</code> лицевого счета, для которого загружен табель в настоящий момент.
+    Если табель не загружен, то возвращает <code>0</code>.
+  </p>
+
+  <h3>См. также</h3>
+  <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
+  <code><a href="exf--WT_Month.htm">WT_Month</a></code> <br />
+  <code><a href="exf--WT_Year.htm">WT_Year</a></code> <br />
+  <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code> <br />
+#end
+function WT_PersonalAccount: comp; external #G_WorkTable;
+
+#doc
+  <brief>Возвращает месяц, за который загружен табель</brief>
+  <p>
+    Возвращает номер месяца, за который загружен табель в настоящий момент.
+    Если табель не загружен, то возвращает <code>0</code>.
+  </p>
+
+  <h3>См. также</h3>
+  <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
+  <code><a href="exf--WT_PersonalAccount.htm">WT_PersonalAccount</a></code> <br />
+  <code><a href="exf--WT_Year.htm">WT_Year</a></code> <br />
+  <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code> <br />
+#end
+function WT_Month: word; external #G_WorkTable;
+
+#doc
+  <brief>Возвращает год месяца, за который загружен табель</brief>
+  <p>
+    Возвращает год, за месяц которого загружен табель в настоящий момент
+    (параметр <code>Year</code> функции <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code>).
+    Если табель не загружен, то возвращает <code>0</code>.
+  </p>
+
+  <h3>См. также</h3>
+  <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
+  <code><a href="exf--WT_PersonalAccount.htm">WT_PersonalAccount</a></code> <br />
+  <code><a href="exf--WT_Month.htm">WT_Month</a></code> <br />
+  <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code> <br />
+#end
+function WT_Year: integer; external #G_WorkTable;
 
 #doc
   <brief>Проверяет, существует ли текущий табель в базе.</brief>
@@ -381,10 +442,10 @@ function LoadWorkingTable(Account: comp, Month: word, Year: word): integer; exte
   </p>
   <h3>Примечание</h3>
   <p>
-      Текущий контекст табеля определяется при загрузке табеля (функция <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code>).
-	    Имеет смысл использовать <code>WT_IsNew</code> после вызова
-      <code>LoadWorkingTable</code>, для того, чтобы определить,
-      существовал ли табель на момент попытки его загрузки.
+    Текущий контекст табеля определяется при загрузке табеля (функция <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code>).
+    Имеет смысл использовать <code>WT_IsNew</code> после вызова
+    <code>LoadWorkingTable</code>, для того, чтобы определить,
+    существовал ли табель на момент попытки его загрузки.
   </p>
 
   <h3>См. также</h3>
@@ -393,15 +454,19 @@ function LoadWorkingTable(Account: comp, Month: word, Year: word): integer; exte
 function WT_IsNew: boolean; external #G_WorkTable;
 
 #doc
-  <brief>Очищает текущий контекст табеля.</brief>
+  <brief>Сбросить загруженный табель.</brief>
   <p>
-    Очищает контекст, установленный до этого функцией <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code>.
+    Очищает контекст, установленный до этого функцией <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code>
+    (делает табель снова незагруженным). Функции
+    <code><a href="exf--WT_PersonalAccount.htm">WT_PersonalAccount</a></code>,
+    <code><a href="exf--WT_Month.htm">WT_Month</a></code>, <code><a href="exf--WT_Year.htm">WT_Year</a></code>
+    после вызова данной функции снова возвращают <code>0</code>, до момента следующей загрузки.
   </p>
 
   <h3>См. также</h3>
   <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
 #end
-procedure ReSetWorkingTable;  external #G_WorkTable;
+procedure ResetWorkingTable;  external #G_WorkTable;
 
 #doc
   <brief>
@@ -416,7 +481,7 @@ procedure ReSetWorkingTable;  external #G_WorkTable;
   </ul>
   <h3>Возвращаемое значение</h3>
   <p><p>
-	  Возвращает <code>-1</code> в случае неудачного завершения, иначе &ndash; <code>0</code>.</p>
+	  Возвращает <code>0</code> в случае удачного завершения, иначе &ndash; <code>-1</code>.</p>
   </p>
   <h3>См. также</h3>
   <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
@@ -424,7 +489,7 @@ procedure ReSetWorkingTable;  external #G_WorkTable;
   <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code> <br />
   <code><a href="exf--RefreshWorkingTable.htm">RefreshWorkingTable</a></code>
 #end
-function ReFormWorkingTable(Account: comp, Month: word, Year: word): integer; external #G_WorkTable;
+function ReformWorkingTable(Account: comp, Month: word, Year: word): integer; external #G_WorkTable;
 
 #doc
   <brief>Переформирование(формирование) табеля.</brief>
@@ -443,13 +508,13 @@ function ReFormWorkingTable(Account: comp, Month: word, Year: word): integer; ex
   </ul>
   <h3>Возвращаемое значение</h3>
   <p>
-  	Возвращает <code>-1</code> в случае неудачного завершения, или <code>0</code> в противном случае.
+  	Возвращает <code>0</code> в случае удачного завершения, <code>-1</code> &ndash; в случае неудачного завершения.
   </p>
   <h3>См. также</h3>
   <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
   <code><a href="exf--ReformWorkingTable.htm">ReformWorkingTable</a></code> <br />
 #end
-function ReCalcWorkingTable(Account: comp, Month: word, Year: word): integer; external #G_WorkTable;
+function RecalcWorkingTable(Account: comp, Month: word, Year: word): integer; external #G_WorkTable;
 
 #doc
   <brief>Обновить табель</brief>
@@ -467,7 +532,7 @@ function ReCalcWorkingTable(Account: comp, Month: word, Year: word): integer; ex
   </ul>
   <h3>Возвращаемое значение</h3>
   <p><p>
-  	Возвращает <code>-1</code> в случае неудачного завершения, или <code>0</code> в противном случае.</p>
+  	Возвращает <code>0</code> в случае удачного завершения, <code>-1</code> &ndash; в cлучае неудачного завершения.</p>
   </p>
   <h3>См. также</h3>
   <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
@@ -636,7 +701,7 @@ function WT_GetCurrent: comp; external #G_WorkTable;
       не входящих в рабочие часы оплачиваемых отклонений, приходящихся на такой день)</td> </tr>
     <tr> <td><code>hkPaid</code></td>                   <td><code>12</code></td> <td>оплачиваемые часы
       (рабочие часы плюс часы приходящегося на день оплачиваемого отклонения)</td> </tr>
-    <tr> <td><code>hkOverworkForPeriod</code></td>      <td><code>14</code></td> <td>переработка за период</td> </tr>
+    <tr> <td><code><b><font color="red">*</font></b>hkOverworkForPeriod</code></td>  <td><code>14</code></td> <td>переработка за период</td> </tr>
     <tr> <td><code><b><font color="red">*</font></b>hkCarry</code></td>  <td><code>17</code></td> <td>рабочие часы, переходящие на следующие сутки (не работает: всегда <code>0</code>)</td> </tr>
     <tr> <td><code>hkTimeForSickListEnteringKind</code></td> <td><code>18</code></td> <td>рабочие часы для расчета времени по больничному (учет входимости видов оплат)</td> </tr>
     <tr> <td><code>hkWorkDayAvgTime</code></td>         <td><code>20</code></td> <td>средняя продолжительность рабочего дня, часов</td> </tr>
@@ -678,6 +743,16 @@ function WT_GetCurrent: comp; external #G_WorkTable;
       (сумма <code>hkHoliday</code> и <code>hkHolidayForLeave</code>)</td> </tr>
     <tr> <td><code>hkWholeWeekend</code></td>           <td><code>43</code></td> <td>часы работы в выходные, как за оплату, так и за отгул
       (сумма <code>hkWeekend</code> и <code>hkWeekendForLeave</code>)</td> </tr>
+    <tr> <td><code>hkSummedOverworkRestBorder</code></td>    <td><code>44</code></td> <td>граница между сверхурочными и остатком сверхурочных
+      для суммированного учёта. Для получения остатка следует считать данные часы за период и сравнивать
+      с <code>hkSummedOverhours</code> за этот же период.</td> </tr>
+    <tr> <td><code>hkWorkingWhileVacation</code></td>        <td><code>45</code></td> <td>рабочие часы во время отпуска по уходу за ребёнком</td> </tr>
+    <tr> <td><code>hkWorkingWithBusinessTrips</code></td>    <td><code>46</code></td> <td>фактически отработанные часы плюс часы командировок, которые не входят
+      в фактически отработанное время</td> </tr>
+    <tr> <td><code>hkCreditedHarmful</code></td>        <td><code>47</code></td> <td>вредные часы, идущие "в зачёт" для РБ.
+      Равны <code>hkICHarmful</code>, если день по итогу вредный. В остальных случаях - ноль.</td> </tr>
+    <tr> <td><code>hkCreditedOrdinary</code></td>       <td><code>48</code></td> <td>"обычные" часы для пары к <code>hkCreditedHarmful</code>.
+      В сумме с <code>hkCreditedHarmful</code> дают <code>hkWorkingForIslbrCalculations</code></td> </tr>
   </table>
   <p>
     <code><b><font color="red">*</font></b></code> &ndash; устаревшие виды часов.
@@ -692,7 +767,7 @@ function WT_GetCurrent: comp; external #G_WorkTable;
   <p>Возможные типы графиков представлены в таблице.</p>
   <table>
     <tr> <td>Константа</td> <td>Значение</td> <td>Описание</td> </tr>
-    <tr> <td><code>stActual</code></td>   <td><code>1</code></td>  <td>фактический табель</td> </tr>
+    <tr> <td><code>stActual</code></td>   <td><code>1</code></td>  <td>фактические данные (табель)</td> </tr>
     <tr> <td><code>stPlanned</code></td>  <td><code>0</code></td>  <td>плановый график</td> </tr>
     <tr> <td><code>stBalanced</code></td> <td><code>-1</code></td> <td>балансный график</td> </tr>
     <tr> <td><code>stStandard</code></td> <td><code>-2</code></td> <td>график нормы
@@ -1064,7 +1139,8 @@ function WT_GetHoursBwDatesEx(HourKind: word, BeginningHour: double, MaxDailyHou
     <tr> <td><code>dkSpecial</code></td>            <td><code>1</code></td>  <td>больничный/отпуск/уже уволен/еще не принят на работу</td> </tr>
     <tr> <td><code>dkWorking</code></td>            <td><code>2</code></td>  <td>день, считающийся рабочим по закону (зависит от настроек)</td> </tr>
     <tr> <td><code>dkHoliday</code></td>            <td><code>3</code></td>  <td>праздничный день</td> </tr>
-    <tr> <td><code>dkWeekEnd</code></td>            <td><code>4</code></td>  <td>выходной</td> </tr>
+    <tr> <td><code>dkWeekEnd</code></td>            <td><code>4</code></td>  <td>выходной (для <a href="art--WTABELDOC_ScheduleTypes.htm">типа графика</a> <code>stActual</code>
+      фактически означает, помечен ли этот день именно что условным обозначением выходного)</td> </tr>
     <tr> <td><code>dkOverWork</code></td>           <td><code>5</code></td>  <td rowspan=2>дни работы сверхурочно</td> </tr>
     <tr> <td><code>dkOverworkRest</code></td>       <td><code>6</code></td>  </tr>
     <tr> <td><code>dkEvening</code></td>            <td><code>7</code></td>  <td>дни работы вечером</td> </tr>
@@ -1093,16 +1169,23 @@ function WT_GetHoursBwDatesEx(HourKind: word, BeginningHour: double, MaxDailyHou
     <tr> <td><code>dkWorkingWorkingHoliday</code></td>  <td><code>28</code></td> <td>дни работы в рабочий по плану праздничный день </td> </tr>
     <tr> <td><code>dkWorkingWeekendHoliday</code></td>  <td><code>29</code></td> <td>дни работы в нерабочий по плану праздничный день за оплату</td> </tr>
     <tr> <td><code>dkICOrdinary</code></td>             <td><code>30</code></td> <td>дни, отработанные в нормальных условиях труда
-      (с <a href="exf--WT_GetInsalubrityCode.htm#InsalubrityCodes">кодом вредности</a> ICOrdinary), и приравнивающиеся к таковым</td> </tr>
+      (с <a href="exf--WT_GetInsalubrityCode.htm#InsalubrityCodes">кодом вредности</a> <code>ICOrdinary</code>), и приравнивающиеся к таковым</td> </tr>
     <tr> <td><code>dkICHarmful</code></td>              <td><code>31</code></td> <td>дни, отработанные во вредных условиях труда
-      (с <a href="exf--WT_GetInsalubrityCode.htm#InsalubrityCodes">кодом вредности</a> ICHarmful), и приравнивающиеся к таковым</td> </tr>
+      (с <a href="exf--WT_GetInsalubrityCode.htm#InsalubrityCodes">кодом вредности</a> <code>ICHarmful</code>), и приравнивающиеся к таковым</td> </tr>
     <tr> <td colspan=3>Виды дней, поддерживаемые только функциями с постфиксом -Ex</td> </tr>
     <tr> <td><code>dkICExtraHarmful</code></td>         <td><code>32</code></td> <td>дни, отработанные в особо вредных условиях труда
-      (с <a href="exf--WT_GetInsalubrityCode.htm#InsalubrityCodes">кодом вредности</a> ICExtraHarmful), и приравнивающиеся к таковым</td> </tr>
+      (с <a href="exf--WT_GetInsalubrityCode.htm#InsalubrityCodes">кодом вредности</a> <code>ICExtraHarmful</code>), и приравнивающиеся к таковым</td> </tr>
     <tr> <td><code>dkWorkingForIslbrCalculations</code></td> <td><code>33</code></td> <td>дни работы, принимающие участие в расчетах начислений по доп. тарифам</td> </tr>
     <tr> <td><code>dkShiftable</code></td>          <td><code>34</code></td> <td>дни, могущие связываться <a href="art--WTABELDOC_Shifts.htm">переходящими рабочими сменами</a> </td> </tr>
     <tr> <td><code>dkWorkingHolidayForLeave</code></td> <td><code>35</code></td> <td>дни работы в нерабочий по плану праздничный день за отгул</td> </tr>
     <tr> <td><code>dkWorkingWeekendForLeave</code></td> <td><code>36</code></td> <td>дни работы в выходной день за отгул</td> </tr>
+    <tr> <td><code>dkHarmfulForVacations</code></td>    <td><code>37</code></td> <td>дни, считающиеся вредными с точки зрения отпусков за вредные условия труда</td> </tr>
+    <tr> <td><code>dkWithSummedOverhours</code></td>    <td><code>38</code></td> <td>дни, в которые положительное кол-во суммированных сверхурочных часов
+      (<code><a href="art--WTABELDOC_HourKinds.htm">hkSummedOverhours</a></code>)</td> </tr>
+    <tr> <td><code>dkWorkingWhileVacation</code></td>   <td><code>39</code></td> <td>дни, содержащие работу во время отпуска по уходу за ребёнком (одновременно рабочие часы и часы отпуска)</td> </tr>
+    <tr> <td><code>dkWorkingWithBusinessTrips</code></td> <td><code>40</code></td> <td>дни, содержащие фактически отработанное время и/или время командировок, не входящих в фактически отработанное время</td> </tr>
+    <tr> <td><code>dkSchrodingersDay</code></td>        <td><code>41</code></td> <td>наличие и больничного и отпуска по уходу за ребёнком в один день</td> </tr>
+    <tr> <td><code>dkWeekendWhileVacation</code></td>   <td><code>42</code></td> <td>выходной во время работы во время отпуска по уходу за ребёнком</td> </tr>
   </table>
   <p>
     <code><b><font color="red">*</font></b></code> &ndash; устаревшие виды дней.
@@ -4290,12 +4373,27 @@ procedure WT_UndoDayMask; external #G_WorkTable;
     <tr> <td><code>cfUselessDays</code></td>     <td><code>4</code></td>  <td>Выбрасывать из периодов "бесполезные дни" (см. <code><a href="exf--WT_IsDayUseless.htm">WT_IsDayUseless</a></code>)</td> </tr>
     <tr> <td><code>cfFilterChange</code></td>    <td><code>9</code></td>  <td>Разбивать периоды по дням, удовлетворяющим/не удовлетворяющим <a href="art--WTABELDOC_AboutFilters.htm">поденному фильтру</a>.
       В отличие от флага <code>cfFilter</code>, дни, не удовлетворяющие фильтру, не выбрасываются из периодов.</td> </tr>
-    <tr> <td><code>cfHired</code></td>           <td><code>16</code></td> <td>Выбрасывать из периодов дни, в которые был уже уволен/ещё не принят на работу</td> </tr>
+    <tr> <td><code>cfHired</code></td>           <td><code>16</code></td> <td>Выбрасывать из периодов дни, в которые был уже уволен/ещё не принят на работу. <br />
+      Актуально в тех случаях, когда несколько раз принимали на работу и увольняли,
+      чтобы учитывать разрывы между периодами работы. Потому что самые крайние даты
+      приёма/увольнения анализируются и без этого флага, и дни за их пределами
+      сами выбрасываются из периодов. <br />
+      Не употреблять совместно с <code>cfDisregardHired</code>.</td> </tr>
     <tr> <td><code>cfInsalubrityRef</code></td>  <td><code>32</code></td> <td>Разбивать периоды по изменениям Особых условий/КПС. См. <code><a href="exf--WT_GetInsalubrity.htm">WT_GetInsalubrity</a></code> </td> </tr>
     <tr> <td><code>cfInsalubrityCode</code></td> <td><code>64</code></td> <td>Разбивать периоды по изменениям <a href="exf--WT_GetInsalubrityCode.htm#InsalubrityCodes">кода вредности</a></td> </tr>
-    <tr> <td><code>cfPenStajInsalubrityRef</code></td> <td><code>128</code></td> <td>Разбивать периоды по изменениям Особых условий/КПС для пенсионного стажа.
+    <tr> <td><code><b><font color="red">*</font></b>cfPenStajInsalubrityRef</code></td> <td><code>128</code></td> <td>Разбивать периоды по изменениям Особых условий/КПС для пенсионного стажа.
       См. <code><a href="exf--WT_GetPenStajInsalubrity.htm">WT_GetPenStajInsalubrity</a></code></td> </tr>
+    <tr> <td><code>cfDisregardHired</code></td>  <td><code>256</code></td> <td><b>Совсем</b> не учитывать даты приёма/увольнения. <br />
+      От простого отсутствия флага <code>cfHired</code> отличается тем, что по умолчанию
+      все периоды грузятся всё-таки в пределах "крайних" дат приёма/увольнения
+      (максимальных из лицевого счета / истории увольнений), а данный флажок делает так, чтобы
+      даже эти даты не учитывались. <br />
+      Не употреблять совместно с <code>cfHired</code>.
+    </td> </tr>
   </table>
+  <p>
+    <code><b><font color="red">*</font></b></code> &ndash; устаревшие флажки.
+  </p>
 
   <h3>См. также</h3>
   <a href="art--WTABELDOC_AboutWT.htm">Табель учета рабочего времени</a> <br />
@@ -4532,8 +4630,8 @@ function WT_GetPeriod(PeriodNumber: longint, var Beginning: date, var Ending: da
     <tr> <td><code>aaHours</code></td>        <td><code>5</code></td> <td>кол-во часов неявки</td>         <td><code>double</code></td> </tr>
     <tr> <td><code>aaDescription</code></td>  <td><code>6</code></td> <td>описание неявки</td>             <td><code>string</code></td> </tr>
     <tr> <td><code>aaPaymentCode</code></td>  <td><code>7</code></td> <td>код вида оплаты</td>             <td><code>word</code></td> </tr>
-    <tr> <td><code>aaSourceRecord</code></td> <td><code>8</code></td> <td>nrec записи-источника</td>                   <td><code>comp</code></td> </tr>
-    <tr> <td><code>aaNotation</code></td>     <td><code>9</code></td>  <td>nrec условного обозначения</td>             <td><code>comp</code></td> </tr>
+    <tr> <td><code>aaSourceRecord</code></td> <td><code>8</code></td> <td><code>nRec</code> записи-источника</td>                   <td><code>comp</code></td> </tr>
+    <tr> <td><code>aaNotation</code></td>     <td><code>9</code></td>  <td><code>nRec</code> условного обозначения</td>             <td><code>comp</code></td> </tr>
     <tr> <td><code>aaKind</code></td>         <td><code>10</code></td> <td><a href="art--WTABELDOC_AbsenceKinds.htm">вид неявки</a></td> <td><code>word</code></td> </tr>
     <tr> <td><code><b><font color="red">*</font></b>aaHoursMap</code></td>    <td><code>11</code></td> <td>карта распределения часов неявки</td> <td><code>longint (PContainer)</code></td> </tr>
     <tr> <td><code><b><font color="red">*</font></b>aaDayMap</code></td>      <td><code>12</code></td> <td>карта распределения дней неявки</td>  <td><code>longint (PContainer)</code></td> </tr>
@@ -4551,6 +4649,11 @@ function WT_GetPeriod(PeriodNumber: longint, var Beginning: date, var Ending: da
                                                                                                 (при <code>aaOverridesInsalubrityCode = true</code>)</td>  <td><code>word</code></td> </tr>
     <tr> <td><code>aaWorkingForInsalubrityCalculations</code></td> <td><code>23</code></td> <td>считается ли отработанным временем с точки зрения доп. тарифов</td>  <td><code>boolean</code></td> </tr>
     <tr> <td><code>aaIncludedInWorkingHours</code></td>            <td><code>24</code></td> <td>входит в состав рабочих часов. Более общее условие, чем <code>aaAdditive</code></td>  <td><code>boolean</code></td> </tr>
+
+    <tr> <td><code>aaDecreasesStandardTime</code></td>             <td><code>25</code></td> <td>признак "уменьшает норму"</td>  <td><code>boolean</code></td> </tr>
+    <tr> <td><code>aaWholeDay</code></td>      <td><code>26</code></td> <td>претендует ли неявка на то, чтобы занять целый день: создана на основе
+                                                                            больничного/отпуска/командировки, либо на основе уменьшения с нулевым кол-вом часов.
+                                                                            Таким образом, признак характеризует, если можно так выразиться, "целодневность по плану".</td>  <td><code>boolean</code></td> </tr>
   </table>
   <p>
     <code><b><font color="red">*</font></b></code> &ndash; устаревшие атрибуты.
@@ -4574,7 +4677,7 @@ function WT_GetPeriod(PeriodNumber: longint, var Beginning: date, var Ending: da
     <tr> <td><code><font color="#008000"><b>*</b></font>akDuty</code></td>           <td><code>128</code></td>  <td>выполнение гособязанностей</td> </tr>
     <tr> <td><code><font color="#008000"><b>*</b></font>akSickList</code></td>       <td><code>256</code></td>  <td>больничный</td> </tr>
     <tr> <td><code><font color="#008000"><b>*</b></font>akVacation</code></td>       <td><code>512</code></td>  <td>отпуск</td> </tr>
-    <tr> <td><code>akWeekendMark</code></td>    <td><code>768</code></td>  <td>выходной день (на самом деле - буква "В" в табеле, даже не настоящий выходной)</td> </tr>
+    <tr> <td><code>akWeekendMark</code></td>    <td><code>768</code></td>  <td>искусственная неявка "выходные дни", имеющая условное обозначение выходного</td> </tr>
     <tr> <td><code>akTableAbsence</code></td>   <td><code>1024</code></td> <td>отклонение с типом "уменьшение" либо "увеличение"</td> </tr>
     <tr> <td><code>akIrregularity</code></td>   <td><code>2048</code></td> <td>отклонение с типом "нарушение" режима больничного</td> </tr>
     <tr> <td><code>akRefinement</code></td>     <td><code>4096</code></td> <td>отклонение с типом "уточнение" (не влияет на количество отработанного времени)</td> </tr>
@@ -4582,7 +4685,7 @@ function WT_GetPeriod(PeriodNumber: longint, var Beginning: date, var Ending: da
     <tr> <td><code>akWeekendWorkOrder</code></td>      <td><code>8193</code></td> <td>приказ по кадрам на работу в выходные    </td> </tr>
     <tr> <td><code>akTrainingOrder</code></td>         <td><code>8194</code></td> <td>приказ по кадрам на обучение </td> </tr>
     <tr> <td><code>akTrainingTransferOrder</code></td> <td><code>8195</code></td> <td>приказ по кадрам: перенос обучения  </td> </tr>
-    <tr> <td><code>akInformation</code></td>           <td><code>8196</code></td> <td>тип отклонения, введенного в табеле на вкладке "Отклонения": информация </td> </tr>
+    <tr> <td><code><font color="red"><b>*</b></font>akInformation</code></td>        <td><code>8196</code></td> <td>тип отклонения, введенного в табеле на вкладке "Отклонения": информация </td> </tr>
     <tr> <td><code>akHoursAbsenceOrder</code></td>     <td><code>8197</code></td> <td>приказ на почасовое отклонение </td> </tr>
   </table>
   <p> <code><font color="red"><b>*</b></font></code> &ndash; устаревшие виды неявок</a>. </p>
@@ -5922,6 +6025,9 @@ function WT_GetInsalubrityCode(Day: byte): word; external #G_WorkTable;
 #doc
   <brief>Ссылка на ADVISES для расчета пенсионного стажа</brief>
   <p>
+    <b><font color="red">Устаревшая функция.</font></b>
+  </p>
+  <p>
     Возвращает ссылку на условия труда на рабочем месте (таблица ADVISES)
     на день <code>Day</code> из лицевого счета с учетом переходов в межпериод.
     Если условия труда у работника в этот день обычные
@@ -5936,7 +6042,7 @@ function WT_GetInsalubrityCode(Day: byte): word; external #G_WorkTable;
 
   <h3>Примечание</h3>
   <p>
-    Функция экспериментальная, ни разу не использовалась (11.2014). Разработана только для России.
+    Функция экспериментальная, ни разу не использовалась (09.2016). Разработана только для России.
     Реализация не актуализировалась с декабря 2013.
   </p>
 

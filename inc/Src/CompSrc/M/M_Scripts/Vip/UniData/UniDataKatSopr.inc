@@ -82,6 +82,7 @@ const
   reTipOtvPodr    = 3050;
   recOtvPodr      = 3051;
   recUKS          = 3052;
+  reKatSoprFilial = 3053;
 
   reNoBound                  = 4000;
   reTieToKatSopr             = 4001;

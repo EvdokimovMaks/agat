@@ -12,38 +12,40 @@
 #end
 .form ReeDSV_MN
 .hide    
-.fields  
- NameOrg
- NameOrgS
- INN
- KPP
- KodIP
- KodUL
- Forma
- NomPF
- NomPach
- DataSost
- MonForm
- YearForm
- DataPlPor
- NomerPlPor
- DatObPlPor
- SumUdAll  
- SumOplAll 
- SummaAll  
- NaimPFR
- Kol
+.fields
+  sVersion
+  NameOrg
+  NameOrgS
+  INN
+  KPP
+  KodIP
+  KodUL
+  Forma
+  NomPF
+  NomPach
+  DataSost
+  MonForm
+  YearForm
+  DataPlPor
+  NomerPlPor
+  DatObPlPor
+  SumUdAll
+  SumOplAll
+  SummaAll
+  NaimPFR
+  Kol
 
- Fam     
- Ima     
- Otch    
- NomLsch 
- SumUd   
- SumOpl  
+  Fam
+  Ima
+  Otch
+  NomLsch
+  SumUd
+  SumOpl
  
- EndPach  
+  EndPach
 .endfields
 .{ DSV3_PachCycle CheckEnter
+^
 ^ 
 ^ 
 ^ ^ 
@@ -70,10 +72,9 @@
   NomerVPach : integer;
 .endvar
 .fields
+  sVersion
   INN
   KPP
-  KodIP
-  KodUL
   Upcase(Trim(Forma))
   Upcase(NameOrg)
   Upcase(NameOrgS)
@@ -96,8 +97,6 @@
   TRIM(UPCASE(Otch))
   INN
   KPP
-  KodIP
-  KodUL
   Upcase(Trim(Forma))
   Upcase(NameOrg) 
   Upcase(NameOrgS)
@@ -115,11 +114,11 @@
     <ТипФайла>ВНЕШНИЙ</ТипФайла>
     <ПрограммаПодготовкиДанных>
        <НазваниеПрограммы>ГАЛАКТИКА</НазваниеПрограммы>
-       <Версия>8.10</Версия>
+       <Версия>^</Версия>
     </ПрограммаПодготовкиДанных>
     <ИсточникДанных>СТРАХОВАТЕЛЬ</ИсточникДанных>
   </ЗаголовокФайла>
-  <ПачкаВходящихДокументов Стадия = "До обработки" Окружение = "В составе файла" ДобровольныеПравоотношения = "ДСВ">
+  <ПачкаВходящихДокументов Окружение = "В составе файла" Стадия = "До обработки" ДобровольныеПравоотношения = "ДСВ">
   <ВХОДЯЩАЯ_ОПИСЬ_РЕЕСТРА>
     <НомерВпачке>1</НомерВпачке>
     <ТипВходящейОписи>ОПИСЬ ПАЧКИ</ТипВходящейОписи>
@@ -128,8 +127,6 @@
         <ИНН>^</ИНН>
         <КПП>^</КПП>
       </НалоговыйНомер>
-      <КодЕГРИП>^</КодЕГРИП>
-      <КодЕГРЮЛ>^</КодЕГРЮЛ>
       <Форма>^</Форма>
       <НаименованиеОрганизации>^</НаименованиеОрганизации>
       <НаименованиеКраткое>^</НаименованиеКраткое>
@@ -179,8 +176,6 @@ end.
          <ИНН>^</ИНН>
          <КПП>^</КПП>
        </НалоговыйНомер>
-       <КодЕГРИП>^</КодЕГРИП>
-       <КодЕГРЮЛ>^</КодЕГРЮЛ>
        <Форма>^</Форма>
        <НаименованиеОрганизации>^</НаименованиеОрганизации>
        <НаименованиеКраткое>^</НаименованиеКраткое>

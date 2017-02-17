@@ -99,7 +99,7 @@ WokerTabN - ^
 .endDeclare
 .var
  iFeeSigners : FeeSigners;
- i, lSign : longint;
+ DocNpp, i, lSign : longint;
  FIOs, Post : array [1..2] of string;
 .endvar
 .fields
@@ -110,6 +110,7 @@ WokerTabN - ^
  FromPodr
 .endfields
 .begin
+ DocNpp := 0;
  lSign := 0;
 
  for (i := 1; i <= Count(FIOs); i++)
@@ -132,6 +133,12 @@ WokerTabN - ^
      while (iFeeSigners.GetSignerNext);
 end.
 .{
+.begin
+  DocNpp++;
+end.
+.{?Internal;(DocNpp > 1);
+
+.}
  ^
 
                           НАКЛАДНАЯ НА ВНУТРЕННЕЕ ПЕРЕМЕЩЕНИЕ
@@ -179,7 +186,6 @@ end.
 .endfields
   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}
-
 .}
 .endform
 
@@ -199,7 +205,7 @@ end.
 .endDeclare
 .var
  iFeeSigners : FeeSigners;
- i, lSign : longint;
+ DocNpp, i, lSign : longint;
  FIOs, Post : array [1..2] of string;
 .endvar
 .fields
@@ -210,6 +216,7 @@ end.
  FromPodr
 .endfields
 .begin
+ DocNpp := 0;
  lSign := 0;
 
  for (i := 1; i <= Count(FIOs); i++)
@@ -232,6 +239,12 @@ end.
      while (iFeeSigners.GetSignerNext);
 end.
 .{
+.begin
+  DocNpp++;
+end.
+.{?Internal;(DocNpp > 1);
+
+.}
  ^
 
                           НАКЛАДНАЯ НА ВВОД В ЭКСПЛУАТАЦИЮ
@@ -281,7 +294,6 @@ end.
 .endfields
   @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}
-
 .}
 .endform
 
@@ -295,7 +307,7 @@ end.
 .endDeclare
 .var
  iFeeSigners : FeeSigners;
- i, lSign : longint;
+ DocNpp, i, lSign : longint;
  FIOs, Post : array [1..2] of string;
  SumOld : double;
 .endvar
@@ -307,6 +319,7 @@ end.
  FromMol
 .endfields
 .begin
+ DocNpp := 0;
  SumOld := 0;
  lSign := 0;
 
@@ -330,6 +343,12 @@ end.
      while (iFeeSigners.GetSignerNext);
 end.
 .{
+.begin
+  DocNpp++;
+end.
+.{?Internal;(DocNpp > 1);
+
+.}
  ^
 
                                  АКТ ПЕРЕОЦЕНКИ
@@ -380,7 +399,6 @@ end.
 .endfields
   @@@@@@@@@@@@@@: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}
-
 .}
 .endform
 
@@ -493,7 +511,9 @@ end.
  на ответственное хранение ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                   подпись                        фамилия, инициалы
 .}
+.{?Internal;(PageKol mod 2 > 0);
 
+.}
 .]f
 .}
 .{?INTERNAL;PrintObr
@@ -532,7 +552,6 @@ end.
  Инструменты принял
  на ответственное хранение ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                                   подпись                        фамилия, инициалы
-
 .} Р
 .}
 .endform
@@ -638,7 +657,9 @@ end.
   БПринял Б  ___________________  ___________________    Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
              должность              подпись                       фамилия, инициалы
 .}
+.{?Internal;(PageKol mod 2 > 0);
 
+.}
 .]f
 .}
 .{?INTERNAL;PrintObr;
@@ -669,7 +690,6 @@ end.
              должность              подпись                       фамилия, инициалы
   БПринял Б  ___________________  ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
              должность              подпись                       фамилия, инициалы
-
 .} Р
 .}
 .endForm
@@ -764,7 +784,9 @@ end.
 
   "_____"  _____________________  20___ г.               Принял (получил)                        Сдал (выдал)
 .}
+.{?Internal;(PageKol mod 2 > 0);
 
+.}
 .]f
 .}
 .{?INTERNAL;PrintObr;
@@ -790,7 +812,6 @@ end.
   └────────────────────────────────────────────────────┴──────┴──────────────┴───────────┴──────────┴──────────────┴──────────────┘
 
   "_____"  _____________________  20___ г.               Принял (получил)                        Сдал (выдал)
-
 .} Р
 .}
 .endForm
@@ -805,7 +826,7 @@ end.
 .endDeclare
 .var
  iFeeSigners : FeeSigners;
- i, lSign : longint;
+ DocNpp, i, lSign : longint;
  FIOs, Post : array [1..2] of string;
 .endvar
 .fields
@@ -816,6 +837,7 @@ end.
  FromMol
 .endfields
 .begin
+ DocNpp := 0;
  lSign := 0;
 
  for (i := 1; i <= Count(FIOs); i++)
@@ -838,6 +860,12 @@ end.
      while (iFeeSigners.GetSignerNext);
 end.
 .{
+.begin
+  DocNpp++;
+end.
+.{?Internal;(DocNpp > 1);
+
+.}
  ^
 
                             АКТ ИЗМЕНЕНИЯ ПАРАМЕТРОВ
@@ -881,6 +909,5 @@ end.
 .endfields
   @@@@@@@@@@@@@@: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}
-
 .}
 .endform

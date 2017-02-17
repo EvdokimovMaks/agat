@@ -21,6 +21,7 @@ const
   rePlanType    = 2003;
 	recvPlan      = 2004;
   reTemplate_   = 2005;
+  rePlanFilial  = 2006;
 
   reRole1       = 2011;
   reRole2       = 2012;

@@ -99,6 +99,7 @@
 #include FeeSigners.vih
 .endDeclare
 .var
+  DocNpp : Longint;
   Cnt : LongInt;
   TotCnt : Double;
   TotSum : Double;
@@ -114,6 +115,7 @@
 .endvar
 #CommissionLinkVar
 .begin
+  DocNpp := 0;
   sUtv := sPost := '';
 
   iFeeSigners.InitFeeSigners(cgReport_MBP);
@@ -147,6 +149,7 @@ end.
   KodMain
 .endfields
 .begin
+  DocNpp++;
   Cnt := 0;
   TotSum := 0;
   TotCnt := 0;
@@ -167,6 +170,9 @@ end.
   for (i := 0; i < Count(Util_Stoim); i++)
     Util_Stoim[i + 1] := 0;
 end.
+.{?Internal;(DocNpp > 1);
+
+.}
  ^
  И                                                     УТВЕРЖДАЮ:
                                           Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
@@ -324,7 +330,6 @@ end.
    Утиль по накладной № ___________________сдан.
 
    "_____"_______________20___г.
-
 .}
 .endform
 
@@ -339,7 +344,7 @@ end.
 .endDeclare
 .var
   iFeeSigners : FeeSigners;
-  i, lSign : longint;
+  DocNpp, i, lSign : longint;
   FIOs, Post : array [1..2] of string;
   Npp : LongInt;
   TotCnt : Double;
@@ -347,6 +352,7 @@ end.
 .endvar
 #CommissionLinkVar
 .begin
+  DocNpp := 0;
   lSign := 0;
 
   for (i := 1; i <= Count(FIOs); i++)
@@ -377,10 +383,14 @@ end.
  Podr MOL
 .endfields
 .begin
+ DocNpp++;
  Npp := 0;
  TotSum := 0;
  TotCnt := 0;
 end.
+.{?Internal;(DocNpp > 1);
+
+.}
  ^
 
               РАСХОДНЫЙ ОРДЕР №  Б^ Б  от  Б^ Б
@@ -428,7 +438,6 @@ end.
 .endfields
   @@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}
-
 .}
 .endform
 
@@ -442,7 +451,7 @@ end.
 .endDeclare
 .var
   iFeeSigners : FeeSigners;
-  i, lSign : longint;
+  DocNpp, i, lSign : longint;
   FIOs, Post : array [1..2] of string;
   Cnt : longInt;
   TotCnt : double;
@@ -451,6 +460,7 @@ end.
 .endvar
 #CommissionLinkVar
 .begin
+  DocNpp := 0;
   lSign := 0;
 
   for (i := 1; i <= Count(FIOs); i++)
@@ -482,11 +492,15 @@ end.
  MOL
 .endfields
 .begin
+ DocNpp++;
  Cnt := 0;
  TotCnt := 0;
  TotIzn := 0;
  TotSum := 0;
 end.
+.{?Internal;(DocNpp > 1);
+
+.}
  ^
 
                     ВЕДОМОСТЬ НАЧИСЛЕНИЯ ИЗНОСА
@@ -544,7 +558,6 @@ end.
 .endfields
   @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}
-
 .}
 .endform
 
@@ -558,7 +571,7 @@ end.
 .endDeclare
 .var
   iFeeSigners : FeeSigners;
-  i, lSign : longint;
+  DocNpp, i, lSign : longint;
   FIOs, Post : array [1..2] of string;
   Cnt : longint;
   TotCnt : double;
@@ -567,6 +580,7 @@ end.
 .endvar
 #CommissionLinkVar
 .begin
+  DocNpp := 0;
   lSign := 0;
 
   for (i := 1; i <= Count(FIOs); i++)
@@ -598,11 +612,15 @@ end.
  MOL
 .endfields
 .begin
+ DocNpp++;
  Cnt := 0;
  TotCnt := 0;
  TotIzn := 0;
  TotSum := 0;
 end.
+.{?Internal;(DocNpp > 1);
+
+.}
  ^
 
                     ВЕДОМОСТЬ НАЧИСЛЕНИЯ ИЗНОСА
@@ -656,7 +674,6 @@ end.
 .endfields
   @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}
-
 .}
 .endform
 
@@ -721,6 +738,7 @@ end.
 .{
 #CommissionLinkInit(SpisMBPProt)
 .fields
+  'true' : 's'
   CommonFormHeader
   sPost
   Nom
@@ -756,7 +774,7 @@ end.
   for (i := 0; i < Count(Util_Stoim); i++)
     Util_Stoim[i + 1] := 0;
 end.
- Ш ^
+^ Ш ^
                                                                                                                                                                      Типовая межотраслевая форма № МБ-8
                                                                                                                                                                      Утверждена постановлением Госкомстата России
                                                                                                                                                                      от 30.10.97 № 71а
@@ -961,7 +979,6 @@ end.
 .}
   Утиль (лом) по накладной №  ____________________ сдан
     "  " ____________ 20   г. Ш
-
 .begin
   PageNumber := 0;
   PageSeparator := false;
@@ -1040,6 +1057,7 @@ end.
   KolStr := 0;
 end.
 .fields
+  'true' : 's'
   CommonFormHeader
   Nom
   MyOrg
@@ -1050,7 +1068,7 @@ end.
   SchMain
   KodMain
 .endfields
- Ш^
+^ Ш^
                                                                                                             Типовая межотраслевая форма № МБ-4
                                                                                                             Утверждена постановлением Госкомстата России
                                                                                                             от 30.10.97 № 71а
@@ -1174,7 +1192,6 @@ end.
 
     "  " ___________20   г.
 .} Ш
-
 .}
 .endform
 
@@ -1188,12 +1205,13 @@ end.
 .endDeclare
 .var
   iFeeSigners : FeeSigners;
-  i, lSign : longint;
+  DocNpp, i, lSign : longint;
   FIOs, Post : array [1..2] of string;
   totSum : double;
 .endVar
 #CommissionLinkVar
 .begin
+  DocNpp := 0;
   lSign := 0;
 
   for (i := 1; i <= Count(FIOs); i++)
@@ -1230,6 +1248,12 @@ end.
   Price
   if (wGetTune('Fin.MBP.OstStoim') = 0, SumPr, SumPr - SumIsn)
 .endFields
+.begin
+  DocNpp++;
+end.
+.{?Internal;(DocNpp > 1);
+
+.}
  Р ^
 
                                   АКТ ИНВЕНТАРИЗАЦИИ О НЕДОСТАЧЕ
@@ -1271,7 +1295,6 @@ end.
 .endfields
 @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .} Р
-
 .}
 .endForm
 
@@ -1324,6 +1347,7 @@ end.
 .{
 #CommissionLinkInit(SpisMBPProt)
 .fields
+ 'true' : 's'
  CommonFormHeader
  MyOrg
  ОКПО
@@ -1338,7 +1362,7 @@ end.
   TotSum := 0;
   TotCnt := 0;
 end.
- Р ^
+^ Р ^
                                                                                                                                                                               Утверждена
                                                                                                                                                               Постановлением Минпрома РБ
                                                                                                                                                                        от 29.12.2004 №21
@@ -1478,7 +1502,6 @@ end.
 
   Проверил бухгалтер ___________________   Д@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
                            подпись                       фамилия, инициалы Р
-
 .}
 .endForm
 
@@ -1513,6 +1536,7 @@ end.
   }
 end.
 .fields
+ 'true' : 's'
  CommonFormHeader
  MyOrg
  ОКПО
@@ -1527,7 +1551,7 @@ end.
 .begin
   PrintObr := True;
 end.
- Р ^
+^ Р ^
                                                                                                                          Утверждена
                                                                                                          Постановлением Минпрома РБ
                                                                                                                   от 29.12.2004 №21
@@ -1652,7 +1676,6 @@ end.
  на ответственное хранение ___________________  _________________________________________________
                                   подпись                        фамилия, инициалы
 .} Р
-
 .}
 .endform
 

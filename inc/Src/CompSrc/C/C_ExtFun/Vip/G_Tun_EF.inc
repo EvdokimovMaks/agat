@@ -989,6 +989,19 @@ function UserOfficeFilial(cUser: comp): longInt; external 'G_Tune.dll'; // офис 
   </brief>
 
   <p>
+    Возвращает офис и филиал определенного пользователя.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>lUserOffice</code> - значение поля x$Users.xu$UserOffice.</li>
+  </ul>
+#end
+function UserOfficeFilialEx(lUserOffice : longInt): longInt; external 'G_Tune.dll'; // офис + текущий филиал пользователя
+#doc
+  </brief>
+
+  <p>
     Возвращает номер филиала по его ID.
   </p>
 

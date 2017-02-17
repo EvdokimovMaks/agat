@@ -92,14 +92,14 @@
 .begin
   Case Кол_число_знаков of
     0    : sKolZnak := '';
-    1..9 : sKolZnak := PadCh('.', '8', Кол_число_знаков + 1);
+    1..9 : sKolZnak := PadCh('.', '8', Кол_число_знаков);
   else
            sKolZnak := '.8';
   End;
 
   Case Сум_число_знаков of
     0    : sKolZnakS := '';
-    1..9 : sKolZnakS := PadCh('.', '8', Кол_число_знаков + 1);
+    1..9 : sKolZnakS := PadCh('.', '8', Кол_число_знаков);
   else
            sKolZnakS := '.9999';
   End;

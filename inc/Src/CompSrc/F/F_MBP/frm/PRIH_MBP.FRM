@@ -42,7 +42,7 @@
 .endDeclare
 .var
   iFeeSigners : FeeSigners;
-  i, lSign : longint;
+  DocNpp, i, lSign : longint;
   FIOs, Post : array [1..2] of string;
   totSum : double;
 .endvar
@@ -52,6 +52,7 @@
   MBPName  MBPKod  MBPEd  MBPKol  MBPPrice
 .endFields
 .begin
+  DocNpp := 0;
   lSign := 0;
 
   for (i := 1; i <= Count(FIOs); i++)
@@ -74,6 +75,12 @@
       while (iFeeSigners.GetSignerNext);
 end.
 .{
+.begin
+  DocNpp++;
+end.
+.{?Internal;(DocNpp > 1);
+
+.}
 ÿˆ ^
 
                             €Š’ ˆ‚…’€ˆ‡€–ˆˆ  ˆ‡‹ˆ˜Š…
@@ -117,7 +124,6 @@ end.
 .endfields
 @@@@@@@@@@@@@: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}ÿˆ
-
 .}
 .endForm
 
@@ -131,7 +137,7 @@ end.
 .endDeclare
 .var
   iFeeSigners : FeeSigners;
-  i, lSign : longint;
+  DocNpp, i, lSign : longint;
   FIOs, Post : array [1..2] of string;
   totSum : double;
 .endvar
@@ -142,6 +148,7 @@ end.
   totSum
 .endFields
 .begin
+  DocNpp := 0;
   lSign := 0;
 
   for (i := 1; i <= Count(FIOs); i++)
@@ -164,6 +171,12 @@ end.
       while (iFeeSigners.GetSignerNext);
 end.
 .{
+.begin
+  DocNpp++;
+end.
+.{?Internal;(DocNpp > 1);
+
+.}
 ÿ ^
 
                                       „Š“Œ…’ € ˆ•„, ‘’“‹…ˆ…
@@ -199,7 +212,6 @@ end.
 .endfields
 @@@@@@@@@@@@@: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}ÿ
-
 .}
 .endForm
 

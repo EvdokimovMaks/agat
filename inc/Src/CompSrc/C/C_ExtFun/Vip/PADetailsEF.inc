@@ -142,6 +142,7 @@
       <code><a href="exf--PA_StandardBusinessTransactionParameter.htm">PA_StandardBusinessTransactionParameter</a></code> <br />
       <code><a href="exf--PA_Tariff.htm">PA_Tariff</a></code> <br />
       <code><a href="exf--PA_TariffCode.htm">PA_TariffCode</a></code> <br />
+      <code><a href="exf--PA_TerritorialConditions.htm">PA_TerritorialConditions</a></code> <br />
       <code><a href="exf--PA_WageCategory.htm">PA_WageCategory</a></code> <br />
       <code><a href="exf--PA_WageRate.htm">PA_WageRate</a></code> <br />
     </font></td>
@@ -173,6 +174,7 @@
       <code><a href="exf--PA_StandardBusinessTransactionParameterOnDay.htm">PA_StandardBusinessTransactionParameterOnDay</a></code> <br />
       <code><a href="exf--PA_TariffOnDay.htm">PA_TariffOnDay</a></code> <br />
       <code><a href="exf--PA_TariffCodeOnDay.htm">PA_TariffCodeOnDay</a></code> <br />
+      <code><a href="exf--PA_TerritorialConditionsOnDay.htm">PA_TerritorialConditionsOnDay</a></code> <br />
       <code><a href="exf--PA_WageCategoryOnDay.htm">PA_WageCategoryOnDay</a></code> <br />
       <code><a href="exf--PA_WageRateOnDay.htm">PA_WageRateOnDay</a></code> <br />
     </font></td>
@@ -190,18 +192,8 @@
 #doc article PADAPI_UsingContexts
   <brief>Инициализация функций получения параметров ЛС на дату при помощи прикладных контекстов</brief>
   <p>
-    Для работы функций получения параметров ЛС на дату необходимо провести предварительную
-    инициализацию, а по окончании работы с ними - деинициализацию.
-    Существует возможность вручную вызывать инициализатор и финализатор
-    (функции <code><a href="exf--EnablePADetailsUtils.htm">EnablePADetailsUtils</a></code>,
-    <code><a href="exf--DisablePADetailsUtils.htm">DisablePADetailsUtils</a></code>) функционала,
-    <font color="red"><b>но лучше этого не делать</b></font>, так как это служит постоянным источником ошибок,
-    связанных с рассогласованием количества вызовов инициализатора и деинициализатора.
-    Предпочтительный способ инициализации и деинициализации для работы функций для випа -
-    использование <link objInterface Z_ZAR::IContextList>механизма прикладных контекстов</link>.
-  </p><p>
-    Для захвата нужного прикладного контекста, и, как следствие, для инициализации и обеспечения
-    автоматической деинициализации функционала, необходимо предпринять следующие шаги:
+    Для того, чтобы с функциями получения параметров ЛС на дату можно было работать, необходимо
+    проделать следующие шаги:
   </p>
   <pre class="example">
   // 1. Подключить заголовочный файл:
@@ -237,8 +229,22 @@
   end.
   </pre>
   <p>
-    После этого PA_-функции для випа в данном интерфейсе будут работать корректно. Никаких
-    других действий не требуется.
+    Действий 1, 2, 3 достаточно для того, чтобы PA_-функции для випа в данном интерфейсе
+    заработали корректно. Больше ничего добавлять не нужно.
+  </p>
+
+  <h3>Подробнее</h3>
+  <p>
+    Для работы функций получения параметров ЛС на дату необходимо провести предварительную
+    инициализацию, а по окончании работы с ними - деинициализацию.
+    Существует возможность вручную вызывать инициализатор и финализатор
+    (функции <code><a href="exf--EnablePADetailsUtils.htm">EnablePADetailsUtils</a></code>,
+    <code><a href="exf--DisablePADetailsUtils.htm">DisablePADetailsUtils</a></code>),
+    <font color="red"><b>но лучше этого не делать</b></font>, так как это служит постоянным источником ошибок,
+    связанных с рассогласованием количества вызовов инициализатора и деинициализатора.
+    Предпочтительный способ инициализации и деинициализации -
+    использование <link objInterface Z_ZAR::IContextList>механизма прикладных контекстов</link>,
+    образец которого дан выше.
   </p>
   <p>
     Фактический вызов инициализатора (<code>EnablePADetailsUtils</code>) произойдет
@@ -257,7 +263,7 @@
   <p>
     Если инициализация была переделана с явного вызова <code>EnablePADetailsUtils</code>/
     <code>DisablePADetailsUtils</code> на использование прикладных контекстов,
-    упоминание <b>всех</b> вызовов инициализатора и деинициализатора в коде нужно убрать за ненадобностью.
+    упоминание <b>всех</b> ручных вызовов инициализатора и деинициализатора в коде нужно убрать.
   </p>
 
   <h3>См. также</h3>
@@ -818,6 +824,48 @@ function PA_Insalubrity(OnDate: date): comp; external #G_WorkTable;
 #end
 #endif
 function PA_InsalubrityOnDay(Day: byte): comp; external #G_WorkTable;
+
+#doc
+  <brief>Возвращает территориальные условия на указанную дату</brief>
+  <p>
+    Возвращает ссылку на территориальные условия (таблица CATALOGS), в которых работник
+    пребывает на дату <code>OnDate</code>.
+    Текущий лицевой счет задается предварительным вызовом функции
+    <code><a href="exf--PA_Assign.htm">PA_Assign</a></code>.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>OnDate</code> - дата, на которую нужно получить значение</li>
+  </ul>
+
+  <h3>См. также</h3>
+  <a href="art--PADAPI_About.htm">Функции получения параметров ЛС на дату</a> <br />
+  <code><a href="exf--PA_TerritorialConditionsOnDay.htm">PA_TerritorialConditionsOnDay</a></code> <br />
+#end
+function PA_TerritorialConditions(OnDate: date): comp; external #G_WorkTable;
+
+#doc
+  <brief>Возвращает территориальные условия на заданный день месяца</brief>
+  <p>
+    Возвращает ссылку на территориальные условия (таблица CATALOGS),
+    в которых работник пребывает на день <code>Day</code>
+    предварительно заданного функцией <code><a href="exf--PA_SetMonthYear.htm">PA_SetMonthYear</a></code>
+    месяца и года, для текущего лицевого счета. Текущий лицевой счет задается предварительным вызовом функции
+    <code><a href="exf--PA_Assign.htm">PA_Assign</a></code>.
+    В случае заданного лицевого счета, но незаданного месяца и года возвращается неопределенное значение.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>Day</code> - день, на который нужно получить значение</li>
+  </ul>
+
+  <h3>См. также</h3>
+  <a href="art--PADAPI_About.htm">Функции получения параметров ЛС на дату</a> <br />
+  <code><a href="exf--PA_TerritorialConditions.htm">PA_TerritorialConditions</a></code> <br />
+#end
+function PA_TerritorialConditionsOnDay(Day: byte): comp; external #G_WorkTable;
 
 #ifdef PADETAILS_VIP_DOC
 #doc

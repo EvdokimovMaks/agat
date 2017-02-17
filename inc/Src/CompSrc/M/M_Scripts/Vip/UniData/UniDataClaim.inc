@@ -39,6 +39,7 @@ const
   reIndent      = 2003;
   reKatOtpEd    = 2004;
   reMcUslGr     = 2005;
+  reFilial      = 2006;
 
   reRole1       = 2011;
   reRole2       = 2012;
@@ -81,4 +82,3 @@ const
   reSFiltersConst = 6001;
 
 end
-

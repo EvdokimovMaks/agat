@@ -25,14 +25,16 @@ const
   lc_TRAlg_Sys_Nal_Grp_GUID  = '0BF1300E-F82A-4864-993B-15C96FAD9121';
 
   // группа и алгоритм по транспортному налогу
-  lc_TRAlg_Tra_Grp_GUID = '2DD339C6-7180-445E-92A8-5276AF88253A';
-    lc_TRAlg_Tra_Alg_G2013_GUID = 'D6CB269E-4AB7-4ECF-A1F7-01B1DF93917D'; //2013 г.
-    lc_TRAlg_Tra_Alg_G2014_GUID = 'DDCACA9F-0C76-4EA1-8BD5-D7335C0BDB1C'; //2014 г.
+  lc_TRAlg_TranD_Grp_GUID = '2DD339C6-7180-445E-92A8-5276AF88253A';
+    lc_TRAlg_TranD_Alg_G2013_GUID = 'D6CB269E-4AB7-4ECF-A1F7-01B1DF93917D'; //2013 г.
+    lc_TRAlg_TranD_Alg_G2014_GUID = 'DDCACA9F-0C76-4EA1-8BD5-D7335C0BDB1C'; //2014 г.
+    lc_TRAlg_TranD_Alg_G2017_GUID = 'EAB8662A-743B-4A89-9F77-D429EFD83EBE'; //2017 г.
 
   // группа и алгоритм по НДС
   lc_TRAlg_NDS_Grp_GUID = 'C03D4F86-2F78-4F6C-9359-511D5FA5089D';
     lc_TRAlg_NDS_Alg_G2014_GUID = 'C0014F64-378C-4ACA-AADB-024CAFD01640'; //2014 г.
     lc_TRAlg_NDS_Alg_G2015_GUID = '088DFAF8-6546-44A8-ABA5-79A7F43C304B'; //2015 г.
+    lc_TRAlg_NDS_Alg_G2017_GUID = '6DAFFF6B-E8AE-4F5C-82AC-FCD7B8735D40'; //2017 г.
 
   // группа и алгоритм по сведениям о затратах на производство и реализацию продукции
   lc_TRAlg_ZatrNaProizv_Grp_GUID = 'DE18E146-7D9B-448C-8016-34BF975DD62E';
@@ -56,8 +58,14 @@ const
     lc_TRAlg_ZadolPoZP_Alg_G2017_GUID = '3A28F91F-E0EE-46DC-9EA6-F0D5B01151E7';
 
   // группа и алгоритм по налогу на прибыль
-  lc_TRAlg_Pri_Grp_GUID = '6FA6FA8D-90F8-4EBA-B4FB-75AE02EE5061';
-    lc_TRAlg_Pri_Alg_GUID = '5965E705-59D2-4456-85E0-870E9340B211';
+  lc_TRAlg_Prib_Grp_GUID = '6FA6FA8D-90F8-4EBA-B4FB-75AE02EE5061';
+    lc_TRAlg_Prib_Alg_G2015_GUID    = '5965E705-59D2-4456-85E0-870E9340B211';
+    lc_TRAlg_Prib_Alg_G2017_GUID    = '0A0DD470-67C1-4189-9AE4-C1A491C7FD25';
+    lc_TRAlg_Prib_Alg_G2017Add_GUID = '455E06A6-FA6D-4F30-90DD-896341338EE6';
+
+  // группа и алгоритм по налоговому расчету о суммах выплаченных иностр. орг.
+  lc_TRAlg_DohInOrg_Grp_GUID = '405B9750-E9F9-4464-A916-D28074C357A8';
+    lc_TRAlg_DohInOrg_Alg_G2016_GUID = '051D69FE-4ED8-44B7-8E95-5E2A7B8BCCCC';
 
   // группа и алгоритм по акцизам на подакцизные товары, за исключением табачных изделий
   lc_TRAlg_AKCIZ_Grp_GUID = 'C66CD5E4-0024-400E-84DE-C963657A64A2';
@@ -115,11 +123,13 @@ const
   lc_TRAlg_ENVD_Grp_GUID = 'B2E6E10A-2605-4F25-A4C1-9A753254B23B';
     lc_TRAlg_ENVD_Alg_G2015_GUID = '976807C9-D8FF-4C0D-A373-5EF4A5310EDC';
     lc_TRAlg_ENVD_Alg_G2016_GUID = '52B0A663-CC54-40B3-868B-D00FDF2BAFB6';
+    lc_TRAlg_ENVD_Alg_G2017_GUID = 'F4059A34-0948-4D05-966E-E89AD66B4796';
 
   // Ответ на сообщение (с требованием представления пояснений)
   lc_TRAlg_OTTRNDS_Grp_GUID = '302238BB-C301-6D3F-81A1-D6DB4125637D';
     lc_TRAlg_OTTRNDS_Alg_G2015_guid = 'HY452543-497A-4D1D-9015-3D876JH122CB';
     lc_TRAlg_OTTRNDS_Alg_G2016_guid = '18B5BFE1-82C6-428D-9E81-E5D83777EF5A';
+    lc_TRAlg_OTTRNDS_Alg_G2017_guid = '6220DF87-5659-4AAD-9FF1-26EAEDA45997';
 
   // Ответ на сообщение (с требованием представления пояснений)
   lc_TRAlg_BOUPR_Grp_GUID = 'E8BE4B1F-BDD0-404F-8730-73AD07A497DB';

@@ -116,10 +116,10 @@ XML форма на формирование реестров В ФСС
   LiveCode         //  Код условия проживания
   RefNpayOtherNo   //  справка от другого родителя о неполучении пособия номер
   RefNpayOtherDt   //  справка от другого родителя о неполучении пособия дата
-  RefNpayFatherNo   //  справка о неполучении пособия от отца номер
-  RefNpayFatherDt   //  справка о неполучении пособия от отца дата
-  RefNpayMotherNo   //  справка о неполучении пособия от матери номер
-  RefNpayMotherDt   //  справка о неполучении пособия от матери дата
+  RefNpayFatherNo  //  справка о неполучении пособия от отца номер
+  RefNpayFatherDt  //  справка о неполучении пособия от отца дата
+  RefNpayMotherNo  //  справка о неполучении пособия от матери номер
+  RefNpayMotherDt  //  справка о неполучении пособия от матери дата
   WardRefFlag      //  усыновление/опека
   WardRefNo        //  усыновление/опека
   WardRefDt        //  усыновление/опека
@@ -128,7 +128,7 @@ XML форма на формирование реестров В ФСС
   Multipatr        //  одновременный уход за несколькими детьми
   AvgSal           //  среднемесячный заработок
 //--------- Свидетельство о рождении ---------------------------
-  CertType         //  тип документа   для версии 1.7.2 CertType = RefType
+  CertType         //  тип документа
   oCertNo          //  Иной документ подтверждающий  рождение номер
   oCertDt          //  Иной документ подтверждающий  рождение  дата
   CertNo           //  номер документа
@@ -227,15 +227,15 @@ XML форма на формирование реестров В ФСС
   Treat3Chairman
   Treat3Doc2Id
 // Постановка на учет в ранние сроки беременности
-  Pregn12WFlag         // Признак постановки на учет
-  Ref12WeekNo          // Номер справки
-  Ref12WeekDt          // Дата справки
-  KfReg                // Районный коэффициент
-  KfShortDay           // Коэф. неполного раб. дня
-  BaseAvgDailySal      // Среднедневной заработок
-  Payment              // Фактически выплаченная сумма
+  Pregn12WFlag              // Признак постановки на учет
+  Ref12WeekNo               // Номер справки
+  Ref12WeekDt               // Дата справки
+  KfReg                     // Районный коэффициент
+  KfShortDay                // Коэф. неполного раб. дня
+  BaseAvgDailySal           // Среднедневной заработок
+  Payment                   // Фактически выплаченная сумма
 ! поля по простоям
-  prProstoi            // признак наличия простоев
+  prProstoi                 // признак наличия простоев
 //-------------------------------------------
   StartDate
   EndDate
@@ -286,9 +286,13 @@ end.
         author="^"
         phone="^"
         email="^"
+.{?INTERNAL; ( Kpp <> '' )
         EMPL_KPP="^"
+.}
         EMPL_INN="^"
+.{?INTERNAL; ( OGRN <> '' )
         EMPL_OGRN="^"
+.}
         EMPL_REG_NO="^">
 !---------------------
 .begin
@@ -367,8 +371,6 @@ end.
 !-------расчетный период-------------- для разных версий
   Year1            //  Год на кот заменили 1
   Year2            //  Год на кот заменили 2
-  Year1            //  Год на кот заменили 1
-  Year2            //  Год на кот заменили 2
   BaseSum1         //  Сумма заработка за год 1
   BaseSum2         //  Сумма заработка за год 2
 !
@@ -408,7 +410,7 @@ end.
   Multipatr        //  одновременный уход за несколькими детьми
   AvgSal           //  среднемесячный заработок
 //---------Свидетельство о рождении---------------------------
-  CertType         //  тип документа   RefType для версии 1.7.2
+  CertType         //  тип документа
   CertNo           //  номер документа
   CertDt           //  дата документа
   CertBr           //  дата рождения
@@ -535,10 +537,14 @@ end.
     <DOC_TYPE>^</DOC_TYPE>
     <DOC_DT1>^</DOC_DT1>
     <SNILS>^</SNILS>
+.{?INTERNAL; ( InnPerson <> '' )
     <INN_PERSON>^</INN_PERSON>
+.}
     <SURNAME>^</SURNAME>
     <NAME>^</NAME>
+.{?INTERNAL; ( SecName <> '' )
     <PATRONIMIC>^</PATRONIMIC>
+.}
     <RESIDENT_FLAG>^</RESIDENT_FLAG>
 !
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
@@ -554,12 +560,24 @@ end.
 ! если тип оплаты 0 - Почтовый перевод
 .{?INTERNAL; ( PaymentType = '0' )
     <ADDR_KLADR>^</ADDR_KLADR>
+.{?INTERNAL; ( AddrA1 <> '' )
     <ADDR_A1>^</ADDR_A1>
+.}
+.{?INTERNAL; ( AddrA2 <> '' )
     <ADDR_A2>^</ADDR_A2>
+.}
+.{?INTERNAL; ( AddrA3 <> '' )
     <ADDR_A3>^</ADDR_A3>
+.}
+.{?INTERNAL; ( AddrA4 <> '' )
     <ADDR_A4>^</ADDR_A4>
+.}
+.{?INTERNAL; ( AddrA5 <> '' )
     <ADDR_A5>^</ADDR_A5>
+.}
+.{?INTERNAL; ( AddrHouse <> '' )
     <ADDR_HOUSE>^</ADDR_HOUSE>
+.}
     <POST_INDEX>^</POST_INDEX>
 !
 .{?INTERNAL; ( AddrBuilding <> '' )
@@ -570,20 +588,43 @@ end.
     <ADDR_FLAT>^</ADDR_FLAT>
 .}
 .}
+!
+.{?INTERNAL; ( Addr2 <> '' )
     <ADDR2>^</ADDR2>
+.}
+.{?INTERNAL; ( Addr2Kladr <> '' )
     <ADDR2_KLADR>^</ADDR2_KLADR>
+.}
+.{?INTERNAL; ( Addr2A1 <> '' )
     <ADDR2_A1>^</ADDR2_A1>
+.}
+.{?INTERNAL; ( Addr2A2 <> '' )
     <ADDR2_A2>^</ADDR2_A2>
+.}
+.{?INTERNAL; ( Addr2A3 <> '' )
     <ADDR2_A3>^</ADDR2_A3>
+.}
+.{?INTERNAL; ( Addr2A4 <> '' )
     <ADDR2_A4>^</ADDR2_A4>
+.}
+.{?INTERNAL; ( Addr2A5 <> '' )
     <ADDR2_A5>^</ADDR2_A5>
+.}
 ! Если вид реестра cn_vpNetrud, cn_vpTravma
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
+.{?INTERNAL; ( PostIndex2 <> '' )
     <POST_INDEX2>^</POST_INDEX2>
 .}
+.}
+.{?INTERNAL; ( Addr2House <> '' )
     <ADDR2_HOUSE>^</ADDR2_HOUSE>
+.}
+.{?INTERNAL; ( Addr2Building <> '' )
     <ADDR2_BUILDING>^</ADDR2_BUILDING>
+.}
+.{?INTERNAL; ( Addr2Flat <> '' )
     <ADDR2_FLAT>^</ADDR2_FLAT>
+.}
 !------------------------------
 ! Если вид реестра cn_vpNetrud, cn_vpBerem, cn_vpTravma, cn_vpRanBerem
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
@@ -591,7 +632,9 @@ end.
 .}
 !------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpTravma )  or ( VidReestr = cn_vpOtpusk )
+.{?INTERNAL; ( ReasonEmpl <> '' )
     <REASON_EMPL>^</REASON_EMPL>
+.}
 .}
 !-------------------------------
     <OWNER_FLAG>^</OWNER_FLAG>
@@ -599,12 +642,20 @@ end.
 .{?INTERNAL; ( OwnerFlag = '0' )
     <SURNAME2>^</SURNAME2>
     <NAME2>^</NAME2>
+.{?INTERNAL; ( SecName2 <> '' )
     <PATRONIMIC2>^</PATRONIMIC2>
+.}
 .{?INTERNAL; ( Id2Type <> '' )
     <ID2_TYPE>^</ID2_TYPE>
+.{?INTERNAL; ( Id2No <> '' )
     <ID2_NO>^</ID2_NO>
+.}
+.{?INTERNAL; ( Id2Dt <> '' )
     <ID2_DT>^</ID2_DT>
+.}
+.{?INTERNAL; ( Id2Dept <> '' )
     <ID2_DEPT>^</ID2_DEPT>
+.}
 .}
 .}
 !--------------------------------
@@ -618,15 +669,23 @@ end.
 !-- Данные страхователя
     <EMPLOYER>^</EMPLOYER>
     <EMPL_FLAG>^</EMPL_FLAG>
+.{?INTERNAL; ( EmplOgrn <> '' )
     <EMPL_OGRN>^</EMPL_OGRN>
+.}
     <EMPL_REG_NO>^</EMPL_REG_NO>
     <EMPL_PARENT_NO>^</EMPL_PARENT_NO>
+.{?INTERNAL; ( EmplKpp <> '' )
     <EMPL_KPP>^</EMPL_KPP>
+.}
     <EMPL_INN>^</EMPL_INN>
 !------------Руководство-------------
     <APPROVE1>^</APPROVE1>
+.{?INTERNAL; ( Post_Boss <> '' )
     <APPROVE1_ROLE>^</APPROVE1_ROLE>
+.}
+.{?INTERNAL; ( FIO_Buh <> '' )
     <APPROVE2>^</APPROVE2>
+.}
 .{?INTERNAL; ( TypeInfo = 1 )
     <RECALC_REASON_CODE>^</RECALC_REASON_CODE>
 .}
@@ -649,15 +708,6 @@ end.
     <YEAR2>^</YEAR2>
 .}
 .} // ( CalcMetod = 1 )
-!-------расчетный период--------------
-.{?INTERNAL; ( Version = '1.7.2' )
-.{?INTERNAL; ( CalcMetod = 0 )
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild )
-    <YEAR1>^</YEAR1>
-    <YEAR2>^</YEAR2>
-.}
-.} // ( CalcMetod = 0 )
-.} // 1.7.2
 !
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma )
     <BASE_SUM1>^</BASE_SUM1>
@@ -674,11 +724,21 @@ end.
 .}
 !
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+.{?INTERNAL; ( MseDt1 <> '' )
     <MSE_DT1>^</MSE_DT1>
+.}
+.{?INTERNAL; ( MseDt2 <> '' )
     <MSE_DT2>^</MSE_DT2>
+.}
+.{?INTERNAL; ( MseDt3 <> '' )
     <MSE_DT3>^</MSE_DT3>
+.}
+.{?INTERNAL; ( MseInvalidGroup > 0 )
     <MSE_INVALID_GROUP>^</MSE_INVALID_GROUP>
+.}
+.{?INTERNAL; ( MseInvaliDays > 0 )
     <MSE_INVALID_DAYS>^</MSE_INVALID_DAYS>
+.}
 !
 .{?INTERNAL; ( MseResult <> '' )
     <MSE_RESULT>^</MSE_RESULT>
@@ -706,17 +766,19 @@ end.
     <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
 .}
 !
-.{?INTERNAL; ( Version = '1.7.3' )
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
     <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
 .}
-.} // 1.7.3
 !------------ Стаж ---------------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
     <INSUR_YY>^</INSUR_YY>
     <INSUR_MM>^</INSUR_MM>
+.{?INTERNAL; ( NotInsurYY > 0 )
     <NOT_INSUR_YY>^</NOT_INSUR_YY>
+.}
+.{?INTERNAL; ( NotInsurMM > 0 )
     <NOT_INSUR_MM>^</NOT_INSUR_MM>
+.}
 .}
 !------Условия проживания\работы-------
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) and ( LiveCode <> '' )
@@ -784,7 +846,9 @@ end.
     <CERT_BR>^</CERT_BR>
     <CERT_SURNAME>^</CERT_SURNAME>
     <CERT_NAME>^</CERT_NAME>
+.{?INTERNAL; ( CertPatronimic <> '' )
     <CERT_PATRONIMIC>^</CERT_PATRONIMIC>
+.}
 .{?INTERNAL; ( Ref24No <> '' )
 ! справка о рождении
     <REF_24_NO>^</REF_24_NO>
@@ -818,9 +882,15 @@ end.
 !------------------------------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
 ! условия исчисления
+.{?INTERNAL; ( CalcCondition1 <> '' )
     <CALC_CONDITION1>^</CALC_CONDITION1>
+.}
+.{?INTERNAL; ( CalcCondition2 <> '' )
     <CALC_CONDITION2>^</CALC_CONDITION2>
+.}
+.{?INTERNAL; ( CalcCondition3 <> '' )
     <CALC_CONDITION3>^</CALC_CONDITION3>
+.}
 .}
 !---------------------------------------------------------
 ! Р Е Е С Т Р  П О   Б О Л Ь Н И Ч Н Ы М   Л И С Т А М
@@ -830,18 +900,26 @@ end.
     <LN_CODE>^</LN_CODE>
     <LN_DATE>^</LN_DATE>
     <REASON1>^</REASON1>
+.{?INTERNAL; ( Reason2 > '' )
     <REASON2>^</REASON2>
+.}
+.{?INTERNAL; ( Reason3 > '' )
     <REASON3>^</REASON3>
+.}
 .{?INTERNAL; ( EmplFlag = 0 )
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma )
     <PARENT_CODE>^</PARENT_CODE>
 .}
 .}
 !
+.{?INTERNAL; ( Date1 <> '' )
     <DATE1>^</DATE1>
+.}
 .{?INTERNAL; ( Date2 <> '' )
     <DATE2>^</DATE2>
+.{?INTERNAL; ( VoucherNo <> '' )
     <VOUCHER_NO>^</VOUCHER_NO>
+.}
     <VOUCHER_OGRN>^</VOUCHER_OGRN>
 .}
 .{?INTERNAL; ( VidReestr = cn_vpOtpusk )
@@ -862,7 +940,9 @@ end.
     <SERV2_AGE>^</SERV2_AGE>
     <SERV2_MM>^</SERV2_MM>
     <SERV2_RELATION_CODE>^</SERV2_RELATION_CODE>
+.{?INTERNAL; ( Serv2Fio <> '' )
     <SERV2_FIO>^</SERV2_FIO>
+.}
 .}
 !
 .{?INTERNAL; ( HospitalDt1 <> '' )
@@ -891,7 +971,9 @@ end.
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
     <PRIMARY_FLAG>^</PRIMARY_FLAG>
     <LPU_NAME>^</LPU_NAME>
+.{?INTERNAL; ( LpuAdress <> '' )
     <LPU_ADDRESS>^</LPU_ADDRESS>
+.}
     <LPU_OGRN>^</LPU_OGRN>
 .}
     <BIRTHDAY>^</BIRTHDAY>
@@ -903,18 +985,30 @@ end.
     <HOSPITAL_BREACH_DT>^</HOSPITAL_BREACH_DT>
 .}
 ! ОПЛАТА
+.{?INTERNAL; ( EmplPayment > 0 )
     <EMPL_PAYMENT>^</EMPL_PAYMENT>
+.}
+.{?INTERNAL; ( FssPayment > 0 )
     <FSS_PAYMENT>^</FSS_PAYMENT>
+.}
 ! данные о враче
 .{?INTERNAL; ( Treat1Doctor <> '' )
     <TREAT1_DT1>^</TREAT1_DT1>
     <TREAT1_DT2>^</TREAT1_DT2>
     <TREAT1_DOCTOR_ROLE>^</TREAT1_DOCTOR_ROLE>
     <TREAT1_DOCTOR>^</TREAT1_DOCTOR>
+.{?INTERNAL; ( Treat1DocId <> '' )
     <TREAT1_DOC_ID>^</TREAT1_DOC_ID>
+.}
+.{?INTERNAL; ( Treat1Doc2Role <> '' )
     <TREAT1_DOCTOR2_ROLE>^</TREAT1_DOCTOR2_ROLE>
+.}
+.{?INTERNAL; ( Treat1Chairman <> '' )
     <TREAT1_CHAIRMAN_VK>^</TREAT1_CHAIRMAN_VK>
+.}
+.{?INTERNAL; ( Treat1Doc2Id <> '' )
     <TREAT1_DOC2_ID>^</TREAT1_DOC2_ID>
+.}
 .}
 !----------------------------------------------------------
 .{?INTERNAL; ( Treat2Doctor <> '' )
@@ -922,10 +1016,18 @@ end.
     <TREAT2_DT2>^</TREAT2_DT2>
     <TREAT2_DOCTOR_ROLE>^</TREAT2_DOCTOR_ROLE>
     <TREAT2_DOCTOR>^</TREAT2_DOCTOR>
+.{?INTERNAL; ( Treat2DocId <> '' )
     <TREAT2_DOC_ID>^</TREAT2_DOC_ID>
+.}
+.{?INTERNAL; ( Treat2Doc2Role <> '' )
     <TREAT2_DOCTOR2_ROLE>^</TREAT2_DOCTOR2_ROLE>
+.}
+.{?INTERNAL; ( Treat2Chairman <> '' )
     <TREAT2_CHAIRMAN_VK>^</TREAT2_CHAIRMAN_VK>
+.}
+.{?INTERNAL; ( Treat2Doc2Id <> '' )
     <TREAT2_DOC2_ID>^</TREAT2_DOC2_ID>
+.}
 .}
 !-----------------------------------------------------------
 .{?INTERNAL; ( Treat3Doctor <> '' )
@@ -933,10 +1035,18 @@ end.
     <TREAT3_DT2>^</TREAT3_DT2>
     <TREAT3_DOCTOR_ROLE>^</TREAT3_DOCTOR_ROLE>
     <TREAT3_DOCTOR>^</TREAT3_DOCTOR>
+.{?INTERNAL; ( Treat3DocId <> '' )
     <TREAT3_DOC_ID>^</TREAT3_DOC_ID>
+.}
+.{?INTERNAL; ( Treat3Doc2Role <> '' )
     <TREAT3_DOCTOR2_ROLE>^</TREAT3_DOCTOR2_ROLE>
+.}
+.{?INTERNAL; ( Treat3Chairman <> '' )
     <TREAT3_CHAIRMAN_VK>^</TREAT3_CHAIRMAN_VK>
+.}
+.{?INTERNAL; ( Treat3Doc2Id <> '' )
     <TREAT3_DOC2_ID>^</TREAT3_DOC2_ID>
+.}
 .}
 .}
 !------------------------------------------------------------------
@@ -955,17 +1065,15 @@ end.
     <KF_REG>^</KF_REG>
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
     <KF_SHORT_DAY>^</KF_SHORT_DAY>
+.{?INTERNAL; ( BaseAvgDailySal > 0 )
     <BASE_AVG_DAILY_SAL>^</BASE_AVG_DAILY_SAL>
+.}
 .}
 !
 .{?INTERNAL; ( VidReestr = cn_vpPogreb ) or ( VidReestr = cn_vpDopDay )
     <PAYMENT>^</PAYMENT>     //фактически выплаченная сумма
 .}
 !---------- ПРОСТОЙ -------------------
-.{?INTERNAL; ( prProstoi = 0 )
-    <PERIODS></PERIODS>
-.}
-!
 .{?INTERNAL; ( prProstoi = 1 )
     <PERIODS>
 .}
@@ -1019,9 +1127,13 @@ end.
         author="^"
         phone="^"
         email="^"
+.{?INTERNAL; ( Kpp <> '' )
         EMPL_KPP="^"
+.}
         EMPL_INN="^"
+.{?INTERNAL; ( OGRN <> '' )
         EMPL_OGRN="^"
+.}
         EMPL_REG_NO="^">
 !---------------------
 .begin
@@ -1105,9 +1217,7 @@ end.
   YearChangeFlag   //  Признак замены годов
   Year1Old         //  Год 1 изменения
   Year2Old         //  Год 2 изменения
-!-------расчетный период-------------- для разных версий
-  Year1            //  Год на кот заменили 1
-  Year2            //  Год на кот заменили 2
+!-------расчетный период--------------
   Year1            //  Год на кот заменили 1
   Year2            //  Год на кот заменили 2
   BaseSum1         //  Сумма заработка за год 1
@@ -1208,7 +1318,7 @@ end.
   FssPayment       //  Сумма за счет ФСС
   Payment          // Фактически выплаченная сумма
 //--------- Свидетельство о рождении ---------------------------
-  CertType         //  тип документа   RefType для версии 1.7.2
+  CertType         //  тип документа
   CertNo           //  номер документа
   CertDt           //  дата документа
   CertBr           //  дата рождения
@@ -1272,10 +1382,14 @@ end.
     <DOC_TYPE>^</DOC_TYPE>
     <DOC_DT1>^</DOC_DT1>
     <SNILS>^</SNILS>
+.{?INTERNAL; ( InnPerson <> '' )
     <INN_PERSON>^</INN_PERSON>
+.}
     <SURNAME>^</SURNAME>
     <NAME>^</NAME>
+.{?INTERNAL; ( SecName <> '' )
     <PATRONIMIC>^</PATRONIMIC>
+.}
     <RESIDENT_FLAG>^</RESIDENT_FLAG>
 !
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
@@ -1288,12 +1402,24 @@ end.
     <ID_DEPT>^</ID_DEPT>
 ! если тип оплаты 0 - Почтовый перевод
     <ADDR_KLADR>^</ADDR_KLADR>
+.{?INTERNAL; ( AddrA1 <> '' )
     <ADDR_A1>^</ADDR_A1>
+.}
+.{?INTERNAL; ( AddrA2 <> '' )
     <ADDR_A2>^</ADDR_A2>
+.}
+.{?INTERNAL; ( AddrA3 <> '' )
     <ADDR_A3>^</ADDR_A3>
+.}
+.{?INTERNAL; ( AddrA4 <> '' )
     <ADDR_A4>^</ADDR_A4>
+.}
+.{?INTERNAL; ( AddrA5 <> '' )
     <ADDR_A5>^</ADDR_A5>
+.}
+.{?INTERNAL; ( AddrHouse <> '' )
     <ADDR_HOUSE>^</ADDR_HOUSE>
+.}
 !
 .{?INTERNAL; ( AddrBuilding <> '' )
     <ADDR_BUILDING>^</ADDR_BUILDING>
@@ -1315,37 +1441,76 @@ end.
 .{?INTERNAL; ( OwnerFlag = '0' )
     <SURNAME2>^</SURNAME2>
     <NAME2>^</NAME2>
+.{?INTERNAL; ( SecName2 <> '' )
     <PATRONIMIC2>^</PATRONIMIC2>
+.}
 .{?INTERNAL; ( Id2Type <> '' )
     <ID2_TYPE>^</ID2_TYPE>
+.{?INTERNAL; ( Id2No <> '' )
     <ID2_NO>^</ID2_NO>
+.}
+.{?INTERNAL; ( Id2Dt <> '' )
     <ID2_DT>^</ID2_DT>
+.}
+.{?INTERNAL; ( Id2Dept <> '' )
     <ID2_DEPT>^</ID2_DEPT>
 .}
 .}
+.}
+!
+.{?INTERNAL; ( Addr2 <> '' )
     <ADDR2>^</ADDR2>
+.}
+.{?INTERNAL; ( Addr2Kladr <> '' )
     <ADDR2_KLADR>^</ADDR2_KLADR>
+.}
+.{?INTERNAL; ( Addr2A1 <> '' )
     <ADDR2_A1>^</ADDR2_A1>
+.}
+.{?INTERNAL; ( Addr2A2 <> '' )
     <ADDR2_A2>^</ADDR2_A2>
+.}
+.{?INTERNAL; ( Addr2A3 <> '' )
     <ADDR2_A3>^</ADDR2_A3>
+.}
+.{?INTERNAL; ( Addr2A4 <> '' )
     <ADDR2_A4>^</ADDR2_A4>
+.}
+.{?INTERNAL; ( Addr2A5 <> '' )
     <ADDR2_A5>^</ADDR2_A5>
+.}
+.{?INTERNAL; ( Addr2House <> '' )
     <ADDR2_HOUSE>^</ADDR2_HOUSE>
+.}
+.{?INTERNAL; ( Addr2Building <> '' )
     <ADDR2_BUILDING>^</ADDR2_BUILDING>
+.}
+.{?INTERNAL; ( Addr2Flat <> '' )
     <ADDR2_FLAT>^</ADDR2_FLAT>
+.}
+.{?INTERNAL; ( PostIndex2 <> '' )
     <POST_INDEX2>^</POST_INDEX2>
+.}
 !-- Данные страхователя
     <EMPLOYER>^</EMPLOYER>
     <EMPL_FLAG>^</EMPL_FLAG>
+.{?INTERNAL; ( EmplOgrn <> '' )
     <EMPL_OGRN>^</EMPL_OGRN>
+.}
     <EMPL_REG_NO>^</EMPL_REG_NO>
     <EMPL_PARENT_NO>^</EMPL_PARENT_NO>
+.{?INTERNAL; ( EmplKpp <> '' )
     <EMPL_KPP>^</EMPL_KPP>
+.}
     <EMPL_INN>^</EMPL_INN>
 !------------Руководство-------------
     <APPROVE1>^</APPROVE1>
+.{?INTERNAL; ( Post_Boss <> '' )
     <APPROVE1_ROLE>^</APPROVE1_ROLE>
+.}
+.{?INTERNAL; ( FIO_Buh <> '' )
     <APPROVE2>^</APPROVE2>
+.}
 !
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild )
 ! Трудовой договор
@@ -1362,11 +1527,9 @@ end.
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem )
     <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
 .}
-.{?INTERNAL; ( Version = '1.7.3' )
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
     <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
 .}
-.} // 1.7.3
 !----------- средний заработок ---------------------------
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma )
     <BASE_AVG_SAL>^</BASE_AVG_SAL>
@@ -1378,7 +1541,9 @@ end.
 .}
     <MULTPATR>^</MULTPATR>
 .}
+.{?INTERNAL; ( BaseAvgDailySal > 0 )
     <BASE_AVG_DAILY_SAL>^</BASE_AVG_DAILY_SAL>
+.}
 .{?INTERNAL; ( CalcMetod = 1 )
 !
     <YEAR_CHANGE_FLAG>^</YEAR_CHANGE_FLAG>
@@ -1394,15 +1559,6 @@ end.
 .}
 .} // ( CalcMetod = 1 )
 !------------ Отметка о замене годов для расчета
-.{?INTERNAL; ( Version = '1.7.2' )
-.{?INTERNAL; ( CalcMetod = 0 )
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild )
-    <YEAR1>^</YEAR1>
-    <YEAR2>^</YEAR2>
-.}
-.} // ( CalcMetod = 0 )
-.} // 1.7.2
-!
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma )
     <BASE_SUM1>^</BASE_SUM1>
     <BASE_SUM2>^</BASE_SUM2>
@@ -1429,8 +1585,12 @@ end.
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
     <INSUR_YY>^</INSUR_YY>
     <INSUR_MM>^</INSUR_MM>
+.{?INTERNAL; ( NotInsurYY > 0 )
     <NOT_INSUR_YY>^</NOT_INSUR_YY>
+.}
+.{?INTERNAL; ( NotInsurMM > 0 )
     <NOT_INSUR_MM>^</NOT_INSUR_MM>
+.}
 .}
 !
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
@@ -1445,7 +1605,9 @@ end.
     <DUPLICATE_FLAG>^</DUPLICATE_FLAG>
     <LN_DATE>^</LN_DATE>
     <LPU_NAME>^</LPU_NAME>
+.{?INTERNAL; ( LpuAdress <> '' )
     <LPU_ADDRESS>^</LPU_ADDRESS>
+.}
     <LPU_OGRN>^</LPU_OGRN>
 .} // Больничный лист
 !
@@ -1454,8 +1616,12 @@ end.
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
 ! Больничный лист
     <REASON1>^</REASON1>
+.{?INTERNAL; ( Reason2 > '' )
     <REASON2>^</REASON2>
+.}
+.{?INTERNAL; ( Reason3 > '' )
     <REASON3>^</REASON3>
+.}
 .} // Больничный лист
 !
 .{?INTERNAL; ( EmplFlag = 0 )
@@ -1465,10 +1631,14 @@ end.
 .}
 ! Больничный лист
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+.{?INTERNAL; ( Date1 <> '' )
     <DATE1>^</DATE1>
+.}
 .{?INTERNAL; ( Date2 <> '' )
     <DATE2>^</DATE2>
+.{?INTERNAL; ( VoucherNo <> '' )
     <VOUCHER_NO>^</VOUCHER_NO>
+.}
     <VOUCHER_OGRN>^</VOUCHER_OGRN>
 .}
 .}
@@ -1485,7 +1655,9 @@ end.
     <SERV2_AGE>^</SERV2_AGE>
     <SERV2_MM>^</SERV2_MM>
     <SERV2_RELATION_CODE>^</SERV2_RELATION_CODE>
+.{?INTERNAL; ( Serv2Fio <> '' )
     <SERV2_FIO>^</SERV2_FIO>
+.}
 .}
 .{?INTERNAL; ( VidReestr = cn_vpBerem )
     <PREGN12W_FLAG>^</PREGN12W_FLAG>
@@ -1501,11 +1673,21 @@ end.
     <HOSPITAL_BREACH_CODE>^</HOSPITAL_BREACH_CODE>
     <HOSPITAL_BREACH_DT>^</HOSPITAL_BREACH_DT>
 .}
+.{?INTERNAL; ( MseDt1 <> '' )
     <MSE_DT1>^</MSE_DT1>
+.}
+.{?INTERNAL; ( MseDt2 <> '' )
     <MSE_DT2>^</MSE_DT2>
+.}
+.{?INTERNAL; ( MseDt3 <> '' )
     <MSE_DT3>^</MSE_DT3>
+.}
+.{?INTERNAL; ( MseInvalidGroup > 0 )
     <MSE_INVALID_GROUP>^</MSE_INVALID_GROUP>
+.}
+.{?INTERNAL; ( MseInvaliDays > 0 )
     <MSE_INVALID_DAYS>^</MSE_INVALID_DAYS>
+.}
 .{?INTERNAL; ( MseResult <> '' )
     <MSE_RESULT>^</MSE_RESULT>
 .}
@@ -1515,10 +1697,18 @@ end.
     <TREAT1_DT2>^</TREAT1_DT2>
     <TREAT1_DOCTOR_ROLE>^</TREAT1_DOCTOR_ROLE>
     <TREAT1_DOCTOR>^</TREAT1_DOCTOR>
+.{?INTERNAL; ( Treat1DocId <> '' )
     <TREAT1_DOC_ID>^</TREAT1_DOC_ID>
+.}
+.{?INTERNAL; ( Treat1Doc2Role <> '' )
     <TREAT1_DOCTOR2_ROLE>^</TREAT1_DOCTOR2_ROLE>
+.}
+.{?INTERNAL; ( Treat1Chairman <> '' )
     <TREAT1_CHAIRMAN_VK>^</TREAT1_CHAIRMAN_VK>
+.}
+.{?INTERNAL; ( Treat1Doc2Id <> '' )
     <TREAT1_DOC2_ID>^</TREAT1_DOC2_ID>
+.}
 .}
 !----------------------------------------------------------
 .{?INTERNAL; ( Treat2Doctor <> '' )
@@ -1526,10 +1716,18 @@ end.
     <TREAT2_DT2>^</TREAT2_DT2>
     <TREAT2_DOCTOR_ROLE>^</TREAT2_DOCTOR_ROLE>
     <TREAT2_DOCTOR>^</TREAT2_DOCTOR>
+.{?INTERNAL; ( Treat2DocId <> '' )
     <TREAT2_DOC_ID>^</TREAT2_DOC_ID>
+.}
+.{?INTERNAL; ( Treat2Doc2Role <> '' )
     <TREAT2_DOCTOR2_ROLE>^</TREAT2_DOCTOR2_ROLE>
+.}
+.{?INTERNAL; ( Treat2Chairman <> '' )
     <TREAT2_CHAIRMAN_VK>^</TREAT2_CHAIRMAN_VK>
+.}
+.{?INTERNAL; ( Treat2Doc2Id <> '' )
     <TREAT2_DOC2_ID>^</TREAT2_DOC2_ID>
+.}
 .}
 !-----------------------------------------------------------
 .{?INTERNAL; ( Treat3Doctor <> '' )
@@ -1537,10 +1735,18 @@ end.
     <TREAT3_DT2>^</TREAT3_DT2>
     <TREAT3_DOCTOR_ROLE>^</TREAT3_DOCTOR_ROLE>
     <TREAT3_DOCTOR>^</TREAT3_DOCTOR>
+.{?INTERNAL; ( Treat3DocId <> '' )
     <TREAT3_DOC_ID>^</TREAT3_DOC_ID>
+.}
+.{?INTERNAL; ( Treat3Doc2Role <> '' )
     <TREAT3_DOCTOR2_ROLE>^</TREAT3_DOCTOR2_ROLE>
+.}
+.{?INTERNAL; ( Treat3Chairman <> '' )
     <TREAT3_CHAIRMAN_VK>^</TREAT3_CHAIRMAN_VK>
+.}
+.{?INTERNAL; ( Treat3Doc2Id <> '' )
     <TREAT3_DOC2_ID>^</TREAT3_DOC2_ID>
+.}
 .}
 .{?INTERNAL; ( OtherStateDt <> '' )
     <OTHER_STATE_DT>^</OTHER_STATE_DT>
@@ -1559,9 +1765,15 @@ end.
 !------------------------------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
 ! условия исчисления
+.{?INTERNAL; ( CalcCondition1 <> '' )
     <CALC_CONDITION1>^</CALC_CONDITION1>
+.}
+.{?INTERNAL; ( CalcCondition2 <> '' )
     <CALC_CONDITION2>^</CALC_CONDITION2>
+.}
+.{?INTERNAL; ( CalcCondition3 <> '' )
     <CALC_CONDITION3>^</CALC_CONDITION3>
+.}
 !
 .{?INTERNAL; ( Form1Dt <> '' )
     <FORM1_DT>^</FORM1_DT>
@@ -1588,8 +1800,12 @@ end.
 !
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
 ! ОПЛАТА
+.{?INTERNAL; ( EmplPayment > 0 )
     <EMPL_PAYMENT>^</EMPL_PAYMENT>
+.}
+.{?INTERNAL; ( FssPayment > 0 )
     <FSS_PAYMENT>^</FSS_PAYMENT>
+.}
 .}
 .{?INTERNAL; ( VidReestr = cn_vpPogreb ) or ( VidReestr = cn_vpDopDay )
     <PAYMENT>^</PAYMENT>     //фактически выплаченная сумма
@@ -1608,7 +1824,9 @@ end.
     <CERT_BR>^</CERT_BR>
     <CERT_SURNAME>^</CERT_SURNAME>
     <CERT_NAME>^</CERT_NAME>
+.{?INTERNAL; ( CertPatronimic <> '' )
     <CERT_PATRONIMIC>^</CERT_PATRONIMIC>
+.}
 .{?INTERNAL; ( Ref24No <> '' )
 ! справка о рождении
     <REF_24_NO>^</REF_24_NO>
@@ -1686,13 +1904,11 @@ end.
 .}
 !
 .{?INTERNAL; ( VidReestr = cn_vpTravma )  or ( VidReestr = cn_vpOtpusk )
+.{?INTERNAL; ( ReasonEmpl <> '' )
     <REASON_EMPL>^</REASON_EMPL>
 .}
-!---------- ПРОСТОЙ -------------------
-.{?INTERNAL; ( prProstoi = 0 )
-    <PERIODS></PERIODS>
 .}
-!
+!---------- ПРОСТОЙ -------------------
 .{?INTERNAL; ( prProstoi = 1 )
     <PERIODS>
 .}

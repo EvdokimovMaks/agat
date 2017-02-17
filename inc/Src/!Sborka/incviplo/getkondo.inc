@@ -7,13 +7,12 @@ type
     ALLORG         : Word;            { AllOrg                                }
     TPDO           : Word;            { TpDO                                  }
     WPARAM         : Word;            { wParam                                }
+    WTIPDO         : Word;            { wTipDO                                }
     MYSTOPPED      : Boolean;         { MyStopped                             }
     D1             : Date;            { d1                                    }
     D2             : Date;            { d2                                    }
-    PICKED         : String;          { Выражение номер 0                     }
-    BOISPICKED     : Boolean;         { Выражение номер 1                     }
-    VIDD           : String;          { Выражение номер 2                     }
-    VALDO          : String;          { Выражение номер 3                     }
+    PMARKER        : TReferenceBuf;   { pMarker                               }
+    VALDO          : String;          { Выражение номер 0                     }
   end;
 
 type
@@ -22,35 +21,67 @@ type
 {$IFDEF __CONSTANTS__}
 const
     TNBASEDOC=0;
-    TNBASEFIN=6;
+    TNBASEFIN=5;
     TNKATORG=1;
-    TNKATSOPR=7;
-    TNPICK=3;
-    TNPICK6=4;
-    TNSTEPDOC=5;
+    TNKATSOPR=6;
+    TNPICK6=3;
+    TNPMARKER=7;
+    TNSTEPDOC=4;
     TNTEMPDB=2;
-    TCSETRUB=28;
-    TCSETRUBANDRUBVAL=32;
-    TCSETRUBANDVAL=31;
-    TCSETRUBVAL=29;
-    TCSETVAL=30;
-    TCSETVALANDRUBVAL=33;
+    TCSETRUB=21;
+    TCSETRUBANDRUBVAL=25;
+    TCSETRUBANDVAL=24;
+    TCSETRUBVAL=22;
+    TCSETVAL=23;
+    TCSETVALANDRUBVAL=26;
     FNALLORG=0;
-    FNBOISPICKED=9;
-    FND1=4;
-    FND2=5;
-    FNMYSTOPPED=3;
-    FNPICKED=7;
+    FND1=5;
+    FND2=6;
+    FNMYSTOPPED=4;
+    FNPMARKER=7;
     FNTPDO=1;
-    FNVALDO=13;
-    FNVIDD=11;
+    FNVALDO=9;
     FNWPARAM=2;
+    FNWTIPDO=3;
     tbBASEDOC_4_MODIF_0=65536;
-    tbPICK_4_MODIF_0=65539;
-    tb4_MODIF_1=131075;
-    tbPICK6_4_MODIF_0=4;
+    tbPICK6_4_MODIF_0=3;
+    tbRMTEMPDB1=7;
+    tbRMTEMPDB2=65538;
 {$ENDIF}
 {$IFDEF __Type__}
 type
    prGETKONDOGETKONDO = pGETKONDO;
 {$endif}
+
+{$ifdef __MTtabledef__}
+{═════════════ Таблица : ILMARKER_PMARKER "ILMarker=>PMARKER" ══════════════}
+type
+  pILMARKER_PMARKER = ^tILMARKER_PMARKER;
+  tILMARKER_PMARKER = record   { - ILMarker=>PMARKER }
+    PNREC          : Comp;            { pNRec                                 }
+    OWNER          : LongInt;         { Owner                                 }
+    IMAGENAME      : String;          { ImageName                             }
+    STORENAME      : String;          { StoreName                             }
+    AUTOSAVE       : Boolean;         { AutoSave                              }
+    LOADAUTO       : Boolean;         { LoadAuto                              }
+    COUNT          : LongInt;         { Count                                 }
+    ISCAPTION      : Boolean;         { IsCaption                             }
+    CAPTION        : String;          { Caption                               }
+    SHOWCAPTISZERO : Boolean;         { ShowCaptIsZero                        }
+    DISABLE        : Boolean;         { Disable                               }
+    SENDPOSCHANGEDWHITHGROUPDELETE: Boolean;{ SendPosChangedWhithGroupDelete  }
+    ISMARKNESTEDTREENODE: Boolean;    { IsMarkNestedTreeNode                  }
+    ISMARKTREENODEUP: Boolean;        { IsMarkTreeNodeUp                      }
+    ISNEEDCHECKDELETE: Boolean;       { IsNeedCheckDelete                     }
+    NPP            : LongInt;         { NPP                                   }
+    KOL            : Double;          { Kol                                   }
+    WPICK          : Word;            { wPick                                 }
+    FIRSTMARKREC   : Comp;            { FirstMarkRec                          }
+  end;
+const
+  tiIBYNREC              = 0;  { PNREC(Un M Up)                          }
+  tiIBYNPP               = 1;  { NPP(M Up)                               }
+
+const
+  mtILMARKER_PMARKER = 'ILMARKER=>PMARKER';
+{$endif __MTtabledef__}

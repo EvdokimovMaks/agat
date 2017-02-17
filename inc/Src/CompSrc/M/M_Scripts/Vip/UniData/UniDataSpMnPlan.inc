@@ -30,6 +30,7 @@ const
 
   reStateLine   = 2016;
   reAnNum       = 2017;
+  rePosFilial   = 2018;
 
   reCode1       = 2021;
   reCode2       = 2022;

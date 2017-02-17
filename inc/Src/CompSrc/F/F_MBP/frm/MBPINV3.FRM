@@ -24,6 +24,7 @@
   begDate  : Date vidMC  : String  placeMC : String
   startNpp : Word isCopy : Word
   Grouping : String sPrikaz : String dPrikaz : Date
+  TipName : Word
 .endFields
  #CommissionBody(MBPInvProt)
   NRec - ^
@@ -33,7 +34,7 @@
   ^ ^
   ^ ^
   ^ ^ ^ ^ ^
-  ^ ^ ^
+  ^ ^ ^ ^
 .{
 .{ cirInvGrp CheckEnter
 .Fields
@@ -306,8 +307,8 @@ end.
     if (Izn > 0)
       MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' изн ' + String(Izn) + '%';
 
-    if (PartyName <> '')
-      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + PartyName;
+    if (PartyName <> '') and (TipName > 0)
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + if (TipName = 2, PartyKod, PartyName);
 
     MBPInfo := MBPName + if (MBPInfo = '', '', ' (' + MBPInfo + ')');
   }
@@ -767,8 +768,8 @@ end.
     if (Izn > 0)
       MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' изн ' + String(Izn) + '%';
 
-    if (PartyName <> '')
-      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + PartyName;
+    if (PartyName <> '') and (TipName > 0)
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + if (TipName = 2, PartyKod, PartyName);
 
     MBPInfo := MBPName + if (MBPInfo = '', '', ' (' + MBPInfo + ')');
 
@@ -1129,8 +1130,8 @@ end.
     if (Izn > 0)
       MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' изн ' + String(Izn) + '%';
 
-    if (PartyName <> '')
-      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + PartyName;
+    if (PartyName <> '') and (TipName > 0)
+      MBPInfo := MBPInfo + if (MBPInfo = '', '', ',') + ' партия: ' + if (TipName = 2, PartyKod, PartyName);
 
     MBPInfo := MBPName + if (MBPInfo = '', '', ' (' + MBPInfo + ')');
 

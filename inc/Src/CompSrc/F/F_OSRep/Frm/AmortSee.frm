@@ -348,7 +348,13 @@ end.
     1   │   2  │            3            │        4       │        5       │       6      │       7     │    8    │    9   │      10     │      11     │      12    │     13     │      14    │     15     │     16     │     17     │     18
 ────────┴──────┴─────────────────────────┴────────────────┴────────────────┴──────────────┴─────────────┴─────────┴────────┴─────────────┴─────────────┴────────────┴────────────┴────────────┴────────────┴────────────┴────────────┴────────────
 .]H
+.fields
+  Node_Name  // узел
+  DoubleToStr(Node_SIznM1, Формат_Сумм)
+  DoubleToStr(Node_SIznM2, Формат_Сумм)
+.endfields
 .{ AmortSee_Header CheckEnter
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@               &&&&&&&&&&&&& &&&&&&&&&&&&&
 .}
 .{ AmortSee_Body CheckEnter
 .{?Internal;(Leaf_cKatOS <> comp(0) AND not SearchMarker(MrkKatOS, Leaf_cKatOS, IndNo));
@@ -423,7 +429,7 @@ end.
 .defo landscape
 .var
   MrkKatOS : TPtr;
-  IndNo    : longint;
+  IndNo, KolMon    : longint;
 .endvar
 #FeeSigners_Os_LinkVar
 .fields
@@ -445,6 +451,7 @@ end.
 .begin
   MrkKatOS := InitMarker('PrnReestr_ByRazn', 8, 100, 100, True);
   ClearMarker(MrkKatOS);
+  // KolMon := Months_Between(BegDate, EndDate) + 1;   // Количество месяцев в периоде
 end.
                                                          Бза период с ^ по ^ Б
 Фильтры:
@@ -476,7 +483,13 @@ end.
     1   │      2      │            3            │           4           │          5         │        6       │        7       │        8       │        9
 ────────┴─────────────┴─────────────────────────┴───────────────────────┴────────────────────┴────────────────┴────────────────┴────────────────┴────────────────
 .]H
+.fields
+    Node_Name  // узел
+//  DoubleToStr((Node_Stoim1 - Node_SumIzn1 - Node_SIznM1) / KolMon, Формат_Сумм)  // Остаточная стоимость на конец периода
+//  DoubleToStr((Node_Stoim2 - Node_SumIzn2 - Node_SIznM2) / KolMon, Формат_Сумм)  // Остаточная стоимость на конец периода
+.endfields
 .{ AmortSee_Header CheckEnter
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                   
 .}
 .{ AmortSee_Body CheckEnter
 .{?Internal;(Leaf_cKatOS <> comp(0) AND not SearchMarker(MrkKatOS, Leaf_cKatOS, IndNo));
@@ -492,8 +505,8 @@ end.
   DoubleToStr(Leaf_VVR_Period, Формат_Сумм)
   DoubleToStr(Leaf_NVR_Period, Формат_Сумм)
 
-  DoubleToStr(Leaf_OstSTOIM_1, Формат_Сумм)
-  DoubleToStr(Leaf_OstSTOIM_2, Формат_Сумм)
+  DoubleToStr(Leaf_OstSTOIM_1, Формат_Сумм)    // Остаточная стоимость на конец периода
+  DoubleToStr(Leaf_OstSTOIM_2, Формат_Сумм)    // Остаточная стоимость на конец периода
 .endfields
 @@@@@@@@│@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@@@@@@@@@│&&&&&&&&&&&&&&&&&&&&&&&│&&&&&&&&&&&&&&&&&&&&│&&&&&&&&&&&&&&&&│&&&&&&&&&&&&&&&&│&&&&&&&&&&&&&&&&│&&&&&&&&&&&&&&&&
 .}

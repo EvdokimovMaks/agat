@@ -761,6 +761,7 @@
   cgOp_FopMakeDocs       =  3; // плат.доки
   cgOp_FopUnion          =  4; // объединение Фоп
   cgOp_FopDivision       =  5; // разделение Фоп
+  cgOp_FopChangeDatePar  =  6; //   даты (явно)
 
   cgOp_FopRecount        = 20;
 

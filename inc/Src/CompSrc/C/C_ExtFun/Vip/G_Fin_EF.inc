@@ -12,39 +12,39 @@ function  FPLogDone                                          : Boolean; external
 function  FPLog                (String)                      : Boolean; external 'G_Fin.dll';
 //------------------------------------------------------------------------------
 // FpVipIfc
-function fpInitHier            (Comp,Comp,Word)              : Longint; external 'G_Fin.dll';
-function fpInitHierExt         (Comp,Comp,Word,LongInt)      : Longint; external 'G_Fin.dll';
+function fpInitHier            (Comp,Comp,Word)              : #TPtr; external 'G_Fin.dll';
+function fpInitHierExt         (Comp,Comp,Word,LongInt)      : #TPtr; external 'G_Fin.dll';
 
-function fpInitMatrix          (Longint,Word,Comp,Comp,Boolean,Word,Comp)
-                                                             : Longint; external 'G_Fin.dll';
-function fpInitMatrixCO        (Longint,Comp,Comp,Word,Comp,Word,Comp,Boolean) 
-                                                             : Longint; external 'G_Fin.dll';
+function fpInitMatrix          (#TPtr,Word,Comp,Comp,Boolean,Word,Comp)
+                                                             : #TPtr; external 'G_Fin.dll';
+function fpInitMatrixCO        (#TPtr,Comp,Comp,Word,Comp,Word,Comp,Boolean)
+                                                             : #TPtr; external 'G_Fin.dll';
 
-function fpLoadMatrix          (Longint)                     : Boolean; external 'G_Fin.dll';
-function fpSetNewPeriod        (Longint,Comp)                : Boolean; external 'G_Fin.dll';
-function fpSetCurrentMatrix    (Longint)                     : Boolean; external 'G_Fin.dll';
-function fpKillAllValues       (Longint)                     : Boolean; external 'G_Fin.dll';
-function fpReLoadMatrixStPer   (Longint,Comp,Comp)           : Boolean; external 'G_Fin.dll';
+function fpLoadMatrix          (#TPtr)                 : Boolean; external 'G_Fin.dll';
+function fpSetNewPeriod        (#TPtr,Comp)            : Boolean; external 'G_Fin.dll';
+function fpSetCurrentMatrix    (#TPtr)                 : Boolean; external 'G_Fin.dll';
+function fpKillAllValues       (#TPtr)                 : Boolean; external 'G_Fin.dll';
+function fpReLoadMatrixStPer   (#TPtr,Comp,Comp)       : Boolean; external 'G_Fin.dll';
 
 function fpAddFirstMatrixToSecond
-                               (Longint,Longint,Word)        : Boolean; external 'G_Fin.dll';
-function fpGetSumma            (Longint,Comp,Comp)           : Double;  external 'G_Fin.dll';
-function fpSetSumma            (Longint,Comp,Comp,Double,Boolean)
+                               (#TPtr,#TPtr,Word): Boolean; external 'G_Fin.dll';
+function fpGetSumma            (#TPtr,Comp,Comp)       : Double;  external 'G_Fin.dll';
+function fpSetSumma            (#TPtr,Comp,Comp,Double,Boolean)
                                                              : Boolean; external 'G_Fin.dll';
-function fpSetCellAttr         (Longint,Comp,Comp,Word)      : Boolean; external 'G_Fin.dll';
-function fpMaskCell            (Longint,Comp,Comp)           : Word;    external 'G_Fin.dll';
-function fpGetCellCont         (Longint,Comp,Comp,Boolean,Longint)
+function fpSetCellAttr         (#TPtr,Comp,Comp,Word)  : Boolean; external 'G_Fin.dll';
+function fpMaskCell            (#TPtr,Comp,Comp)       : Word;    external 'G_Fin.dll';
+function fpGetCellCont         (#TPtr,Comp,Comp,Boolean,#TPtr)
                                                              : Boolean; external 'G_Fin.dll';
-function fpGetExtInfo          (Longint,Comp,Comp,var Comp,var Comp,var Comp,var Comp)
+function fpGetExtInfo          (#TPtr,Comp,Comp,var Comp,var Comp,var Comp,var Comp)
                                                              : Boolean; external 'G_Fin.dll';
-function fpReCount             (Longint,Boolean,var String)  : Boolean; external 'G_Fin.dll';
-function fpSaveMatrix          (Longint,Word)                : Boolean; external 'G_Fin.dll';
-function fpDoneMatrix          (Longint)                     : Boolean; external 'G_Fin.dll';
-function fpDoneHier            (Longint)                     : Boolean; external 'G_Fin.dll';
-function fpGetInfo             (Longint,Boolean)
-                                                             : Longint; external 'G_Fin.dll';
+function fpReCount             (#TPtr,Boolean,var String)  : Boolean; external 'G_Fin.dll';
+function fpSaveMatrix          (#TPtr,Word)            : Boolean; external 'G_Fin.dll';
+function fpDoneMatrix          (#TPtr)                 : Boolean; external 'G_Fin.dll';
+function fpDoneHier            (#TPtr)                 : Boolean; external 'G_Fin.dll';
+function fpGetInfo             (#TPtr,Boolean)
+                                                             : longint; external 'G_Fin.dll';
 function fpInitFPCheckService                                : Boolean; external 'G_Fin.dll';
-function fpGoCheck             (LongInt,Comp)                : Boolean; external 'G_Fin.dll';
+function fpGoCheck             (#TPtr,Comp)            : Boolean; external 'G_Fin.dll';
 function fpDoneFPCheckService                                : Boolean; external 'G_Fin.dll';
 //------------------------------------------------------------------------------
 // FpVipAn.pas
@@ -56,52 +56,52 @@ function HAnReInit             (Boolean)                     : Boolean; external
 function HAnRetrieveSloj                                     : Boolean; external 'G_Fin.dll';
 function HAnIsCashMode                                       : Boolean; external 'G_Fin.dll';
 function HAnSetCashMode        (Boolean)                     : Boolean; external 'G_Fin.dll';
-function HAnGetHash            (Comp,LongInt,Boolean)        : Comp;    external 'G_Fin.dll';
+function HAnGetHash            (Comp,#TPtr,Boolean)        : Comp;    external 'G_Fin.dll';
 function HAnGetSloj            (Comp)                        : Comp;    external 'G_Fin.dll';
 function HAnIsKauInSloj        (Comp,Word)                   : Comp;    external 'G_Fin.dll';
 function HAnGetHashName        (Comp)                        : String;  external 'G_Fin.dll';
 function HAnGetAnMean          (Comp,Integer)                : Comp;    external 'G_Fin.dll';
-function HAnMakeListSlaveHash  (Comp,Comp,LongInt,LongInt)   : Boolean; external 'G_Fin.dll';
-function HAnMakeListSynchHash  (Comp,Comp,LongInt,LongInt)   : Boolean; external 'G_Fin.dll';
+function HAnMakeListSlaveHash  (Comp,Comp,#TPtr,#TPtr)   : Boolean; external 'G_Fin.dll';
+function HAnMakeListSynchHash  (Comp,Comp,#TPtr,#TPtr)   : Boolean; external 'G_Fin.dll';
 
 // Процедуры работы с контейнером аналитик
-function  ContAnInit                                         : LongInt; external 'G_Fin.dll';
-function  ContAnInited         (LongInt)                     : Boolean; external 'G_Fin.dll';
-function  ContAnDone           (LongInt)                     : Boolean; external 'G_Fin.dll';
-function  ContAnClear          (LongInt)                     : Boolean; external 'G_Fin.dll';
-function  ContAnKolAn          (LongInt)                     : Integer; external 'G_Fin.dll';
-function  ContAnDel            (LongInt,Integer)             : Boolean; external 'G_Fin.dll';
+function  ContAnInit                                         : #TPtr; external 'G_Fin.dll';
+function  ContAnInited         (#TPtr)                     : Boolean; external 'G_Fin.dll';
+function  ContAnDone           (#TPtr)                     : Boolean; external 'G_Fin.dll';
+function  ContAnClear          (#TPtr)                     : Boolean; external 'G_Fin.dll';
+function  ContAnKolAn          (#TPtr)                     : Integer; external 'G_Fin.dll';
+function  ContAnDel            (#TPtr,Integer)             : Boolean; external 'G_Fin.dll';
 function  ContAnAddDef                                       : Boolean; external 'G_Fin.dll';
-function  ContAnAdd            (LongInt,Word,Comp)           : Boolean; external 'G_Fin.dll';
-function  ContAnAddR           (LongInt,Word,Comp,Comp)      : Boolean; external 'G_Fin.dll';
-function  ContAnSetKod         (LongInt,Integer,Word)        : Boolean; external 'G_Fin.dll';
-function  ContAnSetAn          (LongInt,Integer,Comp)        : Boolean; external 'G_Fin.dll';
-function  ContAnSetRole        (LongInt,Integer,Comp)        : Boolean; external 'G_Fin.dll';
-function  ContAnSetAttr        (LongInt,Integer,Word)        : Boolean; external 'G_Fin.dll';
-function  ContAnSet            (LongInt,Integer,Word,Comp)   : Boolean; external 'G_Fin.dll';
-function  ContAnSetR           (LongInt,Integer,Word,Comp,Comp)
+function  ContAnAdd            (#TPtr,Word,Comp)           : Boolean; external 'G_Fin.dll';
+function  ContAnAddR           (#TPtr,Word,Comp,Comp)      : Boolean; external 'G_Fin.dll';
+function  ContAnSetKod         (#TPtr,Integer,Word)        : Boolean; external 'G_Fin.dll';
+function  ContAnSetAn          (#TPtr,Integer,Comp)        : Boolean; external 'G_Fin.dll';
+function  ContAnSetRole        (#TPtr,Integer,Comp)        : Boolean; external 'G_Fin.dll';
+function  ContAnSetAttr        (#TPtr,Integer,Word)        : Boolean; external 'G_Fin.dll';
+function  ContAnSet            (#TPtr,Integer,Word,Comp)   : Boolean; external 'G_Fin.dll';
+function  ContAnSetR           (#TPtr,Integer,Word,Comp,Comp)
                                                              : Boolean; external 'G_Fin.dll';
-function  ContAnGetKod         (LongInt,Integer)             : Word;    external 'G_Fin.dll';
-function  ContAnGetAn          (LongInt,Integer)             : Comp;    external 'G_Fin.dll';
-function  ContAnGetRole        (LongInt,Integer)             : Comp;    external 'G_Fin.dll';
-function  ContAnGetAttr        (LongInt,Integer)             : Word;    external 'G_Fin.dll';
-function  ContAnGet            (LongInt,Integer,var Word,var Comp)
+function  ContAnGetKod         (#TPtr,Integer)             : Word;    external 'G_Fin.dll';
+function  ContAnGetAn          (#TPtr,Integer)             : Comp;    external 'G_Fin.dll';
+function  ContAnGetRole        (#TPtr,Integer)             : Comp;    external 'G_Fin.dll';
+function  ContAnGetAttr        (#TPtr,Integer)             : Word;    external 'G_Fin.dll';
+function  ContAnGet            (#TPtr,Integer,var Word,var Comp)
                                                              : Boolean; external 'G_Fin.dll';
-function  ContAnGetIndKod      (LongInt,Word)                : Integer; external 'G_Fin.dll';
-function  ContAnGetIndKodAn    (LongInt,Word,Comp)           : Integer; external 'G_Fin.dll';
-function  ContAnGetIndKodAnRole(LongInt,Word,Comp,Comp)      : Integer; external 'G_Fin.dll';
-function  ContAnGetIndKodRole  (LongInt,Word,Comp)           : Integer; external 'G_Fin.dll';
-function  ContAnDelKod         (LongInt,Word)                : Boolean; external 'G_Fin.dll';
-function  ContAnInvert         (LongInt)                     : Boolean; external 'G_Fin.dll';
-function  ContAnEqual          (LongInt,LongInt)             : Boolean; external 'G_Fin.dll';
-function  ContAnAddContAn      (LongInt,LongInt)             : Boolean; external 'G_Fin.dll';
-function  ContAnCopy           (LongInt,LongInt)             : Boolean; external 'G_Fin.dll';
-function  ContAnPrint          (LongInt,Boolean)             : String;  external 'G_Fin.dll';
-function  ContAnPrintR         (LongInt,Boolean)             : String;  external 'G_Fin.dll';
-function  ContAnOder           (LongInt,Comp)                : Boolean; external 'G_Fin.dll';
-function  ContAnOderR          (LongInt,Comp)                : Boolean; external 'G_Fin.dll';
-function  ContAnMakeByHash     (LongInt,Comp)                : Boolean; external 'G_Fin.dll';
-function  ContAnMakeBySloj     (LongInt,Comp)                : Boolean; external 'G_Fin.dll';
+function  ContAnGetIndKod      (#TPtr,Word)                : Integer; external 'G_Fin.dll';
+function  ContAnGetIndKodAn    (#TPtr,Word,Comp)           : Integer; external 'G_Fin.dll';
+function  ContAnGetIndKodAnRole(#TPtr,Word,Comp,Comp)      : Integer; external 'G_Fin.dll';
+function  ContAnGetIndKodRole  (#TPtr,Word,Comp)           : Integer; external 'G_Fin.dll';
+function  ContAnDelKod         (#TPtr,Word)                : Boolean; external 'G_Fin.dll';
+function  ContAnInvert         (#TPtr)                     : Boolean; external 'G_Fin.dll';
+function  ContAnEqual          (#TPtr,#TPtr)             : Boolean; external 'G_Fin.dll';
+function  ContAnAddContAn      (#TPtr,#TPtr)             : Boolean; external 'G_Fin.dll';
+function  ContAnCopy           (#TPtr,#TPtr)             : Boolean; external 'G_Fin.dll';
+function  ContAnPrint          (#TPtr,Boolean)             : String;  external 'G_Fin.dll';
+function  ContAnPrintR         (#TPtr,Boolean)             : String;  external 'G_Fin.dll';
+function  ContAnOder           (#TPtr,Comp)                : Boolean; external 'G_Fin.dll';
+function  ContAnOderR          (#TPtr,Comp)                : Boolean; external 'G_Fin.dll';
+function  ContAnMakeByHash     (#TPtr,Comp)                : Boolean; external 'G_Fin.dll';
+function  ContAnMakeBySloj     (#TPtr,Comp)                : Boolean; external 'G_Fin.dll';
 // Процедуры работы с FpRound
 function  FpRoundInit                                        : LongInt; external 'G_Fin.dll';
 function  FpRoundDone          (LongInt)                     : Boolean; external 'G_Fin.dll';

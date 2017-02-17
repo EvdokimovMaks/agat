@@ -362,11 +362,11 @@ begin
        SpaceOfZeroForTotal := 0;
 end.
 .begin
-  pach_nmb:= PachNumBegin
-  nomer   := 0
-  KolNach := 0
-  SumNach := 0
-  SumVz   := 0
+  pach_nmb:= PachNumBegin;
+  nomer   := 0;
+  KolNach := 0;
+  SumNach := 0;
+  SumVz   := 0;
 end.
 .{ CheckEnter formpu6Enter
 .begin
@@ -398,9 +398,9 @@ if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // ª®«-Ά® «¨αβ®Ά Ά ― ηª¥
 .}
 .begin
   nomer:= nomer + 1;
-  KolNach:= 0
-  SumNach:= 0
-  SumVz  := 0
+  KolNach:= 0;
+  SumNach:= 0;
+  SumVz  := 0;
   _cnt    := 0;
   case CharF of
    0: TrueType:= ''
@@ -699,9 +699,9 @@ ___…– ^ €—
 .begin
   pach_nmb:= pach_nmb + 1;
   nomer:= 0;
-  KolNach := 0
-  SumNach := 0
-  SumVz   := 0
+  KolNach := 0;
+  SumNach := 0;
+  SumVz   := 0;
 end.
 .end
 .}

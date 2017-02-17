@@ -1502,25 +1502,27 @@ end.
 .nameinlist 'Реестр застрахованных лиц'
 .group 'Реестры ДСВ'
 .p 60
-.var KolList   : integer
-     SumList1  : double
-     ItogSumma1: double
-     SummaStr1 : string
-     SummaStr2 : string
-     SummaStr3 : string
+.var
+  KolList : integer;
+  SumList1 : double;
+  SumList2 : double;
+  ItogSumma1 : double;
+  SummaStr1 : string;
+  SummaStr2 : string;
+  SummaStr3 : string;
 .endvar
 .begin
   KolList := 0;
-  SumList1:= 0;
+  SumList1 := 0;
+  SumList2 := 0;
   ItogSumma1 := 0;
 end.
 
 .{
-                                                                                   Форма ДСВ-3
-                                       Р Е Е С Т Р
-              ЗАСТРАХОВАННЫХ ЛИЦ, ЗА КОТОРЫХ ПЕРЕЧИСЛЕНЫ ДОПОЛНИТЕЛЬНЫЕ
-               СТРАХОВЫЕ ВЗНОСЫ НА НАКОПИТЕЛЬНУЮ ЧАСТЬ ТРУДОВОЙ ПЕНСИИ
-                     И УПЛАЧЕНЫ СТРАХОВЫЕ ВЗНОСЫ РАБОТОДАТЕЛЯ
+ Форма ДСВ-3
+                            Реестр застрахованных лиц,
+               за которых перечислены дополнительные страховые взносы
+               на накопительную пенсию и уплачены взносы работодателя
 .fields
  RegNomPF
  INN
@@ -1533,7 +1535,7 @@ end.
 
 .endFields
 
- Реквизиты работодателя, передающего реестр:
+ Реквизиты работодателя, передающего реестр застрахованных лиц:
  Регистрационный номер ПФР @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
  ИНН @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  КПП @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
  Наименование организации (краткое)
@@ -1543,12 +1545,12 @@ end.
  Период уплаты ^
 
 ────┬────────────────────────────┬──────────────────┬────────────────────┬────────────────────
-    │                            │                  │Сумма перечисленных │Сумма уплаченных
- №  │           Ф.И.О.           │ Страховой номер  │   дополнительных   │взносов работодателя
-п/п │    застрахованного лица    │  индивидуального │страховых взносов на│ (в случае уплаты),
-    │                            │  лицевого счета  │накопительную часть │      (руб.)
-    │                            │                  │ трудовой пенсии    │
-    │                            │                  │       (руб.)       │
+    │                            │ Страховой номер  │        Сумма       │      Сумма
+ №  │           Ф.И.О.           │  индивидуального │   перечисленных    │    уплаченных
+п/п │    застрахованного лица    │  лицевого счета  │   дополнительных   │      взносов
+    │                            │  застрахованного │ страховых взносов  │    работодателя
+    │                            │       лица       │ на накопительную   │  (в случае уплаты)
+    │                            │      (СНИЛС)     │    пенсию (руб.)   │      (руб.)
 .{
 .[h OverWrite
 .begin
@@ -1560,8 +1562,9 @@ end.
 .]h
 .{
 .begin
-  SumList1  := SumList1 + Sum_Per + Sum_PerU;
-  ItogSumma1:= ItogSumma1 + Sum_Per  + Sum_PerU;
+  SumList1 := SumList1 + Sum_PerU;
+  SumList2 := SumList2 + Sum_Per;
+  ItogSumma1 := ItogSumma1 + Sum_Per  + Sum_PerU;
 end.
 .fields
  Npp FIO Nom_lsh GetStrSummaExt(true, true, Sum_PerU) GetStrSummaExt(true, true, Sum_Per)
@@ -1572,28 +1575,29 @@ end.
 .fields
   KolList
   GetStrSummaExt(true, true, SumList1)
+  GetStrSummaExt(true, true, SumList2)
   SummaStr2
   SummaStr3
 .endfields
 ────┴────────────────────────────┴──────────────────┴────────────────────┴────────────────────
- Итого по листу &&&:                                                      &'#&&&&&&&&&&&&&&&&&
+ Всего по листу &&&:                                 &'#&&&&&&&&&&&&&&&&& &'#&&&&&&&&&&&&&&&&&
 .begin
   //сумма прописью по листу
   SummaStr2:= '';
   SummaStr3:= '';
-  SummaStr1:= DoubleToString(KodVal,SumList1);
+  SummaStr1:= DoubleToString(KodVal,SumList1+SumList2);
   if length(SummaStr1) > 93
-   {
+  {
     SummaStr2:= GetPartStr(SummaStr1,93);
     if Trim(SummaStr2)=''
      SummaStr2:=substr(SummaStr1,1,93);
-     SummaStr3:= substr(SummaStr1,length(SummaStr2)+1,93);
-   }
+    SummaStr3:= substr(SummaStr1,length(SummaStr2)+1,93);
+  }
   else
-   {
-     SummaStr2:= SummaStr1;
-     SummaStr3:= '';
-   }
+  {
+    SummaStr2:= SummaStr1;
+    SummaStr3:= '';
+  }
 end.
  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1643,7 +1647,10 @@ end.
    @@@@@@@@@@@@@@@@@@                           ^
                              _______________    _____________________________________________
                                  (подпись)                  (расшифровка подписи)
-.begin  KolList:= 0
+
+      Дата                                      М.П.
+.begin
+  KolList:= 0
  end.
 .if BrPage
 ^

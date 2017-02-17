@@ -103,12 +103,13 @@
 .endDeclare
 .var
   iFeeSigners : FeeSigners;
-  i, lSign : longint;
+  DocNpp, i, lSign : longint;
   FIOs, Post : array [1..2] of string;
   Npp : longint;
   ItogSum : double;
 .endvar
 .begin
+  DocNpp := 0;
   lSign := 0;
 
   for (i := 1; i <= Count(FIOs); i++)
@@ -141,9 +142,13 @@ end.
 .endfields
 .{ SortDoc CheckEnter
 .begin
+  DocNpp++;
   Npp := 0;
   ItogSum := 0;
 end.
+.{?Internal;(DocNpp > 1);
+
+.}
 ÿ ^
 
                                                      ÿ€Š’ € ……‘’ˆ–“ÿ
@@ -207,6 +212,5 @@ end.
 .endfields
 @@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .}ÿ
-
 .}
 .endform

@@ -35,6 +35,9 @@
     slStaffServLenArchOld   = 4;
     coStaffSuper            = 'MaslakovaPlusVasja99';
 
+// таблица стажей PenStaj
+    coStajLink = 777;
+
 
 // коды модулей
     moStaff = 1;

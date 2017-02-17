@@ -235,9 +235,9 @@ end.
   Массив_ИК_Заводской_Номер      [ik] // 02
   Массив_ИК_Номер_Паспорта       [ik] // 03
   Массив_ИК_Модель_Тип_Марка     [ik] // 05
-  iExcelFormat.DoubleToStrFormatExcel (if (DuplicateRecordInGroupIK, 1, Массив_ИК_Количество [ik]), 0) // 08
-  iExcelFormat.DoubleToStrFormatExcel (Массив_ИК_Стоимость_за_единицу [ik], 2) // 09
-  iExcelFormat.DoubleToStrFormatExcel (if (DuplicateRecordInGroupIK, Массив_ИК_Стоимость_за_единицу [ik], Массив_ИК_Стоимость_всего [ik]), 2) // 10
+  iExcelFormat.KolOsToStrRep  (if (DuplicateRecordInGroupIK, 1, Массив_ИК_Количество [ik])) // 08
+  iExcelFormat.DoubleToStrRep (Массив_ИК_Стоимость_за_единицу [ik]) // 09
+  iExcelFormat.DoubleToStrRep (if (DuplicateRecordInGroupIK, Массив_ИК_Стоимость_за_единицу [ik], Массив_ИК_Стоимость_всего [ik])) // 10
 .endfields
    │@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@@│@@@@@@@@@@@@@@@@@@│                  │@@@@@@@@@@@@@@@@@@│          │                     │&&&&&&&&&&&&│&&&&&&&&&&&&&&&&&&│&&&&&&&&&&&&&&&&&&│            │
 .begin

@@ -178,6 +178,10 @@ Const
   wAlgDate_SbBan_dForm             = 42;   // дата формирования реестра
   wAlgDate_SbBan_DataN             = 43;   // дата принятия к обработке реестра
   wAlgDate_SbBan_DatOk             = 44;   // дата закрытия реестра
+  wAlgDate_PlanDog_dBegAvans       = 45;   // дата начальная из условия авансовых платежей по договору/соглашению
+  wAlgDate_PlanDog_dEndAvans       = 46;   // дата конечная из условий авансовых платежей по договору/соглашению
+  wAlgDate_PlanDog_dBegPlus        = 47;   // дата начальная + количество дней из условий авансовых платежей по договору/соглашению
+  wAlgDate_PlanDog_dEndPlus        = 48;   // дата конечная + количество дней из условий авансовых платежей по договору/соглашению
   // DOUBLE ( 100 - 199 )
   wAlgSumma_DocReq_Summa           = 100;  // Сумма заявки
   wAlgSumma_BaseDoc_Summa          = 101;  // Сумма по ДО
@@ -205,6 +209,7 @@ Const
   wAlgSumma_BaseDoc_NoOpl          = 124;  // Остаток к исполнению по
   wAlgSumma_DocReq_NoOpl           = 125;  // Остаток к исполнению по договору
   wAlgSumma_SbBan_Summa            = 126;  // Сумма по реестру
+  wAlgSumma_PlanDog_AvanPlat       = 127;  // Сумма из поля авансовые платежи по договору/соглашению
   // COMP ( 200 - 299 )
   wAlgRef_Def_CO                   = 200;  // ЦО по умолчанию (из настройки)
   wAlgRef_Def_Person               = 201;  // Куратор по умолчанию
@@ -293,6 +298,7 @@ Const
   wAlgRef_SbBan_BankPol            = 284;  // банк получателя платежей по реестру
   wAlgRef_SbBan_Person             = 285;  // сотрудник по реестру
   wAlgRef_GrafKred_Tip             = 286;  // тип этапа погашения кредита
+  wAlgRef_SoprHoz_ExtKAU_StBud     = 287;  // Статья из внешнего КАУ к хозоперации
   // WORD ( 300 - 399 )
   wAlgWord_Def_Vid_Avans           = 300;  // явно - аванс
   wAlgWord_Def_Vid_Fakt            = 301;  // явно - факт

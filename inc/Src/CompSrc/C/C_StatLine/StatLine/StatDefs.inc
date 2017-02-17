@@ -247,5 +247,7 @@
           '',     cmShowAll,           kbCtrlEqual;
           '',     cmSetupReport,       kbCtrlR;
           '',     cmStartDopTables,    kbAltI;
+	  '',     cmStaffDoWin13,      kbAltL;
+	  '',     cmStaffDoWin14,      kbAltT;
 #end
 !-------------------------------------------------------------------------------

@@ -57,4 +57,6 @@ const fcT1_RAISE = 61818;
 const fcT5_2004_RAISE = 26736;
 const fcT5_RAISE = 54633;
 const fcT6_2004_CYCLE1 = 12544;
+const fcT6_2004_CYCLEDOPVAC = 9100;
+const fcT6_2004_CYCLEVAC = 24433;
 const fcTEMA_CYCLE = 32511;

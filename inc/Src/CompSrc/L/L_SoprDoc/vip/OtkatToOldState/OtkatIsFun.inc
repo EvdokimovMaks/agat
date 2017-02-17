@@ -27,6 +27,7 @@ Const
   otsKatOrgName     = 18;               // контрагент
   otsBarKodAndState = 19;               // штрихкод
   otsKDKolDiff      = 20;               // количество в корректировочном документе
+  otsOtvPodr        = 21;               // Центр ответственности
 end;
 
 #end

@@ -325,6 +325,23 @@ function GetEnvString(sName: string): string;  external 'G_ExpImp.dll';
 function XML_New                                                       : #TPtr; external 'G_ExpImp.dll';
 
 #doc
+  Возвращает количество узлов в документе
+</breaf>
+<br>
+Параметра
+<ul>
+  <li>адрес указателя на XML-документ
+  <li>адрес указателя на гл. узел заголовка документа
+  <li>название элемента, являющегося документом
+</ul>
+<br>
+Результат:<br>
+  Количество узлов в документе
+#end
+Function XML_CountDoc(#TPtr, #TPtr, string) : longint; external 'G_ExpImp.dll';
+
+
+#doc
 Загрузка XML-документа из файла
 </breaf>
 <br>

@@ -13,6 +13,27 @@ type
     PARAM1         : Word;            { Param1                                }
     SCHNAME        : String;          { SchName                               }
     SUBNAME        : String;          { SubName                               }
+    MKAUOS1        : LongInt;         { mKauOs1                               }
+    MKAUOS2        : LongInt;         { mKauOs2                               }
+    MKAUOS3        : LongInt;         { mKauOs3                               }
+    MKAUOS4        : LongInt;         { mKauOs4                               }
+    MKAUOS5        : LongInt;         { mKauOs5                               }
+    MKAUOS6        : LongInt;         { mKauOs6                               }
+    WKAUOS1        : Word;            { wKauOs1                               }
+    WKAUOS2        : Word;            { wKauOs2                               }
+    WKAUOS3        : Word;            { wKauOs3                               }
+    WKAUOS4        : Word;            { wKauOs4                               }
+    WKAUOS5        : Word;            { wKauOs5                               }
+    WKAUOS6        : Word;            { wKauOs6                               }
+    CKAUOS1        : Comp;            { cKauOs1                               }
+    CKAUOS2        : Comp;            { cKauOs2                               }
+    CKAUOS3        : Comp;            { cKauOs3                               }
+    CKAUOS4        : Comp;            { cKauOs4                               }
+    CKAUOS5        : Comp;            { cKauOs5                               }
+    CKAUOS6        : Comp;            { cKauOs6                               }
+    WKAU           : Word;            { wKau                                  }
+    CKAU           : Comp;            { cKau                                  }
+    MCOUNT         : LongInt;         { mCount                                }
     PICKSCH        : String21;        { PickSch                               }
     PICKSUB        : String21;        { PickSub                               }
     PICKPLANSNO    : Comp;            { PickPlansNo                           }
@@ -22,6 +43,12 @@ type
     ISOKOB         : Boolean;         { isOkOb                                }
     FIRSTMON       : String;          { FIRSTMON                              }
     PLANNAME       : String;          { PLANNAME                              }
+    DLGKAUD1       : String;          { Выражение номер 2                     }
+    DLGKAUD2       : String;          { Выражение номер 3                     }
+    DLGKAUD3       : String;          { Выражение номер 4                     }
+    DLGKAUD4       : String;          { Выражение номер 5                     }
+    DLGKAUD5       : String;          { Выражение номер 6                     }
+    DLGKAUD6       : String;          { Выражение номер 7                     }
     NAME           : String150;       { Наименование счета/субсчета           }
   end;
 
@@ -31,35 +58,69 @@ type
 {$IFDEF __CONSTANTS__}
 const
     TNBUHSCHET=0;
+    TNKATKAU=5;
     TNOBOROT=1;
     TNPICKBUH=3;
+    TNPICKBUHNEW=6;
     TNPICKBUHS=4;
     TNSALDMOUN=2;
+    TNSEARCHBUH=7;
     FNBEGDATE=2;
+    FNCKAU=26;
+    FNCKAUOS1=19;
+    FNCKAUOS2=20;
+    FNCKAUOS3=21;
+    FNCKAUOS4=22;
+    FNCKAUOS5=23;
+    FNCKAUOS6=24;
+    FNDLGKAUD1=37;
+    FNDLGKAUD2=38;
+    FNDLGKAUD3=39;
+    FNDLGKAUD4=40;
+    FNDLGKAUD5=41;
+    FNDLGKAUD6=42;
     FNENDDATE=3;
-    FNFIRSTMON=14;
-    FNISOKOB=13;
-    FNISOKSAL=12;
-    FNMULTISCH=10;
-    FNMULTISUB=11;
+    FNFIRSTMON=35;
+    FNISOKOB=34;
+    FNISOKSAL=33;
+    FNMCOUNT=27;
+    FNMKAUOS1=7;
+    FNMKAUOS2=8;
+    FNMKAUOS3=9;
+    FNMKAUOS4=10;
+    FNMKAUOS5=11;
+    FNMKAUOS6=12;
+    FNMULTISCH=31;
+    FNMULTISUB=32;
     FNMYPLANSNO=0;
-    FNNAME=16;
+    FNNAME=43;
     FNPARAM1=4;
-    FNPICKPLANSNO=9;
-    FNPICKSCH=7;
-    FNPICKSUB=8;
-    FNPLANNAME=15;
+    FNPICKPLANSNO=30;
+    FNPICKSCH=28;
+    FNPICKSUB=29;
+    FNPLANNAME=36;
     FNSCHNAME=5;
     FNSUBNAME=6;
     FNTECDATE=1;
+    FNWKAU=25;
+    FNWKAUOS1=13;
+    FNWKAUOS2=14;
+    FNWKAUOS3=15;
+    FNWKAUOS4=16;
+    FNWKAUOS5=17;
+    FNWKAUOS6=18;
     tbBUHSCHET_4_MODIF_0=0;
     tbBUHSCHET_4_MODIF_1=65536;
+    tbBUHSCHET_4_MODIF_2=131072;
+    tbKATKAU_4_MODIF_0=5;
     tbOBOROT_4_MODIF_0=1;
     tbOBOROT_4_MODIF_1=65537;
     tbOBOROT_4_MODIF_2=131073;
     tbOBOROT_4_MODIF_3=196609;
     tb4_MODIF_4=262145;
     tbPICKBUH_4_MODIF_0=3;
+    tbPICKBUHNEW_4_MODIF_0=6;
+    tbPICKBUHNEW_4_MODIF_1=65542;
     tbSALDOALL=2;
     tbSALDOPLAN=65538;
     tbSALDOSCH=131074;
@@ -67,6 +128,8 @@ const
     tbSALDMOUN_4_MODIF_1=262146;
     tbSALDMOUN_4_MODIF_2=327682;
     tbSALDMOUN_4_MODIF_3=393218;
+    tbSEARCHBUH_4_MODIF_0=65543;
+    tbSEARCHBUH_4_MODIF_1=131079;
 {$ENDIF}
 {$IFDEF __Type__}
 type
@@ -97,4 +160,26 @@ const
 
 const
   mtPICKBUH = 'F_BUHREP::PICKBUH';
+{═════════════ Таблица : F_BUHREP::PICKBUHNEW "PICKBUHNEW" ══════════════}
+type
+  pPICKBUHNEW = ^tPICKBUHNEW;
+  tPICKBUHNEW = record   { - PICKBUHNEW }
+    LENTITY        : LongInt;         { насятройка, хранящая данные           }
+    KODTABLE       : Word;            { таблица                               }
+    PICKREC        : Comp;            { номер элемента в списке               }
+    PICKKOD        : String[21];      { код или NRec элемента                 }
+    SCHET          : String[21];      { бухг.счет                             }
+    SUBKAU         : String[21];      { субсчет/КАУ                           }
+    NAME           : String[250];     { имя фильтра                           }
+    PICK           : LongInt;         { порядок выбора                        }
+    PICKKOL        : Double;          { количество                            }
+  end;
+const
+  tiPICKBUHNEWREC        = 0;  { LENTITY(M) + KODTABLE + PICKREC         }
+  tiPICKBUHNEWKOD        = 1;  { LENTITY(M) + KODTABLE + PICKKOD(Up)     }
+  tiPICKBUHNEWSCH        = 2;  { LENTITY(M) + KODTABLE + SCHET(Up) + PICKKOD(Up) }
+  tiPICKBUHNEWPCK        = 3;  { LENTITY(M) + KODTABLE + PICK            }
+
+const
+  mtPICKBUHNEW = 'F_BUHREP::PICKBUHNEW';
 {$endif __MTtabledef__}

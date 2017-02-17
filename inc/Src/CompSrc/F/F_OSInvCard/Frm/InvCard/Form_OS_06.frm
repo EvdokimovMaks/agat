@@ -40,8 +40,6 @@ where
   wCountry     : word;
   strNDE       : string;
 .endvar
-#include funcOs.frn
-end.  // funcOs.frn - вынес из файла чтобы не создавалась пустая строка перед формой
 .begin
   bWasDrag := false;
   bWasMemo := false;
@@ -134,7 +132,7 @@ end.
  Счет_Субсчет
  КАУ
  Стоимость
- SrokIspEdIzmWord (Срок_Использования)
+ iExcelFormat.SrokIspEdIzmWord (Срок_Использования)
  string(Норма_Амортизации, 10, 6)
  Код_Нормы_Амортизации
  Счет_Субсчет_Аморт
@@ -362,8 +360,6 @@ end.
   N1 : word; // Текущий номер в цикле
   NN : word; // Количество элементов в массиве.
 .endvar
-#include funcOs.frn
-end.  // funcOs.frn - вынес из файла чтобы не создавалась пустая строка перед формой
 .fields
  '(Метод учета: ' +Метод_Учета +')'
  DateToStr(Отчетный_период,'Month YYYY')
@@ -513,8 +509,8 @@ end.
 
  // 06
  if (WriteDivisionOne = 0,
-   if ((Сумма_Амортизации_получения = 0), '', SrokIspEdIzmWord (Срок_Использования_До_Поступления  ) ),
-   SrokIspEdIzmWord (Срок_Использования_на_заданную_дату) )
+   if ((Сумма_Амортизации_получения = 0), '', iExcelFormat.SrokIspEdIzmWord (Срок_Использования_До_Поступления  ) ),
+   iExcelFormat.SrokIspEdIzmWord (Срок_Использования_на_заданную_дату) )
 
   // 07
  if (WriteDivisionOne = 0, iExcelFormat.DoubleToStrRep(Сумма_Амортизации_получения), iExcelFormat.DoubleToStrRep(Сумма_Амортизации) )
@@ -527,8 +523,8 @@ end.
  // Таблица 2
  iExcelFormat.DoubleToStrRep(Стоимость_получения)                                                // 01
  if (isWriteSrokonDate = 0,                                                                      // 02
-   SrokIspEdIzmWord(Срок_Использования_При_поступлении - Срок_Использования_До_Поступления),     // 02
-   SrokIspEdIzmWord(Срок_Использования - Срок_Использования_До_Поступления) )                    // ПИР 102.113287
+   iExcelFormat.SrokIspEdIzmWord(Срок_Использования_При_поступлении - Срок_Использования_До_Поступления),     // 02
+   iExcelFormat.SrokIspEdIzmWord(Срок_Использования - Срок_Использования_До_Поступления) )                    // ПИР 102.113287
 .endfields
                                                                                                           2. Сведения об объекте
                                                                                                           основных средств на дату

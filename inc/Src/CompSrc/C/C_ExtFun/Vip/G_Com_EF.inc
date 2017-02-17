@@ -2425,6 +2425,7 @@ function TrGet(word): word; external 'G_Common.dll';
   Функция устарела. Вызов её деструктивен.
 #end
 function TrWasAbort: boolean; external 'G_Common.dll';
+function TrWasInit : boolean; external 'G_Common.dll';
 #doc
   Функция устарела. Вызов её деструктивен.
 #end

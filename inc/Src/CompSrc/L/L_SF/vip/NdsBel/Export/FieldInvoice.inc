@@ -20,6 +20,7 @@ const
   fi_requisitesOrg  = 9;   // Реквизиты поставщика\получателя
 
   // Раздел 2. Реквизиты поставщика - provider
+  fi_provider_invoice              = 10; // Не заполнять сведения о поставщике
   fi_provider_providerStatus       = 11; // 6. Статус поставщика
   fi_provider_dependentPerson      = 12; // 6.1. Взаимозависимое лицо
   fi_provider_residentsOfOffshore  = 13; // 6.2. Сделка с резидентом оффшорной зоны
@@ -41,6 +42,7 @@ const
   fi_provider_taxes_date           = 29; // 14. Реквизиты заявления о ввозе товаров и уплате косвенных налогов - дата
 
   // Раздел 3. Реквизиты получателя - recipient
+  fi_recipient_invoice             = 30; // Не заполнять сведения о получателе
   fi_recipient_recipientStatus     = 31; // 15. Статус получателя
   fi_recipient_dependentPerson     = 32; // 15.1. Взаимозависимое лицо
   fi_recipient_residentsOfOffshore = 33; // 15.2. Сделка с резидентом оффшорной зоны
@@ -79,6 +81,8 @@ const
   fi_deliveryCondition_contract_document_seria        = 67; // Серия
   fi_deliveryCondition_contract_document_number       = 68; // Номер
   fi_deliveryCondition_description                    = 69; // 31.Дополнительные сведения
+
+  fi_dopParamInvoice          = 70; // Дополнительные параметры ЭСЧФ
 
   // Раздел 6. Данные по товарам (работам, услугам), имущественным правам - roster
   fi_roster_item_number       = 71; // 1. № п/п

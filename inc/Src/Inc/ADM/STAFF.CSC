@@ -7,7 +7,7 @@
 //  บ       เ ฌฅโเ๋:                                                     บ
 //  บ      งฌฅญฅญจ๏:                                                     บ
 //  ศอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผ
-//        ฎโ 9100. ฅเข๋ฉ แขฎกฎคญ๋ฉ = 9245;
+//        ฎโ 9100. ฅเข๋ฉ แขฎกฎคญ๋ฉ = 9246;
 
     scStaff178Esc                 = 9154;
     scStaffAddr1List              = 9122;
@@ -156,4 +156,6 @@
     sci13TreeAllEsc                  = 9242;
     sci14TreeAllEsc                  = 9243;
     sci18InsPMEsc                    = 9244;
+    scStaffReceptionT2ButtAltG       = 9245;
+    scStaffReceptionMainTreeExtend   = 9246;
  

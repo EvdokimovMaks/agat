@@ -31,6 +31,8 @@ const
   recParty   = 3004;
   recSpDocs  = 3005;
   recVal     = 3006;
+  reFilStep  = 3007;
+
 
   rePrSkid     = 4001;
 

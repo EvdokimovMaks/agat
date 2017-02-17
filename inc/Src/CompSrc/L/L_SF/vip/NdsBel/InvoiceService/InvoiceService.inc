@@ -14,6 +14,7 @@ Type
     Status: string;          // статус документа;
     Message: string;         // информационное сообщение о статусе документа;
     Since: string;           // дата начала действия статуса документа;
+    BeginFileStatus: string; // сохранение статуса ЭСЧФ
   end;
 
   TETicket = record
@@ -40,6 +41,9 @@ Type
     FileInvoiceSign: string; // сохранение ЭСЧФ с ЭЦП
     SignDate: string;        // дата подписания ЭСЧФ
     SignName: string;        // наименования подписанта
+    NotSign: boolean;        // документ не содержит ЭЦП
+    FileXsd: string;         // путь к xsd-схеме
+    FileTicket: string;      // входящая квитанция при отправке
   end;
 
 #endif // _InvoiceService_inc_

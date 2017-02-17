@@ -55,7 +55,7 @@ const
 
   // идентификатор дополнительного сегмента "длинной строки"
   lc_XMapMultyStrSegID = '_Add';
-  lc_XMapMaxLengthGTD : word = 1000;  // максимальная длина поля ГТД
+  lc_XMapMaxLengthMultyStr : word = 1000;  // максимальная длина поля "длинной строки"
 
   // наименование поля со значением текстовой вершины
   lc_XMapTextValueFieldName = 'Значение';

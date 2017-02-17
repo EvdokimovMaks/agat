@@ -47,6 +47,7 @@ const
 	reBaseDocSklad       = 3019;
 	reBaseDocParty       = 3020;
   reBaseDoccNazna      = 3021;
+  reBaseDocFilial      = 3022;
 
   reBaseDocVhodNal     = 4001;
   reBaseDocShtraf      = 4002;

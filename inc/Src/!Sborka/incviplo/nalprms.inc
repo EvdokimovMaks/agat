@@ -10,6 +10,7 @@ type
   pNALRP_V = ^tNALRP_V;
   tNALRP_V = record   { - NALRP_V }
     PXLREPSETUP    : TReferenceBuf;   { pxlrepsetup                           }
+    PXL            : TReferenceBuf;   { pXL                                   }
     SXLTFILENAME   : String;          { sXLTFileName                          }
     SXLSFILENAME   : String;          { sXLSFileName                          }
     FLTMC          : String;          { fltMC                                 }
@@ -34,7 +35,6 @@ type
     CBFILTEROLD    : Word;            { cbFilterOld                           }
     CBVEDOLD       : Word;            { cbVedOld                              }
     SKPR           : Word;            { SkPr                                  }
-    KOLPICK        : Word;            { KolPick                               }
     TOC            : Word;            { toc                                   }
     VDRMET         : Word;            { vDrMet                                }
     WROUNDS        : Word;            { wRoundS                               }
@@ -43,6 +43,7 @@ type
     DFILTER2       : Date;            { dFilter2                              }
     CKLPRICE       : Comp;            { cKlPrice                              }
     CSEG           : LongInt;         { cSeg                                  }
+    KOLPICK        : LongInt;         { KolPick                               }
     CLASSNAME      : String;          { ClassName                             }
     SEGNAME        : String;          { SegName                               }
     PCKEXTCLASS    : String;          { pckExtClass                           }
@@ -82,62 +83,63 @@ const
     TNKATPODR=2;
     TNKLPRICE=8;
     TNPICK=1;
-    FNCBFILTER=15;
-    FNCBFILTEROLD=22;
-    FNCBVED=14;
-    FNCBVEDOLD=23;
+    FNCBFILTER=16;
+    FNCBFILTEROLD=23;
+    FNCBVED=15;
+    FNCBVEDOLD=24;
     FNCKLPRICE=32;
-    FNCLASSCODE=20;
-    FNCLASSNAME=34;
-    FNCLASSUNI=21;
+    FNCLASSCODE=21;
+    FNCLASSNAME=35;
+    FNCLASSUNI=22;
     FNCSEG=33;
     FNDDATE=29;
     FNDFILTER1=30;
     FNDFILTER2=31;
-    FNDSK_SKPR=37;
-    FNEXCLASSNAME_CLASSCODE=61;
-    FNEXCLASSNAME_NAME=62;
-    FNEXCLASSSEG_CLASSCODE=59;
-    FNEXCLASSSEG_NAME=60;
-    FNEXCLASSSEG_NREC=58;
-    FNFLTGR=4;
-    FNFLTMC=3;
-    FNFLTMOL=6;
-    FNFLTPART=7;
-    FNFLTPODR=5;
-    FNFLTPRLST=8;
-    FNFLTVNKLF=9;
-    FNGROUPMC_NAME=54;
-    FNGROUPMC_NREC=53;
-    FNGROUPPOS=19;
-    FNID=12;
-    FNKATMC_NAME=51;
-    FNKATMC_NREC=50;
-    FNKATMOL_NAME=57;
-    FNKATMOL_NREC=56;
-    FNKATPARTY_NAME=65;
-    FNKATPARTY_NREC=64;
-    FNKATPODR_NAME=48;
-    FNKATPODR_NREC=47;
-    FNKLPRICE_NAME=67;
-    FNKLPRICE_NREC=66;
-    FNKOLPICK=25;
-    FNLFLTR=10;
-    FNLPAROTCH=11;
-    FNPCKEXTCLASS=36;
-    FNPICK_CREC=46;
+    FNDSK_SKPR=38;
+    FNEXCLASSNAME_CLASSCODE=62;
+    FNEXCLASSNAME_NAME=63;
+    FNEXCLASSSEG_CLASSCODE=60;
+    FNEXCLASSSEG_NAME=61;
+    FNEXCLASSSEG_NREC=59;
+    FNFLTGR=5;
+    FNFLTMC=4;
+    FNFLTMOL=7;
+    FNFLTPART=8;
+    FNFLTPODR=6;
+    FNFLTPRLST=9;
+    FNFLTVNKLF=10;
+    FNGROUPMC_NAME=55;
+    FNGROUPMC_NREC=54;
+    FNGROUPPOS=20;
+    FNID=13;
+    FNKATMC_NAME=52;
+    FNKATMC_NREC=51;
+    FNKATMOL_NAME=58;
+    FNKATMOL_NREC=57;
+    FNKATPARTY_NAME=66;
+    FNKATPARTY_NREC=65;
+    FNKATPODR_NAME=49;
+    FNKATPODR_NREC=48;
+    FNKLPRICE_NAME=68;
+    FNKLPRICE_NREC=67;
+    FNKOLPICK=34;
+    FNLFLTR=11;
+    FNLPAROTCH=12;
+    FNPCKEXTCLASS=37;
+    FNPICK_CREC=47;
+    FNPXL=1;
     FNPXLREPSETUP=0;
-    FNRBGROUP=17;
-    FNRBGROUPADD=18;
-    FNRBSORT=16;
-    FNSEGNAME=35;
-    FNSKPR=24;
-    FNSXLSFILENAME=2;
-    FNSXLTFILENAME=1;
+    FNRBGROUP=18;
+    FNRBGROUPADD=19;
+    FNRBSORT=17;
+    FNSEGNAME=36;
+    FNSKPR=25;
+    FNSXLSFILENAME=3;
+    FNSXLTFILENAME=2;
     FNTOC=26;
-    FNTYPEREPORT=13;
+    FNTYPEREPORT=14;
     FNVDRMET=27;
-    FNWLIST=38;
+    FNWLIST=39;
     FNWROUNDS=28;
     tbEXCLASSNAME_4_MODIF_0=7;
     tbEXCLASSNAME_4_MODIF_1=65543;

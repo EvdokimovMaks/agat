@@ -8,6 +8,9 @@
 #end
 .set name = 'SostObjOS'
 .hide
+.var
+  iEF : ExcelFormat;
+.endvar
 .fields
   TitleRep          // название отчета
   //---------------------------------------------
@@ -50,6 +53,7 @@
   OsMc_NRec    : comp          // ссылка на составляющую
   OsMc_Level   : word          // уровень вложенности по иерархии состава 0 - корневой
   KatMc_Name                   // наименование МЦ
+  OsMc_TiDk    : word          // Тип  15-МЦ, 315 - Услуга
   OsMc_BarKod                  // номенклатурный номер
   OsMc_ZavNom                  // заводской номер
   OsMc_IsLeaf   : word         // признак листа
@@ -129,6 +133,7 @@
   OsMc_NRec     ^
   OsMc_Level    ^
   KatMc_Name    ^
+  OsMc_TiDk     ^
   OsMc_BarKod   ^
   OsMc_ZavNom   ^
   OsMc_IsLeaf   ^
@@ -176,22 +181,22 @@
   TitleRep
   //---------------------------------------------
 
-  PadCh('','.',KatOs_Level) + KatOs_Name
+  PadCh('',' ',KatOs_Level*2) + KatOs_Name : 'T:-'
   KatOs_InNum
   KatOs_ZavNom
-  if (SpKatOs_Stoim = 0, '', DoubleToStr(SpKatOs_Stoim,SumFormat))
-  if (OsKatSopr_Sum = 0, '', DoubleToStr(OsKatSopr_Sum,SumFormat))
+  DoubleToStr(SpKatOs_Stoim,SumFormat)
+  iEF.DoubleToStrRep(OsKatSopr_Sum,SumFormat)
   OSKatOr_Name
   OsKatSoprNumDate
     KatUsl_Name1
-    if (RaspUslOnCurrObj1 = 0, '', DoubleToStr(RaspUslOnCurrObj1,SumFormat) )
+    iEF.DoubleToStrRep(RaspUslOnCurrObj1,SumFormat)
     Org_NameUsl1
     NumDateUsl1
-  PadCh('','.',OsMc_Level) + KatMc_Name
+  PadCh('',' ',OsMc_Level*2) + KatMc_Name : 'T:-'
   OsMc_BarKod
   OsMc_ZavNom
-  if (SpOsMc_Stoim = 0, '', DoubleToStr(SpOsMc_Stoim,SumFormat))
-  if (KatSopr_Sum = 0, '', DoubleToStr(KatSopr_Sum,SumFormat))
+  DoubleToStr(SpOsMc_Stoim,SumFormat)
+  iEF.DoubleToStrRep(KatSopr_Sum,SumFormat)
   KatOr_Name
   NumDate
     KatUsl_Name2
@@ -199,8 +204,8 @@
     Org_NameUsl2
     NumDateUsl2
 
-  if (Stoim = 0, '', DoubleToStr(Stoim,SumFormat))
-  if (StoimPokup = 0, '', DoubleToStr(StoimPokup,SumFormat))
+  DoubleToStr(Stoim,SumFormat)
+  iEF.DoubleToStrRep(StoimPokup,SumFormat)
 
   //---------------------------------------------
 .endfields
@@ -221,16 +226,15 @@ end.
 .begin
   if (KatOs_IsLeaf = 1) and (not KatOs_OsMcExists)
   {
-    Stoim      := Stoim + SpKatOs_Stoim;
-    StoimPokup := StoimPokup + OSKatSopr_Sum;
+    Stoim      += SpKatOs_Stoim;
+    StoimPokup += OSKatSopr_Sum;
   }
 end.
-
  Б@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                         @@@@@@@@@@@@@@ @@@@@@@@@@@@@@ &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& @@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@ Б
 .{ Usl_Cicle1 CheckEnter
 .begin
   if (KatOs_IsLeaf = 1)
-    StoimPokup := StoimPokup + RaspUslOnCurrObj1;
+    StoimPokup += RaspUslOnCurrObj1;
 end.
                                    @@@@@@@@@@@@@@@@@@@@@@@                                                    &&&&&&&&&&&&&&&&&&&& @@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@
 .}
@@ -238,9 +242,8 @@ end.
 .{?Internal; Longint(OsMc_DatV)=0;
 .begin
   if (OsMc_IsLeaf = 1)
-    Stoim:= Stoim + SpOsMc_Stoim;
-
-  StoimPokup := StoimPokup + KatSopr_Sum;
+    Stoim    += SpOsMc_Stoim;
+  StoimPokup += KatSopr_Sum;
 end.
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                         @@@@@@@@@@@@@@ @@@@@@@@@@@@@@ &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& @@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@
 .}
@@ -248,7 +251,7 @@ end.
 .{?Internal; Longint(OsMc_DatV)=0;
 ! .begin
 !  if (OsMc_IsLeaf = 1)
-!    StoimPokup := StoimPokup + RaspUslOnCurrObj2;
+!    StoimPokup +=  RaspUslOnCurrObj2;
 !  end.
                                    @@@@@@@@@@@@@@@@@@@@@@@                                                    &&&&&&&&&&&&&&&&&&&& @@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@
 .}
@@ -256,7 +259,7 @@ end.
 .}
 .[F
 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- Б                                                                        Итого            &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& Б
+ Б                                                                        Итого:           &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& Б
 .]F
 .} Р
 .endform
@@ -275,39 +278,39 @@ end.
   TitleRep+'(развернутый, с учетом выбывших из состава)'
   //---------------------------------------------
 
-  ' ' + PadCh('','.',KatOs_Level) + KatOs_Name
+  PadCh('',' ',KatOs_Level*2) + KatOs_Name : 'T:-'
   KatOs_InNum
   KatOs_ZavNom
-  if (SpKatOs_Stoim = 0, '', DoubleToStr(SpKatOs_Stoim,SumFormat))
-  if (SpKatOs_SumIzn= 0, '', DoubleToStr(SpKatOs_SumIzn,SumFormat))
-  if (SpKatOs_SIznM = 0, '', DoubleToStr(SpKatOs_SIznM,SumFormat))
-  if (OsKatSopr_Sum = 0, '', DoubleToStr(OsKatSopr_Sum,SumFormat))
+  DoubleToStr(SpKatOs_Stoim,SumFormat)
+  iEF.DoubleToStrRep(SpKatOs_SumIzn,SumFormat)
+  iEF.DoubleToStrRep(SpKatOs_SIznM,SumFormat)
+  iEF.DoubleToStrRep(OsKatSopr_Sum,SumFormat)
   OSKatOr_Name
   OsKatSoprNumDate
     KatUsl_Name1
-    if (RaspUslOnCurrObj1 = 0, '', DoubleToStr(RaspUslOnCurrObj1,SumFormat) )
+    iEF.DoubleToStrRep(RaspUslOnCurrObj1,SumFormat)
     Org_NameUsl1
     NumDateUsl1
 
-  PadCh('','.',OsMc_Level) + if(Longint(OsMc_DatV)>0,'*','') + KatMc_Name
+  PadCh('',' ',OsMc_Level*2) + if(Longint(OsMc_DatV)>0,'*','') + KatMc_Name : 'T:-'
   OsMc_BarKod
   OsMc_ZavNom
-  if (SpOsMc_Stoim = 0, '', DoubleToStr(SpOsMc_Stoim,SumFormat))
-  if (SpOsMc_SumIzn = 0, '', DoubleToStr(SpOsMc_SumIzn,SumFormat))
-  if (SpOsMc_SIznM  = 0, '', DoubleToStr(SpOsMc_SIznM ,SumFormat))
-  if (KatSopr_Sum = 0, '', DoubleToStr(KatSopr_Sum,SumFormat))
+  DoubleToStr(SpOsMc_Stoim,SumFormat)
+  iEF.DoubleToStrRep(SpOsMc_SumIzn,SumFormat)
+  iEF.DoubleToStrRep(SpOsMc_SIznM ,SumFormat)
+  iEF.DoubleToStrRep(KatSopr_Sum,SumFormat)
   KatOr_Name
   NumDate
   if(Longint(OsMc_DatV)>0, DateToStr(OsMc_DatV,'DD/MM/YYYY'), '')
     KatUsl_Name2
-    if (RaspUslOnCurrObj2 = 0, '', DoubleToStr(RaspUslOnCurrObj2, SumFormat))
+    iEF.DoubleToStrRep(RaspUslOnCurrObj2, SumFormat)
     Org_NameUsl2
     NumDateUsl2
 
-  if (Stoim = 0, '', DoubleToStr(Stoim,SumFormat))
-  if (SumIzn = 0, '', DoubleToStr(SumIzn,SumFormat))
-  if (SIznM = 0, '', DoubleToStr(SIznM,SumFormat))
-  if (StoimPokup = 0, '', DoubleToStr(StoimPokup,SumFormat))
+  DoubleToStr(Stoim,SumFormat)
+  iEF.DoubleToStrRep(SumIzn,SumFormat)
+  iEF.DoubleToStrRep(SIznM,SumFormat)
+  iEF.DoubleToStrRep(StoimPokup,SumFormat)
 
   //---------------------------------------------
 .endfields
@@ -333,18 +336,17 @@ end.
 .begin
   if (KatOs_IsLeaf = 1) and (not KatOs_OsMcExists)
   {
-    Stoim      := Stoim + SpKatOs_Stoim;
-    StoimPokup := StoimPokup + OSKatSopr_Sum;
-    SumIzn:= SumIzn + SpKatOs_SumIzn;
-    SIznM := SIznM  + SpKatOs_SIznM;
+    Stoim      += SpKatOs_Stoim;
+    StoimPokup += OSKatSopr_Sum;
+    SumIzn     += SpKatOs_SumIzn;
+    SIznM      += SpKatOs_SIznM;
   }
 end.
-
  Ш@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                         @@@@@@@@@@@@@@ @@@@@@@@@@@@@@ &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& @@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@ Ш
 .{ Usl_Cicle1 CheckEnter
 .begin
   if (KatOs_IsLeaf = 1)
-    StoimPokup := StoimPokup + RaspUslOnCurrObj1;
+    StoimPokup +=  RaspUslOnCurrObj1;
 end.
  Ш                                   @@@@@@@@@@@@@@@@@@@@@@@                                                                                      &&&&&&&&&&&&&&&&&&&& @@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@ Ш
 .}
@@ -352,15 +354,15 @@ end.
 .begin
   if (OsMc_IsLeaf = 1)
   {
-    Stoim := Stoim  + SpOsMc_Stoim;
-    SumIzn:= SumIzn + SpOsMc_SumIzn;
-    SIznM := SIznM  + SpOsMc_SIznM;
+    Stoim  +=  SpOsMc_Stoim;
+    SumIzn +=  SpOsMc_SumIzn;
+    SIznM  +=  SpOsMc_SIznM;
 
     if ( Longint(OsMc_DatV) > 0 )
     {
-      StoimVyb  := StoimVyb  + SpOsMc_Stoim;
-      SumIznVyb := SumIznVyb + SpOsMc_SumIzn;
-      SIznMVyb  := SIznMVyb  + SpOsMc_SIznM;
+      StoimVyb  += SpOsMc_Stoim;
+      SumIznVyb += SpOsMc_SumIzn;
+      SIznMVyb  += SpOsMc_SIznM;
     }
   }
   StoimPokup := StoimPokup + KatSopr_Sum;
@@ -369,21 +371,21 @@ end.
 .{ Usl_Cicle2  CheckEnter
 !.begin
 !  if (OsMc_IsLeaf = 1)
-!    StoimPokup := StoimPokup + RaspUslOnCurrObj2;
+!    StoimPokup += RaspUslOnCurrObj2;
 !end.
  Ш                                   @@@@@@@@@@@@@@@@@@@@@@@                                                                                      &&&&&&&&&&&&&&&&&&&& @@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@ Ш
 .}
 .}
 .[F
  Ш────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-                                                                       Итого             &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& Ш
+                                                                       Итого:            &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& Ш
 .{?Internal; ((StoimVyb <> 0) OR (SumIznVyb <> 0) OR (SIznMVyb <> 0));
 .fields
   if (StoimVyb = 0, '', DoubleToStr(StoimVyb,SumFormat))
   if (SumIznVyb = 0, '', DoubleToStr(SumIznVyb,SumFormat))
   if (SIznMVyb = 0, '', DoubleToStr(SIznMVyb,SumFormat))
 .endfields
- Ш                                                                       Итого по выбывшим &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&& Ш
+ Ш                                                                      Итого по выбывшим: &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&& Ш
 .}
 .]F
 .}

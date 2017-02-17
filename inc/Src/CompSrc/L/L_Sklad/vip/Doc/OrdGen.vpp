@@ -353,7 +353,7 @@ procedure DeleteRefBarkod;
     FreeVipInterface(m_arObjArchiveLink[i]);
   SetLimit(m_arObjArchiveLink, 0);
 }
-
+//********************************************************************************
 Function ExistsAnyOborotSklOrder(cSklOrder: comp): boolean;
 {
   Result := False;
@@ -361,6 +361,16 @@ Function ExistsAnyOborotSklOrder(cSklOrder: comp): boolean;
                                SoprHozTipDoc == SoprHoz.TipDoc )) = tsOk
     Result := oSHmanager.HaveBuhOborot(SoprHoz.nRec, 0, 0) OR
               oSHmanager.HaveFpOborot (SoprHoz.nRec, 0, 0);
+}
+//********************************************************************************
+Function ExistsAnyOborotSklOrderDoc(cKatSopr : comp): boolean;
+{
+  Result := False;
+  if ( GetFirst KatSopr where ((cKatSopr  ==  KatSopr.Nrec))= tsOk )
+    if GetFirst SoprHoz1 where (( KatSopr.VidSopr == SoprHoz1.TipDoc AND
+                                  KatSopr.NRec    == SoprHoz1.cSoprDoc )) = tsOk
+      Result := oSHmanager.HaveBuhOborot(SoprHoz1.nRec, 0, 0) OR
+                oSHmanager.HaveFpOborot (SoprHoz1.nRec, 0, 0);
 }
 
 //********************************************************************************
@@ -432,6 +442,13 @@ var
     {
       Result := False;
       ShowTune('Запрещена модификация ордеров при наличии проводок!', 'Sklad.ModHaveProvod');
+      Exit;
+    }
+
+  if ((wGetTune('Sklad.ModHaveProvodDoc') = 0) and (ExistsAnyOborotSklOrderDoc(SklOrder.cSopr)))
+    {
+      Result := False;
+      ShowTune('Запрещена модификация ордеров при наличии проводок по документу!', 'Sklad.ModHaveProvodDoc');
       Exit;
     }
 
@@ -2065,11 +2082,11 @@ Function F_Change_Party(OldParty: comp): boolean;
 
 Procedure GetSaveDoc;
 {
-  var SavPar: comp;  SavPar := SpOrder.cParty;
+  var SavPar: comp = SpOrder.cParty;
 
   if ( SkPr = 1 ) //производство
     {
-      if ( RunInterface( ViewOstMnf
+      if ( RunInterface( 'ViewOstMnf'
                        , SklOrder.cPodr
                        , SklOrder.cMOL
                        , SpOrder.cParty
@@ -2080,7 +2097,7 @@ Procedure GetSaveDoc;
     }
   else
     {
-      var SavPar: comp;  SavPar := SpOrder.cParty;
+      var SavPar: comp = SpOrder.cParty;
 
       if ( RunInterface('GTekOstSkPr'
                        , SpOrder.cMC
@@ -2089,6 +2106,7 @@ Procedure GetSaveDoc;
                        , Comp(0)
                        , Comp(0)
                        , SpOrder.cParty
+                       , IGetTekOstParBase(Self)
                        , (SkPr+1)
                        , 0
                        , SklOrder.cMOL
@@ -2097,19 +2115,15 @@ Procedure GetSaveDoc;
 
       F_Change_Party(SavPar);
 
-      var cKitKau: comp;
-      if (not ReadMyDsk(cKitKau, 'GTekOst_KatStroy', False))
-        cKitKau := 0;
-
-      if (  ((boGetTune('Oper.RazrezCU')) and (SpOrder.SP <> cgVidUchO_UPL))
-         or ((boGetTune('Manuf.RazrezCU')) and (SpOrder.SP = cgVidUchO_UPL))
+      if (  (boGetTune('Oper.RazrezCU')  and (SpOrder.SP <> cgVidUchO_UPL))
+         or (boGetTune('Manuf.RazrezCU') and (SpOrder.SP  = cgVidUchO_UPL))
          )
         oVipMtrCount.MtrCheckDocs (coSpOrder, SpOrder.nRec, 0, true);
 
-      oMtrFun.AdjustSpecMtrByKit(coSpOrder, SpOrder.nRec, cKitKau);
+      oMtrFun.AdjustSpecMtrByKit(coSpOrder, SpOrder.nRec, pKitKau);
 
-      if (  ((boGetTune('Oper.RazrezCU')) and (SpOrder.SP <> cgVidUchO_UPL))
-         or ((boGetTune('Manuf.RazrezCU')) and (SpOrder.SP = cgVidUchO_UPL))
+      if (  (boGetTune('Oper.RazrezCU')  and (SpOrder.SP <> cgVidUchO_UPL))
+         or (boGetTune('Manuf.RazrezCU') and (SpOrder.SP  = cgVidUchO_UPL))
          )
       {
         if ( SklOrder.VidOrder = 1 )
@@ -2651,7 +2665,8 @@ Procedure DoLinkMtrSpec(awAction: word);
 
        if (Check_BackDate) or (NOT boGetTune('Doc.ModOrder')) or
          (NOT fCloseBuhPer(SklOrder.nRec, SklOrder.VidOrder, SklOrder.SP, False)) or
-         ((wGetTune('Sklad.ModHaveProvod') = 0) and (ExistsAnyOborotSklOrder(SklOrder.Nrec)))
+         ((wGetTune('Sklad.ModHaveProvod') = 0) and (ExistsAnyOborotSklOrder(SklOrder.Nrec))) or
+         ((wGetTune('Sklad.ModHaveProvodDoc') = 0) and (ExistsAnyOborotSklOrderDoc(SklOrder.cSopr)))
          wPrView_Edit := cgPr_View;
 
         RunInterface('EditMtr2Spec_2', coSpOrder, SpOrder.nRec, wPrView_Edit, awAction, GetLinkMTRAutoPick(CurField));
@@ -2716,6 +2731,7 @@ var
         if ( IsNew ) // создана новая запись
           {
             SaveMyDsk(word(1), 'PickMC_EdIzm_Okr'); // округлять кол-во в интерфейсе выбора МЦ: 0 - по отп. ед. изм, 1 - по уч. ед. изм.
+
             case wTunePick of
               0:
               {
@@ -2723,6 +2739,7 @@ var
                   StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm, 'Добавляются выбранные МЦ...', 1);
 
                 PushPos(#SpOrder);
+
                 if ( RunInterface('GetSomeMC', if( NOT isDoocen, comp(0), comp(-12345)) ) <> cmCancel )
                   if ( GetFirst Pick where ((Word(7) == Pick.wList)) ordered by index Pick02 = tsOk )
                     {
@@ -2877,9 +2894,7 @@ var
                               Continue;
                             }
 
-                        var dkol_ : double;
-
-                        dkol_ := if(PickKol_Gtsp_ <> 0, PickKol_Gtsp_, SpOrder.kol);
+                        var dkol_ : double = if(PickKol_Gtsp_ <> 0, PickKol_Gtsp_, SpOrder.kol);
 
                         Nal := 0;
 
@@ -3348,8 +3363,8 @@ var
 
                       ShowTune('В настройке установлен запрет модификации ордеров в закрытом периоде!',
                                 if (SkPr = cgVidUchO_UKS, 'UKS.Doc.ModOrder',
-                                 if (SkPr = cgVidUchO_UPL, 'Manuf.ModOrder',
-                                    'McUsl.ModOrder'
+                                if (SkPr = cgVidUchO_UPL, 'Manuf.ModOrder',
+                                                          'McUsl.ModOrder'
                               )));
                       SklOrder.dOrd := Cur_Date;
                     }
@@ -3437,8 +3452,8 @@ var
 
                     for (i_Gtsp_:=0;i_Gtsp_<=MarkerCount_Gtsp_Obj;i_Gtsp_++)
                     {
-                      if (GetMarker(Marker_Gtsp_Obj,i_Gtsp_,PickRec_Gtsp_) and
-                              GetMarker(MarkerKol_Gtsp_Obj,i_Gtsp_,PickKol_Gtsp_))
+                      if (GetMarker(Marker_Gtsp_Obj   ,i_Gtsp_,PickRec_Gtsp_) and
+                          GetMarker(MarkerKol_Gtsp_Obj,i_Gtsp_,PickKol_Gtsp_))
                       {
                         if ( loCheckRashOrd.GetFirst SaldoObj Where (( PickRec_Gtsp_ == SaldoObj.nRec )) = tsOK )
                         {
@@ -3450,8 +3465,8 @@ var
                                 Continue;
                               }
 
-                          var dkol_ : double;
-                          dkol_ := if(PickKol_Gtsp_ <> 0, PickKol_Gtsp_, SpOrder.kol);
+                          var dkol_ : double = if(PickKol_Gtsp_ <> 0, PickKol_Gtsp_, SpOrder.kol);
+
                           Nal := 0;
 
                           if (Abs(dKol_) >= GetPresision_forKol) // нулевое количество
