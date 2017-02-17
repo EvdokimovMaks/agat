@@ -3,7 +3,7 @@
   CheckPeriod=0
 
 [Database]
-  DataBaseName=galpatch
+  DataBaseName=teach910
   DataBaseDriver=MS70DRV.DLL
   CheckRepository=Off
 
@@ -17,7 +17,8 @@
   password=argument
 
 [Vip]
-  DefaultEnv=galnet_galpatch
+  //DefaultEnv=galnet_galpatch
+  DefaultEnv=galnet
 
 [licparam]
   LicFileName='%ConfigDir%%ConfigSubDir%\vip.lic'
