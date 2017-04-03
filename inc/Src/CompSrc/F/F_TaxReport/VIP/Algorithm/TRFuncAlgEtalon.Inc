@@ -77,9 +77,11 @@ const
 
   // группа и алгоритм по бухгалтерской отчетности
   lc_TRAlg_Buh_Grp_GUID = 'C66CD5E4-0024-400E-84DE-C854657A64A2';
-    lc_TRAlg_Buh_Alg_G2014_GUID = '2D934935-6148-4CD2-B3C9-4C6DE569C1B3';
-    lc_TRAlg_Buh_Alg_G2015_GUID = '4B52DCB9-4E40-4E9E-B480-1C37A818C057';
+    lc_TRAlg_Buh_Alg_G2014_GUID    = '2D934935-6148-4CD2-B3C9-4C6DE569C1B3';
+    lc_TRAlg_Buh_Alg_G2015_GUID    = '4B52DCB9-4E40-4E9E-B480-1C37A818C057';
     lc_TRAlg_Buh_Alg_G2015Add_GUID = '52892044-5DC7-4C5A-B60B-F42114445D2F';
+    lc_TRAlg_Buh_Alg_G2017_GUID    = '3B8003DA-2DFE-494E-A702-C2EE608BB45A';
+    lc_TRAlg_Buh_Alg_G2017Add_GUID = '24B46970-A8BC-482A-BC6C-C2F151EC6E56';
 
   // группа и алгоритм по сведениям о приложении к бух. отчетности
   lc_TRAlg_BuhOtchPril_Grp_GUID = '316A07B3-7D6B-4C76-8EF3-1E06A3B2E182';
@@ -131,10 +133,12 @@ const
     lc_TRAlg_OTTRNDS_Alg_G2016_guid = '18B5BFE1-82C6-428D-9E81-E5D83777EF5A';
     lc_TRAlg_OTTRNDS_Alg_G2017_guid = '6220DF87-5659-4AAD-9FF1-26EAEDA45997';
 
-  // Ответ на сообщение (с требованием представления пояснений)
+  // Упрощенная бухгалтерская (финансовая) отчетность
   lc_TRAlg_BOUPR_Grp_GUID = 'E8BE4B1F-BDD0-404F-8730-73AD07A497DB';
     lc_TRAlg_BOUPR_Alg_G2015_GUID    = '4DF58C44-9616-4134-A487-62CED06FC3D2';
     lc_TRAlg_BOUPR_Alg_G2015Add_GUID = 'AA78D814-1F1A-4E42-9EB0-50830AB63F52';
+    lc_TRAlg_BOUPR_Alg_G2017_GUID    = '86DDD629-E299-40FB-AFB8-F1B55E9899AD';
+    lc_TRAlg_BOUPR_Alg_G2017Add_GUID = '1DDF309B-24E7-4584-ADFF-A74216C1DD3A';
 
   // группа и алгоритм по ЕСХН
   lc_TRAlg_ESHN_Grp_GUID = '1BAFFA6D-85EF-4B46-9C8D-2133D23F75F5';
@@ -147,6 +151,14 @@ const
   // группа и алгоритм по акцизам на этиловый спирт, алкогольную и (или) подакцизную спиртосодержащую продукцию (1151090)
   lc_TRAlg_AKCALK_Grp_GUID = '56321ED8-409C-447F-B5A0-88B5FB256B67';
     lc_TRAlg_AKCALK_Alg_G2016_GUID = 'E5D16351-BBA9-409A-9C4B-4209AE6F2D08';
+
+  // группа и алгоритм уведомления о контролируемых иностранных компаниях (1120416)
+  lc_TRAlg_UvKik_Grp_GUID = '80B5F4F0-F8D4-478A-9756-F5DCC833E64C';
+    lc_TRAlg_UvKik_Alg_G2017_GUID = '42205859-D6D0-4AFC-854B-B51BCB0E9574';
+
+  // группа и алгоритм уведомления об участии в иностранных организациях (1120411)
+  lc_TRAlg_UvUchIno_Grp_GUID = 'DAA026E0-7B90-47F4-8CE7-B58A731D147F';
+    lc_TRAlg_UvUchIno_Alg_G2017_GUID = '60FE4AAA-CB7C-4346-AB78-A84C02F44AD5';
   //#endregion НАЛОГОВАЯ ОТЧЕТНОСТЬ
   //****************************************************************************
 
@@ -177,7 +189,8 @@ const
 
   // группа и алгоритм по производству и отгрузке товаров и услуг
   lc_TRAlg_PrIOtgrTov_Grp_GUID = '124CA5E5-7976-4833-8771-28B8DD3DE93B';
-    lc_TRAlg_PrIOtgrTov_Alg_GUID = 'DE359015-CFB8-4FBB-BFBF-BFDB769FC388';
+    lc_TRAlg_PrIOtgrTov_Alg_G2014_GUID = 'DE359015-CFB8-4FBB-BFBF-BFDB769FC388';
+    lc_TRAlg_PrIOtgrTov_Alg_G2016_GUID = 'CB9D8256-4958-401C-8B10-C24C3F0509FF';
 
   // группа и алгоритм по деятельности организации
   lc_TRAlg_DeytOrg_Grp_GUID = 'D198EC8D-39CE-4D98-BA07-8CBB858C0200';

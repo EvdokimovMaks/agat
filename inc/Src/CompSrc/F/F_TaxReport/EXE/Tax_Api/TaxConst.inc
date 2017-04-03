@@ -30,6 +30,9 @@ cgsTaxCat_NDS_R3P1 = 'TaxCatalog_NDS_R3P1';
 cgiTaxCat_KodOperNDS = 8;
 cgsTaxCat_KodOperNDS = 'TaxCatalog_KodOperNDS';
 
+cgiTaxCat_TranspRate = 9;
+cgsTaxCat_TranspRate = 'TaxCatalog_RateCatEntity';
+
 //константы для отбора объектов-справочников
 cgsTax_IfcPrefixCat  = 'TaxCatalog_';
 cgsTax_ObjIfcNameCat = 'F_TaxReport::oTaxCatalog';

@@ -222,8 +222,21 @@ CONST
 CONST
        cmHideSelectColumn                             = 110;
 CONST
+       cmUpdateDefaultStypeOptions                    = 111;
+CONST
+       cmFindAllWin                                   = 112;
+CONST
+       cmSetCurImg                                    = 113;
+CONST
+       cmImgClick                                     = 114;
+CONST
+       cmImgDblClick                                  = 115;
+CONST
+       cmXlsxBrowse                                   = 116;
+CONST
+       cmXMLBrowse                                    = 117;
+CONST
        cmHotKeys                                      = 300;
-
 CONST
        cmFileOpen                                     = 301;
 CONST
@@ -240,12 +253,15 @@ CONST
        cmFileFocused                                  = 307;
 CONST
        cmFileDoubleClicked                            = 308;
-
+CONST
+       cmGetPanelByTblNum                             = 309;
 
 CONST
        cmImportMemo                                   = 320;
 
 
+CONST
+       cmDoReleaseLicense                             = 338;
 CONST
        cmClearSymInterface                            = 339;
 CONST
@@ -683,6 +699,10 @@ CONST
        cmMemoViewerUpdateDocumentList                 = 556;
 CONST
        cmQuerySampleWidth                             = 579;
+CONST
+       cmToolButtonHotKey                             = 580;
+CONST
+       cmButtonHotKey                                 = 581;
 
 CONST
        cmRdSetCtrlH                                   = 600;
@@ -1033,6 +1053,12 @@ CONST
 
 CONST
        cmInternalSave                                 = 819;
+
+CONST
+       cmInternalCheck                                = 821;
+CONST
+       cmInternalEdit                                 = 822;
+
 CONST
        cmWindowCreated                                = 824;
 
@@ -1559,6 +1585,8 @@ CONST
 CONST
        cmIsSearchOpen                                 = 1103;
 CONST
+       cmArmDefault                                   = 1104;
+CONST
        cmArmAdminMode                                 = 1105;
 CONST
        cmArmExport                                    = 1106;
@@ -2020,7 +2048,12 @@ CONST
        cmHttpSetCurrent                               = 1337;
 CONST
        cmFreeOlapObj                                  = 1338;
-
+CONST
+       cmCopyLM                                       = 1339;
+CONST
+       cmPasteLM                                      = 1340;
+CONST
+       cmCutLM                                        = 1341;
 
 // !! Диапазон 2000 - 2099 прикладной, константы в него не добавлять !!
 
@@ -2208,6 +2241,8 @@ CONST
 
 // !! Дополнительный системный диапазон 55000 - 64999
 CONST
+      cmEditorSelectAll                               = 57342;
+CONST
       cmMemoFieldChanged                              = 57343;
 CONST
       cmEditorCharLeft                                = 57344;
@@ -2328,6 +2363,8 @@ CONST
        scAtlPickDef                                   = 23;
 CONST
        scAtlTreePick                                  = 24;
+CONST
+       scAtlInsDel                                    = 25;
 
 CONST
        scFiltersList                                  = 101;
@@ -2348,6 +2385,19 @@ CONST
        scMenuCtx                                      = 110;
 
 CONST
+       scTabRefEdit                                   = 111;
+CONST
+       scTabRefViewFields                             = 112;
+CONST
+       scTabRefManage                                 = 113;
+CONST
+       scTabRefManagePick                             = 114;
+CONST
+       scTabRefManageSwitch                           = 115;
+CONST
+       scTabRefManageEdit                             = 116;
+
+CONST
        scMemoView                                     = 120;
 
 CONST
@@ -2366,6 +2416,8 @@ CONST
        scDSKList                                      = 131;
 CONST
        scDSKDetail                                    = 132;
+CONST
+       scLayoutsList                                  = 133;
 
 CONST
        scGrum_Query                                   = 135;
@@ -2391,6 +2443,8 @@ CONST
        scExtAttrMemo                                  = 149;
 CONST
        scExtAttrComp                                  = 150;
+CONST
+       scExtClassifier                                = 151;
 
 CONST
        sciAqaViewOneSegment                           = 296;
@@ -2481,22 +2535,19 @@ CONST
        scAtlCalcField                                 = 339;
 CONST
        scAtlCalcProtocol                              = 340;
+
 CONST
-       scCfgSelAttr1                                  = 341;
+       scCfgSelAttr2                                  = 343;
 CONST
-       scCfgSelAttr2                                  = 342;
-CONST
-       scCfgSelAttr3                                  = 343;
-CONST
-       scCfgSelAttr4                                  = 344;
+       scCfgSelAttr3                                  = 344;
 CONST
        scCfgClassifier                                = 345;
 CONST
        scCfgClassifierTree                            = 346;
 CONST
-       scCfgSelAttr2Tree                              = 347;
+       scCfgClassifierEdit                            = 347;
 CONST
-       scCfgSelAttr5                                  = 348;
+       scCfgClassifierEditTree                        = 348;
 CONST
        scCfgParamStringEdit                           = 349;
 CONST
@@ -2519,7 +2570,6 @@ CONST
        scArmConfigSys                                 = 358;
 CONST
        scProtocolMain                                 = 359;
-
 CONST
        scTreeReport                                   = 360;
 CONST
@@ -3449,6 +3499,8 @@ CONST
         msConfModified                  = 16384;
 CONST
         msCustomSorting                 = 32768;
+CONST
+        msFormatsGroupPart              = 65536;
 
 
 CONST

@@ -16,8 +16,8 @@
 .linkform 'InvVed_1' prototype is 'InvVed'
 .group 'Ведомости'
 .nameInList 'Ведомость по итогам инвентаризации'
-#CommissionLinkVar
-#CommissionLinkInit(PrintPereo)
+#FeeSigners_Os_LinkVar
+#FeeSIgners_Os_LinkInit(PrintPereo)
 .fields
   CommonFormHeader
     дата_инвентаризации:'m:"DD" mon YYYY г.'
@@ -65,9 +65,9 @@
  Р───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Р
 !.}
 .}
-.{While (Номер_члена_комиссии < Количество_членов_комиссии)
+.{While (номер_подписанта < Количество_Членов_комиссии)
 .begin
-  Номер_члена_комиссии++;
+  номер_подписанта++;
 end.
 .}
 .endform
@@ -80,8 +80,8 @@ end.
 .nameInList 'Инвентаризационная опись (пустая)'
 .group 'Бланки (Беларусь)'
 .group 'Бланки'
-#CommissionLinkVar
-#CommissionLinkInit(PrintPereo)
+#FeeSigners_Os_LinkVar
+#FeeSIgners_Os_LinkInit(PrintPereo)
 .fields
   CommonFormHeader
     склад
@@ -123,9 +123,9 @@ end.
 ──────────────────────────────────────────────────────────────────────────────────
 !.}
 .}
-.{While (Номер_члена_комиссии < Количество_членов_комиссии)
+.{While (номер_подписанта < Количество_Членов_комиссии)
 .begin
-  Номер_члена_комиссии++;
+  номер_подписанта++;
 end.
 .}
 .endform
@@ -138,8 +138,8 @@ end.
 .nameInList 'Инвентаризационная опись (пустая, с ценой)'
 .group 'Бланки (Беларусь)'
 .group 'Бланки'
-#CommissionLinkVar
-#CommissionLinkInit(PrintPereo)
+#FeeSigners_Os_LinkVar
+#FeeSIgners_Os_LinkInit(PrintPereo)
 .fields
   CommonFormHeader
     склад
@@ -182,9 +182,9 @@ end.
 ──────────────────────────────────────────────────────────────────────────────
 !.}
 .}
-.{While (Номер_члена_комиссии < Количество_членов_комиссии)
+.{While (номер_подписанта < Количество_Членов_комиссии)
 .begin
-  Номер_члена_комиссии++;
+  номер_подписанта++;
 end.
 .}
 .endform

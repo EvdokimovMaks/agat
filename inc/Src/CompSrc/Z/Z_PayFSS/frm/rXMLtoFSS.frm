@@ -259,7 +259,7 @@ end.
 !
 !
 !
-.Linkform 'rXMLtoFSS_1.6' prototype 'rXMLtoFSS'
+.Linkform 'rXMLtoFSS_1.7.3' prototype 'rXMLtoFSS'
 .nameinlist 'XML форма на формирование реестров В ФСС'
 .F 'rXMLtoFSS_1.6.xml'
 !
@@ -303,6 +303,7 @@ end.
   FileName         //  Имя файла
   Npp              //  Номер по порядку
   TypeInfo         //  Признак перерасчета
+  RecalcReasonCode //  Причина перерасчета
   GetDocType       //  Тип реестра
   DateReesForm     //  Дата формирования реестра
   SNILS            //  СНИЛС
@@ -324,9 +325,21 @@ end.
   AddrA4           //  Населенный пункт
   AddrA5           //  Улица
   AddrHouse        //  Номер дома
-  PostIndex        //  Индекс
   AddrBuilding     //  Корпус
   AddrFlat         //  Квартира
+  PostIndex        //  Индекс
+  OwnerFlag        //  Получатель пособия
+  PaymentType      //  Тип оплаты
+  AccountBic       //  БИК
+  AccountName      //  Наименование банка
+  Account          //  Номер счета
+  SurName2         //  Фамилия
+  FirstName2       //  Имя
+  SecName2         //  Отчество
+  Id2Type          //  Код документа
+  Id2No            //  Номер документа
+  Id2Dt            //  Дата документа
+  Id2Dept          //  Кем выдан
  //- адрес регистрации ----
   Addr2            //  Адрес регистрации
   Addr2Kladr       //  Адрес по КЛАДР
@@ -335,24 +348,10 @@ end.
   Addr2A3          //  Город
   Addr2A4          //  Населенный пункт
   Addr2A5          //  Улица
-  PostIndex2       //  Индекс
   Addr2House       //  Номер дома
   Addr2Building    //  Корпус
   Addr2Flat        //  Квартира
-  DublicateFlag    //  Дубликат б/л
-  ReasonEmpl       //  Пострадавший на другом предприятии
-  OwnerFlag        //  Получатель пособия
-  SurName2         //  Фамилия
-  FirstName2       //  Имя
-  SecName2         //  Отчество
-  Id2Type          //  Код документа
-  Id2No            //  Номер документа
-  Id2Dt            //  Дата документа
-  Id2Dept          //  Кем выдан
-  PaymentType      //  Тип оплаты
-  AccountBic       //  БИК
-  AccountName      //  Наименование банка
-  Account          //  Номер счета
+  PostIndex2       //  Индекс
   Employer         //  Страхователь
   EmplFlag         //  Вид работы
   EmplOgrn         //  ОГРН страхователя
@@ -364,83 +363,45 @@ end.
   FIO_Boss         //  ФИО руководителя
   Post_Boss        //  Должность руководителя
   FIO_Buh          //  ФИО бухгалтера
-  RecalcReasonCode //  Причина перерасчета
+//------- Трудовой договор
+  WorkConStart     //  дата начала
+  WorkConFinish    //  дата окончания
+  RoleWage         //  Должностной оклад
+  BaseCalcDays     //  Число календарных дней
+  BaseCalcDays     //  Число календарных дней
+  BaseAvgSal       //  Средний заработок
+  AvgSal           //  среднемесячный заработок
+  Multipatr        //  одновременный уход за несколькими детьми
+  BaseAvgDailySal  // Среднедневной заработок
   YearChangeFlag   //  Признак замены годов
   Year1Old         //  Год 1 изменения
   Year2Old         //  Год 2 изменения
-!-------расчетный период-------------- для разных версий
+!-------расчетный период--------------
   Year1            //  Год на кот заменили 1
   Year2            //  Год на кот заменили 2
   BaseSum1         //  Сумма заработка за год 1
   BaseSum2         //  Сумма заработка за год 2
-!
+  KfReg            //  Районный коэффициент
+  KfShortDay       //  Коэф. неполного раб. дня
+  LiveCodeFlag     //  Признак условия проживания
+  LiveCode         //  Код условия проживания
   CalcPeriodStart  //  Расчетный период для пособий по материнству
   CalcPeriodFinish //  Расчетный период для пособий по материнству
-  MseDt1           //  Дата направления в бюро МСЭ
-  MseDt2           //  Дата регистрации документов в бюро МСЭ
-  MseDt3           //  Дата освидетельствования в бюро МСЭ
-  MseInvalidGroup  //  Установлена/изменена группа инвалидности
-  MseInvaliDays    //  кол-во календарных дней, используемых в текущем году по нетрудоспособности
-  MseResult        //  Изменение статуса нетрудоспособного
-  OtherStateDt     //  Дата изменения состояния нетрудоспособного
-  ReturnDateLpu    //  Дата выхода на работу
-  BaseAvgSal       //  Средний заработок
-  RoleWage         //  Должностной оклад
-  BaseCalcDays     //  Число календарных дней
-  BaseCalcDays     //  Число календарных дней
   InsurYY          //  Стаж страховой год
   InsurMM          //  Стаж страховой месяц
   NotInsurYY       //  Стаж не страховой год
   NotInsurMM       //  Стаж не страховой месяц
-  LiveCodeFlag     //  Признак условия проживания
-  LiveCode         //  Код условия проживания
-!------------------------------------------------------------------------------
-  RefNpayOtherNo   //  справка от другого родителя о неполучении пособия номер
-  RefNpayOtherDt   //  справка от другого родителя о неполучении пособия дата
-  RefNpayFatherNo  //  справка о неполучении пособия от отца номер
-  RefNpayFatherDt  //  справка о неполучении пособия от отца дата
-  RefNpayMotherNo  //  справка о неполучении пособия от матери номер
-  RefNpayMotherDt  //  справка о неполучении пособия от матери дата
-!------------------------------------------------------------------------------
-  WardRefFlag      //  усыновление/опека
-  WardRefNo        //  усыновление/опека
-  WardRefDt        //  усыновление/опека
-  RefFamilyNo      //  договор о передаче в приемную семью номер
-  RefFamilyDt      //  договор о передаче в приемную семью дата
-  Multipatr        //  одновременный уход за несколькими детьми
-  AvgSal           //  среднемесячный заработок
-//---------Свидетельство о рождении---------------------------
-  CertType         //  тип документа
-  CertNo           //  номер документа
-  CertDt           //  дата документа
-  CertBr           //  дата рождения
-  CertSurName      //  фамилия
-  CertName         //  имя
-  CertPatronimic   //  отчество
-  Ref24No          //  справка о рождении номер
-  Ref24Dt          //  справка о рождении дата
-  oCertNo          //  Иной документ подтверждающий  рождение номер
-  oCertDt          //  Иной документ подтверждающий  рождение  дата
-//------- Трудовой договор
-  WorkConStart     //  дата начала
-  WorkConFinish    //  дата окончания
-//------- Данные об отпуске
-  HolidOrdNo       //  номер приказа
-  HolidOrdDt       //  дата приказа
-  HolidDtSt        //  дата начала отпуска
-  HolidDtFn        //  дата окончания отпуска
-  Dt2Fact          //  Дата фактического окончания периода выплаты пособия
-  ChildSer         //  Очередность рождения
-  MhOut            //  Отметка о лишении материнства
-  OtherChildBr     //  Наличие док о др ребенке о рождении
-  OtherChildDt     //  Наличие док о др ребенке о смерти
-//------- условия исчисления
-  CalcCondition1   //  условия исчисления 1
-  CalcCondition2   //  условия исчисления 2
-  CalcCondition3   //  условия исчисления 3
  // --- Больничный лист
   LnCode           //  № больничного
+  PrevLnCode       //  Номер первичного больничного
+  PrimaryFlag      //  Первичный или продолжение
+  DublicateFlag    //  Дубликат б/л
   LnDate           //  Дата начала больничного
+  LpuName          //  Наименование ЛПУ
+  LpuAdress        //  адрес ЛПУ
+  LpuOgrn          //  ОГРН ЛПУ
+  Birthday         //  Дата рождения
+  Gender           //  Пол
   Reason1          //  Код причины нетрудоспособности
   Reason2          //  Доп код причины нетрудоспособности
   Reason3          //  Код изменения причины нетрудоспособности
@@ -449,8 +410,6 @@ end.
   Date2            //  Дата
   VoucherNo        //  Номер путевки в санаторий
   VoucherOgrn      //  Огрн санатория
-  CalcDays         //  Количество дней болезни
-  Form1Dt          //  Дата формы Н -1
   Serv1Age         //  Возраст лет
   Serv1Mm          //  Возраст мес
   Serv1RelCode     //  Код родственной связи
@@ -459,25 +418,19 @@ end.
   Serv2Mm          //  Возраст мес
   Serv2RelCode     //  Код родственной связи
   Serv2Fio         //  ФИО родственника
+! Постановка на учет в ранние сроки беременности
+  Pregn12WFlag     //  Признак постановки на учет
   HospitalDT1      //  Дата пребывания в госпитале
   HospitalDT2      //  Дата пребывания в госпитале
-  FssPayFlag       //  Флаг периода оплаты за счет ФСС
-  DT1              //  Дата периода расчета
-  DT2              //  Дата периода расчета
-  PrevLnCode       //  Номер первичного больничного
-  NextLnCode       //  Номер продолжающегося больничного
-  CalcMetod        //  Расчет по закону
-  PrimaryFlag      //  Первичный или продолжение
-  LpuName          //  Наименование ЛПУ
-  LpuAdress        //  адрес ЛПУ
-  LpuOgrn          //  ОГРН ЛПУ
-  Birthday         //  Дата рождения
-  Gender           //  Пол
   HospitalBrCode   //  Код нарушения режима
   HospitalBrDt     //  Дата нарушения режима
-// ---- ОПЛАТА -------------------
-  EmplPayment      //  Сумма за счет предприятия
-  FssPayment       //  Сумма за счет ФСС
+!
+  MseDt1           //  Дата направления в бюро МСЭ
+  MseDt2           //  Дата регистрации документов в бюро МСЭ
+  MseDt3           //  Дата освидетельствования в бюро МСЭ
+  MseInvalidGroup  //  Установлена/изменена группа инвалидности
+  MseInvaliDays    //  кол-во календарных дней, используемых в текущем году по нетрудоспособности
+  MseResult        //  Изменение статуса нетрудоспособного
 //------ данные о враче ---------------
   Treat1Dt1
   Treat1Dt2
@@ -505,14 +458,60 @@ end.
   Treat3Doc2Role
   Treat3Chairman
   Treat3Doc2Id
+  OtherStateDt     //  Дата изменения состояния нетрудоспособного
+  ReturnDateLpu    //  Дата выхода на работу
+  NextLnCode       //  Номер продолжающегося больничного
+  CalcMetod        //  Расчет по закону
+//------- условия исчисления
+  CalcCondition1   //  условия исчисления 1
+  CalcCondition2   //  условия исчисления 2
+  CalcCondition3   //  условия исчисления 3
+  Form1Dt          //  Дата формы Н -1
+  FssPayFlag       //  Флаг периода оплаты за счет ФСС
+  DT1              //  Дата периода расчета
+  DT2              //  Дата периода расчета
+  CalcDays         //  Количество дней болезни
+  Dt2Fact          //  Дата фактического окончания периода выплаты пособия
+ // ---- ОПЛАТА -------------------
+  EmplPayment      //  Сумма за счет предприятия
+  FssPayment       //  Сумма за счет ФСС
+  Payment          // Фактически выплаченная сумма
+//--------- Свидетельство о рождении ---------------------------
+  CertType         //  тип документа
+  CertNo           //  номер документа
+  CertDt           //  дата документа
+  CertBr           //  дата рождения
+  CertSurName      //  фамилия
+  CertName         //  имя
+  CertPatronimic   //  отчество
+  Ref24No          //  справка о рождении номер
+  Ref24Dt          //  справка о рождении дата
+  oCertNo          //  Иной документ подтверждающий  рождение номер
+  oCertDt          //  Иной документ подтверждающий  рождение  дата
+  ChildSer         //  Очередность рождения
+  MhOut            //  Отметка о лишении материнства
+//------- Данные об отпуске
+  HolidOrdNo       //  номер приказа
+  HolidOrdDt       //  дата приказа
+  HolidDtSt        //  дата начала отпуска
+  HolidDtFn        //  дата окончания отпуска
+  RefNpayOtherNo   //  справка от другого родителя о неполучении пособия номер
+  RefNpayOtherDt   //  справка от другого родителя о неполучении пособия дата
+  WardRefFlag      //  усыновление/опека
+  WardRefNo        //  усыновление/опека
+  WardRefDt        //  усыновление/опека
+  RefFamilyNo      //  договор о передаче в приемную семью номер
+  RefFamilyDt      //  договор о передаче в приемную семью дата
+  OtherChildBr     //  Наличие док о др ребенке о рождении
+  OtherChildDt     //  Наличие док о др ребенке о смерти
+  RefNpayFatherNo  //  справка о неполучении пособия от отца номер
+  RefNpayFatherDt  //  справка о неполучении пособия от отца дата
+  RefNpayMotherNo  //  справка о неполучении пособия от матери номер
+  RefNpayMotherDt  //  справка о неполучении пособия от матери дата
 // Постановка на учет в ранние сроки беременности
-  Pregn12WFlag         // Признак постановки на учет
-  Ref12WeekNo          // Номер справки
-  Ref12WeekDt          // Дата справки
-  KfReg                // Районный коэффициент
-  KfShortDay           // Коэф. неполного раб. дня
-  BaseAvgDailySal      // Среднедневной заработок
-  Payment              // Фактически выплаченная сумма
+  Ref12WeekNo      // Номер справки
+  Ref12WeekDt      // Дата справки
+  ReasonEmpl       //  Пострадавший на другом предприятии
 ! поля по простоям
   StartDate
   EndDate
@@ -534,6 +533,9 @@ end.
     <BATCH_NO>^:^</BATCH_NO>
 !----- Причина перерасчета
     <TYPE_INFO>^</TYPE_INFO>
+.{?INTERNAL; ( TypeInfo = 1 )
+    <RECALC_REASON_CODE>^</RECALC_REASON_CODE>
+.}
     <DOC_TYPE>^</DOC_TYPE>
     <DOC_DT1>^</DOC_DT1>
     <SNILS>^</SNILS>
@@ -578,7 +580,6 @@ end.
 .{?INTERNAL; ( AddrHouse <> '' )
     <ADDR_HOUSE>^</ADDR_HOUSE>
 .}
-    <POST_INDEX>^</POST_INDEX>
 !
 .{?INTERNAL; ( AddrBuilding <> '' )
     <ADDR_BUILDING>^</ADDR_BUILDING>
@@ -586,6 +587,35 @@ end.
 !
 .{?INTERNAL; ( AddrFlat <> '' )
     <ADDR_FLAT>^</ADDR_FLAT>
+.}
+    <POST_INDEX>^</POST_INDEX>
+.} // ( PaymentType = '0' )!
+    <OWNER_FLAG>^</OWNER_FLAG>
+    <PAYMENT_TYPE>^</PAYMENT_TYPE>
+! Если оплата через банк
+.{?INTERNAL; ( PaymentType = 1 )
+    <ACCOUNT_BIC>^</ACCOUNT_BIC>
+    <ACCOUNT_NAME>^</ACCOUNT_NAME>
+    <ACCOUNT>^</ACCOUNT>
+.}
+! Если получатель пособия 0- уполномоченный представитель
+.{?INTERNAL; ( OwnerFlag = '0' )
+    <SURNAME2>^</SURNAME2>
+    <NAME2>^</NAME2>
+.{?INTERNAL; ( SecName2 <> '' )
+    <PATRONIMIC2>^</PATRONIMIC2>
+.}
+.{?INTERNAL; ( Id2Type <> '' )
+    <ID2_TYPE>^</ID2_TYPE>
+.{?INTERNAL; ( Id2No <> '' )
+    <ID2_NO>^</ID2_NO>
+.}
+.{?INTERNAL; ( Id2Dt <> '' )
+    <ID2_DT>^</ID2_DT>
+.}
+.{?INTERNAL; ( Id2Dept <> '' )
+    <ID2_DEPT>^</ID2_DEPT>
+.}
 .}
 .}
 !
@@ -610,12 +640,6 @@ end.
 .{?INTERNAL; ( Addr2A5 <> '' )
     <ADDR2_A5>^</ADDR2_A5>
 .}
-! Если вид реестра cn_vpNetrud, cn_vpTravma
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
-.{?INTERNAL; ( PostIndex2 <> '' )
-    <POST_INDEX2>^</POST_INDEX2>
-.}
-.}
 .{?INTERNAL; ( Addr2House <> '' )
     <ADDR2_HOUSE>^</ADDR2_HOUSE>
 .}
@@ -625,46 +649,10 @@ end.
 .{?INTERNAL; ( Addr2Flat <> '' )
     <ADDR2_FLAT>^</ADDR2_FLAT>
 .}
-!------------------------------
-! Если вид реестра cn_vpNetrud, cn_vpBerem, cn_vpTravma, cn_vpRanBerem
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
-    <DUPLICATE_FLAG>^</DUPLICATE_FLAG>
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
+.{?INTERNAL; ( PostIndex2 <> '' )
+    <POST_INDEX2>^</POST_INDEX2>
 .}
-!------------------------------
-.{?INTERNAL; ( VidReestr = cn_vpTravma )  or ( VidReestr = cn_vpOtpusk )
-.{?INTERNAL; ( ReasonEmpl <> '' )
-    <REASON_EMPL>^</REASON_EMPL>
-.}
-.}
-!-------------------------------
-    <OWNER_FLAG>^</OWNER_FLAG>
-! Если получатель пособия 0- уполномоченный представитель
-.{?INTERNAL; ( OwnerFlag = '0' )
-    <SURNAME2>^</SURNAME2>
-    <NAME2>^</NAME2>
-.{?INTERNAL; ( SecName2 <> '' )
-    <PATRONIMIC2>^</PATRONIMIC2>
-.}
-.{?INTERNAL; ( Id2Type <> '' )
-    <ID2_TYPE>^</ID2_TYPE>
-.{?INTERNAL; ( Id2No <> '' )
-    <ID2_NO>^</ID2_NO>
-.}
-.{?INTERNAL; ( Id2Dt <> '' )
-    <ID2_DT>^</ID2_DT>
-.}
-.{?INTERNAL; ( Id2Dept <> '' )
-    <ID2_DEPT>^</ID2_DEPT>
-.}
-.}
-.}
-!--------------------------------
-    <PAYMENT_TYPE>^</PAYMENT_TYPE>
-! Если оплата через банк
-.{?INTERNAL; ( PaymentType = 1 )
-    <ACCOUNT_BIC>^</ACCOUNT_BIC>
-    <ACCOUNT_NAME>^</ACCOUNT_NAME>
-    <ACCOUNT>^</ACCOUNT>
 .}
 !-- Данные страхователя
     <EMPLOYER>^</EMPLOYER>
@@ -686,12 +674,42 @@ end.
 .{?INTERNAL; ( FIO_Buh <> '' )
     <APPROVE2>^</APPROVE2>
 .}
-.{?INTERNAL; ( TypeInfo = 1 )
-    <RECALC_REASON_CODE>^</RECALC_REASON_CODE>
+!
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild )
+! Трудовой договор
+    <WORK_CONTRACT_START_DT>^</WORK_CONTRACT_START_DT>
+    <WORK_CONTRACT_FINISH_DT>^</WORK_CONTRACT_FINISH_DT>
+.}
+!----------------  Должностной оклад
+.{?INTERNAL; ( BaseAvgSal = 0 ) and ( CalcMetod = 0 )
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
+    <ROLE_WAGE>^</ROLE_WAGE>
+.}
+.}
+!----------- Число календарных дней --------------------
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem )
+    <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
+.}
+!
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
+    <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
+.}
+!----------- средний заработок ---------------------------
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma )
+    <BASE_AVG_SAL>^</BASE_AVG_SAL>
+.}
+!
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild )
+.{?INTERNAL; ( Multipatr = '1' )
+    <AVG_SAL>^</AVG_SAL>
+.}
+    <MULTPATR>^</MULTPATR>
+.}
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+.{?INTERNAL; ( BaseAvgDailySal > 0 )
+    <BASE_AVG_DAILY_SAL>^</BASE_AVG_DAILY_SAL>
 .}
 !------------Отметка о замене годов для расчета
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
-!
 .{?INTERNAL; ( CalcMetod = 1 )
 !
 .{?INTERNAL; ( YearChangeFlag <> '' )
@@ -714,6 +732,15 @@ end.
     <BASE_SUM2>^</BASE_SUM2>
 .}
 .}  // cn_vpYhodChild  cn_vpNetrud  cn_vpBerem  cn_vpTravma  cn_vpRanBerem
+    <KF_REG>^</KF_REG>
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+    <KF_SHORT_DAY>^</KF_SHORT_DAY>
+.}
+!------Условия проживания\работы-------
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) and ( LiveCode <> '' )
+    <LIVE_COND_FLAG>^</LIVE_COND_FLAG>
+    <LIVE_COND>^</LIVE_COND>
+.}
 !
 .{?INTERNAL; ( CalcMetod = 0 )
 !
@@ -721,53 +748,6 @@ end.
     <CALC_MH_PERIOD_START>^</CALC_MH_PERIOD_START>
     <CALC_MH_PERIOD_FINISH>^</CALC_MH_PERIOD_FINISH>
 .}
-.}
-!
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
-.{?INTERNAL; ( MseDt1 <> '' )
-    <MSE_DT1>^</MSE_DT1>
-.}
-.{?INTERNAL; ( MseDt2 <> '' )
-    <MSE_DT2>^</MSE_DT2>
-.}
-.{?INTERNAL; ( MseDt3 <> '' )
-    <MSE_DT3>^</MSE_DT3>
-.}
-.{?INTERNAL; ( MseInvalidGroup > 0 )
-    <MSE_INVALID_GROUP>^</MSE_INVALID_GROUP>
-.}
-.{?INTERNAL; ( MseInvaliDays > 0 )
-    <MSE_INVALID_DAYS>^</MSE_INVALID_DAYS>
-.}
-!
-.{?INTERNAL; ( MseResult <> '' )
-    <MSE_RESULT>^</MSE_RESULT>
-.}
-.{?INTERNAL; ( OtherStateDt <> '' )
-    <OTHER_STATE_DT>^</OTHER_STATE_DT>
-.}
-!  дата выхода на работу
-.{?INTERNAL; ( MseResult = '' )
-    <RETURN_DATE_LPU>^</RETURN_DATE_LPU>
-.}
-.}
-!----------- средний заработок ---------------------------
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma )
-    <BASE_AVG_SAL>^</BASE_AVG_SAL>
-.}
-!----------------  Должностной оклад
-.{?INTERNAL; ( BaseAvgSal = 0 ) and ( CalcMetod = 0 )
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
-    <ROLE_WAGE>^</ROLE_WAGE>
-.}
-.}
-!----------- Число календарных дней --------------------
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem )
-    <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
-.}
-!
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpTravma )
-    <BASE_CALC_DAYS>^</BASE_CALC_DAYS>
 .}
 !------------ Стаж ---------------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
@@ -780,125 +760,28 @@ end.
     <NOT_INSUR_MM>^</NOT_INSUR_MM>
 .}
 .}
-!------Условия проживания\работы-------
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) and ( LiveCode <> '' )
-    <LIVE_COND_FLAG>^</LIVE_COND_FLAG>
-    <LIVE_COND>^</LIVE_COND>
-.}
 !
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBornChild )
-! справка от другого родителя о неполучении пособия
-.{?INTERNAL; ( RefNpayOtherNo <> '' )
-!
-.{?INTERNAL; ( VidReestr = cn_vpBornChild )
-    <REF_NPAY_OTHER_NO>^</REF_NPAY_OTHER_NO>
-    <REF_NPAY_OTHER_DT>^</REF_NPAY_OTHER_DT>
-.}
-.} // ( RefNpayOtherNo <> '' )
-!
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild )
-! справка от отца
-.{?INTERNAL; ( RefNpayFatherNo <> '' )
-    <REF_NPAY_FATHER_NO>^</REF_NPAY_FATHER_NO>
-    <REF_NPAY_FATHER_DT>^</REF_NPAY_FATHER_DT>
-.}
-! справка от матери
-.{?INTERNAL; ( RefNpayMotherNo <> '' )
-    <REF_NPAY_MOTHER_NO>^</REF_NPAY_MOTHER_NO>
-    <REF_NPAY_MOTHER_DT>^</REF_NPAY_MOTHER_DT>
-.}
-!
-.}//( VidReestr = cn_vpYhodChild )
-!
-! усыновление/опека
-.{?INTERNAL; ( WardRefNo <> '' )
-    <WARD_FLAG>^</WARD_FLAG>
-    <WARD_REF_NO>^</WARD_REF_NO>
-    <WARD_REF_DT>^</WARD_REF_DT>
-.}
-! договор о передаче в приемную семью
-.{?INTERNAL; ( RefFamilyNo <> '' )
-.{?INTERNAL; ( VidReestr = cn_vpBornChild )
-    <REF_FAMILY_NO>^</REF_FAMILY_NO>
-    <REF_FAMILY_DT>^</REF_FAMILY_DT>
-.}
-.} // ( RefFamilyNo <> '' )
-.}
-!---------------------------------------------------------
-!    Р Е Е С Т Р    П О   У Х О Д У  И  Р О Ж Д Е Н И Ю
-!---------------------------------------------------------
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild )
-    <MULTPATR>^</MULTPATR>
-.{?INTERNAL; ( Multipatr = '1' )
-    <AVG_SAL>^</AVG_SAL>
-.}
-.}
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBornChild )
-! свидетельство о рождении
-.{?INTERNAL; ( VidReestr = cn_vpBornChild ) and ( CertType <> '' )
-    <REF_TYPE>^</REF_TYPE>
-.}
-!
-.{?INTERNAL; ( CertNo <> '' )
-    <CERT_NO>^</CERT_NO>
-    <CERT_DT>^</CERT_DT>
-.}
-    <CERT_BR>^</CERT_BR>
-    <CERT_SURNAME>^</CERT_SURNAME>
-    <CERT_NAME>^</CERT_NAME>
-.{?INTERNAL; ( CertPatronimic <> '' )
-    <CERT_PATRONIMIC>^</CERT_PATRONIMIC>
-.}
-.{?INTERNAL; ( Ref24No <> '' )
-! справка о рождении
-    <REF_24_NO>^</REF_24_NO>
-    <REF_24_DT>^</REF_24_DT>
-.}
-!
-.{?INTERNAL; ( oCertNo <> '' )
-! справка о рождении
-    <O_CERT_NO>^</O_CERT_NO>
-    <O_CERT_DT>^</O_CERT_DT>
-.}
-!
-.}
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild )
-! Трудовой договор
-    <WORK_CONTRACT_START_DT>^</WORK_CONTRACT_START_DT>
-    <WORK_CONTRACT_FINISH_DT>^</WORK_CONTRACT_FINISH_DT>
-! Данные об отпуске
-    <HOLID_ORD_NO>^</HOLID_ORD_NO>
-    <HOLID_ORD_DT>^</HOLID_ORD_DT>
-    <HOLID_DT_ST>^</HOLID_DT_ST>
-    <HOLID_DT_FN>^</HOLID_DT_FN>
-    <DT2_FACT>^</DT2_FACT>
-    <CHILD_SER>^</CHILD_SER>
-    <MH_OUT>^</MH_OUT>
-.{?INTERNAL; ( ChildSer > 1 )
-    <OTHER_CHILD_FLAG_BR>^</OTHER_CHILD_FLAG_BR>
-    <OTHER_CHILD_FLAG_DT>^</OTHER_CHILD_FLAG_DT>
-.}
-.}
-!------------------------------------------------------
-.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
-! условия исчисления
-.{?INTERNAL; ( CalcCondition1 <> '' )
-    <CALC_CONDITION1>^</CALC_CONDITION1>
-.}
-.{?INTERNAL; ( CalcCondition2 <> '' )
-    <CALC_CONDITION2>^</CALC_CONDITION2>
-.}
-.{?INTERNAL; ( CalcCondition3 <> '' )
-    <CALC_CONDITION3>^</CALC_CONDITION3>
-.}
-.}
-!---------------------------------------------------------
-! Р Е Е С Т Р  П О   Б О Л Ь Н И Ч Н Ы М   Л И С Т А М
-!---------------------------------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
 ! Больничный лист
     <LN_CODE>^</LN_CODE>
+! номер первичного больничного
+.{?INTERNAL; ( PrimaryFlag = '0' )
+    <PREV_LN_CODE>^</PREV_LN_CODE>
+.}
+!
+    <PRIMARY_FLAG>^</PRIMARY_FLAG>
+    <DUPLICATE_FLAG>^</DUPLICATE_FLAG>
     <LN_DATE>^</LN_DATE>
+    <LPU_NAME>^</LPU_NAME>
+.{?INTERNAL; ( LpuAdress <> '' )
+    <LPU_ADDRESS>^</LPU_ADDRESS>
+.}
+    <LPU_OGRN>^</LPU_OGRN>
+.} // Больничный лист
+!
+    <BIRTHDAY>^</BIRTHDAY>
+    <GENDER>^</GENDER>
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
     <REASON1>^</REASON1>
 .{?INTERNAL; ( Reason2 > '' )
     <REASON2>^</REASON2>
@@ -906,6 +789,7 @@ end.
 .{?INTERNAL; ( Reason3 > '' )
     <REASON3>^</REASON3>
 .}
+!
 .{?INTERNAL; ( EmplFlag = 0 )
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma )
     <PARENT_CODE>^</PARENT_CODE>
@@ -922,13 +806,6 @@ end.
 .}
     <VOUCHER_OGRN>^</VOUCHER_OGRN>
 .}
-.{?INTERNAL; ( VidReestr = cn_vpOtpusk )
-    <CALC_DAYS>^</CALC_DAYS>
-.}
-!
-.{?INTERNAL; ( Form1Dt <> '' )
-    <FORM1_DT>^</FORM1_DT>
-.}
 !
 .{?INTERNAL; ( Serv1 <> '' )
     <SERV1_AGE>^</SERV1_AGE>
@@ -944,52 +821,41 @@ end.
     <SERV2_FIO>^</SERV2_FIO>
 .}
 .}
+.} // ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+!
+.{?INTERNAL; ( VidReestr = cn_vpBerem )
+    <PREGN12W_FLAG>^</PREGN12W_FLAG>
+.}
+!
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
 !
 .{?INTERNAL; ( HospitalDt1 <> '' )
     <HOSPITAL_DT1>^</HOSPITAL_DT1>
     <HOSPITAL_DT2>^</HOSPITAL_DT2>
 .}
 !
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma )
-    <FSS_PAYMENT_FLAG>^</FSS_PAYMENT_FLAG>
-.}
-!
-.{?INTERNAL; ( FssPayFlag = 1 )
-    <DT1>^</DT1>
-    <DT2>^</DT2>
-.}
-! номер первичного больничного
-.{?INTERNAL; ( PrimaryFlag = '0' )
-    <PREV_LN_CODE>^</PREV_LN_CODE>
-.}
-!
-.{?INTERNAL; ( BlProd = '1' ) and ( MseResult = '31' )
-    <NEXT_LN_CODE>^</NEXT_LN_CODE>
-.}
-.}
-    <CALC_METHOD>^</CALC_METHOD>
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
-    <PRIMARY_FLAG>^</PRIMARY_FLAG>
-    <LPU_NAME>^</LPU_NAME>
-.{?INTERNAL; ( LpuAdress <> '' )
-    <LPU_ADDRESS>^</LPU_ADDRESS>
-.}
-    <LPU_OGRN>^</LPU_OGRN>
-.}
-    <BIRTHDAY>^</BIRTHDAY>
-    <GENDER>^</GENDER>
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
 ! нарушение режима
 .{?INTERNAL; ( HospitalBrCode <> 0 )
     <HOSPITAL_BREACH_CODE>^</HOSPITAL_BREACH_CODE>
     <HOSPITAL_BREACH_DT>^</HOSPITAL_BREACH_DT>
 .}
-! ОПЛАТА
-.{?INTERNAL; ( EmplPayment > 0 )
-    <EMPL_PAYMENT>^</EMPL_PAYMENT>
+.{?INTERNAL; ( MseDt1 <> '' )
+    <MSE_DT1>^</MSE_DT1>
 .}
-.{?INTERNAL; ( FssPayment > 0 )
-    <FSS_PAYMENT>^</FSS_PAYMENT>
+.{?INTERNAL; ( MseDt2 <> '' )
+    <MSE_DT2>^</MSE_DT2>
+.}
+.{?INTERNAL; ( MseDt3 <> '' )
+    <MSE_DT3>^</MSE_DT3>
+.}
+.{?INTERNAL; ( MseInvalidGroup > 0 )
+    <MSE_INVALID_GROUP>^</MSE_INVALID_GROUP>
+.}
+.{?INTERNAL; ( MseInvaliDays > 0 )
+    <MSE_INVALID_DAYS>^</MSE_INVALID_DAYS>
+.}
+.{?INTERNAL; ( MseResult <> '' )
+    <MSE_RESULT>^</MSE_RESULT>
 .}
 ! данные о враче
 .{?INTERNAL; ( Treat1Doctor <> '' )
@@ -1048,30 +914,158 @@ end.
     <TREAT3_DOC2_ID>^</TREAT3_DOC2_ID>
 .}
 .}
+.{?INTERNAL; ( OtherStateDt <> '' )
+    <OTHER_STATE_DT>^</OTHER_STATE_DT>
 .}
-!------------------------------------------------------------------
-! Р Е Е С Т Р  НА Р А Н Н И Е  С Р О К И   Б Е Р Е М Е Н Н О С Т И
-!------------------------------------------------------------------
-.{?INTERNAL; ( VidReestr = cn_vpBerem )
-    <PREGN12W_FLAG>^</PREGN12W_FLAG>
+!  дата выхода на работу
+.{?INTERNAL; ( MseResult = '' )
+    <RETURN_DATE_LPU>^</RETURN_DATE_LPU>
 .}
+!
+.{?INTERNAL; ( BlProd = '1' ) and ( MseResult = '31' )
+    <NEXT_LN_CODE>^</NEXT_LN_CODE>
+.}
+.}// ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+    <CALC_METHOD>^</CALC_METHOD>
+!------------------------------------------------------
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+! условия исчисления
+.{?INTERNAL; ( CalcCondition1 <> '' )
+    <CALC_CONDITION1>^</CALC_CONDITION1>
+.}
+.{?INTERNAL; ( CalcCondition2 <> '' )
+    <CALC_CONDITION2>^</CALC_CONDITION2>
+.}
+.{?INTERNAL; ( CalcCondition3 <> '' )
+    <CALC_CONDITION3>^</CALC_CONDITION3>
+.}
+.}
+!
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+!
+.{?INTERNAL; ( Form1Dt <> '' )
+    <FORM1_DT>^</FORM1_DT>
+.}
+!
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma )
+    <FSS_PAYMENT_FLAG>^</FSS_PAYMENT_FLAG>
+.}
+!
+.{?INTERNAL; ( FssPayFlag = 1 )
+    <DT1>^</DT1>
+    <DT2>^</DT2>
+.}
+.}// ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+!
+.{?INTERNAL; ( VidReestr = cn_vpOtpusk )
+    <CALC_DAYS>^</CALC_DAYS>
+.}
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild )
+    <DT2_FACT>^</DT2_FACT>
+.}
+!
+.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+! ОПЛАТА
+.{?INTERNAL; ( EmplPayment > 0 )
+    <EMPL_PAYMENT>^</EMPL_PAYMENT>
+.}
+.{?INTERNAL; ( FssPayment > 0 )
+    <FSS_PAYMENT>^</FSS_PAYMENT>
+.}
+.}//( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+!
+.{?INTERNAL; ( VidReestr = cn_vpPogreb ) or ( VidReestr = cn_vpDopDay )
+    <PAYMENT>^</PAYMENT>     //фактически выплаченная сумма
+.}
+!
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBornChild )
+! свидетельство о рождении
+.{?INTERNAL; ( VidReestr = cn_vpBornChild ) and ( CertType <> '' )
+    <REF_TYPE>^</REF_TYPE>
+.}
+!
+.{?INTERNAL; ( CertNo <> '' )
+    <CERT_NO>^</CERT_NO>
+    <CERT_DT>^</CERT_DT>
+.}
+    <CERT_BR>^</CERT_BR>
+    <CERT_SURNAME>^</CERT_SURNAME>
+    <CERT_NAME>^</CERT_NAME>
+.{?INTERNAL; ( CertPatronimic <> '' )
+    <CERT_PATRONIMIC>^</CERT_PATRONIMIC>
+.}
+.{?INTERNAL; ( Ref24No <> '' )
+! справка о рождении
+    <REF_24_NO>^</REF_24_NO>
+    <REF_24_DT>^</REF_24_DT>
+.}
+!
+.{?INTERNAL; ( oCertNo <> '' )
+! справка о рождении
+    <O_CERT_NO>^</O_CERT_NO>
+    <O_CERT_DT>^</O_CERT_DT>
+.}
+.}// ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBornChild )
+!
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild )
+    <CHILD_SER>^</CHILD_SER>
+    <MH_OUT>^</MH_OUT>
+! Данные об отпуске
+    <HOLID_ORD_NO>^</HOLID_ORD_NO>
+    <HOLID_ORD_DT>^</HOLID_ORD_DT>
+    <HOLID_DT_ST>^</HOLID_DT_ST>
+    <HOLID_DT_FN>^</HOLID_DT_FN>
+.}
+! справка от другого родителя о неполучении пособия
+.{?INTERNAL; ( RefNpayOtherNo <> '' ) and  ( VidReestr = cn_vpBornChild )
+    <REF_NPAY_OTHER_NO>^</REF_NPAY_OTHER_NO>
+    <REF_NPAY_OTHER_DT>^</REF_NPAY_OTHER_DT>
+.} // ( RefNpayOtherNo <> '' )
+!
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBornChild )
+! усыновление/опека
+.{?INTERNAL; ( WardRefNo <> '' )
+    <WARD_FLAG>^</WARD_FLAG>
+    <WARD_REF_NO>^</WARD_REF_NO>
+    <WARD_REF_DT>^</WARD_REF_DT>
+.}
+! договор о передаче в приемную семью
+.{?INTERNAL; ( RefFamilyNo <> '' ) and  ( VidReestr = cn_vpBornChild )
+    <REF_FAMILY_NO>^</REF_FAMILY_NO>
+    <REF_FAMILY_DT>^</REF_FAMILY_DT>
+.} // ( RefFamilyNo <> '' )
+!
+.{?INTERNAL; ( VidReestr = cn_vpYhodChild )
+! Данные об отпуске
+.{?INTERNAL; ( ChildSer > 1 )
+    <OTHER_CHILD_FLAG_BR>^</OTHER_CHILD_FLAG_BR>
+    <OTHER_CHILD_FLAG_DT>^</OTHER_CHILD_FLAG_DT>
+.}
+! справка от отца
+.{?INTERNAL; ( RefNpayFatherNo <> '' )
+    <REF_NPAY_FATHER_NO>^</REF_NPAY_FATHER_NO>
+    <REF_NPAY_FATHER_DT>^</REF_NPAY_FATHER_DT>
+.}
+! справка от матери
+.{?INTERNAL; ( RefNpayMotherNo <> '' )
+    <REF_NPAY_MOTHER_NO>^</REF_NPAY_MOTHER_NO>
+    <REF_NPAY_MOTHER_DT>^</REF_NPAY_MOTHER_DT>
+.}
+.}// ( VidReestr = cn_vpYhodChild )
+!
+.} // ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBornChild )
 ! Постановка на учет в ранние сроки беременности
 .{?INTERNAL; ( VidReestr = cn_vpRanBerem ) or ( VidReestr = cn_vpBerem )
 .{?INTERNAL; ( Pregn12WFlag = '1' )
     <REF_12WEEK_NO>^</REF_12WEEK_NO>
     <REF_12WEEK_DT>^</REF_12WEEK_DT>
 .}
-.}
-    <KF_REG>^</KF_REG>
-.{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
-    <KF_SHORT_DAY>^</KF_SHORT_DAY>
-.{?INTERNAL; ( BaseAvgDailySal > 0 )
-    <BASE_AVG_DAILY_SAL>^</BASE_AVG_DAILY_SAL>
-.}
-.}
+.}// ( VidReestr = cn_vpRanBerem ) or ( VidReestr = cn_vpBerem )
 !
-.{?INTERNAL; ( VidReestr = cn_vpPogreb ) or ( VidReestr = cn_vpDopDay )
-    <PAYMENT>^</PAYMENT>     //фактически выплаченная сумма
+.{?INTERNAL; ( VidReestr = cn_vpTravma )  or ( VidReestr = cn_vpOtpusk )
+.{?INTERNAL; ( ReasonEmpl <> '' )
+    <REASON_EMPL>^</REASON_EMPL>
+.}
 .}
 !---------- ПРОСТОЙ -------------------
 .{?INTERNAL; ( prProstoi = 1 )

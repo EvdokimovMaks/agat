@@ -132,6 +132,7 @@
   rsSoprHozAlg = 8; // Хозоперация
   rsCreditAlg  = 9; // ЭПГ
   rsReestrAlg  = 10;// Реестр
+  rsCredCrdAlg = 11;// Кредит
 
   // тип фин.операции
   ctNODEF          =   0; // неопределенный

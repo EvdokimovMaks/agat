@@ -46,6 +46,8 @@ const
   csClassKodViewTrans  : String = 'Код вида сделки';
   csAttrSignEDO        : String = 'ЭЦП счета-фактуры';
 
+  csClassKodNameBlank  : String = 'Код и наименование бланка документа';
+
   csAttrDopD_Bel       : String = 'Дополнительные данные'; // Для спецификации ЭСЧФ, Беларусь
   // значения
   cwDopD_FullMinus : Word = 1; // Вычет в полном объеме
@@ -92,11 +94,13 @@ const
   cwESFLinkedWith_KatSopr = 1; // Выполнена только привязка сопрдока к СФ
   cwESFLinkedWith_PlPor   = 2; // Выполнена только привязка платежа к СФ
   cwESFLinkedWith_GrSopr  = 5; // Выполнена только привязка сводной накладной к СФ
+  cwESFLinkedWith_RzDoc   = 7; // Выполнена только привязка розничной накладной к СФ
 
   // СФ создавался после привязки первичного документа
   cwESFCreated_KatSopr    = 3; // Создан СФ после привязки сопродока
   cwESFCreated_PlPor      = 4; // Создан СФ после привязки платежа
   cwESFCreated_GrSopr     = 6; // Создан СФ после привязки сводной накладной
+  cwESFCreated_RzDoc      = 8; // Создан СФ после привязки розничной накладной
 
   // РБ. Константа для привязки сторнирующего СФ к СФ розницы (SchFact.wADoc)
   cwStornoRozn            = 20;
@@ -243,6 +247,8 @@ const
   cwTypeSF_Sell_Bel_Physical       : Word = 7253;  // Накладная по физическим лицам (Беларусь)
   cwTypeSF_Sell_Bel_StornoRozn     : Word = 7254;  // Сторнирующая накладная, розница (Беларусь)
   cwTypeSF_Sell_Bel_OtgrInoOrg     : Word = 7255;  // Накладная, отгрузка иностранной организации (Беларусь)
+  cwTypeSF_Sell_ExemtionNDS        : Word = 7260;  // Счет-фактура по освобожденным от НДС
+  cwTypeSF_Sell_ExemtionNDS_Avans  : Word = 7261;  // Счет-фактура, оплата, предоплата по освобожденным от НДС
 
   //---------------------------------------------------------------------------------------------
   // Снабжение, СФ поставщика, SchFact.TipUser
@@ -338,6 +344,7 @@ const
   cwTypeBK_Sell_Bel_Otgr_Plus           : Word = 7451;  // Регистрация СФ, увеличение реализации (Беларусь)
   cwTypeBK_Sell_Bel_Otgr_Minus          : Word = 7452;  // Регистрация СФ, уменьшение реализации (Беларусь)
   cwTypeBK_Sell_Bel_Ispr                : Word = 7453;  // Регистрация СФ (исправление) (Беларусь)
+  cwTypeBK_Sell_ExemtionNDS             : Word = 7460;  // Регистрация СФ по освобожденным от НДС
 
   //---------------------------------------------------------------------------------------------
   // Снабжение, книга покупок, BookPrZk.TipUser
@@ -360,7 +367,8 @@ const
   cwTypeBK_Buy_RestNDS_Self            : Word = 7554;  // Нерегистрируемый остаток по раздельному учету, себестоимость (книга покупок)
   cwTypeBK_Buy_DelayPlat               : Word = 7551;  // Отложенная регистрация по платежам (нерегистрируемая)
   cwTypeBK_Buy_ReNDS                   : Word = 7508;  // Восстановление НДС (вклад в уставной капитал), только суммы НДС заносятся
-  cwTypeBK_Buy_ReNDS_Plat              : Word = 7518;  // Восстановление НДС по платежу (книга покупок), основная, стандартная запись
+  cwTypeBK_Buy_ReNDS_Plat21            : Word = 7518;  // Восстановление НДС по платежу (книга покупок), код 21
+  cwTypeBK_Buy_ReNDS_Plat22            : Word = 7560;  // Восстановление НДС по платежу (книга покупок), код 22
   cwTypeBK_Buy_ReNDS_Otgr              : Word = 7535;  // Восстановление НДС по отгрузке (книга покупок), основная, стандартная запись
   cwTypeBK_Buy_Correcting              : Word = 7541;  // Корректирующая запись (книга покупок)
   cwTypeBK_Buy_CorrAvans               : Word = 7549;  // Корректирующая предоплату поставщику запись
@@ -567,6 +575,9 @@ const
   cwGroupTipsSF_Ispr     : Word = 2;
   cwGroupTipsSF_IsprCorr : Word = 3;
   cwGroupTipsSF_FullNach : Word = 4;
+
+  // PickRep.wList
+  cwTableMatching_SeriaNumer : Word = 890;
 end;
 
 
@@ -706,7 +717,8 @@ function Is_Annul_BK(aTipUser, aSubTip : Word) : Boolean;
 // Проверка, является ли запись восстановлением НДС по платежу
 function Is_ReNDS_Plat_BK(aTipUser : Word) : Boolean;
 {
-  Result := ((aTipUser = cwTypeBK_Buy_ReNDS_Plat) or (aTipUser = cwTypeBK_Sell_ReNDS_Plat));
+  Result := ((aTipUser = cwTypeBK_Buy_ReNDS_Plat21) or (aTipUser = cwTypeBK_Buy_ReNDS_Plat22) or
+             (aTipUser = cwTypeBK_Sell_ReNDS_Plat));
 }
 
 // Проверка на тип СФ заказчика
@@ -902,6 +914,17 @@ Function Is_Physical_SF(aTipUser: word): Boolean;
 Function Is_OtgrMinus_BK_Bel(aTipUser: word): Boolean;
 {
   Result := (aTipUser = cwTypeBK_Sell_Bel_Otgr_Minus) or (aTipUser = cwTypeBK_Buy_Bel_Otgr_Minus);
+}
+
+function Is_Plat_BK(wBKSubTip : Word) : Boolean;
+{
+  result := (wBKSubTip = cwTotal_TypeBK_RegAvans) or
+            (wBKSubTip = cwTotal_TypeBK_AvansInMomentOtgr) or
+            (wBKSubTip = cwTotal_TypeBK_RegVozvratAvans) or
+            (wBKSubTip = cwTotal_TypeBK_RegVozvratPlat) or
+            (wBKSubTip = cwTotal_TypeBK_OplataSF_NotReg) or
+            (wBKSubTip = cwTotal_TypeBK_LinkVozvratPlat) or
+            (wBKSubTip = cwTotal_TypeBK_NotReg_Avans);
 }
 
 // Для новых типов СФ заводить коды операций.

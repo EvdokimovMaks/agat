@@ -41,7 +41,6 @@
   cgPick_DC           =    57;  // групповой выбор в наборов свойств МЦ (6.0)
   cgPick_FPCO         =    58;  // FPCO (центры ответственности)
   cgPick_Rank         =    61;  // звания в СФО
-  cgPick_GrafKred     =    62;  // графики получения/погашения кредитов
   cgPick_MnfForm      =    66;  // матотчет
   cgPick_GrOs         =   110;  // GrOs
   cgPick_Drag         =   112;  // KatDragMet

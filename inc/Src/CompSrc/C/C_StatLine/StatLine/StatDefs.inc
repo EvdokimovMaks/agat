@@ -115,6 +115,8 @@
           '',     cmZoom,              kbF5;
           '',     cmNext,              kbF6;
           '',     cmMenu,              kbF10;
+          '',     cmCheckOrder,        kbCtrlW;
+          '',     cmCheckRPD,          kbCtrlM;
 #end
 !-------------------------------------------------------------------------------
 ! Для статус-строк с фильтром по Alt-B

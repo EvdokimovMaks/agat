@@ -149,6 +149,7 @@ const
   bfSavedDefault = $100;
   bfSingleLine = $200;
   bfDoubleLine = $400;
+  bfMenu      = $1000;
 
 type SelectMode = (NormalSelect, EnterSelect, LeaveSelect);
 

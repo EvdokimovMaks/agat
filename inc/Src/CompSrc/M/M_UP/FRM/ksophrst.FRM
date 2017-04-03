@@ -21,14 +21,16 @@
  PodrTo        : string
  MolTo         : string
  Nazna         : string
+ sMc           : string
  sVidSopr      : string
  RepName       : string
  flgFilters    : word    //10 - UserDeskRep.ResWord[20]
  flgRepStyles  : word    //11 - UserDeskRep.ResWord[21]
+ flgSpFilters  : word    //12 - UserDeskRep.ResWord[22]
 .endfields
                    1
  123456789          01
- ^^^^^^^^^^^^^^^^ ^^
+ ^^^^^^^^^^^^^^^^^ ^^^
 .{ //main cycle
 .{ CheckEnter GroupHeaderKS
 .fields
@@ -148,6 +150,7 @@ end.
    OR ((flgFilters and  word(64)) =  64)
    OR ((flgFilters and word(128)) = 128)
    OR ((flgFilters and word(256)) = 256)
+   OR ((flgSpFilters and word(1)) =   1)
     ) boIsFilter := True
  else boIsFilter := False;
 end.
@@ -206,6 +209,13 @@ end.
 .{ ?INTERNAL; ((flgFilters and word(256) ) = 256 ));
 .Fields
  Nazna
+.EndFields
+      ˇÅ^ˇÅ
+.}
+!------------------------------------------------------------------------
+.{ ?INTERNAL; ((flgSpFilters and word(1) ) = 1 ));
+.Fields
+ sMc
 .EndFields
       ˇÅ^ˇÅ
 .}

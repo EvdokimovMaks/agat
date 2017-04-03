@@ -10,11 +10,11 @@ const
   FLT_AGENT          = 0004h;
   FLT_DOC            = 0008h;
   FLT_DOC_TYPE       = 0010h;
-  FLT_NOT_PAY        = 0020h;
-  FLT_CURRENCY       = 0040h;
-  FLT_STATUS_INVOICE = 0080h;
-  FLT_DESCR          = 0100h;
-  FLT_DESGR          = 0200h;
+  FLT_OTV_PODR       = 0020h;
+  FLT_STATUS_INVOICE = 0040h;
+  FLT_DESCR          = 0080h;
+  FLT_DESGR          = 0100h;
+  FLT_INVDOC         = 0200h;
 
   FLT_ALL            = 03ffh;
 
@@ -29,4 +29,6 @@ const
   ID_DELAYEDUKS_REG: word = 65509;
   ID_DELAYEDUKS_STORNO: word = 65510;
   ID_FILT_EXPSF_BEL : Word = 65511;
+
+  csMask_NumESF : string = '999999999\-9999\-9999999999';
 end;

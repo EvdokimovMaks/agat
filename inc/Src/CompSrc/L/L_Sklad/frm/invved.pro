@@ -6,7 +6,7 @@
 ! Форма InvVed.frm используется INVBLANK.VIP, SLICVED.VIP и INVN_PRN.VPP
 ! Не забудьте синхронизировать все !!!
 
-#include Commission.frn
+#include FeeSigners.frn
 #doc
 Ведомость по итогам инвентаризации
 #end
@@ -20,7 +20,7 @@
   цена_прод :double
 .endvar
 .fields
-#CommissionFields
+#FeeSigners_Os_Fields
    Признак_описи        : Boolean
    NRec_инвентаризации  : comp
    дата_инвентаризации  : date
@@ -71,7 +71,7 @@
 !.}
 .endfields
 -------------------------------------------------------------------------------
-#CommissionBody(PrintPereo)
+#FeeSigners_Os_Body(PrintPereo)
    Признак описи                   ^
 
    NRec_инвентаризации : comp      ^

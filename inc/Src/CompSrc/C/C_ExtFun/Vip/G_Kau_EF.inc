@@ -48,7 +48,6 @@ function GetKauReffArrayAbbr    (string,comp)      : string;  external 'G_Kau.dl
 function GetKauReffArrayCode    (string,comp)      : string;  external 'G_Kau.dll';
 
 function ShowKauPrn             (word, comp, date) : string;  external 'G_Kau.dll';
-function ShowKauArrayPrn        (word, word, word, word, word, word,
-                                 comp, comp, comp, comp, comp, comp,
-                                 date)             : string;  external 'G_Kau.dll';
+function ShowKauArrayPrn        (var array, var array, date)
+                                                   : string;  external 'G_Kau.dll';
 //---------------------------------------------------------------------------------

@@ -20,6 +20,8 @@
 #CommissionFields
 
    NRec_инвентаризации:comp
+   орг_ОКПО:string
+   орг_наименование:string
    номер_приказа:string
    дата_приказа:date
    дата_инвентаризации:date
@@ -48,6 +50,8 @@
 #CommissionBody(MnfInvVed)
 
    NRec_инвентаризации:comp        ^
+   орг_ОКПО:string                 ^
+   орг_наименование:string         ^
    номер_приказа:string            ^
    дата_приказа:date               ^
    дата_инвентаризации:date        ^
@@ -132,8 +136,8 @@ end.
 #CommissionLinkInit(MnfInvVed)
 .fields
     CommonFormHeader
-    if (invlog.GetFirst KatOrg = tsOk, invlog.KatOrg.Name, '')
-    if (invlog.GetFirst KatOrg = tsOk, invlog.KatOrg.OKPO, '')
+    орг_наименование
+    орг_ОКПО
     подразделение
     номер_приказа
     if(дата_приказа = Date(0,0,0), '', DateToStr(дата_приказа, 'DD mon YYYY г.'))
@@ -430,8 +434,8 @@ end.
 .endvar
 .fields
     CommonFormHeader
-    if (invlog.GetFirst KatOrg = tsOk, invlog.KatOrg.Name, '')
-    if (invlog.GetFirst KatOrg = tsOk, invlog.KatOrg.OKPO, '')
+    орг_наименование
+    орг_ОКПО
     подразделение
     номер_приказа
     if(дата_приказа = Date(0,0,0), '', DateToStr(дата_приказа, 'DD mon YYYY г.'))

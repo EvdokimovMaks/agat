@@ -102,3 +102,9 @@ ExRef = 2400;      { Ислкючения при работе со ссылками }
 ExDataStream = 2500;
   ExDSErrorId                    = 2501;   { Задан ID поля превышающий их число в запросе}
   ExDSErrorFormatID              = 2501;   { Ожидалось ID поля }
+
+ExExcel = 2600;
+  ExcelInvalidObject             = ExExcel + 1; { Ошибка создания объекта для работы с Excel }
+  ExcelNotLoadDll                = ExExcel + 2; { Ошибка загрузки длл }
+  ExcelNotFoundFunction          = ExExcel + 3; { Не найдена функция }
+  ExcelInternalError             = ExExcel + 4; { Ошибка создания файла }

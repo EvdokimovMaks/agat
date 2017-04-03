@@ -182,6 +182,8 @@ Const
   wAlgDate_PlanDog_dEndAvans       = 46;   // дата конечная из условий авансовых платежей по договору/соглашению
   wAlgDate_PlanDog_dBegPlus        = 47;   // дата начальная + количество дней из условий авансовых платежей по договору/соглашению
   wAlgDate_PlanDog_dEndPlus        = 48;   // дата конечная + количество дней из условий авансовых платежей по договору/соглашению
+  wAlgDate_Veksl_dDoc              = 49;   // дата кредита
+  wAlgDate_Veksl_dOpl              = 50;   // срок погашения кредита
   // DOUBLE ( 100 - 199 )
   wAlgSumma_DocReq_Summa           = 100;  // Сумма заявки
   wAlgSumma_BaseDoc_Summa          = 101;  // Сумма по ДО
@@ -210,6 +212,7 @@ Const
   wAlgSumma_DocReq_NoOpl           = 125;  // Остаток к исполнению по договору
   wAlgSumma_SbBan_Summa            = 126;  // Сумма по реестру
   wAlgSumma_PlanDog_AvanPlat       = 127;  // Сумма из поля авансовые платежи по договору/соглашению
+  wAlgSumma_Veksl_Summa            = 128;  // Сумма по кредиту
   // COMP ( 200 - 299 )
   wAlgRef_Def_CO                   = 200;  // ЦО по умолчанию (из настройки)
   wAlgRef_Def_Person               = 201;  // Куратор по умолчанию
@@ -299,6 +302,9 @@ Const
   wAlgRef_SbBan_Person             = 285;  // сотрудник по реестру
   wAlgRef_GrafKred_Tip             = 286;  // тип этапа погашения кредита
   wAlgRef_SoprHoz_ExtKAU_StBud     = 287;  // Статья из внешнего КАУ к хозоперации
+  wAlgRef_Veksl_Org                = 288;  // контрагент по кредиту
+  wAlgRef_Veksl_Bank               = 289;  // банк контрагента по кредиту
+  wAlgRef_Dogovor_PlatMean         = 290;  // платежное средство по договору/соглашению
   // WORD ( 300 - 399 )
   wAlgWord_Def_Vid_Avans           = 300;  // явно - аванс
   wAlgWord_Def_Vid_Fakt            = 301;  // явно - факт
@@ -393,6 +399,7 @@ Const
   wAlgWord_GrafKred_Tip            = 390;  // тип этапа погашения кредита
   wAlgWord_Val                     = 391;  // по валюте
   wAlgWord_SbBan_MeanType          = 392;  // тип платежного средства по реестру
+  wAlgWord_Dogovor_MeanType        = 393;  // тип платежного средства по договору
   // шаблоны для настройки ( 400 - 499 )
   wAlgDate_Manual_Date             = 400;  // дата документа явно
   wAlgSumm_Manual_Summa            = 401;  // сумма явно

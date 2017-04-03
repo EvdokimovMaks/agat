@@ -17,6 +17,8 @@
 .endvar
 .fields
    NRec_инвентаризации:comp
+   орг_ОКПО:string
+   орг_наименование:string
    номер_приказа:string
    дата_приказа:date
    дата_инвентаризации:date
@@ -43,6 +45,8 @@
 .endfields
 -------------------------------------------------------------------------------
    NRec_инвентаризации:comp        ^
+   орг_ОКПО:string                 ^
+   орг_наименование:string         ^
    номер_приказа:string            ^
    дата_приказа:date               ^
    дата_инвентаризации:date        ^
@@ -118,8 +122,8 @@ end.
 ;
 .fields
     CommonFormHeader
-    if (SLIC_LOG1.GetFirst KatOrg = tsOk, SLIC_LOG1.KatOrg.Name, '')
-    if (SLIC_LOG1.GetFirst KatOrg = tsOk, SLIC_LOG1.KatOrg.OKPO, '')
+    орг_наименование
+    орг_ОКПО
     подразделение
     номер_приказа
     if(дата_приказа = Date(0,0,0), '', DateToStr(дата_приказа, 'DD/MM/YYYY'))
@@ -327,8 +331,8 @@ end.
 ;
 .fields
     CommonFormHeader
-    if (SLIC_LOG1.GetFirst KatOrg = tsOk, SLIC_LOG1.KatOrg.Name, '')
-    if (SLIC_LOG1.GetFirst KatOrg = tsOk, SLIC_LOG1.KatOrg.OKPO, '')
+    орг_наименование
+    орг_ОКПО
     подразделение
     номер_приказа
     if(дата_приказа = Date(0,0,0), '', DateToStr(дата_приказа, 'DD/MM/YYYY'))

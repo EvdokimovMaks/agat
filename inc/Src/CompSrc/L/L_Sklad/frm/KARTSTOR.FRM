@@ -67,6 +67,7 @@
  cSigner : comp
 #FeeSignersFields
 .endfields
+.{
  Организация ^
                       КАРТОЧКА СКЛАДСКОГО УЧЕТА
 
@@ -98,6 +99,7 @@ Nrec товара: ^
 .}
 Итого по операциям:                                                                                        &&&&&&&&&&&                                &'&&&&&&&&&&&&&.&& &'&&&&&&&&&.&&&&
 Исходящий остаток:                                                                                         &&&&&&&&&&& &'&&&&&&&&&.&& &'&&&&&&&&.&&&& &'&&&&&&&&&&&&&.&& &'&&&&&&&&&.&&&&
+.}
 ^
 #FeeSignersBody(KartStor)
 .endform
@@ -118,8 +120,25 @@ Nrec товара: ^
  TOVAR_NAME TOVAR_BarKod
  TOVAR_Ed_Izm
 .endfields
+.var
+page:word
+.endvar
 .p 50
 .defo landscape
+.begin
+page := 0;
+end.
+.{
+.{?Internal; page > 0
+
+
+
+
+ Р
+.}
+ Р.begin
+page := page + 1;
+end. Р
  ^
  ^
                        БКАРТОЧКА СКЛАДСКОГО УЧЕТА Б
@@ -207,6 +226,7 @@ Nrec товара: ^
 
  Итого по операциям:                                                                            &&&&&&&&&&&                                &'&&&&&&&&&&&&&&&& &'&&&&&&&&&&&&&&
  Исходящий остаток:                                                                             &&&&&&&&&&& &'&&&&&&&&&&&& &'&&&&&&&&&&&&& &'&&&&&&&&&&&&&&&& &'&&&&&&&&&&&&&&
+.}
  Ш
 #FeeSignersLinkInit(KartStor)
 
@@ -245,7 +265,24 @@ end.
  TOVAR_NAME TOVAR_BarKod
  TOVAR_Ed_Izm
 .endfields
+.var
+page:word
+.endvar
 .DEFO PORTRAIT
+.begin
+page := 0;
+end.
+.{
+ Р.{?Internal; page > 0
+
+
+
+
+ Р
+ Р.}
+. Рbegin
+page := page +1;
+end. Р
  ^
  ^
                        БКАРТОЧКА СКЛАДСКОГО УЧЕТА Б
@@ -324,6 +361,7 @@ end.
 
  Итого по операциям:                                                                                  &&&&&&&&&&&&&                      &'&&&&&&&&&&&&&&&&&&&
  Исходящий остаток:                                                                                   &&&&&&&&&&&&& &'&&&&&&&&&&&&&&&&&& &'&&&&&&&&&&&&&&&&&&&
+.}
  Ш
 #FeeSignersLinkInit(KartStor)
 

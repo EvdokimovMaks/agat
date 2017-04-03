@@ -28,6 +28,7 @@ const
   frExportGIF        = 12;
   frExportSimpleText = 13;
   frExportTXT        = 14;
+  frExportXLSX       = 15;
   frExportFP3        = 20;
   frPrintParam       = 21;
   frMailParam        = 22;
@@ -40,6 +41,7 @@ const
   frcPrintReport    = 1003;
   frcDesignReport   = 1004;
   frcPrepareReport  = 1005;
+  frcCreateReport   = 1006;
 
   frDelimeter = WideChar($2605);
   frGroupsDelimeter = ',';
@@ -147,6 +149,16 @@ type
     EmptyLines      : WordBool;
     Frames          : WordBool;
     OEM             : WordBool;
+    ShowDialog      : WordBool;
+    OpenAfterExport : WordBool;
+  end;
+
+  PfrxXLSXExportParam = ^frxXLSXExportParam;
+  frxXLSXExportParam = record
+    Pages           : ShortString;
+    SuppressPageHeadersFooters : WordBool;
+    Picture         : WordBool;
+    DeleteEmptyRows : WordBool;
     ShowDialog      : WordBool;
     OpenAfterExport : WordBool;
   end;

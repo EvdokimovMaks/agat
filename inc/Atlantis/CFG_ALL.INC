@@ -190,6 +190,7 @@ const cfpOnlyOneDoc         = 1222;
 const cfpImgName            = 1223;
 
 const cfpTabbedSheetOrder   = 1224;
+const cfpMenuName           = 1225;
 //=============================================================================
 // Флаги свойства
 //=============================================================================
@@ -253,6 +254,8 @@ const cfcEmbIntConfKeeper   = 36;
 const cfcEICKeeperItem      = 37;
 const cfcMenuSeparator      = 38;
 const cfcInputButton        = 39;
+
+const cfcFormatsGroup       = 40;
 
 //=============================================================================
 // Флаги объектов

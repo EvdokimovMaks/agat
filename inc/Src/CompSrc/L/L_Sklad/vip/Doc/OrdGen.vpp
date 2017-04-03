@@ -22,6 +22,11 @@ var
 , SpOrder_nRec
 , SpOrdercMC
 , _cMC
+, _cSaldTune
+, _cObj
+, _cKau1
+, _cKau2
+, _cKau3
             : comp;
 from
   SklOrder
@@ -70,11 +75,11 @@ where
   AND  coSpOrder         == SpecMtr.coTable
   AND  SpOrder.nRec      == SpecMtr.cSpec
   AND  word(613)         == MtrAct.VidSopr
-  AND  SpecMtr.cSaldTune == MtrAct.cSaldSrc
-  AND  SpecMtr.cObj      == MtrAct.cObjSrc
-  AND  SpecMtr.cKau[1]   == MtrAct.cKauSrc[1]
-  AND  SpecMtr.cKau[2]   == MtrAct.cKauSrc[2]
-  AND  SpecMtr.cKau[3]   == MtrAct.cKauSrc[3]
+  AND  _cSaldTune        == MtrAct.cSaldSrc
+  AND  _cObj             == MtrAct.cObjSrc
+  AND  _cKau1            == MtrAct.cKauSrc[1]
+  AND  _cKau2            == MtrAct.cKauSrc[2]
+  AND  _cKau3            == MtrAct.cKauSrc[3]
   AND  SpOrder.dOrd     <<= MtrAct.dSopr
   AND  MtrAct.nRec       == SpMtrAct.cSopr
   AND  SpOrder.cMC       == SpMtrAct.cMC
@@ -199,9 +204,27 @@ Function Check_wasSpis(_cSklOrder: comp; var wModeSpis : word): boolean;
 
       if (Result)
       {
-        wModeSpis := 1;
+        if ((wModeSpis and 1) = 0)
+          wModeSpis += 1;
         Break;
       }
+    }
+
+    if ( loCheckRashOrd.GetFirst SpecMTR = tsOk )
+    {
+      loCheckRashOrd._cSaldTune := loCheckRashOrd.SpecMtr.cSaldTune;
+      loCheckRashOrd._cObj      := loCheckRashOrd.SpecMtr.cObj;
+      loCheckRashOrd._cKau1     := loCheckRashOrd.SpecMtr.cKau[1];
+      loCheckRashOrd._cKau2     := loCheckRashOrd.SpecMtr.cKau[2];
+      loCheckRashOrd._cKau3     := loCheckRashOrd.SpecMtr.cKau[3];
+    }
+    else
+    {
+      loCheckRashOrd._cSaldTune := 0;
+      loCheckRashOrd._cObj      := 0;
+      loCheckRashOrd._cKau1     := 0;
+      loCheckRashOrd._cKau2     := 0;
+      loCheckRashOrd._cKau3     := 0;
     }
 
     loCheckRashOrd._LOOP MtrAct
@@ -214,15 +237,16 @@ Function Check_wasSpis(_cSklOrder: comp; var wModeSpis : word): boolean;
           Continue;
 
       loCheckRashOrd._LOOP SpMtrAct
-      {
-        Result := True;
-        wModeSpis := wModeSpis + 2;
-      }
+        if ((wModeSpis and 2) = 0)
+          wModeSpis += 2;
 
-      if Result
+      if ((wModeSpis and 2) <> 0)
         Break;
     }
   }
+
+  if ((wModeSpis and 2) <> 0)
+    Result := True;
 
   var bIsSpis, bFirst : boolean;
 
@@ -482,6 +506,16 @@ var
       {
         ShowTune( 'Запрещена модификация приходных ордеров при наличии перемещений из ячеек хранения!'
                 , 'Oper.Box.ModOrdAftPer');
+        Exit;
+      }
+
+    if ((wModeSpis and 2) <> 0)
+      if (wGetTune('Oper.Sklad.EditPrihOrdWithAktCU') = 1)
+      {
+        ShowTune( 'Запрещена модификация приходных ордеров при наличии Актов изменения целевого назначения запасов МТР!'
+                , 'Oper.Sklad.EditPrihOrdWithAktCU');
+        frm1wed.ShowFile('Протокол Актов изменения целевого назначения запасов МТР');
+
         Exit;
       }
 
@@ -2730,8 +2764,6 @@ var
       {
         if ( IsNew ) // создана новая запись
           {
-            SaveMyDsk(word(1), 'PickMC_EdIzm_Okr'); // округлять кол-во в интерфейсе выбора МЦ: 0 - по отп. ед. изм, 1 - по уч. ед. изм.
-
             case wTunePick of
               0:
               {
@@ -2740,7 +2772,7 @@ var
 
                 PushPos(#SpOrder);
 
-                if ( RunInterface('GetSomeMC', if( NOT isDoocen, comp(0), comp(-12345)) ) <> cmCancel )
+                if ( RunInterface('GetSomeMC', if( NOT isDoocen, comp(0), comp(-12345)), 1 ) <> cmCancel )
                   if ( GetFirst Pick where ((Word(7) == Pick.wList)) ordered by index Pick02 = tsOk )
                     {
                       _LOOP Pick where ((Word(7) == Pick.wList)) ordered by index Pick02
@@ -2769,10 +2801,10 @@ var
 
                               fEdIzm.CheckKolDiskretAll( Pick.PickKol, fEdIzm.GetUchOtpEdNRec(KatMC.nRec, 1), KatMC.cEd, True, True );
 
-                              var kol_     : double = SpOrder.kol;
-                              var price_   : double = SpOrder.srPrice;
-                              var vprice_  : double = SpOrder.vPrice;
-                              var cval_    : comp   = SpOrder.cVal;
+                              var kol_    : double = SpOrder.kol;
+                              var price_  : double = SpOrder.srPrice;
+                              var vprice_ : double = SpOrder.vPrice;
+                              var cval_   : comp   = SpOrder.cVal;
 
                               SpOrderDefault;
 
@@ -3067,8 +3099,8 @@ var
                             }
                         }
 
-                        var dkol_ : double;
-                        dkol_ := if(PickKol_Gtsp_ <> 0, PickKol_Gtsp_, SpOrder.kol);
+                        var dkol_ : double = if(PickKol_Gtsp_ <> 0, PickKol_Gtsp_, SpOrder.kol);
+
                         Nal := 0;
 
                         if (Abs(dKol_) >= GetPresision_forKol) // нулевое количество
@@ -3110,8 +3142,8 @@ var
                             SpOrder.kol := PickKol_Gtsp_;
                         }
 
-                       SpOrder.cMC  := TekSaldo.cMC;
-                       SpOrder.cParty  := TekSaldo.cParty;
+                       SpOrder.cMC    := TekSaldo.cMC;
+                       SpOrder.cParty := TekSaldo.cParty;
 
                        GetPriceRazrezOrder(TekSaldo.cMC, SklOrder.cPodr, SklOrder.cMOL, SpOrder.cParty, True);
 
@@ -3136,7 +3168,7 @@ var
                        if (not oModifOrds.Check_wasSpisOrder(SpOrder.cMC, SpOrder.cParty, SklOrder.cPodr, SklOrder.cMol, 0, SkPr, SklOrder.dOrd, 1+ SklOrder.VidOrder))
                          and (CheckAllowMinusKol(SpOrder.kol))
                        {
-                         Counts := Counts + 1;
+                         Counts++;
                          oModifOrds.AnySpOrder_Insert(TypeSpOrder(SpOrder.buffer));
                        }
                        else
@@ -3202,12 +3234,12 @@ var
                          if (loCheckRashOrd.KatMCAr.IsArch = 1)
                          {
                            ShowTune('МЦ "' + loCheckRashOrd.KatMCAr.Name + '" находится в архиве!', 'Sklad.ArchivMC');
-                            Continue;
+                           Continue;
                          }
                      }
 
-                     var dkol_ : double;
-                     dkol_ := if(loCheckRashOrd.PickRep.pickKol <> 0, loCheckRashOrd.PickRep.pickKol, SpOrder.kol);
+                     var dkol_ : double = if(loCheckRashOrd.PickRep.pickKol <> 0, loCheckRashOrd.PickRep.pickKol, SpOrder.kol);
+
                      Nal := 0;
 
                      if (Abs(dKol_) >= GetPresision_forKol) // нулевое количество
@@ -3267,7 +3299,7 @@ var
                      if (not oModifOrds.Check_wasSpisOrder(SpOrder.cMC, SpOrder.cParty, SklOrder.cPodr, SklOrder.cMol, 0, SkPr, SklOrder.dOrd, 1+ SklOrder.VidOrder))
                        and (CheckAllowMinusKol(SpOrder.kol))
                      {
-                       Counts := Counts + 1;
+                       Counts++;
                        oModifOrds.AnySpOrder_Insert(TypeSpOrder(SpOrder.buffer));
                      }
                      else
@@ -3295,17 +3327,17 @@ var
 
                      PushPos(#SpOrder);
                      SpOrderDefault;
-                     SpOrder.cMC  := TekSaldo.cMC;
-                     SpOrder.cParty  := TekSaldo.cParty;
+                     SpOrder.cMC    := TekSaldo.cMC;
+                     SpOrder.cParty := TekSaldo.cParty;
                       if loCheckRashOrd.GetFirst SaldoObj where (( PickRep.cUserDeskRep == SaldoObj.nRec )) = tsOk
                         oMTRFun.InsSpecMTR_Kit(coSpOrder, SpOrder.nRec, loCheckRashOrd.SaldoObj.cKitKau);
 
                      GetPriceRazrezOrder(TekSaldo.cMC, TekSaldo.cPodr, TekSaldo.cMOL, TekSaldo.cParty, True);
 
                      if (isDoocen)
-                       SpOrder.Kol   := 0;
+                       SpOrder.Kol := 0;
                      else
-                       SpOrder.Kol   := loCheckRashOrd.PickRep.PickKol;
+                       SpOrder.Kol := loCheckRashOrd.PickRep.PickKol;
 
                      if (IsLifoFifoNU)
                        SpOrder.OstatokN := SpOrder.Kol;
@@ -3328,7 +3360,7 @@ var
                       if (not oModifOrds.Check_wasSpisOrder(SpOrder.cMC, SpOrder.cParty, SklOrder.cPodr, SklOrder.cMol, 0, SkPr, SklOrder.dOrd, 1+ SklOrder.VidOrder))
                         and (CheckAllowMinusKol(SpOrder.kol))
                       {
-                        Counts := Counts + 1;
+                        Counts++;
                         oModifOrds.AnySpOrder_Insert(TypeSpOrder(SpOrder.buffer));
                       }
                       else
@@ -3344,12 +3376,11 @@ var
             if ( SklOrder.VidOrder = 0 ) and ( wTunePick = 0 )//приход
               StopVisual('', 0);
 
-            Counts := Counts - 1;   // - 1 стандартная вставка убраная
-            SaveMyDsk(word(0), 'PickMC_EdIzm_Okr'); // округлять кол-во в интерфейсе выбора МЦ: 0 - по отп. ед. изм, 1 - по уч. ед. изм.
+            Counts--;   // - 1 стандартная вставка убраная
           }
         else // редактируется ранее существовавшая
           {
-            var cMCtmp: comp;  cMCtmp := SpOrder.cMC;
+            var cMCtmp: comp = SpOrder.cMC;
               case wTunePick of
                 0:
                 {

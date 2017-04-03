@@ -55,6 +55,7 @@
   extBerlio   =  8;
   extRDA      =  9;
   extTusson2  = 10;
+  extBerlio1  = 11;
 
   wayPRICE    = 0;
   wayMOL      = 1;
@@ -65,35 +66,37 @@
 
 // Nazgul для передачи параметров в интерфейс GetDocs
 
-vcGetDog_DesGr         =         1;
-vcGetDog_Descr         =         2;
-vcGetDog_Date          =         4;
-vcGetDog_DateSrok      =         8;
-vcGetDog_MyOrg         =        16;
-vcGetDog_Kontr         =        32;
-vcGetDog_GruzFrom      =        64;
-vcGetDog_GruzTo        =       128;
-vcGetDog_Plat          =       256;
-vcGetDog_Pol           =       512;
-vcGetDog_Valut         =      1024;
-vcGetDog_Progr         =      2048;
-vcGetDog_VidDoc        =      4096;
-vcGetDog_Status        =      8192;
-vcGetDog_KatStatus     =     16384;
-vcGetDog_Dogovor       =     32768;
-vcGetDog_AppDog        =     65536;
-vcGetDog_CalPlan       =    131072;
-vcGetDog_ExistKP       =    262144;
-vcGetDog_isSelect      =    524288;
-vcGetDog_NoFinKP       =   1048576;
-vcGetDog_NoMCKP        =   2097152;
-vcGetDog_Zamena        =   4194304;
-vcGetDog_OtvPodr       =   8388608;
-vcGetDog_KatStatusPKP  =  16777216;
-vcGetDog_NoCommiss     =  33554432;
-vcGetDog_KatStatusSogl =  67108864;
-vcGetDog_CurPodr       = 134217728;
-vcGetDog_Theme         = 268435456;
+vcGetDog_DesGr         =          1;
+vcGetDog_Descr         =          2;
+vcGetDog_Date          =          4;
+vcGetDog_DateSrok      =          8;
+vcGetDog_MyOrg         =         16;
+vcGetDog_Kontr         =         32;
+vcGetDog_GruzFrom      =         64;
+vcGetDog_GruzTo        =        128;
+vcGetDog_Plat          =        256;
+vcGetDog_Pol           =        512;
+vcGetDog_Valut         =       1024;
+vcGetDog_Progr         =       2048;
+vcGetDog_VidDoc        =       4096;
+vcGetDog_Status        =       8192;
+vcGetDog_KatStatus     =      16384;
+vcGetDog_Dogovor       =      32768;
+vcGetDog_AppDog        =      65536;
+vcGetDog_CalPlan       =     131072;
+vcGetDog_ExistKP       =     262144;
+vcGetDog_isSelect      =     524288;
+vcGetDog_NoFinKP       =    1048576;
+vcGetDog_NoMCKP        =    2097152;
+vcGetDog_Zamena        =    4194304;
+vcGetDog_OtvPodr       =    8388608;
+vcGetDog_KatStatusPKP  =   16777216;
+vcGetDog_NoCommiss     =   33554432;
+vcGetDog_KatStatusSogl =   67108864;
+vcGetDog_CurPodr       =  134217728;
+vcGetDog_Theme         =  268435456;
+vcGetDog_CO            =  536870912;
+vcGetDog_GrDogs        = 1073741824;
 
 koShortName            =  1;
 koFullName             =  2;

@@ -367,6 +367,10 @@ const
     pkSystemID            = 'SYSTEMID';
   isWorkProtocol          = 'WORKPROTOCOL';
   isTimeServer            = 'TimeServer';
+  isMQBroker              = 'MQBroker';
+  isMQserverUserQueueLength = 'MQserverUserQueueLength';
+  isMQserverAllQueuesLength = 'MQserverAllQueuesLength';
+  isMQserverUserLiveTime    = 'MQserverUserLiveTime';
 
 // список параметров секции csEnvironment
   isSourcePath            = 'SourceFilesDirectory';
@@ -479,6 +483,7 @@ const
   isFROneReportMode       = 'FROneReportMode';
   isFROneReportExtension  = 'FROneReportExtension';
   isFROpenIsSilence       = 'FROpenIsSilence';
+  isFRAutoPageNumbers     = 'FRAutoPageNumbers';
 
 // список параметров секции csDebug
   isLogErrors             = 'LogErrors';
@@ -541,6 +546,8 @@ const
   isMaxCursorCount = 'OpenCursorsLimit';
   isPeakCursorsCountReport = 'PeakCursorsCountReport';
   isSequentialAlterTableLimit = 'SequentialAlterTableLimit';
+  isEnforceStandardPlan = 'EnforceStandardPlan';
+  isUseTop = 'UseTop';
 
 // Список параметров секции csInternal
 // Эти параметры регистрируются только в процессе работы программы.
@@ -619,6 +626,7 @@ const
   isTreeNoLines           = 'TreeNoLines';
   isColorerCatalog        = 'ColorerCatalog';
   isCopyPasteKeyMask      = 'CopyPasteKeyMask';
+  isNoFilterFindFile      = 'NoFilterFindFile';
 
 // список параметров секции csKey
   isSharedPath            = 'SharedPath';

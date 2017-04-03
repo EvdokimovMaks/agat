@@ -124,6 +124,7 @@ end.
  Название_группы
  ed
  EDUCH
+ edIzmAbbr
  KOEF:double
  ed_OKEI: string
  ed_OKEIOtp: string
@@ -374,7 +375,7 @@ end.
  DEI2_Kod ^ DEI2_Name ^ DEI2_Kol ^
 
  Ресурс_хранения ^ Код_группы ^ Название группы ^
- Единица измерения ^ EDuch ^ koef ^ ED_OKEI ^ ED_OKEIOtp ^ Партия ^
+ Единица измерения ^ EDuch ^ edIzmAbbr ^ koef ^  ED_OKEI ^ ED_OKEIOtp ^ Партия ^
  Количество по ДО ^
  Количество ^ Количество грузовых мест ^ Количество в однм месте ^
  Цена в нац. ^ Цена в вал. ^ ^

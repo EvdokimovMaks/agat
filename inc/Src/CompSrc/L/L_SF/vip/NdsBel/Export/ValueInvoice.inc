@@ -62,23 +62,28 @@ const
   ds_IMPORT_VAT        = 'IMPORT_VAT';
 
   // typeDocument
-  td_No         =   0; // не указан
-  td_Default    =   1; // по умолчанию
-  td_Other      = 601; // Другое
-  td_TN2        = 602; // ТН-2
-  td_TTN1       = 603; // ТТН-1
-  td_Dogovor    = 604; // договор
-  td_Kontrakt   = 605; // Контракт
-  td_Akt        = 606; // акт
-  td_CMRNakl    = 607; // CMR-накладная
-  td_SF         = 608; // Счет-фактура
-  td_Invoice    = 609; // invoice (счет)
-  td_Avizo      = 610; // авизо
-  td_BuhS       = 611; // бухгалтерская справка
-  td_AVR        = 612; // акт выполненных работ
-  td_Konosament = 613; // Коносамент
-  td_eTTN1      = 614; // Электронная ТТН-1
-  td_eTN2       = 615; // Электронная ТН-2
+  td_No            =   0; // не указан
+  td_Default       =   1; // по умолчанию
+  td_SeriaNumBlank =   2; // по серии и номеру бланка
+  td_BlankCode     =   3; // по коду бланка
+  td_Other         = 601; // Другое
+  td_TN2           = 602; // ТН-2
+  td_TTN1          = 603; // ТТН-1
+  td_Dogovor       = 604; // договор
+  td_Kontrakt      = 605; // Контракт
+  td_Akt           = 606; // акт
+  td_CMRNakl       = 607; // CMR-накладная
+  td_SF            = 608; // Счет-фактура
+  td_Invoice       = 609; // invoice (счет)
+  td_Avizo         = 610; // авизо
+  td_BuhS          = 611; // бухгалтерская справка
+  td_AVR           = 612; // акт выполненных работ
+  td_Konosament    = 613; // Коносамент
+  td_eTTN1         = 614; // Электронная ТТН-1
+  td_eTN2          = 615; // Электронная ТН-2
+
+  // blankCode
+  bc_SeriaNumBlank = 0;   // по серии и номеру бланка
 end;
 
 #endif // _ValueInvoice_inc_

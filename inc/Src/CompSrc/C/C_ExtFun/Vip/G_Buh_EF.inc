@@ -13,6 +13,7 @@ procedure BuhErrorCloseAndShow                           ; external 'G_Buh.dll';
 procedure BuhErrorCurrentShow                            ; external 'G_Buh.dll';
 function  BuhErrorCurrentStatus                 : Boolean; external 'G_Buh.dll';
 procedure BuhErrorDelayShow     (Boolean)                ; external 'G_Buh.dll';
+procedure BuhErrorDisable       (Boolean)                ; external 'G_Buh.dll';
 //------------------------------------------------------------------------------
 // KoefRash.pas
 function KoefRasch

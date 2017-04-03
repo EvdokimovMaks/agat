@@ -298,6 +298,11 @@ function GetReportingPeriodBeginning: date; external 'G_ZARPL.DLL';
 function AccountingPeriodRealBeginning: date; external 'G_ZARPL.DLL';
 Procedure InitarKlVidUd; external 'G_ZARPL.DLL';
 function GetVidUdRound(word, var word): boolean; external 'G_ZARPL.DLL';
+#doc
+Алгоритм предложен разработчиками Atlantis
+взят из \Pascal\Gal\Common\Rounder.pas. Настройка исключена
+#end
+function RoundDouble(double, word): double; external 'G_ZARPL.DLL';
 
 function OcrugNaRuk(Double, Double): Double; external 'G_ZARPL.DLL';
 function OcrugVBS(Double, Double): Double; external 'G_ZARPL.DLL';
@@ -409,6 +414,7 @@ function OtpKalendFlag(Longint): word; external 'G_SUMDIVIDE.DLL';
 function OtpSredDay(Longint): double; external 'G_SUMDIVIDE.DLL';
 function OtpCaseByte(Longint): word; external 'G_SUMDIVIDE.DLL';
 function SPZVi(var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, comp, Word, word, date, Word): boolean; external 'G_SUMDIVIDE.DLL';
+function SPZVi_N(var anytype, var anytype, var anytype, var anytype, var anytype, var anytype, comp, Word, word, date, Word): boolean; external 'G_SUMDIVIDE.DLL';
 function UpdateMask(Integer, Integer, String, String, String, String, String, String, String, String, String, String, String, String): boolean; external 'G_SUMDIVIDE.DLL';
 // аналог UpdateMask
 // для госслужащих РФ для месяца ухода в отпуск нужно приписать год ухода в отпуск
@@ -646,3 +652,8 @@ function Payroll_Init(_param: longint // #docl Параметры расчета (константы cgPa
 function Payroll_One(_ls: comp // #docl Ссылка на лицевой счет (LSchet.NRec)
                     ): word    // #docl Код ошибки (0 - успешно)
                   ; external 'G_Zarpl.dll#Payroll_One';
+
+#doc
+Получение месячной тарифной ставки
+#end
+function TarMTS(word, word, word, date): double; external 'G_ZARPL.DLL';

@@ -56,6 +56,7 @@
   WorkingHolidays HolidayHours PlannedWorkingHolidays PlannedHolidayHours
   WorkingWeekends WeekendHours PlannedWorkingWeekends PlannedWeekendHours
   OverworkDays OverworkHours PlannedOverworkDays PlannedOverworkHours
+  LschetNrec PersonsNrec KatpodrNrec
 .endfields
 ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
@@ -67,6 +68,7 @@
 ^ ^ ^ ^
 ^ ^ ^ ^
 ^ ^ ^ ^
+^ ^ ^
 .{ AbsenceData checkenter
 .fields
   AbsenceData: integer

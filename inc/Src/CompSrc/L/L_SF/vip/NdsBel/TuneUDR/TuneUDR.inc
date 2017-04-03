@@ -11,9 +11,10 @@ const
   so_TuneImport = 2; // настройка импорта
 
   // ResWord
-  ty_Const = 0;  // Константа
-  ty_Atrib = 1;  // Внешний атрибут
-  ty_Field = 2;  // Поле таблицы
+  ty_Const      = 0; // Константа
+  ty_Atrib      = 1; // Внешний атрибут
+  ty_Field      = 2; // Поле таблицы
+  ty_AutoDetect = 3; // Автоматическое определение поля по другим полям
 
   // Dogovor
   fd_Dogovor_dBeg         =  0; // Дата начала действия договора (Dogovor.dBeg)
@@ -69,6 +70,15 @@ const
   fd_NalAkt_dOpr          = 70; // Дата оприходования/списания (KatSopr.dOpr)
   fd_NalAkt_SrokRes       = 71; // Срок, до которого установлен резерв (KatSopr.SrokRes)
   fd_NalAkt_UserField     = 72; // Поле пользователя (KatSopr.UserField)
+  // PlPor
+  fd_PlPor_NoDOK          = 80; // Номер документа
+  fd_PlPor_DatVip         = 81; // Дата выписки докум.
+  fd_PlPor_DatOts         = 82; // Дата отсылки в банк
+  fd_PlPor_DatOB          = 83; // Дата оборота фактическая
+  fd_PlPor_NContract      = 84; // Номер договора/контракта
+  fd_PlPor_DContract      = 85; // Дата договора/контракта
+  fd_PlPor_NPassport      = 86; // Номер паспорта сделки
+  fd_PlPor_DPassport      = 87; // Дата паспорта сделки
 
   // Дополнительные таблицы (синонимы)
   taNalAkt = 1000;
