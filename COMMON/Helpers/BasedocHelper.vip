@@ -1,5 +1,6 @@
 #include BasedocHelper.vih
 #include Query.vih
+#include AtlProtocol.vih
 
 #component "AGAT"
 
@@ -23,7 +24,7 @@ var
 
 create view
 as select *
-from basedoc;
+from basedoc, katnotes, statlog;
 
 constructor Init;
 {
@@ -115,6 +116,99 @@ function IBasedocHelper.GetDeferredDaysCount(aBasedocNrec: comp): word;
       }
     }
   }
+
+}
+
+function IBasedocHelper.SetStatus(aBasedocNrec: comp; aKatnotesNrec: comp; aCreateHistory: boolean = false; aComment: string = ''): boolean;
+{
+
+  result := false;
+
+  if getfirst basedoc where ((aBasedocNrec == basedoc.nrec)) = tsOk
+  {
+
+    var wNewStatus: word = 0;
+    if getfirst katnotes where ((aKatnotesNrec == katnotes.nrec)) = tsOk
+      wNewStatus := katnotes.status;
+    else
+      wNewStatus := 0;
+
+    var oldKatnotesNrec: comp;
+    oldKatnotesNrec := basedoc.cnote;
+
+    var wOldStatus: word;
+    wOldStatus := basedoc.status;
+
+    var rslt: integer = 0;
+    basedoc.cnote := aKatnotesNrec;
+    basedoc.status := wNewStatus;
+    rslt := update current basedoc;
+
+    if rslt = tsOk and aCreateHistory
+    {
+      clearbuffer(#statlog);
+      statlog.cdoc      := basedoc.nrec;
+      statlog.cnewnote  := aKatnotesNrec;
+      statlog.coldnote  := oldKatnotesNrec;
+      statlog.comment   := aComment;
+      statlog.descr     := sGetTune('USER.DESCR');
+      statlog.desgr     := sGetTune('USER.DESGR');
+      statlog.doctype   := 40;
+      statlog.doper     := cur_date;
+      statlog.newstatus := wNewStatus;
+      statlog.oldstatus := wOldStatus;
+      statlog.timeoper  := cur_time;
+      insert current statlog;
+    }
+
+    result := rslt = tsOk;
+
+  }
+
+}
+
+function IBasedocHelper.SetStatusValidate(aBasedocBuffer: type$basedoc; aKatnotesNrec: comp; protocol: IAtlProtocol = nullref): boolean;
+{
+
+  result := true;
+
+  //Если пользователь - админ - ничего не проверяем
+  if pr_CurUserAdmin exit;
+
+  //инициализируем протокол, если он не передан в качестве параметра
+  if protocol = nullref
+    protocol := IAtlProtocol(new(AtlProtocol));
+
+  //Проверяем корректность ссылки на статус
+  if (getfirst katnotes where ((aKatnotesNrec == katnotes.nrec)) != tsOk) and aKatnotesNrec != 0
+  {
+    result := false;
+    protocol.LogLine(APE_ERROR, 'Установка несуществующего статуса');
+  }
+
+  case aKatnotesNrec of
+
+    KATNOTES_NREC_BASEDOC_REESTR:
+    {
+
+      var vizas: IBasedocVizas;
+      vizas := GetBasedocVizas(aBasedocBuffer.nrec);
+
+      if not (vizas.BUH.Soglasovana and vizas.DIR.Soglasovana and vizas.KAZ.Soglasovana)
+        result := false;
+
+      if not vizas.BUH.Soglasovana
+        protocol.LogLine(APE_ERROR, 'Запрещено включать в реестр счет без визы бухгалтерии');
+
+      if not vizas.DIR.Soglasovana
+        protocol.LogLine(APE_ERROR, 'Запрещено включать в реестр счет без визы дирекции');
+
+      if not vizas.KAZ.Soglasovana
+        protocol.LogLine(APE_ERROR, 'Запрещено включать в реестр счет без визы казначейства');
+
+    }
+
+  end;
 
 }
 

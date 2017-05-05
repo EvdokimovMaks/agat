@@ -7,6 +7,8 @@
 #include BasedocReeReport.vih
 #include UserReport.vih
 #include XLREPORT.vih
+#include BasedocHelper.vih
+#include AtlProtocol.vih
 
 #component "AGAT"
 
@@ -53,9 +55,11 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     SelectVizaNrec: comp;
 
     _contractIDHelper: ContractIDHelper;
+    _basedocHelper: BasedocHelper;
     _hierReportRsZakazRejim: BasedocReeReport_Hier_Rs_Zakaz_Rejim;
     _hierReportRs: BasedocReeReport_Hier_Rs;
     _qOpl: IQuery;
+    _setNewReestrNumber: string;
     mrkMain: longint;
     cfltrStatus: comp;
     sfltrStatus: string;
@@ -85,7 +89,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     sReestr: string;
     cMainBD: comp;
   as select *
-  from katnotes, buhschet, tbd, tsection, tmpfltr,
+  from katnotes, buhschet, tbd, tsection, tmpfltr, basedoc,
        tbd brbd (i02), basedoc brbasedoc, katorg brorg, katbank brbank, dogovor brdog,
        katnotes brnote, klval brval, stepdoc brsd, basefin brbf, basefin brbf1,
        klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin
@@ -240,6 +244,26 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     }
     end; //handleevent
   end; //wSelectViza
+
+  window wSetNewReestrNumber 'Номер реестра' EscClose, DoAccept;
+  show (,,39, 5);
+    screen scSetNewReestrNumber;
+    fields
+      _setNewReestrNumber: noprotect;
+    buttons
+      cmSetNewReestrNumber, default;
+      cmCancel;
+<<
+
+`Номер реестра` .@@@@@@@@@@@@@@@@@@@@
+
+          <. Продолжить .> <. Отмена .>
+>>
+    end;
+    handleevent
+      cmSetNewReestrNumber: putcommand(cmDefault);
+    end;
+  end;
 
 //#endregion
 
@@ -2017,6 +2041,52 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
         ProcessText(LogFileName, vfNewTitle or vfEscable, 'Протокол формирования платёжных поручений из реестра ДО');
       }
     }
+    cmValue1: //Включить в реестр
+    {
+
+      if runwindowmodal(wSetNewReestrNumber) = cmDefault
+      {
+
+        if trim(_setNewReestrNumber) = '' exit;
+
+        var log: IAtlProtocol;
+        log := IAtlProtocol(new(AtlProtocol));
+        log.AutoFlush := true;
+        log.Visible := true;
+        log.LogStartVisual('Включение в реестр', 0);
+
+        pushpos(#brbd);
+
+        _loop brbd where foundmarker(mrkMain, brbd.nrec)
+        {
+
+          if getfirst basedoc where ((brbd.nrec == basedoc.nrec)) = tsOk
+          {
+
+            log.LogMessage(APE_MESSAGE, 'ДО №' + basedoc.nodoc + ' от ' + basedoc.ddoc);
+
+            if _basedocHelper.SetStatusValidate(type$basedoc(basedoc.buffer), 000100000000007Eh, log)
+              if _basedocHelper.SetStatus(basedoc.nrec, 000100000000007Eh, true, _setNewReestrNumber)
+              {
+                update current brbd set brbd.cnote := 000100000000007Eh, brbd.reestr :=_setNewReestrNumber;
+                log.LogLine(APE_MESSAGE, 'Успешно');
+              }
+
+            log.LogCommit;
+
+          }
+
+        }
+
+        log.LogStopVisual;
+        log.Refresh;
+
+        poppos(#brbd);
+        rereadrecord(#brbd);
+
+      }
+
+    }
   end;
 end.
 
@@ -2060,6 +2130,7 @@ mnuAGAT_Basedoc_Ree Menu
 - 'Печать с группировкой по счетам', cmPlansNo, 'Печать реестра с группировкой по счетам', , 'Alt+P', kbAltP, sci1Esc;
 - 'Печать с группировкой по счетам, заказам, режимам исп.', cmImp, 'Печать реестра с группировкой по счетам, заказам, режимам использования счетов', , '', , sci1Esc;
 - 'Сформировать платежные поручения', cmNal, 'Сформировать платежные поручения', , 'Alt+F', kbAltF, sci1Esc;
+- 'Включить в реестр', cmValue1, 'Установить статус "в реестре" у помеченных ДО';
 - 'Иерархия/список', cmAccording, 'Иерархия/список', , 'Alt+S', kbAltS, sci1Esc;
 - 'Показать/скрыть фильтры', cmFilterSave, 'Показать/скрыть фильтры', , 'Alt+B', kbAltB, sci1Esc;
 - 'Показать/скрыть карточку ДО', cmCalcUslParam, 'Показать/скрыть карточку ДО', ,'Alt+W', kbAltW, sci1Esc;

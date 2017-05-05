@@ -35,4 +35,13 @@ const
 
   //целевой учет
   SALDTUNE_NREC_DEFAULT : comp = 0001000000000001h; //Настройка целевого учета по умолчанию
+
+  //статусы ДО
+  KATNOTES_NREC_BASEDOC_OFORML : comp = 40009D44C1790C6Bh; //оформляемый
+  KATNOTES_NREC_BASEDOC_ISPOLN : comp = 400056A46A9AD669h; //исполняемый
+  KATNOTES_NREC_BASEDOC_OPLACH : comp = 0001000000000077h; //оплачен
+  KATNOTES_NREC_BASEDOC_REESTR : comp = 000100000000007Eh; //в реестре
+  KATNOTES_NREC_BASEDOC_OTLOJ  : comp = 0001000000000150h; //Отложен
+  KATNOTES_NREC_BASEDOC_ZAKR   : comp = 4000485AB57C8F9Dh; //закрытый
+
 end;
