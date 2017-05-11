@@ -1,0 +1,248 @@
+#include SetSpstepAttributesBatch.vih
+#include GetKau.vih
+#include AtlProtocol.vih
+#include ExtAttr.vih
+
+#component "AGAT"
+
+interface SetSpstepAttributesBatch;
+
+var
+  _flags        : byte;
+  _zakVibNrec   : comp;
+  _rsSpisNrec   : comp;
+  _rejIspNrec   : comp;
+  _overwriteFlag: boolean;
+  _getkau: GetKau;
+  _ea: iExtAttr;
+
+function GetFldValue(aNrec: comp; aKodgrkau: word; aFlagSet: boolean): string; forward;
+
+create view
+var
+  _currentBasedocNrec: comp;
+
+as select GetFldValue(_zakVibNrec, 40   , ((_flags and 1) > 0)) (fieldname=ZakVibFld),
+          GetFldValue(_rsSpisNrec, 10545, ((_flags and 2) > 0)) (fieldname=RsSpisFld),
+          GetFldValue(_rejIspNrec, 10695, ((_flags and 4) > 0)) (fieldname=RejIspFld)
+
+from basedoc, stepdoc, spstep
+where ((
+  _currentBasedocNrec == basedoc.nrec and
+  _currentBasedocNrec == stepdoc.cbasedoc and
+  stepdoc.nrec        == spstep.cstepdoc
+))
+;
+
+window wConfig 'Установка атрибутов строк ДО' doaccept, escclose;
+show(,,60,9);
+
+screen sc1;
+fields
+  _flags   : noprotect;
+  ZakVibFld: protect, pickbutton;
+  RsSpisFld: protect, pickbutton;
+  RejIspFld: protect, pickbutton;
+  _overwriteFlag: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+ [.] Заказ выбытия`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ [.] Р/счет списания` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ [.] Реж.исп. счета`  .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ [:] Заменять заполненные атрибуты`
+
+ <. Продолжить .> <. Отмена .>
+>>
+end;
+
+procedure PickKau(aBit: byte; aKodgrKau: word; var aNrec: comp);
+{
+  var c: comp;
+  c := aNrec;
+  if _getkau.GetCodeKau(1, aKodgrKau, c) > 0
+  {
+    aNrec := c;
+    _flags := _flags or word(2 ** aBit);
+  }
+}
+
+handleevent
+
+cmDoOk: putcommand(cmDefault);
+
+cmPick:
+{
+
+  case curfield of
+    #ZakVibFld: PickKau(0, 40   , _zakVibNrec);
+    #RsSpisFld: PickKau(1, 10545, _rsSpisNrec);
+    #RejIspFld: PickKau(2, 10695, _rejIspNrec);
+  end;
+  rereadrecord;
+
+}
+
+end; //handleevent window
+
+end; //window
+
+function GetFldValue(aNrec: comp; aKodgrkau: word; aFlagSet: boolean): string;
+{
+  if aNrec = 0
+    result := if(aFlagSet, 'Очистить', 'Не устанавливать');
+  else
+    result := if(getanykau(1, aKodgrkau, aNrec), givenanname(1), '');
+}
+
+handleevent
+
+cmDelOnProtect:
+{
+
+  case curfield of
+    #ZakVibFld: _zakVibNrec := 0;
+    #RsSpisFld: _rsSpisNrec := 0;
+    #RejIspFld: _rejIspNrec := 0;
+  end;
+  rereadrecord;
+
+}
+
+cmCheckField:
+{
+
+  case curfield of
+    #_flags: rereadrecord;
+  end;
+
+}
+
+end; //handleevent
+
+procedure SetSpstepExtattr(attrnamNrec: comp; valueNrec: comp; valueName: string; aProtocol: IAtlProtocol; aCaption: string);
+{
+
+  var isModifying: boolean;
+  isModifying := _overwriteFlag;
+
+  if _overwriteFlag = false
+  {
+    if _ea.coGetAttrId(1104, spstep.nrec, attrnamNrec) = 0
+      isModifying := true;
+    else
+      aProtocol.LogLine(APE_WARNING, 'Строка ' + spstep.npp + ' ' + aCaption + '. Флаг "Заменять заполненный атрибут" не установлен, значение атрибута заполнено. Строка пропущена.');
+  }
+
+  if isModifying
+  {
+
+    if valueNrec = 0
+    {
+      if _ea.DeleteValueID(1104, spstep.nrec, attrnamNrec) = tsOk
+        aProtocol.LogLine(APE_MESSAGE, 'Строка ' + spstep.npp + ' ' + aCaption + '. Значение очищено.');
+    }
+    else
+    {
+      if _ea.coSetAttrID(1104, spstep.nrec, attrnamNrec, valueNrec, valueName)
+        aProtocol.LogLine(APE_MESSAGE, 'Строка ' + spstep.npp + ' ' + aCaption + '. Значение установлено.');
+      else
+        aProtocol.LogLine(APE_ERROR, 'Строка ' + spstep.npp + ' ' + aCaption + '. Ошибка при установке значения.');
+    }
+
+  }
+
+}
+
+//#region vipinterface public methods
+
+function ShowConfig: word;
+{
+
+  result := runwindowmodal(wConfig);
+
+}
+
+procedure SaveToDSK(aPrefix: string = 'SetSpstepAttributesBatch');
+{
+
+  savemydsk(_flags        , aPrefix + '_flags');
+  savemydsk(_zakVibNrec   , aPrefix + '_zakVibNrec');
+  savemydsk(_rsSpisNrec   , aPrefix + '_rsSpisNrec');
+  savemydsk(_zakVibNrec   , aPrefix + '_zakVibNrec');
+  savemydsk(_overwriteFlag, aPrefix + '_overwriteFlag')
+
+}
+
+procedure LoadFromDSK(aPrefix: string = 'SetSpstepAttributesBatch');
+{
+
+  if not readmydsk(_zakVibNrec   , aPrefix + '_zakVibNrec'   , false) _zakVibNrec    := 0;
+  if not readmydsk(_rsSpisNrec   , aPrefix + '_rsSpisNrec'   , false) _rsSpisNrec    := 0;
+  if not readmydsk(_zakVibNrec   , aPrefix + '_zakVibNrec'   , false) _zakVibNrec    := 0;
+  if not readmydsk(_flags        , aPrefix + '_flags'        , false) _flags         := 0;
+  if not readmydsk(_overwriteFlag, aPrefix + '_overwriteFlag', false) _overwriteFlag := true;
+
+}
+
+procedure SetSpstepAttributes(aBasedocMarker: longint; aProtocol: IAtlProtocol);
+{
+
+  if aProtocol = nullref
+    aProtocol := IAtlProtocol(new(AtlProtocol));
+
+  var i, cnt: longint = 0;
+  cnt := GetMarkerCount(aBasedocMarker);
+
+  for(i := 0; i < cnt; i++)
+  {
+
+    if not getmarker(aBasedocMarker, i, _currentBasedocNrec)
+      continue;
+
+    if getfirst fastfirstrow basedoc = tsOk
+    {
+
+      aProtocol.LogMessage(APE_MESSAGE, 'ДО №' + basedoc.nodoc + ' от ' + basedoc.ddoc);
+
+      if basedoc.cnote = KATNOTES_NREC_BASEDOC_OPLACH
+      {
+        aProtocol.LogLine(APE_WARNING, 'ДО в статусе "Оплачено". ДО пропущено');
+      }
+      else
+      {
+
+        _loop stepdoc
+        {
+
+          _loop spstep
+          {
+
+            var rslt: boolean = true;
+
+            if (_flags and 1) > 0 SetSpstepExtattr(ATTRNAM_NREC_SPSTEP_ZAKAZ_VIBITIYA, _zakVibNrec, ZakVibFld, aProtocol, 'Заказ выбытия');
+
+            if (_flags and 2) > 0 SetSpstepExtattr(ATTRNAM_NREC_SPSTEP_RS_SPISANIYA, _rsSpisNrec, RsSpisFld, aProtocol, 'Р/с списания');
+
+            if (_flags and 4) > 0 SetSpstepExtattr(ATTRNAM_NREC_SPSTEP_REJIM_ISPOLZOVANIYA_SCHETA, _rejIspNrec, RejIspFld, aProtocol, 'Реж.исп. счета');
+
+          } //spstep
+
+        } //stepdoc
+
+      }
+
+      aProtocol.LogCommit;
+
+    } //basedoc
+
+  }
+
+}
+
+//#endregion
+
+end.
