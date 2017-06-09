@@ -1,42 +1,56 @@
-#include Query.vih
+#include BasedocHelper.vih
 #component "AGAT"
-
-sql query qV =
-  select vk.vcomp as VizaKaz,
-         vb.vcomp as VizaBuh,
-         vd.vcomp as VizaDir
-  from basedoc bd
-  left join attrval vk on vk.cattrnam = #comp(0001000000000087h) and vk.crec = bd.nrec
-  left join attrval vb on vb.cattrnam = #comp(0001000000000089h) and vb.crec = bd.nrec
-  left join attrval vd on vd.cattrnam = #comp(000100000000008Ah) and vd.crec = bd.nrec
-  where bd.nrec = :bdnrec
-;
 
 handler with replace Agat_BeforeUpdateBasedoc on trigger Basedoc before update
 action
 {
   result := true;
-  var buf: record as table Basedoc
+
+  //буфер записи ДО новый, который будет записан
+  var buf: record as table Basedoc;
   GetTableBuffer(buf);
-  var q: IQuery;
-  var rs: IResultSet;
-  q := queryManager.createQuery(qV);
-  q.setParam('bdnrec', buf.nrec);
-  rs := q.getresultset;
-  if rs = nullref exit;
-  rs.getFirst;
-  if buf.cnote = 000100000000007Eh    //в реестре
+
+  //хелпер для работы с ДО
+  var helper: BasedocHelper;
+
+  //буфер записи ДО старый, до изменений
+  var oldbuf: type$basedoc;
+  oldbuf := helper.GetBuffer(buf.nrec);
+
+
+  //Если статус ДО "В реестре"
+  if buf.cnote = KATNOTES_NREC_BASEDOC_REESTR
   {
-    var vk, vb, vd: comp;
-    vk := rs.row.val('VizaKaz');
-    vb := rs.row.val('VizaBuh');
-    vd := rs.row.val('VizaDir');
-    //message(vk+' '+vb+' '+vd+' ');
-    if (vk != comp(00010000000001CEh) or vb != comp(00010000000001CEh) or vd != comp(00010000000001CEh)) //если хотябы одна из виз несогласована
-//    if vk = comp(0) or vb = comp(0) or vd = comp(0)
-//    if message('Вернуть ошибку? ;)', yesNo) = cmYes
+
+    //Получаем визы ДО
+    var vizas: IBasedocVizas;
+    vizas := helper.GetBasedocVizas(buf.nrec);
+
+    //Если хотя бы одна из виз не согласована - отменяем транзакцию
+    if (vizas.BUH.ValueNrec != VIZA_SOGLASOVANO) or
+       (vizas.KAZ.ValueNrec != VIZA_SOGLASOVANO) or
+       (vizas.DIR.ValueNrec != VIZA_SOGLASOVANO)
+    {
       result := false;
+    }
+
   }
+
+
+  //Если статус Исполняемый и изменен Договор/ДС/ПКП - меняем статус на Оформляемый
+  if oldbuf.status = 2 and
+     (oldbuf.cdogovor != buf.cdogovor or
+      oldbuf.cappdogovor != buf.cappdogovor or
+      oldbuf.ccalplan != buf.ccalplan)
+  {
+
+    buf.status := 1;
+    buf.cnote := KATNOTES_NREC_BASEDOC_OFORML;
+    result := SetTableBuffer(buf) = tsOk;
+    message('Счет переведен в статус "Оформляемый"');
+
+  }
+
 }
 rollback
 {
