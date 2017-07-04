@@ -1,0 +1,265 @@
+#component "M_TPP"
+
+/*
+Перекрытие интерфейса редактирования позиций ПС.
+Расширение обработчика установки доп. аналитик позиций ПС:
+аналитика устанавливается для всех помеченных позиций с учетом подчиненных ПС (разузлование)
+*/
+alter interface INPRSED;
+
+create view vSetDopAn
+as select * from ps_lines;
+
+create view vPslines
+var
+  _hdrpsNrec: comp;
+as select *
+from ps_lines
+where ((
+  _hdrpsNrec == ps_lines.cHdr
+));
+
+/*
+Добавляет в маркер pslinesMarker позиции ПС hdrpsNrec с учетом разузлования.
+Т.е. если позиция ПС является ссылкой на подчиненную ПС, то в маркер
+будут добавлены позиции подчиненной ПС.
+*/
+procedure AddPslinesToMarker(hdrpsNrec: comp; pslinesMarker: longint);
+{
+
+  var m: longint;  //маркер с нреками hdr_ps, позиции которых будем добавлять в маркер
+  m := initmarker('', sizeof(comp), 10, 100, false);
+
+  //добавляем в маркер hdrpsNrec
+  insertmarker(m, hdrpsNrec);
+
+  var c: comp;
+  var i: longint;
+
+  //идем в цикле по маркеру нреков hdr_ps
+  for (i := 0; GetMarker(m, i, c); i++)
+  {
+
+    //находим позиции ps_lines, подчиненные текущей hdr_ps и идем по ним в цикле
+    vPslines._hdrpsNrec := c;
+    vPslines._loop ps_lines
+    {
+
+      //если текущая позиция - МЦ
+      if vPslines.ps_lines.tdoc = 0
+      {
+        //добавляем ее в psLinesMarer
+        insertMarker(pslinesMarker, vPslines.ps_lines.nrec);
+      }
+      else //иначе, если текущая позиция - подчиненная ПС
+      {
+        //добавляем ссылку на подчиненную ПС в маркер с нреками hdr_ps
+        insertMarker(m, vPslines.ps_lines.cDoc);
+      }
+
+    }
+
+  }
+
+  doneMarker(m, '');
+
+} //AddPslinesToMarker
+
+/*
+Устанавливает дополнительное КАУ позиций ПС из маркера psLinesMarker с учетом разузлования.
+Т.е. если позиция ПС является ссылкой на подчиненную ПС, то для позиций этой подчиненной ПС
+тоже будут установлены дополнительные КАУ.
+  <kauIndex> - номер доп. аналитики 1,2,3
+  <kauCode> - код КАУ доп. аналитики
+  <kauNrec> - значение доп. аналитики
+  <pslinesMarker> - маркер с нреками ps_lines, для которых необходимо установить значение доп. аналитики
+*/
+procedure SetDopAnForMarked(kauIndex: byte; kauCode: word; kauNrec: comp; pslinesMarker: longint);
+{
+
+  //временный маркер с нреками ps_lines, для которых необходимо установить доп. аналитику
+  //объявляем отдельный маркер, т.к. в него будем добавлять позиции подчиненных ПС
+  var m: longint;
+  m := initmarker('', sizeof(comp), 10, 100, false);
+
+  //копируем во временный маркер нреки ps_lines, для которых необходимо установить доп. аналитику
+  copymarker(m, pslinesMarker);
+
+  var c: comp;
+  var i: longint;
+
+  //идем в цикле по нрекам ps_lines, для которых необходимо установить доп. аналитику
+  for(i := 0; GetMarker(m, i, c); i++)
+  {
+
+    //позиционируемся на ps_lines
+    if vSetDopAn.getfirst ps_lines where ((c == ps_lines.nrec)) = tsOk
+    {
+
+      //если ps_lines - матценность
+      if vSetDopAn.ps_lines.tdoc = 0
+      {
+
+        //модифицируем у нее соответствующую аналитику
+        case kauIndex of
+          1:
+          {
+            vSetDopAn.ps_lines.wkodgr1 := kauCode;
+            vSetDopAn.ps_lines.canval1 := kauNrec;
+          }
+          2:
+          {
+            vSetDopAn.ps_lines.wkodgr2 := kauCode;
+            vSetDopAn.ps_lines.canval2 := kauNrec;
+          }
+          3:
+          {
+            vSetDopAn.ps_lines.wkodgr3 := kauCode;
+            vSetDopAn.ps_lines.canval3 := kauNrec;
+          }
+        end;
+
+        vSetDopAn.update current ps_lines;
+
+      }
+      else //иначе, если ps_lines - подчиненная ПС
+      {
+        //добавляем в маркер с нреками ps_lines позиции этой подчиненной ПС
+        AddPslinesToMarker(vSetDopAn.ps_lines.cdoc, m);
+      }
+
+    }
+
+  }
+
+  donemarker(m, '');
+
+} //SetDopAnForMarked
+
+/*
+Копирует текущую доп. аналитику, на которой стоит курсор пользователя,
+в доп. аналитики помеченных позиций
+*/
+procedure CopyCurrentDopAnForMarkedPslines;
+{
+
+  //определяем индекс доп. аналитики, код кау, нрек кау,
+  //установленной пользователем в стандартном обработчике cmPick
+  var kauCode : word = 0;
+  var kauNrec : comp = 0;
+  var kauIndex: byte = 0;
+
+  case curfield of
+    #DopAn1:
+    {
+      kauCode  := ps_lines.wkodgr1;
+      kauNrec  := ps_lines.canval1;
+      kauIndex := 1;
+    }
+    #DopAn2:
+    {
+      kauCode  := ps_lines.wkodgr2;
+      kauNrec  := ps_lines.canval2;
+      kauIndex := 2;
+    }
+    #DopAn3:
+    {
+      kauCode  := ps_lines.wkodgr3;
+      kauNrec  := ps_lines.canval3;
+      kauIndex := 3;
+    }
+  end;
+
+  //устанавливаем доп. аналитику у помеченных позиций
+  SetDopAnForMarked(kauIndex, kauCode, kauNrec, Markers);
+
+}
+
+handleevent
+
+cmPick:
+{
+
+  case curfield of
+
+    //Если текущее поле - доп. аналитика
+    #DopAn1, #DopAn2, #DopAn3:
+    {
+
+      //запоминаем значение буфера до изменений пользователем
+      var oldbuf: type$ps_lines;
+      oldbuf := type$ps_lines(ps_lines.buffer);
+
+      //стандартный обработчик cmPick
+      inherited::handleevent(cmPick);
+
+      //если пользователь изменил аналитику и
+      //если есть помеченные позиции и hdr_ps создана по шаблону, т.е. доп. аналитики вообще присутствуют
+      if (Markers <> 0) and
+         (getMarkerCount(Markers)) > 0 and
+         (hdr_ps.cDocNastr != 0) and
+         (CheckVIPRefs('iNastSrv', false)) and
+         (oldbuf.canval1 <> ps_lines.canval1 or oldbuf.canval2 <> ps_lines.canval2 or oldbuf.canval3 <> ps_lines.canval3)
+      {
+
+        if message('Установить для всех помеченных позиций?', yesNo) = cmYes
+        {
+
+          //записываем изменения в редактируемую пользователем позицию ps_lines
+          updatetable;
+          //копируем текущую доп.аналитику в помеченные позиции
+          CopyCurrentDopAnForMarkedPslines;
+
+        } //if message...
+
+      } //if markers <> 0...
+
+    } //#DopAn1, #DopAn2, #DopAn3:
+
+    else
+      //стандартный обработчик cmPick
+      inherited::handleevent(cmPick);
+
+  end; //case curfield
+
+} //cmPick
+
+cmDelOnProtect:
+{
+
+  //стандартный обработчик cmDelOnProtect
+  inherited::handleevent(cmDelOnProtect);
+
+  case curfield of
+
+    #DopAn1, #DopAn2, #DopAn3:
+    {
+
+      //если есть помеченные позиции и hdr_ps создана по шаблону, т.е. доп. аналитики вообще присутствуют
+      if (Markers <> 0) and
+         (getMarkerCount(Markers)) > 0 and
+         (hdr_ps.cDocNastr != 0) and
+         (CheckVIPRefs('iNastSrv', false))
+      {
+
+        if message('Очистить для всех помеченных позиций?', yesNo) = cmYes
+        {
+
+          //записываем изменения в редактируемую пользователем позицию ps_lines
+          updatetable;
+          //копируем текущую доп.аналитику в помеченные позиции
+          CopyCurrentDopAnForMarkedPslines;
+
+        } //if message...
+
+      } //if (Markers <> 0)...
+
+    } //#DopAn1, #DopAn2, #DopAn3:
+
+  end; //case curfield of
+
+} //cmDelOnProtect
+
+end;
+
+end.
