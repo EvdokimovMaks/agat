@@ -1,0 +1,425 @@
+#include GetKau.vih
+#include Query.vih
+#include Marker.vih
+
+#component "AGAT"
+
+interface ReplaceKatstroy 'Замена заказов в документах и проводках' escclose doaccept;
+show(,,62, 12);
+
+sql query queryDocs =
+  select distinct #identity as nrec,
+                  oborot.tidkgal as tidkgal,              //сопроводительный документ, связанный с проводкой
+                  oborot.tidk as tidk,
+                  oborot.csoprdoc as csoprdoc,
+                  :KatstroyNrecFrom as KatstroyNrecFrom,
+                  :KatstroyNrecTo as KatstroyNrecTo,
+                  sh.nodoc as nodoc,
+                  sh.datob as ddoc
+  from oborot
+  join soprhoz sh on sh.nrec = oborot.csoprhoz
+  where oborot.datob between :d1 and :d2 and
+        case when tblos[1] = 40 then kauos[1]
+             when tblos[2] = 40 then kauos[2]
+             when tblos[3] = 40 then kauos[3]
+             when tblos[4] = 40 then kauos[4]
+             when tblos[5] = 40 then kauos[5]
+             when tblos[6] = 40 then kauos[6]
+             when tblks[1] = 40 then kauks[1]
+             when tblks[2] = 40 then kauks[2]
+             when tblks[3] = 40 then kauks[3]
+             when tblks[4] = 40 then kauks[4]
+             when tblks[5] = 40 then kauks[5]
+             when tblks[6] = 40 then kauks[6]
+             else #comp(0)
+        end = :KatstroyNrecFrom
+
+  union all
+
+  select distinct #identity, 40, 40, bdmain.nrec, :KatstroyNrecFrom, :KatstroyNrecTo, bdmain.nodoc, bdmain.ddoc    //ДО связанный с проводкой
+  from oborot
+  join soprhoz sh on sh.nrec = oborot.csoprhoz
+  left join basedoc bd on bd.nrec = sh.cpredopldo
+  left join stepdoc sd1 on sd1.cbasedoc = bd.nrec
+  left join stepdoc sd2 on sd2.nrec = sh.cstepdoc
+  join spstep sps on sps.cstepdoc in (sd1.nrec, sd2.nrec)
+  join stepdoc sdmain on sdmain.nrec = sps.cstepdoc
+  join basedoc bdmain on bdmain.nrec = sdmain.cbasedoc
+  join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1104 and sm.cspec = sps.nrec and sm.cobj = :KatstroyNrecFrom
+  where oborot.datob between :d1 and :d2 and
+        case when tblos[1] = 40 then kauos[1]
+             when tblos[2] = 40 then kauos[2]
+             when tblos[3] = 40 then kauos[3]
+             when tblos[4] = 40 then kauos[4]
+             when tblos[5] = 40 then kauos[5]
+             when tblos[6] = 40 then kauos[6]
+             when tblks[1] = 40 then kauks[1]
+             when tblks[2] = 40 then kauks[2]
+             when tblks[3] = 40 then kauks[3]
+             when tblks[4] = 40 then kauks[4]
+             when tblks[5] = 40 then kauks[5]
+             when tblks[6] = 40 then kauks[6]
+             else #comp(0)
+        end = :KatstroyNrecFrom
+
+;
+
+sql query querySpecmtrByKatsopr =
+  select sm.nrec
+  from spsopr sps
+  join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1110 and sm.cspec = sps.nrec and sm.cobj = :KatstroyNrecFrom
+  where sps.csopr = :KatsoprNrec
+  union all
+  select sm.nrec
+  from sklorder sko
+  join sporder spo on spo.csklorder = sko.nrec
+  join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1112 and sm.cspec = spo.nrec and sm.cobj = :KatstroyNrecFrom
+  where sko.csopr = :KatsoprNrec
+;
+
+sql query querySpecmtrByBasedoc =
+  select sm.nrec
+  from stepdoc sd
+  join spstep sps on sps.cstepdoc = sd.nrec
+  join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1104 and sm.cspec = sps.nrec and sm.cobj = :KatstroyNrecFrom
+  where sd.cbasedoc = :BasedocNrec ;
+
+sql query querySvNar =
+  select spm.nrec
+  from spmnplan spm
+  where spm.cmnplan = :MnplanNrec and spm.cizd <> #comp(0) and spm.cAnVal1 = :KatstroyNrecFrom
+;
+
+table struct tKatstroy (
+  KatstroyNrecFrom: comp,
+  KatstroyNrecTo: comp
+) with index (
+  iKatstroyNrecFrom = KatstroyNrecFrom (unique)
+);
+
+table struct tDocs (
+  nrec: comp,
+  tidkgal: word,
+  tidk: word,
+  csoprdoc: comp,
+  nodoc: string[30],
+  ddoc: date,
+  KatstroyNrecFrom: comp,
+  KatstroyNrecTo: comp
+) with index (
+  i00 = nrec (unique, surrogate),
+  i01 = tidk + csoprdoc + KatstroyNrecFrom (unique)
+);
+
+table struct tOperations (
+  s: string
+);
+
+var
+  _d1, _d2: date;
+  _getkau: getkau;
+  _marker: IMarker(Marker) new;
+
+create view
+as select *
+from tKatstroy, katstroy ksFrom, katstroy ksTo, tDocs, katdoc, tOperations, oborot
+where ((
+  tKatstroy.KatstroyNrecFrom == ksFrom.nrec and
+  tKatstroy.KatstroyNrecTo == ksTo.nrec and
+  tDocs.tidkgal == katdoc.tidkgal
+));
+
+window wDocs 'Документы' escClose doAccept;
+browse brInfo;
+show(,,,20);
+table tDocs;
+recMarker = _marker { tDocs.nrec };
+fields
+  tDocs.nrec 'nrec': [10], protect;
+  tDocs.tidkgal 'Код типа документа': [5], protect;
+  katdoc.name 'Тип документа': [10], protect;
+  tDocs.csoprdoc 'Nrec документа' : [10], protect;
+  tDocs.nodoc 'Номер документа' : [10], protect;
+  tDocs.ddoc 'Дата документа' : [10], protect;
+  if(getanykau(1, cgKau_ObjBuild, tDocs.KatstroyNrecFrom), givenanname(1), '') 'Заменяемый заказ': [10], protect;
+  if(getanykau(1, cgKau_ObjBuild, tDocs.KatstroyNrecTo), givenanname(1), '') 'Заменяющий заказ': [10], protect;
+end;
+screen scInfo;
+show (,21,,) fixed_y;
+buttons
+  cmReplaceKatstroy, default;
+  cmCancel;
+<<
+                                             <. Заменить заказы .> <. Отмена .>
+>>
+end;
+handleevent
+  cmInit:
+  {
+    _marker.UnselectAll;
+    _marker.IsCaption := true;
+  }
+  cmReplaceKatstroy: putcommand(cmDefault);
+end;
+end; //window wDocs;
+
+procedure createReplacementOperation(tablename: string; fieldname: string; recordNrec: comp; newKatstroyNrec: comp);
+{
+  insert tOperations
+  set tOperations.s := 'update ' + tablename + ' set ' + fieldname + ' = #comp(' + string(newKatstroyNrec, 0, 0) + ') where nrec = #comp(' + string(recordNrec, 0, 0) + ')';
+}
+
+procedure createReplacementOperationsByKatsopr(katsoprNrec: comp; katstroyNrecFrom: comp; katstroyNrecTo: comp);
+{
+
+  var rs: IResultSet;
+  rs := queryManager.CreateQuery(querySpecmtrByKatsopr)
+                    .setParam('KatsoprNrec', katsoprNrec)
+                    .setParam('KatstroyNrecFrom', katstroyNrecFrom)
+                    .getResultSet;
+
+  if rs.getFirst = tsOk do
+  {
+
+    createReplacementOperation('specmtr', 'cobj', comp(rs.row.val('nrec')), katstroyNrecTo);
+
+  } while rs.getNext = tsOk;
+
+}
+
+procedure createReplacementOperationsByBasedoc(basedocNrec: comp; katstroyNrecFrom: comp; katstroyNrecTo: comp);
+{
+
+  var rs: IResultSet;
+  rs := queryManager.CreateQuery(querySpecmtrByBasedoc)
+                    .setParam('BasedocNrec', basedocNrec)
+                    .setParam('KatstroyNrecFrom', katstroyNrecFrom)
+                    .getResultSet;
+
+  if rs.getFirst = tsOk do
+  {
+
+    createReplacementOperation('specmtr', 'cobj', comp(rs.row.val('nrec')), katstroyNrecTo);
+
+  } while rs.getNext = tsOk;
+
+}
+
+procedure createReplacementOperationsBySvNar(mnplanNrec: comp; katstroyNrecFrom: comp; katstroyNrecTo: comp);
+{
+
+  var rs: IResultSet;
+  rs := queryManager.CreateQuery(querySvNar)
+                    .setParam('MnplanNrec', mnplanNrec)
+                    .setParam('KatstroyNrecFrom', katstroyNrecFrom)
+                    .getResultSet;
+
+  if rs.getFirst = tsOk do
+  {
+
+    createReplacementOperation('spmnplan', 'canval1', comp(rs.row.val('nrec')), katstroyNrecTo);
+
+  } while rs.getNext = tsOk;
+
+}
+
+procedure createReplacementOperationsByOborot(atidk: word; acsoprdoc: comp; katstroyNrecFrom: comp; katstroyNrecTo: comp);
+{
+
+  _loop oborot where ((atidk == oborot.tidk and acsoprdoc == oborot.csoprdoc))
+  {
+
+    var i: byte;
+    for(i := 1; i <= 6; i++)
+    {
+
+      if oborot.tblos[i] = cgKau_ObjBuild and oborot.kauos[i] = katstroyNrecFrom
+        createReplacementOperation('oborot', 'kauos['+i+']', oborot.nrec, katstroyNrecTo);
+
+      if oborot.tblks[i] = cgKau_ObjBuild and oborot.kauks[i] = katstroyNrecFrom
+        createReplacementOperation('oborot', 'kauks['+i+']', oborot.nrec, katstroyNrecTo);
+
+    }
+
+  }
+
+}
+
+function createReplacementOperationsByDocs: boolean;
+{
+
+  result := true;
+
+  var m: longint;
+  m := initmarker('', sizeof(comp), 10, 100, false);
+  _marker.ExportTo(m);
+
+  startnewvisual(vtIndicatorVisual, vfBreak + vfTimer, 'Формирование запросов для изменения данных', getMarkerCount(m));
+
+  _loop tDocs where foundmarker(m, tDocs.nrec)
+  {
+
+    case tDocs.tidkgal of
+
+      101, 111, 201, 211, 600, 501, 502: createReplacementOperationsByKatsopr(tDocs.csoprdoc, tDocs.KatstroyNrecFrom, tDocs.KatstroyNrecTo);
+
+      40: createReplacementOperationsByBasedoc(tDocs.csoprdoc, tDocs.KatstroyNrecFrom, tDocs.KatstroyNrecTo);
+
+      1204: createReplacementOperationsBySvNar(tDocs.csoprdoc, tDocs.KatstroyNrecFrom, tDocs.KatstroyNrecTo);
+
+    end;
+
+    createReplacementOperationsByOborot(tDocs.tidk, tDocs.csoprdoc, tDocs.KatstroyNrecFrom, tDocs.KatstroyNrecTo);
+
+    if not nextvisual
+    {
+      result := false;
+      break;
+    }
+
+  }
+
+  stopvisual('', 0);
+
+}
+
+procedure executeReplacementOperations;
+{
+
+  startnewvisual(vtIndicatorVisual, vfBreak + vfTimer, 'Модификация данных', recordsintable(#tOperations));
+
+  _loop tOperations
+  {
+
+    var errCode: integer;
+    errCode := queryManager.createQuery(tOperations.s).Execute.errorCode;
+
+    if errCode <> tsOk
+    {
+      message(''#6'Ошибка выполнения запроса ' + errCode + ''#13'' + tOperations.s + ''#13'Выполнение прервано');
+      exit;
+    }
+
+    if not nextvisual break;
+  }
+
+  stopvisual('', 0);
+
+}
+
+procedure FillTDocs;
+{
+
+  _loop tKatstroy
+  {
+     sqlCopyInto(queryManager.createQuery(queryDocs)
+                             .setParam('KatstroyNrecFrom', tKatstroy.KatstroyNrecFrom)
+                             .setParam('KatstroyNrecTo', tKatstroy.KatstroyNrecTo)
+                             .setParam('d1', _d1)
+                             .setParam('d2', _d2)
+                             .getResultSet,
+                 #tDocs,
+                 true);
+
+  }
+
+}
+
+screen sc1;
+show(,,,4) fixed_y;
+fields
+  _d1: noprotect;
+  _d2: noprotect;
+<<
+
+`Анализировать данные за период с`.@@@@@@@@@@ `по`.@@@@@@@@@@
+>>
+end;
+
+browse br1;
+show(,5,,9);
+table tKatstroy;
+fields
+  ksFrom.Name 'Заменяемый заказ (что)': [30], protect, pickbutton;
+  ksTo.Name 'Заменяющий заказ (на что)': [30], protect, pickbutton;
+end;
+
+screen sc2;
+show(,10,,11) fixed_y;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+                <. Получить список документов .> <. Отмена .>
+>>
+end;
+
+tableevent table tKatstroy;
+
+cmPick:
+{
+  case curfield of
+    #ksFrom.Name:
+    {
+      var c: comp;
+      c := tKatstroy.KatstroyNrecFrom;
+      if _getkau.GetCodeKau(1, cgKau_ObjBuild, c) > 0
+      {
+        tKatstroy.KatstroyNrecFrom := c;
+        SetModified(true);
+        UpdateTable;
+        rereadrecord(#tKatstroy);
+      }
+    }
+    #ksTo.Name:
+    {
+      var c: comp;
+      c := tKatstroy.KatstroyNrecTo;
+      if _getkau.GetCodeKau(1, cgKau_ObjBuild, c) > 0
+      {
+        tKatstroy.KatstroyNrecTo := c;
+        SetModified(true);
+        UpdateTable;
+        rereadrecord(#tKatstroy);
+      }
+    }
+  end;
+}
+
+cmInsertRecord: insert current tKatstroy;
+cmUpdateRecord: update current tKatstroy;
+cmDeleteRecord: delete current tKatstroy;
+
+end;
+
+handleevent
+
+cmDoOk:
+{
+  delete all tDocs;
+  FillTDocs;
+  if runwindowmodal(wDocs) = cmDefault
+  {
+    delete all tOperations;
+    if createReplacementOperationsByDocs
+      executeReplacementOperations;
+  }
+}
+
+cmInit:
+{
+  if not readmydsk(_d1, 'ReplaceKatstroy_d1', false) _d1 := cur_date;
+  if not readmydsk(_d2, 'ReplaceKatstroy_d2', false) _d2 := cur_date;
+  insert tKatstroy set tKatstroy.KatstroyNrecFrom := 0001000000000BC2h, tKatstroy.KatstroyNrecTo := 0001000000000BC1h;
+  insert tKatstroy set tKatstroy.KatstroyNrecFrom := 0001000000000BC1h, tKatstroy.KatstroyNrecTo := 0001000000000BC2h;
+}
+
+cmDone:
+{
+  savemydsk(_d1, 'ReplaceKatstroy_d1');
+  savemydsk(_d2, 'ReplaceKatstroy_d2');
+}
+
+end;
+
+end.
