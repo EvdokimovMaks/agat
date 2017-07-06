@@ -17,10 +17,21 @@ table struct trs (
   rejimNrec   : comp,
   name        : string,
   summa       : double,
-  total       : double
+  total       : double,
+  sumopl      : double,
+  sumsaldo    : double
 ) with index (
   i01 = ObshiySchet+spkRSNrec+zakazVibNrec+rejimNrec,
   i02 = name
+);
+
+table struct tOpl (
+  basedocNrec: comp,
+  rsNrec: comp,
+  summa: double,
+  dopl: date
+) with index (
+  i01 = basedocNrec + rsNrec (unique)
 );
 
 table struct tbd (
@@ -39,6 +50,8 @@ table struct tbd (
   summa       : double,
   dopl        : date,
   total       : double,
+  sumopl      : double,
+  sumsaldo    : double,
   val         : string,
   avans       : string,
   status      : string,
@@ -78,7 +91,8 @@ table struct tbd (
   vizaBUHPrim : string
 ) with index (
   i01 = nrec,
-  i02 = ObshiySchet + spkRSNrec + zakazVibNrec + rejimNrec + ddoc + nodoc
+  i02 = ObshiySchet + spkRSNrec + zakazVibNrec + rejimNrec + ddoc + nodoc,
+  i03 = nrec + spkRSNrec
 );
 
 //#endregion
@@ -143,71 +157,112 @@ select coalescen(katbank.nrec, spkRS.nrec, #comp(0)) as RSNrec,
   where bd.nrec = :basedocNrec and ( coalesce(avRS.vcomp,#comp(0)) = :rsNrec or coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h) )
 ;
 
+//суммы оплаты по реестру ДО в разрезе ДО и р/с списания
 sql query qSelectOpl =
-  select distinct plpor.datob
-  from basefin bf
-  join plpor on plpor.nrec = bf.cplpor and plpor.datob <> 0
-  where (bf.cbasedoc = :basedocNrec or bf.cpredopldo = :basedocNrec ) and bf.tidkgal = 1
+
+select tbd.basedocNrec as basedocNrec,
+       tbd.rsNrec      as rsNrec,
+       max(bf.ddoc)    as dopl,
+       sum(bf.summa)   as summa
+
+from (
+      select distinct bdreeagat.crec as basedocNrec, spkRS.nrec as rsNrec
+
+      from bdreeagat
+
+      join stepdoc sd on sd.cbasedoc = bdreeagat.crec
+
+      join spstep sps on sps.cstepdoc = sd.nrec
+
+      join attrval avRS on avRS.wtable = 1104 and avRS.cRec = sps.nrec and avRS.cattrnam = #comp(0001000000000A86h)
+
+      join spkau spkRS on spkRS.nrec = avRS.vcomp
+
+     ) tbd
+
+join basefin bf on bf.tidkgal = 1 and (bf.cbasedoc = tbd.basedocNrec or bf.cpredopldo = tbd.basedocNrec)
+
+join usersdoc ud on ud.tipgal=bf.tidkgal and ud.tipusers=bf.tipdoc
+
+join cashbank cb on cb.nrec = ud.ccashbank
+
+join spcash on spcash.ccashbank = cb.nrec and
+               spcash.cplanssch = #comp(000100000000000Eh) and
+               case when spcash.tblos[1] = 10545 then spcash.kauos[1]
+                    when spcash.tblos[2] = 10545 then spcash.kauos[2]
+                    when spcash.tblos[3] = 10545 then spcash.kauos[3]
+                    when spcash.tblos[4] = 10545 then spcash.kauos[4]
+                    when spcash.tblos[5] = 10545 then spcash.kauos[5]
+                    when spcash.tblos[6] = 10545 then spcash.kauos[6]
+                    else #comp(0)
+               end = tbd.rsNrec
+
+group by tbd.basedocNrec, tbd.rsNrec
 ;
 
 sql query querymain =
 select bd.nrec,
-       bd.viddoc as viddoc,
-       bd.ddoc as ddoc,
-       bd.nodoc as nodoc,
-       coalesce(statlog.comment,'') as reestr,
-       coalesce(date(lastStatlog.dt), 0) as dVklRee,
-       coalesce(spkBdds.Name,'') as bdds,
-       bd.dform as dform,
-       tbd.obshiySchet as ObshiySchet,
-       tbd.spkRSNrec as spkRSNrec,
-       tbd.RejimNrec as rejimNrec,
-       tbd.ZakazVibNrec as zakazVibNrec,
-       tbd.summa as summa,
-       round(round(tbd.total, 6), 2) as total,
-       coalesce(bfall.dopl,0) as dopl,
-       coalesce(klval.simvolv,'') as val,
-       coalesce(spkAvans.code,'') as avans,
-       coalesce(katnotes.name,'') as status,
-       coalesce(podrIspoln.kod,'') as ispoln,
-       coalesce(spkDds.code,'') as dds,
+       bd.viddoc                                   as viddoc,
+       bd.ddoc                                     as ddoc,
+       bd.nodoc                                    as nodoc,
+       coalesce(statlog.comment,'')                as reestr,
+       coalesce(date(lastStatlog.dt), 0)           as dVklRee,
+       coalesce(spkBdds.Name,'')                   as bdds,
+       bd.dform                                    as dform,
+       tbd.obshiySchet                             as ObshiySchet,
+       tbd.spkRSNrec                               as spkRSNrec,
+       tbd.RejimNrec                               as rejimNrec,
+       tbd.ZakazVibNrec                            as zakazVibNrec,
+       tbd.summa                                   as summa,
+       round(round(tbd.total, 6), 2)               as total,
+       coalesce(bfall.dopl,0)                      as dopl,
+       coalesce(bfall.summa, 0)                    as sumopl,
+       coalesce(klval.simvolv,'')                  as val,
+       coalesce(spkAvans.code,'')                  as avans,
+       coalesce(katnotes.name,'')                  as status,
+       coalesce(podrIspoln.kod,'')                 as ispoln,
+       coalesce(spkDds.code,'')                    as dds,
        coalesce(substring(buhschet.schet,2,10),'') as buhsch,
-       coalesce(avSogl.atl_lastdate,0) as dsogl,
-       coalesce(avSogl.vstring,'') as sogl,
-       coalesce(org.name, '') as org,
-       coalesce(bank.name, '') as bank,
-       coalesce(bank.schet1, '') as bankrs,
-       coalesce(getdocfo(bd.nrec),'-') as cfo,
-       coalesce(getdozakaz(bd.nrec),'-') as zakaz,
-       coalesce(dog.nodoc,'') as dognum,
-       coalesce(dog.ddoc,0) as dogdate,
-       bd.procopl as procav,
-       case when coalesce(avNaznPl.vString,'') = '' then bd.name else avNaznPl.vString end as nazn,
-       coalesce(spkPEU.nrec, #comp(0)) as vizaPEUNrec,
-       coalesce(spkKAZ.nrec, #comp(0)) as vizaKAZNrec,
-       coalesce(spkKOM.nrec, #comp(0)) as vizaKOMNrec,
-       coalesce(spkBUH.nrec, #comp(0)) as vizaBUHNrec,
-       coalesce(spkPEU.name, '') as vizaPEUName,
-       coalesce(spkKAZ.name, '') as vizaKAZName,
-       coalesce(spkKOM.name, '') as vizaKOMName,
-       coalesce(spkBUH.name, '') as vizaBUHName,
-       coalesce(avVizaPEU.atl_lastdate, 0) as vizaPEUDate,
-       coalesce(avVizaKAZ.atl_lastdate, 0) as vizaKAZDate,
-       coalesce(avVizaKOM.atl_lastdate, 0) as vizaKOMDate,
-       coalesce(avVizaBUH.atl_lastdate, 0) as vizaBUHDate,
-       coalesce(uPEU.xu$loginname, '') as vizaPEUUser,
-       coalesce(uKAZ.xu$loginname, '') as vizaKAZUser,
-       coalesce(uKOM.xu$loginname, '') as vizaKOMUser,
-       coalesce(uBUH.xu$loginname, '') as vizaBUHUser,
-       coalesce(avPrimPEU.vString, '') as vizaPEUPrim,
-       coalesce(avPrimKAZ.vString, '') as vizaKAZPrim,
-       coalesce(avPrimKOM.vString, '') as vizaKOMPrim,
-       coalesce(avPrimBUH.vString, '') as vizaBUHPrim
+       coalesce(avSogl.atl_lastdate,0)             as dsogl,
+       coalesce(avSogl.vstring,'')                 as sogl,
+       coalesce(org.name, '')                      as org,
+       coalesce(bank.name, '')                     as bank,
+       coalesce(bank.schet1, '')                   as bankrs,
+       coalesce(getdocfo(bd.nrec),'-')             as cfo,
+       coalesce(getdozakaz(bd.nrec),'-')           as zakaz,
+       coalesce(dog.nodoc,'')                      as dognum,
+       coalesce(dog.ddoc,0)                        as dogdate,
+       bd.procopl                                  as procav,
+       case when coalesce(avNaznPl.vString,'') = ''
+            then bd.name
+            else avNaznPl.vString
+       end                                         as nazn,
+       coalesce(spkPEU.nrec, #comp(0))             as vizaPEUNrec,
+       coalesce(spkKAZ.nrec, #comp(0))             as vizaKAZNrec,
+       coalesce(spkKOM.nrec, #comp(0))             as vizaKOMNrec,
+       coalesce(spkBUH.nrec, #comp(0))             as vizaBUHNrec,
+       coalesce(spkPEU.name, '')                   as vizaPEUName,
+       coalesce(spkKAZ.name, '')                   as vizaKAZName,
+       coalesce(spkKOM.name, '')                   as vizaKOMName,
+       coalesce(spkBUH.name, '')                   as vizaBUHName,
+       coalesce(avVizaPEU.atl_lastdate, 0)         as vizaPEUDate,
+       coalesce(avVizaKAZ.atl_lastdate, 0)         as vizaKAZDate,
+       coalesce(avVizaKOM.atl_lastdate, 0)         as vizaKOMDate,
+       coalesce(avVizaBUH.atl_lastdate, 0)         as vizaBUHDate,
+       coalesce(uPEU.xu$loginname, '')             as vizaPEUUser,
+       coalesce(uKAZ.xu$loginname, '')             as vizaKAZUser,
+       coalesce(uKOM.xu$loginname, '')             as vizaKOMUser,
+       coalesce(uBUH.xu$loginname, '')             as vizaBUHUser,
+       coalesce(avPrimPEU.vString, '')             as vizaPEUPrim,
+       coalesce(avPrimKAZ.vString, '')             as vizaKAZPrim,
+       coalesce(avPrimKOM.vString, '')             as vizaKOMPrim,
+       coalesce(avPrimBUH.vString, '')             as vizaBUHPrim
+
 from (select bd.nrec,
-             case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h) then 1 else 0 end as obshiySchet,
-             coalesce(spkRS.nrec,#comp(0)) as spkRSNrec,
+             case when avVizaPEU.vcomp = #comp(0001000000001423h) then 1 else 0 end as obshiySchet,  //если виза ПЭУ = "с общих сч.", ставим признак общего счета
+             coalesce(spkRS.nrec,#comp(0))       as spkRSNrec,
              coalesce(avZakazVib.vcomp,#comp(0)) as ZakazVibNrec,
-             coalesce(avRejim.vcomp,#comp(0)) as RejimNrec,
+             coalesce(avRejim.vcomp,#comp(0))    as RejimNrec,
              sum(sps.summa + case when bd.vhodnal=2 then sps.nds else 0 end) as summa,
              sum(case when bd.summa <> 0 then cast(sps.summa as double) / bd.summa * bd.total else 0 end) as total
       from bdreeagat
@@ -220,11 +275,10 @@ from (select bd.nrec,
       left join attrval avZakazVib on avZakazVib.wtable = 1104 and avZakazVib.cRec = sps.nrec and avZakazVib.cattrnam = #comp(0001000000000A87h)
       left join attrval avRejim on avRejim.wtable = 1104 and avRejim.cRec = sps.nrec and avRejim.cattrnam = #comp(000100000000079Eh)
       group by bd.nrec,
-               case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h) then 1 else 0 end,
+               case when avVizaPEU.vcomp = #comp(0001000000001423h) then 1 else 0 end,
                coalesce(spkRS.nrec,#comp(0)),
                coalesce(avZakazVib.vcomp,#comp(0)),
                coalesce(avRejim.vcomp,#comp(0))
-               //case when coalesce(avVizaPEU.vcomp,#comp(0)) = #comp(0001000000001423h) then #comp(0) else coalesce(spkRS.nrec,#comp(0)) end
      ) tbd
 
 join basedoc bd on bd.nrec = tbd.nrec
@@ -447,9 +501,75 @@ procedure CreateTmpTableForMarker(lMarker: longint; tableName: string);
 
 procedure PrepareData(lBasedocMarker: longint);
 {
+
+  //создаем в sql временную таблицу для маркера. она используется в следующих запросах
   CreateTmpTableForMarker(lBasedocMarker, 'bdreeagat');
+
+  //заполняем tbd данными по ДО из маркера в разрезе р/с выбытия, режимов исп, заказов выбытия
   delete all tbd;
   sqlCopyInto(queryManager.createQuery(querymain).getResultSet, #tbd, true);
+
+  //заполняем tOpl данными по оплатам в разрезе ДО и р/с выбытия
+  delete all tOpl;
+  sqlCopyInto(queryManager.createQuery(qSelectOpl).getResultSet, #tOpl, true);
+
+  //распределяем суммы из tOpl по tBd, т.е. из разреза ДО/рс  в  разрез ДО/рс/заказ/режим
+  _loop tOpl
+  {
+
+    //сумма для распределения по текущему ДО/рс
+    var sumForDistr: double;
+    sumForDistr := tOpl.summa;
+
+    //распределяем последовательно
+    _loop tbd where (( tOpl.basedocNrec == tbd.nrec and tOpl.rsNrec == tbd.spkRsNrec ))
+    {
+
+      if tbd.total <= sumForDistr
+      {
+        tbd.sumopl  := tbd.total;
+        sumForDistr -= tbd.total;
+      }
+      else
+      {
+        tbd.sumopl  := sumForDistr;
+        sumForDistr := 0;
+      }
+
+      update current tbd;
+
+      if sumForDistr = 0 break;
+
+    }
+
+    //в случае, если сумма для распределения > суммы ДО (переплата)
+    if sumForDistr > 0
+    {
+
+      //Сумма, которую удалось распределить последовательно
+      var sumDistributed: double;
+      sumDistributed := tOpl.summa - sumForDistr;
+
+      if sumDistributed <> 0
+      {
+
+        //распределяем сумму переплаты пропорционально распределенной
+        _loop tbd where (( tOpl.basedocNrec == tbd.nrec and tOpl.rsNrec == tbd.spkRsNrec ))
+        {
+          tbd.sumopl += tbd.sumopl / sumDistributed * sumForDistr;
+          update current tbd;
+        }
+
+      } //if sumDistributed <> 0
+
+    } //if sumForDistr > 0
+
+  } //_loop tOpl
+
+  //считаем sumsaldo
+  update tbd set tbd.sumsaldo := tbd.total - tbd.sumopl;
+
+  //заполняем trs группами р/с выбытия, режимов исп, заказов выбытия
   delete all trs;
 
   _loop tbd
@@ -468,14 +588,18 @@ procedure PrepareData(lBasedocMarker: longint);
                            '; Заказ №' + substr(vRs.katstroy.name, 1, pos(' ', vRs.katstroy.name + ' ') - 1))
                       + if(vRs.getfirst spkRejim != tsOk, '; Режим использования счета не установлен',
                            '; ' + vRs.spkRejim.name);
-      vRs.trs.summa := tbd.summa;
-      vRs.trs.total := tbd.total;
+      vRs.trs.summa    := tbd.summa;
+      vRs.trs.total    := tbd.total;
+      vRs.trs.sumopl   := tbd.sumopl;
+      vRs.trs.sumsaldo := tbd.sumsaldo;
       vRs.insert current trs;
     }
     else
     {
-      vRs.trs.summa += tbd.summa;
-      vRs.trs.total += tbd.total;
+      vRs.trs.summa    += tbd.summa;
+      vRs.trs.total    += tbd.total;
+      vRs.trs.sumopl   += tbd.sumopl;
+      vRs.trs.sumsaldo += tbd.sumsaldo;
       vRs.update current trs;
     }
   }
@@ -572,6 +696,8 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
   pXL.CreateTblFld('dform' );
   pXL.CreateTblFld('summa' );
   pXL.CreateTblFld('total' );
+  pXL.CreateTblFld('sumopl');
+  pXL.CreateTblFld('sumsaldo');
   pXL.CreateTblFld('val'   );
   pXL.CreateTblFld('avans' );
   pXL.CreateTblFld('status');
@@ -623,6 +749,8 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
     pXL.SetTblStringFldValue('npp'      , if(brrs.spkRSNrec!=0, '', if(brrs.ObshiySchet=1,'Общий счет ','Отдельный счет ')) + brrs.name);
     pXL.SetTblNumberFldValue('summa'    , brrs.summa                       );
     pXL.SetTblNumberFldValue('total'    , brrs.total                       );
+    pXL.SetTblNumberFldValue('sumopl'   , brrs.sumopl                      );
+    pXL.SetTblNumberFldValue('sumsaldo' , brrs.sumsaldo                    );
     pXL.InsTblRow;
 
     _loop brbd  {
@@ -643,6 +771,9 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
       pXL.SetTblStringFldValue('dform'    , datetostr(brbd.dform,'DD.MM.YYYY'));
       pXL.SetTblNumberFldValue('summa'    , brbd.summa                       );
       pXL.SetTblNumberFldValue('total'    , brbd.total                       );
+      pXL.SetTblNumberFldValue('sumopl'   , brbd.sumopl                      );
+      pXL.SetTblNumberFldValue('sumsaldo' , brbd.sumsaldo                    );
+      pXL.SetTblNumberFldValue('dopl'     , brbd.dopl                        );
 
       pXL.SetTblStringFldValue('avans'    , brbd.avans                       );
       pXL.SetTblStringFldValue('status'   , brbd.status                      );
@@ -713,17 +844,6 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
       else
         pXL.SetTblStringFldValue('statusName', '');
 
-      /*
-      if isStatusVklVReestr(brbasedoc.cnote)
-      {
-        if getlast brstatlog = tsOk
-          pXL.SetTblStringFldValue('statusComment', brstatlog.comment);
-        else
-          pXL.SetTblStringFldValue('statusComment', '');
-      }
-      else
-        pXL.SetTblStringFldValue('statusComment', '');
-      */
       pXL.SetTblStringFldValue('statusComment', brbd.reestr);
 
       pXL.SetTblNumberFldValue('daystoree', DaysFromLastVizaToVklVReestr);
