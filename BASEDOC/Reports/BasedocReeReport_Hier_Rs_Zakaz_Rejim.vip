@@ -92,7 +92,8 @@ table struct tbd (
 ) with index (
   i01 = nrec,
   i02 = ObshiySchet + spkRSNrec + zakazVibNrec + rejimNrec + sumsaldo,
-  i03 = nrec + spkRSNrec
+  i03 = nrec + spkRSNrec,
+  i04 = nrec + sumsaldo
 );
 
 //#endregion
@@ -158,6 +159,7 @@ select coalescen(katbank.nrec, spkRS.nrec, #comp(0)) as RSNrec,
 ;
 
 //суммы оплаты по реестру ДО в разрезе ДО и р/с списания
+//отбираются только те платежки р/с которых совпадает с р/с списания в спецификации ДО
 sql query qSelectOpl =
 
 select tbd.basedocNrec as basedocNrec,
@@ -200,6 +202,50 @@ join spcash on spcash.ccashbank = cb.nrec and
 group by tbd.basedocNrec, tbd.rsNrec
 ;
 
+//суммы оплаты по реестру ДО в разрезе ДО
+//отбираются только те платежки р/с которых НЕ совпадает с р/с списания в спецификации ДО
+sql query qSelectOplAnotherRS =
+
+select bdreeagat.crec as basedocNrec, sum(bf.summa) as summa
+
+from bdreeagat
+
+join basefin bf on bf.tidkgal = 1 and (bf.cbasedoc = bdreeagat.crec or bf.cpredopldo = bdreeagat.crec)
+
+join usersdoc ud on ud.tipgal=bf.tidkgal and ud.tipusers=bf.tipdoc
+
+join cashbank cb on cb.nrec = ud.ccashbank
+
+join spcash on spcash.ccashbank = cb.nrec and spcash.cplanssch = #comp(000100000000000Eh)
+
+left join (select distinct bdreeagat.crec as basedocNrec, spkRS.nrec as rsNrec
+
+           from bdreeagat
+
+           join stepdoc sd on sd.cbasedoc = bdreeagat.crec
+
+           join spstep sps on sps.cstepdoc = sd.nrec
+
+           join attrval avRS on avRS.wtable = 1104 and avRS.cRec = sps.nrec and avRS.cattrnam = #comp(0001000000000A86h)
+
+           join spkau spkRS on spkRS.nrec = avRS.vcomp
+
+          ) tBdRs on tBdRs.basedocNrec = bdreeagat.crec and
+                     case when spcash.tblos[1] = 10545 then spcash.kauos[1]
+                          when spcash.tblos[2] = 10545 then spcash.kauos[2]
+                          when spcash.tblos[3] = 10545 then spcash.kauos[3]
+                          when spcash.tblos[4] = 10545 then spcash.kauos[4]
+                          when spcash.tblos[5] = 10545 then spcash.kauos[5]
+                          when spcash.tblos[6] = 10545 then spcash.kauos[6]
+                          else #comp(0)
+                     end = tBdRs.rsNrec
+
+where tBdRs.rsNrec is Null
+
+group by bdreeagat.crec
+;
+
+
 sql query querymain =
 select bd.nrec,
        bd.viddoc                                   as viddoc,
@@ -215,8 +261,8 @@ select bd.nrec,
        tbd.ZakazVibNrec                            as zakazVibNrec,
        tbd.summa                                   as summa,
        round(round(tbd.total, 6), 2)               as total,
-       coalesce(bfall.dopl,0)                      as dopl,
-       coalesce(bfall.summa, 0)                    as sumopl,
+       //coalesce(bfall.dopl,0)                      as dopl,
+       //coalesce(bfall.summa, 0)                    as sumopl,
        coalesce(klval.simvolv,'')                  as val,
        coalesce(spkAvans.code,'')                  as avans,
        coalesce(katnotes.name,'')                  as status,
@@ -569,6 +615,52 @@ procedure PrepareData(lBasedocMarker: longint);
   //считаем sumsaldo
   update tbd set tbd.sumsaldo := tbd.total - tbd.sumopl;
 
+  //распределяем платежи по ДО, которые прошли не по тем рс, которые указаны в спецификации ДО
+  var rs: IResultSet;
+  rs := queryManager.createQuery(qSelectOplAnotherRS).getResultSet;
+
+  if rs.getFirst = tsOk do
+  {
+
+    var curBasedocNrec: comp;
+    curBasedocNrec := rs.row.Val('basedocNrec');
+
+    var sumForDistr: double;
+    sumForDistr := rs.row.Val('summa');
+
+    _loop tbd where (( curBasedocNrec == tbd.nrec and (tbd.sumsaldo > 0) )) ordered by tbd.sumsaldo
+    {
+
+      if tbd.sumsaldo <= sumForDistr
+      {
+        tbd.sumopl   += tbd.sumsaldo;
+        sumForDistr  -= tbd.sumsaldo;
+        tbd.sumsaldo := 0;
+      }
+      else
+      {
+        tbd.sumopl   += sumForDistr;
+        tbd.sumsaldo -= sumForDistr;
+        sumForDistr  := 0;
+      }
+
+      update current tbd;
+
+      if sumForDistr = 0 break;
+
+    }
+
+    //если после распределения сумма еще осталась - кидаем ее на первый попавшийся разрез по ДО
+    if sumForDistr > 0
+      if getfirst tbd where (( curBasedocNrec == tbd.nrec )) = tsOk
+      {
+        tbd.sumopl += sumForDistr;
+        tbd.sumsaldo -= sumForDistr;
+        update current tbd;
+      }
+
+  } while rs.getNext = tsOk;
+
   //заполняем trs группами р/с выбытия, режимов исп, заказов выбытия
   delete all trs;
 
@@ -674,11 +766,24 @@ procedure AddSpstepInfo(spstepDataResultSet: IResultSet;
 
 function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams = nullref): boolean;
 {
+
+  var stopReport: boolean;
+
+  startnewvisual(vtRotateVisual, vfBreak+vfTimer, ''#3'Формирование отчета'#13'Выборка данных', 0)
+
   _qOpl := queryManager.createQuery(qSelectOpl);
 
   _qSpstepData := queryManager.createQuery(qSpstepData);
 
   PrepareData(lBasedocMarker);
+
+  stopReport := not nextvisual;
+  if stopReport
+  {
+    StopVisual('', 0);
+    exit;
+  }
+  SetVisualHeader(''#3'Формирование отчета'#13'Подготовка excel');
 
   var szakaz, scfo, _dds: string;
 
@@ -740,6 +845,12 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
   pXL.CreateTblFld('statusComment');
   pXL.CreateTblFld('daystoree');
   pXL.CreateTblFld('daysinree');
+
+  stopReport := not nextvisual;
+  StopVisual('', 0);
+  if stopReport exit;
+
+  StartNewVisual(vtIndicatorVisual, vfBreak+vfTimer, ''#3'Формирование отчета'#13'Вывод в excel', recordsintable(#tbd));
 
   var _npp: longint = 0;
 
@@ -850,12 +961,23 @@ function IBasedocReeReport.PrintReport(lBasedocMarker: longint; params: IParams 
       pXL.SetTblNumberFldValue('daysinree', DaysVklVReestrWithoutVizaPEU);
 
       pXL.InsTblRow;
+
+      stopReport := not nextvisual;
+      if stopReport break;
+
     } //loop brbd
+
+    if stopReport break;
+
   }//loop brrs
+
   pXL.PublishTbl('Main');
   pXL.LoadReport(sXLSFileName);
   pXL.DisConnectExcel;
   result := true;
+
+  stopvisual('', 0);
+
 }
 
 end.
