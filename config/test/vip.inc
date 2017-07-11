@@ -18,7 +18,7 @@
 
 [Vip]
   //DefaultEnv=galnet_galpatch
-  DefaultEnv=galnet
+  DefaultEnv=galnet_galtest
 
 [licparam]
   LicFileName='%ConfigDir%%ConfigSubDir%\vip.lic'
