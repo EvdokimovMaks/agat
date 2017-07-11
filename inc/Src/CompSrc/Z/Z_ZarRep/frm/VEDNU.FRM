@@ -16,16 +16,18 @@
 .p 60
 .fields
  Npred  VidNach
- Mes1 God1 Mes2 God2
+ Mes1 God1
+ LocFlag6
+ Mes2 God2
  NamePodr
  VidOplP VidOpl NVidOpl
  категория
  Пол
  NameGrPodr
  NameCex
- Npp Tabn Fio Dolgnost KodOp Dney Chasf Summa Proc Summa4 Summa5
- МесяцВыплаты: word МесяцНачисленияЗА: word МесяцНачисленияВ: word
- ItogFio        DneyFio ChasfFio SummaFio Summa4Fio Summa5Fio
+ Npp Tabn Fio МесяцВыплаты: word МесяцНачисленияЗА: word МесяцНачисленияВ: word ГодНачисленияВ: word  ГодНачисленияЗА: word
+ Dolgnost KodOp Dney Chasf Summa Proc Summa4 Summa5
+ ItogFio DneyFio ChasfFio SummaFio Summa4Fio Summa5Fio
  ItgNameCex
  GNI KPP OKATO  ItgDneyCex      ItgChasfCex       ItgSummaCex       ItgSummaCex4      ItgSummaCex5
  ItgNamePodr    ItgDneyPodr     ItgChasfPodr      ItgSummaPodr      ItgSummaPodr4     ItgSummaPodr5
@@ -34,7 +36,7 @@
  ItgNameCatg    ItgDneyCatg     ItgChasfCatg      ItgSummaCatg      ItgSummaCatg4     ItgSummaCatg5
  ItgNamePred    ItgDneyPred     ItgChasfPred      ItgSummaPred      ItgSummaPred4     ItgSummaPred5
 .endfields
- ^ ^ ^ ^ ^ ^ ^
+ ^ ^ ^ ^ ^ ^ ^ ^
 .{ VEDNU_VidOpl
  ^ ^ ^
 .}
@@ -57,7 +59,7 @@
 .{ vedteknu
 .[h OverWrite
 .]h
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .if ItogRab
 ^ ^ ^ ^ ^ ^
 .end

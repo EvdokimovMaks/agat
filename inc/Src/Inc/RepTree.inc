@@ -64,6 +64,18 @@
   cgGrpKauK5     = 18; //                   -*- 5
   cgGrpKauK6     = 19; //                   -*- 6
   cgGrpPodrK     = 20; // Подразделение корр. счета
+  cgGrpKau7      = 21;
+  cgGrpKau8      = 22;
+  cgGrpKau9      = 23;
+  cgGrpKau10     = 24;
+  cgGrpKau11     = 25;
+  cgGrpKau12     = 26;
+  cgGrpKauK7     = 27;
+  cgGrpKauK8     = 28;
+  cgGrpKauK9     = 29;
+  cgGrpKauK10    = 30;
+  cgGrpKauK11    = 31;
+  cgGrpKauK12    = 32;
 
   // типы группировок для интерактивного аналитического отчета
   cgTreeGroupNoGroup =  0;  // несгруппированные данные

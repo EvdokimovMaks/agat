@@ -3,14 +3,7 @@ const
   tmtNoTree  = 0; // Не дерево или не учавствует в построении дерева.
   tmtManager = 1; // Поле, в котором будет прорисовано дерево.
   tmtLevel   = 2; // Содержит текущий уровень дерева.
-  tmtHasBr   = 3; // Содержит информацию о наличии "братьев" на том же уровне.
-  tmtIsLeaf  = 4; // Содержит информацию "узел или лист".
-  tmtPicture = 5; // Содержит картинку листа или узла.
-
-  // Константы для MemoType.
-  mtEmpty      = 1;
-  mtBMP        = 2;
-  mtMarkBitmap = 3;
+  tmtPicture = 3; // Содержит картинку листа или узла.
 
   // Константы типа экспорта.
   frExportBIFF       = 0;
@@ -55,16 +48,16 @@ const
 type
   PgfrHeaderInfo = ^TgfrHeaderInfo;
   TgfrHeaderInfo = record
-    Index       : LongInt;  // Номер по порядку
-    Width       : LongInt;  // Ширина колонки
-    Align       : LongInt;  // Выравнивание в ячейке: saLeft, saRight, saCenter
-    MemoType    : LongInt;  // Тип Мемо поля
-    TreeManager : LongInt;  // Параметры для дерева
-    AtlType     : LongInt;  // Тип данных Атлантиса
-    AutoSize    : WordBool; // Флаг "Авторасширение колонки"
-    Name        : String;   // Имя поля в DataSet-е
-    Title       : String;   // Заголовок колонки в BROWSE или TREE
-    ViewFormat  : String;   // Формат отображения данных колонки
+    Index       : LongInt;     // Номер по порядку
+    Width       : LongInt;     // Ширина колонки
+    Align       : LongInt;     // Выравнивание в ячейке: saLeft, saRight, saCenter
+    TreeManager : LongInt;     // Параметры для дерева
+    AtlType     : LongInt;     // Тип данных Атлантиса
+    IsPicture   : WordBool;    // Является ли поле картинкой
+    AutoSize    : WordBool;    // Флаг "Авторасширение колонки"
+    Name        : ShortString; // Имя поля в DataSet-е
+    Title       : ShortString; // Заголовок колонки в BROWSE или TREE
+    ViewFormat  : ShortString; // Формат отображения данных колонки
   end;
 
   PfrxBiffExportParam = ^frxBiffExportParam;
@@ -176,8 +169,8 @@ type
 
   PfrxSendMailParam = ^frxSendMailParam;
   frxSendMailParam = record
-    MailTo     : ShortString;
-    Subject    : ShortString;
-    Body       : ShortString;
+    MailTo     : WideString;
+    Subject    : WideString;
+    Body       : WideString;
     ShowDialog : WordBool;
   end;

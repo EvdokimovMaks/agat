@@ -16,7 +16,7 @@ const
   stoAllowHolidays = 1;
   stoShortenPreHolidays = 2;
   stoMatchSPCalendarData = 4; // Учитывать отклонения.
-  stoMatchSPCalendarValid = 40000000h; // Действительность флага stoMatchSPCalendarData.
+  stoMatchSPCalendarValid = 40000000h; // Действительность флага stoMatchSPCalendarData (не используется, но флаг в записях БД может быть взведен)
 end;
 
 #end

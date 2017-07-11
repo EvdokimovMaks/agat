@@ -11,6 +11,7 @@
   ieDBF         = 1;       // DBF
   ieDelimText   = 2;       // текст с разделителями
   ieXML         = 3;       // XML
+  ieExcel       = 4;      
 
   // константы для справочника полей
   // смещения для кодов
@@ -190,9 +191,8 @@
 
   // значения mskImportDuplicates :
   ieDontFindDuplicates  = 0;
-  ieFindDuplicatesInLog = 1;
-  ieFindDuplicatesInDB  = 2;
-  ieUpdateDuplicates    = 3;
+  ieFindDuplicatesInDB  = 1;
+  ieUpdateDuplicates    = 2;
 
   // маркер вставленных записей
   sInsertRecordsMarker  = 'ieInsertRecordsMarker';

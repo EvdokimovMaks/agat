@@ -5,7 +5,7 @@
 //------------------------------------------------------------------------------
 
 // Сервер
-procedure SetAutoregParam(string, word);                      external 'ZarDistribute.dll#SetAutoregParam';
+procedure SetAutoregParam(string, word, word);                external 'ZarDistribute.dll#SetAutoregParam';
 function ZarServerStart(word, string): word;                  external 'ZarDistribute.dll#ZarServerStart';
 function ZarServerStop: word;                                 external 'ZarDistribute.dll#ZarServerStop';
 function GetZarQueueLen: longint;                             external 'ZarDistribute.dll#GetZarQueueLen';
@@ -14,7 +14,14 @@ function GetRaznoskaBeg: string;                              external 'ZarDistr
 function GetRaznoskaEnd: string;                              external 'ZarDistribute.dll#GetRaznoskaEnd';
                                                              
 // Клиент                                                    
-function GetZarCompName: string;                              external 'ZarDistribute.dll#GetZarCompName';
+const
+  // Тип формата имени компьютера (wNameType), возвращаемого функцией GetZarCompName
+  cgNameType_NetBIOS = 0; // имя локального компьютера (по умолчанию)
+  cgNameType_DNS     = 1; // полное имя, которое однозначно идентифицирует компьютер
+  cgNameType_IP      = 2; // идентификация компьютера по его IP-адресу
+end;
+  
+function GetZarCompName(wNameType: word): string;             external 'ZarDistribute.dll#GetZarCompName';
 function GetZarUserName: string;                              external 'ZarDistribute.dll#GetZarUserName';
 function CallZarServer(string, word, string, string): word;   external 'ZarDistribute.dll#CallZarServer';
 function GetLastResponse: string;                             external 'ZarDistribute.dll#GetLastResponse';

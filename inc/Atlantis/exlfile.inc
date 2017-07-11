@@ -6,7 +6,7 @@ const etGrid             = 4;
 
 
 const efBlack          = 0;         // $00000000
-const efWhite          = 16777216;  // $00FFFFFF
+const efWhite          = 16777215;  // $00FFFFFF
 const efRed            = 255;       // $000000FF
 const efGreen          = 65280;     // $0000FF00
 const efBlue           = 16711680;  // $00FF0000

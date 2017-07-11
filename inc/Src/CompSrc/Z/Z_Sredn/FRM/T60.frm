@@ -91,7 +91,7 @@ end.
 ³  1  ³     2    ³         3          ³       4       ³    5     ³        6          ³
 ÃÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
 .begin
-  SredSummaIt := 0
+  SredSummaIt := 0;
   SredSummaIt :=  SredSummaIt + Double(SredSumma1);
 end.
 ³@@@@ ³ @@@@@@@@@³&'&&&&&&&&&&&&&&&&&&³    &'&&&&&    ³  &'&&&&& ³  &'&&&&&&&&&&&    ³

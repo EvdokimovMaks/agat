@@ -89,9 +89,9 @@ Year11 Mes11 SredSumma11
 Year12 Mes12 SredSumma12 DnAv Dn SummaOt
 .endfields
 .begin
- SredSummaIt := 0
- SumItRub := 0
- SumItKop := 0
+ SredSummaIt := 0;
+ SumItRub := 0;
+ SumItKop := 0;
 end.
 .{
                                          Ъ░▌║╝Ю╝Б╜═О АБ╝Ю╝╜═ Д╝Ю╛К Э ▓-61
@@ -108,7 +108,7 @@ end.
 Ё  1  Ё     2    Ё         3          Ё       4       Ё    5     Ё        6          Ё
 цдддддеддддддддддеддддддддддддддддддддедддддддддддддддеддддддддддеддддддддддддддддддд╢
 .begin
-  SredSummaIt := 0
+  SredSummaIt := 0;
   if Double(SredSumma1) <> 0
     SredSummaIt :=  SredSummaIt + Double(SredSumma1)
 end.
@@ -193,10 +193,10 @@ SummaItog
 Ё&'&&&&&&&&&Ё&'&&&&&&&&&Ё&'&&&&&&&&&Ё&'&&&&&&&&&Ё&'&&&&&&&&Ё&'&&&&&&&&Ё&'&&&&&&&&&Ё&'&&&&&&&&Ё&'&&&&&&&&Ё&'&&&&&&&&&&&Ё
 юдддддддддддадддддддддддадддддддддддадддддддддддаддддддддддаддддддддддадддддддддддаддддддддддаддддддддддаддддддддддддды
 .begin
-  SummaProp := DoubleToString(0,SummaItog)
-  SumItRub := Trunc(Round(SummaItog,2))
-  SumI := abs(SummaItog)
-  SumItKop := word(Round((SumI - abs(SumItRub)) * 100,0))
+  SummaProp := DoubleToString(0,SummaItog);
+  SumItRub := Trunc(Round(SummaItog,2));
+  SumI := abs(SummaItog);
+  SumItKop := word(Round((SumI - abs(SumItRub)) * 100,0));
 end.
 .fields
   SummaProp

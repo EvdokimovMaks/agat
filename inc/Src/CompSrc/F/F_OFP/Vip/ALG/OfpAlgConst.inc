@@ -45,6 +45,13 @@ Const
   nAlg_cPerson   = 28;// подотчетное лицо
   nAlg_cGroup    = 29;// группа ФОБ
   nAlg_cKatBank  = 30;// банк
+  nAlg_NamePl1   = 31;// назначение платежа 1
+  nAlg_NamePl2   = 32;// назначение платежа 2
+  nAlg_NamePl3   = 33;// назначение платежа 3
+  nAlg_NamePl4   = 34;// назначение платежа 4
+  nAlg_NamePl5   = 35;// назначение платежа 5
+  nAlg_NamePl6   = 36;// назначение платежа 6
+  nAlg_Queue     = 37;// очередь платежа
 
   // поля интерфейса групповой модификации заявок
   cgReqPos_Descr     = 0;
@@ -104,6 +111,7 @@ Const
   cgAktPos_wCurse    = 23;
   cgAktPos_wVidPlat  = 24;
   cgAktPos_cGroup    = 25;
+  cgAktPos_Queue     = 26;
 
   // поля интерфейса формирования ФОБ на основании ПД
   cgBySHPos_Descr     = 0;
@@ -184,6 +192,7 @@ Const
   wAlgDate_PlanDog_dEndPlus        = 48;   // дата конечная + количество дней из условий авансовых платежей по договору/соглашению
   wAlgDate_Veksl_dDoc              = 49;   // дата кредита
   wAlgDate_Veksl_dOpl              = 50;   // срок погашения кредита
+  wAlgDate_PlanDog_dCurPlus        = 51;   // текущая дата + количество дней из условий авансовых платежей по договору/соглашению
   // DOUBLE ( 100 - 199 )
   wAlgSumma_DocReq_Summa           = 100;  // Сумма заявки
   wAlgSumma_BaseDoc_Summa          = 101;  // Сумма по ДО
@@ -213,7 +222,7 @@ Const
   wAlgSumma_SbBan_Summa            = 126;  // Сумма по реестру
   wAlgSumma_PlanDog_AvanPlat       = 127;  // Сумма из поля авансовые платежи по договору/соглашению
   wAlgSumma_Veksl_Summa            = 128;  // Сумма по кредиту
-  // COMP ( 200 - 299 )
+  // COMP ( 200 - 299, 500 - 599 )
   wAlgRef_Def_CO                   = 200;  // ЦО по умолчанию (из настройки)
   wAlgRef_Def_Person               = 201;  // Куратор по умолчанию
   wAlgRef_DocReq_SoprHoz           = 202;  // хозоперация заявки
@@ -305,7 +314,7 @@ Const
   wAlgRef_Veksl_Org                = 288;  // контрагент по кредиту
   wAlgRef_Veksl_Bank               = 289;  // банк контрагента по кредиту
   wAlgRef_Dogovor_PlatMean         = 290;  // платежное средство по договору/соглашению
-  // WORD ( 300 - 399 )
+  // WORD ( 300 - 399, 600 - 699 )
   wAlgWord_Def_Vid_Avans           = 300;  // явно - аванс
   wAlgWord_Def_Vid_Fakt            = 301;  // явно - факт
   wAlgWord_Def_Prior               = 302;  // приоритет из системной настройки
@@ -400,6 +409,16 @@ Const
   wAlgWord_Val                     = 391;  // по валюте
   wAlgWord_SbBan_MeanType          = 392;  // тип платежного средства по реестру
   wAlgWord_Dogovor_MeanType        = 393;  // тип платежного средства по договору
+  wAlgWord_SoprHoz_Vid             = 394;  // вид платежа по хозоперации
+  wAlgWord_Def_Queue               = 395;  // очередь платежа по умолчанию
+  wAlgWord_AktOfp_StBud_Queue      = 396;  // очередь платежа из статьи бюджета ФОБ
+  // STRING ( 700 - 799 )
+  wAlgStr_DocReq_NamePl1           = 700;  // назначение платежа заявки (1 строка)
+  wAlgStr_DocReq_NamePl2           = 701;  // назначение платежа заявки (2 строка)
+  wAlgStr_DocReq_NamePl3           = 702;  // назначение платежа заявки (3 строка)
+  wAlgStr_DocReq_NamePl4           = 703;  // назначение платежа заявки (4 строка)
+  wAlgStr_DocReq_NamePl5           = 704;  // назначение платежа заявки (5 строка)
+  wAlgStr_DocReq_NamePl6           = 705;  // назначение платежа заявки (6 строка)
   // шаблоны для настройки ( 400 - 499 )
   wAlgDate_Manual_Date             = 400;  // дата документа явно
   wAlgSumm_Manual_Summa            = 401;  // сумма явно
@@ -436,9 +455,12 @@ Const
   wAlgRef_Oborot_Soot_StBud        = 433;  // разноска по статьям бюджета из оборотов, через каталог соответствий
   wAlgRef_Manual_PlatMean          = 434;  // явно платежное средство
   wAlgRef_Manual_Group             = 435;  // явно группа ФОБ
+  wAlgStr_Manual_NamePl            = 436;  // явно назначение платежа
+  wAlgStr_ExtAttr_NamePl           = 437;  // внешний атрибут назначение платежа (строка)
+  wAlgWord_Manual_Queue            = 438;  // явно из каталога очередей
   // настраиваемые алгоритмы
   wNumAlg_Nastr_min      = 1000;
-  wNumAlg_Nastr_max      = 4999;
+  wNumAlg_Nastr_max      = 5999;
   // настраиваемые алгоритмы DATE   ( 1000 - 1999 )
   wNumAlg_Date_Nastr_min = 1000;
   wNumAlg_Date_Nastr_max = 1999;
@@ -451,6 +473,9 @@ Const
   // настраиваемые алгоритмы WORD   ( 4000 - 4999 )
   wNumAlg_Word_Nastr_min = 4000;
   wNumAlg_Word_Nastr_max = 4999;
-  // пользовательские алгоритмы     ( 5000 - ...  )
-  wNumAlg_User           = 5000;
+  // настраиваемые алгоритмы STRING ( 5000 - 5999 )
+  wNumAlg_Str_Nastr_min  = 5000;
+  wNumAlg_Str_Nastr_max  = 5999;
+  // пользовательские алгоритмы     ( 6000 - ...  )
+  wNumAlg_User           = 6000;
 End;

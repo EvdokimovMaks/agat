@@ -1,6 +1,6 @@
 
 
-.autoform BrigadeDutyGroupingCard(BrigadeMarker, DepartmentMarker: LongInt)
+.autoform BrigadeDutyGroupingCard(BrigadeMarker, DepartmentMarker: #TSurrPtr)
 .p 70
 .var
   I: Integer
@@ -29,6 +29,7 @@
   Res: integer;
   TimeTotal:double;
 .endvar
+
 .create view T1 as select
   PRNARYAD.TABN,
   PRNARYAD.STRTABN,
@@ -46,30 +47,29 @@ from
   PERSONS (ReadOnly)
 where
 ((
-  1 == SYS_NAR.CHOICE
+  jsBrigade == SYS_NAR.CHOICE
   and BrigadeNumber == SYS_NAR.NBRIG (noindex)
   and (FoundMarker(DepartmentMarker, SYS_NAR.CEX))
   and SYS_NAR.NREC == PRNARYAD.MNREC
   and PRNARYAD.TPERSON == PERSONS.NREC
 ))
 order external by SYS_NAR.NBRIG, PRNARYAD.TABN;
+
 .create view T2 as
 select
   SYS_NAR.NMNEM,
   SYS_NAR.SUMMANTM,
   SYS_NAR.SUMMANAR,
-  XARPRED.DATOTCH,
   BRIGAD.NMBRIG
 from
   SYS_NAR (ReadOnly),
-  BRIGAD (ReadOnly),
-  XARPRED (ReadOnly)
+  BRIGAD (ReadOnly)
 where
 ((
-  1              == SYS_NAR.CHOICE and
-  SYS_NAR.NBRIG  == BRIGAD.NBRIG
-)) and
-((BrigadeNumber = SYS_NAR.NBRIG) and (FoundMarker(DepartmentMarker, SYS_NAR.CEX)))
+  jsBrigade              == SYS_NAR.CHOICE
+  and SYS_NAR.NBRIG  == BRIGAD.NBRIG
+))
+and ((BrigadeNumber = SYS_NAR.NBRIG) and (FoundMarker(DepartmentMarker, SYS_NAR.CEX)))
 order by SYS_NAR.NMNEM;
 
 .fields
@@ -99,6 +99,7 @@ order by SYS_NAR.NMNEM;
   Time2StrDef(TimeTotal)
   T2.SYS_NAR.SUMMANAR:'SUM:DutyTotals'
 .endfields
+
 .begin
   CharacterClockNumbers := wGetTune('FormatClockNumber') <> 0;
   BrigadeNumber := 0;
@@ -106,13 +107,17 @@ order by SYS_NAR.NMNEM;
   I := 0;
   BrigadesPrinted := 0;
 end.
+
 .{ while I < GetMarkerCount(BrigadeMarker)
 .begin
   I := I + 1;
+
   if (not GetMarker(BrigadeMarker, I - 1, BrigadeNumber))
     BrigadeDutyGroupingCard.FContinue;
+
   if (T2.GetFirst ViewTable <> 0)
     BrigadeDutyGroupingCard.FContinue;
+
   DutyTimeTotal := 0;
   DutySumTotal := 0;
   ActualHoursSumTotal := 0;
@@ -120,6 +125,7 @@ end.
   PaymentSumTotal := 0;
   CurDate := DateToStr(dGetTune('UP.DATOTCH'), 'MONTH YYYY');
 end.
+
 ÿ‘‚„€Ÿ ƒ“ˆ‚—€Ÿ Š€’—Š€  ˆƒ€„… ÿ^ÿ (^) ‡€ ÿ^ÿ ƒ„€.
 ‹€’€ ‘„…‹œ€Ÿ
 
