@@ -7,6 +7,8 @@
 #ifndef __TRNImuKatOS_Inc__
 #define __TRNImuKatOS_Inc__
 
+#include TRNImuKatOSVer.Inc
+
 const
   // пустая дата
   lc_dEmpty : date = Date(0, 0, 0);
@@ -17,9 +19,10 @@ const
   lc_Lg_3_10_AmGr_Date = Date(1, 1, 2013);  // дата льготы
 
   // идентификаторы страниц
-  lc_R01PageID : word = 0;  // Раздел 1
-  lc_R02PageID : word = 1;  // Раздел 2
-  lc_R03PageID : word = 2;  // Раздел 3
+  lc_R01PageID   : word = 0;  // Раздел 1
+  lc_R02PageID   : word = 1;  // Раздел 2
+  lc_R02p1PageID : word = 3;  // Раздел 2.1
+  lc_R03PageID   : word = 2;  // Раздел 3
 
   // Раздел 2
   lc_R02SumOS_MaxCount : byte = 13;  // максимальное количество сумм остаточной стоимости ОС в "Раздел 2"

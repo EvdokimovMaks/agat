@@ -27,6 +27,7 @@ var
 , _cKau1
 , _cKau2
 , _cKau3
+, _cNotes
             : comp;
 from
   SklOrder
@@ -52,6 +53,8 @@ from
 , SoprOrdb
 , SaldoObj
 , PickRep
+, SpSopr
+, KatNotes
 
 #ifdef _ZPRIHORD_VIP_
 , SpDocSmeta
@@ -1164,7 +1167,7 @@ var last, now: comp;
 
 Function CheckOrder: boolean;
 {
-  var Res: boolean;  Res := (SklOrder.cPodr <> 0);
+  var Res: boolean = (SklOrder.cPodr <> 0);
 
   CheckOrder := Res;
   if ( NOT Res )
@@ -1227,7 +1230,7 @@ Function DeleteOrder(DoDelOrd: boolean): boolean;
       Exit;
   }
 
-  var tr: comp;  tr := SpOrder.nRec;
+  var tr: comp = SpOrder.nRec;
 
   StartNewVisual(vtNumericVisual, vfTimer, 'Проверка наличия возвратов', 1);
 
@@ -1279,16 +1282,15 @@ Function DeleteOrder(DoDelOrd: boolean): boolean;
   if ( delete safe NoVisual Oborot <> tsOk )
     {}
 
-  var SumFOrd: double;    SumFOrd  := 0;
-  var VSumFOrd: double;   VSumFOrd := 0;
+  var SumFOrd : double = 0;
+  var VSumFOrd: double = 0;
 
   if ( GetFirst SpOrder = tsOk )
     {
       SetVisualHeader('Подготовка к удалению спецификации...');
-      var marks: TPtr;
+      var marks: TPtr = InitMarker('', 8, 100, 100);
       var markj, markm: longint;
-      var markc: comp;
-      marks := InitMarker('', 8, 100, 100);
+      var markc: comp = 0;
 
       _LOOP SpOrder
         {
@@ -1306,6 +1308,7 @@ Function DeleteOrder(DoDelOrd: boolean): boolean;
 
           SumFOrd  += SpOrder.srPrice * SpOrder.kol;
           VSumFOrd += SpOrder.VPrice  * SpOrder.kol;
+
           InsertMarker(marks, SpOrder.nRec);
         }
 
@@ -1415,7 +1418,7 @@ Function DeleteOrder(DoDelOrd: boolean): boolean;
 
 // удаление внешних атрибутов
 #ifdef _PRIH_RASH_
-  if not(DeleteAllAttr(coSklOrder, SklOrder.nRec))
+  if not (DeleteAllAttr(coSklOrder, SklOrder.nRec))
     {}
 #else
   #ifndef __ListSkl_vip__
@@ -1438,12 +1441,15 @@ Function DeleteOrder(DoDelOrd: boolean): boolean;
       end; //c
 
       oModifOrds.AbortOrdNom(SklOrder.nRec);
-      var cUKS: comp; cUKS := SklOrder.nRec;
-      var VidUKS: word;
-      VidUKS := SklOrder.VidOrder;
+
+      var cUKS  : comp = SklOrder.nRec;
+      var VidUKS: word = SklOrder.VidOrder;
+
       if ( delete current SklOrder = tsOk )
         {
+          #SetStateDeleteDocOnArchive(GetSoprHozTipDoc(SkPr, VidUKS), cUKS)
           oChkSchem.RemoveDocFromSpSchem(cUKS, GetSoprHozTipDoc(SkPr, VidUKS));
+
           if ( VidUKS = 0 )
             piOsReal.OnDeleteDoc(cgOsReal_Order, cUKS);
         }
@@ -2210,12 +2216,12 @@ Function F_SDocNumber: boolean;
   //------------------------------------------------------------------------------
 
     600 .. 607:  //накладные на внутреннее перемещение
-         { RunInterface(SopInMov, KatSopr.vidSopr, KatSopr.nRec); Exit; }
+         { RunInterface(SopInMov, KatSopr.VidSopr, KatSopr.nRec); Exit; }
   //------------------------------------------------------------------------------
   //------------------------------------------------------------------------------
     621         //(акт комплектации)
   , 622:        //(акт разукомплектации)
-         { RunInterface(ActCompl, KatSopr.vidSopr, KatSopr.nRec); Exit; }
+         { RunInterface(ActCompl, KatSopr.VidSopr, KatSopr.nRec); Exit; }
   //------------------------------------------------------------------------------
   end;
 
@@ -2352,10 +2358,21 @@ Function F_SDocNumber: boolean;
                         SpOrder.rVPrice  /= fEdIzm.GetKoefOtpEd(loCheckRashOrd.SoprOrdB.cOtpEd);
                       }
 
+
                     SpOrder.srPrice := oSaldo_K.RoundRubOrd(SpOrder.rSrPrice, SpOrder.kol);
                     SpOrder.vPrice  := oSaldo_K.RoundValOrd(SpOrder.rVPrice , SpOrder.kol);
                     SpOrder.Ostatok := SpOrder.kol;
                     SpOrder.OstatokN:= SpOrder.kol;
+
+                    if (boGetTune('Oper.NalUch'))
+                    {
+                      if loCheckRashOrd.GetFirst SpSopr where ((SoprOrdb.cSpSopr == SpSopr.nRec)) = TsOk
+                      {
+                        SpOrder.priceN := loCheckRashOrd.SpSopr.priceN / fEdIzm.GetKoefOtpEd(loCheckRashOrd.SoprOrdB.cOtpEd);
+                        SpOrder.SummN  := SpOrder.PriceN*if(f_KolIsZero(SpOrder.Kol), 1.0, SpOrder.Kol);
+                        SpOrder.SummN  := oSaldo_K.RoundRubOrd(SpOrder.PriceN, if(f_KolIsZero(SpOrder.Kol), 1.0, SpOrder.Kol))*if(f_KolIsZero(SpOrder.Kol), 1.0, SpOrder.Kol);
+                      }
+                    }
 
                     if (not oModifOrds.Check_wasSpisOrder(SpOrder.cMC, SpOrder.cParty, SklOrder.cPodr, SklOrder.cMol, 0, SkPr, SklOrder.dOrd, 1+ SklOrder.VidOrder))
                       and (CheckAllowMinusKol(SpOrder.kol))
@@ -2425,6 +2442,16 @@ Function F_SDocNumber: boolean;
                     SpOrder.vPrice   := oSaldo_K.RoundValOrd(SpOrder.rVPrice , SpOrder.kol);
                     SpOrder.Ostatok  := SpOrder.kol;
                     SpOrder.OstatokN := SpOrder.kol;
+
+                    if (boGetTune('Oper.NalUch'))
+                    {
+                      if loCheckRashOrd.GetFirst SpSopr where ((SoprOrdb.cSpSopr == SpSopr.nRec)) = TsOk
+                      {
+                        SpOrder.priceN := loCheckRashOrd.SpSopr.priceN / fEdIzm.GetKoefOtpEd(loCheckRashOrd.SoprOrdB.cOtpEd);
+                        SpOrder.SummN  := SpOrder.PriceN*if(f_KolIsZero(SpOrder.Kol), 1.0, SpOrder.Kol);
+                        SpOrder.SummN  := oSaldo_K.RoundRubOrd(SpOrder.PriceN, if(f_KolIsZero(SpOrder.Kol), 1.0, SpOrder.Kol))*if(f_KolIsZero(SpOrder.Kol), 1.0, SpOrder.Kol);
+                      }
+                    }
 
                     if (not oModifOrds.Check_wasSpisOrder(SpOrder.cMC, SpOrder.cParty, SklOrder.cPodr, SklOrder.cMol, 0, SkPr, SklOrder.dOrd, 1 + SklOrder.VidOrder))
                       and (CheckAllowMinusKol(SpOrder.kol))
@@ -4548,7 +4575,7 @@ Function F_SpOrder_CheckRecord: boolean;
 
 //********************************************************************************
 
-Function F_SklOrder_DeleteRecord: boolean; //??? проверить не вызывается ли для зацищенных записей
+Function F_SklOrder_DeleteRecord: boolean; //??? проверить не вызывается ли для защищенных записей
 {
   Result := False;
 
@@ -4567,17 +4594,31 @@ Function F_SklOrder_DeleteRecord: boolean; //??? проверить не вызывается ли для 
 #end
 
   if (SklOrder.cSopr <> 0)
-    if GetFirst KatSopr where ((SklOrder.cSopr == KatSopr.nRec))= tsOk
-      if (KatSopr.vidSopr = 101) or (KatSopr.vidSopr = 108) or (KatSopr.vidSopr = 600) or
-         (KatSopr.vidSopr = 601) or (KatSopr.vidSopr = 602) or (KatSopr.vidSopr = 603) or
-         (KatSopr.vidSopr = 605) or (KatSopr.vidSopr = 606)
+    if (GetFirst KatSopr where ((SklOrder.cSopr == KatSopr.nRec)) = tsOk)
+    {
+      if (SklOrder.TipOrd <> 10)
+        if (sGetTune('Doc.ModSopr.DelOrdStat') <> '')
+          {
+            loCheckRashOrd._cNotes := KatSopr.cNote;
+
+            if (loCheckRashOrd.GetFirst KatNotes where (( _cNotes == KatNotes.nRec )) = tsOk)
+              if (instr(UpCase(sGetTune('Doc.ModSopr.DelOrdStat')), UpCase(loCheckRashOrd.KatNotes.Name)) <> 0)
+              {
+                ShowTune('Запрещено удаление ордеров в данном статусе накладной!', 'Doc.ModSopr.DelOrdStat');
+                Exit;
+              }
+          }
+
+      if (KatSopr.VidSopr = 101) or (KatSopr.VidSopr = 108) or (KatSopr.VidSopr = 600) or
+         (KatSopr.VidSopr = 601) or (KatSopr.VidSopr = 602) or (KatSopr.VidSopr = 603) or
+         (KatSopr.VidSopr = 605) or (KatSopr.VidSopr = 606)
       {
-        var cKatSoprNRec : comp;
-        cKatSoprNRec := KatSopr.nRec;
+        var cKatSoprNRec : comp = KatSopr.nRec;
+
         if loCheckRashOrd.GetFirst KatSoprCheck where (( cKatSoprNRec == KatSoprCheck.cKatSopr )) = tsOk
         {
-          var cKatSoprCheck : comp;
-          cKatSoprCheck := loCheckRashOrd.KatSoprCheck.nRec;
+          var cKatSoprCheck : comp = loCheckRashOrd.KatSoprCheck.nRec;
+
           if loCheckRashOrd.GetFirst SklOrderRash where (( cKatSoprCheck == SklOrderRash.cSopr)) = tsOk
           {
              Message('У накладной есть акт на прием услуг, по которому создан ордер дооценки - удаление приходного ордера невозможно', information);
@@ -4585,6 +4626,8 @@ Function F_SklOrder_DeleteRecord: boolean; //??? проверить не вызывается ли для 
           }
         }
       }
+    }
+
   if ( Message('Удалить ордер '+SklOrder.nOrder + '?', YesNo+Confirmation+mfSwapButtons) <> cmYes )
     Exit;
 
@@ -4625,17 +4668,31 @@ Function F_SpOrder_DeleteRecord: boolean; //??? проверить не вызывается ли для з
     Exit;
 
   if (SklOrder.cSopr <> 0)
-    if GetFirst KatSopr where ((SklOrder.cSopr == KatSopr.nRec))= tsOk
-      if (KatSopr.vidSopr = 101) or (KatSopr.vidSopr = 108) or (KatSopr.vidSopr = 600) or
-         (KatSopr.vidSopr = 601) or (KatSopr.vidSopr = 602) or (KatSopr.vidSopr = 603) or
-         (KatSopr.vidSopr = 605) or (KatSopr.vidSopr = 606)
+    if (GetFirst KatSopr where ((SklOrder.cSopr == KatSopr.nRec)) = tsOk)
+    {
+      if (SklOrder.TipOrd <> 10)
+        if (sGetTune('Doc.ModSopr.DelOrdStat') <> '')
+          {
+            loCheckRashOrd._cNotes := KatSopr.cNote;
+
+            if (loCheckRashOrd.GetFirst KatNotes where (( _cNotes == KatNotes.nRec )) = tsOk)
+              if (instr(UpCase(sGetTune('Doc.ModSopr.DelOrdStat')), UpCase(loCheckRashOrd.KatNotes.Name)) <> 0)
+              {
+                ShowTune('Запрещено удаление ордеров в данном статусе накладной!', 'Doc.ModSopr.DelOrdStat');
+                Exit;
+              }
+          }
+
+      if (KatSopr.VidSopr = 101) or (KatSopr.VidSopr = 108) or (KatSopr.VidSopr = 600) or
+         (KatSopr.VidSopr = 601) or (KatSopr.VidSopr = 602) or (KatSopr.VidSopr = 603) or
+         (KatSopr.VidSopr = 605) or (KatSopr.VidSopr = 606)
       {
-        var cKatSoprNRec : comp;
-        cKatSoprNRec := KatSopr.nRec;
+        var cKatSoprNRec : comp = KatSopr.nRec;
+
         if loCheckRashOrd.GetFirst KatSoprCheck where (( cKatSoprNRec == KatSoprCheck.cKatSopr )) = tsOk
         {
-          var cKatSoprCheck : comp;
-          cKatSoprCheck := loCheckRashOrd.KatSoprCheck.nRec;
+          var cKatSoprCheck : comp = loCheckRashOrd.KatSoprCheck.nRec;
+
           if loCheckRashOrd.GetFirst SklOrderRash where (( cKatSoprCheck == SklOrderRash.cSopr)) = tsOk
           {
              Message('У накладной есть акт на прием услуг, по которому создан ордер дооценки - удаление невозможно', information);
@@ -4643,6 +4700,8 @@ Function F_SpOrder_DeleteRecord: boolean; //??? проверить не вызывается ли для з
           }
         }
       }
+    }
+
   if ( Length(SDocNumber) > 0 )
     if ( Message('Данному ордеру соответствует накладная.'#13 +
                  'Изменение ордера может привести к некорректной ситуации!'#13#13 +

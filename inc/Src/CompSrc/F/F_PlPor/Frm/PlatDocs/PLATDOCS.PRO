@@ -206,6 +206,9 @@ PlatNameCity PlatTuneCity
 PlatOKATO
 PlatOGRN PlatKBK
 !
+doPalatNew
+PlatUNNnew PlatKPPnew
+!
 PlatNameForeign
 PlatAddrForeign
 PlatResidenceForeign
@@ -745,6 +748,10 @@ PlatTuneCity        наименование города/адреса по настройке ^
 PlatOKATO           ОКАТО ^
 PlatOGRN            ОГРН ^
 PlatKBK             КБК ^
+
+doPalatNew          Заменять на инфу 3-х лиц ^
+PlatUNNnew          ИНН (УНН) ^
+PlatKPPnew          КПП ^
 
 // 3 поля - реквизиты плательщика на иностранном языке
 PlatNameForeign       Наименование ^

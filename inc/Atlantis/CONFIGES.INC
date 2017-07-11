@@ -548,6 +548,8 @@ const
   isSequentialAlterTableLimit = 'SequentialAlterTableLimit';
   isEnforceStandardPlan = 'EnforceStandardPlan';
   isUseTop = 'UseTop';
+  isNavigationMaximumTop = 'NavigationMaximumTop';
+  isNavigationNoLock = 'NavigationNoLock';
 
 // Список параметров секции csInternal
 // Эти параметры регистрируются только в процессе работы программы.

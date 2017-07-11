@@ -23,6 +23,10 @@
  Pach_NachItog:double
  Pach_VzItog:double
  Pach_VzItogUpl:double
+ Pach_NachY: double
+ Pach_Nach1: double
+ Pach_Nach2: double
+ Pach_Nach3: double
  Фамилия
  Имя
  Отчество
@@ -94,6 +98,10 @@
  Pach_NachItog   ^
  Pach_VzItog     ^
  Pach_VzItogUpl  ^
+ Pach_NachY      ^     
+ Pach_Nach1      ^
+ Pach_Nach2      ^
+ Pach_Nach3      ^
  Фамилия         ^
  Имя             ^
  Отчество        ^
@@ -392,9 +400,13 @@ if(CharF<>2, DoubleToStr(Pach_NachItog,'[|-]36666666666667,8899'),' ')
 if(CharF<>2, DoubleToStr(Pach_VzItog,'[|-]36666666666667,8899'),' ')
 if(CharF<>2, DoubleToStr(Pach_VzItogUpl,'[|-]36666666666667,8899'),' ')
 if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
+if(CHARF=0 or CHARF=3, DoubleToStr(Pach_NachY,'[|-]36666666666667,8899'),' ')
+if(CHARF=0 or CHARF=3, DoubleToStr(Pach_Nach1,'[|-]36666666666667,8899'),' ')
+if(CHARF=0 or CHARF=3, DoubleToStr(Pach_Nach2,'[|-]36666666666667,8899'),' ')
+if(CHARF=0 or CHARF=3, DoubleToStr(Pach_Nach3,'[|-]36666666666667,8899'),' ')
 .endfields
 ЗГЛВ=1.5=
-<ПАЧК=^=^=^=^=^=^=^=^=^=^=^=>
+<ПАЧК=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=>
 .}
 .begin
   nomer:= nomer + 1;

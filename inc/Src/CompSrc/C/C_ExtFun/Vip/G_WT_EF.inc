@@ -6051,4 +6051,16 @@ function WT_GetInsalubrityCode(Day: byte): word; external #G_WorkTable;
   <code><a href="exf--WT_GetInsalubrity.htm">WT_GetInsalubrity</a></code> <br />
 #end
 function WT_GetPenStajInsalubrity(Day: byte): comp; external #G_WorkTable;
+
+#doc
+  <brief>Подкласс условий труда на определенную дату</brief>
+  <p>
+    Возвращает подкласс условий труда на дату <code>ADate</code>
+  </p>
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>ADate</code> - дата, на которую необходимо получить подкласс условий труда</li>
+  </ul>
+#end
+function WT_GetInsalubritySubClass(ADate: date): double; external #G_WorkTable;
 //------------------------------------------------------------------------------

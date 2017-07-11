@@ -12,6 +12,7 @@
 
 
 .Fields
+NRecTitleDoc : comp
 
 организация
 ОКПО
@@ -42,7 +43,7 @@ PersNrec: comp
 
 .EndFields
 
-^ ^ ^ ^
+^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^
 ^ ^

@@ -345,7 +345,37 @@ function UCH_CAPPOINT   : Comp;  external 'G_ZARPL.DLL';
 function NrCexSumTar(comp, boolean): double; external 'g_zarpl.dll';
 function NrCexOzSumTar(comp, boolean): double; external 'g_zarpl.dll';
 function NrBrigSumTar(comp, boolean): double; external 'g_zarpl.dll';
+
+#doc
+  Сумма фактически отработанного времени конкретного работника с учетом/без учета КТУ
+#end
+function NrSumTimeByLS(comp, boolean): double; external 'g_zarpl.dll';
+
+#doc
+  Сумма фактически отработанного времени по операции с учетом/без учета КТУ
+#end
+function NrSumTimeByOp(comp, boolean): double; external 'g_zarpl.dll';
+
+#doc
+  Фактически отработанное время по записи в спецификации наряда учетом/без учета КТУ
+#end
+function NrTime(boolean): double; external 'g_zarpl.dll';
+
+#doc
+  NRec бригады из текущей записи в разноске наряда
+#end
 function LsBrig: comp; external 'g_zarpl.dll';
+
+#doc
+  NRec лицевого счета из текущей записи в разноске наряда
+#end
+function LsNar: comp; external 'g_zarpl.dll';
+
+#doc
+  NRec операции из текущей записи в разноске наряда
+#end
+function OperNar: comp; external 'g_zarpl.dll';
+
 function NachDVH(word,word): Double; external 'G_ZARPL.DLL';
 
 #doc
@@ -544,35 +574,68 @@ function SumAlgNPD(prNALG : word, PrKAlgg: word, Param: string): double;  extern
 #doc
   Извлечение данных из буфера
 #end
-function GetBufValueD: Double; external 'G_ZARPL.DLL';
+function GetBufValueD: double; external 'G_ZARPL.DLL';
+#doc
+  <brief>Функция возвращает из временного буфера значение числа с плавающей точкой</brief>
+  <p>
+    Функция GETBUFVALUEDI предназначена для получения из временного буфера значения,
+    сохраненного по определенному индексу, который передается в качестве параметра.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>AIndex</code> - индекс</li>
+  </ul>
+#end
+function GetBufValueDI(AIndex: longint): double; external 'G_ZARPL.DLL';
 #doc
   Извлечение данных из буфера
 #end
-function GetBufValueW: Word; external 'G_ZARPL.DLL';
+function GetBufValueW: word; external 'G_ZARPL.DLL';
 #doc
   Извлечение данных из буфера
 #end
-function GetBufValueB: Byte; external 'G_ZARPL.DLL';
+function GetBufValueB: byte; external 'G_ZARPL.DLL';
 #doc
   Извлечение данных из буфера
 #end
-function GetBufValueC: Comp; external 'G_ZARPL.DLL';
+function GetBufValueC: comp; external 'G_ZARPL.DLL';
 #doc
   Сохранение данных в буфер
 #end
-function SetBufValueD(Value: Double): Double; external 'G_ZARPL.DLL';
+function SetBufValueD(double): double; external 'G_ZARPL.DLL';
+#doc
+  <brief>Функция сохраняет во временном буфере значение числа с плавающей точкой</brief>
+  <p>
+    Функция SETBUFVALUEDI сохраняет во временном буфере значение числа с плавающей точкой.
+    В первом параметре передается индекс, по которому будет сохранено значение, переданное
+    во втором параметре. Функция возвращает сохраненное значение.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>AIndex</code> - индекс</li>
+    <li><code>Value</code> - сохраняемое значение</li>
+  </ul>
+
+  <h3>Возвращаемое значение</h3>
+  <p><p>
+    Возвращает переданное в качестве <code>Value</code> значение.</p>
+  </p>
+#end
+function SetBufValueDI(AIndex: longint, Value: double): double; external 'G_ZARPL.DLL';
 #doc
   Сохранение данных в буфер
 #end
-function SetBufValueW(Value: Word): Word; external 'G_ZARPL.DLL';
+function SetBufValueW(word): word; external 'G_ZARPL.DLL';
 #doc
   Сохранение данных в буфер
 #end
-function SetBufValueB(Value: Byte): Byte; external 'G_ZARPL.DLL';
+function SetBufValueB(byte): byte; external 'G_ZARPL.DLL';
 #doc
   Сохранение данных в буфер
 #end
-function SetBufValueC(Value: Comp): Comp; external 'G_ZARPL.DLL';
+function SetBufValueC(comp): comp; external 'G_ZARPL.DLL';
 
 #doc
   Создание буфера

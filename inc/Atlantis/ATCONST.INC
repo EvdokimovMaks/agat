@@ -101,6 +101,8 @@ CONST
 CONST
        cmReleasedFocus                                = 51;
 CONST
+       cmBrowserTune                                  = 52;
+CONST
        cmScrollBarChanged                             = 53;
 CONST
        cmScrollBarClicked                             = 54;
@@ -235,6 +237,24 @@ CONST
        cmXlsxBrowse                                   = 116;
 CONST
        cmXMLBrowse                                    = 117;
+CONST
+       cmJsonBrowse                                   = 118;
+CONST
+       cmCsvBrowse                                    = 119;
+CONST
+       cmTuneExpToFormats                             = 120;
+CONST
+       cmReSetAllFilters                              = 121;
+CONST
+       cmShowAllColumn                                = 122;
+CONST
+       cmShowCustomColumn                             = 123;
+CONST
+       cmMarkFromClipboard                            = 124;
+CONST
+       cmMarkToClipboard                              = 125;
+CONST
+       cmFindWithValue                                = 126;
 CONST
        cmHotKeys                                      = 300;
 CONST
@@ -703,6 +723,8 @@ CONST
        cmToolButtonHotKey                             = 580;
 CONST
        cmButtonHotKey                                 = 581;
+CONST
+       cmToolButtonHotKeyApp                          = 582;
 
 CONST
        cmRdSetCtrlH                                   = 600;
@@ -3824,11 +3846,15 @@ CONST
 CONST
   tgiTblNavigator    = 10;  // kbUp, kbDown, kbPgUp, kbPgDown, kbCtrlPgUp, kbCtrlPgDn
 CONST
-  tgiAbsNavigator    = 11;  // kbPgUp, kbPgDown, kbCtrlPgUp, kbCtrlPgDn
+  tgiTblExport       = 11;  // выгрузка из браузера, отчеты...
 CONST
-  tgiMarker          = 12;  //
+  tgiTblAggr         = 12;  // сортировка, фильтры
 CONST
-  tgiColumnMarker    = 13;  //
+  tgiAbsNavigator    = 13;  // kbPgUp, kbPgDown, kbCtrlPgUp, kbCtrlPgDn
+CONST
+  tgiMarker          = 14;  //
+CONST
+  tgiColumnMarker    = 15;  //
   // DialogToolbar
 CONST
   tgdEdit            = 30;  //  kbCtrlIns, kbShiftIns, kbAltBkSpace

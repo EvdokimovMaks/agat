@@ -68,13 +68,13 @@ CommonFormHeader
  Mes God
  Name_Rees + ' '+strdat
 .endfields
-.begin  KolList  := 0
-        SumList1 := 0
-        SumList2 := 0
-        SumList3 := 0
-        SumList4 := 0
-        SumList5 := 0
-        SumList6 := 0
+.begin  KolList  := 0;
+        SumList1 := 0;
+        SumList2 := 0;
+        SumList3 := 0;
+        SumList4 := 0;
+        SumList5 := 0;
+        SumList6 := 0;
    end.
 
   Предприятие  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
@@ -93,12 +93,12 @@ CommonFormHeader
  ├────────────────┼──────────────┼──────────────┼──────────────┼──────────────┼──────────┼──────────┤ И
 .]h
 .{ CheckEnter reesubol_2
-.begin SumList1 := SumList1 + Кол_раб_дн
-       SumList2 := SumList2 + Кол_раб_час
-       SumList3 := SumList3 + Кол_календ_дн
-       SumList4 := SumList4 + Summa
-       SumList5 := SumList5 + KolRab
-       SumList6 := SumList6 + CountEvents
+.begin SumList1 := SumList1 + Кол_раб_дн;
+       SumList2 := SumList2 + Кол_раб_час;
+       SumList3 := SumList3 + Кол_календ_дн;
+       SumList4 := SumList4 + Summa;
+       SumList5 := SumList5 + KolRab;
+       SumList6 := SumList6 + CountEvents;
   end.
 .fields
  VidPos Кол_календ_дн Кол_раб_дн Кол_раб_час Summa KolRab CountEvents
@@ -114,12 +114,12 @@ CommonFormHeader
  И └────────────────┴──────────────┴──────────────┴──────────────┴──────────────┴──────────┴──────────┘
 Итого по листу &&&: &'&&&&&&&&&&& &'&&&&&&&&.&&  &'&&&&&&&&&.&& &'&&&&&&&&&.&& &'&&&&&&&& &'&&&&&&&&
  И
-.begin SumList1:=0
-       SumList2:=0
-       SumList3:=0
-       SumList4:=0
-       SumList5:=0
-       SumList6:=0
+.begin SumList1:=0;
+       SumList2:=0;
+       SumList3:=0;
+       SumList4:=0;
+       SumList5:=0;
+       SumList6:=0;
   end.
 .]f
 .}
@@ -158,13 +158,13 @@ CommonFormHeader
  Mes God
  Name_Rees+ ' '+strdat
 .endfields
-.begin  KolList  := 0
-        SumList1 := 0
-        SumList2 := 0
-        SumList3 := 0
-        SumList4 := 0
-        SumList5 := 0
-        SumList6 := 0
+.begin  KolList  := 0;
+        SumList1 := 0;
+        SumList2 := 0;
+        SumList3 := 0;
+        SumList4 := 0;
+        SumList5 := 0;
+        SumList6 := 0;
   end.
 
   Предприятие  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
@@ -183,12 +183,12 @@ CommonFormHeader
  ├─────────────────┼──────────────┼──────────────┼──────────────┼──────────────┼──────────┼──────────┤ И
 .]h
 .{ CheckEnter reesubol_2
-.begin SumList1 := SumList1 + Кол_раб_дн
-       SumList2 := SumList2 + Кол_раб_час
-       SumList3 := SumList3 + Кол_календ_дн
-       SumList4 := SumList4 + Summa
-       SumList5 := SumList5 + KolRab
-       SumList6 := SumList6 + CountEvents
+.begin SumList1 := SumList1 + Кол_раб_дн;
+       SumList2 := SumList2 + Кол_раб_час;
+       SumList3 := SumList3 + Кол_календ_дн;
+       SumList4 := SumList4 + Summa;
+       SumList5 := SumList5 + KolRab;
+       SumList6 := SumList6 + CountEvents;
   end.
 .fields
  VidPos Кол_календ_дн Кол_раб_дн Кол_раб_час Summa  KolRab CountEvents
@@ -203,12 +203,12 @@ CommonFormHeader
  И └─────────────────┴──────────────┴──────────────┴──────────────┴──────────────┴──────────┴──────────┘
 Итого по листу &&&: &'&&&&&&&&&&&& &'&&&&&&&&&.&& &'&&&&&&&&&.&& &'&&&&&&&&&.&& &'&&&&&&&& &'&&&&&&&&
  И
-.begin SumList1:=0
-       SumList2:=0
-       SumList3:=0
-       SumList4:=0
-       SumList5:=0
-       SumList6:=0
+.begin SumList1:=0;
+       SumList2:=0;
+       SumList3:=0;
+       SumList4:=0;
+       SumList5:=0;
+       SumList6:=0;
   end.
 .]f
 .}
@@ -251,17 +251,17 @@ CommonFormHeader
  Mes God
  Name_Rees+ ' '+strdat
 .endfields
-.begin  KolList    := 0
-        SumList1   := 0
-        SumList2   := 0
-        SumList3   := 0
-        SumList4   := 0
-        SumList1_d := 0
-        SumList2_d := 0
-        SumList4_d := 0
-        SumListPrev:= 0
-        SumList5   := 0
-        SumList6   := 0
+.begin  KolList  := 0;
+        SumList1 := 0;
+        SumList2 := 0;
+        SumList3 := 0;
+        SumList4 := 0;
+        SumList1_d:= 0;
+        SumList2_d:= 0;
+        SumList4_d:= 0;
+        SumListPrev:= 0;
+        SumList5 := 0;
+        SumList6   := 0;
    end.
 
  Ш  Предприятие  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
@@ -287,16 +287,16 @@ CommonFormHeader
  Кол_раб_дн_d Кол_раб_час_d  Summa_d SumPrev KolRab CountEvents
 .endfields
 .begin
-  SumList1:= SumList1 + Кол_раб_дн_o
-  SumList2:= SumList2 + Кол_раб_час_o
-  SumList3:= SumList3 + Кол_календ_дн
-  SumList4:= SumList4 + Summa_o
-  SumList1_d:= SumList1_d + Кол_раб_дн_d
-  SumList2_d:= SumList2_d + Кол_раб_час_d
-  SumList4_d:= SumList4_d + Summa_d
-  SumListPrev:= SumListPrev + SumPrev
-  SumList5  := SumList5 + KolRab
-  SumList6  := SumList6 + CountEvents
+  SumList1:= SumList1 + Кол_раб_дн_o;
+  SumList2:= SumList2 + Кол_раб_час_o;
+  SumList3:= SumList3 + Кол_календ_дн;
+  SumList4:= SumList4 + Summa_o;
+  SumList1_d:= SumList1_d + Кол_раб_дн_d;
+  SumList2_d:= SumList2_d + Кол_раб_час_d;
+  SumList4_d:= SumList4_d + Summa_d;
+  SumListPrev:= SumListPrev + SumPrev;
+  SumList5  := SumList5 + KolRab;
+  SumList6  := SumList6 + CountEvents;
   end.
  │@@@@@@@@@@@@@@@@│ &'&&&&&&&&│&'&&&&&&&.&&│&'&&&&&&&&.&&│&'&&&&&&&&&&.&&│ &'&&&&&&.&&│&'&&&&&&&&.&&│&'&&&&&&&&&&.&&│&'&&&&&&&&&&.&&│&'&&&&&&&&│&'&&&&&&&&│
 .}
@@ -309,16 +309,16 @@ CommonFormHeader
 Итого по листу &&&:&'&&&&&&&&& &'&&&&&&&.&& &'&&&&&&&&.&& &'&&&&&&&&&&.&& &'&&&&&&&.&& &'&&&&&&&&.&& &'&&&&&&&&&&.&& &'&&&&&&&&&&.&& &'&&&&&&&& &'&&&&&&&&
 
 .begin
-  SumList1:=0
-  SumList2:=0
-  SumList3:=0
-  SumList4:=0
-  SumList1_d:=0
-  SumList2_d:=0
-  SumList4_d:=0
-  SumListPrev:=0
-  SumList5:=0
-  SumList6:=0
+  SumList1:=0;
+  SumList2:=0;
+  SumList3:=0;
+  SumList4:=0;
+  SumList1_d:=0;
+  SumList2_d:=0;
+  SumList4_d:=0;
+  SumListPrev:=0;
+  SumList5:=0;
+  SumList6:=0;
   end.
 .]f
 .}

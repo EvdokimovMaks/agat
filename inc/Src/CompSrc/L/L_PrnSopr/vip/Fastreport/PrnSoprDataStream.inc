@@ -246,14 +246,14 @@ Datastream fr_prndata
                                                 fr_dochead.AllDoc5 , fr_dochead.AllCert1, fr_dochead.AllCert2 , fr_dochead.AllCert3,
                                                 fr_dochead.AllCert4, fr_dochead.AllCert5, fr_dochead.PriceList, sPrice);
 
-    [val_rub             ] oPrnSoprFun.GetVal_rub(fr_dochead.KatSopr_cVal);
-    [val_kop             ] oPrnSoprFun.GetVal_kop(fr_dochead.KatSopr_cVal);
-    [nvagon              ] oPrnSoprFun.GetVagon  (fr_dochead.KatSoprNRec, 0);
-    [prGrpol             ] oPrnSoprFun.GetPrGrpol(fr_dochead.KatSoprNRec);
-    [nplomba             ] oPrnSoprFun.GetPlomba (fr_dochead.KatSoprNRec);
-    [isSumOtpEd          ] oPrnSoprFun.IsSumOtpEd(fr_dochead.KatSoprNRec);
-    [IGK                 ] oPrnSoprFun.GetFullIGK(fr_dochead.KatSoprNRec);
-    [CMR                 ] oPrnSoprFun.Write_CMR (fr_dochead.KatSoprNRec);
+    [val_rub             ] oPrnSoprFun.GetVal_rub  (fr_dochead.KatSopr_cVal);
+    [val_kop             ] oPrnSoprFun.GetVal_kop  (fr_dochead.KatSopr_cVal);
+    [nvagon              ] oPrnSoprFun.GetVagon    (fr_dochead.KatSoprNRec, 0);
+    [prGrpol             ] oPrnSoprFun.GetPrGrpol  (fr_dochead.KatSoprNRec);
+    [nplomba             ] oPrnSoprFun.GetPlomba   (fr_dochead.KatSoprNRec);
+    [isSumOtpEd          ] oPrnSoprFun.IsSumOtpEd  (fr_dochead.KatSoprNRec);
+    [IGK                 ] oPrnSoprFun.GetFullIGKEx(fr_dochead.KatSoprNRec, fr_dochead.SchFact_NRec);
+    [CMR                 ] oPrnSoprFun.Write_CMR   (fr_dochead.KatSoprNRec);
 ! Поля для универсального передаточного документа
 //продавец
     [SchFactPostName     ] oPrnSoprFun.GetOrgFullName(oPrnSoprFun.GetSchFactOrgNRec(fr_dochead.SchFact_NRec, 0), 8, 0, fr_dochead.KatSopr_dSopr);
@@ -281,6 +281,10 @@ Datastream fr_prndata
 //Руководитель и реквизиты для ИП
     [Check_IP            ] oPrnSoprFun.Check_IP(fr_dochead.KatSoprNRec, 1);
     [Write_IP            ] oPrnSoprFun.Write_IP(fr_dochead.KatSoprNRec, 1);
+//Транспортная накладная для торг-12
+    [nomerTN             ] oPrnSoprFun.NumData(fr_dochead.KatSoprNRec, 0);       // Номер
+    [date_fullTN         ] oPrnSoprFun.NumData(fr_dochead.KatSoprNRec, 1);// Дата
+
   )
   ;
 
@@ -534,7 +538,48 @@ Datastream fr_prndata
                                              Abs (oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec)), 0), Cena_Pr);
     [KDSumma2             ] DoubleToStr(if ((oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec)) > 0,
                                              oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec), 0), Cena_Pr);
+! Для исправительного документа 101.62039
+    [KDKolOldIsp          ] DoubleToStr(oPrnSoprFun.GetKNKol(fr_docspecif.SpSoprNRec, 0), Kol_Pr);
+    [KDKolNewIsp          ] DoubleToStr(oPrnSoprFun.GetKNKol(fr_docspecif.SpSoprNRec, 1), Kol_Pr);
+    [KDPriceOldIsp        ] DoubleToStr(oPrnSoprFun.GetKNPrice(fr_docspecif.SpSoprNRec, 0), Kol_Pr);
+    [KDPriceNewIsp        ] DoubleToStr(oPrnSoprFun.GetKNPrice(fr_docspecif.SpSoprNRec, 1), Kol_Pr);
+    [KDSummaOldBNIsp      ] DoubleToStr(oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0), Cena_Pr);
+    [KDSummaNewBNIsp      ] DoubleToStr(oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1) - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1), Cena_Pr);
+    [KDSumma1BNIsp        ] DoubleToStr(if ((oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0)
+                                           - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0)
+                                           - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1)
+                                           + oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1)) < 0,
+                                         Abs(oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0)
+                                           - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0)
+                                           - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1)
+                                           + oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1)), 0), Cena_Pr);
+    [KDSumma2BNIsp        ] DoubleToStr(if ((oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0)
+                                           - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0)
+                                           - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1)
+                                           + oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1)) > 0,
+                                             oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0)
+                                           - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0)
+                                           - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1)
+                                           + oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1), 0), Cena_Pr);
 
+    [KDAkcizOldIsp        ] if (oPrnSoprFun.GetKNPrice(fr_docspecif.SpSoprNRec, 0) <> 0, if (fr_docspecif.CExciseNak <> 0, DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr), 'Без акциза'), '-');
+    [KDAkcizNewIsp        ] if (oPrnSoprFun.GetKNPrice(fr_docspecif.SpSoprNRec, 1) <> 0, if (fr_docspecif.CExciseNak <> 0, DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr), 'Без акциза'), '-');
+    [KDAkciz1Isp          ] if (oPrnSoprFun.GetKNPrice(fr_docspecif.SpSoprNRec, 0) <> 0, if (fr_docspecif.CExciseNak <> 0, DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr), 'Без акциза'), '-');
+    [KDAkciz2Isp          ] if (oPrnSoprFun.GetKNPrice(fr_docspecif.SpSoprNRec, 1) <> 0, if (fr_docspecif.CExciseNak <> 0, DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr), 'Без акциза'), '-');
+
+    [KDNalogOldIsp        ] DoubleToStr(oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0), Cena_Pr);
+    [KDNalogNewIsp        ] DoubleToStr(oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1), Cena_Pr);
+    [KDNalog1Isp          ] DoubleToStr(if ((oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1)) < 0,
+                                         Abs(oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1)), 0), Cena_Pr);
+    [KDNalog2Isp          ] DoubleToStr(if ((oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1)) > 0,
+                                             oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNNalog(fr_docspecif.SpSoprNRec, 1), 0), Cena_Pr);
+
+    [KDSummaOldIsp        ] DoubleToStr(oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0), Cena_Pr);
+    [KDSummaNewIsp        ] DoubleToStr(oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1), Cena_Pr);
+    [KDSumma1Isp          ] DoubleToStr(if ((oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1)) < 0,
+                                        Abs (oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1)), 0), Cena_Pr);
+    [KDSumma2Isp          ] DoubleToStr(if ((oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1)) > 0,
+                                             oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1), 0), Cena_Pr);
   );
 
 

@@ -192,6 +192,7 @@ const
   csMessageAboutClosePeriod = 'Закрытый период. Модификация документов запрещена.';
 
   // Максимальная дата в системе. Не маловато ли?
+  Min_Date : Date = Date(1, 1, 1900);
   Max_Date : Date = Date(1, 1, 2100);
 
   cdDateIntroductionESF : Date = Date(1, 7, 2016); // Дата введения ЭСЧФ
@@ -506,9 +507,10 @@ const
   Separator_NumIspr = '_';
 
   // Константы для UsersDoc.Flags
-  clUD_NumShablon : LongInt = 1; // Признак нумерации типа по шаблону
-  clUD_Ispr       : LongInt = 2; // Признак исправительного типа
-  clUD_PickOppos  : LongInt = 4; // Выбор в СФ противоположного направления
+  clUD_NumShablon  : LongInt = 1; // Признак нумерации типа по шаблону
+  clUD_Ispr        : LongInt = 2; // Признак исправительного типа
+  clUD_PickOppos   : LongInt = 4; // Выбор в СФ противоположного направления
+  clUD_UseCodeOpSF : LongInt = 8; // Использовать код вида операции СФ для связанных записей регистрации
 
   // Режимы (aMode) для функции Get_List_SF_Src_CorrV - поиска исходных СФ сводного корректировочного СФ
   cw_PrintOneSF : Word =   1;  // Печать первого СФ, по умолчанию

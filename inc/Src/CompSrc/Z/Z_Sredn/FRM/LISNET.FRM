@@ -40,8 +40,9 @@ end.
   EdIzm
   FIO_Buh
   Post_Buh
+  lCountSick
 .endfields
- ^ ^ ^ ^
+ ^ ^ ^ ^ ^
 .{ FormHeaderPrint
 .fields
   ZagText1 ZagText2
@@ -287,12 +288,17 @@ end.
   DoubleToStr(Итого_Сумма_общая, '[|-]36''666''666''666''666.88')
   Итого_Дней_рабочих
   Итого_Дней_календарных
-!  Итого_Дней_календарных_с_начала_года
 .endfields
         @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@    Г&'&&&&&&&&&&&&& &'&&&&&&&&&&&& &'&&&&&&&&&& &'&&&&&&&&&&&&                       &&&&&&&&&&& &&&&&&&  Г
 .{ lisnet_Totals_forChildrenControl CHECKENTER
 .}
 .} // lisnet_ProcessTotal
+.fields
+  lCountSick
+.endfields
+.{?internal; (Depth_Total = 0)
+        Случаев заболеваемости : ^
+.}
 .} //lisnet_MainCycle
 .fields
   Post_Buh
@@ -421,10 +427,14 @@ end.
 .} // Totals_forChildrenControl CHECKENTER
 .} // lisnet_ProcessTotal
 .fields
+  lCountSick
   Post_Buh
   FIO_Buh
 .endfields
 .} // lisnet_MainCycle Ш
+.{?internal; (Depth_Total = 0)
+        Случаев заболеваемости : ^
+.}
 .{?internal; ( FIO_Buh <> '' )
 
         ^ ___________________________________ ^

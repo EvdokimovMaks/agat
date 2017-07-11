@@ -13,20 +13,24 @@
 .group 'Общие показатели'
 .fields
  ShinafNrec
- Org Arch NomShin MarkaShin ModShin Nomrsl KatOrg_Izg NameOs NameOsZav
+ Org Arch NomShin MarkaShin ModShin Nomrsl KatOrg_Izg NameOs NameOsZav price:double
  ProbegAll:double GarProbeg:double IksProbeg:double
  MotoAll:double GarMoto:double IksMoto:double
  DniAll:double  GarDni:double  IksDni:double
  Cur_AvtoGnom TipDviMain DatOp ist
 
- MarkaTC Cur_AvtoGnom2 AvtoGnom AvtoGarNum TipDvi DatZak DatSisan ProbegZap ProbegAvto MotoAvto DniAvto TipKOL sRemoval
+ MarkaTC Cur_AvtoGnom2 AvtoGnom AvtoGarNum TipDvi DatZak DatSisan ProbegZap:double ProbegAvto:double MotoAvto DniAvto TipKOL sRemoval
 
  NameMonth SumProbegMonth SumProbeg SumMotoMonth SumMoto
+
+ InChangeTransp
+ sMainComissPost sMainComissFIO
+ sComissPost sComissFIO
 .endfields
 
 .{
 ^
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .if Kar_Shi
 .{
@@ -35,6 +39,13 @@
 ^ ^ ^ ^ ^
 .}
 .}
+
+^
+^ ^
+.{ CheckEnter ComissKarShi
+^ ^
+.}
+
 .end
 .}
 .endform
@@ -43,7 +54,7 @@
 .group 'Общие показатели'
 .fields
  CommonFormHeader
- Org Arch ModShin NomShin
+ Org Arch ModShin NameOsZav NomShin
  IksProbeg
  AvtoGnom  DatZak DatSisan ProbegZap ProbegAvto TipDvi
 .endfields
@@ -54,7 +65,7 @@
 
                 Карточка учета автомобильной шины ^
            новая.восстановленная.б/у(ненужное зачеркнуть)
-Размер ______ Модель @@@@@@@@@@@@@ Заводской N _____ Гаражный порядковый N шины @@@@@@@@@
+Размер ______ Модель @@@@@@@@@@@@@ Заводской N @@@@@@@@@@@@@ Гаражный порядковый N шины @@@@@@@@@
 Завод-изготовитель _________ ГОСТ ___________ Норма пробега &&&&&&&.&
 
 
@@ -70,7 +81,8 @@
 .}
 .}
 └──────────┴───────────────────────┴───────────────────────┴──────────────┴────────────┴─────────┘
-
+.{ CheckEnter ComissKarShi
+.}
 .end
 .} Р
 .endform
@@ -104,6 +116,8 @@
 .}
 .}
 └─────────┴─────────────┴──────────┴──────────┴────────────┴────────────┘
+.{ CheckEnter ComissKarShi
+.}
 .end
 -----------------------------------------------------------------------
 .}
@@ -141,6 +155,8 @@ end.
 .{
 .}
 .}
+.{ CheckEnter ComissKarShi
+.}
 .end
 .}
 └─────────┴───────────────┴────────┴────────┴──────────┴────────┴────────┴──────────┴────────┴────────┴────────┴──────────┘
@@ -169,6 +185,8 @@ end.
 .{
 .}
 .}
+.{ CheckEnter ComissKarShi
+.}
 .end
 .}
 └─────────┴───────────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴───────────┴──────────┴─────────────┴─────────────┘ И
@@ -179,7 +197,7 @@ end.
 .fields
  CommonFormHeader
  Arch
- NomShin  ModShin Nomrsl
+ NomShin  ModShin  NameOsZav Nomrsl
  GarProbeg IksProbeg KatOrg_Izg Org
  AvtoGnom  DatZak DatSisan TipDvi  TipKol
  NameMonth SumProbegMonth SumProbeg
@@ -190,7 +208,7 @@ end.
                 Карточка учета автомобильной шины ^
            новая.восстановленная.б/у(ненужное зачеркнуть)
 Обозначение шины @@@@@@@@@@@@@@@@@@@@@@@@@@@@@  Модель @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-ГОСТ или ТУ на шину __________________________  Заводской номер _________________________
+ГОСТ или ТУ на шину __________________________  Заводской номер @@@@@@@@@@@@@@@@@@@@@@@@@
 Норма слойности или индекс грузоподъемности @@@@@@@@@@@@@@@@@@@@@
 Гарантийная /эксплуатационная/ норма пробега &&&&&&&.&  &&&&&&&.&
 Предприятие-изготовитель новой шины или шиноремонтное предприятие восстановленной шины
@@ -210,6 +228,8 @@ end.
 .}
 .}
 └──────────┴───────────────────────┴───────────────────────┴──────────────┴────────────┴─────────┴─────────┘
+.{ CheckEnter ComissKarShi
+.}
 .end
 .} Р
 .endform
@@ -246,6 +266,8 @@ end.
 .{
 .{
 .}
+.}
+.{ CheckEnter ComissKarShi
 .}
 .end
 .}

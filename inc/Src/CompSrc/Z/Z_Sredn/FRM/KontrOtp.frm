@@ -86,12 +86,12 @@ CommonFormHeader
  ├─────────┼──────────────────────────────┼─────────────────────────┼──────────┼──────────┼──────────────┼────────┼──────────┼───────────┼──────────┼──────────┤
  Ш.]h
 .{
-.begin SumList1 := SumList1 + Summa
-       SumList2 := SumList2 + Кол_опл_дн
-       SumList3 := SumList3 + Кол_раб_дн
-       SumList4 := SumList4 + Кол_календ_дн
-       SumList5 := SumList5 + Кол_раб_час
-       SumList6 := SumList6 + Кол_раб_днейРП
+.begin SumList1 := SumList1 + Summa;
+       SumList2 := SumList2 + Кол_опл_дн;
+       SumList3 := SumList3 + Кол_раб_дн;
+       SumList4 := SumList4 + Кол_календ_дн;
+       SumList5 := SumList5 + Кол_раб_час;
+       SumList6 := SumList6 + Кол_раб_днейРП;
   end.
 .fields
  TabN Fio VidPos DataN DataOK Summa Кол_опл_дн Кол_раб_дн Кол_календ_дн Кол_раб_час Кол_раб_днейРП

@@ -136,6 +136,13 @@ const
 
 	// создание и удаление
 	reInsertRecord = 6100;
+  reDuplRecord   = 6101;
+  rePersonsParam = 6102;
+  rePointFromParam = 6103;
+  rePointToParam   = 6104;
+  reDateFromParam  = 6105;
+  reDateToParam    = 6106;
+  rePLCreateParam   = 6107;
 
   // параметры
   rePutLstParam     = 7101;

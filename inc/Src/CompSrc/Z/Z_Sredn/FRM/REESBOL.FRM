@@ -61,13 +61,13 @@ CommonFormHeader
  Mes God
  Name_Rees + ' '+strdat
 .endfields
-.begin  KolList  := 0
-        SumList1 := 0
-        SumList2 := 0
-        SumList3 := 0
-        SumList4 := 0
-        SumList5 := 0
-        SumList6 := 0
+.begin  KolList  := 0;
+        SumList1 := 0;
+        SumList2 := 0;
+        SumList3 := 0;
+        SumList4 := 0;
+        SumList5 := 0;
+        SumList6 := 0;
    end.
 
  И  Предприятие @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -87,12 +87,12 @@ CommonFormHeader
  ├──────────────────┼────────┼──────────┼───────────┼──────────┼──────────────┼──────────┤ И
 .]h
 .{ CheckEnter reesbol_2
-.begin SumList1 := SumList1 + Кол_опл_дн
-       SumList2 := SumList2 + Кол_раб_дн
-       SumList3 := SumList3 + Кол_календ_дн
-       SumList4 := SumList4 + Кол_раб_час
-       SumList5 := SumList5 + Summa
-       SumList6 := SumList6 + KolRab
+.begin SumList1 := SumList1 + Кол_опл_дн;
+       SumList2 := SumList2 + Кол_раб_дн;
+       SumList3 := SumList3 + Кол_календ_дн;
+       SumList4 := SumList4 + Кол_раб_час;
+       SumList5 := SumList5 + Summa;
+       SumList6 := SumList6 + KolRab;
   end.
 .fields
  VidPos Кол_опл_дн Кол_раб_дн Кол_календ_дн Кол_раб_час Summa KolRab
@@ -107,12 +107,12 @@ CommonFormHeader
  И └──────────────────┴────────┴──────────┴───────────┴──────────┴──────────────┴──────────┘
  Итого по листу &&&:  &'&&&&.& &'&&&&&&.& &'&&&&&&&.& &'&&&&&&.& &'&&&&&&&&&.&& &'&&&&&&&&
  И
-.begin SumList1:=0
-       SumList2:=0
-       SumList3:=0
-       SumList4:=0
-       SumList5:=0
-       SumList6:=0
+.begin SumList1:=0;
+       SumList2:=0;
+       SumList3:=0;
+       SumList4:=0;
+       SumList5:=0;
+       SumList6:=0;
   end.
 .]f
 .}

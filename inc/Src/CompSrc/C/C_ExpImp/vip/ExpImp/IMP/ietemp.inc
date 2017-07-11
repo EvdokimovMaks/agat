@@ -31,3 +31,5 @@
   oExtClass: iExtClass;
 
   wMessageError : word;
+
+  iFileStruct : GetFieldFromFile;

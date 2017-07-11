@@ -44,6 +44,7 @@ Type
     NotSign: boolean;        // документ не содержит ЭЦП
     FileXsd: string;         // путь к xsd-схеме
     FileTicket: string;      // входящая квитанция при отправке
+    FirstSign: _datetime;    // дата первой подписи
   end;
 
 #endif // _InvoiceService_inc_

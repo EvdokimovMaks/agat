@@ -107,6 +107,7 @@
   mofFixedRightColumn = $00002000;
   //Помеченные колонки в броузере
   mofSelectedColumn = $00004000;
+  mofActivLabel     = $00008000;
 
 
 const
