@@ -1,0 +1,271 @@
+#include Query.vih
+#include AtlProtocol.vih
+
+#component "AGAT"
+
+interface SyncDogovorIGK 'Синхронизация ИГК в договорах по заказам' escclose doaccept;
+show(,,30,3);
+
+sql query qZakaz =
+
+  select distinct d.nrec, spkau.name
+  from dogovor d
+  join attrval avZakaz on avZakaz.wtable = 1707 and avZakaz.cRec = d.nrec and avZakaz.cattrnam = #comp(00010000000000ABh)
+  join katstroy ks on ks.nrec = avZakaz.vComp
+  join attrval avIGK on avIGK.wtable = 2101 and avIGK.crec = ks.nrec and avIGK.cattrnam = #comp(00010000000004CCh)
+  join spkau on spkau.nrec = avIGK.vComp
+
+  union
+
+  select distinct d.nrec, spkau.name
+  from dogovor d
+  join calplan cp on cp.cdogovor = d.nrec
+  join spdocs on spdocs.tidk = 403 and spdocs.cdoc = cp.nrec
+  join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1723 and sm.cspec = spdocs.nrec
+  join katstroy ks on ks.nrec = sm.cobj
+  join attrval avIGK on avIGK.wtable = 2101 and avIGK.crec = ks.nrec and avIGK.cattrnam = #comp(00010000000004CCh)
+  join spkau on spkau.nrec = avIGK.vComp
+
+  union
+
+  select distinct d.nrec, spkau.name
+  from dogovor d
+  join spdocs on spdocs.tidk = 401 and spdocs.cdoc = d.nrec
+  join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1723 and sm.cspec = spdocs.nrec
+  join katstroy ks on ks.nrec = sm.cobj
+  join attrval avIGK on avIGK.wtable = 2101 and avIGK.crec = ks.nrec and avIGK.cattrnam = #comp(00010000000004CCh)
+  join spkau on spkau.nrec = avIGK.vComp
+;
+
+table struct tIgk (
+  nrec: comp,
+  name: string
+) with index (
+  i01 = nrec
+);
+
+table struct tdogovor (
+  nrec: comp,
+  cdogovor: comp,
+  nodoc: string,
+  ddoc: date
+) with index (
+  i01 = nrec (unique),
+  i02 = cdogovor
+);
+
+create view
+as select *
+from tIgk, tdogovor, tdogovor d, tdogovor ds, exclassseg, exclassier, exclassval
+where ((
+  0      == d.cdogovor and
+  d.nrec == ds.cdogovor
+))
+;
+
+type tStringArray = array[0..0] of string;
+
+function FillIGKArrayByDogovor(dogovorNrec: comp; var arr: tStringArray): longint;
+{
+
+  var i: longint = 0;
+
+  _loop tIgk where ((dogovorNrec == tIgk.nrec))
+  {
+
+    arr[i] := tIgk.name;
+    i++;
+
+  }
+
+  result := i;
+
+}
+
+procedure LogStringArray(arr: tStringArray; MessageType: byte; p: IAtlProtocol);
+{
+
+  var i: longint;
+  for(i := 0; i < count(arr); i++)
+  {
+    p.LogLine(MessageType, arr[i]);
+  }
+
+}
+
+function GetExclassegNrecIGK(igk: string): comp;
+{
+
+  if getfirst exclassseg where ((213 == exclassseg.classcode and igk == exclassseg.name)) != tsOk
+  {
+    clearbuffer(#exclassseg);
+    exclassseg.classcode := 213;
+    exclassseg.name := igk;
+    insert current exclassseg;
+
+    clearbuffer(#exclassier);
+    exclassier.cgroup    := exclassseg.nrec;
+    exclassier.crecds    := exclassseg.nrec;
+    exclassier.name      := exclassseg.name;
+    exclassier.classcode := exclassseg.classcode;
+    insert current exclassier;
+  }
+
+  result := exclassseg.nrec;
+
+}
+
+procedure SetDogovorIGK(dogovorNrec: comp; igk: string);
+{
+
+  if getfirst exclassval where ((213 == exclassval.classcode and 1707 == exclassval.wtable and dogovorNrec == exclassval.crec )) != tsOk
+  {
+    clearbuffer(#exclassval);
+    exclassval.classcode := 213;
+    exclassval.wtable := 1707;
+    exclassval.crec := dogovorNrec;
+    exclassval.cclassseg := GetExclassegNrecIGK(igk);
+    insert current exclassval;
+  }
+  else
+  {
+    exclassval.cclassseg := GetExclassegNrecIGK(igk);
+    update current exclassval;
+  }
+
+}
+
+procedure SyncDogovorIGK;
+{
+
+  var p: IAtlProtocol;
+  p := IAtlProtocol(new(AtlProtocol));
+
+  delete all tIgk;
+  sqlCopyInto(queryManager.createQuery(qZakaz).getResultSet, #tIgk, true);
+
+  delete all tdogovor;
+
+  insert tdogovor (nrec, cdogovor, nodoc, ddoc)
+  select dogovor.nrec, dogovor.cdogovor, dogovor.nodoc, dogovor.ddoc
+  from tIgk, dogovor
+  where ((
+    tIgk.nrec == dogovor.nrec
+  ))
+  ignore_errors(tsDuplicateKey)
+  ;
+
+  insert tdogovor (nrec, cdogovor, nodoc, ddoc)
+  select dogovor.nrec, dogovor.cdogovor, dogovor.nodoc, dogovor.ddoc
+  from tdogovor td, dogovor
+  where ((
+    td.cdogovor == dogovor.nrec
+  ))
+  ignore_errors(tsDuplicateKey)
+  ;
+
+  p.LogStartVisual('Синхронизация ИГК в договорах', recordsintable(#d));
+
+  //Цикл по договорам
+  _loop d
+  {
+
+    p.LogMessage(APE_MESSAGE, 'Договор №' + d.nodoc + ' от ' + d.ddoc);
+
+    var dIgk: tStringArray;
+    var dIgkCount: longint;
+
+    dIgkCount := FillIGKArrayByDogovor(d.nrec, dIgk);
+
+    if dIgkCount = 1
+    {
+      p.LogLine(APE_MESSAGE, 'ИГК найден: ' + dIgk[0] + '. Устанавливаем');
+      SetDogovorIGK(d.nrec, dIgk[0]);
+    }
+    else if dIgkCount > 1
+    {
+      p.LogMessage(APE_ERROR, 'Найдено ' + dIgkCount + ' ИГК:');
+      LogStringArray(dIgk, APE_ERROR, p);
+      p.LogCommit;
+    }
+
+
+    //Цикл по допникам
+    _loop ds
+    {
+
+      p.LogMessage(APE_MESSAGE, 'ДС №' + ds.nodoc + ' от ' + ds.ddoc);
+
+      var dsIgk: tStringArray;
+      var dsIgkCount: longint;
+
+      dsIgkCount := FillIGKArrayByDogovor(ds.nrec, dsIgk);
+
+      if dsIgkCount = 0
+      {
+
+        if dIgkCount = 1
+        {
+          p.LogLine(APE_MESSAGE, 'По ДС не определен ИГК. Устанавливаем ИГК из договора: ' + dIgk[0]);
+          SetDogovorIGK(ds.nrec, dIgk[0]);
+        }
+
+      }
+      else if dsIgkCount = 1
+      {
+
+        p.LogLine(APE_MESSAGE, 'ИГК найден: ' + dsIgk[0] + '. Устанавливаем');
+        SetDogovorIGK(ds.nrec, dsIgk[0]);
+
+      }
+      else if dsIgkCount > 1
+      {
+
+        var messageType: byte;
+        messageType := if(dIgkCount = 1, APE_MESSAGE, APE_ERROR);
+
+        p.LogMessage(messageType, 'Найдено ' + dIgkCount + ' ИГК:');
+        LogStringArray(dsIgk, messageType, p);
+        p.LogCommit;
+
+        if dIgkCount = 1
+        {
+          p.LogLine(APE_MESSAGE, 'Устанавливаем ИГК из договора ' + dIgk[0]);
+          SetDogovorIGK(ds.nrec, dIgk[0]);
+        }
+
+      } //ds.IgkCount > 1
+
+      p.LogCommit;
+      if not p.LogNextVisual('') break;
+
+    } //loop ds
+
+    p.LogCommit;
+    if not p.LogNextVisual('') break;
+
+  } //loop d
+
+  p.LogStopVisual;
+  p.visible := true;
+  p.Refresh;
+
+}
+
+screen sc1;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+<. Выполнить .> <. Отмена .>
+>>
+end;
+
+handleevent
+
+cmDoOk: SyncDogovorIGK;
+
+end;
+
+end.
