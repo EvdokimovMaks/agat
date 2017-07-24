@@ -1,0 +1,116 @@
+#include VacationSaldo.vih
+#include StaffStruct.vih
+#include AppFuncs.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface testVacationSaldo1 'testVacationSaldo1' escclose, doaccept;
+
+function GetStaffStructVacKolDn: integer; forward;
+function GetPersVacKolDn: integer; forward;
+
+var
+  _d: date;
+  _vacationSaldo: UTILS::iVacationSaldo;
+  _af: AppointmentsFunctions;
+  _ss: StaffStruct;
+  _qGetPersVacKolDn: IQuery;
+
+create view
+as select GetStaffStructVacKolDn() (fieldname=StaffStructVacKolDn),
+          GetPersVacKolDn() (fieldname=PersVacKolDn)
+from persons,
+     appointments
+;
+
+function GetStaffStructVacKolDn: integer;
+{
+
+  var appNrec: comp;
+  appNrec := _af.GetAppNrec_OnDate(persons.nrec, _d);
+
+  if getfirst appointments where ((appNrec == appointments.nrec)) = tsOk
+    result := _ss.GetVacKolDn(appointments.staffstr, _d);
+  else
+    result := 0;
+
+}
+
+sql query qGetPersVacKolDn =
+  select sum(persvacation.wcountday) wcountday
+  from persvacation
+  where persvacation.cpersons = :personsNrec and
+        persvacation.typeotp = 1 and
+        (persvacation.dbegexist = 0 or persvacation.dbegexist <= :date ) and
+        (persvacation.dendexist = 0 or persvacation.dendexist >= :date )
+;
+
+function GetPersVacKolDn: integer;
+{
+
+  if _qGetPersVacKolDn = nullref
+    _qGetPersVacKolDn := queryManager.createQuery(qGetPersVacKolDn);
+
+  result := _qGetPersVacKolDn.setParam('personsNrec', persons.nrec)
+                             .setParam('date', _d)
+                             .getResultValue;
+}
+
+browse br1;
+show(,,,15);
+table persons;
+fields
+  persons.tabnmb 'tabnmb':[10], protect;
+  persons.fio 'fio': [30], protect;
+  persons.disdate 'disdate': [10], protect;
+  StaffStructVacKolDn 'StaffStructVacKolDn': [10], protect;
+  PersVacKolDn 'PersVacKolDn': [10], protect;
+end; //browse
+
+screen sc1;
+show(,16,,) fixed_y;
+fields
+  _d: noprotect;
+buttons
+  cmCalcSald;
+
+<<
+
+`Дата расчетов`.@@@@@@@@@@
+
+<. Сальдо .>
+>>
+end; //screen
+
+handleevent
+
+cmCalcSald:
+{
+
+  message(_vacationSaldo.GetByPersonOnDate(persons.nrec, _d));
+
+}
+
+cminit:
+{
+
+  var c: comp;
+  if readmydsk(c, 'testVacationSaldo1_personsNrec', false)
+    if getfirst persons where ((c == persons.nrec)) = tsOk {}
+
+  if not readmydsk(_d, 'testVacationSaldo1_d', false) _d := cur_date;
+
+}
+
+cmDone:
+{
+
+  savemydsk(persons.nrec, 'testVacationSaldo1_personsNrec');
+  savemydsk(_d, 'testVacationSaldo1_d');
+
+}
+
+end; //handleevent
+
+end.

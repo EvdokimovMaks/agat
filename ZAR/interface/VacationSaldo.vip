@@ -1,5 +1,7 @@
 #include Query.vih
 #include VacationSaldo.vih
+#include StaffStruct.vih
+#include AppFuncs.vih
 
 #component "UTILS"
 
@@ -34,40 +36,17 @@ create view
 var
   _personsNrec: comp;
 as select *
-from persons, lschet, factotpusk
+from persons, lschet, factotpusk, appointments
 where ((
   _personsNrec == persons.nrec and
   _personsNrec == factotpusk.person and
   2            == factotpusk.vactype
 ));
 
-/*
-function PeriodStartDate(d: date): date;
-{
-  if ( day(d) > (last_day(d) / 2) )
-  {
-    d := Add_Months(d, 1);
-    result := date(1, month(d), year(d));
-  }
-  else
-  {
-    result := d;
-  }
-}
-
-function PeriodEndDate(d: date): date;
-{
-  if ( day(d) < (last_day(d) / 2) )
-  {
-    d := Sub_Months(d, 1);
-    result := date(last_day(d), month(d), year(d));
-  }
-  else
-  {
-    result := d;
-  }
-}
-*/
+var
+  _qGetPersVacKolDn: IQuery;
+  _af: AppointmentsFunctions;
+  _ss: StaffStruct;
 
 function PeriodMonths(dBeg: date; dEnd: date): word;
 {
@@ -92,6 +71,42 @@ function GetDekretMonths(dBeg: date; dEnd: date): word;
   result := cnt;
 }
 
+
+sql query qGetPersVacKolDn =
+  select sum(persvacation.wcountday) wcountday
+  from persvacation
+  where persvacation.cpersons = :personsNrec and
+        persvacation.typeotp = 1 and
+        (persvacation.dbegexist = 0 or persvacation.dbegexist <= :date ) and
+        (persvacation.dendexist = 0 or persvacation.dendexist >= :date )
+;
+
+function GetDaysPerMonthByPerson(aPersonsNrec: double; aDate: date): double;
+{
+
+  var appNrec: comp;
+  appNrec := _af.GetAppNrec_OnDate(aPersonsNrec, aDate);
+
+  var staffstrVacKolDn: double;
+
+  if getfirst appointments where ((appNrec == appointments.nrec)) = tsOk
+    staffstrVacKolDn := _ss.GetVacKolDn(appointments.staffstr, aDate);
+  else
+    staffstrVacKolDn := 0;
+
+  var persVacKolDn: double;
+
+  if _qGetPersVacKolDn = nullref
+    _qGetPersVacKolDn := queryManager.createQuery(qGetPersVacKolDn);
+
+  persVacKolDn := _qGetPersVacKolDn.setParam('personsNrec', aPersonsNrec)
+                                   .setParam('date', aDate)
+                                   .getResultValue;
+
+  result := (staffstrVacKolDn + persVacKolDn) / 12;
+
+}
+
 function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
 {
   result := 0;
@@ -103,7 +118,8 @@ function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
     exit;
   }
 
-  if persons.disdate != 0 and persons.disdate < aDate exit;
+  if persons.disdate != 0 and (year(persons.disdate) * 12 + month(persons.disdate)) < (year(aDate) * 12 + month(aDate)) then
+    exit;
 
   var q: IQuery;
   var rs: IResultSet;
@@ -152,7 +168,19 @@ function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
 
         //количество полагающихся дней отпуска на месяц рабочего периода
         var daysPerMonth: double;
-        daysPerMonth := dayCount / PeriodMonths(wpDbeg, wpDend);
+        if wpDend = persons.disdate
+        {
+          //если период - период увольнения сотрудника, то вычисляем колво дней на месяц из ШР и привязки отпусков сотрудника
+          //по дням периода отпуска определять нельзя, т.к. сам период короткий, а кол-во полагающихся дней
+          //отпуска - на весь год
+          daysPerMonth := GetDaysPerMonthByPerson(persons.nrec, wpDend);
+        }
+        else
+        {
+          //если период - не период увольнения сотрудника, то вычисляем колво дней на месяц
+          //по кол-ву полагающихся отпусков в периоде на кол-во месяцев в периоде
+          daysPerMonth := dayCount / PeriodMonths(wpDbeg, wpDend);
+        }
 
         //даты начала и окончания расчетного периода
         var d1, d2: date;
