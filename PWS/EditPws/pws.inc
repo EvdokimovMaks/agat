@@ -1,12 +1,12 @@
 table struct pws (
-  Nrec: comp,
-  MnplanNrec: comp,
-  Number: string[20],
-  Name: string[80],
-  PeriodNrec: comp,
-  PodrNrec: comp,
-  StartDate: date,
-  EndDate: date
+  Nrec           : comp,
+  MnplanNrec     : comp,
+  Number         : string[20],
+  Name           : string[80],
+  PeriodNrec     : comp,
+  PodrNrec       : comp,
+  StartDate      : date,
+  EndDate        : date
 ) with index (
   i01 = Nrec (unique, surrogate),
   i02 = MnplanNrec
