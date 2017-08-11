@@ -1,0 +1,117 @@
+#include PlporHelper.vih
+#include Query.vih
+
+#component "F_BANKDOCF"
+
+alter interface vypsee;
+
+var
+  _plporHelper: PlporHelper;
+  _qFindPlpor: IQuery;
+
+overload
+  Function CreateNewPlPor(sum: double; sumVal: double; NewNRec: comp): boolean;
+  Function GetNumber(_TiDkGal, _TiDk: word; _Descr: TDescr; _DatVip : date; _NoDok: string): string;
+  Function PlPor_FindByDateVipSum: boolean;
+end;
+
+create view
+as select *
+from soprhoz plporSoprhoz, schfact plporSchfact
+where ((
+  plpor.tidk            == plporSoprhoz.tipdoc   and
+  plpor.nrec            == plporSoprhoz.csoprdoc and
+  plporSoprhoz.cschfact == plporSchfact.nrec
+));
+
+Function CreateNewPlPor(sum: double; sumVal: double; NewNRec: comp): boolean;
+{
+
+  if inherited::CreateNewPlPor(sum, sumVal, NewNRec)
+  {
+
+    case plpor.tidkgal of
+      1:
+      {
+        update current plpor set plpor.nodok := '00000';
+        update current plpor
+          set plpor.nodok := _plporHelper.GetNewPlporNumber(plpor.tidkgal, year(plpor.datvip));
+      }
+    end;
+
+    oExtAttr.sSetAttrId(9015, plpor.nrec, ATTRNAM_NREC_PLPOR_NOMER_V_BANKE, TmpPlPor.nodok);
+
+    _loop plporSoprhoz
+    {
+      if getfirst plporSchfact = tsOk
+      {
+        if delete current plporSchfact = tsOk
+          update current plporSoprhoz set plporSoprhoz.cschfact := 0;
+      }
+    }
+
+    result := true;
+
+  }
+  else
+    result := false;
+
+}
+
+
+Function GetNumber(_TiDkGal, _TiDk: word; _Descr: TDescr; _DatVip : date; _NoDok: string): string;
+{
+
+  case _TiDkGal of
+    2: result := _NoDok;
+  else
+    result := inherited::GetNumber(_TiDkGal, _TiDk, _Descr, _DatVip, _NoDok);
+  end;
+
+}
+
+
+sql query queryFindPlpor =
+  select top 1 plpor.nrec
+  from plpor
+  join attrval avNumber on avNumber.wTable = 9015 and avNumber.cRec = plpor.nrec and
+               avNumber.cAttrNam = :cattrnam and avNumber.vString = :nodok
+  where plpor.tidk = :tidk and plpor.datvip = :datvip and plpor.sumplat = :sumplat and
+        plpor.cplat = :cplat and plpor.cpol = :cpol
+  order by plpor.datvip desc
+;
+
+Function PlPor_FindByDateVipSum: boolean;
+{
+
+  if not inherited::PlPor_FindByDateVipSum
+  {
+
+    if _qFindPlpor = nullref
+      _qFindPlpor := queryManager.createQuery(queryFindPlpor);
+
+    var rs: IResultSet;
+    rs := _qFindPlpor.setParam('cattrnam', ATTRNAM_NREC_PLPOR_NOMER_V_BANKE)
+                     .setParam('nodok'   , TmpPlPor.NoDok)
+                     .setParam('tidk'    , TmpPlPor.tidk)
+                     .setParam('datvip'  , TmpPlPor.datvip)
+                     .setParam('sumplat' , TmpPlPor.sumplat)
+                     .setParam('cplat'   , TmpPlPor.cplat)
+                     .setParam('cpol'    , TmpPlPor.cpol)
+                     .getResultSet;
+
+    if rs.getFirst = tsOk
+    {
+      TmpPlPor.cPlPor := comp(rs.row.valAt(1));
+      result := update current TmpPlPor = tsOk;
+    }
+    else
+      result := false;
+
+  }
+  else
+    result := true;
+
+}
+
+end.
