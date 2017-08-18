@@ -11,8 +11,8 @@ sql query qSaldo =
 select wp.dperbeg,
        wp.dperend,
        pv.wtypevac,
-       pv.wdaycount,
-       coalesce(v.duration,0) as duration
+       sum(pv.wdaycount) as wdaycount,
+       sum(coalesce(v.duration,0)) as duration
 from persons p
 join workperiod wp on p.nrec = wp.cperson and wp.dperbeg <= :SaldoDate
 join putvacation pv on wp.nrec = (case when pv.cwpremain = #comp(0) then pv.cworkperiod else pv.cwpremain end)
@@ -22,6 +22,8 @@ left join (select cputvac, sum(duration) as duration
            group by cputvac
           ) v on pv.nrec = v.cputvac
 where p.nrec = :PersonsNrec
+group by wp.dperbeg, wp.dperend, pv.wtypevac
+order by wp.dperbeg
 ;
 
 sql query qVacations =
@@ -45,6 +47,7 @@ where ((
 
 var
   _qGetPersVacKolDn: IQuery;
+  _qSaldo: IQuery;
   _af: AppointmentsFunctions;
   _ss: StaffStruct;
 
@@ -121,17 +124,17 @@ function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
   if persons.disdate != 0 and (year(persons.disdate) * 12 + month(persons.disdate)) < (year(aDate) * 12 + month(aDate)) then
     exit;
 
-  var q: IQuery;
-  var rs: IResultSet;
+  if _qSaldo = nullref
+    _qSaldo := queryManager.CreateQuery(qSaldo);
 
-  q := queryManager.CreateQuery(qSaldo);
-  q.setParam('SaldoDate', aDate);
-  q.setParam('PersonsNrec', aPersonsNrec);
-  rs := q.getResultSet;
+  var rs: IResultSet;
+  rs := _qSaldo.setParam('SaldoDate', aDate)
+               .setParam('PersonsNrec', aPersonsNrec)
+               .getResultSet;
 
   if (rs = nullRef)
   {
-    message('iVacationSaldo: Ошибка выполнения запроса расчета сальдо: ' + q.errorCode +
+    message('iVacationSaldo: Ошибка выполнения запроса расчета сальдо: ' + _qSaldo.errorCode +
             ''#13'Сотрудник: ' + if(getanykau(1,3,aPersonsNrec),givenanname(1),aPersonsNrec) + ', Дата:' + aDate, error);
     exit;
   }
@@ -168,16 +171,20 @@ function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
 
         //количество полагающихся дней отпуска на месяц рабочего периода
         var daysPerMonth: double;
-        if wpDend = persons.disdate
+        if wpDend = persons.disdate or (aDate >= wpDbeg and aDate <= wpDend)
         {
-          //если период - период увольнения сотрудника, то вычисляем колво дней на месяц из ШР и привязки отпусков сотрудника
+          //Если период - период увольнения сотрудника, то вычисляем колво дней на месяц из ШР и привязки отпусков сотрудника
           //по дням периода отпуска определять нельзя, т.к. сам период короткий, а кол-во полагающихся дней
-          //отпуска - на весь год
+          //отпуска - на весь год.
+          //Если период текущий, то алгоритм определения количества дней по
+          //количеству полагающихся отпусков часто глючит. Например, в следующем месяце у сотрудника декретный отпуск,
+          //в текущем месяце кадровики скорректировали рабочий период - он стал равен двум годам:
+          //28 полагающихся дней / 24 месяца = 1.17, а должно быть 2.33
           daysPerMonth := GetDaysPerMonthByPerson(persons.nrec, wpDend);
         }
         else
         {
-          //если период - не период увольнения сотрудника, то вычисляем колво дней на месяц
+          //если период - не период увольнения сотрудника и не длиннее 366 дней, то вычисляем колво дней на месяц
           //по кол-ву полагающихся отпусков в периоде на кол-во месяцев в периоде
           daysPerMonth := dayCount / PeriodMonths(wpDbeg, wpDend);
         }
