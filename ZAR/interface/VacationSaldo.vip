@@ -1,12 +1,16 @@
 #include Query.vih
 #include VacationSaldo.vih
-#include StaffStruct.vih
-#include AppFuncs.vih
+//#include StaffStruct.vih
+//#include AppFuncs.vih
+#include FactVacation.vih
 
 #component "UTILS"
 
 interface iVacationSaldo;
 
+/*
+//Убираю ручной расчет. Галактисты предоставили стандартный функционал.
+//
 sql query qSaldo =
 select wp.dperbeg,
        wp.dperend,
@@ -84,7 +88,7 @@ sql query qGetPersVacKolDn =
         (persvacation.dendexist = 0 or persvacation.dendexist >= :date )
 ;
 
-function GetDaysPerMonthByPerson(aPersonsNrec: double; aDate: date): double;
+function GetDaysPerMonthByPerson(aPersonsNrec: comp; aDate: date): double;
 {
 
   var appNrec: comp;
@@ -96,6 +100,9 @@ function GetDaysPerMonthByPerson(aPersonsNrec: double; aDate: date): double;
     staffstrVacKolDn := _ss.GetVacKolDn(appointments.staffstr, aDate);
   else
     staffstrVacKolDn := 0;
+
+  if staffstrVacKolDn = 0
+    staffstrVacKolDn := 28;
 
   var persVacKolDn: double;
 
@@ -128,6 +135,7 @@ function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
     _qSaldo := queryManager.CreateQuery(qSaldo);
 
   var rs: IResultSet;
+  rs := nullref;
   rs := _qSaldo.setParam('SaldoDate', aDate)
                .setParam('PersonsNrec', aPersonsNrec)
                .getResultSet;
@@ -171,22 +179,31 @@ function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
 
         //количество полагающихся дней отпуска на месяц рабочего периода
         var daysPerMonth: double;
-        if wpDend = persons.disdate or (aDate >= wpDbeg and aDate <= wpDend)
+        daysPerMonth := 0;
+
+        if wpDend = persons.disdate
         {
           //Если период - период увольнения сотрудника, то вычисляем колво дней на месяц из ШР и привязки отпусков сотрудника
           //по дням периода отпуска определять нельзя, т.к. сам период короткий, а кол-во полагающихся дней
           //отпуска - на весь год.
-          //Если период текущий, то алгоритм определения количества дней по
-          //количеству полагающихся отпусков часто глючит. Например, в следующем месяце у сотрудника декретный отпуск,
-          //в текущем месяце кадровики скорректировали рабочий период - он стал равен двум годам:
-          //28 полагающихся дней / 24 месяца = 1.17, а должно быть 2.33
           daysPerMonth := GetDaysPerMonthByPerson(persons.nrec, wpDend);
         }
         else
         {
           //если период - не период увольнения сотрудника и не длиннее 366 дней, то вычисляем колво дней на месяц
           //по кол-ву полагающихся отпусков в периоде на кол-во месяцев в периоде
-          daysPerMonth := dayCount / PeriodMonths(wpDbeg, wpDend);
+          var monthsInCurrentPeriod: double;
+          monthsInCurrentPeriod := PeriodMonths(wpDbeg, wpDend);
+
+          var dekretMonthsInCurrentPeriod: double;
+          dekretMonthsInCurrentPeriod := GetDekretMonths(wpDbeg, wpDend);
+
+          if monthsInCurrentPeriod > dekretMonthsInCurrentPeriod
+            daysPerMonth := dayCount / (monthsInCurrentPeriod - dekretMonthsInCurrentPeriod);
+
+          if daysPerMonth = 0
+            daysPerMonth := GetDaysPerMonthByPerson(persons.nrec, wpDend);
+
         }
 
         //даты начала и окончания расчетного периода
@@ -211,7 +228,56 @@ function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
 
       cnt -= double(rs.row.val('duration'));
 
-    } while (rs.getNext = tsOk)
+    } while (rs.getNext = tsOk);
+
+  rs := nullref;
+
+  result := cnt;
+
+}
+*/
+
+sql query qSaldo =
+select pv.nrec
+from persons p
+join workperiod wp on p.nrec = wp.cperson and wp.dperbeg <= :SaldoDate
+join putvacation pv on wp.nrec = (case when pv.cwpremain = #comp(0) then pv.cworkperiod else pv.cwpremain end)
+where p.nrec = :PersonsNrec
+;
+
+sql query qVacations =
+select sum(v.duration) as duration
+from persons p
+join workperiod wp on p.nrec = wp.cperson
+join putvacation pv on wp.nrec = (case when pv.cwpremain = #comp(0) then pv.cworkperiod else pv.cwpremain end)
+join vacations v on pv.nrec = v.cputvac and v.factyearbeg between :dbeg and :dend
+where p.nrec = :PersonsNrec;
+
+var
+  _qGetFactVacationKolDn: IQuery = nullref;
+  _qVacDaysBetweenDates: IQuery = nullref;
+  _factVacation: iFactVacation;
+
+create view
+as select *
+from lschet;
+
+function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
+{
+
+  if _qGetFactVacationKolDn = nullref
+    _qGetFactVacationKolDn := queryManager.createQuery(qSaldo);
+
+  var rs: IResultSet;
+  rs := _qGetFactVacationKolDn.setParam('PersonsNrec', aPersonsNrec).setParam('SaldoDate', aDate).getResultSet;
+
+  var cnt: double;
+  cnt := 0;
+
+  if rs.getFirst = tsOk do
+  {
+    cnt += _factVacation.funGetBalanceVac(comp(rs.row.valat(1)), 0, aDate);
+  } while rs.getNext = tsOk;
 
   result := cnt;
 
@@ -228,12 +294,13 @@ function GetVacationDaysBetweenDates(aPersonsNrec: comp; aStartDate: date; aEndD
 {
   var cnt: double; cnt := 0;
 
-  var q: iQuery;
-  q := queryManager.CreateQuery(qVacations);
-  q.setParam('dbeg', aStartDate);
-  q.setParam('dend', aEndDate);
-  q.setParam('PersonsNrec', aPersonsNrec);
-  cnt := q.getResultValue;
+  if _qVacDaysBetweenDates = nullref
+    _qVacDaysBetweenDates := queryManager.CreateQuery(qVacations);
+
+  _qVacDaysBetweenDates.setParam('dbeg', aStartDate);
+  _qVacDaysBetweenDates.setParam('dend', aEndDate);
+  _qVacDaysBetweenDates.setParam('PersonsNrec', aPersonsNrec);
+  cnt := _qVacDaysBetweenDates.getResultValue;
 
   result := cnt;
 }

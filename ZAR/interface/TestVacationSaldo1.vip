@@ -1,6 +1,7 @@
 #include VacationSaldo.vih
 #include StaffStruct.vih
 #include AppFuncs.vih
+#include FactVacation.vih
 #include Query.vih
 
 #component "AGAT"
@@ -9,6 +10,7 @@ interface testVacationSaldo1 'testVacationSaldo1' escclose, doaccept;
 
 function GetStaffStructVacKolDn: integer; forward;
 function GetPersVacKolDn: integer; forward;
+function GetFactVacationKolDn: double; forward;
 
 var
   _d: date;
@@ -16,10 +18,14 @@ var
   _af: AppointmentsFunctions;
   _ss: StaffStruct;
   _qGetPersVacKolDn: IQuery;
+  _fv: iFactVacation;
+  _qGetFactVacationKolDn: IQuery;
 
 create view
 as select GetStaffStructVacKolDn() (fieldname=StaffStructVacKolDn),
-          GetPersVacKolDn() (fieldname=PersVacKolDn)
+          GetPersVacKolDn() (fieldname=PersVacKolDn),
+          GetFactVacationKolDn() (fieldname=FactVacationKolDn),
+          _vacationSaldo.GetByPersonOnDate(persons.nrec, _d) (fieldname=myFactVacation)
 from persons,
      appointments
 ;
@@ -57,6 +63,33 @@ function GetPersVacKolDn: integer;
                              .getResultValue;
 }
 
+sql query qGetFactVacationKolDn =
+select pv.nrec
+from persons p
+join workperiod wp on p.nrec = wp.cperson and wp.dperbeg <= :SaldoDate
+join putvacation pv on wp.nrec = (case when pv.cwpremain = #comp(0) then pv.cworkperiod else pv.cwpremain end)
+where p.nrec = :personsNrec
+;
+
+function GetFactVacationKolDn(): double;
+{
+  if _qGetFactVacationKolDn = nullref
+    _qGetFactVacationKolDn := queryManager.createQuery(qGetFactVacationKolDn);
+
+  var rs: IResultSet;
+  rs := _qGetFactVacationKolDn.setParam('personsNrec', persons.nrec).setParam('SaldoDate', _d).getResultSet;
+
+  var cnt: double;
+  cnt := 0;
+
+  if rs.getFirst = tsOk do
+  {
+    cnt += _fv.funGetBalanceVac(comp(rs.row.valat(1)), 0, _d);
+  } while rs.getNext = tsOk;
+
+  result := cnt;
+}
+
 browse br1;
 show(,,,15);
 table persons;
@@ -66,6 +99,8 @@ fields
   persons.disdate 'disdate': [10], protect;
   StaffStructVacKolDn 'StaffStructVacKolDn': [10], protect;
   PersVacKolDn 'PersVacKolDn': [10], protect;
+  FactVacationKolDn 'FactVacationKolDn': [10,2], protect;
+  myFactVacation 'myFactVacation':[10,2], protect;
 end; //browse
 
 screen sc1;
