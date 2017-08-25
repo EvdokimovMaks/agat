@@ -52,4 +52,6 @@ const
   KATNOTES_NREC_BASEDOC_OTLOJ  : comp = 0001000000000150h; //Отложен
   KATNOTES_NREC_BASEDOC_ZAKR   : comp = 4000485AB57C8F9Dh; //закрытый
 
+  //КАУ
+  cgKau_Claim = 5191;
 end;
