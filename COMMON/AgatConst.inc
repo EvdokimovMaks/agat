@@ -38,6 +38,10 @@ const
   //внешние атрибуты заявок
   ATTRNAM_NREC_CLAIM_TU                           : comp = 0001000000000421h; //Технические условия - строка с комментарием к позиции заявки
 
+  //внешние атрибуты РБП
+  ATTRNAM_NREC_NALREGDC_KOLLIC                    : comp = 0001000000000A85h; //Количество лицензий
+  ATTRNAM_NREC_NALREGDC_SRBESSR                   : comp = 0001000000000A4Ah; //Срочная/бессрочная лицензия
+
   //предопределенные услуги
   KATUSL_NREC_SUTOCHNIE : comp = 00010000000003FEh; //Суточные
 
@@ -53,5 +57,6 @@ const
   KATNOTES_NREC_BASEDOC_ZAKR   : comp = 4000485AB57C8F9Dh; //закрытый
 
   //КАУ
-  cgKau_Claim = 5191;
+  cgKau_Claim   = 5191;  //Строка заявки
+  cgKau_SrBessr = 10753; //2016 Срочная/бессрочная лицензия
 end;
