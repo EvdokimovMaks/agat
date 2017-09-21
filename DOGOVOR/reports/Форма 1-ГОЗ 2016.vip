@@ -12,6 +12,7 @@ table struct dog (
   cappdog: comp,
   ddoc   : date,
   nodoc  : string[40],
+  status : string[30],
   viddog : string[80],
   OrgName: string[150],
   OrgCode: string[10],
@@ -161,6 +162,24 @@ where ((
   brdet.kodgr == brKatDoc.tidkgal and
   brdet.crec  == brCalPlan.nRec
 ));
+
+//вьюха для определения договоров, которые не нужно включать в отчет
+create view vDel
+as select *
+from dog, dogovor, col
+where ((
+  vDel.dog.cappdog == dogovor.nrec and
+  vDel.dog.cdog    == col.cdog
+)) and ( //договора не в статусе исполняемый, не в периоде отчета, без сумм в колонках
+         (vDel.dogovor.status <> 1 and
+         (vDel.dogovor.dbeg > dRep2 or vDel.dogovor.dend < dRep1) and
+         vDel.col.d14 = 0 and vDel.col.d19 = 0 and vDel.col.d20 = 0 and
+         vDel.col.d26 = 0 and vDel.col.d25 = 0 and vDel.col.d30 = 0)
+       )
+       or
+       ( //договора с видом Д_Счета, гарантийные письма
+         dogovor.cviddog = VIDDOG_NREC_D_SCHETA_GAR_PISMA
+       )   ;
 
 screen scmain;
 fields
@@ -381,21 +400,25 @@ procedure FillTables;
 var
   s: longint;
 {
+
   //временная таблица для договоров
   sqlFreeStr(s);
   sqlAddStr(s, 'table dog (cdog: comp, cappdog: comp) with index (i01 = cdog + cappdog);');
   sqlCreateTmpTable(s , ctmNormal);
   sqlExecDirect('DELETE FROM dog');
+
   //временная таблица для календарных планов
   sqlFreeStr(s);
   sqlAddStr(s,'table cp (cappdog: comp, cCalPlan: comp, cKatStroy: comp, dend: date, kol: double, summa: double) with index (i01 = cappdog);');
   sqlCreateTmpTable(s, ctmNormal);
   sqlExecDirect('DELETE FROM cp');
+
   //временная таблица для этапов
   sqlFreeStr(s);
   sqlAddStr(s,'table ks (cappdog: comp, cKatStroy: comp, dend: date, kol: double, summa: double) with index (i01 = cappdog);');
   sqlCreateTmpTable(s, ctmNormal);
   sqlExecDirect('DELETE FROM ks');
+
   //временная таблица для колонок
   sqlFreeStr(s);
   sqlAddStr(s,'table col (cdog: comp, d12: double, d13: double, d14: double, d15: double, d16: double, d17: double, d18: double,');
@@ -404,13 +427,15 @@ var
   sqlAddStr(s,') with index (i01 = cdog);');
   sqlCreateTmpTable(s, ctmNormal);
   sqlExecDirect('DELETE FROM col');
+
   //временная таблица для детализации сумм
   sqlFreeStr(s);
   sqlAddStr(s,'table det (cdog: comp, type: word, kodgr: word, crec: comp, cKatStroy: comp, kol: double, summa: double) with index (i01 = cdog + type);');
   sqlCreateTmpTable(s, ctmNormal);
   sqlExecDirect('DELETE FROM det');
+
   //заполняем таблицу договоров
-  setvisualheader('2');
+  setvisualheader('Отбор договоров');
   sqlFreeStr(s);
   sqlAddStr(s, 'insert dog (cdog, cappdog)');
   sqlAddStr(s, 'select d.nrec, coalesce(sogl.nrec,d.nrec)');
@@ -419,31 +444,17 @@ var
   sqlAddStr(s, 'left join attrval avKonPotr on avKonPotr.wTable=1707 and avKonPotr.cRec=d.nrec and avKonPotr.cattrnam=#comp(281474976710831)');   //конечный потребитель
   sqlAddStr(s, 'left join (select dogovor.cdogovor as cdogovor, max(dogovor.nrec) as nrec');
   sqlAddStr(s, '           from dogovor');
-  sqlAddStr(s, '           left join attrval on attrval.wtable=1707 and attrval.crec = dogovor.nrec and attrval.cattrnam=#comp(281474976710830)');
-  sqlAddStr(s, '           where dogovor.tidk=401 and dogovor.status=1 and coalesce(attrval.vcomp,#comp(0)) <> #comp(4001AB188D71B97Ah)');          //dogovor.status<>3
+  sqlAddStr(s, '           left join attrval on attrval.wtable=1707 and attrval.crec = dogovor.nrec and attrval.cattrnam=#comp(281474976710830)');   //источник финансирования
+  sqlAddStr(s, '           where dogovor.tidk=401 and dogovor.status<>3 and coalesce(attrval.vcomp,#comp(0)) <> #comp(4001AB188D71B97Ah)');          //dogovor.status<>3, источник финансирования <> Внебюджетное финансирование
   sqlAddStr(s, '           group by dogovor.cdogovor');
   sqlAddStr(s, '          ) sogl on d.nrec = sogl.cdogovor');
-  sqlAddStr(s, 'left join (select kauos[2] as cdogovor, sum(sumob) as summa');
-  sqlAddStr(s, '           from oborot');
-  sqlAddStr(s, '           where scheto=''862'' and datob < #date('+datetostr(drep1,'DD,MM,YYYY')+')');
-  sqlAddStr(s, '           group by kauos[2]) od on d.nrec = od.cdogovor');
-  sqlAddStr(s, 'left join (select kauks[2] as cdogovor, sum(sumob) as summa');
-  sqlAddStr(s, '           from oborot');
-  sqlAddStr(s, '           where schetk=''862'' and datob < #date('+datetostr(drep1,'DD,MM,YYYY')+')');
-  sqlAddStr(s, '           group by kauks[2]) ok on d.nrec = ok.cdogovor');
-  sqlAddStr(s, 'left join (select kauos[2] as cdogovor, sum(sumob) as summa');
-  sqlAddStr(s, '           from oborot');
-  sqlAddStr(s, '           where scheto=''862'' and datob between #date('+datetostr(drep1,'DD,MM,YYYY')+') and #date('+datetostr(drep2,'DD,MM,YYYY')+')');
-  sqlAddStr(s, '           group by kauos[2]) od1 on d.nrec = od1.cdogovor');
-  sqlAddStr(s, 'left join (select kauks[2] as cdogovor, sum(sumob) as summa');
-  sqlAddStr(s, '           from oborot');
-  sqlAddStr(s, '           where schetk=''862'' and datob between #date('+datetostr(drep1,'DD,MM,YYYY')+') and #date('+datetostr(drep2,'DD,MM,YYYY')+')');
-  sqlAddStr(s, '           group by kauks[2]) ok1 on d.nrec = ok1.cdogovor');
-  sqlAddStr(s, 'where d.tidk=400 and d.status=1 and coalesce(avKonPotr.vComp, #comp(0)) <> #comp(281474976711952)'); //исключаем конечного потребителя Кооперация ВТС
-  // and ((coalesce(od.summa,0)-coalesce(ok.summa,0))<>0 or ok1.summa>0.01 or od1.summa>0.01)');
+  sqlAddStr(s, 'where d.tidk=400 and d.direct = 1 and ');                               // and d.status=1 - убрал фильтр по статусу
+  sqlAddStr(s, '      coalesce(avKonPotr.vComp, #comp(0)) <> #comp(281474976711952)');  //исключаем конечного потребителя Кооперация ВТС
   sqlExecDirect(s);
+
   //заполняем таблицу этапов
   sqlExecDirect(sSelectEtap);
+
   //заполняем таблицу календарных планов
   sqlFreeStr(s);
   sqlAddStr(s,'insert cp (cappdog, cCalPlan, cKatStroy, dend, kol, summa)');
@@ -461,6 +472,7 @@ var
   sqlAddStr(s,'left join cursval on spd.cval = cursval.kodvalut and coalesce(cv.datval,0) = cursval.datval');
   sqlAddStr(s,'group by ks.cappdog, CalPlan.nRec, ks.cKatStroy');
   sqlExecDirect(s);
+
   //детализация по 12: Объем заданной к выпуску продукции (работ и услуг) в соответствии с контрактом (было 11.1)
   setvisualheader('12');
   sqlFreeStr(s);
@@ -469,6 +481,7 @@ var
   sqlAddStr(s,'from dog');
   sqlAddStr(s,'join cp on dog.cappdog = cp.cappdog');
   sqlExecDirect(s);
+
   //детализация по 13: Количество заданной к выпуску продукции (работ и услуг) в соответствии с контрактом (было 11.2)
   setvisualheader('13');
   sqlFreeStr(s);
@@ -725,7 +738,7 @@ var
   //заполняем виповские таблицы
   delete all dog;
   sqlFreeStr(s);
-  sqlAddStr(s,'select dog.cdog, dog.cappdog, d.ddoc, d.nodoc,');
+  sqlAddStr(s,'select dog.cdog, dog.cappdog, d.ddoc, d.nodoc, appdogStatus.sname,');
   sqlAddStr(s,'       case');
   sqlAddStr(s,'         when coalesce(katvidd.name,'''') in (''ОКР'',''НИР'') then ''01''');
   sqlAddStr(s,'         when coalesce(katvidd.name,'''') in (''ОКР ФЦП'',''НИР ФЦП'') then ''21''');
@@ -738,6 +751,8 @@ var
   sqlAddStr(s,'       coalesce(katvidd.name,'''')+'' ''+d.nodoc_ext');
   sqlAddStr(s,'from dog');
   sqlAddStr(s,'join dogovor d on dog.cdog = d.nrec');
+  sqlAddStr(s,'left join dogovor appdog on dog.cappdog = appdog.nrec');
+  sqlAddStr(s,'left join katnotes appdogStatus on appdogStatus.nrec = appdog.cnote');
   sqlAddStr(s,'left join katorg on d.corg = katorg.nrec');
   sqlAddStr(s,'left join attrdog on d.nrec = attrdog.cdogovor');
   sqlAddStr(s,'left join katvidd on d.cviddog = katvidd.nrec');
@@ -782,6 +797,12 @@ var
   //    delete all dog where ((col.cdog == dog.cdog and ( not ( dog.dbeg <= dRep2 and dog.dend >= dRep1 ) ) ));
   //  }
   //}
+  setvisualheader('Исключение договоров не в статусе Исполняемый с нулевыми суммами в колонках');
+  vDel._loop viewTable
+  {
+    delete all dog where ((vDel.dog.cdog == dog.cdog));
+  }
+
 
   //дропаем временные таблицы
   sqlDropTmpTable('dog');
@@ -808,6 +829,7 @@ var
   pXL.CreateTblFld('nodoc');
   pXL.CreateTblFld('ddoc');
   pXL.CreateTblFld('IGK');
+  pXL.CreateTblFld('Status');
   pXL.CreateTblFld('VidDog');
   pXL.CreateTblFld('OrgName');
   pXL.CreateTblFld('OrgCode');
@@ -846,6 +868,7 @@ var
     pXL.SetTblStringFldValue('npp', i);
     cid := ciHelper.GetContractID(GetContractIDKey_ByDogovor, brDog.cdog);
     pXL.SetTblStringFldValue('nodoc', brDog.nodoc);
+    pXL.SetTblStringFldValue('status', brDog.status);
     pXL.SetTblStringFldValue('IGK', cid);
     pXL.SetTblStringFldValue('ddoc', datetostr(brDog.ddoc,'DD.MM.YYYY'));
     pXL.SetTblStringFldValue('VidDog',brDog.viddog);
