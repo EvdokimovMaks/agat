@@ -1,26 +1,51 @@
 #include PlanOmto.vih
 #include Query.vih
+#include KatstroyHelper.vih
+#include ExtClass.vih
+#include ExtAttr.vih
+#include GetKau.vih
 
 #component "AGAT"
 
 interface DeliverClaimCreator;
 
 sql query queryLastNumber =
-  select top 1 name
+  select top 1 substring(name, 1, instr(' ', name + ' ', 1) - 1) as name
   from claim
   where name <> ''
   order by nrec desc;
 
+type TCompArray     = array[0..0] of comp;
+type TString25Array = array[0..0] of string[25];
+
 var
   _po: IPlanOmto;
+  _extAttr: iExtAttr;
+  _katstroyHelper: KatstroyHelper;
+  _extClass: iExtClass;
+  _getKau: GetKau;
 
 create view
 var
   _number: string;
+  _date: date;
+  _katorgNrec: comp;
+  _dogovorNrec: comp;
+  _katstroyNrec: comp;
+  _IGK: comp;
+  _GK: string;
   _writeNumberToClaim: boolean;
   _overwriteNumberToClaim: boolean;
   pXL: XLSRepBuilder;
   sXLSFileName, sXLTFileName: string;
+as select *
+from katorg, dogovor, katstroy, spkau spkIGK
+where ((
+  _katorgNrec == katorg.nrec and
+  _dogovorNrec == dogovor.nrec and
+  _katstroyNrec == katstroy.nrec and
+  _IGK == spkIGK.nrec
+))
 ;
 
 create view v
@@ -42,16 +67,73 @@ function getLastNumber: string;
       result := q.row.val('name');
 }
 
-function getNextNumber: string;
+function getNewNumber: string;
 {
   result := nextnumstr(getLastNumber);
 }
 
 procedure LoadCfg;
 {
-  _number := getNextNumber;
+  if _number = ''
+    _number := getNewNumber;
+
+  if _date = 0
+    _date := cur_date;
+
   if not readmydsk(_writeNumberToClaim, 'DeliverClaimCreator_writeNumberToClaim', false) _writeNumberToClaim := false;
   if not readmydsk(_overwriteNumberToClaim, 'DeliverClaimCreator_overwriteNumberToClaim', false) _overwriteNumberToClaim := false;
+}
+
+procedure RecalcIGK;
+{
+  _IGK := _extAttr.coGetAttrId(coKatstroy, _katstroyNrec, ATTRNAM_NREC_KATSTROY_IGK);
+}
+
+procedure RecalcDogovorNrec;
+{
+  _dogovorNrec := _katstroyHelper.GetIncomeDogovor(_katstroyNrec);
+  if _dogovorNrec != 0
+    _GK := _extClass.GetSegName(179, _dogovorNrec);
+  else
+    _GK := '';
+}
+
+procedure SetParametersByPlanOMTO(aPlanOmto: IPlanOmto);
+{
+  _po := aPlanOmto;
+  _number := '';
+  _date := 0;
+  _katorgNrec := 0;
+  _katstroyNrec := 0;
+  _dogovorNrec := 0;
+  _IGK := 0;
+  _GK := '';
+
+  v._loop _po
+  {
+
+    if v._po.DeliverClaimNumber != '' and (_number = '')
+      _number := trim(substr(v._po.DeliverClaimNumber, 1, pos(' ', v._po.DeliverClaimNumber + ' ') - 1));
+
+    if v._po.DeliverClaimNumber != '' and (_date = 0)
+      _date := strtodate(substr(v._po.DeliverClaimNumber, pos(' от ', v._po.DeliverClaimNumber + ' ') + 5, 20), 'DD.MM.YYYY');
+
+    if v._po.DeliverOrgNrec != 0 and _katorgNrec = 0
+      _katorgNrec := v._po.DeliverOrgNrec;
+
+    if v._po.KatstroyNrec != 0 and _katstroyNrec = 0
+    {
+      _katstroyNrec := v._po.KatstroyNrec;
+      RecalcDogovorNrec;
+      RecalcIGK;
+    }
+
+    if _katorgNrec != 0 and _katstroyNrec != 0
+      break;
+
+  }
+
+  _po := nullref;
 }
 
 procedure SaveCfg;
@@ -61,11 +143,17 @@ procedure SaveCfg;
 }
 
 window wndConfig 'Параметры формирования заявки поставщику', doaccept, escclose;
-show(, , 41, 8);
+show(, , 50, 14);
 
   screen scConfig;
   fields
     _number: noprotect;
+    _date: noprotect;
+    [KatorgFld] ShowKau(cgKau_Katorg, _katorgNrec): protect, pickbutton;
+    [KatstroyFld] ShowKau(cgKau_ObjBuild, _katstroyNrec): protect, pickbutton;
+    ShowKau(cgKau_Dogovor, _dogovorNrec): skip;
+    ShowKau(KODGRKAU_IGK, _IGK): skip;
+    _GK: skip;
     _writeNumberToClaim: noprotect, noframe;
     _overwriteNumberToClaim: noprotect, noframe;
   buttons
@@ -73,12 +161,18 @@ show(, , 41, 8);
     cmCancel;
 <<
 
-`Номер`.@@@@@@@@@@@@@@@@@@@@
+`Номер`      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Дата`       .@@@@@@@@@@
+`Организация`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Заказ`      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Договор`    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`ИГК`        .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`ГК`         .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
  [:] Сохранять номер в заявке подразделения`
  [:] Перезаписывать номер, если установлен ранее`
 
-            <. Продолжить .> <. Отмена .>
+                   <. Продолжить .> <. Отмена .>
 >>
   end;
 
@@ -96,6 +190,35 @@ show(, , 41, 8);
   {
     putcommand(cmDefault);
   }
+  cmPick:
+  {
+    case curfield of
+      #KatorgFld:
+      {
+        var c: comp;
+        c := _katorgNrec;
+
+        if _getkau.GetCodeKau(cgiPick, cgKau_Katorg, c) > 0
+        {
+          _katorgNrec := c;
+          rereadrecord;
+        }
+      }
+      #KatstroyFld:
+      {
+        var c: comp;
+        c := _katstroyNrec;
+
+        if _getkau.GetCodeKau(cgiPick, cgKau_ObjBuild, c) > 0
+        {
+          _katstroyNrec := c;
+          RecalcDogovorNrec;
+          RecalcIGK;
+          rereadrecord;
+        }
+      }
+    end;
+  }
   end;
 
 end; //window
@@ -105,7 +228,6 @@ function ShowConfig: word;
   result := runwindowmodal(wndConfig);
 }
 
-/*
 procedure CreateDeliverClaim(aPlanOmto: IPlanOmto);
 {
   _po := aPlanOmto;
@@ -122,15 +244,13 @@ procedure CreateDeliverClaim(aPlanOmto: IPlanOmto);
   pXL.CreateTblFld('EdIzm');
 
   var i: word = 1;
-  var DeliverClaimNumber: string = '';
-  var KatorgName: string = '';
 
   v._loop _po
   {
     if _writeNumberToClaim
       if v._po.DeliverClaimNumber = '' or _overwriteNumberToClaim
       {
-        v._po.DeliverClaimNumber := _number;
+        v._po.DeliverClaimNumber := _number + ' от ' + datetostr(_date, 'DD.MM.YYYY');
         v.update current _po;
         _po.SaveData;
       }
@@ -142,25 +262,39 @@ procedure CreateDeliverClaim(aPlanOmto: IPlanOmto);
     pXL.SetTblStringFldValue('Count'   , v._po.ClaimQty);
     pXL.InsTblRow;
 
-    if v._po.DeliverClaimNumber != ''
-      DeliverClaimNumber := v._po.DeliverClaimNumber;
-
-    if v.getfirst katorg = tsOk
-      KatorgName := v.katorg.name;
-
     i++;
   }
   pXL.PublishTbl('Main');
 
   pXL.CreateVar(sXLSFileName);
-  pXL.SetStringVar('DeliverClaimNumber', DeliverClaimNumber);
-  pXL.SetStringVar('KatorgName', KatorgName);
+
+  pXL.SetStringVar('DeliverClaimDate', datetostr(_date, 'DD.MM.YYYY'));
+  pXL.SetStringVar('DeliverClaimNumber', _number);
+  pXL.SetStringVar('KatorgName', if(getfirst katorg = tsOk, katorg.name, ''));
+
+  if getfirst dogovor = tsOk
+  {
+    pXL.SetStringVar('DogovorDate', datetostr(dogovor.ddoc, 'DD.MM.YYYY'));
+    pXL.SetStringVar('DogovorNumber', dogovor.nodoc);
+  }
+  else
+  {
+    pXL.SetStringVar('DogovorDate', '');
+    pXL.SetStringVar('DogovorNumber', '');
+  }
+
+  pXL.SetStringVar('KatstroyName', if(getfirst katstroy = tsOk, katstroy.name, ''));
+  pXL.SetStringVar('IGK', if(getfirst spkIGK = tsOk, spkIGK.name, ''));
+  pXL.SetStringVar('GK', _GK);
   pXL.PublishVar;
   pXL.LoadReport(sXLSFileName);
   pXL.DisConnectExcel;
-}
-*/
 
+  _po := nullref;
+
+}
+
+/*
 procedure CreateDeliverClaim(aPlanOmto: IPlanOmto);
 {
   _po := aPlanOmto;
@@ -176,7 +310,7 @@ procedure CreateDeliverClaim(aPlanOmto: IPlanOmto);
       }
   }
 }
-
+*/
 
 constructor Init;
 {

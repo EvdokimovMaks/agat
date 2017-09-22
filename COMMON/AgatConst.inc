@@ -8,6 +8,7 @@ const
   KODGRKAU_VID_RASHODOV_PRIKAZA_NA_KOMANDIROVKU : word = 10879; //Виды расходов приказа на командировку
   KODGRKAU_KORPORATIVNIE_KARTI                  : word = 10880; //Корпоративные карты
   KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA           : word = 10695; //Режим использования счета
+  KODGRKAU_IGK                                  : word = 10527; //2015 Идентификатор государственного контракта
 
   //внешние атрибуты для лицевых счетов
   ATTRNAM_NREC_LSCHET_KORPORATIVNAYA_KARTA : comp = 0001000000000F16h;
@@ -41,6 +42,9 @@ const
   //внешние атрибуты РБП
   ATTRNAM_NREC_NALREGDC_KOLLIC                    : comp = 0001000000000A85h; //Количество лицензий
   ATTRNAM_NREC_NALREGDC_SRBESSR                   : comp = 0001000000000A4Ah; //Срочная/бессрочная лицензия
+
+  //внешние атрибуты объектов строительства
+  ATTRNAM_NREC_KATSTROY_IGK                       : comp = 00010000000004CCh; //Идентификатор гос.контракта
 
   //предопределенные услуги
   KATUSL_NREC_SUTOCHNIE : comp = 00010000000003FEh; //Суточные
