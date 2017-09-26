@@ -14,10 +14,10 @@ for /f "delims=" %%x in (version) do set Build=%%x
 echo ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
 echo Š®¬¯¨«ïæ¨ï %2 ¢ à¥áãàá %OutputResourceDir%\%~n2%Build%.res
 
-if "%mode%"=="quiet" (
-  %CompilerPath% %2 /c:"%ConfigDir%vip.cfg" /r:"%OutputResourceDir%\%~n2%Build%.res" > %log%
-) else (
-  %CompilerPath% %2 /c:"%ConfigDir%vip.cfg" /r:"%OutputResourceDir%\%~n2%Build%.res" | %ConfigDir%wtee %log%
+%CompilerPath% %2 /c:"%ConfigDir%vip.cfg" /r:"%OutputResourceDir%\%~n2%Build%.res" /Compilers.WriteListingTo:%log%
+
+if not "%mode%"=="quiet" (
+  type %log%
   echo.
   echo.
   echo ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
