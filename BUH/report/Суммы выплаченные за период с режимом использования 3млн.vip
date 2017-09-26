@@ -1,0 +1,169 @@
+#include Query.vih
+#component "AGAT"
+
+interface Payments3MlnReport 'Суммы, выплаченные за период с режимом использования в пределах 3 млн' escclose doaccept;
+show(,,40, 5);
+
+sql query queryPayments3MlnReport =
+select plpor.nodok, plpor.datvip, plpor.sumplat, usersdoc.name RSName, coalesce(spkIGK.name, '') as IGK
+from plpor
+join attrval avRejim  on avRejim.wtable = 9015 and avRejim.crec = plpor.nrec and avRejim.cattrnam = :AttrnamRejim and avRejim.vcomp = :RejimNrec
+join usersdoc on usersdoc.tipusers = plpor.tidk
+left join spcash on spcash.ccashbank = usersdoc.ccashbank and spcash.cplanssch = :PlansschNrec
+left join spkau spkIGK on spkIGK.nrec = case when spcash.tblos[1] = :KodgrKauIGK then spcash.kauos[1]
+                                             when spcash.tblos[2] = :KodgrKauIGK then spcash.kauos[2]
+                                             when spcash.tblos[3] = :KodgrKauIGK then spcash.kauos[3]
+                                             when spcash.tblos[4] = :KodgrKauIGK then spcash.kauos[4]
+                                             when spcash.tblos[5] = :KodgrKauIGK then spcash.kauos[5]
+                                             when spcash.tblos[6] = :KodgrKauIGK then spcash.kauos[6]
+                                             else #comp(0)
+                                        end
+where plpor.tidkgal = 1 and plpor.datvip between :DBeg and :DEnd
+order by usersdoc.name, coalesce(spkIGK.name, ''), plpor.datvip, plpor.nodok
+;
+
+
+var
+  _dbeg: date;
+  _dend: date;
+  _rs: IResultSet;
+  _counter: longint;
+
+
+datastream Payments3MlnReport
+(
+
+  [DBeg] _dbeg;
+  [DEnd] _dend;
+
+  dataset Plpor
+  (
+    [Number] _rs.row.Val('nodok');
+    [Date]   _rs.row.Val('datvip');
+    [Summa]  _rs.row.Val('sumplat');
+    [RS]     _rs.row.Val('RSName');
+    [IGK]    _rs.row.Val('IGK');
+  );
+
+)
+
+handleevent dataset Plpor
+
+  cmPreProcess:
+  {
+    _counter := 0;
+  }
+
+  cmOnProcess:
+  {
+    _counter++;
+
+    if (_counter = 1)
+    {
+      if _rs.getFirst = tsOk
+        ContinueDataset;
+    }
+    else
+    {
+      if _rs.getNext = tsOk
+        ContinueDataset;
+    }
+  }
+
+end; //handleevent
+
+end;  //datastream Payments3MlnReport
+
+procedure CreateReport;
+{
+
+  _rs := queryManager.createQuery(queryPayments3MlnReport)
+                     .setParam('AttrnamRejim', ATTRNAM_NREC_PLPOR_REJIM_ISPOLZOVANIYA_SCHETA)
+                     .setParam('RejimNrec',    SPKAU_NREC_REJIM_ISPOLZOVANIYA_SCHETA_3MLN)
+                     .setParam('PlansschNrec', PLANSSCH_NREC_2013)
+                     .setParam('KodgrKauIGK',  KODGRKAU_IGK)
+                     .setParam('dbeg',         _dbeg)
+                     .setParam('dend',         _dend)
+                     .getResultSet;
+  if _rs = nullref
+    message('Ошибка формирования отчета', error);
+  else if _rs.count = 0
+    message('Отсутствуют данные для формирования отчета')
+  else
+    RunFReport(Payments3MlnReport, '', true);
+
+}
+
+screen sc1;
+fields
+  _dbeg: noprotect;
+  _dend: noprotect;
+buttons
+  cmDoOk, default;
+  cmCancel;
+<<
+
+ `Период с`.@@@@@@@@@@ `по`.@@@@@@@@@@
+
+          <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+
+  cmDefault: CreateReport;
+
+  cmDoOk: putcommand(cmDefault);
+
+  cmInit:
+  {
+    if not readmydsk(_dbeg, 'Payments3MlnReport_dbeg', false) _dbeg := date(1, month(cur_date), year(cur_date));
+    if not readmydsk(_dend, 'Payments3MlnReport_dend', false) _dend := date(last_day(_dbeg), month(_dbeg), year(_dbeg));
+  }
+
+  cmDone:
+  {
+    savemydsk(_dbeg, 'Payments3MlnReport_dbeg');
+    savemydsk(_dend, 'Payments3MlnReport_dend');
+  }
+
+end;
+
+end.
+
+VipInterface UserReport_Payments3MlnReport Implements IUserReport licensed(free);
+Interface UserReport_Payments3MlnReport;
+
+  create view dummy;
+
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::Payments3MlnReport);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Суммы выплаченные за период с режимом использования в пределах 3 млн';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    level := 0;
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'B_FINANS';
+      2 : VisibleInModule := 'BUY';
+    end;
+  end;
+
+end.
