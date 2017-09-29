@@ -1,5 +1,6 @@
 #include XLREPORT.vih
 #include getkau.vih
+#include Query.vih
 #include userreport.vih
 #include ContractID.vih
 
@@ -77,7 +78,12 @@ sql query sSelectEtap =
 insert ks (cappdog, cKatStroy, dend, kol, summa)
 select dog.cappdog,
        sm.cobj,
-       max( case when coalesce(avprik.vdate,0)>0 and calplan.dto = 0 then avprik.vdate else calplan.dto end ),
+       max(
+        case when coalesce(avprik.vdate,0)>0 and calplan.dto = 0
+                  then avprik.vdate
+             else calplan.dto
+        end
+       ),
        sum(spd.kol),
        sum(spd.summa+case when calplan.vhodnal=2 then spd.sumnds else 0 end)
 from dog
@@ -396,6 +402,27 @@ procedure CalcOverDue(aCol: word);
   }
 }
 
+function GetSymbolsAfterSubstring(s: string; subs: string; qty: byte): string;
+{
+  var k: byte;
+  k := pos(subs, s);
+
+  if k > 0
+    result := substr(s, k + length(subs), qty);
+  else
+    result := '';
+}
+
+function GetKatstroyEndDateByName(katstroyName: string): date;
+{
+  katstroyName := replace(replace(locase(katstroyName),' ',''),'-','');
+  var sDate: string;
+  sDate := GetSymbolsAfterSubstring(katstroyName, 'окон.', 10);
+  if sDate = ''
+    sDate := GetSymbolsAfterSubstring(katstroyName, 'закрыт', 10);
+  result := strtodate(sDate, 'DD.MM.YYYY');
+}
+
 procedure FillTables;
 var
   s: longint;
@@ -415,7 +442,7 @@ var
 
   //временная таблица для этапов
   sqlFreeStr(s);
-  sqlAddStr(s,'table ks (cappdog: comp, cKatStroy: comp, dend: date, kol: double, summa: double) with index (i01 = cappdog);');
+  sqlAddStr(s,'table ks (cappdog: comp, cKatStroy: comp, dend: date, kol: double, summa: double) with index (i01 = cappdog, i02 = cappdog + cKatStroy);');
   sqlCreateTmpTable(s, ctmNormal);
   sqlExecDirect('DELETE FROM ks');
 
@@ -454,6 +481,28 @@ var
 
   //заполняем таблицу этапов
   sqlExecDirect(sSelectEtap);
+
+  //в получившейся таблице ks пытаемся изменить дату окончания dend на основании наименования заказа
+  var rs: IResultSet;
+  rs := queryManager.createQuery('select ks.cappdog, ks.ckatstroy, katstroy.name from ks join katstroy on katstroy.nrec = ks.ckatstroy')
+                    .getResultSet;
+
+  if rs.getFirst = tsOk do
+  {
+
+    var ksEndDate: date;
+    ksEndDate := GetKatstroyEndDateByName(rs.row.val('name'));
+
+    if ksEndDate != 0
+    {
+      sqlFreeStr(s);
+      sqlAddStr(s,'update ks set ks.dend = #date(' + datetostr(ksEndDate,'DD,MM,YYYY') + ')');
+      sqlAddStr(s,'where ks.cAppDog = #comp(' + comp(rs.row.val('cappdog')) + ')');
+      sqlAddStr(s,'and ks.cKatStroy = #comp(' + comp(rs.row.val('ckatstroy')) + ')');
+      sqlExecDirect(s);
+    }
+
+  } while rs.getNext = tsOk;
 
   //заполняем таблицу календарных планов
   sqlFreeStr(s);
