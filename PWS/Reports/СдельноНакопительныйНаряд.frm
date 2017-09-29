@@ -1,5 +1,5 @@
 .LinkForm 'SdNar' Prototype is 'MNPLAN'
-.NameInList 'Агат. Сдельно-накопительный наряд'
+.NameInList 'Сдельно-накопительный наряд'
 .f "NUL"
 .var
   _dataRepository: pwsDataRepository;
