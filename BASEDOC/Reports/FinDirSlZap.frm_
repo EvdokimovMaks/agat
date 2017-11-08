@@ -1,0 +1,137 @@
+.linkform FinDirSlZap prototype is prbdoc
+.nameinlist 'Агат. Финансовая дирекция. Служебная записка'
+.group 'Закупка'
+.group 'Предоплата закупок'
+.declare
+#include ExtAttr.vih
+#include FeeSigners.vih
+#include PsnFuncs.vih
+.enddeclare
+.var
+  _extAttr: iExtAttr;
+  _feeSigners: FeeSigners;
+  _personsFunctions: PersonsFunctions;
+  _zakaz: string;
+  _signerNrec: comp;
+  _toPosition3: string;
+  _toFIO : string;
+  _toFIO3: string;
+  _toIO  : string;
+  _toSex : string;
+.endvar
+.create view v
+from StepDoc,
+     SpStep,
+     SpecMtr,
+     KatStroy
+where ((
+  BaseDocNrec           == StepDoc.cBaseDoc and
+  StepDoc.Nrec          == SpStep.cStepDoc and
+  SALDTUNE_NREC_DEFAULT == SpecMtr.cSaldTune and
+  coSpStep              == SpecMtr.coTable and
+  SpStep.Nrec           == SpecMtr.cSpec and
+  SpecMtr.cObj          == KatStroy.Nrec
+));
+.create view vs
+from SelPicks,
+     MnSpAdd,
+     Persons
+where ((
+  _signerNrec    == SelPicks.Nrec and
+  SelPicks.cRec  == MnSpAdd.Nrec and
+  MnSpAdd.cOwner == Persons.Nrec
+));
+.function InitialsWithSurname(fio: string): string;
+begin
+  fio := GetSurnameWithInitials(fio);
+  var k: byte;
+  k := Pos(' ', fio + ' ');
+  InitialsWithSurname := SubStr(fio, k + 1, 255) + SubStr(fio, 1, k - 1);
+end.
+.{
+.{ CheckEnter IsBaseFin
+.}
+.{ CheckEnter IsExClass
+.}
+.{ CheckEnter IsGroup
+.}
+.{
+.}
+.if Delimiter
+.end
+.}
+.fields
+  replace(ddoc,'/','.')
+  _toPosition3
+  UpCase(InitialsWithSurname(_toFIO3))
+  if(_toSex = 'Ж', 'Уважаемая', 'Уважаемый') _toIO
+  bpost
+  pol
+  nomer
+  replace(ddoc,'/','.')
+  DoubleToStr(k1, '[|-]3 666 666 666 666 666,88')
+  _zakaz
+.endfields
+!#region begin_end
+.begin
+
+  //Запускаем интерфейс настройки отчета
+  var feeSignersNrec: comp = 0;
+  if runinterface(AGAT::FinDirSlZapParams, BaseDocNrec, feeSignersNrec) != cmDefault
+    FinDirSlZap.fExit;
+
+  //определяем поля "Кому***"
+  _toPosition3 := '';
+  _toFIO       := '';
+  _toFIO3      := '';
+  _toSex       := 'М';
+  _toIO        := '';
+  _feeSigners.InitFeeSigners(FEESIGNERS_CONSTREP_FINDIR_SLZAP);
+  if _feeSigners.FindFeeSignersByNRec(feeSignersNrec)
+    if _feeSigners.GetSignerFirst
+    {
+      _toPosition3 := _feeSigners.GetSignerPosition(3);
+      _toFIO       := _feeSigners.GetSignerFIO(1);
+      _toFIO3      := _feeSigners.GetSignerFIO(3);
+      _signerNrec  := _feeSigners.GetSignerNRec;
+      _toIO        := SubStr(_toFIO, pos(' ', _toFIO + ' ') + 1, 255);
+      if vs.getfirst SelPicks = tsOk
+        if vs.getfirst MnSpAdd = tsOk
+          if vs.getfirst Persons = tsOk
+          {
+            _toSex := vs.Persons.Sex;
+            _toIO  := _personsFunctions.Get_FirstName(vs.Persons.Nrec) + ' ' +
+                      _personsFunctions.GetPatronymic(vs.Persons.Nrec);
+          }
+    }
+
+  //Определяем строку с заказами
+  var katstroyMarker: TPtr;
+  katstroyMarker := InitMarker('', 8, 10, 10, true);
+  _zakaz := '';
+  if v.getfirst StepDoc = tsOk
+    v._loop Spstep
+    {
+      if v.getfirst SpecMtr = tsOk
+        if v.getfirst KatStroy = tsOk
+          if not FoundMarker(katstroyMarker, v.KatStroy.Nrec)
+          {
+            InsertMarker(katstroyMarker, v.KatStroy.Nrec);
+            _zakaz += if(_zakaz = '', '', ', ') + SubStr(v.KatStroy.Name, 1, pos(' ', v.KatStroy.Name + ' ') - 1);
+          }
+    }
+  DoneMarker(katstroyMarker, '');
+
+end.
+!#endregion
+^
+^
+^
+^ ^
+^
+^
+^
+^
+^
+^
+.endform
