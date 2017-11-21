@@ -1,9 +1,15 @@
+#include Commission.fun  // Функции для вывода комиссии
+#include Commission.vih  // Вывод комиссии в отчет
 #include extattr.vih
 #include getkau.vih
 
 #component "F_NALOGREG"
 
 alter interface NALOGREGDOC;
+
+overload
+  Procedure UnloadVars;
+end;
 
 extendformats SCRASHFUTUR;
 
@@ -13,8 +19,45 @@ var
 
 create view
 as select _extattr.doGetAttrID(coNalRegDc, nalregdc.nrec, ATTRNAM_NREC_NALREGDC_KOLLIC) (fieldname=KolLicFld),
-          _extattr.sGetAttrID(coNalRegDc, nalregdc.nrec, ATTRNAM_NREC_NALREGDC_SRBESSR) (fieldname=SrBessrFld)
+          _extattr.sGetAttrID(coNalRegDc, nalregdc.nrec, ATTRNAM_NREC_NALREGDC_SRBESSR) (fieldname=SrBessrFld),
+          if(isValidAll(tnSpkRash), spkRash.Name, '') (fieldname=RashNameFld),
+          if(isValidAll(tnSpkRash), spkRash.Code, '') (fieldname=RashCodeFld)
+from attrval avRash, SpKau spkRash
+where ((
+  coNalRegDc                 == avRash.wTable and
+  nalregdc.nrec              == avRash.cRec and
+  ATTRNAM_NREC_NALREGDC_RBP  == avRash.cAttrNam and
+  avRash.vComp               == spkRash.Nrec
+))
 ;
+
+//******************************************************************************
+//#region Перекрытые функции
+
+Procedure UnloadVars;
+{
+  // Инициализация переменных Excel-БД (DBVar Constructor)
+  pXL.CreateVar(sXLSFileName);
+  // Выгрузка значений переменных                    // Номер документа
+  #WriteXltCommissionVar(iCommission,pXL);
+  pXL.SetDateVar('Дата_форм_акта', dDate);           // Наименование налогоплательщика
+  pXL.SetStringVar('организации_наим', KatOrg.Name); // Дата формирования акта инвентаризации
+  pXL.SetStringVar('организации_ОКПО', KatOrg.OKPO); // Единица измерения
+  pXL.SetStringVar('Валюта', KatOrg.OKPO);
+  pXL.SetStringVar('Номер_документа', sNumber);      // Код по ОКПО налогоплательщика
+  pXL.SetNumberVar('Страна', wGetTune('Country'));
+  pXL.SetNumberVar('КолвоЛицензий', KolLicFld);
+  pXL.SetStringVar('СрочнаяБессрочная', SrBessrFld);
+  pXL.SetStringVar('НаименованиеРБП', RashNameFld);
+  pXL.SetStringVar('КодРБП', RashCodeFld);
+  pXL.SetDateVar  ('ДатаНачалаРасчета', nalregdc.dopdat2);
+  pXL.SetNumberVar('КолвоДней', nalregdc.kol);
+  // Все необходимые пост-действия по "публикации" переменных (DBVar Destructor)
+  pXL.PublishVar;
+}
+//******************************************************************************
+
+//#endregion Перекрытые функции
 
 window NALREGWIN;
 
@@ -23,6 +66,7 @@ screen SCRASHFUTUR;
 table nalregdc;
 
 fields
+  RashNameFld: protect, pickbutton;
   KolLicFld: noprotect;
   SrBessrFld: protect, pickbutton;
 
@@ -38,8 +82,8 @@ fields
 
 
 
-
-`Количество лицензий`.@@@@@ `Срочная/бессрочная`.@@@@@@@@@@@@@
+`Наименование расхода`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Количество лицензий` .@@@@@ `Срочная/бессрочная`.@@@@@@@@@@@@@
 >>
 end; //screen
 
@@ -58,13 +102,25 @@ cmPick:
     #SrBessrFld:
     {
 
-
       if not isValidAll(#nalregdc)
         inherited::handleevent(cmInsertRecord);
 
       var c: comp;
       if _getkau.GetCodeKau(cgiPick, cgKau_SrBessr, c) > 0
         _extattr.coSetAttrId(coNalregdc, nalregdc.nrec, ATTRNAM_NREC_NALREGDC_SRBESSR, c, ShowKau(cgKau_SrBessr, c));
+      rereadrecord;
+
+    }
+
+    #RashNameFld:
+    {
+
+      if not isValidAll(#nalregdc)
+        inherited::handleevent(cmInsertRecord);
+
+      var c: comp;
+      if _getkau.GetCodeKau(cgiPick, cgKau_RBP, c) > 0
+        _extattr.coSetAttrId(coNalregdc, nalregdc.nrec, ATTRNAM_NREC_NALREGDC_RBP, c, ShowKau(cgKau_RBP, c));
       rereadrecord;
 
     }
