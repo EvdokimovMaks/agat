@@ -1,3 +1,4 @@
+#include Query.vih
 #include XLREPORT.vih
 #include getkau.vih
 #include userreport.vih
@@ -10,7 +11,9 @@ type tkatpodr = record as table katpodr;
 
 const
   ValueKind_Summa = 0;
-  ValueKind_HoursWorked = 1;
+  ValueKind_HoursFull = 1;
+  ValueKind_HoursBusinessTrip = 2;
+  ValueKind_HoursWorked = 3;
   KATPODR_NIO = 4000D861ACC3D875h;
   CATALOGS_NIO = 4000E0359D481238h;
   ADDSUMTUNE_OSNZP = 40015542D9B27825h;
@@ -105,6 +108,7 @@ sql query qValSums =
   join spkau spk on spl.canval5 = spk.nrec
   left join catalogs post on spm.canval4 = post.nrec;
 
+//Время общее (отработанное + в командировке)
 sql query qValTime =
   insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, CostItemName, PostName, ValueKind, Value)
   select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, spk.name, coalesce(post.name,''), 1, vsp.kol+vsp.price
@@ -120,7 +124,46 @@ sql query qValTime =
     spl.canval5 = #comp(00010000000008AEh)     //статья наряда "Отработано часов по заказу и виду работ за месяц"
   join valspmnp vsp on spl.nrec = vsp.cspmnpl
   join spkau spk on spl.canval5 = spk.nrec
-  left join catalogs post on spm.canval4 = post.nrec;
+  left join catalogs post on spm.canval4 = post.nrec
+  where vsp.kol <> 0 or vsp.price <> 0;
+
+//Время в командировке
+sql query qValTimeBusinessTrip =
+  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, CostItemName, PostName, ValueKind, Value)
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, spk.name, coalesce(post.name,''), 2, vsp.price
+  from tPlan
+  join mnplan mp on tPlan.nrec = mp.nrec
+  join spmnplan spm on mp.nrec = spm.cmnplan and ((:everyZakaz=1) or spm.canval1 in (select crec from fltr where filter=1))
+  join spmnpl spl on
+    spm.nrec = spl.cspmnplan and
+    22 = spl.wkolan and
+    21 = spl.wkodgr4 and
+    mp.canval1 = spl.canval4 and
+    10029 = spl.wkodgr5 and
+    spl.canval5 = #comp(00010000000008AEh)     //статья наряда "Отработано часов по заказу и виду работ за месяц"
+  join valspmnp vsp on spl.nrec = vsp.cspmnpl
+  join spkau spk on spk.nrec = #comp(00010000000008FDh) //статья наряда "Начислено за время нахождения на объекте" - искусственно командировочное время привязываем к этой статье
+  left join catalogs post on spm.canval4 = post.nrec
+  where vsp.price <> 0;
+
+//Время отработанное
+sql query qValTimeWorked =
+  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, CostItemName, PostName, ValueKind, Value)
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, spk.name, coalesce(post.name,''), 3, vsp.kol
+  from tPlan
+  join mnplan mp on tPlan.nrec = mp.nrec
+  join spmnplan spm on mp.nrec = spm.cmnplan and ((:everyZakaz=1) or spm.canval1 in (select crec from fltr where filter=1))
+  join spmnpl spl on
+    spm.nrec = spl.cspmnplan and
+    22 = spl.wkolan and
+    21 = spl.wkodgr4 and
+    mp.canval1 = spl.canval4 and
+    10029 = spl.wkodgr5 and
+    spl.canval5 = #comp(00010000000008AEh)     //статья наряда "Отработано часов по заказу и виду работ за месяц"
+  join valspmnp vsp on spl.nrec = vsp.cspmnpl
+  join spkau spk on spk.nrec = #comp(00010000000008FBh) //статья наряда "По должностному окладу" - искусственно отработанное время на предприятии привязываем к этой статье
+  left join catalogs post on spm.canval4 = post.nrec
+  where vsp.kol <> 0;
 
 sql query qPersonAll =
   select p.nrec, p.fio, p.tabnmb
@@ -259,7 +302,7 @@ fields
   dRepBeg: noprotect;
   dRepEnd: noprotect;
   fZakaz: protect, pickbutton;
-  reportKind: [list 'Новая форма', 'Старая форма' ];
+  reportKind: [list 'Форма с 01.12.2017', 'Форма 2016', 'Старая форма' ];
 buttons
   cmDoOk, default;
 <<
@@ -452,6 +495,14 @@ procedure MakeRep;
   }
   sqlFreeStmt(stmt);
 
+  queryManager.createQuery(qValTimeBusinessTrip)
+              .setParam('everyZakaz', everyZakaz)
+              .execute;
+
+  queryManager.createQuery(qValTimeWorked)
+              .setParam('everyZakaz', everyZakaz)
+              .execute;
+
   //заполняем локальную таблицу значений
   delete all tVal;
   sqlSelectInto('select * from tVal', #tVal);
@@ -534,6 +585,8 @@ procedure MakeRep;
   pXL.CreateTblFld('Должность'        );
   pXL.CreateTblFld('Статья'           );
   pXL.CreateTblFld('Время'            );
+  pXL.CreateTblFld('ВремяВКомандировке');
+  pXL.CreateTblFld('ВремяОтработанное');
   pXL.CreateTblFld('ВремяБалансовое'  );
   pXL.CreateTblFld('Трудоемкость'     );
   pXL.CreateTblFld('Сумма'            );
@@ -577,16 +630,26 @@ procedure MakeRep;
     pXL.SetTblStringFldValue('Должность'          , rVal.PostName);
     pXL.SetTblStringFldValue('Статья'             , replace(rVal.CostItemName,'|',' '));
 
-    if(rVal.ValueKind = ValueKind_Summa)
-    {
-      pXL.SetTblNumberFldValue('Сумма'            , rVal.Value);
-    }
-    else
-    {
-      pXL.SetTblNumberFldValue('Время'            , rVal.Value);
-      pXL.SetTblNumberFldValue('ВремяБалансовое'  , rBal.Value);
-      pXL.SetTblNumberFldValue('Трудоемкость'     , rVal.Value / if(rBal.Value>0,rBal.Value,1));
-    }
+    case rVal.ValueKind of
+      ValueKind_Summa:
+      {
+        pXL.SetTblNumberFldValue('Сумма'            , rVal.Value);
+      }
+      ValueKind_HoursFull:
+      {
+        pXL.SetTblNumberFldValue('Время'            , rVal.Value);
+        pXL.SetTblNumberFldValue('ВремяБалансовое'  , rBal.Value);
+        pXL.SetTblNumberFldValue('Трудоемкость'     , rVal.Value / if(rBal.Value>0,rBal.Value,1));
+      }
+      ValueKind_HoursBusinessTrip:
+      {
+        pXL.SetTblNumberFldValue('ВремяВКомандировке', rVal.Value);
+      }
+      ValueKind_HoursWorked:
+      {
+        pXL.SetTblNumberFldValue('ВремяОтработанное', rVal.Value);
+      }
+    end;
 
     pXL.InsTblRow;
   }
@@ -620,9 +683,10 @@ handleevent
 cmDoOk:
 {
   case reportKind of
-    1: sXLTFileName := TranslatePath('%StartPath%xls\workorder_universal_old.xlsm');
+    1: sXLTFileName := TranslatePath('%StartPath%xls\workorder_universal.xlsm');
+    2: sXLTFileName := TranslatePath('%StartPath%xls\workorder_universal_old.xlsm');
   else
-    sXLTFileName := TranslatePath('%StartPath%xls\workorder_universal.xlsm');
+    sXLTFileName := TranslatePath('%StartPath%xls\workorder_universal_2017.xlsm');
   end;
   startnewvisual(vtRotateVisual, vfTimer, 'Формирование запроса', 0);
   MakeRep;
