@@ -1,12 +1,12 @@
 @echo off
 
 Set ConfigName=%1
-if "%ConfigName%"=="" set /p ConfigName="Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ РєРѕРЅС„РёРіСѓСЂР°С†РёРё РґР»СЏ РѕРїСЂРµРґРµР»РµРЅРёСЏ РїР°РїРєРё FRM (test)"
+if "%ConfigName%"=="" set /p ConfigName="‚ўҐ¤ЁвҐ ­ §ў ­ЁҐ Є®­дЁЈга жЁЁ ¤«п ®ЇаҐ¤Ґ«Ґ­Ёп Ї ЇЄЁ FRM (test)"
 if "%ConfigName%"=="" set ConfigName="test"
 
-echo "Р Р°СЃРїР°РєРѕРІРєР° Р°СЂС…РёРІРѕРІ СЃ РёРЅРєР»СЋРґР°РјРё (FRM)"
+echo "ђ бЇ Є®ўЄ   аеЁў®ў б Ё­Є«о¤ ¬Ё (FRM)"
 call "config\get-new-includes.cmd" %ConfigName%
-echo "Р“РµРЅРµСЂР°С†РёСЏ С„Р°Р№Р»Р° СЃРѕ СЃРїРёСЃРєРѕРј РёРЅРєР»СЋРґРѕРІ"
+echo "ѓҐ­Ґа жЁп д ©«  б® бЇЁбЄ®¬ Ё­Є«о¤®ў"
 call config\gen-includes-file.cmd
-echo "РћР±РЅРѕРІР»РµРЅРёРµ РёРЅРєР»СЋРґРѕРІ Р·Р°РІРµСЂС€РµРЅРѕ"
+echo "ЋЎ­®ў«Ґ­ЁҐ Ё­Є«о¤®ў § ўҐаиҐ­®"
 pause
