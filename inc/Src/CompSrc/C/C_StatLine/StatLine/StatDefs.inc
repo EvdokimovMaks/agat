@@ -252,4 +252,87 @@
 	  '',     cmStaffDoWin13,      kbAltL;
 	  '',     cmStaffDoWin14,      kbAltT;
 #end
+
+#declare Std3Stat
+          '',     cmAlt1,              kbAlt1;
+          '',     cmAlt2,              kbAlt2;
+          '',     cmAlt3,              kbAlt3;
+          '',     cmAlt4,              kbAlt4;
+          '',     cmAlt5,              kbAlt5;
+          '',     cmAlt6,              kbAlt6;
+          '',     cmAlt7,              kbAlt7;
+          '',     cmAlt8,              kbAlt8;
+          '',     cmAlt9,              kbAlt9;
+!          '',     cmAlt0,              kbAlt0;
+          '',     cmAltEqual,          kbAltEqual;
+          '',     cmAltMinus,          kbAltMinus;
+          '',     cmAltIns,            kbAltIns;
+          '',     cmAltGrayPlus,       kbAltGrayPlus;
+          '',     cmPickAttr,          kbAltA;
+          '',     cmFilterSave,        kbAltB;
+          '',     cmPickClass,         kbAltC;
+          '',     cmDocBas,            kbAltD;
+!kbAltE
+          '',     cmNal,               kbAltF;
+          '',     cmRecalcAllSums,     kbAltG;
+          '',     cmIEHist,            kbAltH;
+!kbAltJ
+          '',     cmInsertEditKN,      kbAltK;
+
+          '',     cmManagerId,         kbAltM;
+          '',     cmFilialNo,          kbAltN;
+          '',     cmPlansNo,           kbAltP;
+!kbAltQ
+          '',     cmSortMC,            kbAltR;
+          '',     cmAccording,         kbAltS;
+          '',     cmKauReff,           kbAltT;
+          '',     cmLegend,            kbAltU;
+!kbAltV
+          '',     cmCalcUslParam,      kbAltW;
+          '',     cmQuit,              kbAltX;
+!kbAltY
+!kbAltZ
+          '',     cmLastHelp,          kbAltF1;
+          '',     cmChangeViewMode,    kbAltF2;
+          '',     cmAltInsert,         kbAltF7;
+          '',     cmAlternativeDelete, kbAltF8;
+          '',     cmHotKeys,           kbAltF10;
+
+          '',     cmCalculator,        kbShiftF2;
+          '',     cmBuhCalculator,     kbShiftF3;
+          '',     cmPrev,              kbShiftF6;
+          '',     cmExtendedDelete,    kbShiftF8;
+          '',     cmShiftF9,           kbShiftF9;
+
+          '',     cmEditBudget,        kbCtrlB;
+          '',     cmHozOper,           kbCtrlH;
+          '',     cmMulSelDO,          kbCtrlI;
+          '',     cmCreateKD,          kbCtrlK;
+          '',     cmPrintDoc,          kbCtrlP;
+          '',     cmCalc,              kbCtrlQ;
+          '',     cmSetupReport,       kbCtrlR;
+          '',     cmIerarchy,          kbCtrlU;
+
+          '',     cmAttrib,            kbCtrlEnter;
+
+          '',     cmSaveDoc,           kbCtrlF2;
+          '',     cmRestoreDoc,        kbCtrlF3;
+          '',     cmEvaluateAndModify, kbCtrlF4;
+          '',     cmResize,            kbCtrlF5;
+          '',     cmInsLowLevel,       kbCtrlF7;
+          '',     cmSpecialDelete,     kbCtrlF8;
+          '',     cmSysMenu,           kbCtrlF10;
+
+          '',     cmCompressLevel,     kbCtrlBack;
+          '',     cmShowAll,           kbCtrlGrayPlus;
+          '',     cmShowAll,           kbCtrlEqual;
+          '',     cmHideAll,           kbCtrlGrayMinus;
+
+          '',     cmPass,              kbF4;
+          '',     cmZoom,              kbF5;
+          '',     cmNext,              kbF6;
+          '',     cmMenu,              kbF10;
+		  '',     cmCheckOrder,        kbCtrlW;
+		  '',     cmCheckRPD,          kbCtrlM;
+#end
 !-------------------------------------------------------------------------------

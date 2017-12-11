@@ -4,18 +4,8 @@
 // Функции для работы с цепочками дней
 //------------------------------------------------------------------------------
 
-#ifdef Gal9_1
-  #define G_ZARCACHE 'G_ZARCACHE.DLL'
-#else
-  #define G_ZARCACHE 'ZC.DLL'
-#endif
+#define G_ZARCACHE 'G_ZARCACHE.DLL'
 
-// Документация для 8.1 создаваться не будет, т.к. атлантис 5.4.* не позволяет грабить корованы.
-#if #__TOOLVERSION__ >= 5005.017
-  #define LDSAPI_INC_DOC
-#endif
-
-#ifdef LDSAPI_INC_DOC
 #doc article LDSAPI_About
   <brief>Цепочки дней</brief>
   <p>
@@ -270,9 +260,7 @@
   <code><a href="exf--LDS_GetDayKind.htm">LDS_GetDayKind</a></code> <br />
   <code><a href="exf--LDS_SetDayKind.htm">LDS_SetDayKind</a></code> <br />
 #end
-#endif
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Создать экземпляр цепочки дней</brief>
   <p>
@@ -292,10 +280,9 @@
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--DestroyLDS.htm">DestroyLDS</a></code> <br />
 #end
-#endif
+
 function CreateLDS: longint; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Уничтожить цепочку дней</brief>
   <p>
@@ -313,10 +300,8 @@ function CreateLDS: longint; external #G_ZARCACHE;
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--CreateLDS.htm">CreateLDS</a></code> <br />
 #end
-#endif
 function DestroyLDS(objId: longint): boolean; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Возвращает количество дней в цепочке</brief>
   <p>
@@ -330,10 +315,8 @@ function DestroyLDS(objId: longint): boolean; external #G_ZARCACHE;
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--LDS_SetCount.htm">LDS_SetCount</a></code> <br />
 #end
-#endif
 function LDS_GetCount(objId: longint): longint; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Установить количество дней в цепочке</brief>
   <p>
@@ -360,10 +343,8 @@ function LDS_GetCount(objId: longint): longint; external #G_ZARCACHE;
   <code><a href="exf--LDS_Insert.htm">LDS_Insert</a></code> <br />
   <code><a href="exf--LDS_Remove.htm">LDS_Remove</a></code> <br />
 #end
-#endif
 procedure LDS_SetCount(objId: longint, value: longint); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Вставить дни в цепочку</brief>
   <p>
@@ -396,10 +377,8 @@ procedure LDS_SetCount(objId: longint, value: longint); external #G_ZARCACHE;
   <code><a href="exf--LDS_Remove.htm">LDS_Remove</a></code> <br />
   <code><a href="exf--LDS_SetCount.htm">LDS_SetCount</a></code> <br />
 #end
-#endif
 procedure LDS_Insert(objId: longint, beforeDay: longint, daysCount: longint); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Исключить дни из цепочки</brief>
   <p>
@@ -423,10 +402,8 @@ procedure LDS_Insert(objId: longint, beforeDay: longint, daysCount: longint); ex
   <code><a href="exf--LDS_Insert.htm">LDS_Insert</a></code> <br />
   <code><a href="exf--LDS_SetCount.htm">LDS_SetCount</a></code> <br />
 #end
-#endif
 procedure LDS_Remove(objId: longint, firstDay: longint, daysCount: longint); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Может ли день участвовать в связи</brief>
   <p>
@@ -445,10 +422,8 @@ procedure LDS_Remove(objId: longint, firstDay: longint, daysCount: longint); ext
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--LDS_SetDayLinkable.htm">LDS_SetDayLinkable</a></code> <br />
 #end
-#endif
 function LDS_IsDayLinkable(objId: longint, day: longint): boolean; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Установить, может ли день участвовать в связи</brief>
   <p>
@@ -473,10 +448,8 @@ function LDS_IsDayLinkable(objId: longint, day: longint): boolean; external #G_Z
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--LDS_IsDayLinkable.htm">LDS_IsDayLinkable</a></code> <br />
 #end
-#endif
 procedure LDS_SetDayLinkable(objId: longint, day: longint, value: boolean); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Присоединить последующую цепочку дней</brief>
   <p>
@@ -501,10 +474,8 @@ procedure LDS_SetDayLinkable(objId: longint, day: longint, value: boolean); exte
   <code><a href="exf--LDS_LinkPrevious.htm">LDS_LinkPrevious</a></code> <br />
   <code><a href="exf--LDS_UnlinkNext.htm">LDS_UnlinkNext</a></code> <br />
 #end
-#endif
 procedure LDS_LinkNext(objId: longint, idNext: longint); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Присоединить предшествующую цепочку дней</brief>
   <p>
@@ -529,10 +500,8 @@ procedure LDS_LinkNext(objId: longint, idNext: longint); external #G_ZARCACHE;
   <code><a href="exf--LDS_LinkNext.htm">LDS_LinkNext</a></code> <br />
   <code><a href="exf--LDS_UnlinkPrevious.htm">LDS_UnlinkPrevious</a></code> <br />
 #end
-#endif
 procedure LDS_LinkPrevious(objId: longint, idPrevious: longint); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Отсоединить последующую цепочку дней</brief>
   <p>
@@ -549,10 +518,8 @@ procedure LDS_LinkPrevious(objId: longint, idPrevious: longint); external #G_ZAR
   <code><a href="exf--LDS_UnlinkPrevious.htm">LDS_UnlinkPrevious</a></code> <br />
   <code><a href="exf--LDS_LinkNext.htm">LDS_LinkNext</a></code> <br />
 #end
-#endif
 procedure LDS_UnlinkNext(objId: longint); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Отсоединить предшествующую цепочку дней</brief>
   <p>
@@ -569,10 +536,8 @@ procedure LDS_UnlinkNext(objId: longint); external #G_ZARCACHE;
   <code><a href="exf--LDS_UnlinkNext.htm">LDS_UnlinkNext</a></code> <br />
   <code><a href="exf--LDS_LinkPrevious.htm">LDS_LinkPrevious</a></code> <br />
 #end
-#endif
 procedure LDS_UnlinkPrevious(objId: longint); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Получить тип связанности дня</brief>
   <p>
@@ -593,10 +558,8 @@ procedure LDS_UnlinkPrevious(objId: longint); external #G_ZARCACHE;
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--LDS_SetDayKind.htm">LDS_SetDayKind</a></code> <br />
 #end
-#endif
 function LDS_GetDayKind(objId: longint, day: longint): byte; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Установить тип связанности дня</brief>
   <p>
@@ -628,10 +591,8 @@ function LDS_GetDayKind(objId: longint, day: longint): byte; external #G_ZARCACH
   <code><a href="exf--LDS_CanSetDayKind.htm">LDS_CanSetDayKind</a></code> <br />
   <code><a href="exf--LDS_GetDayKind.htm">LDS_GetDayKind</a></code> <br />
 #end
-#endif
 procedure LDS_SetDayKind(objId: longint, day: longint, kind: byte); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Можно ли установить некоторый тип связанности дня</brief>
   <p>
@@ -656,10 +617,8 @@ procedure LDS_SetDayKind(objId: longint, day: longint, kind: byte); external #G_
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--LDS_SetDayKind.htm">LDS_SetDayKind</a></code> <br />
 #end
-#endif
 function LDS_CanSetDayKind(objId: longint, day: longint, kind: byte): boolean; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Соединить два дня рабочей сменой</brief>
   <p>
@@ -692,10 +651,8 @@ function LDS_CanSetDayKind(objId: longint, day: longint, kind: byte): boolean; e
   <code><a href="exf--LDS_CanGlue.htm">LDS_CanGlue</a></code> <br />
   <code><a href="exf--LDS_Split.htm">LDS_Split</a></code> <br />
 #end
-#endif
 procedure LDS_Glue(objId: longint, firstDay: longint); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Можно ли соединить два дня рабочей сменой</brief>
   <p>
@@ -723,10 +680,8 @@ procedure LDS_Glue(objId: longint, firstDay: longint); external #G_ZARCACHE;
   <code><a href="exf--LDS_Glue.htm">LDS_Glue</a></code> <br />
   <code><a href="exf--LDS_CanSplit.htm">LDS_CanSplit</a></code> <br />
 #end
-#endif
 function LDS_CanGlue(objId: longint, firstDay: longint): boolean; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Разъединить два дня</brief>
   <p>
@@ -759,10 +714,8 @@ function LDS_CanGlue(objId: longint, firstDay: longint): boolean; external #G_ZA
   <code><a href="exf--LDS_CanSplit.htm">LDS_CanSplit</a></code> <br />
   <code><a href="exf--LDS_Glue.htm">LDS_Glue</a></code> <br />
 #end
-#endif
 procedure LDS_Split(objId: longint, firstDay: longint); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Можно ли разъединить два дня?</brief>
   <p>
@@ -794,10 +747,8 @@ procedure LDS_Split(objId: longint, firstDay: longint); external #G_ZARCACHE;
   <code><a href="exf--LDS_Split.htm">LDS_Split</a></code> <br />
   <code><a href="exf--LDS_CanGlue.htm">LDS_CanGlue</a></code> <br />
 #end
-#endif
 function LDS_CanSplit(objId: longint, firstDay: longint): boolean; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Возвращает признак модификации цепочки</brief>
   <p>
@@ -813,10 +764,8 @@ function LDS_CanSplit(objId: longint, firstDay: longint): boolean; external #G_Z
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--LDS_SetModified.htm">LDS_SetModified</a></code> <br />
 #end
-#endif
 function LDS_IsModified(objId: longint): boolean; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Установить значение признака модификации</brief>
   <p>
@@ -832,10 +781,8 @@ function LDS_IsModified(objId: longint): boolean; external #G_ZARCACHE;
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--LDS_IsModified.htm">LDS_IsModified</a></code> <br />
 #end
-#endif
 procedure LDS_SetModified(objId: longint, value: boolean); external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Загрузка данных о связанности дней из битовой маски</brief>
   <p>
@@ -869,10 +816,8 @@ procedure LDS_SetModified(objId: longint, value: boolean); external #G_ZARCACHE;
   <code><a href="exf--LDS_StoreToMask.htm">LDS_StoreToMask</a></code> <br />
   <code><a href="exf--LDS_Refresh.htm">LDS_Refresh</a></code> <br />
 #end
-#endif
 function LDS_LoadFromMask(objId: longint, mask: longint): boolean; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Запись данных о связанности дней в битовую маску</brief>
   <p>
@@ -896,10 +841,8 @@ function LDS_LoadFromMask(objId: longint, mask: longint): boolean; external #G_Z
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
   <code><a href="exf--LDS_LoadFromMask.htm">LDS_LoadFromMask</a></code> <br />
 #end
-#endif
 function LDS_StoreToMask(objId: longint, var mask: longint): boolean; external #G_ZARCACHE;
 
-#ifdef LDSAPI_INC_DOC
 #doc
   <brief>Восстановить целостность данных</brief>
   <p>
@@ -944,5 +887,4 @@ function LDS_StoreToMask(objId: longint, var mask: longint): boolean; external #
   <h3>См. также</h3>
   <a href="art--LDSAPI_About.htm">Цепочки дней</a> <br />
 #end
-#endif
 procedure LDS_Refresh(objId: longint); external #G_ZARCACHE;

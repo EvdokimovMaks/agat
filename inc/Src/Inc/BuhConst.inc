@@ -325,6 +325,7 @@
   joJornalAnalit  = 101;
   joMemoOrder     = 111;
   joMemoOrderH    = 112;
+  joMemoOrderF    = 114;
   joAktReviews    = 113;
   joOnLineGroup   = 201;
 

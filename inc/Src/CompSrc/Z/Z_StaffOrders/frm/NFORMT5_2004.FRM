@@ -88,11 +88,15 @@ contract_nmb
 ФиоРукРП
 ОргНаим
 DateDoc
+NumDoc
 Pasdate
 НомерДопСогл
 
 contract_begin
 contract_end
+
+StaffStrNewSeqNmb
+StaffStrOldSeqNmb
 
 .EndFields
 
@@ -214,8 +218,10 @@ prim ^
 ФиоРукРП            ^
 ОргНаим             ^
 DateDoc             ^
+NumDoc              ^
 PasDate             ^
 НомерДопСогл        ^
 Даты действия трудового договора ^ ^
+^ ^
  Р
 .endform

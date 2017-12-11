@@ -116,7 +116,7 @@
   <tr>
     <td><font size="2">
       <code><a href="exf--PA_Account.htm">PA_Account</a></code> <br />
-      <code><a href="exf--PA_AdditionalAnalytics.htm">PA_AdditionalAnalytics</a></code> <br />
+      <code><a href="exf--PA_GetAdditionalAnalytics.htm">PA_GetAdditionalAnalytics</a></code> <br />
       <code><a href="exf--PA_Appointment.htm">PA_Appointment</a></code> <br />
       <code><a href="exf--PA_Brigade.htm">PA_Brigade</a></code> <br />
       <code><a href="exf--PA_Category.htm">PA_Category</a></code> <br />
@@ -148,7 +148,7 @@
     </font></td>
     <td><font size="2">
       <code><a href="exf--PA_AccountOnDay.htm">PA_AccountOnDay</a></code> <br />
-      <code><a href="exf--PA_AdditionalAnalyticsOnDay.htm">PA_AdditionalAnalyticsOnDay</a></code> <br />
+      <code><a href="exf--PA_GetAdditionalAnalyticsOnDay.htm">PA_GetAdditionalAnalyticsOnDay</a></code> <br />
       <code><a href="exf--PA_AppointmentOnDay.htm">PA_AppointmentOnDay</a></code> <br />
       <code><a href="exf--PA_BrigadeOnDay.htm">PA_BrigadeOnDay</a></code> <br />
       <code><a href="exf--PA_CategoryOnDay.htm">PA_CategoryOnDay</a></code> <br />
@@ -1755,11 +1755,14 @@ function PA_StandardBusinessTransactionParameterOnDay(Day: byte): string; extern
 
 #ifdef PADETAILS_VIP_DOC
 #doc
-  <brief>Возвращает дополнительную аналитику на указанную дату</brief>
+  <brief>Устаревшая функция. Возвращала дополнительную аналитику на указанную дату</brief>
   <p>
-    Возвращает ссылку на набор дополнительных аналитик (таблица OTPDOP) на дату <code>OnDate</code>.
+    <font color="red">Устаревшая функция</font>. Возвращала ссылку на набор дополнительных аналитик (таблица OTPDOP) на дату <code>OnDate</code>.
     Текущий лицевой счет задается предварительным вызовом функции
     <code><a href="exf--PA_Assign.htm">PA_Assign</a></code>.
+  </p>
+  <p>
+    Вместо данной функции следует использовать метод <code><a href="exf--PA_GetAdditionalAnalytics.htm">PA_GetAdditionalAnalytics</a></code>
   </p>
 
   <h3>Параметры</h3>
@@ -1769,20 +1772,23 @@ function PA_StandardBusinessTransactionParameterOnDay(Day: byte): string; extern
 
   <h3>См. также</h3>
   <a href="art--PADAPI_About.htm">Функции получения параметров ЛС на дату</a> <br />
-  <code><a href="exf--PA_AdditionalAnalyticsOnDay.htm">PA_AdditionalAnalyticsOnDay</a></code> <br />
+  <code><a href="exf--PA_GetAdditionalAnalyticsOnDay.htm">PA_GetAdditionalAnalyticsOnDay</a></code> <br />
 #end
 #endif
 function PA_AdditionalAnalytics(OnDate: date): comp; external #G_WorkTable;
 
 #ifdef PADETAILS_VIP_DOC
 #doc
-  <brief>Возвращает дополнительную аналитику на заданный день месяца</brief>
+  <brief>Устаревшая функция. Возвращала дополнительную аналитику на заданный день месяца</brief>
   <p>
-    Возвращает ссылку на набор дополнительных аналитик (таблица OTPDOP) на день <code>Day</code>
+    <font color="red">Устаревшая функция</font>. Возвращала ссылку на набор дополнительных аналитик (таблица OTPDOP) на день <code>Day</code>
     предварительно заданного функцией <code><a href="exf--PA_SetMonthYear.htm">PA_SetMonthYear</a></code>
     месяца и года, для текущего лицевого счета. Текущий лицевой счет задается предварительным вызовом функции
     <code><a href="exf--PA_Assign.htm">PA_Assign</a></code>.
     В случае заданного лицевого счета, но незаданного месяца и года возвращается неопределенное значение.
+  </p>
+  <p>
+    Вместо данной функции следует использовать метод <code><a href="exf--PA_GetAdditionalAnalyticsOnDay.htm">PA_GetAdditionalAnalyticsOnDay</a></code>
   </p>
 
   <h3>Параметры</h3>
@@ -1792,10 +1798,58 @@ function PA_AdditionalAnalytics(OnDate: date): comp; external #G_WorkTable;
 
   <h3>См. также</h3>
   <a href="art--PADAPI_About.htm">Функции получения параметров ЛС на дату</a> <br />
-  <code><a href="exf--PA_AdditionalAnalytics.htm">PA_AdditionalAnalytics</a></code> <br />
+  <code><a href="exf--PA_GetAdditionalAnalytics.htm">PA_GetAdditionalAnalytics</a></code> <br />
 #end
 #endif
 function PA_AdditionalAnalyticsOnDay(Day: byte): comp; external #G_WorkTable;
+
+#ifdef PADETAILS_VIP_DOC
+#doc
+  <brief>Возвращает дополнительные аналитики на указанную дату</brief>
+  <p>
+    Возвращает массивы дополнительных аналитик на дату <code>OnDate</code>.
+    Текущий лицевой счет задается предварительным вызовом функции
+    <code><a href="exf--PA_Assign.htm">PA_Assign</a></code>.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>OnDate</code> - дата, на которую нужно получить значение</li>
+    <li><code>[out] TblExtr</code> - массив кодов таблиц дополнительных аналитики</li>
+    <li><code>[out] KauExtr</code> - массив ссылок на записи таблиц дополнительных аналитик</li>
+  </ul>
+
+  <h3>См. также</h3>
+  <a href="art--PADAPI_About.htm">Функции получения параметров ЛС на дату</a> <br />
+  <code><a href="exf--PA_GetAdditionalAnalyticsOnDay.htm">PA_GetAdditionalAnalyticsOnDay</a></code> <br />
+#end
+#endif
+procedure PA_GetAdditionalAnalytics(OnDate: date, var TblExtr: anytype, var KauExtr: anytype); external #G_WorkTable;
+
+#ifdef PADETAILS_VIP_DOC
+#doc
+  <brief>Возвращает дополнительные аналитики на заданный день месяца</brief>
+  <p>
+    Возвращает массивы дополнительных аналитик на день <code>Day</code>
+    предварительно заданного функцией <code><a href="exf--PA_SetMonthYear.htm">PA_SetMonthYear</a></code>
+    месяца и года, для текущего лицевого счета. Текущий лицевой счет задается предварительным вызовом функции
+    <code><a href="exf--PA_Assign.htm">PA_Assign</a></code>.
+    В случае заданного лицевого счета, но незаданного месяца и года возвращается неопределенное значение.
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>Day</code> - день, на который нужно получить значение</li>
+    <li><code>[out] TblExtr</code> - массив кодов таблиц дополнительных аналитики</li>
+    <li><code>[out] KauExtr</code> - массив ссылок на записи таблиц дополнительных аналитик</li>
+  </ul>
+
+  <h3>См. также</h3>
+  <a href="art--PADAPI_About.htm">Функции получения параметров ЛС на дату</a> <br />
+  <code><a href="exf--PA_GetAdditionalAnalytics.htm">PA_GetAdditionalAnalytics</a></code> <br />
+#end
+#endif
+procedure PA_GetAdditionalAnalyticsOnDay(Day: byte, var TblExtr: anytype, var KauExtr: anytype); external #G_WorkTable;
 
 #ifdef PADETAILS_VIP_DOC
 #doc

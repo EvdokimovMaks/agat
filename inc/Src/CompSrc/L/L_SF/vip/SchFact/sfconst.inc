@@ -13,6 +13,9 @@ const
   cwDirect_Buy   : Word = 2;
   cwDirect_Import: Word = 1010;
 
+  // Тип СФ для передачи в объект расчета налогов
+  cwTipSF_ByNal = 2002;
+
   // РБ. Статус отправки ЭСЧФ (StatusEDO.Status)
   st_IN_WORK             = 0; // В разработке
   st_IN_PROGRESS_ERROR   = 1; // В разработке. Ошибка
@@ -248,8 +251,9 @@ const
   cwTypeSF_Sell_Bel_Physical       : Word = 7253;  // Накладная по физическим лицам (Беларусь)
   cwTypeSF_Sell_Bel_StornoRozn     : Word = 7254;  // Сторнирующая накладная, розница (Беларусь)
   cwTypeSF_Sell_Bel_OtgrInoOrg     : Word = 7255;  // Накладная, отгрузка иностранной организации (Беларусь)
-  cwTypeSF_Sell_ExemtionNDS        : Word = 7260;  // Счет-фактура по освобожденным от НДС
-  cwTypeSF_Sell_ExemtionNDS_Avans  : Word = 7261;  // Счет-фактура, оплата, предоплата по освобожденным от НДС
+  cwTypeSF_Sell_ExemptionNDS       : Word = 7260;  // Счет-фактура по освобожденным от НДС
+  cwTypeSF_Sell_ExemptionNDS_Avans : Word = 7261;  // Счет-фактура, оплата, предоплата по освобожденным от НДС
+  cwTypeSF_Sell_Bel_OtgrCalcStavka : Word = 7264;  // Накладная по расчетной ставке (Беларусь)
 
   //---------------------------------------------------------------------------------------------
   // Снабжение, СФ поставщика, SchFact.TipUser
@@ -281,6 +285,7 @@ const
   cwTypeSF_Buy_Mediator             : Word = 7311;  // Счет-фактура посредника
   cwTypeSF_Buy_Mediator_Avans       : Word = 7313;  // Счет-фактура посредника, аванс
   cwTypeSF_Buy_Return               : Word = 7312;  // Счет-фактура поставщика, возврат
+  cwTypeSF_Buy_ReturnExemptionNDS   : Word = 7362;  // Счет-фактура поставщика, возврат по освобожденным от НДС
   cwTypeSF_Buy_CorrV_Mediator       : Word = 7314;  // Корректировочный счет-фактура посредника
   cwTypeSF_Buy_Ispr_Mediator        : Word = 7316;  // Исправление СФ посредника
   cwTypeSF_Buy_IsprCorrV_Mediator   : Word = 7321;  // Исправление корректировочного СФ посредника
@@ -345,7 +350,8 @@ const
   cwTypeBK_Sell_Bel_Otgr_Plus           : Word = 7451;  // Регистрация СФ, увеличение реализации (Беларусь)
   cwTypeBK_Sell_Bel_Otgr_Minus          : Word = 7452;  // Регистрация СФ, уменьшение реализации (Беларусь)
   cwTypeBK_Sell_Bel_Ispr                : Word = 7453;  // Регистрация СФ (исправление) (Беларусь)
-  cwTypeBK_Sell_ExemtionNDS             : Word = 7460;  // Регистрация СФ по освобожденным от НДС
+  cwTypeBK_Sell_Bel_OtgrCalcStavka      : Word = 7454;  // Регистрация СФ по расчетной ставке (Беларусь)
+  cwTypeBK_Sell_ExemptionNDS            : Word = 7460;  // Регистрация СФ по освобожденным от НДС
 
   //---------------------------------------------------------------------------------------------
   // Снабжение, книга покупок, BookPrZk.TipUser
@@ -390,6 +396,7 @@ const
   cwTypeBK_Buy_NalogSub                : Word = 7534;  // Налоговый вычет
   cwTypeBK_Buy_RegGTD                  : Word = 7505;  // Регистрация ГТД в книге покупок
   cwTypeBK_Buy_Return                  : Word = 7536;  // Регистрация СФ поставщика, возврат
+  cwTypeBK_Buy_ReturnExemptionNDS      : Word = 7566;  // Регистрация СФ поставщика, возврат по освобожденным от НДС
   cwTypeBK_Buy_ReOrg                   : Word = 7537;  // Регистрация СФ Реорганизация (учет у правопреемника)
   cwTypeBK_Buy_FreeOtgr                : Word = 7538;  // Регистрация СФ Безвозмездное получение
   cwTypeBK_Buy_Summa                   : Word = 7539;  // Регистрация СФ Приобретение, учет по стоимости с налогами
@@ -910,7 +917,7 @@ Function IsRoznSF(wType: word): boolean;
 // СФ по физ.лицам и рознице (РБ)
 Function Is_Physical_SF(aTipUser: word): Boolean;
 {
-  Result := (aTipUser = cwTypeSF_Sell_Bel_OtgrRozn) or (aTipUser = cwTypeSF_Sell_Bel_Physical);
+  Result := (aTipUser = cwTypeSF_Sell_Bel_OtgrRozn) or (aTipUser = cwTypeSF_Sell_Bel_Physical) or (aTipUser = cwTypeSF_Sell_Bel_OtgrCalcStavka);
 }
 
 Function Is_OtgrMinus_BK_Bel(aTipUser: word): Boolean;

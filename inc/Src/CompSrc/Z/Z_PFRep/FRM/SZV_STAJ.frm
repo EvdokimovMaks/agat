@@ -241,7 +241,7 @@ end.
 					<“’:‘>^</“’:‘>
 					<“’:®>^</“’:®>
 				</ˆ‘:¥à¨®¤>
-.{?internal;Terr <> '' or Usl <> '' or KPS <> '' or Osn <> '' or Visl <> ''
+.{?internal;Terr <> '' or Usl <> '' or KPS <> '' or Osn <> '' or Visl <> '' or OsnDop <> ''
 				<ˆ‘:‹ì£®â­ë©‘â ¦>
 .{?internal;Terr <> ''
                                         <ˆ‘:’“>

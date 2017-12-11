@@ -529,6 +529,7 @@ end.
          nomer:= 0;
       end
 end.
+.{?internal;(KolNach > 0) or (KolStag > 0)
 .{?internal;(nomer=0)or(nomer=AllCounter)
 .fields
 if(Trim(RealInn)<>'',Trim(RealInn),' ')
@@ -580,6 +581,7 @@ if(Trim(Fone_org)<>'',Trim(Fone_org),' ')
 if ( TrueType = 'Ž','>','')
 .endfields
 <“-3=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^= =^=^=^
+.}
 .{ CheckEnter PU3_2016_PerScale
 .}
 .{ CheckEnter PU3_2016_NACH

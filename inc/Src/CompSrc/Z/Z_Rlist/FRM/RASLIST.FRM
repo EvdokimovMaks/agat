@@ -115,6 +115,12 @@
  ^
  ^
 .}
+.fields
+ NameIsp
+ DolgIsp
+ DatePodp
+.endfields
+^ ^ ^
 .begin
  RasList.fExit;
 end.
@@ -738,6 +744,12 @@ end.
 읕컴컴컨컴컴컴컴컴좔컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴좔컴컴컴컴컴컴켸
 .]f
 .}
+.fields
+ DolgIsp
+ NameIsp
+ DatePodp
+.endfields
+^                         ^     ^
 .endform
 !
 !
@@ -812,4 +824,10 @@ i Tabn FIO
 읕컴컴컨컴컴컴컴컴좔컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴좔컴컴컴컴컴컴켸
 .]f
 .}
+.fields
+ DolgIsp
+ NameIsp
+ DatePodp
+.endfields
+^                         ^     ^
 .endform

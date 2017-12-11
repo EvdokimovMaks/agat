@@ -457,8 +457,12 @@ where
   comp(nRec_потребителя) == KatOrg.nRec
 ))
 ;
+.declare
+  #include History.vih
+.enddeclare
 .var
- ИНН_УНН:string;
+  ИНН_УНН:string;
+  oHistory : iHistory;
 .endvar
 .fields
   substr(upcase(sGetTune('KatOrg.FldView.UNN')),1,11)
@@ -495,7 +499,7 @@ where
 .{
 .begin
   if (CONSUMER.getfirst KatOrg = tsOK)
-    ИНН_УНН := CONSUMER.KatOrg.UNN;
+    ИНН_УНН := oHistory.sGetField(coKatOrg, nRec_потребителя, 'UNN', StrToDate(дата_выдачи, 'DD/MM/YYYY'));
  end.
  Р                                                                         И    Типовая межотраслевая форма № М-2а И
                                                                          И    Утверждена постановлением Госкомстата России И
@@ -567,6 +571,9 @@ where
 .nameinlist 'Доверенность для Беларуси ф.М-2'
 .group 'Доверенность'
 .Group 'Country' subGroup 'Belarus'
+.declare
+  #include History.vih
+.enddeclare
 .create view  CONSUMER
 from KatOrg
 where
@@ -575,7 +582,8 @@ where
 ))
 ;
 .var
- ИНН_УНН:string;
+  ИНН_УНН:string;
+  oHistory : iHistory;
 .endvar
 .fields
   substr(upcase(sGetTune('KatOrg.FldView.UNN')),1,11)
@@ -618,7 +626,7 @@ where
 .{
 .begin
   if (CONSUMER.getfirst KatOrg = tsOK)
-    ИНН_УНН := CONSUMER.KatOrg.UNN;
+    ИНН_УНН := oHistory.sGetField(coKatOrg, nRec_потребителя, 'UNN', StrToDate(дата_выдачи, 'DD/MM/YYYY'));
  end.
  Р                                                                         И    Форма № М-2 И
 
@@ -649,7 +657,7 @@ where
                                                     (наименование потребителя и его адрес)
                                      М@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ М
                                                     (наименование плательщика и его адрес)
-                                    Счет  М№  @@@@@@@@@@@@@@@@@@@@@@ Мв М @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ М
+                                    Счет  М№ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Мв М @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ М
                                                                           (наименование банка)
                                                                  М @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ М
                                                                           (адрес банка)
@@ -736,8 +744,12 @@ where
   comp(nRec_потребителя) == KatOrg.nRec
 ))
 ;
+.declare
+  #include History.vih
+.enddeclare
 .var
- ИНН_УНН:string;
+  ИНН_УНН:string;
+  oHistory : iHistory;
 .endvar
 .fields
   substr(upcase(sGetTune('KatOrg.FldView.UNN')),1,11)
@@ -771,7 +783,7 @@ where
 .{
 .begin
   if (CONSUMER.getfirst KatOrg = tsOK)
-    ИНН_УНН := CONSUMER.KatOrg.UNN;
+    ИНН_УНН := oHistory.sGetField(coKatOrg, nRec_потребителя, 'UNN', StrToDate(дата_выдачи, 'DD/MM/YYYY'));
  end.
  Р                                                                         И    Форма № М-2а И
 
@@ -789,7 +801,7 @@ where
                                                     (наименование потребителя и его адрес)
                                      М@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ М
                                                     (наименование плательщика и его адрес)
-                                    Счет  М№  @@@@@@@@@@@@@@@@@@@@@@ Мв М @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ М
+                                    Счет  М№ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Мв М @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ М
                                                                           (наименование банка)
                                                                  М @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ М
                                                                           (адрес банка)
