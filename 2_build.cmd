@@ -34,6 +34,7 @@ call :compile pws "Компиляция pws (сдельные наряды)"
 call :compile regrade "Компиляция regrade (акты на пересортицу)"
 call :compile rkm "Компиляция RKM (доработки по РКМ)"
 call :compile templan "Компиляция TemPlan (ТемПлан)"
+call :compile zar "Компиляция Zar ()"
 
 echo "Компиляция завершена"
 pause

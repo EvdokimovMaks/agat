@@ -20,6 +20,7 @@ call :deploy pws "Подключение pws (сдельные наряды)"
 call :deploy regrade "Подключение regrade (акты на пересортицу)"
 call :deploy rkm "Подключение RKM (доработки по РКМ)"
 call :deploy templan "Подключение TemPlan (ТемПлан)"
+call :deploy zar"Подключение Zar ()"
 
 echo "Подключение завершено"
 pause

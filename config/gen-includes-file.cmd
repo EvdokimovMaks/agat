@@ -1,11 +1,12 @@
 @echo off
 set IncludesDir=%~dp0..
+set ConfigDir=%~dp0
 call :normalise "%IncludesDir%"
 
 if exist tmp del /F tmp
 dir %IncludesDir% /s /b /a:d >> tmp
 
-if exist includes.inc del /F includes.inc
+if exist %ConfigDir%includes.inc del /F %ConfigDir%includes.inc
 for /f "delims=" %%x in (tmp) do call :addinclude %%x
 
 del /F tmp
@@ -19,5 +20,5 @@ set s=%1
 call set rslt=%%s:%IncludesDir%\=%%
 if %rslt:~0,4% equ .git goto :EOF
 set rslt=%rslt:\=/%
-echo /i:"../%rslt%" >> includes.inc
+echo /i:"../%rslt%" >> %ConfigDir%includes.inc
 goto :EOF
