@@ -45,6 +45,6 @@ echo %2
 echo ===============================================================================
 cd %1
 echo %Version%>version
-rem call "build-%ConfigName%"
+call "build-%ConfigName%"
 cd ..
 exit /B
