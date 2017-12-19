@@ -85,4 +85,14 @@ const
 
   //Настройки подписантов
   FEESIGNERS_CONSTREP_FINDIR_SLZAP                : word = 32001; //Настройка подписантов в отчете к ДО "Финансовая дирекция. Служебная записка"
+
+  //Статусы позиций заявок
+  ClaimStateMadeoutTop       = 0001000000000043h;  //Папка - оформляемый
+  ClaimStateMadeout          = 00010000000000F3h;  //Оформлена
+  ClaimStateMadeoutReplacing = 00010000000000FCh;  //Заменяющая
+  ClaimStateAcceptTop        = 0001000000000044h;  //Папка - исполняемый
+  ClaimStateAccept           = 00010000000000F8h;  //Принята к исполнению
+  ClaimStateAcceptReplacing  = 0001000000000119h;  //Заменяющая.Принята к исполнению
+
+  STATLOG_TIPDOC_INDENT = 30000;
 end;
