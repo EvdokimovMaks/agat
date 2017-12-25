@@ -109,6 +109,7 @@ Reg1
 Reg2
 Reg3
 Reg4
+Phones
 // воинский учет
 vus1
 vus2
@@ -281,6 +282,7 @@ Reg1                      ^
 Reg2                      ^
 Reg3                      ^
 Reg4                      ^
+Phones                    ^
 // воинский учет
 vus1                      ^
 vus2                      ^

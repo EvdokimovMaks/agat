@@ -9,10 +9,11 @@ const
 //    1024, 2048...   - Прочие параметры
   cg_ExpSfPriceNDS     = 1;   // цена с учетом НДС
   cg_ExpSfCreateSign   = 2;   // создать файл с ЭЦП
+  cg_ExpSfGroupPriceMC = 4;   // группировать по матценности и цене
+  cg_ExpSfHideKolPrice = 8;   // Не выводить количество и цену ОКЕИ у услуги
 
   cg_ExpSfSingEDO      = 1024; // экспорт СФ для ЭЦП
   cg_ExpSfNalStRasch   = 2048; // налоговая ставка СФ расчетная
   cg_ExpSfNalStProc    = 4096; // налоговая ставка СФ процентная
-  cg_ExpSfHideKolPrice = 8192; // Не выводить количество и цену ОКЕИ у услуги
-
+  cg_ExpSfVarNameMCUsl = 8192; // выводить вариант наименования МЦ/услуги
 end;

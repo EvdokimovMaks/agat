@@ -287,12 +287,13 @@ end.
  nSoprGTD                // 23 ссылка на ГТД
  GtDCountry:string       // 23a
  GTDNomer:string         // 23b
+ KodTNVED:string
  PeriodUpl:string
  PeriodUplDop:longint
  NumUpl:word
 .endfields
 0abcdefg123abcdef 4567a89101234567ab8920abcd123ab
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^ ^^^^^^^^^^ ^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^ ^^^^^^^^^^ ^^^^^^^
 .begin
  ISummA    +=SummA;
  ISumVal   +=SumVal;
@@ -1409,7 +1410,9 @@ end.
 #include bkprzkf2.frn    // новые для РФ (с 11.05.2006)
 #include bkprzkf3.frn    // новые для РФ (с 01.01.2012)
 #include bkprzkf7.frn    // новые для РФ (с 14.08.2014)
+#include bkprzkf8.frn    // новые для РФ (с 01.10.2017)
 #include bkprzkf1.frn    // для Беларуси
 #include bkprzkd.frn     // Дополнительная книга для РФ
 #include bkprzkd1.frn    // Дополнительная книга для РФ c 01.01.2012
 #include bkprzkd2.frn    // Дополнительная книга для РФ с 14.08.2014
+#include bkprzkd3.frn    // Дополнительная книга для РФ с 01.10.2017

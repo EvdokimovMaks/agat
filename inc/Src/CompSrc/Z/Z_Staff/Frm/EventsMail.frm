@@ -13,9 +13,17 @@ FIO
 TabNmb
 Date_Ev
 Message
+
+Department2
+Post2
+Date_Ev2
+Message2
 .EndFields
 .HIDE
 .{ MailEvent_FormCycle CheckEnter
+ ^ ^ ^ ^
+.}
+.{ MailEvent_FormCycle2 CheckEnter
  ^ ^ ^ ^
 .}
 .begin
@@ -30,6 +38,11 @@ FIO
 TabNmb
 Date_Ev
 Message
+
+Department2
+Post2
+Date_Ev2
+Message2
 .EndFields
 
 <html>
@@ -62,6 +75,29 @@ Message
 .}
       </tbody>
     </table>
+
+    <br></br>
+
+    <table>
+      <tbody>
+        <tr>
+          <th>Подразделение</th>
+          <th>Должность</th>
+          <th>Дата</th>
+          <th>Сообщение</th>
+        </tr>
+
+.{ MailEvent_FormCycle2 CheckEnter
+        <tr>
+          <td>^</td>
+          <td>^</td>
+          <td>^</td>
+          <td>^</td>
+        </tr>
+.}
+      </tbody>
+    </table>
   </body>
+
 </html>
 .endform

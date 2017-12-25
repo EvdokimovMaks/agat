@@ -41,6 +41,7 @@
 #include G_Scales.inc
 #include Scales.inc
 #include ZarDistribute.inc // ZarDistribute.dll
+#include DotNetContextFunc.inc // G_DotNet4Vip.dll
 
 //вывод картинки в rtf документ: путь к rtf файлу, имя rtf файла, высота картинки, два параметра положение на листе
 procedure InsFoto(string, string, longInt, longInt, longInt); external 'InsFoto.dll';

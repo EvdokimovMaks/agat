@@ -37,6 +37,7 @@
 .END
 .{CycleDutyList CHECKENTER
 .FIELDS
+  Нрек_наряда
   Цех
   Номер_наряда
   Номер_бригады
@@ -44,9 +45,10 @@
   Бригадир
   Премия
 .ENDFIELDS
-^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^
 .{CycleDutyItem CHECKENTER
 .FIELDS
+  Нрек_записи
   Номер_записи
   Код_работы
   Номер_операции
@@ -58,7 +60,7 @@
   Счет
   Субсчет
 .ENDFIELDS
-  ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+  ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}
 .IF ConditionPrintDutyListFooter
 .FIELDS

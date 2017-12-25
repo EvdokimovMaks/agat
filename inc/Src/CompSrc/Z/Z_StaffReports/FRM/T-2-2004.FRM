@@ -116,6 +116,7 @@ dayRegPasp
 mesRegPasp
 godRegPasp
 Reg4
+Phones
 // воинский учет
 vus1
 vus2
@@ -188,6 +189,7 @@ End5
 End6
 End7
 End8
+PersonsNRec
 
 .endFields
 
@@ -294,6 +296,7 @@ dayRegPasp                ^
 mesRegPasp                ^
 godRegPasp                ^
 Reg4                      ^
+Phones                    ^
 // воинский учет
 vus1                      ^
 vus2                      ^
@@ -382,6 +385,7 @@ End5                      ^
 End6                      ^
 End7                      ^
 End8                      ^
+PersonsNRec               ^
 
 .begin
  t_2_2004.fExit;

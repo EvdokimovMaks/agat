@@ -117,6 +117,7 @@ dayRegPasp
 mesRegPasp
 godRegPasp
 Reg4
+Phones
 // воинский учет
 vus1
 vus2
@@ -304,6 +305,7 @@ dayRegPasp                ^
 mesRegPasp                ^
 godRegPasp                ^
 Reg4                      ^
+Phones                    ^
 // воинский учет
 vus1                      ^
 vus2                      ^

@@ -29,12 +29,14 @@
   endDate : Date
   MolPost : String
   MBPType : Word
-  TipName  : Word
+  TipName : Word
+  isCopy  : Word
+  PageNum : Word
 .endFields
   #CommissionBody(MBPInvProtPlus)
   NRec - ^
   ^ ^  ^ ^ ^ ^  ^ ^  ^ ^ ^  ^
-  ^ ^ ^ ^ ^ ^
+  ^ ^  ^ ^ ^ ^  ^ ^
 .{
 .Fields
   MBPName : String  MBPKod : String
@@ -43,9 +45,10 @@
   PartyKod : String PartyName : String
   State : Word  Izn : Double
   cntKol: Double  fctKol : Double  dOst : Date
-  Sizes : String
+  Sizes : String  CardNom : String TabN : String FIO : String
+  SpNRec : Comp  Schet : String
 .endFields
-  ^ ^ ^ ^  ^ ^ ^  ^ ^  ^ ^  ^ ^  ^  ^
+  ^ ^ ^ ^  ^ ^ ^  ^ ^  ^ ^  ^ ^  ^  ^ ^ ^ ^  ^  ^
 .}
 
 .endForm
@@ -260,10 +263,10 @@ end.
   StrKol
   StrKol - 3
 .endFields
-.{?Internal;(StrKol <= 3);
-                                                                                                                                                          @-О АБЮ═╜╗Ф═ Д╝Ю╛К Э ┬█┌-3
+.{?Internal;(StrKol <= 3) or (PageNum = 0);
+                                                                                                                                                         &&-О АБЮ═╜╗Ф═ Д╝Ю╛К Э ┬█┌-3
 .}
-.{?Internal;(StrKol > 3);
+.{?Internal;(StrKol > 3) and (PageNum > 0);
                                                                                                                                                   ┌╙╚═╓╜╝╘ ╚╗АБ ╙ Д╝Ю╛╔ Э ┬█┌-3 Э @@
 .}
 зддддддбдддддддддбддддддддддддддддддддддддддддддддддддддддддддддбдддддддддддддддддбдддддддддддддбдддддддддддддддддддддбддддддддддддддддддддддддддддддбдддддддддддддддддддддддддддддд©
@@ -314,25 +317,28 @@ end.
 end.
 .Fields
   Npp
+  Schet
   MBPInfo
-  MBPKod  EdKod  Ed  Price  InvNum  PasNum
+  MBPKod  EdKod  Ed  Price
+  if (InvNum = '', '-', InvNum)  if(PasNum = '', '-', PasNum)
   fctKol  fctKol * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price - tSum)
   cntKol  cntKol * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price - tSum)
 .endFields
-Ё&'&&& Ё         Ё@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@╨@@@@@@@@@@@@@@Ё@@@@@@╨@@@@@@@@@@╨&'&&&&&&&&.&&Ё@@@@@@@@@@Ё@@@@@@@@@@Ё&&&'#&&.&&Ё&'#&&&&&&&&&&&&&.&&╨&&&'#&&.&&Ё&'#&&&&&&&&&&&&&.&&Ё
+Ё&'&&& Ё@@@@@@@@@Ё@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@╨@@@@@@@@@@@@@@Ё@@@@@@╨@@@@@@@@@@╨&'&&&&&&&&.&&Ё@@@@@@@@@@Ё@@@@@@@@@@Ё&&&'#&&.&&Ё&'#&&&&&&&&&&&&&.&&╨&&&'#&&.&&Ё&'#&&&&&&&&&&&&&.&&Ё
 .[f
 .Fields
   NpPg
-  if (RepType = 0, 0.0, PgFctKol)
-  if (RepType = 0, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum))
-  PgCntKol if (wGetTune('Fin.MBP.OstStoim') = 0, PgCntSum, PgCntSum - PgCIzSum)
+  if (isCopy = 1, PgFctKol, 0.0)
+  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), 0.0)
+  if (isCopy = 2, 0.0, PgCntKol)
+  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, PgCntSum, PgCntSum - PgCIzSum))
   DoubleToStr(NpPg, '\m4')
-  if (RepType = 0, '', GetKolStr(PgFctKol))
-  if (RepType = 0, '', DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), '\2p\m4'))
-  if (RepType = 0, '', GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum)))
+  if (isCopy = 1, GetKolStr(PgFctKol), '')
+  if (isCopy = 1, DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), '\2p\m4'), '')
+  if (isCopy = 1, GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum)), '')
 .endFields
 цддддддедддддддддадддддддддддддддддддддддддддддддйммммммммммммммоммммммйддддддддддймммммммммммммоммммммммммоммммммммммьммммммммммьмммммммммммммммммммнддддддддддеддддддддддддддддддд╢
-ЁЪ│&&&&& Ъ│Ё                                                                                                       Ъ│┬Б╝ё╝Ъ│  ЁЪ│&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&'&&&.&&Ъ│ЁЪ│&'&&&&&&&&&&&&&&.&&Ъ│Ё
+ЁЪ│&&&&& Ъ│Ё                                                                                                       Ъ│┬Б╝ё╝Ъ│  ЁЪ│&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&.&&Ъ│Ё
 юдддддды                                                                                                              юддддддддддадддддддддддддддддддаддддддддддаддддддддддддддддддды
     ┬Б╝ё╝ ╞╝ АБЮ═╜╗Ф╔:
                        ═) ╙╝╚╗Г╔АБ╒╝ ╞╝ЮО╓╙╝╒КЕ ╜╝╛╔Ю╝╒       Ъ└@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Ъ└
@@ -348,19 +354,26 @@ end.
 end.
 .Fields
   'true' : 's'
+  StrKol + 1
   Npp
-  if (RepType = 0, 0.0, TotFctKol)
-  if (RepType = 0, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum))
-  TotCntKol if (wGetTune('Fin.MBP.OstStoim') = 0, TotCntSum, TotCntSum - TotCIzSum)
+  if (isCopy = 1, TotFctKol, 0.0)
+  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), 0.0)
+  if (isCopy = 2, 0.0, TotCntKol)
+  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, TotCntSum, TotCntSum - TotCIzSum))
   DoubleToStr(Npp, '\m4')
-  if (RepType = 0, '', GetKolStr(TotFctKol))
-  if (RepType = 0, '', DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), '\2p\m4'))
-  if (RepType = 0, '', GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum)))
+  if (isCopy = 1, GetKolStr(TotFctKol), '')
+  if (isCopy = 1, DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), '\2p\m4'), '')
+  if (isCopy = 1, GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum)), '')
 .endFields
 ^
+.{?Internal;(PageNum = 0);
+                                                                                                                                                         &&-О АБЮ═╜╗Ф═ Д╝Ю╛К Э ┬█┌-3
+.}
+.{?Internal;(PageNum > 0);
                                                                                                                                                           4-О АБЮ═╜╗Ф═ Д╝Ю╛К Э ┬█┌-3
+.}
 здддддддбдддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддбддддддддддбдддддддддддддддддддбддддддддддбддддддддддддддддддд©
-ЁЪ│&&&&&& Ъ│Ё                                                                                       ┌А╔ё╝ ╞╝ ╝╞╗А╗        ЁЪ│&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&'&&&.&&Ъ│ЁЪ│&'&&&&&&&&&&&&&&.&&Ъ│Ё
+ЁЪ│&&&&&& Ъ│Ё                                                                                       ┌А╔ё╝ ╞╝ ╝╞╗А╗        ЁЪ│&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&.&&Ъ│Ё
 юддддддды                                                                                                             юддддддддддадддддддддддддддддддаддддддддддаддддддддддддддддддды
     ┬Б╝ё╝ ╞╝ ╝╞╗А╗:
                        ═) ╙╝╚╗Г╔АБ╒╝ ╞╝ЮО╓╙╝╒КЕ ╜╝╛╔Ю╝╒      Ъ└@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Ъ└
@@ -878,6 +891,7 @@ end.
   TotFctSum : Double  PgFctSum : Double
   TotCIzSum : Double  PgCIzSum : Double
   TotFIzSum : Double  PgFIzSum : Double
+  StrKol : Longint
   MBPInfo : String
 .endVar
 .function GetKolStr(Kol : double) : string;
@@ -981,6 +995,7 @@ end.
   TotFctSum := 0;
   TotCIzSum := 0;
   TotFIzSum := 0;
+  StrKol := 1;
 end.
 Ъ≤ ^
                                                                                                                                                                                                     ▐Ю╗╚╝╕╔╜╗╔ 11
@@ -1042,8 +1057,12 @@ end.
   PgFctSum := 0;
   PgCIzSum := 0;
   PgFIzSum := 0;
+  StrKol := StrKol + 1;
 end.
-                                                                                                                                                                                    @NP@-О АБЮ═╜╗Ф═ Д╝Ю╛К 6-╗╜╒
+.fields
+  StrKol
+.endfields
+                                                                                                                                                                                      &&-О АБЮ═╜╗Ф═ Д╝Ю╛К 6-╗╜╒
     здддддддбдддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддбдддддддддддддддбдддддддддддддддддддддбддддддддддддддддддддддддддддддддддддддддбдддддддддддддддддддддддддддддддддддддддд©
     Ё       Ё                            ▌║╝Ю╝Б╜К╔ ═╙Б╗╒К                             Ё               Ё                     Ё           ■═╙Б╗Г╔А╙╝╔ ╜═╚╗Г╗╔          Ё     ▐╝ ╓═╜╜К╛ ║ЦЕё═╚Б╔ЮА╙╝ё╝ ЦГ╔Б═     Ё
     Ё   Э   цддддддддддддддддддддддддддддддддддддддддддддддддддддддбдддддддддддддддддд╢    ┘╓╗╜╗Ф═    Ё     √╔╜═, ЮЦ║.      цддддддддддддддддддбдддддддддддддддддддддеддддддддддддддддддбддддддддддддддддддддд╢
@@ -1105,16 +1124,17 @@ end.
 .[f
 .fields
   NpPg
-  if (RepType = 0, 0.0, PgFctKol)
-  if (RepType = 0, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum))
-  PgCntKol  if (wGetTune('Fin.MBP.OstStoim') = 0, PgCntSum, PgCntSum - PgCIzSum)
+  if (isCopy = 1, PgFctKol, 0.0)
+  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), 0.0)
+  if (isCopy = 2, 0.0, PgCntKol)
+  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, PgCntSum, PgCntSum - PgCIzSum))
   DoubleToStr(NpPg, '\m4')
-  if (RepType = 0, '', GetKolStr(PgFctKol))
-  if (RepType = 0, '', DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), '\2p\m4'))
-  if (RepType = 0, '', GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum)))
+  if (isCopy = 1, GetKolStr(PgFctKol), '')
+  if (isCopy = 1, DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), '\2p\m4'), '')
+  if (isCopy = 1, GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum)), '')
 .endFields
     цдддддддеддддддддддддддддддддддддддддддддддддддддддддддддддддддаддддддддддддддддддадддддддддддддддедддддддддддддддддддддеддддддддддддддддддедддддддддддддддддддддеддддддддддддддддддеддддддддддддддддддддд╢
-    ЁЪ│@~@@@@@Ъ│Ё                                                                          Ъ│        Ъ│       Ё      Ъ│ ┬▓▌┐▌Ъ│         ЁЪ│&&&&&&&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&&&&&&&&&'&&&.&&Ъ│ЁЪ│&'&&&&&&&&&&&&&&&&.&&Ъ│Ё
+    ЁЪ│@~@@@@@Ъ│Ё                                                                          Ъ│        Ъ│       Ё      Ъ│ ┬▓▌┐▌Ъ│         ЁЪ│&&&&&&&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&&&&&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│Ё
     юддддддды                                                                                         юдддддддддддддддддддддаддддддддддддддддддадддддддддддддддддддддаддддддддддддддддддаддддддддддддддддддддды
 
       ┬Б╝ё╝ ╞╝ АБЮ═╜╗Ф╔: ╙╝╚╗Г╔АБ╒╝ ╞╝ЮО╓╙╝╒КЕ ╜╝╛╔Ю╝╒ Ъ┘@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Ъ┘
@@ -1130,19 +1150,21 @@ end.
 end.
 .fields
   'true' : 's'
+  StrKol + 1
   Npp
-  if (RepType = 0, 0.0, TotFctKol)
-  if (RepType = 0, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum))
-  TotCntKol  if (wGetTune('Fin.MBP.OstStoim') = 0, TotCntSum, TotCntSum - TotCIzSum)
+  if (isCopy = 1, TotFctKol, 0.0)
+  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), 0.0)
+  if (isCopy = 2, 0.0, TotCntKol)
+  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, TotCntSum, TotCntSum - TotCIzSum))
   DoubleToStr(Npp, '\m4')
-  if (RepType = 0, '', GetKolStr(TotFctKol))
-  if (RepType = 0, '', DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), '\2p\m4'))
-  if (RepType = 0, '', GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum)))
+  if (isCopy = 1, GetKolStr(TotFctKol), '')
+  if (isCopy = 1, DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), '\2p\m4'), '')
+  if (isCopy = 1, GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum)), '')
 .endFields
 ^
-                                                                                                                                                                                    @NP@-О АБЮ═╜╗Ф═ Д╝Ю╛К 6-╗╜╒
+                                                                                                                                                                                      &&-О АБЮ═╜╗Ф═ Д╝Ю╛К 6-╗╜╒
     здддддддбдддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддбдддддддддддддддддддддбддддддддддддддддддбдддддддддддддддддддддбддддддддддддддддддбддддддддддддддддддддд©
-    ЁЪ│@~@@@@@Ъ│Ё                                                                                  Ъ│Ъ│       Ё     Ъ│    ┬▓▌┐▌Ъ│       ЁЪ│&&&&&&&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&&&&&&&&&'&&&.&&Ъ│ЁЪ│&'&&&&&&&&&&&&&&&&.&&Ъ│Ё
+    ЁЪ│@~@@@@@Ъ│Ё                                                                                  Ъ│Ъ│       Ё     Ъ│    ┬▓▌┐▌Ъ│       ЁЪ│&&&&&&&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&&&&&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│Ё
     юддддддды                                                                                         юдддддддддддддддддддддаддддддддддддддддддадддддддддддддддддддддаддддддддддддддддддаддддддддддддддддддддды
 
       ┬Б╝ё╝ ╞╝ ╝╞╗А╗: ╙╝╚╗Г╔АБ╒╝ ╞╝ЮО╓╙╝╒КЕ ╜╝╛╔Ю╝╒ Ъ┘@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Ъ┘
@@ -1470,15 +1492,16 @@ end.
 .[f
 .fields
   NpPg
-  if (RepType = 0, 0.0, PgFctKol)
-  if (RepType = 0, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum))
-  PgCntKol  if (wGetTune('Fin.MBP.OstStoim') = 0, PgCntSum, PgCntSum - PgCIzSum)
+  if (isCopy = 1, PgFctKol, 0.0)
+  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), 0.0)
+  if (isCopy = 2, 0.0, PgCntKol)
+  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, PgCntSum, PgCntSum - PgCIzSum))
   DoubleToStr(NpPg, '\m4')
-  if (RepType = 0, '', GetKolStr(PgFctKol))
-  if (RepType = 0, '', GetStoimStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum)))
+  if (isCopy = 1, GetKolStr(PgFctKol), '')
+  if (isCopy = 1, GetStoimStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum)), '')
 .endFields
     цдддддддеддддддддддддддддддддддддддддддддддддддддддддддддддддддйммммммммммммммммммйддддддддддддддймммммммммммммьмммммммммммммммммммммьммммммммммммьмммммммммммммммммммммнддддддддддддеддддддддддддддддддддд╢
-    ЁЪ│@~@@@@@Ъ│Ё                                                                                               Ъ│┬▓▌┐▌Ъ│  Ё                     ЁЪ│&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&&&'&&&.&&Ъ│ЁЪ│&'&&&&&&&&&&&&&&&&.&&Ъ│Ё
+    ЁЪ│@~@@@@@Ъ│Ё                                                                                               Ъ│┬▓▌┐▌Ъ│  Ё                     ЁЪ│&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│Ё
     юддддддды                                                                                                      юдддддддддддддддддддддаддддддддддддадддддддддддддддддддддаддддддддддддаддддддддддддддддддддды
 
       ┬Б╝ё╝ ╞╝ АБЮ═╜╗Ф╔: ╙╝╚╗Г╔АБ╒╝ ╞╝ЮО╓╙╝╒КЕ ╜╝╛╔Ю╝╒ Ъ┘@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Ъ┘
@@ -1495,17 +1518,18 @@ end.
 .fields
   'true' : 's'
   Npp
-  if (RepType = 0, 0.0, TotFctKol)
-  if (RepType = 0, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum))
-  TotCntKol  if (wGetTune('Fin.MBP.OstStoim') = 0, TotCntSum, TotCntSum - TotCIzSum)
+  if (isCopy = 1, TotFctKol, 0.0)
+  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), 0.0)
+  if (isCopy = 2, 0.0, TotCntKol)
+  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, TotCntSum, TotCntSum - TotCIzSum))
   DoubleToStr(Npp, '\m4')
-  if (RepType = 0, '', GetKolStr(TotFctKol))
-  if (RepType = 0, '', GetStoimStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum)))
+  if (isCopy = 1, GetKolStr(TotFctKol), '')
+  if (isCopy = 1, GetStoimStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum)), '')
 .endFields
 ^
                                                                                                                                                                                  @NP@-О АБЮ═╜╗Ф═ Д╝Ю╛К Э ┬█┌-3
     здддддддбддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддддбдддддддддддддддддддддбддддддддддддбдддддддддддддддддддддбддддддддддддбддддддддддддддддддддд©
-    ЁЪ│@~@@@@@Ъ│Ё                                                                                               Ъ│┬▓▌┐▌Ъ│  Ё                     ЁЪ│&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&&&'&&&.&&Ъ│ЁЪ│&'&&&&&&&&&&&&&&&&.&&Ъ│Ё
+    ЁЪ│@~@@@@@Ъ│Ё                                                                                               Ъ│┬▓▌┐▌Ъ│  Ё                     ЁЪ│&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│ЁЪ│&&&&&'#&&.&&Ъ│ЁЪ│&'#&&&&&&&&&&&&&&&.&&Ъ│Ё
     юддддддды                                                                                                      юдддддддддддддддддддддаддддддддддддадддддддддддддддддддддаддддддддддддаддддддддддддддддддддды
 
       ┬Б╝ё╝ ╞╝ ╝╞╗А╗: ╙╝╚╗Г╔АБ╒╝ ╞╝ЮО╓╙╝╒КЕ ╜╝╛╔Ю╝╒ Ъ┘@~@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Ъ┘

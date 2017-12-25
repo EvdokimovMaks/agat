@@ -1,6 +1,6 @@
 //******************************************************************************
 
-var SignersCount: longint;
+var SignersCount: longint; i: integer;
 
 Datastream fr_prndata
 (
@@ -97,8 +97,8 @@ Datastream fr_prndata
     [osnovanie_otp       ] fr_dochead.Class_OsnOtp;        // Основание_отпуска
     [tsel_buy_tovar      ] fr_dochead.Class_CelPriobr;     // Цель_приобретения
     [schetfact_nrec      ] fr_dochead.SchFact_NRec;        // СчФакт_НРек
-    [schetfact_nom       ] fr_dochead.SchFact_Num;         // СчФакт_Номер
-    [schetfact_date      ] oPrnSoprFun.GetSchFactDate(fr_dochead.KatSoprNRec);  //Дата счфактуры
+    [schetfact_nom       ] if (fr_dochead.SchFact_NRec <> 0, fr_dochead.SchFact_Num, if (wGetTune('Doc.SD.Prn.UPD.NumDocWithoutSF') = 0, fr_dochead.KatSopr_NSopr, 'б/н')); // СчФакт_Номер
+    [schetfact_date      ] if (fr_dochead.SchFact_NRec <> 0, oPrnSoprFun.GetSchFactDate(fr_dochead.KatSoprNRec), '');  //Дата счфактуры
     [osnovanie           ] fr_dochead.BaseDoc_NoDoc;       // Основание
     [osnovanie_date      ] fr_dochead.BaseDoc_DDoc;        // Основание_Дата
     [naznachenie         ] fr_dochead.KatNazna_Name;       // Назначение
@@ -231,6 +231,7 @@ Datastream fr_prndata
     [osnOtpNum          ] oPrnSoprFun.GetOsnovNum (fr_dochead.Dogovor_NoDoc, fr_dochead.NZakaz_NoDoc, fr_dochead.BaseDoc_NoDoc);
     [osnOtpDate         ] oPrnSoprFun.GetOsnovDate(fr_dochead.Dogovor_NoDoc, fr_dochead.NZakaz_NoDoc, fr_dochead.BaseDoc_NoDoc,
                                                     fr_dochead.Dogovor_dDoc, fr_dochead.NZakaz_DDoc , fr_dochead.BaseDoc_DDoc);
+    [osnPerUPD          ] oPrnSoprFun.GetOsnovPerUPD(fr_dochead.KatSoprNRec);
 
     [wRoundMass2Str     ] oPrnSoprFun.GetwRoundMass2Str;
     [wRoundMass2StrTTN  ] oPrnSoprFun.GetwRoundMass2StrTTN;
@@ -284,6 +285,12 @@ Datastream fr_prndata
 //Транспортная накладная для торг-12
     [nomerTN             ] oPrnSoprFun.NumData(fr_dochead.KatSoprNRec, 0);       // Номер
     [date_fullTN         ] oPrnSoprFun.NumData(fr_dochead.KatSoprNRec, 1);// Дата
+
+// 101.62039
+    [SchFactIspNom       ] oPrnSoprFun.GetSchFactIsp(fr_dochead.SchFact_NRec, 0);
+    [SchFactIspDat       ] oPrnSoprFun.GetSchFactIsp(fr_dochead.SchFact_NRec, 1);
+    [SchFactIspCorrNom   ] oPrnSoprFun.GetSchFactIspCorr(fr_dochead.KatSoprNRec, 0);
+    [SchFactIspCorrDat   ] oPrnSoprFun.GetSchFactIspCorr(fr_dochead.KatSoprNRec, 1);
 
   )
   ;
@@ -487,7 +494,7 @@ Datastream fr_prndata
                              fr_docspecif.CNacSN, fr_docspecif.CNacBN, fr_docspecif.CNacSNUth, fr_docspecif.CNacBNUth, fr_docspecif.CNacSNUth, fr_docspecif.CNacBNUth), if(GetPrecisionGroup('brForSoprTTN_Price')<> 5, Cena_PrRTTN, Cena_PrR));
     [NastrKol             ]  oPrnSoprFun.NastrEdIzm(DoubleToStr(fr_docspecif.KolUth, Kol_Pr), DoubleToStr(fr_docspecif.KolF, Kol_Pr));
     [NastrEdIzm           ]  oPrnSoprFun.NastrEdIzm(fr_docspecif.UthEd, fr_docspecif.OtpEd);
-    [NastrEdCode          ]  oPrnSoprFun.NastrEdIzm(oPrnSoprFun.GetUthEdKod (fr_docspecif.SpSoprNRec), fr_docspecif.OtpEdKod);
+    [NastrEdCode          ]  oPrnSoprFun.NastrEdIzm(oPrnSoprFun.GetUthEdKod(fr_docspecif.SpSoprNRec), oPrnSoprFun.GetOtpEdKod(fr_docspecif.SpSoprNRec));
     [CHTN_dOpr            ]  fr_docspecif.CHTN_dOpr;
     [akciz                ]  DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr);
     [PrnSoprGTD1          ]  oPrnSoprFun.PrnSoprGTD(PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 0);  //код страны товара
@@ -1423,6 +1430,10 @@ Datastream fr_prndata
 )
 
   handleEvent table fr_dochead
+    cmPreProcess:
+    {
+      i := 0;
+    }
 
     cmOnProcess:
     {
@@ -1443,6 +1454,7 @@ Datastream fr_prndata
       if (SignersCount++ = 0)
       {
         ContinueDataset;
+        i++;
       }
     }
 
@@ -1466,7 +1478,138 @@ Datastream fr_prndata
 
       накладная_нрек := fr_dochead.KatSoprNRec;
 
-      #include GetPersSign.vpp
+      sFIO1 := sPost1 := sFIO2 := sPost2 := '';
+      sFIO3 := sPost3 := sFIO4 := sPost4 := '';
+      sFIO5 := sPost5 := sFIO6 := sPost6 := '';
+
+      if not boGetTune('Doc.RunSign')
+        Exit;
+
+      // запрашивать подписантов для ТОРГ-12 и УПД только для расходных документов
+      case wForm of
+        7, 8:
+        {
+          var oSDfuns: SDfuns;
+
+          case oSDfuns.GetVidSopr(накладная_нрек) of
+            101
+          , 102
+          , 103
+          , 106
+          , 108
+          , 110
+          , 111
+          , 551, 552, 522, 523
+          , 600..607
+            :
+              Exit;
+          end;
+        }
+      end;
+
+      var oGetPersSign: GetPersSign;
+
+      oGetPersSign.ReadDSK(wForm);
+
+      if (i>0)
+       oGetPersSign.SetWasRun(wForm, True);
+
+      if not oGetPersSign.GetWasRun(wForm)
+      {
+        oGetPersSign.SetWasRun(wForm, True);
+
+        if (RunInterface('GetPersSign', wForm) <> cmDefault)
+          Exit;
+      }
+
+      oGetPersSign.ReadDSK(wForm);
+
+      if (oGetPersSign.Persons[1] <> 0) oPrnSoprFun.GetFIOPost(oGetPersSign.Persons[1], sFIO1, sPost1);
+      if (oGetPersSign.Persons[2] <> 0) oPrnSoprFun.GetFIOPost(oGetPersSign.Persons[2], sFIO2, sPost2);
+      if (oGetPersSign.Persons[3] <> 0) oPrnSoprFun.GetFIOPost(oGetPersSign.Persons[3], sFIO3, sPost3);
+      if (oGetPersSign.Persons[4] <> 0) oPrnSoprFun.GetFIOPost(oGetPersSign.Persons[4], sFIO4, sPost4);
+      if (oGetPersSign.Persons[5] <> 0) oPrnSoprFun.GetFIOPost(oGetPersSign.Persons[5], sFIO5, sPost5);
+      if (oGetPersSign.Persons[6] <> 0) oPrnSoprFun.GetFIOPost(oGetPersSign.Persons[6], sFIO6, sPost6);
+
+      case wForm of
+        7, 8:
+        {
+          if (oGetPersSign.FeeSigners <> '')
+          {
+            var iFeeSigners : FeeSigners;
+            var cGrPodp     : comp;
+
+            case wForm of
+              7: // подписанты для УПД
+              {
+                iFeeSigners.InitFeeSignersExt   (cgReport_7403, false, false);
+                iFeeSigners.FindFeeSignersByName(cgReport_7403, oGetPersSign.FeeSigners);
+
+                // Если установлена Группа
+                if iFeeSigners.FeeSignersIsValid
+                {
+                  cGrPodp := iFeeSigners.GetFeeSigners;
+
+                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'За руководителя организации')
+                  {
+                    sFIO1  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
+                    sPost1 := iFeeSigners.GetSignerPosition(1);
+                  }
+
+                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'За главного бухгалтера')
+                  {
+                    sFIO2  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
+                    sPost2 := iFeeSigners.GetSignerPosition(1);
+                  }
+
+                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'Ответственный за правильность оформления факта хозяйственной жизни')
+                  {
+                    sFIO3  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
+                    sFIO3  := if(boolean(InStr(sFIO3, sFIO2)), iFeeSigners.GetSignerFIOEx(if(oGetPersSign.Params = 0, 1, 7), false), sFIO3);
+                    sPost3 := iFeeSigners.GetSignerPosition(1);
+                  }
+
+                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'Груз передал / услуги, результаты работ, права сдал')
+                  {
+                    sFIO4  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
+                    sFIO4  := if(boolean(InStr(sFIO4, sFIO2)), iFeeSigners.GetSignerFIOEx(if(oGetPersSign.Params = 0, 1, 7), false), sFIO4);
+                    sPost4 := iFeeSigners.GetSignerPosition(1);
+                  }
+                }
+              }
+              8: // подписанты для ТОРГ-12
+              {
+                iFeeSigners.InitFeeSignersExt   (cgReport_7404, false, false);
+                iFeeSigners.FindFeeSignersByName(cgReport_7404, oGetPersSign.FeeSigners);
+
+                // Если установлена Группа
+                if iFeeSigners.FeeSignersIsValid
+                {
+                  cGrPodp := iFeeSigners.GetFeeSigners;
+
+                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'За главного бухгалтера')
+                  {
+                    sFIO2  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
+                    sPost2 := iFeeSigners.GetSignerPosition(1);
+                  }
+
+                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'Отпуск разрешил (отпуск груза разрешил)')
+                  {
+                    sFIO4  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
+                    sPost4 := iFeeSigners.GetSignerPosition(1);
+                  }
+
+                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'Сдал отправитель (отпуск груза произвел)')
+                  {
+                    sFIO5  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
+                    sPost5 := iFeeSigners.GetSignerPosition(1);
+                  }
+                }
+              }
+            end;
+          }
+        }
+      end;
     }
 
   end;

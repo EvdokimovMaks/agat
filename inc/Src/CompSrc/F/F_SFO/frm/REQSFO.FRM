@@ -30,7 +30,7 @@ end.
 // Строки спецификации - они же группы СФО или предметы, выданные по группе
   GrKind : Word GrKod  : String  GrName : String  GrEd : String  trbKol : Word  otpKol : Word
   SFOKod : String  SFOName : String  SFOPrice : Double  SFOKol : Double
-  SFOIznS : Double  SFOType : Word SFOSize : String
+  SFOIznS : Double  SFOType : Word SFOSize : String PartyKod : String PartyName : String
 // Подписанты
   Подписант_nRec : comp
   Подписант_ФИО : String
@@ -48,7 +48,7 @@ end.
    ^ ^
    ^ ^
 .{
-   ^ ^ ^ ^ ^ ^ | ^ ^ ^ ^ ^ ^ ^
+   ^ ^ ^ ^ ^ ^ | ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}
 .{ CheckEnter FeeSignersCycle_ReqSFOProt
    ^ ^ ^ ^ ^

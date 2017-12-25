@@ -589,7 +589,7 @@ end.
 
 .endform
 
-.LinkForm 'formt2_01' Prototype is 'formt2'
+.LinkForm 'Типовая межотраслевая форма Т-2' Prototype is 'formt2'
 .DEFP PA4
 .DEFO PORTRAIT
 .P 94
