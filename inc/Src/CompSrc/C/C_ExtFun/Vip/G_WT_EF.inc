@@ -1626,7 +1626,7 @@ function WT_LastThatEx(DayKind: word, ScheduleType: integer, Flags: longint, var
   <h3>Перечень информационных функций табеля</h3>
   <code><a href="exf--WT_CopyAnalytics.htm">WT_CopyAnalytics</a></code> </br>
   <code><a href="exf--WT_GetAccount.htm">WT_GetAccount</a></code> </br>
-  <code><a href="exf--WT_GetAdditionalAnalytics.htm">WT_GetAdditionalAnalytics</a></code> </br>
+  <code><a href="exf--WT_GetAdditionalAnalyticsOnDay.htm">WT_GetAdditionalAnalyticsOnDay</a></code> </br>
   <code><a href="exf--WT_GetAnalytics.htm">WT_GetAnalytics</a></code> </br>
   <code><a href="exf--WT_GetAppointment.htm">WT_GetAppointment</a></code> </br>
   <code><a href="exf--WT_GetBrigade.htm">WT_GetBrigade</a></code> </br>
@@ -2513,11 +2513,14 @@ function WT_GetStandardBusinessTransaction(Day: byte): comp; external #G_WorkTab
 function WT_GetStandardBusinessTransactionParameter(Day: byte): string; external #G_WorkTable;
 
 #doc
-  <brief>Возвращает дополнительную аналитику на день <code>Day</code>.</brief>
+  <brief>Устаревшая функция. Возвращала дополнительную аналитику на день <code>Day</code>.</brief>
   <p>
-    Возвращает ссылку на набор дополнительных аналитик (таблица OTPDOP), приходящийся на день <code>Day</code>.
+    <font color="red">Устаревшая функция</font>. Возвращала ссылку на набор дополнительных аналитик (таблица OTPDOP), приходящийся на день <code>Day</code>.
     Текущий лицевой счёт, месяц и год табеля задаются предварительно во время загрузки табеля
     (см. <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code>).
+  </p>
+  <p>
+    Вместо данной функции следует использовать метод <code><a href="exf--WT_GetAdditionalAnalyticsOnDay.htm">WT_GetAdditionalAnalyticsOnDay</a></code>
   </p>
 
   <h3>Параметры</h3>
@@ -2525,13 +2528,34 @@ function WT_GetStandardBusinessTransactionParameter(Day: byte): string; external
     <li><code>Day</code> - день текущего месяца табеля</li>
   </ul>
 
+  <h3>См. также</h3>
+  <a href="art--WTABELDOC_InformationalFunctions.htm">Информационные функции табеля</a> <br />
+  <code><link externalFunction PA_GetAdditionalAnalyticsOnDay>PA_GetAdditionalAnalyticsOnDay</link></code> <br />
+#end
+function WT_GetAdditionalAnalytics(Day: byte): comp; external #G_WorkTable;
+
+#doc
+  <brief>Возвращает дополнительные аналитики на день <code>Day</code>.</brief>
+  <p>
+    Возвращает массивы дополнительных аналитик, приходящихся на день <code>Day</code>.
+    Текущий лицевой счёт, месяц и год табеля задаются предварительно во время загрузки табеля
+    (см. <code><a href="exf--LoadWorkingTable.htm">LoadWorkingTable</a></code>).
+  </p>
+
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>Day</code> - день текущего месяца табеля</li>
+    <li><code>[out] TblExtr</code> - массив кодов таблиц дополнительных аналитики</li>
+    <li><code>[out] KauExtr</code> - массив ссылок на записи таблиц дополнительных аналитик</li>
+  </ul>
+
   <h3>Примечание</h3>
   <p>
     Информационные функции табеля - устаревший способ получения параметров ЛС на дату.
     В настоящий момент для этих целей лучше использовать специализированные
     <link article PADAPI_About>функции получения параметров ЛС на дату</link>
-    (<code><link externalFunction PA_AdditionalAnalytics>PA_AdditionalAnalytics</link></code>,
-    <code><link externalFunction PA_AdditionalAnalyticsOnDay>PA_AdditionalAnalyticsOnDay</link></code>),
+    (<code><link externalFunction PA_GetAdditionalAnalytics>PA_GetAdditionalAnalytics</link></code>,
+    <code><link externalFunction PA_GetAdditionalAnalyticsOnDay>PA_GetAdditionalAnalyticsOnDay</link></code>),
     поскольку загрузка табеля в общем случае более трудоемка, чем настройка текущего ЛС
     (<code><link externalFunction PA_Assign>PA_Assign</link></code>) для нового функционала.
     Однако, если требуется запрашивать не только параметры ЛС на дату, но и чисто табельные данные,
@@ -2540,9 +2564,9 @@ function WT_GetStandardBusinessTransactionParameter(Day: byte): string; external
 
   <h3>См. также</h3>
   <a href="art--WTABELDOC_InformationalFunctions.htm">Информационные функции табеля</a> <br />
-  <code><link externalFunction PA_AdditionalAnalytics>PA_AdditionalAnalytics</link></code> <br />
+  <code><link externalFunction PA_GetAdditionalAnalyticsOnDay>PA_GetAdditionalAnalyticsOnDay</link></code> <br />
 #end
-function WT_GetAdditionalAnalytics(Day: byte): comp; external #G_WorkTable;
+function WT_GetAdditionalAnalyticsOnDay(Day: byte, var TblExtr: anytype, var KauExtr: anytype): comp; external #G_WorkTable;
 
 #doc
   <brief>Позволяет получить Особые условия, КПС и Территориальные условия, приходящиеся на день <code>Day</code>.</brief>

@@ -74,6 +74,7 @@ XML форма на формирование реестров В ФСС
   AccountBic       //  БИК
   AccountName      //  Наименование банка
   Account          //  Номер счета
+  PayCardNun       //  Номер карты
 //-- Данные страхователя
   Employer         //  Страхователь
   EmplFlag         //  Вид работы
@@ -245,7 +246,7 @@ XML форма на формирование реестров В ФСС
   IdleAverage
 .endfields
 .{ rXMLtoFSS_Persons CheckEnter
-   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 !
 .{ rXMLtoFSS_Prostoi CheckEnter
@@ -336,6 +337,7 @@ end.
   AccountBic       //  БИК
   AccountName      //  Наименование банка
   Account          //  Номер счета
+  PayCardNun       //  Номер карты
   SurName2         //  Фамилия
   FirstName2       //  Имя
   SecName2         //  Отчество
@@ -602,6 +604,14 @@ end.
     <ACCOUNT_BIC>^</ACCOUNT_BIC>
     <ACCOUNT_NAME>^</ACCOUNT_NAME>
     <ACCOUNT>^</ACCOUNT>
+!
+.{?INTERNAL; ( SubStr(PayCardNun,1,1) = '2' )
+    <PAYCARD_FLAG>1</PAYCARD_FLAG>
+    <PAYCARD_NUM>^</PAYCARD_NUM>
+.}
+.{?INTERNAL; ( SubStr(PayCardNun,1,1) <> '2' )
+    <PAYCARD_FLAG>0</PAYCARD_FLAG>
+.}
 .}
 ! Если получатель пособия 0- уполномоченный представитель
 .{?INTERNAL; ( OwnerFlag = '0' )
@@ -801,9 +811,10 @@ end.
 .}
 .}
 !
-.{?INTERNAL; ( Date1 <> '' )
+.{?INTERNAL; ( Date1 <> '' ) or ( ( Version = '1.7.4' ) and ( GetDocType = 2 ) )
     <DATE1>^</DATE1>
 .}
+!
 .{?INTERNAL; ( Date2 <> '' )
     <DATE2>^</DATE2>
 .{?INTERNAL; ( VoucherNo <> '' )
@@ -1175,6 +1186,7 @@ end.
   AccountBic       //  БИК
   AccountName      //  Наименование банка
   Account          //  Номер счета
+  PayCardNun       //  Номер карты
   SurName2         //  Фамилия
   FirstName2       //  Имя
   SecName2         //  Отчество
@@ -1439,6 +1451,13 @@ end.
     <ACCOUNT_BIC>^</ACCOUNT_BIC>
     <ACCOUNT_NAME>^</ACCOUNT_NAME>
     <ACCOUNT>^</ACCOUNT>
+.{?INTERNAL; ( SubStr(PayCardNun,1,1) = '2' )
+    <PAYCARD_FLAG>1</PAYCARD_FLAG>
+    <PAYCARD_NUM>^</PAYCARD_NUM>
+.}
+.{?INTERNAL; ( SubStr(PayCardNun,1,1) <> '2' )
+    <PAYCARD_FLAG>0</PAYCARD_FLAG>
+.}
 .}
 ! Если получатель пособия 0- уполномоченный представитель
 .{?INTERNAL; ( OwnerFlag = '0' )
@@ -1634,7 +1653,7 @@ end.
 .}
 ! Больничный лист
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
-.{?INTERNAL; ( Date1 <> '' )
+.{?INTERNAL; ( Date1 <> '' ) or ( ( Version = '1.7.4' ) and ( GetDocType = 2 ) )
     <DATE1>^</DATE1>
 .}
 .{?INTERNAL; ( Date2 <> '' )

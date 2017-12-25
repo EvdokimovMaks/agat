@@ -19,6 +19,7 @@
  Организации_ОКПО
  Подразделение
  Nomer дата_составления
+ DayDoc MonthDoc YearDoc
  StrMonthYear
  код_подразделения
  ObNoDok
@@ -44,6 +45,7 @@
 ^^ Организация Организации_ОКПО
 ^ Подразделение
 ^^ Nomer дата_составления
+^^^ DayDoc MonthDoc YearDoc
 ^ StrMonthYear
 ^ код_подразделения
 ^ ObNoDok

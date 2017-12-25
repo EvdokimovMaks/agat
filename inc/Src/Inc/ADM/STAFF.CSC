@@ -159,4 +159,6 @@
     scStaffReceptionT2ButtAltG       = 9245;
     scStaffReceptionMainTreeExtend   = 9246;
     sci178InsPMEscWP                 = 9249;
+    sci147LTreeEnEscForSE            = 9250;
+    sci147EnEscForSE                 = 9251;
  

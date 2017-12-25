@@ -370,6 +370,9 @@ isp_posittion
 isp_fone
 isp_email
 FormDate
+
+FemalePens: word
+MalePens: word
 .endfields
 ^^^^^^^^^^^^^^^^^^
 
@@ -711,4 +714,7 @@ isp_posittion: ^
 isp_fone: ^
 isp_email: ^
 FormDate: ^
+
+FemalePens ^
+MalePens ^
 .endform

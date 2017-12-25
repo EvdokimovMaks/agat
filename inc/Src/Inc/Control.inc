@@ -835,6 +835,7 @@
   cgVarintSmet_Value     = 4; // Значение
   cgVarintSmet_Saldo     = 0; // аналитика сальдо
   
+  cgVarintSmet_AnalSootv   =  7;  // Аналитика соответствия
 !  cgVarintSmet_PodrDeb    =  7;  // подразделение из дебета
 !  cgVarintSmet_PodrKred   =  8;  // подразделение из кредита
   cgVarintSmet_COPodrDeb   =  9;  // ЦО подразделения из дебета
@@ -847,7 +848,7 @@
   NameVarintSmet_KrAnalDeb = 'Аналитика кредитовая, при отсутствии дебетовая';
   NameVarintSmet_Value     = 'Значение';
 
-!  NameVarintSmet_PodrDeb    = 'Подразделение из дебета';
+  NameVarintSmet_AnalSootv   = 'Аналитика соответствия';
 !  NameVarintSmet_PodrKred   = 'Подразделение из кредита';
   NameVarintSmet_COPodrDeb  = 'ЦО подразделения из дебета';
   NameVarintSmet_COPodrKred = 'ЦО подразделения из кредита';

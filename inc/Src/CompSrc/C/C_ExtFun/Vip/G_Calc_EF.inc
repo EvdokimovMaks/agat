@@ -677,11 +677,28 @@ function TabHelpSpace(
 procedure TabHelpZap(PrPos:longint, NrecPrMNew : comp, MOtch : word, YOtch : word, FSearch: boolean); external 'G_ZARPL.DLL';
 
 #doc
-  Средний процент доплаты за период с учетом количества рабочих дней
-  описание функции  SrednProcDoplPer(VO, DB, DE)
-  VO - вид оплаты
-  DB - дата начала периода
-  DE - дата окончания периода
+  <brief>Средний процент доплаты за период с учетом количества рабочих дней</brief>
+  <p>
+    Возвращает средний процент из постоянных доплат с системным видом оплаты
+    <code>fOpl</code>, пересекающихся с переданным периодом, с учетом количества рабочих дней
+    Начала периода передается через параметр <code>db</code>, а конец - <code>dе</code>
+  </p>
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>fOpl</code> - системный вид оплаты</li>
+    <li><code>db</code> - дата начала периода</li>
+    <li><code>de</code> - дата окончания периода</li>
+  </ul>
+  <h3>Примечание</h3>
+  <p>
+  Подсчет количества дней зависит от входимости вида оплаты "период оплаты" классификатора видов оплат
+  </p>
+  <ul>
+    <li><code>-</code> - количество рабочих дней</li>
+    <li><code>Р+ с учетом работы в выходные и праздники</code> - все отработанные дни
+           (без учета настроек "рабочие часы за вычетом...")</li>
+    <li><code>+  с учетом оплачиваемых отклонений</code> - оплачиваемые дни</li>
+  </ul>
 #end
 function SRPRDOPL(VO: longint, DB: date, DE: date): double; external 'G_ZARPL.DLL';
 
@@ -746,3 +763,19 @@ function DPS(comp): double; external 'G_ZARPL.DLL';
    Расчетный коэффициент установленной нормы рабочего времени  (плановый/балансный график)
 #end
 function WORKEDHOURSCOEF(LschetNrec: comp, Month: byte, Year: word): double;  external 'G_ZARPL.DLL';
+
+#doc
+  <brief>Сумма процентов из постоянных доплат</brief>
+  <p>
+    Возвращает сумму процентов из постоянных доплат с системным видом оплаты
+    <code>fOpl</code>, пересекающихся с переданным периодом. Начала периода
+    передается через параметр <code>db</code>, а конец - <code>dе</code>
+  </p>
+  <h3>Параметры</h3>
+  <ul>
+    <li><code>fOpl</code> - системный вид оплаты</li>
+    <li><code>db</code> - дата начала периода</li>
+    <li><code>de</code> - дата окончания периода</li>
+  </ul>
+#end
+function PDopProcDate(fOpl: longint, db: date, de: date): double; external 'G_ZARPL.DLL';

@@ -15,12 +15,14 @@
   FIO : String  TabN : String  spisReason : String
   frPodr : String  frMol : String
   toPodr : String  toMol : String
+  ActRec : Comp    ActTiDk : Word
 #CommissionFields
 .endFields
 .{ sfoNxtAct checkenter
   ^ ^ ^ ^
   ^ ^ ^
   ^ ^ ^ ^
+  ^ ^
 #CommissionBody(SFO_Act)
 .{ spcSfoAct checkenter
 .Fields

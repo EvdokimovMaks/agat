@@ -34,7 +34,6 @@ type
     WKAU           : Word;            { wKau                                  }
     CKAU           : Comp;            { cKau                                  }
     MCOUNT         : LongInt;         { mCount                                }
-    OKODSPO        : Comp;            { oKodSPO                               }
     PICKSCH        : String21;        { PickSch                               }
     PICKSUB        : String21;        { PickSub                               }
     PICKPLANSNO    : Comp;            { PickPlansNo                           }
@@ -51,7 +50,6 @@ type
     DLGKAUD5       : String;          { Выражение номер 6                     }
     DLGKAUD6       : String;          { Выражение номер 7                     }
     NAME           : String150;       { Наименование счета/субсчета           }
-    DLGKODSPO      : String;          { Выражение номер 9                     }
   end;
 
 type
@@ -75,17 +73,16 @@ const
     FNCKAUOS4=22;
     FNCKAUOS5=23;
     FNCKAUOS6=24;
-    FNDLGKAUD1=38;
-    FNDLGKAUD2=39;
-    FNDLGKAUD3=40;
-    FNDLGKAUD4=41;
-    FNDLGKAUD5=42;
-    FNDLGKAUD6=43;
-    FNDLGKODSPO=45;
+    FNDLGKAUD1=37;
+    FNDLGKAUD2=38;
+    FNDLGKAUD3=39;
+    FNDLGKAUD4=40;
+    FNDLGKAUD5=41;
+    FNDLGKAUD6=42;
     FNENDDATE=3;
-    FNFIRSTMON=36;
-    FNISOKOB=35;
-    FNISOKSAL=34;
+    FNFIRSTMON=35;
+    FNISOKOB=34;
+    FNISOKSAL=33;
     FNMCOUNT=27;
     FNMKAUOS1=7;
     FNMKAUOS2=8;
@@ -93,16 +90,15 @@ const
     FNMKAUOS4=10;
     FNMKAUOS5=11;
     FNMKAUOS6=12;
-    FNMULTISCH=32;
-    FNMULTISUB=33;
+    FNMULTISCH=31;
+    FNMULTISUB=32;
     FNMYPLANSNO=0;
-    FNNAME=44;
-    FNOKODSPO=28;
+    FNNAME=43;
     FNPARAM1=4;
-    FNPICKPLANSNO=31;
-    FNPICKSCH=29;
-    FNPICKSUB=30;
-    FNPLANNAME=37;
+    FNPICKPLANSNO=30;
+    FNPICKSCH=28;
+    FNPICKSUB=29;
+    FNPLANNAME=36;
     FNSCHNAME=5;
     FNSUBNAME=6;
     FNTECDATE=1;
@@ -123,7 +119,6 @@ const
     tbOBOROT_4_MODIF_3=196609;
     tb4_MODIF_4=262145;
     tbPICKBUH_4_MODIF_0=3;
-    tbPICKBUH_4_MODIF_1=65539;
     tbPICKBUHNEW_4_MODIF_0=6;
     tbPICKBUHNEW_4_MODIF_1=65542;
     tbSALDOALL=2;

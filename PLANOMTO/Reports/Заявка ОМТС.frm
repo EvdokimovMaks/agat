@@ -1,9 +1,6 @@
 .linkform AgatClaim1 prototype is Claim
 .nameinlist 'Агат. Служебная записка'
 .f 'NUL'
-.declare
-#include globalifc.vih
-.endDeclare
 .var
   pXL: XLSRepBuilder;
   sXLSFileName, sXLTFileName: string;
@@ -171,10 +168,9 @@ end.
   sqlBindCol(stmt, 1, OrderNrec);
   sqlBindCol(stmt, 2, IGKNrec);
   sqlExecute(stmt);
-  var GDBK: agatglobalifc;
   while sqlFetch(stmt) = tsOk
   {
-    dogovorNrec := GDBK.GetDogovorByKatstroy(OrderNrec);
+    dogovorNrec := GetDogovorByKatstroy(OrderNrec);
   }
   sqlFreeStmt(stmt);
 

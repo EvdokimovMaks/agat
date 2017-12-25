@@ -15,9 +15,10 @@
 ! параметры печати
 ParamSum ParamText ParamGroupPrint
 ! номера и даты
-NoDOK PlPorNRec DatVip1 DatVip2 DatOB1 DatOB2 YEARDOC
+NoDOK PlPorNRec DatVip1 DatVip2 DatOB1 DatOB2 YEARDOC YEARDOCS MonthDoc DayDoc
+AvizoType
 ! счет и субсчет взвиморасчетов, месяц, год
-MainSch MainSub MainMon MainYear
+MainSch MainSub MainMon MainYear MainYearS
 ! основание
 BaseName
 ! назначение извещения
@@ -38,6 +39,7 @@ NppOper:integer
 OborotNRec
 NameOper
   SodPr KorrSchet KorrSub SumDeb: double SumKred: double ValDeb: double ValKred: double
+SchDeb SchKred
 ! итого
 AllSumDeb: double AllSumKred: double AllValDeb: double AllValKred: double
 ! количество документов
@@ -75,11 +77,16 @@ DatVip2          Дата выписки докум. DD mon YYYY г. ^
 DatOB1           Дата оборота фактическая DD/MM/YY ^
 DatOB2           Дата оборота фактическая DD mon YYYY г. ^
 YEARDOC          Год даты выписки ^
+YEARDOCS         Год даты выписки (сокр.) ^
+MonthDoc         Месяц даты выписки ^
+DayDoc           День даты выписки ^
+AvizoType        Тип авизо ^
 !
 MainSch          счет взвиморасчетов ^
 MainSub                      субсчет ^
 MainMon          месяц года          ^
 MainYear         год                 ^
+MainYearS        год сокращенный     ^
 !
 BaseName         документ-основание   ^
 NamePl1          содержание извещения ^
@@ -129,6 +136,8 @@ SumDeb           сумма по дебету     ^
 SumKred                по кредиту    ^
 ValDeb           в валюте по дебету: ^
 ValKred                  по кредиту: ^
+SchDeb                               ^
+SchKred                              ^
 .begin
   case ParamText of
     0: CurText := string(NppOper) + '. ' + NamePl1 + ' ' + NamePl2 + ' ' + NamePl3 + ' ' +  NamePl4 + ' ' +  NamePl5;
