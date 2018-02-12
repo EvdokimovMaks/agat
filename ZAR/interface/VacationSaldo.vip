@@ -1,3 +1,5 @@
+#include WorkPeriods.vih
+#include CalcAndCreateCompens.vih
 #include Query.vih
 #include VacationSaldo.vih
 //#include StaffStruct.vih
@@ -253,34 +255,74 @@ join putvacation pv on wp.nrec = (case when pv.cwpremain = #comp(0) then pv.cwor
 join vacations v on pv.nrec = v.cputvac and v.factyearbeg between :dbeg and :dend
 where p.nrec = :PersonsNrec;
 
+sql query qFactOtpusk =
+select sum(fo.duration)
+from klotpusk
+join factotpusk fo on fo.person      = :PersonsNrec and
+                      fo.vactype     = klotpusk.kotpus and
+                      fo.year_vac    = :Year and
+                      fo.factyearbeg between :dbeg and :dend
+where klotpusk.typeotp in (0, 1, 3) //основной, дополнительный, компенсация
+;
+
 var
-  _qGetFactVacationKolDn: IQuery = nullref;
   _qVacDaysBetweenDates: IQuery = nullref;
+  _qFactOtpDaysBetweenDates: IQuery = nullref;
   _factVacation: iFactVacation;
+  _calcAndCreateCompens: CalcAndCreateCompens;
 
 create view
+var
+  _personsNrec: comp;
+  _date: date;
 as select *
-from lschet;
+from workperiod wp, putvacation pv, lschet
+where ((
+  _personsNrec      == wp.cPerson      and
+  cnWP_Work         == wp.wTypePeriod  and
+  (_date            >= wp.dPerBeg      and
+   _date            <= wp.dPerEnd )    and
+
+  wp.nrec           == pv.cWorkPeriod
+));
 
 function GetByPersonOnDate(aPersonsNrec: comp; aDate: date): double;
 {
 
-  if _qGetFactVacationKolDn = nullref
-    _qGetFactVacationKolDn := queryManager.createQuery(qSaldo);
+//  if _qGetFactVacationKolDn = nullref
+//    _qGetFactVacationKolDn := queryManager.createQuery(qSaldo);
+//
+//  var rs: IResultSet;
+//  rs := _qGetFactVacationKolDn.setParam('PersonsNrec', aPersonsNrec).setParam('SaldoDate', aDate).getResultSet;
+//
+//  var cnt: double;
+//  cnt := 0;
+//
+//  if rs.getFirst = tsOk do
+//  {
+//    cnt += _factVacation.funGetBalanceVac(comp(rs.row.valat(1)), 0, aDate);
+//  } while rs.getNext = tsOk;
+//
+//  result := cnt;
+  result := 0;
 
-  var rs: IResultSet;
-  rs := _qGetFactVacationKolDn.setParam('PersonsNrec', aPersonsNrec).setParam('SaldoDate', aDate).getResultSet;
+  _personsNrec := aPersonsNrec;
+  _date := aDate;
 
-  var cnt: double;
-  cnt := 0;
-
-  if rs.getFirst = tsOk do
-  {
-    cnt += _factVacation.funGetBalanceVac(comp(rs.row.valat(1)), 0, aDate);
-  } while rs.getNext = tsOk;
-
-  result := cnt;
-
+  if getfirst wp = tsOk
+    if getfirst pv = tsOk
+    {
+      var doProportion: double;
+      doProportion := _calcAndCreateCompens.CaclVacProportion(wp.NRec, aDate);
+      //message(wp.dPerBeg + ' - ' + wp.dPerEnd + ' ' + doProportion);
+      var liVacMarker: TPtr;
+      liVacMarker := InitMarker('',8,200,10);
+      _loop pv
+      {
+        result += _calcAndCreateCompens.CalcCountDaysLikeCompensWithFactDate(pv.NRec, aDate, aDate, doProportion, liVacMarker, 0);
+      }
+      DoneMarker(liVacMarker, '');
+    }
 }
 
 function GetByLschetOnDate(aLschetNrec: comp; aDate: date): double;
@@ -303,6 +345,18 @@ function GetVacationDaysBetweenDates(aPersonsNrec: comp; aStartDate: date; aEndD
   cnt := _qVacDaysBetweenDates.getResultValue;
 
   result := cnt;
+}
+
+function GetFactOtpuskDaysBetweenDates(aPersonsNrec: comp; aStartDate: date; aEndDate: date): double;
+{
+  if _qFactOtpDaysBetweenDates = nullref
+    _qFactOtpDaysBetweenDates := queryManager.CreateQuery(qFactOtpusk);
+
+  result := _qFactOtpDaysBetweenDates.setParam('PersonsNrec', aPersonsNrec)
+                                     .setParam('dbeg', aStartDate)
+                                     .setParam('dend', aEndDate)
+                                     .setParam('Year', year(aStartDate))
+                                     .getResultValue;
 }
 
 end.
