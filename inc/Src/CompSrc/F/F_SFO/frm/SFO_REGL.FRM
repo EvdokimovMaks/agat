@@ -16,10 +16,12 @@
 .Fields
   ANo : String  ADate : Date
   PodrFiltr : String  MolFiltr : String
+  ActRec : Comp
 #CommissionFields
 .endFields
   ^ ^
   ^ ^
+  ^
 #CommissionBody(SFO_Regl)
 .{ spcSFORegl CheckEnter
 .Fields
@@ -29,12 +31,13 @@
   sfSrok : String  sfEnd : Date
   psCdN  : String  psFIO : String  psTabN : String
   psMol  : String  psPodr: String
+  sfoRec : Comp
 .endFields
 .if ActSpLevItog
   ˆâ®£® ¯® ‹Š: ^
 .else
 
-  ^ ^ ^  ^ ^  ^ ^  ^ ^ ^ ^ ^
+  ^ ^ ^  ^ ^  ^ ^  ^ ^ ^ ^ ^  ^
 .end
 .}
 

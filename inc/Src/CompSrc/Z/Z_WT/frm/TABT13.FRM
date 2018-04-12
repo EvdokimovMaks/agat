@@ -29,25 +29,25 @@
   LayerCount
   D1  D2  D3  D4  D5  D6  D7  D8  D9  D10 D11 D12 D13 D14 D15
   перв_пол_дни
-  VidOpl1 Коррсчет1 Day1 Chas1 VidOpl2 Коррсчет2 Day2 Chas2 KodNejavki1 DayNejavok1 ChasNejavok1 KodNejavki2 DayNejavok2 ChasNejavok2
+  VidOpl1 Коррсчет1 Day1 Chas1 VidOpl2 Коррсчет2 Day2 Chas2 KodNejavki1 DayNejavok1 ChasNejavok1 PrintHours1 KodNejavki2 DayNejavok2 ChasNejavok2 PrintHours2
   Npp LSTABNREC PEREXODNREC FIO месяц_дни lschnum TabN WageCategory
   Ch1 Ch2 Ch3 Ch4
   Ch5 Ch6 Ch7 Ch8
   Ch9 Ch10 Ch11 Ch12
   Ch13 Ch14 Ch15
   перв_пол_часы
-  VidOpl3 Коррсчет3 Day3 Chas3 VidOpl4 Коррсчет4 Day4 Chas4 KodNejavki3 DayNejavok3 ChasNejavok3 KodNejavki4 DayNejavok4 ChasNejavok4
+  VidOpl3 Коррсчет3 Day3 Chas3 VidOpl4 Коррсчет4 Day4 Chas4 KodNejavki3 DayNejavok3 ChasNejavok3 PrintHours3 KodNejavki4 DayNejavok4 ChasNejavok4 PrintHours4
   Dolg
   D16  D17  D18  D19  D20  D21  D22  D23  D24  D25  D26  D27  D28  D29  D30  D31
   втор_пол_дни
-  VidOpl5 Коррсчет5 Day5 Chas5 VidOpl6 Коррсчет6 Day6 Chas6 KodNejavki5 DayNejavok5 ChasNejavok5 KodNejavki6 DayNejavok6 ChasNejavok6
+  VidOpl5 Коррсчет5 Day5 Chas5 VidOpl6 Коррсчет6 Day6 Chas6 KodNejavki5 DayNejavok5 ChasNejavok5 PrintHours5 KodNejavki6 DayNejavok6 ChasNejavok6 PrintHours6
   месяц_часы
   Ch16 Ch17 Ch18 Ch19
   Ch20 Ch21 Ch22 Ch23
   Ch24 Ch25 Ch26 Ch27
   Ch28 Ch29 Ch30 Ch31
   втор_пол_часы
-  VidOpl7 Коррсчет7 Day7 Chas7 VidOpl8 Коррсчет8 Day8 Chas8 KodNejavki7 DayNejavok7 ChasNejavok7 KodNejavki8 DayNejavok8 ChasNejavok8
+  VidOpl7 Коррсчет7 Day7 Chas7 VidOpl8 Коррсчет8 Day8 Chas8 KodNejavki7 DayNejavok7 ChasNejavok7 PrintHours7 KodNejavki8 DayNejavok8 ChasNejavok8 PrintHours8
 
   // дни/часы второго слоя:
   L2D1 L2D2 L2D3 L2D4 L2D5 L2D6 L2D7 L2D8 L2D9 L2D10 L2D11 L2D12 L2D13 L2D14 L2D15
@@ -71,12 +71,12 @@
  ^
 .{
  ^
- ^^^^^^^^^^^^^^^  ^ ^^^^^^^^ ^^^^^^
- ^^ ^^ ^^^^^^^^^^^^^^^^^  ^ ^^^^^^^^ ^^^^^^
+ ^^^^^^^^^^^^^^^  ^ ^^^^^^^^ ^^^^^^^^
+ ^^ ^^ ^^^^^^^^^^^^^^^^^  ^ ^^^^^^^^ ^^^^^^^^
  ^ ^
- ^^^^^^^^^^^^^^^^ ^ ^^^^^^^^ ^^^^^^
+ ^^^^^^^^^^^^^^^^ ^ ^^^^^^^^ ^^^^^^^^
  ^ ^
- ^^^^^^^^^^^^^^^^ ^ ^^^^^^^^ ^^^^^^
+ ^^^^^^^^^^^^^^^^ ^ ^^^^^^^^ ^^^^^^^^
  ^^^^^^^^^^^^^^^ ^^
  ^^^^^^^^^^^^^^^ ^
  ^^^^^^^^^^^^^^^^ ^^

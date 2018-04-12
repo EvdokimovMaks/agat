@@ -39,7 +39,7 @@ Podr
 Valut
 Podrr
 StCalc
-ShapkaCal1 ShapkaCal2 ZnStCal
+ShapkaCal1 ShapkaCal2 ShapkaCal3 ZnStCal
 SxV
 .EndFields
 
@@ -48,7 +48,7 @@ SxV
 ^
    .{.?stShapCal12;      ^.}
 .{
-^ ^ .{.?StSummaCal2;     ^.}
+^ ^ ^.{.?StSummaCal2;     ^.}
 .}
 .if IsNeedShowItog
    .{.?stItgSumCal2;     ^.}

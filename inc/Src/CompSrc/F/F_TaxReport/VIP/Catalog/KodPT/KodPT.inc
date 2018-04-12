@@ -1,5 +1,5 @@
 
-// ŠŽ„› …„ˆˆ–› ˆ‡Œ……ˆŸ Ž ŽŠ…ˆ
+  // ŠŽ„› …„ˆˆ–› ˆ‡Œ……ˆŸ Ž ŽŠ…ˆ
   KodOKEI_EdIzm_383 = 0;
   KodOKEI_EdIzm_744 = 1;
   KodOKEI_EdIzm_831 = 2;

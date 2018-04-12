@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------------
 //                                                      (c) корпорация Галактика
-// Галактика 9.10 - модуль "Электронная отчетность"
+// Галактика 9.1 - модуль "Электронная отчетность"
 // Глобальные константы модуля
 //------------------------------------------------------------------------------
 
@@ -32,6 +32,9 @@ cgsTaxCat_KodOperNDS = 'TaxCatalog_KodOperNDS';
 
 cgiTaxCat_TranspRate = 9;
 cgsTaxCat_TranspRate = 'TaxCatalog_RateCatEntity';
+
+cgiTaxCat_ProtyjOb = 10;
+cgsTaxCat_ProtyjOb = 'TaxCatalog_ProtyjOb';
 
 //константы для отбора объектов-справочников
 cgsTax_IfcPrefixCat  = 'TaxCatalog_';

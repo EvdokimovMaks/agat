@@ -42,7 +42,7 @@
   Sum_NomV  : double    // сумма по наминалу векселя
   Sum_Op    : double    // сумма операции
   Sum_OPV   : double    // сумма операции в валюте
-  kol       : word      // количество
+  kol       : double    // количество
   Sum_Proc  : double    // начисленные проценты
   Sum_ProcV : double    // начисленные проценты
   Proc      : double    // проценты по векселю

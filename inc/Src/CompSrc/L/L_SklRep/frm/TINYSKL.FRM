@@ -2031,21 +2031,19 @@ end.
 ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ˜
 .]H
 .create view VDrag
+var _à¥ª : comp;
+    _tiDk: word;
 from
   KatDrag (readonly)
 , NalDrag (readonly)
 , KatEd (readonly)
 , TmpSaldo2
-, NalDrag NalDragPar
 
 where
-(( word(3)          == NalDrag.TiDk   and
-   MC_nrec          == NalDrag.cKatOS and
+(( _tiDk            == NalDrag.TiDk   and
+   _à¥ª             == NalDrag.cKatOS and
    NalDrag.cKatDrag == KatDrag.nRec   and
    KatDrag.cKatEd   == KatEd.nRec
-
-and  word(4)       == NalDragPar.TiDk
-and  Party_nrec    == NalDragPar.cKatos
 ))
 ;
 .create view PodrDrag
@@ -2073,9 +2071,6 @@ if VDrag.GetFirst TmpSaldo2 where ((cDM_   == TmpSaldo2.cMC   and
   { VDrag.TmpSaldo2.cMC  := cDM_;
     VDrag.TmpSaldo2.cPodr:= cPodr_;
 
-    if VDrag.GetFirst NalDragPar = tsOk  // ¡¥à¥¬ ¨§ ¯ àâ¨¨
-      VDrag.GetFirst NalDrag where ((NalDragPar.nrec == NalDrag.nrec));
-
     VDrag.TmpSaldo2.kol := begkol * VDrag.NalDrag.Kol;
     VDrag.TmpSaldo2.kolP:= addkol * VDrag.NalDrag.Kol;
     VDrag.TmpSaldo2.kolR:= subkol * VDrag.NalDrag.Kol;
@@ -2084,9 +2079,6 @@ if VDrag.GetFirst TmpSaldo2 where ((cDM_   == TmpSaldo2.cMC   and
   }
 else
   {
-    if VDrag.GetFirst NalDragPar = tsOk  // ¡¥à¥¬ ¨§ ¯ àâ¨¨
-      VDrag.GetFirst NalDrag where ((NalDragPar.nrec == NalDrag.nrec));
-
     VDrag.TmpSaldo2.kol := VDrag.TmpSaldo2.kol  + begkol * VDrag.NalDrag.Kol;
     VDrag.TmpSaldo2.kolP:= VDrag.TmpSaldo2.kolP + addkol * VDrag.NalDrag.Kol;
     VDrag.TmpSaldo2.kolR:= VDrag.TmpSaldo2.kolR + subkol * VDrag.NalDrag.Kol;
@@ -2139,8 +2131,15 @@ end.
 .{
 .if TinySkl00
 .begin
-if VDrag.GetFirst NalDragPar <> tsOk  // ¡¥à¥¬ ¨§ ¯ àâ¨¨
-if VDrag.getFirst NalDrag <>tsOk  TinySkl_040.fbreak;
+ VDrag._à¥ª  := Party_nrec;
+ VDrag._tiDk := 4;
+ if VDrag.GetFirst NalDrag <>tsOk
+   {
+     VDrag._à¥ª  := MC_nrec;
+     VDrag._tiDk := 3;
+     if VDrag.GetFirst NalDrag <>tsOk
+       TinySkl_040.fbreak;
+   }
 end.
   @@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@ @@@@@@@@@ &&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&&
 .{ table 'VDrag.NalDrag'
@@ -2157,12 +2156,8 @@ end.
          if(VDrag.NalDrag.VidDrag=2, 'á¯à ¢®ç­¨ª', '')))
 .endfields
 .begin
-
-if VDrag.GetFirst NalDragPar = tsOk  // ¡¥à¥¬ ¨§ ¯ àâ¨¨
-  VDrag.GetFirst NalDrag where ((NalDragPar.nrec == NalDrag.nrec));
-
-InsertTmp2_DM(VDrag.KatDrag.nRec, sklad_nRec);
-InsertTmp2_DM(VDrag.KatDrag.nRec,  -2);
+  InsertTmp2_DM(VDrag.KatDrag.nRec, sklad_nRec);
+  InsertTmp2_DM(VDrag.KatDrag.nRec,  -2);
 end.
   @@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@ @@@@@@@@@ &&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& @@@@@@@@@@@@@@@@
 .}
@@ -2229,21 +2224,19 @@ end.
 ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÿ˜
 .]H
 .create view VDrag
+var _à¥ª : comp;
+    _tiDk: word;
 from
   KatDrag (readonly)
 , NalDrag (readonly)
 , KatEd (readonly)
 , TmpSaldo2
-, NalDrag NalDragPar
 
 where
-(( word(3)          == NalDrag.TiDk   and
-   MC_nrec          == NalDrag.cKatOS and
+(( _tiDk            == NalDrag.TiDk   and
+   _à¥ª             == NalDrag.cKatOS and
    NalDrag.cKatDrag == KatDrag.nRec   and
    KatDrag.cKatEd   == KatEd.nRec
-
-and  word(4)       == NalDragPar.TiDk
-and  Party_nrec    == NalDragPar.cKatos
 ))
 ;
 .create view PodrDrag
@@ -2270,10 +2263,6 @@ if VDrag.GetFirst TmpSaldo2 where ((cDM_   == TmpSaldo2.cMC   and
                                     cPodr_ == TmpSaldo2.cPodr ))<>tsOk
   { VDrag.TmpSaldo2.cMC  := cDM_;
     VDrag.TmpSaldo2.cPodr:= cPodr_;
-
-    if VDrag.GetFirst NalDragPar = tsOk  // ¡¥à¥¬ ¨§ ¯ àâ¨¨
-      VDrag.GetFirst NalDrag where ((NalDragPar.nrec == NalDrag.nrec));
-
     VDrag.TmpSaldo2.kol := begkol * VDrag.NalDrag.Kol;
     VDrag.TmpSaldo2.kolP:= addkol * VDrag.NalDrag.Kol;
     VDrag.TmpSaldo2.kolR:= subkol * VDrag.NalDrag.Kol;
@@ -2282,9 +2271,6 @@ if VDrag.GetFirst TmpSaldo2 where ((cDM_   == TmpSaldo2.cMC   and
   }
 else
   {
-    if VDrag.GetFirst NalDragPar = tsOk  // ¡¥à¥¬ ¨§ ¯ àâ¨¨
-      VDrag.GetFirst NalDrag where ((NalDragPar.nrec == NalDrag.nrec));
-
     VDrag.TmpSaldo2.kol := VDrag.TmpSaldo2.kol  + begkol * VDrag.NalDrag.Kol;
     VDrag.TmpSaldo2.kolP:= VDrag.TmpSaldo2.kolP + addkol * VDrag.NalDrag.Kol;
     VDrag.TmpSaldo2.kolR:= VDrag.TmpSaldo2.kolR + subkol * VDrag.NalDrag.Kol;
@@ -2337,8 +2323,15 @@ end.
 .{
 .if TinySkl00
 .begin
-if VDrag.GetFirst NalDragPar <> tsOk  // ¡¥à¥¬ ¨§ ¯ àâ¨¨
-if VDrag.getFirst NalDrag <>tsOk  TinySkl_041.fbreak;
+ VDrag._à¥ª  := Party_nrec;
+ VDrag._tiDk := 4;
+ if VDrag.GetFirst NalDrag <> tsOk
+   {
+     VDrag._à¥ª  := MC_nrec;
+     VDrag._tiDk := 3;
+     if VDrag.GetFirst NalDrag <>tsOk
+       TinySkl_041.fbreak;
+   }
 end.
 @@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@ &&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&&
 .{ table 'VDrag.NalDrag'
@@ -2355,11 +2348,8 @@ end.
          if(VDrag.NalDrag.VidDrag=2, 'á¯à ¢®ç­¨ª', '')))
 .endfields
 .begin
-if VDrag.GetFirst NalDragPar = tsOk  // ¡¥à¥¬ ¨§ ¯ àâ¨¨
-  VDrag.GetFirst NalDrag where ((NalDragPar.nrec == NalDrag.nrec));
-
-InsertTmp2_DM(VDrag.KatDrag.nRec, sklad_nRec);
-InsertTmp2_DM(VDrag.KatDrag.nRec,  -2);
+  InsertTmp2_DM(VDrag.KatDrag.nRec, sklad_nRec);
+  InsertTmp2_DM(VDrag.KatDrag.nRec,  -2);
 end.
   @@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@ &&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& &&&&&&&&&&&&&&&&&&&&&& @@@@@@@@@@@@@@@@
 .}

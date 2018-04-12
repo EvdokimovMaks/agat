@@ -47,7 +47,7 @@ DateSrSPchisl KolMen
 .linkform 'SrednSpisInformXML_401' prototype 'SrednSpisInformXML'
 .nameinlist '‘ўҐ¤Ґ­Ёп ® баҐ¤­ҐбЇЁб®з­®© §  Ј®¤(XML)'
 .fields
-XSDName IDFile KOLdoc DoljnOtv Tel Email
+IDFile KOLdoc DoljnOtv Tel Email
 BukvYA fioOtv BukvYA NameOtv OtchvOtv IdDoc
 NaimOrg InnUl KPP BukvYA RukFio BukvYA RukName RukOtchv NaimDocPred BukvYA FioPred BukvYA NamePred
 OtchPred NaimOrgPred //ћаЁ¤ЁзҐбЄ®Ґ «Ёж®
@@ -57,8 +57,7 @@ DateDoc
 DateSrSPchisl KolMen
 .endfields
 <?xml version="1.0" encoding="windows-1251"?>
-<Файл xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-xsi:noNamespaceSchemaLocation="^.xsd" ИдФайл="^" ВерсФорм="4.01" ТипИнф="СВЕДСРСПИСЧИСЛ"
+<Файл ИдФайл="^" ВерсФорм="4.01" ТипИнф="СВЕДСРСПИСЧИСЛ"
 КолДок="^">
 <ИдОтпр ДолжОтв="^" Тлф="^" E-mail="^">
 	<ФИООтв Фамили^="^" Им^="^" Отчество="^"/>

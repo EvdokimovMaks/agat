@@ -38,6 +38,7 @@ XML форма на формирование реестров В ФСС
   IdDept           //  Кем выдан
   PaymentType      //  Тип оплаты
 //- адрес проживания ----
+  AddrGuid         //  Адрес по ФИАС
   AddrKladr        //  Адрес по КЛАДР
   AddrA1           //  Субъект
   AddrA2           //  Район
@@ -50,6 +51,7 @@ XML форма на формирование реестров В ФСС
   AddrFlat         //  Квартира
   VidReestr        //  Вид реестра
 //- адрес регистрации ----
+  Addr2Guid        //  Адрес по ФИАС
   Addr2            //  Адрес регистрации
   Addr2Kladr       //  Адрес по КЛАДР
   Addr2A1          //  Субъект
@@ -74,7 +76,7 @@ XML форма на формирование реестров В ФСС
   AccountBic       //  БИК
   AccountName      //  Наименование банка
   Account          //  Номер счета
-  PayCardNun       //  Номер карты
+  PayCardNum       //  Номер карты
 //-- Данные страхователя
   Employer         //  Страхователь
   EmplFlag         //  Вид работы
@@ -149,6 +151,11 @@ XML форма на формирование реестров В ФСС
   HolidOrdDt       //  дата приказа
   HolidDtSt        //  дата начала отпуска
   HolidDtFn        //  дата окончания отпуска
+//-- Преждевременный выход на работу/ прекращение трудовых отношений 1.7.5
+  HolidType        //  Признак типа приказа страхователя
+  HolidNo          //  Номер приказа страхователя о
+  HolidDt          //  Дата приказа страхователя
+  HolidDt_Ex       //  Дата преждевременного выхода
   Dt2Fact          //  Дата фактического окончания периода выплаты пособия
   ChildSer         //  Очередность рождения
   MhOut            //  Отметка о лишении материнства
@@ -160,6 +167,7 @@ XML форма на формирование реестров В ФСС
   CalcCondition3   //  условия исчисления 3
 // --- Больничный лист
   LnCode           //  № больничного
+  LnType           //  Тип ЛН
   LnDate           //  Дата начала больничного
   Reason1          //  Код причины нетрудоспособности
   Reason2          //  Доп код причины нетрудоспособности
@@ -246,8 +254,8 @@ XML форма на формирование реестров В ФСС
   IdleAverage
 .endfields
 .{ rXMLtoFSS_Persons CheckEnter
-   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 !
 .{ rXMLtoFSS_Prostoi CheckEnter
    ^^^
@@ -322,6 +330,7 @@ end.
   IdDt             //  Дата документа
   IdDept           //  Кем выдан
   //- адрес проживания ----
+  AddrGuid         //  Адрес по ФИАС
   AddrKladr        //  Адрес по КЛАДР
   AddrA1           //  Субъект
   AddrA2           //  Район
@@ -337,7 +346,7 @@ end.
   AccountBic       //  БИК
   AccountName      //  Наименование банка
   Account          //  Номер счета
-  PayCardNun       //  Номер карты
+  PayCardNum       //  Номер карты
   SurName2         //  Фамилия
   FirstName2       //  Имя
   SecName2         //  Отчество
@@ -347,6 +356,7 @@ end.
   Id2Dept          //  Кем выдан
  //- адрес регистрации ----
   Addr2            //  Адрес регистрации
+  Addr2Guid        //  Адрес по ФИАС
   Addr2Kladr       //  Адрес по КЛАДР
   Addr2A1          //  Субъект
   Addr2A2          //  Район
@@ -399,6 +409,7 @@ end.
  // --- Больничный лист
   LnCode           //  № больничного
   PrevLnCode       //  Номер первичного больничного
+  LnType           //  Тип ЛН
   PrimaryFlag      //  Первичный или продолжение
   DublicateFlag    //  Дубликат б/л
   LnDate           //  Дата начала больничного
@@ -502,6 +513,10 @@ end.
   HolidOrdDt       //  дата приказа
   HolidDtSt        //  дата начала отпуска
   HolidDtFn        //  дата окончания отпуска
+  HolidType        //  Признак типа приказа страхователя
+  HolidNo          //  Номер приказа страхователя о
+  HolidDt          //  Дата приказа страхователя
+  HolidDt_Ex       //  Дата преждевременного выхода
   RefNpayOtherNo   //  справка от другого родителя о неполучении пособия номер
   RefNpayOtherDt   //  справка от другого родителя о неполучении пособия дата
   WardRefFlag      //  усыновление/опека
@@ -568,7 +583,13 @@ end.
     <ID_DEPT>^</ID_DEPT>
 ! если тип оплаты 0 - Почтовый перевод
 .{?INTERNAL; ( PaymentType = '0' )
+.{?INTERNAL; ( ( Version = '1.7.5' ) and ( AddrGuid <> '' ) )
+    <ADDR_GUID>^</ADDR_GUID>
+.}
+.{?INTERNAL; ( ( Version = '1.7.5' ) and ( AddrGuid = '' ) ) or ( Version = '1.7.4' )
     <ADDR_KLADR>^</ADDR_KLADR>
+.}
+!
 .{?INTERNAL; ( AddrA1 <> '' )
     <ADDR_A1>^</ADDR_A1>
 .}
@@ -605,11 +626,13 @@ end.
     <ACCOUNT_NAME>^</ACCOUNT_NAME>
     <ACCOUNT>^</ACCOUNT>
 !
-.{?INTERNAL; ( SubStr(PayCardNun,1,1) = '2' )
-    <PAYCARD_FLAG>1</PAYCARD_FLAG>
+.{?INTERNAL; ( SubStr(PayCardNum,1,1) = '2' )
+.{?INTERNAL; ( Version = '1.7.4' )
+     <PAYCARD_FLAG>1</PAYCARD_FLAG>
+.}
     <PAYCARD_NUM>^</PAYCARD_NUM>
 .}
-.{?INTERNAL; ( SubStr(PayCardNun,1,1) <> '2' )
+.{?INTERNAL; ( Version = '1.7.4' ) and ( SubStr(PayCardNum,1,1) <> '2' )
     <PAYCARD_FLAG>0</PAYCARD_FLAG>
 .}
 .}
@@ -637,9 +660,14 @@ end.
 .{?INTERNAL; ( Addr2 <> '' )
     <ADDR2>^</ADDR2>
 .}
-.{?INTERNAL; ( Addr2Kladr <> '' )
+!
+.{?INTERNAL; ( ( Version = '1.7.5' ) and ( Addr2Guid <> '' ) )
+    <ADDR2_GUID>^</ADDR2_GUID>
+.}
+.{?INTERNAL; ( ( Version = '1.7.5' ) and ( Addr2Guid = '' ) ) or ( Version = '1.7.4' )
     <ADDR2_KLADR>^</ADDR2_KLADR>
 .}
+!
 .{?INTERNAL; ( Addr2A1 <> '' )
     <ADDR2_A1>^</ADDR2_A1>
 .}
@@ -696,7 +724,7 @@ end.
     <WORK_CONTRACT_FINISH_DT>^</WORK_CONTRACT_FINISH_DT>
 .}
 !----------------  Должностной оклад
-.{?INTERNAL; ( BaseAvgSal = 0 ) and ( CalcMetod = 0 )
+.{?INTERNAL; ( Version = '1.7.4' ) and ( BaseAvgSal = 0 ) and ( CalcMetod = 0 )
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
     <ROLE_WAGE>^</ROLE_WAGE>
 .}
@@ -725,7 +753,7 @@ end.
     <BASE_AVG_DAILY_SAL>^</BASE_AVG_DAILY_SAL>
 .}
 !------------Отметка о замене годов для расчета
-.{?INTERNAL; ( CalcMetod = 1 )
+.{?INTERNAL; ( ( Version = '1.7.4' ) and ( CalcMetod = 1 ) ) or ( Version = '1.7.5' )
 !
 .{?INTERNAL; ( YearChangeFlag <> '' )
     <YEAR_CHANGE_FLAG>^</YEAR_CHANGE_FLAG>
@@ -740,7 +768,7 @@ end.
     <YEAR1>^</YEAR1>
     <YEAR2>^</YEAR2>
 .}
-.} // ( CalcMetod = 1 )
+.}
 !
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpTravma )
     <BASE_SUM1>^</BASE_SUM1>
@@ -757,7 +785,7 @@ end.
     <LIVE_COND>^</LIVE_COND>
 .}
 !
-.{?INTERNAL; ( CalcMetod = 0 )
+.{?INTERNAL; ( Version = '1.7.4' ) and ( CalcMetod = 0 )
 !
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
     <CALC_MH_PERIOD_START>^</CALC_MH_PERIOD_START>
@@ -782,6 +810,10 @@ end.
 ! номер первичного больничного
 .{?INTERNAL; ( PrimaryFlag = '0' )
     <PREV_LN_CODE>^</PREV_LN_CODE>
+.}
+!
+.{?INTERNAL; ( Version = '1.7.5' )
+    <LN_TYPE>^</LN_TYPE>
 .}
 !
     <PRIMARY_FLAG>^</PRIMARY_FLAG>
@@ -811,7 +843,7 @@ end.
 .}
 .}
 !
-.{?INTERNAL; ( Date1 <> '' ) or ( ( Version = '1.7.4' ) and ( GetDocType = 2 ) )
+.{?INTERNAL; ( Date1 <> '' )
     <DATE1>^</DATE1>
 .}
 !
@@ -851,7 +883,6 @@ end.
     <HOSPITAL_DT1>^</HOSPITAL_DT1>
     <HOSPITAL_DT2>^</HOSPITAL_DT2>
 .}
-!
 ! нарушение режима
 .{?INTERNAL; ( HospitalBrCode <> 0 )
     <HOSPITAL_BREACH_CODE>^</HOSPITAL_BREACH_CODE>
@@ -944,7 +975,10 @@ end.
     <NEXT_LN_CODE>^</NEXT_LN_CODE>
 .}
 .}// ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
+!
+.{?INTERNAL; ( Version = '1.7.4' )
     <CALC_METHOD>^</CALC_METHOD>
+.}
 !------------------------------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
 ! условия исчисления
@@ -1033,6 +1067,15 @@ end.
     <HOLID_ORD_DT>^</HOLID_ORD_DT>
     <HOLID_DT_ST>^</HOLID_DT_ST>
     <HOLID_DT_FN>^</HOLID_DT_FN>
+!
+.{?INTERNAL; ( Version = '1.7.5' )
+    <HOLID_TYPE>^</HOLID_TYPE>
+.{?INTERNAL; ( HolidNo <> '' )
+    <HOLID_NO>^</HOLID_NO>
+    <HOLID_DT>^</HOLID_DT>
+    <HOLID_DT_EX>^</HOLID_DT_EX>
+.}
+.}
 .}
 ! справка от другого родителя о неполучении пособия
 .{?INTERNAL; ( RefNpayOtherNo <> '' ) and  ( VidReestr = cn_vpBornChild )
@@ -1171,6 +1214,7 @@ end.
   IdDt             //  Дата документа
   IdDept           //  Кем выдан
   //- адрес проживания ----
+  AddrGuid         //  Адрес по ФИАС
   AddrKladr        //  Адрес по КЛАДР
   AddrA1           //  Субъект
   AddrA2           //  Район
@@ -1186,7 +1230,7 @@ end.
   AccountBic       //  БИК
   AccountName      //  Наименование банка
   Account          //  Номер счета
-  PayCardNun       //  Номер карты
+  PayCardNum       //  Номер карты
   SurName2         //  Фамилия
   FirstName2       //  Имя
   SecName2         //  Отчество
@@ -1196,6 +1240,7 @@ end.
   Id2Dept          //  Кем выдан
  //- адрес регистрации ----
   Addr2            //  Адрес регистрации
+  AddrGuid         //  Адрес по ФИАС
   Addr2Kladr       //  Адрес по КЛАДР
   Addr2A1          //  Субъект
   Addr2A2          //  Район
@@ -1248,6 +1293,7 @@ end.
  // --- Больничный лист
   LnCode           //  № больничного
   PrevLnCode       //  Номер первичного больничного
+  LnType           //  Тип ЛН
   PrimaryFlag      //  Первичный или продолжение
   DublicateFlag    //  Дубликат б/л
   LnDate           //  Дата начала больничного
@@ -1351,6 +1397,10 @@ end.
   HolidOrdDt       //  дата приказа
   HolidDtSt        //  дата начала отпуска
   HolidDtFn        //  дата окончания отпуска
+  HolidType        //  Признак типа приказа страхователя
+  HolidNo          //  Номер приказа страхователя о
+  HolidDt          //  Дата приказа страхователя
+  HolidDt_Ex       //  Дата преждевременного выхода
 !------------------------------------------------------------------------------
   RefNpayOtherNo   //  справка от другого родителя о неполучении пособия номер  для версии 1.7.2
   RefNpayOtherDt   //  справка от другого родителя о неполучении пособия дата
@@ -1416,7 +1466,13 @@ end.
     <ID_DT>^</ID_DT>
     <ID_DEPT>^</ID_DEPT>
 ! если тип оплаты 0 - Почтовый перевод
+.{?INTERNAL; ( ( Version = '1.7.5' ) and ( AddrGuid <> '' ) )
+    <ADDR_GUID>^</ADDR_GUID>
+.}
+.{?INTERNAL; ( ( Version = '1.7.5' ) and ( AddrGuid = '' ) ) or ( Version = '1.7.4' )
     <ADDR_KLADR>^</ADDR_KLADR>
+.}
+!
 .{?INTERNAL; ( AddrA1 <> '' )
     <ADDR_A1>^</ADDR_A1>
 .}
@@ -1451,11 +1507,13 @@ end.
     <ACCOUNT_BIC>^</ACCOUNT_BIC>
     <ACCOUNT_NAME>^</ACCOUNT_NAME>
     <ACCOUNT>^</ACCOUNT>
-.{?INTERNAL; ( SubStr(PayCardNun,1,1) = '2' )
+.{?INTERNAL; ( SubStr(PayCardNum,1,1) = '2' )
+.{?INTERNAL; ( Version = '1.7.4' )
     <PAYCARD_FLAG>1</PAYCARD_FLAG>
+.}
     <PAYCARD_NUM>^</PAYCARD_NUM>
 .}
-.{?INTERNAL; ( SubStr(PayCardNun,1,1) <> '2' )
+.{?INTERNAL; ( Version = '1.7.4' ) and ( SubStr(PayCardNum,1,1) <> '2' )
     <PAYCARD_FLAG>0</PAYCARD_FLAG>
 .}
 .}
@@ -1483,9 +1541,14 @@ end.
 .{?INTERNAL; ( Addr2 <> '' )
     <ADDR2>^</ADDR2>
 .}
-.{?INTERNAL; ( Addr2Kladr <> '' )
+!
+.{?INTERNAL; ( ( Version = '1.7.5' ) and ( Addr2Guid <> '' ) )
+    <ADDR2_GUID>^</ADDR2_GUID>
+.}
+.{?INTERNAL; ( ( Version = '1.7.5' ) and ( Addr2Guid = '' ) ) or ( Version = '1.7.4' )
     <ADDR2_KLADR>^</ADDR2_KLADR>
 .}
+!
 .{?INTERNAL; ( Addr2A1 <> '' )
     <ADDR2_A1>^</ADDR2_A1>
 .}
@@ -1540,7 +1603,7 @@ end.
     <WORK_CONTRACT_FINISH_DT>^</WORK_CONTRACT_FINISH_DT>
 .}
 !----------------  Должностной оклад
-.{?INTERNAL; ( BaseAvgSal = 0 ) and ( CalcMetod = 0 )
+.{?INTERNAL; ( Version = '1.7.4' ) and ( BaseAvgSal = 0 ) and ( CalcMetod = 0 )
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
     <ROLE_WAGE>^</ROLE_WAGE>
 .}
@@ -1566,7 +1629,7 @@ end.
 .{?INTERNAL; ( BaseAvgDailySal > 0 )
     <BASE_AVG_DAILY_SAL>^</BASE_AVG_DAILY_SAL>
 .}
-.{?INTERNAL; ( CalcMetod = 1 )
+.{?INTERNAL; ( ( Version = '1.7.4' ) and ( CalcMetod = 1 ) ) or ( Version = '1.7.5' )
 !
     <YEAR_CHANGE_FLAG>^</YEAR_CHANGE_FLAG>
 !
@@ -1595,14 +1658,13 @@ end.
     <LIVE_COND>^</LIVE_COND>
 .}
 !
-.{?INTERNAL; ( CalcMetod = 0 )
+.{?INTERNAL; ( Version = '1.7.4' ) and ( CalcMetod = 0 )
 !
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
     <CALC_MH_PERIOD_START>^</CALC_MH_PERIOD_START>
     <CALC_MH_PERIOD_FINISH>^</CALC_MH_PERIOD_FINISH>
 .}
 .}
-!
 !------------ Стаж ---------------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpRanBerem )
     <INSUR_YY>^</INSUR_YY>
@@ -1621,6 +1683,10 @@ end.
 ! номер первичного больничного
 .{?INTERNAL; ( PrimaryFlag = '0' )
     <PREV_LN_CODE>^</PREV_LN_CODE>
+.}
+!
+.{?INTERNAL; ( Version = '1.7.5' )
+    <LN_TYPE>^</LN_TYPE>
 .}
 !
     <PRIMARY_FLAG>^</PRIMARY_FLAG>
@@ -1653,9 +1719,10 @@ end.
 .}
 ! Больничный лист
 .{?INTERNAL; ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
-.{?INTERNAL; ( Date1 <> '' ) or ( ( Version = '1.7.4' ) and ( GetDocType = 2 ) )
+.{?INTERNAL; ( Date1 <> '' )
     <DATE1>^</DATE1>
 .}
+!
 .{?INTERNAL; ( Date2 <> '' )
     <DATE2>^</DATE2>
 .{?INTERNAL; ( VoucherNo <> '' )
@@ -1785,7 +1852,9 @@ end.
 .}
 .} // больничные
 !
+.{?INTERNAL; ( Version = '1.7.4' )
     <CALC_METHOD>^</CALC_METHOD>
+.}
 !------------------------------------------------------
 .{?INTERNAL; ( VidReestr = cn_vpYhodChild ) or ( VidReestr = cn_vpNetrud ) or ( VidReestr = cn_vpBerem ) or ( VidReestr = cn_vpTravma ) or ( VidReestr = cn_vpRanBerem )
 ! условия исчисления
@@ -1872,6 +1941,14 @@ end.
     <HOLID_ORD_DT>^</HOLID_ORD_DT>
     <HOLID_DT_ST>^</HOLID_DT_ST>
     <HOLID_DT_FN>^</HOLID_DT_FN>
+.{?INTERNAL; ( Version = '1.7.5' )
+    <HOLID_TYPE>^</HOLID_TYPE>
+.{?INTERNAL; ( HolidNo <> '' )
+    <HOLID_NO>^</HOLID_NO>
+    <HOLID_DT>^</HOLID_DT>
+    <HOLID_DT_EX>^</HOLID_DT_EX>
+.}
+.}
 .}
 !
 .{?INTERNAL; ( RefNpayOtherNo <> '' )

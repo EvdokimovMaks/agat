@@ -55,6 +55,7 @@ Pu1LikePu2 : word
 ЛичныйНомер
 СтрахНомер
 Адр1Индекс Адр1Адр Адр2Индекс Адр2Адр Телефоны ТелефоныДом
+РаботаПоСовмест
 .endfields
 ^
 ^ ^ ^ ^ ^ ^ ^^^
@@ -68,6 +69,7 @@ Pu1LikePu2 : word
 ^^^^^^^
 ^^
 ^^^^^^
+^
 .fields
 ДатаОтчета : date
 РуководФИО
@@ -100,7 +102,7 @@ YearAdv:word
  TrueType: string[1]
  _PachNum: word;
 .endvar
-.nameinlist 'Форма ПУ-1(файл для магнитных носителей)'
+.nameinlist 'Форма ПУ-1 (электронный формат)'
 .begin _PachNum := НомерПачки end.
 .{ RBAllPachLoop CheckEnter
 .fields

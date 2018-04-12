@@ -39,7 +39,7 @@ NppOper:integer
 OborotNRec
 NameOper
   SodPr KorrSchet KorrSub SumDeb: double SumKred: double ValDeb: double ValKred: double
-SchDeb SchKred
+SchDeb SchKred AvizoDir
 ! итого
 AllSumDeb: double AllSumKred: double AllValDeb: double AllValKred: double
 ! количество документов
@@ -138,6 +138,7 @@ ValDeb           в валюте по дебету: ^
 ValKred                  по кредиту: ^
 SchDeb                               ^
 SchKred                              ^
+AvizoDir                             ^
 .begin
   case ParamText of
     0: CurText := string(NppOper) + '. ' + NamePl1 + ' ' + NamePl2 + ' ' + NamePl3 + ' ' +  NamePl4 + ' ' +  NamePl5;

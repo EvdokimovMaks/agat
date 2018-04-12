@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------------
 //                                                      (c) корпорация Галактика
-// Галактика 9.10 - модуль "Электронная отчетность"
+// Галактика 9.1 - модуль "Электронная отчетность"
 // Интерфейс редактирования : "Пояснения к налоговой декларации по НДС"
 //------------------------------------------------------------------------------
 
@@ -47,6 +47,7 @@ const
   lc_NetKnigaProd_F_NavNodeType  : word = 29;  // Сведения, отсутствующие в книге продаж (папка)
   lc_NepodtvZapisi_F_NavNodeType : word = 30;  // Сведения о записях, операции по которым не подтверждаются (папка)
   lc_NepodtvZapisi_0_NavNodeType : word = 31;  // Сведения о записях, операции по которым не подтверждаются
+  lc_NepodtvZapisi_1_NavNodeType : word = 37;  // Сведения о записях, операции по которым не подтверждаются (сведения о счет-фактуре)
   lc_NeKnPrStr_F_NavNodeType     : word = 32;  // Сведения по строкам, отсутствующим в книге продаж (папка)
   lc_NeKnPrStr_0_NavNodeType     : word = 33;  // Сведения по строкам, отсутствующим в книге продаж
   lc_PojasnInOsn_NavNodeType     : word = 34;  // Пояснения по иным основаниям
@@ -77,6 +78,12 @@ const
 
   lc_R12_ParentNodePath : string = lc_RXX_ParentNodePath + '/СведРазд12';
   lc_R12_SlavedNodePath : string = lc_R12_ParentNodePath + '/ВыстСчФ_173.5';
+
+  lc_NetKnigaProd_ParentNodePath  : string = lc_RXX_ParentNodePath          + '/НетКнигаПрод';
+  lc_NetKnigaProd_SlavedNodePath  : string = lc_NetKnigaProd_ParentNodePath + '/НеподтвЗаписи';
+
+  lc_SvedKS_ParentNodePath  : string = lc_RXX_ParentNodePath    + '/СведКС';
+  lc_SvedKS_SlavedNodePath  : string = lc_SvedKS_ParentNodePath + '/СведКСОдин';
 
   // список документов
   lc_DocListSeparator  = ';'         ;  // разделитель списка документов

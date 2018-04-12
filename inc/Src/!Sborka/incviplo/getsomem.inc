@@ -6,6 +6,7 @@ type
   tTABLEBLAN = record   { - TABLEBLAN }
     PMC            : Comp;            { pMC                                   }
     WHATPICK       : Word;            { WhatPick                              }
+    PICKMC_EDIZM_OKR: Word;           { PickMC_EdIzm_Okr                      }
     ISMYOK         : Word;            { IsMyOk                                }
     REZVIB         : Word;            { RezVib                                }
     KAUREFFARRAY   : String;          { Выражение номер 0                     }
@@ -19,10 +20,11 @@ const
     TNGROUPMC=1;
     TNKATMC=0;
     TNPICK=2;
-    FNISMYOK=2;
-    FNKAUREFFARRAY=5;
+    FNISMYOK=3;
+    FNKAUREFFARRAY=6;
+    FNPICKMC_EDIZM_OKR=2;
     FNPMC=0;
-    FNREZVIB=3;
+    FNREZVIB=4;
     FNWHATPICK=1;
     tb4_MODIF_0=2;
     tb4_MODIF_1=65538;

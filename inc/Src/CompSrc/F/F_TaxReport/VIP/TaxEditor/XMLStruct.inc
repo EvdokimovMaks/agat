@@ -59,7 +59,7 @@ const
 
   // наименование поля со значением текстовой вершины
   lc_XMapTextValueFieldName = 'Значение';
-end; // const
+end;
 
 const
   bxCompElement = 0;

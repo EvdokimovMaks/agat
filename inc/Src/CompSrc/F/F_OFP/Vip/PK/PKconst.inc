@@ -39,4 +39,14 @@ Const
   cgFlPos_FpCO      =  3; // ЦО
   cgFlPos_FpStBud   =  4; // статья бюджета
   cgFlPos_FpBudAn   =  5; // аналитика
+
+  // позиции в фильтре RESWORD[3]
+  cgUnFlViewPos_Prior     =  0; // приоритет
+  cgUnFlViewPos_FObStatus =  1; // статус ФОП
+  cgUnFlViewPos_KatOrg    =  2; // контрагент
+
+  // Отображение "Все, кроме"
+  cgUnFlPos_Prior     = 0; // приоритет
+  cgUnFlPos_FObStatus = 1; // статус ФОБ
+  cgUnFlPos_KatOrg    = 0; // контрагент
 End;

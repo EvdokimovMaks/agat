@@ -15,7 +15,7 @@
 !.p 60
 .fields
 !Основной лист
- NameOrg Addr Tel Okpo
+ NameOrg Addr Tel Okpo OGRN
  BegDate :date
  Nrec_Pl :comp
  Npl Seria tWorkGsm :word
@@ -111,7 +111,7 @@ Put_march
 !услуги
 .endfields
 .{
-^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^

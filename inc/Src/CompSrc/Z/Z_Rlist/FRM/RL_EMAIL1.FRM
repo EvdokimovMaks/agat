@@ -9,7 +9,6 @@
   Itogo : double;
 .endvar
 .fields
-! Mes God
  PeriodStr
  Podr ПодраздРаботника
  Tabn FIO
@@ -57,6 +56,7 @@
  strYearDohNV YearDohNV strYearVichNV YearVichNV
 !---------------------------------------------------------
  str4 доход str1 Годовой_доход str2 Налог
+ str4_1 доход_c_пред_места
  Дополнит_налог Дополнит_доход
  str7 Пенс_Фонд  str8 Пенс_Фонд_Район
  ДоходИмЛьготу Вычеты
@@ -459,6 +459,13 @@ end.
     <td width="200" align="right"><strong>^</strong> &'&&&&&&&&&&&&&.&&</td>
     <td width="150" align="right"><strong>^</strong> &'&&&&&&&&&&&&&.&&</td>
 </tr>
+.{?Internal; boPrevDoh = true
+<tr><td width="200"><strong>@@@@@@@@@@@@@@@@@@@@</strong></td>
+    <td width="150" align="right">&'&&&&&&&&&&&&&.&&</td>
+    <td width="200" align="right"><strong>''</strong>''</td>
+    <td width="150" align="right"><strong>''</strong>''</td>
+</tr>
+.}
 <tr><td width="200"><strong>Дополнительный доход</strong></td>
     <td width="150" align="right">&'&&&&&&&&&&&&&.&&</td>
     <td width="200"><strong>Дополнительный налог</strong></td>
@@ -651,7 +658,8 @@ end.
  strYearVidDohNV
  strYearDohNV YearDohNV strYearVichNV YearVichNV
 !---------------------------------------------------------
-  str4 доход str1 Годовой_доход str2 Налог
+ str4 доход str1 Годовой_доход str2 Налог
+ str4_1 доход_c_пред_места
  Дополнит_налог Дополнит_доход
  str7 Пенс_Фонд  str8 Пенс_Фонд_Район
  ДоходИмЛьготу Вычеты
@@ -977,6 +985,13 @@ end.
     <td width="200" align="right"><strong>^</strong> &'&&&&&&&&&&&&&.&&</td>
     <td width="150" align="right"><strong>^</strong> &'&&&&&&&&&&&&&.&&</td>
 </tr>
+.{?Internal; boPrevDoh = true
+<tr><td width="200"><strong>@@@@@@@@@@@@@@@@@@@@</strong></td>
+    <td width="150" align="right">&'&&&&&&&&&&&&&.&&</td>
+    <td width="200" align="right"><strong>''</strong>''</td>
+    <td width="150" align="right"><strong>''</strong>''</td>
+</tr>
+.}
 <tr><td width="200"><strong>Дополнительный доход</strong></td>
     <td width="150" align="right">&'&&&&&&&&&&&&&.&&</td>
     <td width="200"><strong>Дополнительный налог</strong></td>
