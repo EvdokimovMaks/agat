@@ -1,0 +1,115 @@
+#include Query.vih
+
+interface fixOrders27Sklad;
+
+const
+  SKLAD_27_NREC: comp = 281474976826645;
+end;
+
+sql query q1 =
+  select mc.nrec as KatMcNrec,
+         t1.csporder as csporder,
+         coalesce(spo.dord, #date(0,0,0)) as dord: date,
+         coalesce(sko.norder, '') as norder,
+         t1.prih,
+         t1.rash,
+         t1.ostatok
+  from (select csporder, cmc, sum(prih) as prih, sum(rash) as rash, sum(prih-rash) as ostatok
+        from (select nrec as csporder, cmc, round(srprice,8) as srprice, kol as prih, 0 as rash
+              from sporder
+              where sp=0 and vidorder=0 and dord<=:date and ccpodr=:KatPodrNrec
+              union all
+              select csporder, cmc, 0, 0, kol
+              from sporder
+              where sp=0 and vidorder=1 and dord<=:date and ccpodr=:KatPodrNrec
+             ) t
+        group by csporder, cmc
+       ) t1
+  join katmc mc on mc.nrec = t1.cmc
+  left join sporder spo on spo.nrec = t1.csporder
+  left join sklorder sko on sko.nrec = spo.csklorder
+  where t1.ostatok < 0
+;
+
+sql query q2 =
+  select spo0.nrec
+  from sporder spo0
+  join specmtr spm on spm.csaldtune=#comp(0001000000000001h) and spm.coTable=1112 and spm.cspec=spo0.nrec and spm.cobj=:KatstroyNrec
+  where spo0.sp = 0 and
+        spo0.vidorder = 0 and
+        spo0.cmc = :KatMcNrec and
+        spo0.dord <= :date and
+        spo0.ostatok >= :kol and
+        spo0.ccpodr = :katpodrNrec
+;
+
+create view
+var
+  _cmc: comp;
+  _csporder: comp;
+  _cpodr: comp;
+  _date: date;
+  _spo0Nrec: comp;
+as select spo1.nrec
+from sporder spo1,
+     specmtr spm,
+     sporder spo0
+where ((
+  0 == spo1.sp and 1 == spo1.vidorder and _cmc == spo1.cmc and (spo1.csporder = _csporder and spo1.ccpodr = _cpodr and spo1.dord <= _date) and
+  0001000000000001h == spm.csaldtune and coSporder == spm.coTable and spo1.nrec == spm.cSpec and
+  _spo0Nrec == spo0.Nrec
+));
+
+screen sc1;
+buttons
+  cmDoOk, default;
+<<
+ <. ok .>
+>>
+end;
+
+handleevent
+cmdook:
+{
+  _date := date(23,10,2017);
+
+  var rs: IResultSet;
+  rs := queryManager.createQuery(q1).setParam('KatPodrNrec', SKLAD_27_NREC).setParam('Date', _date).getResultSet;
+  if rs.getFirst = tsOk do {
+
+    _cmc := rs.row.val('KatMcNrec');
+    _csporder := rs.row.val('csporder');
+    _cpodr := SKLAD_27_NREC;
+
+    if _csporder = 0 continue;
+
+    while getfirst spo1 = tsOk
+    {
+      var rs1: IResultSet;
+      rs1 := queryManager.createQuery(q2)
+                         .setParam('KatstroyNrec', if(isValid(#spm), spm.cobj, 0))
+                         .setParam('KatMcNrec', spo1.cmc)
+                         .setParam('date', spo1.dord)
+                         .setParam('kol', spo1.kol)
+                         .setParam('katpodrNrec', spo1.ccpodr)
+                         .getResultSet;
+      if rs1.getFirst = tsOk
+      {
+        _spo0Nrec := rs1.row.val('nrec');
+        if getfirst spo0 = tsOk
+        {
+          update current spo1 set spo1.csporder := spo0.nrec;
+          update current spo0 set spo0.ostatok := spo0.ostatok - spo1.kol;
+        }
+        else
+          break;
+      }
+      else
+        break;
+    }
+
+  } while rs.getNext = tsOk;
+}
+end;
+
+end.
