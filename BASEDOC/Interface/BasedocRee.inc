@@ -43,6 +43,7 @@ table struct tbd (
   buhsch: string[50],
   cfo   : string[50],
   zakaz : string[50],
+  sud   : string[20],
   sogl  : string[3],
   dsogl : date,
   cbuh  : comp,
@@ -128,6 +129,7 @@ const
     ATTRNAM_SUBPODR       = 00010000000006BCh; //Nrec атрибута ДО СМП и субподрядчики
     ATTRNAM_DDS           = 000100000000008Fh; //Nrec атрибута ДО Статья ДДС
     ATTRNAM_SUMMPKB       = 00010000000009DDh; //Nrec атрибута ДО Сумма ПКБ
+    ATTRNAM_SUD           = 0001000000001979h; //Nrec атрибута ДО Состояние судопроизводства
     ATTRNAM_ISK           = 281474976712379;
     ATTRNAM_SMP           = 281474976712380;
     ATTRNAM_PRBUH         = 0001000000000097h;
@@ -180,6 +182,7 @@ const
   DSK_MRKCFO            = 'AGAT_BDREE_MRKCFO';
   DSK_MRKVAL            = 'AGAT_BDREE_MRKVAL';
   DSK_MRKREJIM          = 'AGAT_BDREE_MRKREJIM';
+  DSK_MRKSUD            = 'AGAT_BDREE_MRKSUD';
   KODGR_DDS             = 10009;
   KODGR_BDR             = 10010;
   cmPrintDoc            = 3440;
@@ -198,8 +201,9 @@ const
   BIT_CFO               = 9;
   BIT_VAL               = 10;
   BIT_REJIM             = 11;
-  BIT_NODOC             = 12;
-  BIT_REESTR            = 13;
+  BIT_SUD               = 12;
+  BIT_NODOC             = 13;
+  BIT_REESTR            = 14;
   BIT_SUMMA             = 0;
   BIT_TOTAL             = 1;
   BIT_SUMVAL            = 2;
