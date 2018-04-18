@@ -22,7 +22,7 @@ c0p1 c0p2 c0p3 c0p4 c0p5 c0p6 c0p7
 cCurPS sCurPS
 c1f1
 c2f1 c2f2
-c4p1 c4p2 c4p3 c4p3a c4p4 PlatPolNrec c4p5 c4p5a c4p5b c4p5c
+c4p1 c4p2 cSoprHoz c4p3 c4p3a c4p4 PlatPolNrec c4p5 c4p5a c4p5b c4p5c
 c4p6 c4p6v CursObValD  SubKCursD c4p7 c4p7v CursObValK SubKCursK
 BaseDocDate ValSimv CursOnDate
 c4_p1 c4_p1v SumSubKValD SumSubKCursD c4_p2 c4_p2v SumSubKValK SumSubKCursK
@@ -55,6 +55,7 @@ c2f2 ^
 .{
 c4p1     дата         ^
 c4p2     N док        ^
+cSoprHoz              ^
 c4p3     субсчет основного  ^
 c4p3a    кор счет     ^
 c4p4     субсчет кор  ^

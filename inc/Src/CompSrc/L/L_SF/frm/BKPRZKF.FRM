@@ -279,6 +279,7 @@ end.
  SumIn4:double           // 20b
  Summ23:double           // 20c
  isNDS20: boolean        // 20d
+ isIncItog: boolean
 
  BaseDoc_NoDoc:string    // 21
  Nazn:string             // 22 примечание к записи
@@ -292,13 +293,13 @@ end.
  PeriodUplDop:longint
  NumUpl:word
 .endfields
-0abcdefg123abcdef 4567a89101234567ab8920abcd123ab
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^ ^^^^^^^^^^ ^^^^^^^
+0abcdefg123abcdef 4567a89101234567ab8920abcd 123ab
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^ ^^^^^^^
 .begin
- ISummA    +=SummA;
- ISumVal   +=SumVal;
- ISumValSF +=SumValSF;
- ISumNDSRub+=SumNDSRub;
+ ISummA    += if (IsIncItog, SummA, 0.0);
+ ISumVal   += if (IsIncItog, SumVal, 0.0);
+ ISumValSF += if (IsIncItog, SumValSF, 0.0);
+ ISumNDSRub+= if (IsIncItog, SumNDSRub, 0.0);
  ISumm1 +=Summ1;
  ISumm2 +=Summ2;
  ISumm3 +=Summ3;

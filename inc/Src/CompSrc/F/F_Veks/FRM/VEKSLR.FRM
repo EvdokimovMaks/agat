@@ -54,14 +54,14 @@
  NoDoc
  NoDocEnd
  NoBlnk
- kol    : longint
+ kol    : double
 
  DatVip
  DatOpl
  DatOb
 
  Sum    : double
- SumV   : dOuble
+ SumV   : double
  SumPl  : double
  SumPlV : double
  Curr1

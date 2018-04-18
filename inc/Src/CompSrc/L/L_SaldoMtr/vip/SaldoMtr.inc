@@ -4,6 +4,9 @@
 // Константы для целевого учета запасов
 //------------------------------------------------------------------------------
 
+#ifndef   __SaldoMtr_inc__
+#define   __SaldoMtr_inc__
+
 
 Const
   // Константа для вычисления значения поля SaldoRaz.wMode (SaldoObj.wMode)
@@ -42,3 +45,5 @@ End;
 #declare ModeByVidUch(VidUch)
   word((#VidUch + 1) * cgMode_VidUch)
 #end
+
+#endif

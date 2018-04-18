@@ -9,13 +9,13 @@
 
 //********************************************************************************
 Const
-  otsOther          = 0;                // все другие поля
-  otsSchFact        = 1;                // счетфактура
-  otsDOpr           = 2;                // дата ордера (исполнения)
-  otsKatNotes       = 3;                // статус
-  otsBDNomDes       = 4;                // ДО
-  otsDogovor        = 8;                // поля договора
-  otsAppDogovor     = 9;                // поля соглашения
+  otsOther          =  0;               // все другие поля
+  otsSchFact        =  1;               // счетфактура
+  otsDOpr           =  2;               // дата ордера (исполнения)
+  otsKatNotes       =  3;               // статус
+  otsBDNomDes       =  4;               // ДО
+  otsDogovor        =  8;               // поля договора
+  otsAppDogovor     =  9;               // поля соглашения
   otsCalPlan        = 10;               // поля календарного плана
   otsHozOper        = 11;               // хозоперация
   otsDescr          = 12;               // дескриптор
@@ -28,6 +28,8 @@ Const
   otsBarKodAndState = 19;               // штрихкод
   otsKDKolDiff      = 20;               // количество в корректировочном документе
   otsOtvPodr        = 21;               // Центр ответственности
+  otsCU             = 23;               // Целевой учет
+  otsParty          = 24;               // Партия
 end;
 
 #end

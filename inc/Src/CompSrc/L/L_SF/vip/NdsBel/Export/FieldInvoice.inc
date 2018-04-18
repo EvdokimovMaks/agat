@@ -110,7 +110,9 @@ const
   // дополнительный параметры
   fi_roster_NDSFrom           = 100; // Брать НДС из
   fi_roster_NDSUsl            = 101; // Налоговая услуга
+  fi_status                   = 102; // Статус
 
+  fi_roster_NotFillGrEvrazes  = 103; // Не заполнять графы 4, 5, 6, 11
 end;
 
 #endif // _FieldInvoice_inc_

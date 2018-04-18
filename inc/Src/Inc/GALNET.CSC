@@ -498,9 +498,10 @@ sci1EnEscPg  = 8236;
 sci1378ShiftF7Esc = 8237;
 
 // ZREPORT - для подсистемы хранения отчетности
-sci1EscZRep     = 8800;
-sci13EscZRep    = 8801;
-
+sci1EscZRep          = 8800;
+sci13EscZRep         = 8801;
+sci148EnEscTreeIZRep = 8802;
+sci1EnInsTreeZRep    = 8803;
 // Экспорт данных во внешнее хранилище
 scDE_TaskMan     = 30000;
 scDE_JobMan      = 30001;

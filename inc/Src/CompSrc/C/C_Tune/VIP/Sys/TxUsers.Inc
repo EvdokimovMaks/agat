@@ -17,7 +17,10 @@
        Flag       : word,
        DesGr      : string [5],
        LoginName  : string[48],
-       FullName   : string[50]
+       FullName   : string[50],
+       cPerson    : comp,
+       cDEPARTMENT: comp,
+       cGALDEP    : comp
        )
     With index (
       TXUsers00 = nRec (Unique,Surrogate),

@@ -39,6 +39,8 @@
  Valut
  Podrr
  ShapkaCal1
+ TitleNN
+ ShapkaCal1N
  TitleNormKolPr2
  ShapkaCal2
  TitleVixodPr2
@@ -53,6 +55,7 @@
 .{
 ^
    .{.?stShapCal1;      ^.}
+  ^.{.?stShapCal1N;     ^.}
 .if IsNeedShowNormKolAndVixod
   ^.{.?stShapCal2;      ^.}
   ^.{.?stShapCal3;      ^.}

@@ -19,6 +19,7 @@ KatSoprVidSopr
 ForMnf_Kol:word
 ForMnf_Price:word
 N_TTN
+KatSoprNSopr
 ORG oKPO oKDp
 Org_Unn Org_Addr Bank_name  Bank_Schet bank_MFO
 F_KUDA
@@ -56,7 +57,7 @@ VSUMMA_PROPISU
 
 .{
 ^ ^ ^ ^ ^
-                       €Š‹€„€Ÿ ü  ^
+                       €Š‹€„€Ÿ ü  ^ ^
                        ^ ^ ^ ^ ^
                        ^ ^ ^  ^
                        ®â ^

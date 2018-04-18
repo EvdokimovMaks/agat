@@ -52,6 +52,7 @@ const
   csClassKodNameBlank  : String = 'Код и наименование бланка документа';
 
   csAttrDopD_Bel       : String = 'Дополнительные данные'; // Для спецификации ЭСЧФ, Беларусь
+  csAttr_SpecEcZone    : String = 'Особая экономическая зона';
   // значения
   cwDopD_FullMinus : Word = 1; // Вычет в полном объеме
   cwDopD_FreeNDS   : Word = 2; // Освобождение от НДС
@@ -94,16 +95,18 @@ const
 
   // РБ. Импорт ЭСЧФ(SchFact.wADoc). Константы для разграничения вариантов привязки к ЭСЧФ первичных документов
   // Привязан первичный документ с уже созданным СФ или без него
-  cwESFLinkedWith_KatSopr = 1; // Выполнена только привязка сопрдока к СФ
-  cwESFLinkedWith_PlPor   = 2; // Выполнена только привязка платежа к СФ
-  cwESFLinkedWith_GrSopr  = 5; // Выполнена только привязка сводной накладной к СФ
-  cwESFLinkedWith_RzDoc   = 7; // Выполнена только привязка розничной накладной к СФ
+  cwESFLinkedWith_KatSopr   = 1; // Выполнена только привязка сопрдока к СФ
+  cwESFLinkedWith_PlPor     = 2; // Выполнена только привязка платежа к СФ
+  cwESFLinkedWith_MultPlPor = 9; // Выполнена только привязка множественная привязка платежа к СФ
+  cwESFLinkedWith_GrSopr    = 5; // Выполнена только привязка сводной накладной к СФ
+  cwESFLinkedWith_RzDoc     = 7; // Выполнена только привязка розничной накладной к СФ
 
   // СФ создавался после привязки первичного документа
-  cwESFCreated_KatSopr    = 3; // Создан СФ после привязки сопродока
-  cwESFCreated_PlPor      = 4; // Создан СФ после привязки платежа
-  cwESFCreated_GrSopr     = 6; // Создан СФ после привязки сводной накладной
-  cwESFCreated_RzDoc      = 8; // Создан СФ после привязки розничной накладной
+  cwESFCreated_KatSopr      = 3;  // Создан СФ после привязки сопродока
+  cwESFCreated_PlPor        = 4;  // Создан СФ после привязки платежа
+  cwESFCreated_MultPlPor    = 11; // Создан СФ после множественной привязки платежа
+  cwESFCreated_GrSopr       = 6;  // Создан СФ после привязки сводной накладной
+  cwESFCreated_RzDoc        = 8;  // Создан СФ после привязки розничной накладной
 
   // РБ. Константа для привязки сторнирующего СФ к СФ розницы (SchFact.wADoc)
   cwStornoRozn            = 20;
@@ -254,6 +257,9 @@ const
   cwTypeSF_Sell_ExemptionNDS       : Word = 7260;  // Счет-фактура по освобожденным от НДС
   cwTypeSF_Sell_ExemptionNDS_Avans : Word = 7261;  // Счет-фактура, оплата, предоплата по освобожденным от НДС
   cwTypeSF_Sell_Bel_OtgrCalcStavka : Word = 7264;  // Накладная по расчетной ставке (Беларусь)
+  cwTypeSF_Sell_Otgr_NDS_NA        : Word = 7265;  // Счет-фактура, отгрузка, НДС НА
+  cwTypeSF_Sell_Avans_NDS_NA       : Word = 7266;  // Счет-фактура, оплата, предоплата, НДС НА
+  cwTypeSF_Sell_CorrV_NDS_NA       : Word = 7267;  // Корректировочный счет-фактура, НДС НА
 
   //---------------------------------------------------------------------------------------------
   // Снабжение, СФ поставщика, SchFact.TipUser
@@ -301,6 +307,9 @@ const
   cwTypeSF_Buy_OtgrInoOrg           : Word = 7350;  // Счет-фактура поставщика, отгрузка иностранной организации (Беларусь)
   cwTypeSF_Buy_Mediator_SelfZ       : Word = 7351;  // Счет-фактура посредника с собственными затратами
   cwTypeSF_Buy_Bel_InMov            : Word = 7352;  // Накладная поставщика, НВП (Беларусь)
+  cwTypeSF_Buy_Otgr_NDS_NA          : Word = 7353;  // Счет-фактура поставщика, отгрузка, НДС НА
+  cwTypeSF_Buy_Avans_NDS_NA         : Word = 7354;  // Счет-фактура, предоплата поставщику, НДС НА
+  cwTypeSF_Buy_CorrV_NDS_NA         : Word = 7355;  // Корректировочный счет-фактура поставщика, НДС НА
   //---------------------------------------------------------------------------------------------
   // Поле BookPrZk.TipUser
   //---------------------------------------------------------------------------------------------
@@ -352,6 +361,16 @@ const
   cwTypeBK_Sell_Bel_Ispr                : Word = 7453;  // Регистрация СФ (исправление) (Беларусь)
   cwTypeBK_Sell_Bel_OtgrCalcStavka      : Word = 7454;  // Регистрация СФ по расчетной ставке (Беларусь)
   cwTypeBK_Sell_ExemptionNDS            : Word = 7460;  // Регистрация СФ по освобожденным от НДС
+  cwTypeBK_Sell_ManualIspr              : Word = 7449;  // Исправление ошибок (книга продаж)
+  cwTypeBK_Sell_ManualIspr_Corr         : Word = 7455;  // Корректирующая запись, исправление ошибок (книга продаж)
+  cwTypeBK_Sell_OtgrRegistr_NDS_NA          : Word = 7456;  // Регистрация СФ (учет по отгрузке), НДС НА
+  cwTypeBK_Sell_RegAvans_NDS_NA             : Word = 7457;  // Регистрация оплаты, предоплаты, НДС НА
+  cwTypeBK_Sell_OtgrRegistr_NDS_NA_OfBuy    : Word = 7458;  // Регистрация СФ поставщика, НДС НА (книга продаж)
+  cwTypeBK_Sell_RegAvans_NDS_NA_OfBuy       : Word = 7459;  // Регистрация предоплаты поставщику, НДС НА (книга продаж)
+  cwTypeBK_Sell_RegAvansInMomentOtgr_NDS_NA : Word = 7461;  // Регистрация аванса поставщику в момент отгрузки, НДС НА
+  cwTypeBK_Sell_CorrV_Plus_NDS_NA           : Word = 7462;  // Корректировочная запись, увеличение реализации, НДС НА
+  cwTypeBK_Sell_CorrV_Minus_NDS_NA          : Word = 7463;  // Корректировочная запись, уменьшение закупки, НДС НА
+  cwTypeBK_Sell_CorrV_Plus_NDS_NA_OfBuy     : Word = 7464;  // Корректировочная запись поставщика, увеличение закупки, НДС НА (книга продаж)
 
   //---------------------------------------------------------------------------------------------
   // Снабжение, книга покупок, BookPrZk.TipUser
@@ -414,6 +433,14 @@ const
   cwTypeBK_Buy_Bel_Otgr_Plus           : Word = 7561;  // Регистрация СФ, увеличение закупки (Беларусь)
   cwTypeBK_Buy_Bel_Otgr_Minus          : Word = 7562;  // Регистрация СФ, уменьшение закупки (Беларусь)
   cwTypeBK_Buy_Bel_Ispr                : Word = 7563;  // Регистрация СФ (исправление) (Беларусь)
+  cwTypeBK_Buy_ManualIspr              : Word = 7564;  // Исправление ошибок (книга покупок)
+  cwTypeBK_Buy_ManualIspr_Corr         : Word = 7565;  // Корректирующая запись, исправление ошибок (книга покупок)
+  cwTypeBK_Buy_OtgrRegistr_NDS_NA                : Word = 7567;  // Регистрация СФ поставщика, НДС НА
+  cwTypeBK_Buy_RegAvans_NDS_NA                   : Word = 7568;  // Регистрация предоплаты поставщику, НДС НА
+  cwTypeBK_Buy_RegAvansInMomentOtgr_NDS_NA_OfBuy : Word = 7571;  // Регистрация аванса поставщику в момент отгрузки, НДС НА (книга покупок)
+  cwTypeBK_Buy_CorrV_Plus_NDS_NA                 : Word = 7573;  // Корректировочная запись поставщика, увеличение закупки, НДС НА
+  cwTypeBK_Buy_CorrV_Minus_NDS_NA                : Word = 7572;  // Корректировочная запись поставщика, уменьшение реализации, НДС НА
+  cwTypeBK_Buy_CorrV_Minus_NDS_NA_OfBuy          : Word = 7574;  // Корректировочная запись, уменьшение закупки, НДС НА (книга покупок)
 
   //---------------------------------------------------------------------------------------------
   // Поле BookPrZk.SubTip
@@ -568,6 +595,11 @@ const
   cb_KodOp_NeverNDS   : Byte = 4;   // контрагенты не состоят на учете в налоговых органах РБ
   cb_KodOp_Vozvr      : Byte = 5;   // регистрация возвратов
 
+  // РФ. Код вида операции
+  cs_KodOp_RF_21      : String = '21';  // код вида операции 21
+  cs_KodOp_RF_27      : String = '27';  // код вида операции 27
+  cs_KodOp_RF_43      : String = '43';  // код вида операции 43
+
   // Фильтрация СФ по типам
   cwST_All            : Word = 100;
   cwST_Concr          : Word = 101;
@@ -631,14 +663,24 @@ function Is_CorrV_SF(aTipUser : Word) : Boolean;
   Result := ((aTipUser = cwTypeSF_Sell_CorrV             ) or (aTipUser = cwTypeSF_Buy_CorrV              ) or
              (aTipUser = cwTypeSF_Sell_IsprCorrV         ) or (aTipUser = cwTypeSF_Buy_IsprCorrV          ) or
              (aTipUser = cwTypeSF_Sell_CorrV_Consumer    ) or (aTipUser = cwTypeSF_Buy_CorrV_Mediator     ) or
-             (aTipUser = cwTypeSF_Sell_IsprCorrV_Consumer) or (aTipUser = cwTypeSF_Buy_IsprCorrV_Mediator));
+             (aTipUser = cwTypeSF_Sell_IsprCorrV_Consumer) or (aTipUser = cwTypeSF_Buy_IsprCorrV_Mediator ) or
+             (aTipUser = cwTypeSF_Sell_CorrV_NDS_NA      ) or (aTipUser = cwTypeSF_Buy_CorrV_NDS_NA       ));
+}
+
+// проверка, является ли запись корректировочной при реализации шкур и лома
+function Is_CorrV_BK_NDS_NA(aTipUser : Word) : Boolean;
+{
+  Result := ((aTipUser = cwTypeBK_Sell_CorrV_Plus_NDS_NA) or (aTipUser = cwTypeBK_Sell_CorrV_Minus_NDS_NA) or
+             (aTipUser = cwTypeBK_Buy_CorrV_Plus_NDS_NA ) or (aTipUser = cwTypeBK_Buy_CorrV_Minus_NDS_NA ) or
+             (aTipUser = cwTypeBK_Sell_CorrV_Plus_NDS_NA_OfBuy) or (aTipUser = cwTypeBK_Buy_CorrV_Minus_NDS_NA_OfBuy));
 }
 
 // Проверка, является ли запись регистрации корректировочной
 function Is_CorrV_BK(aTipUser : Word) : Boolean;
 {
   Result := ((aTipUser = cwTypeBK_Sell_CorrV_Plus) or (aTipUser = cwTypeBK_Sell_CorrV_Minus) or
-             (aTipUser = cwTypeBK_Buy_CorrV_Plus ) or (aTipUser = cwTypeBK_Buy_CorrV_Minus ));
+             (aTipUser = cwTypeBK_Buy_CorrV_Plus ) or (aTipUser = cwTypeBK_Buy_CorrV_Minus ) or
+             Is_CorrV_BK_NDS_NA(aTipUser));
 }
 
 // Проверка, является ли СФ исправлением
@@ -715,7 +757,8 @@ function Is_Annul_BK(aTipUser, aSubTip : Word) : Boolean;
              (aTipUser = cwTypeBK_Sell_RegAvans   ) or (aTipUser = cwTypeBK_Buy_RegAvans   ) or
              (aTipUser = cwTypeBK_Sell_Correcting ) or (aTipUser = cwTypeBK_Buy_Correcting ) or
              (aTipUser = cwTypeBK_Sell_CorrAvans  ) or (aTipUser = cwTypeBK_Buy_CorrAvans  ) or
-             (aTipUser = cwTypeBK_Sell_Peny       ) or (aTipUser = cwTypeBK_Sell_Physical));
+             (aTipUser = cwTypeBK_Sell_Peny       ) or (aTipUser = cwTypeBK_Sell_Physical)   or
+             (aTipUser = cwTypeBK_Buy_Builder));
 
   // Проверка на пользовательские типы. По полю SubTip проверку не провожу, т.к. много лишних записей могут попасть.
   if ((not Result) and (aTipUser >= cwUserType_Min))
@@ -848,6 +891,59 @@ function Is_RegVozvrAvans(aTipUser : Word) : Boolean;
   Result := ((aTipUser = cwTypeBK_Sell_RegVozvrAvans) or (aTipUser = cwTypeBK_Buy_RegVozvrAvans));
 }
 
+function Is_SF_NDS_NA(aTipUser : Word) : Boolean;
+{
+  Result := ((aTipUser = cwTypeSF_Sell_Otgr_NDS_NA) or (aTipUser = cwTypeSF_Buy_Otgr_NDS_NA) or
+             (aTipUser = cwTypeSF_Sell_Avans_NDS_NA) or (aTipUser = cwTypeSF_Buy_Avans_NDS_NA) or
+             (aTipUser = cwTypeSF_Sell_CorrV_NDS_NA) or (aTipUser = cwTypeSF_Buy_CorrV_NDS_NA));
+}
+
+function Is_SF_NDS_NA_Sell(aTipUser : Word): Boolean;
+{
+  Result := ((aTipUser = cwTypeSF_Sell_Otgr_NDS_NA) or (aTipUser = cwTypeSF_Sell_Avans_NDS_NA) or (aTipUser = cwTypeSF_Sell_CorrV_NDS_NA));
+}
+
+function Is_SF_NDS_NA_Buy(aTipUser : Word): Boolean;
+{
+  Result := ((aTipUser = cwTypeSF_Buy_Otgr_NDS_NA) or (aTipUser = cwTypeSF_Buy_Avans_NDS_NA) or (aTipUser = cwTypeSF_Buy_CorrV_NDS_NA));
+}
+
+function Is_BK_NDS_NA_Sell(aTipUser : Word): Boolean;
+{
+  Result := ((aTipUser = cwTypeBK_Sell_OtgrRegistr_NDS_NA) or (aTipUser = cwTypeBK_Sell_RegAvans_NDS_NA) or
+             (aTipUser = cwTypeBK_Sell_CorrV_Plus_NDS_NA) or (aTipUser = cwTypeBK_Buy_CorrV_Minus_NDS_NA));
+}
+
+function Is_BK_NDS_NA_Buy(aTipUser : Word): Boolean;
+{
+  Result := ((aTipUser = cwTypeBK_Buy_OtgrRegistr_NDS_NA) or (aTipUser = cwTypeBK_Buy_RegAvans_NDS_NA) or
+             (aTipUser = cwTypeBK_Sell_RegAvansInMomentOtgr_NDS_NA) or
+             (aTipUser = cwTypeBK_Buy_CorrV_Plus_NDS_NA) or (aTipUser = cwTypeBK_Sell_CorrV_Minus_NDS_NA));
+}
+
+function Is_BK_NDS_NA_SellOfBuy(aTipUser : Word): Boolean;
+{
+  Result := ((aTipUser = cwTypeBK_Sell_OtgrRegistr_NDS_NA_OfBuy) or (aTipUser = cwTypeBK_Sell_RegAvans_NDS_NA_OfBuy) or
+             (aTipUser = cwTypeBK_Buy_RegAvansInMomentOtgr_NDS_NA_OfBuy) or (aTipUser = cwTypeBK_Sell_CorrV_Plus_NDS_NA_OfBuy) or
+             (aTipUser = cwTypeBK_Buy_CorrV_Minus_NDS_NA_OfBuy));
+}
+
+function Is_BK_NDS_NA(aTipUser : Word): Boolean;
+{
+  Result := (Is_BK_NDS_NA_Sell(aTipUser) or Is_BK_NDS_NA_Buy(aTipUser) or Is_BK_NDS_NA_SellOfBuy(aTipUser));
+}
+
+function Is_CorrV_BK_NDS_NA_Sell(aTipUser : Word) : Boolean;
+{
+  Result := ((aTipUser = cwTypeBK_Sell_CorrV_Plus_NDS_NA) or (aTipUser = cwTypeBK_Buy_CorrV_Minus_NDS_NA));
+}
+
+function Is_CorrV_BK_NDS_NA_Buy(aTipUser : Word) : Boolean;
+{
+  Result := ((aTipUser = cwTypeBK_Buy_CorrV_Plus_NDS_NA) or (aTipUser = cwTypeBK_Sell_CorrV_Minus_NDS_NA) or
+             (aTipUser = cwTypeBK_Sell_CorrV_Plus_NDS_NA_OfBuy) or (aTipUser = cwTypeBK_Buy_CorrV_Minus_NDS_NA_OfBuy));
+}
+
 // Рассматриваемые группы типов СФ: корректировочная, исправления, исправления корректировки, стандартная
 function GetGroup4TipSF(TipSF, wFlag : Word) : Word;
 {
@@ -935,6 +1031,14 @@ function Is_Plat_BK(wBKSubTip : Word) : Boolean;
             (wBKSubTip = cwTotal_TypeBK_LinkVozvratPlat) or
             (wBKSubTip = cwTotal_TypeBK_NotReg_Avans);
 }
+
+// Проверка, является ли запись исправлением ошибок. Печатается в суммами только по самой записи, не СФ, невзирая на настройки
+function Is_ManualIspr_BK(aTipUser : Word) : Boolean;
+{
+  Result := ((aTipUser = cwTypeBK_Sell_ManualIspr) or (aTipUser = cwTypeBK_Sell_ManualIspr_Corr) or
+             (aTipUser = cwTypeBK_Buy_ManualIspr)  or (aTipUser = cwTypeBK_Buy_ManualIspr_Corr));
+}
+
 
 // Для новых типов СФ заводить коды операций.
 #end

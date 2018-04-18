@@ -301,6 +301,19 @@ private objinterface IRPD_Base_AppChange;
 end;
 
 #doc
+Расширение интерфейса базового класса всех РПД об изменении атрибутов назначения
+#end
+private objinterface IRPD_Base_AppChange2;
+
+  #doc
+  Метод для модификации флагов рабочей корзины RK_...  из реализаций приказов
+  Требуется если часть флагов истории АН_ хранятся не в AppHist.cInf1
+  #end
+  procedure ChangeFlagForRK(var flag: longint);
+
+end;
+
+#doc
 Объектный интерфейс для копирования приказов
 #end
 private objinterface IRPDCopy;
@@ -375,7 +388,11 @@ private objinterface IRPD_RPD1;
     иначе есть вероятность оставить не прикрепленный Persons в базе
   #end
   procedure FillPersonOnInsIndRPD1(cInsPers:comp; bNeedInsNewPers: boolean);
-
+  #doc
+    Наполнение РПД - 1 заполняется поле "Вариант ЛС и карточки"
+    в соответствии с входным параметром - вариантом оформления
+  #end
+  procedure FillAndRefillCartLSlist(wHowCut: word);
 end;
 
 #doc
@@ -392,11 +409,36 @@ private objinterface IRPD_ViewMode;
 end;
 
 #doc
+Добавление записи в протокол при проверке/утверждении приказа
+#end
+public ObjInterface IRPD_Base5;
+
+  #doc
+  Добавление записи в протокол при проверке/утверждении приказа
+  Может использоваться в точке расширения epRPD_CheckAfterExt(cContDoc: comp; _IRPDBase: IRPD_Base5);
+  _IRPDBase.OrderMessage('Текст сообщения!' , Error);
+  #end
+  function OrderMessage(_stErr: string; _wMsgType: word = Error): longint;
+end;
+
+#doc
+Определяет использование Atl-протокола в реализации приказа
+#end
+private ObjInterface IRPD_Base6;
+
+  #doc
+  Определяет использование Atl-протокола в реализации приказа
+  Необходим для случаев, когда приказ используется отдельно и протокол недоступен (РПД-1)
+  #end
+  function IsBlockAtlProtocol(): boolean;
+end;
+
+#doc
 Базовый класс всех РПД по персоналу
 #end
 private VipInterface RPD_Base
-  implements IRPD_Base, IRPD_Base2, IRPDPR, IRPDPR2, OnlyViewRPD, IRPD_Base3, 
-             IRPD_Base4, IRPD_ViewMode
+  implements IRPD_Base, IRPD_Base2, IRPDPR, OnlyViewRPD, IRPD_Base3, IRPDPR2,
+             IRPD_Base4, IRPD_Base5, IRPD_Base6, IRPD_ViewMode
   licensed(free);
 
 #doc
@@ -429,7 +471,7 @@ end;
 Базовый интерфейс для РПД, изменяющих существующее назначение
 #end
 private VipInterface RPD_Base_AppChange(RPD_Base)
-  implements IRPD_Base_AppChange, IRPDCopy
+  implements IRPD_Base_AppChange, IRPD_Base_AppChange2, IRPDCopy
   licensed(free);
 public:
   procedure IRPD_Base.ReDrawPanels;
@@ -457,6 +499,7 @@ public:
   procedure IRPD_Base.ReDrawPanels;
   procedure IRPD_Base.ReReadRecords;
   function IRPD_Base.ChildConfirmOneOrder(cNrec: comp = 0): boolean;
+  function IRPD_Base2.CheckAbilityToDelete: boolean;
 end;
 
 #doc
@@ -539,10 +582,12 @@ public:
   procedure IRPD_Base.SetView(ModView: word; cContDoc: comp);
   procedure IRPDPR.SetNewView(cPersRec: comp);
   procedure IRPD_RPD1.FillPersonOnInsIndRPD1(cInsPers:comp; bNeedInsNewPers: boolean);
+  procedure IRPD_RPD1.FillAndRefillCartLSlist(wHowCut: word);
   function IRPD_Base.ChildCheckOneOrder(cNrec: comp = 0): boolean;
   function IRPD_Base.ChildConfirmOneOrder(cNrec: comp = 0): boolean;
   function IRPD_Base2.CheckAbilityToDelete: boolean;
   function IRPD_Base2.GetContract4Pick: comp;
+  function IRPD_Base6.IsBlockAtlProtocol(): boolean;
 end;
 
 // Изменение ФИО
@@ -835,6 +880,20 @@ public:
   function IRPD_Base.ChildConfirmOneOrder(cNrec: comp = 0): boolean;
 end;
 
+// Перенос план отпуска
+VipInterface RPD_38(RPD_Base)
+  implements IRPDCopy
+  licensed(free);
+public:
+  procedure IRPD_Base.EnableDisable;
+  procedure IRPD_Base.MyDel;
+  procedure IRPD_Base3.PrintRPD(typePrint: TPtr; fcEnter: word);
+  procedure IRPD_Base3.PrintFromPD;
+  function IRPD_Base.ChildCheckOneOrder(cNrec: comp = 0): boolean;
+  function IRPD_Base.ChildConfirmOneOrder(cNrec: comp = 0): boolean;
+  function IRPD_Base2.CheckAbilityToDelete: boolean;
+end;
+
 // Перенос оплачиваемого отпуска
 VipInterface RPD_39(RPD_Base)
   implements IRPDCopy
@@ -975,7 +1034,9 @@ public:
   procedure IRPD_Base.MyDel;
   procedure IRPD_Base3.PrintRPD(typePrint: TPtr; fcEnter: word);
   procedure IRPD_Base3.PrintFromPD;
+  procedure IRPD_Base3.PrintFromSMC;
   procedure IRPD_Base_AppChange.FillHistFromApp;
+  procedure IRPD_Base_AppChange2.ChangeFlagForRK(var flag: longint);
   function IRPD_Base.ChildCheckOneOrder(cNrec: comp = 0): boolean;
   function IRPD_Base.ChildConfirmOneOrder(cNrec: comp = 0): boolean;
   function IRPD_Base2.GetContract4Agreement: comp;
@@ -1110,5 +1171,11 @@ ExtensionPoint epRPD_CheckBefore(cContDoc: comp);
 Внешняя проверка возможности утверждения приказа. Вызывается после стандартной проверки.
 #end
 ExtensionPoint epRPD_CheckAfter(cContDoc: comp);
+
+#doc
+Внешняя проверка возможности утверждения приказа. Вызывается после стандартной проверки.
+Содержит ссылку на объект приказа для доступа к протоколу
+#end
+ExtensionPoint epRPD_CheckAfterExt(cContDoc: comp; _IRPDBase: IRPD_Base5);
 
 #end

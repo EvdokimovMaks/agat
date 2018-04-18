@@ -446,6 +446,7 @@
   PrzCalcOcOBj_Norm    = 0;  // по нормам
   PrzCalcOcOBj_Nac     = 1;  // способом начисления
   PrzCalcOcOBj_Otn     = 2;  // относительным способом
+  PrzCalcOcObj_Price   = 3;  // источник цен ПВ
 
 // коды знаков для PrzCalcOcOBj_Otn
   ValueOCK_PLUS        = 43; // + для Char
@@ -684,6 +685,7 @@
   ALL_SCHET   = 'Все';
   NULL_SCHET  = '';
   ZERO_SCHET  = '00';
+  Multi_SCHET = 'Мн.выбор';
 
 //Минимальное значение
 ! ContrMinSumma = 0.0000000000000001;  // для вссяческих расчетов и калькуляций
@@ -810,6 +812,8 @@
   VarintForm_DebAnalSyn = 13;  // дебетовая аналитика-синоним
   VarintForm_KrAnalSyn  = 14;  // кредитовая аналитика-синоним
   VarintForm_Default    = 15;  // 'По умолчанию' для ЭЗ, для СЗ = 0
+  VarintForm_DebABazSyn = 16;  // дебетовая базовая аналитика-синоним 
+  VarintForm_KreABazSyn = 17;  // кредитовая базовая аналитика-синоним
 
   VarintForm_Saldo     = 1;  // сальдо
   VarintForm_SaldoAnal = 3;  // аналитика сальдо
@@ -824,7 +828,9 @@
   NameVarintForm_ActPer  = 'Номер акта на пересортицу';
   NameVarintForm_DebAnalSyn = 'Аналитика-синоним дебетовая';
   NameVarintForm_KrAnalSyn  = 'Аналитика-синоним кредитовая';
-
+  NameVarintForm_DebABazSyn = 'Аналитика дебетовая, как базовая для синонима';
+  NameVarintForm_KreABazSyn = 'Аналитика кредитовая, как базовая для синонима';
+  
   NameVarintCtRD_Default    = 'По умолчанию';
 
 // варианты формирования в настройках выгрузки в СМЕТЫ
@@ -958,6 +964,11 @@
 
   wPrzBill_StructFactor = 16; // настройки структур факторный анализ
   wPrzBill_Factor       = 14; // настройки параметров факторный анализ
+
+  wPrzSetBill_BudjMultiDeb     = 601; // настройки смет (множественный выбор Д)
+  wPrzSetBill_BudjMultiKre     = 602; // настройки смет (множественный выбор К)
+  wPrzSetBill_BudjMultiPodrDeb = 603; // настройки смет (множественный выбор Д-подр)
+  wPrzSetBill_BudjMultiPodrKre = 604; // настройки смет (множественный выбор К-подр)
 
   wReferens_In        = 0;   // входящий ПД
   wReferens_InModif   = 1;   // входящий ПД, но скорректирвана сумма

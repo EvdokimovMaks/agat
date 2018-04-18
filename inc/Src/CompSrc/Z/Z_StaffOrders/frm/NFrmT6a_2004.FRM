@@ -34,6 +34,7 @@ myType
 dat1
 dat2
 sFoundation
+sNote
 FIO_Req
 FIO_VP_Req
 TabN_Req
@@ -88,6 +89,7 @@ myType                    ^
 dat1                      ^
 dat2                      ^
 sFoundation               ^
+sNote                     ^
 FIO_Req                   ^
 FIO_VP_Req                ^
 TabN_Req                  ^

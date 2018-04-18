@@ -291,7 +291,11 @@ Datastream fr_prndata
     [SchFactIspDat       ] oPrnSoprFun.GetSchFactIsp(fr_dochead.SchFact_NRec, 1);
     [SchFactIspCorrNom   ] oPrnSoprFun.GetSchFactIspCorr(fr_dochead.KatSoprNRec, 0);
     [SchFactIspCorrDat   ] oPrnSoprFun.GetSchFactIspCorr(fr_dochead.KatSoprNRec, 1);
-
+//106.10533 - Номер и дата исходной накладной для корректировочных
+    [IshNum              ] oPrnSoprFun.GetNaklFactNum(fr_dochead.KatSoprNRec);
+    [IshData             ] oPrnSoprFun.GetNaklFactDate(fr_dochead.KatSoprNRec);
+//102.178376
+    [SFDopInf            ] oPrnSoprFun.GetSFDopInf(fr_dochead.SchFact_NRec, fr_dochead.KatSoprNRec);
   )
   ;
 

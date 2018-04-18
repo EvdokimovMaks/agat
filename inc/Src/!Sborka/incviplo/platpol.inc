@@ -23,13 +23,13 @@ type
     KATPODR_NAME   : String150;       { наименование подразделения            }
     KATORG_NAME    : String;          { наим.организации или ФИО физ.лица     }
     KATORG_OKPO    : String20;        { код по ОКПО                           }
-    KATBANK_MFO1   : String20;        { код МФО                               }
+    KATBANK_MFO1   : String40;        { код МФО                               }
     KATBANK_SCHET1 : String40;        { счет                                  }
     KATBANK_NAME   : String;          { наименование банка                    }
     KATBANK_SCHET2 : String40;        { счет в РКЦ                            }
     KATORG1_NAME   : String;          { наим.организации или ФИО физ.лица     }
     KATORG1_OKPO   : String20;        { код по ОКПО                           }
-    KATBANK1_MFO1  : String20;        { код МФО                               }
+    KATBANK1_MFO1  : String40;        { код МФО                               }
     KATBANK1_SCHET1: String40;        { счет                                  }
     KATBANK1_NAME  : String;          { наименование банка                    }
     KATBANK1_SCHET2: String40;        { счет в РКЦ                            }

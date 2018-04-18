@@ -66,6 +66,7 @@ const
   td_Default       =   1; // по умолчанию
   td_SeriaNumBlank =   2; // по серии и номеру бланка
   td_BlankCode     =   3; // по коду бланка
+  td_WithoutDoc    = 600; // Без документа
   td_Other         = 601; // Другое
   td_TN2           = 602; // ТН-2
   td_TTN1          = 603; // ТТН-1

@@ -8,7 +8,7 @@
 !º  ˆ§¬¥­¥­¨ï:                                                         º
 !ÈÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼
 
-#include Commission.frn
+#include FeeSigners.frn
 
 #doc
 €Š‹€„€Ÿ € ‚“’……… ……Œ…™…ˆ…
@@ -31,7 +31,7 @@
   KolStrTTH1 :=35;
 end.
 .fields
-#CommissionFields
+#FeeSigners_Os_Fields
  EdUchAll
  à¥ª„®ªã¬¥­â  : comp
  Nom
@@ -303,7 +303,7 @@ end.
 
 .endfields
 .{
- #CommissionBody(printinmovnak)
+ #FeeSigners_Os_Body(printinmovnak)
  EdUchAll  ^
  à¥ª ^
  ®¬¥à ­ ª« ¤­®© ^ „¥áªà¨¯â®à ^ ®¬¥à_á_¤¥áªà¨¯â®à®¬ ^
@@ -545,7 +545,7 @@ end.
 .Group 'VnutSpecos'
 .Group 'VnutSpecosBel'
 .DEFP PA4
-#CommissionLinkVar
+#FeeSigners_Os_LinkVar
 .var
   sBoss    : string
   sMainBuh : string
@@ -584,7 +584,7 @@ end.
 
 .endfields
 .{
-#CommissionLinkInit(printinmovnak)
+#FeeSigners_Os_LinkInit(printinmovnak)
  ^
 
                €Š‹€„€Ÿ € ‚“’……… ……Œ…™…ˆ…
@@ -633,7 +633,7 @@ end.
 .Group 'VnutSpecos'
 .Group 'VnutSpecosBel'
 .DEFP PA4
-#CommissionLinkVar
+#FeeSigners_Os_LinkVar
 .var
   sBoss    : string
   sMainBuh : string
@@ -670,7 +670,7 @@ end.
  ‘¯¥æ‘¨¬¢®«
 .endfields
 .{
-#CommissionLinkInit(printinmovnak)
+#FeeSigners_Os_LinkInit(printinmovnak)
  ^
 
                €Š‹€„€Ÿ € ‚“’……… ……Œ…™…ˆ…
@@ -729,7 +729,7 @@ end.
 .PAPER PA4
 .ORIENT LANDSCAPE
 .LL 60
-#CommissionLinkVar
+#FeeSigners_Os_LinkVar
 .var
   SchMain, KodMain : string;
   SchSpec, KodSpec : string;
@@ -779,7 +779,7 @@ end.
 
 ÿ˜
 .{
-#CommissionLinkInit(printinmovnak)
+#FeeSigners_Os_LinkInit(printinmovnak)
 .begin
   RunInterface('iPrnShowSchet26', à¥ª„®ªã¬¥­â , SchMain, '', '', '', KodMain, '');
   CurP    := 0FFFFh;

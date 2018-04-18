@@ -42,6 +42,7 @@
   FromDate
   ToDate
   Terr
+  rZarkoof
   Usl
   KPS
   Osn
@@ -58,8 +59,10 @@
   VislDop
   DatUv
   wLast
+  wDopAdv
+  wLastAdv
 .endfields
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 .}
 .fields
   wSocDaNet
@@ -146,8 +149,12 @@ end.
 				<ИС:Описание>^</ИС:Описание>
 				<ИС:Документы>^</ИС:Документы>
 				<ИС:ОУТ>
+.{?internal;SSUsl <> ''
 					<ИС:Код>^</ИС:Код>
+.}
+.{?internal;SSKPS <> ''
 					<ИС:ПозицияСписка>^</ИС:ПозицияСписка>
+.}
 				</ИС:ОУТ>
 			</ИС:Основание>
 .begin
@@ -209,6 +216,7 @@ end.
   FromDate
   ToDate
   Terr
+  rZarkoof
   Usl
   KPS
   Osn
@@ -236,16 +244,21 @@ end.
 			</ФИО>
 			<СНИЛС>^</СНИЛС>
 .}
+.{?internal;wDopAdv = 0 or wDopAdv = 1
 			<СтажевыйПериод>
 				<ИС:Период>
 					<УТ:С>^</УТ:С>
 					<УТ:По>^</УТ:По>
 				</ИС:Период>
+.}
 .{?internal;Terr <> '' or Usl <> '' or KPS <> '' or Osn <> '' or Visl <> '' or OsnDop <> ''
 				<ИС:ЛьготныйСтаж>
 .{?internal;Terr <> ''
                                         <ИС:ТУ>
                                                 <ИС:Основание>^</ИС:Основание>
+.{?internal;double(rZarkoof) >= double(0.01)
+                                                <ИС:Коэффициент>^</ИС:Коэффициент>
+.}
                                         </ИС:ТУ>
 .}
 .{?internal;Usl <> '' or KPS <> ''
@@ -258,21 +271,29 @@ end.
 .}
 					</ИС:ОУТ>
 .}
-.{?internal;Osn <> ''
+.{?internal;Osn <> '' or wHours <> 0 or wMinutes <> 0 or wMon <> 0 or wDays <> 0
                                         <ИС:ИС>
 .{?internal;Osn <> ''
                                                 <ИС:Основание>^</ИС:Основание>
 .}
 .{?internal;wHours <> 0 or wMinutes <> 0
                                                 <ВС:ВыработкаВчасах>
+.{?internal;wHours <> 0
                                                       <ВС:Часы>^</ВС:Часы>
+.}
+.{?internal;wMinutes <> 0
                                                       <ВС:Минуты>^</ВС:Минуты>
+.}
                                                 </ВС:ВыработкаВчасах>
 .}
 .{?internal;(wMon <> 0 or wDays <> 0) and (wHours = 0 and wMinutes = 0)
                                                 <ВС:ВыработкаКалендарная>
+.{?internal;wMon <> 0
                                                       <ВС:ВсеМесяцы>^</ВС:ВсеМесяцы>
+.}
+.{?internal;wDays <> 0
                                                       <ВС:ВсеДни>^</ВС:ВсеДни>
+.}
                                                 </ВС:ВыработкаКалендарная>
 .}
                                         </ИС:ИС>
@@ -280,21 +301,29 @@ end.
 .{?internal;OsnDop <> ''
                                         <ИС:ДопСведенияИС>^</ИС:ДопСведенияИС>
 .}
-.{?internal;Visl <> '' or VislDop <> ''
+.{?internal;Visl <> '' or VislDop <> '' or wHours2 <> 0 or wMinutes2 <> 0 or wMon2 <> 0 or wDays2 <> 0
                                         <ИС:ВЛ>
 .{?internal;Visl <> ''
                                                 <ИС:Основание>^</ИС:Основание>
 .}
 .{?internal;wHours2 <> 0 or wMinutes2 <> 0
                                                 <ВС:ВыработкаВчасах>
+.{?internal;wHours2 <> 0
                                                       <ВС:Часы>^</ВС:Часы>
+.}
+.{?internal;wMinutes2 <> 0
                                                       <ВС:Минуты>^</ВС:Минуты>
+.}
                                                 </ВС:ВыработкаВчасах>
 .}
 .{?internal;(wMon2 <> 0 or wDays2 <> 0) and (wHours2 = 0 and wMinutes2 = 0)
                                                 <ВС:ВыработкаКалендарная>
+.{?internal;wMon2 <> 0
                                                       <ВС:ВсеМесяцы>^</ВС:ВсеМесяцы>
+.}
+.{?internal;wDays2 <> 0
                                                       <ВС:ВсеДни>^</ВС:ВсеДни>
+.}
                                                 </ВС:ВыработкаКалендарная>
 .}
 .{?internal;VislDop <> ''
@@ -304,7 +333,9 @@ end.
 .}
 				</ИС:ЛьготныйСтаж>
 .}
+.{?internal;wDopAdv = 0 or wLastAdv <> 0
 			</СтажевыйПериод>
+.}
 .fields
   DateUv
 .endfields
