@@ -1,0 +1,172 @@
+//Копирование заявки по косвенным затратам
+
+#include AtlProtocol.vih
+#include GetKau.vih
+
+#component "M_MNPLAN"
+
+VipInterface Algoritm_5120 Implements oAlgoritm_Sys;
+Interface Algoritm_5120;
+
+var
+  _getKau: GetKau;
+
+create view
+var
+  _mnPlanNrec: comp;
+  _cSpMnPlan: comp;
+  _periodNrec: comp;
+as select MnPlan.Nrec
+from MnPlan mp, SpMnPlan spm, SpMnPl spl, ValSpMnP vsp, AllMemo almem, FpPeriod per, KatPodr podr,
+     MnPlan, SpMnPlan, SpMnPl, ValSpMnP, AllMemo
+where ((
+  _mnPlanNrec == mp.Nrec       and
+  _cSpMnPlan  == spm.cSpMnPlan and
+  mp.Nrec     == spm.cMnPlan   and
+  spm.Nrec    == spl.cSpMnPlan and
+  spl.Nrec    == vsp.cSpMnPl   and
+  coSpMnPlan  == almem.wTable  and
+  spm.Nrec    == almem.cRec    and
+  mp.cAnVal2  == podr.Nrec     and
+  _periodNrec == per.Nrec
+))
+;
+
+Procedure CopySpMnPlan(oldParentSpMnPlanNrec: comp; newParentSpMnPlanNrec: comp);
+{
+  var mOld, mNew: TPtr;
+  mOld := InitMarker('', 8, 10, 100, false);
+  mNew := InitMarker('', 8, 10, 100, false);
+
+  _cSpMnPlan := oldParentSpMnPlanNrec;
+  _loop spm
+  {
+    SpMnPlan.Buffer    := spm.Buffer;
+    SpMnPlan.Nrec      := 0;
+    SpMnPlan.cMnPlan   := MnPlan.Nrec;
+    SpMnPlan.StartDate := MnPlan.StartDate;
+    SpMnPlan.EndDate   := MnPlan.EndDate;
+    SpMnPlan.cSpMnPlan := newParentSpMnPlanNrec;
+    if insert current SpMnPlan != tsOk continue;
+
+    InsertMarker(mOld, spm.Nrec);
+    InsertMarker(mNew, SpMnPlan.Nrec);
+
+    _loop spl
+    {
+      SpMnPl.Buffer    := spl.Buffer;
+      SpMnPl.Nrec      := 0;
+      SpMnPl.cMnPlan   := MnPlan.Nrec;
+      SpMnPl.cSpMnPlan := SpMnPlan.Nrec;
+      SpMnPl.StartDate := SpMnPlan.StartDate;
+      SpMnPl.EndDate   := SpMnPlan.EndDate;
+      case SpMnPl.wKodGr4 of
+        cgKau_MnPlan2: SpMnPl.cAnVal4 := MnPlan.Nrec;
+        cgKau_FpPeriod: SpMnPl.cAnVal4 := MnPlan.cAnVal1;
+      end;
+      if insert current SpMnPl != tsOk continue;
+
+      _loop vsp
+      {
+        ValSpMnP.Buffer  := vsp.Buffer;
+        ValSpMnP.Nrec    := 0;
+        ValSpMnP.cSpMnPl := SpMnPl.Nrec;
+        insert current ValSpMnP;
+      }
+    }
+
+    var fileName: string;
+    fileName := CreateTmpFileName;
+    _loop almem
+    {
+      if not ExportMemoToFile(almem.mem, fileName, false) continue;
+      ClearBuffer(#AllMemo);
+      AllMemo.wTable := coSpMnPlan;
+      AllMemo.cRec   := SpMnPlan.Nrec;
+      if ImportFileToMemo(AllMemo.Mem, fileName, false)
+        insert current AllMemo;
+    }
+    DeleteFile(fileName);
+  }
+
+  var i: longint;
+  var spmOldNrec, spmNewNrec: comp = 0;
+  for(i := 0; GetMarker(mOld, i, spmOldNrec); i++)
+    if GetMarker(mNew, i, spmNewNrec)
+      CopySpMnPlan(spmOldNrec, spmNewNrec);
+
+  DoneMarker(mOld, '');
+  DoneMarker(mNew, '');
+
+}
+
+Function RunInter(wflag: word; var pt: TRecAcc): boolean;
+{
+  wflag := wflag;
+
+  _mnPlanNrec := pt.cMnPlan;
+  if getfirst mp != tsOk exit;
+
+  _periodNrec := mp.cAnVal1;
+  RunInterface(F_FpCatalog::GetPeriod, cgiPick, 000100000000000Dh /*fpperiod.cMain*/, 0, _periodNrec, 0);
+  //_getKau.GetCodeKau(1, cgKau_FpPeriod, _periodNrec);
+  if getfirst per != tsOk exit;
+
+  MnPlan.Buffer     := mp.buffer;
+  MnPlan.Nrec       := 0;
+  MnPlan.StartDate  := per.dBeg;
+  MnPlan.EndDate    := per.dEnd;
+  MnPlan.UtvDate    := 0;
+  MnPlan.StatemDate := Cur_Date;
+  MnPlan.cStatus    := 00010000000000E1h;
+  MnPlan.cAnVal1    := _periodNrec;
+  MnPlan.Name       := 'Заявка косв.затр. Период: ' + per.Name + ' Подр: ' + if(GetFirst podr = tsOk, podr.Kod, '');
+  if insert current MnPlan != tsOk
+  {
+    Message('Ошибка при формировании копии заявки', Error);
+    exit;
+  }
+
+  CopySpMnPlan(0, 0);
+
+  Message('Сформирована заявка №' + MnPlan.Number + ' от ' + MnPlan.StatemDate);
+
+  result := true;
+}
+
+function InitInter(var pt: TRecAcc): boolean;
+{
+  pt.cFormpl := pt.cFormpl;
+
+  result := true;
+}
+
+Function DoneInter(var pt: TRecAcc): boolean;
+{
+  pt.Position := pt.Position;
+  DoneInter := true;
+}
+
+function GetNum: word;
+{
+  GetNum := 5120;
+}
+
+function GetName: string; {
+  GetName := 'АГАТ. Копирование заявки по косвенным затратам';
+}
+
+function GetMemo (st:oSteckCommonString): boolean; {
+  GetMemo := true;
+  st.push(string(''));
+}
+
+function GetNameInter: string; {
+  GetNameInter := 'Algoritm_5120' ;
+}
+
+function GetNameInterPr: string; {
+  GetNameInterPr := 'AlgoritmSetup_5120' ;
+}
+
+end.
