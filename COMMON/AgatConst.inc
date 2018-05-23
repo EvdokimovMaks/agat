@@ -94,5 +94,8 @@ const
   ClaimStateAccept           = 00010000000000F8h;  //Принята к исполнению
   ClaimStateAcceptReplacing  = 0001000000000119h;  //Заменяющая.Принята к исполнению
 
+  //Группы ДО
+  GROUPSCH_NREC_USERSETS     = 000100000000013Bh;  //Пользовательские наборы
+
   STATLOG_TIPDOC_INDENT = 30000;
 end;
