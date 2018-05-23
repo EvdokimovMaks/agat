@@ -204,6 +204,7 @@ const
   BIT_SUD               = 12;
   BIT_NODOC             = 13;
   BIT_REESTR            = 14;
+  BIT_GROUP             = 15;
   BIT_SUMMA             = 0;
   BIT_TOTAL             = 1;
   BIT_SUMVAL            = 2;

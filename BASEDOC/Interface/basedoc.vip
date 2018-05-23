@@ -50,10 +50,11 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     flagVid, flagBDDS, flagAvans, flagDates, flagSums, flagAttr, flagOpl, flagVsbl1, flagVsbl2: word;
     VvodBeg, VvodEnd, DDocBeg, DDocEnd, DSoglBeg, DSoglEnd: date;
     mrkOrg, mrkStatus, mrkIspoln, mrkDDS, mrkBDR, mrkBuhSch,  mrkZakaz, mrkDog, mrkCFO, mrkVal, mrkDescr, mrkRejim, mrkSud: longint;
-    sOrg, sIspoln, sDDS, sBDR, sBuhSch, sZakaz, sDog, sCFO, sVal, sDescr, sRejim, sSud: string;
+    sOrg, sIspoln, sDDS, sBDR, sBuhSch, sZakaz, sDog, sCFO, sVal, sDescr, sRejim, sSud, sGroupSch: string;
     SumSchOt, SumSchDo, SumTotOt, SumTotDo, SumValOt, SumValDo, SumOplOt, SumOplDo : double;
     flagVizaKind: word;
-    SelectVizaNrec: comp;
+    SelectVizaNrec, _cGroupSch: comp;
+
 
     _contractIDHelper: ContractIDHelper;
     _basedocHelper: BasedocHelper;
@@ -94,7 +95,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   from katnotes, buhschet, tbd, tsection, tmpfltr, basedoc,
        tbd brbd (i02), basedoc brbasedoc, katorg brorg, katbank brbank, dogovor brdog,
        katnotes brnote, klval brval, stepdoc brsd, basefin brbf, basefin brbf1,
-       klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin
+       klval selval, x$users, tmInfoDescr (tmInfoDescr03), basefin, GroupSch SelGroupSch
   where ((
     brbd.nrec          == brbasedoc.nrec    and
     brbasedoc.corg     == brorg.nrec        and
@@ -105,7 +106,8 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     brbd.nrec          == brsd.cbasedoc     and
     brbd.nrec          == brbf.cbasedoc     and
     0                  == brbf1.tidkbase    and
-    brbd.nrec          == brbf1.cpredopldo
+    brbd.nrec          == brbf1.cpredopldo  and
+    _cGroupSch         == SelGroupSch.Nrec
   ))
   bounds    byParent = cMainBD      == brbd.cPrnt
   condition bySogl   = brbd.daysogl >= viza1.days
@@ -312,6 +314,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     sSud     : Protect, PickButton;
     sNumSch  : noProtect;
     sReestr  : noProtect;
+    sGroupSch: noProtect, pickbutton;
   buttons
     cmFilter;
 <<
@@ -354,6 +357,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
   [.] Судопроизв-во  ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
   [.] Номер счета    ` .@@@@@@@@@@@@@@@
   [.] Номер реестра  ` .@@@@@@@@@@@@@@@
+  [.] Группа         ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@
 >>
   end; //screen scmainfilters
   screen scVizaFilters 'Фильтры по визам' show (,,,) fixed_x;
@@ -936,6 +940,12 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
     if bitset(flagAttr, BIT_VAL) {
       addsect('WHERE', 'bd.cval IN (select tmppick.crec from tmppick where tmppick.filter='''+DSK_MRKVAL+''')');
     }
+    //по группе
+    if bitset(flagAttr, BIT_GROUP) {
+      addsect('JOIN', 'join SpGrSch on SpGrSch.cBaseDoc = bd.Nrec');
+      addsect('JOIN', 'join GroupSch on GroupSch.Nrec = SpGrSch.cGroupSch and GroupSch.Name like '''+sGroupSch+'''');
+      //addsect('JOIN', 'join IerGrSch on IerGrSch.cRec = GroupSch.Nrec and IerGrSch.cUpRec = #comp(' + GROUPSCH_NREC_USERSETS + ')');
+    }
     //передан на согласование
     PrepareSoglFilter(viza1);
     //по визам
@@ -1311,6 +1321,11 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       SetSchetFldName;
       updateflag(BIT_BUHSCH, true, flagAttr);
     }
+  }
+  procedure selectGroupSch; {
+    if RunInterface(L_GRSCH::GETGROUPSCH, 3, 3, 3, false, _cGroupSch, false, 0) = cmDefault
+      if getfirst SelGroupSch = tsOk
+        sGroupSch := SelGroupSch.Name;
   }
   procedure clearbuhsch; {
     sBuhSch := '';
@@ -1731,6 +1746,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
         #v4operator  : { if(viza4.operator=0) viza4.operator := 1 else viza4.operator := 0; rereadrecord;}
         #v5operator  : { if(viza5.operator=0) viza5.operator := 1 else viza5.operator := 0; rereadrecord;}
         #v6operator  : { if(viza6.operator=0) viza6.operator := 1 else viza6.operator := 0; rereadrecord;}
+        #sGroupSch   : { selectGroupSch; rereadrecord; }
       end;
     }
     cmdelonprotect: {
@@ -1784,6 +1800,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       if (not readmydsk(SumValDo      , 'AGAT_BDREE_SumValDo'      , false)) SumValDo       := 1000000000;
       if (not readmydsk(SumOplOt      , 'AGAT_BDREE_SumOplOt'      , false)) SumOplOt       := 1;
       if (not readmydsk(SumOplDo      , 'AGAT_BDREE_SumOplDo'      , false)) SumOplDo       := 1000000000;
+      if (not readmydsk(sGroupSch     , 'AGAT_BDREE_GroupSch'      , false)) sGroupSch      := '';
       if (not readmydsk(flagVsbl1     , 'AGAT_BDREE_flagVsbl1'     , false)) flagVsbl1      := 65535;
       if (not readmydsk(flagVsbl2     , 'AGAT_BDREE_flagVsbl2'     , false)) flagVsbl2      := 65535;
       viza1.initviza('AGAT_BDREE_SOGL', 'На согласование', 'Готов к согласованию', 1102);
@@ -1856,6 +1873,7 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
       savemydsk(SumValDo      , 'AGAT_BDREE_SumValDo'      );
       savemydsk(SumOplOt      , 'AGAT_BDREE_SumOplOt'      );
       savemydsk(SumOplDo      , 'AGAT_BDREE_SumOplDo'      );
+      savemydsk(sGroupSch     , 'AGAT_BDREE_GroupSch'      );
       savemydsk(flagVsbl1     , 'AGAT_BDREE_flagVsbl1'     );
       savemydsk(flagVsbl2     , 'AGAT_BDREE_flagVsbl2'     );
       viza1.doneviza;
@@ -2147,6 +2165,17 @@ interface AGAT_BASEDOC_REE 'Агат. Документы-основания';
 
     }
 
+    cmValue3: //включение ДО в группу
+    {
+        var m: tPtr;
+        m := InitMarker('', 8, 10, 20, false);
+
+        copymarker(m, mrkMain);
+        _basedocHelper.AddBasedocToGroupUI(sGroupSch, m);
+
+        doneMarker(m, '');
+    }
+
   end;
 end.
 
@@ -2195,6 +2224,7 @@ mnuAGAT_Basedoc_Ree Menu
 - 'Иерархия/список', cmAccording, 'Иерархия/список', , 'Alt+S', kbAltS, sci1Esc;
 - 'Показать/скрыть фильтры', cmFilterSave, 'Показать/скрыть фильтры', , 'Alt+B', kbAltB, sci1Esc;
 - 'Показать/скрыть карточку ДО', cmCalcUslParam, 'Показать/скрыть карточку ДО', ,'Alt+W', kbAltW, sci1Esc;
+- 'Включить помеченные ДО в группу', cmValue3, 'Включить помеченные ДО в группу';
 }
 
 mnuAGAT_Basedoc_Dop Menu
