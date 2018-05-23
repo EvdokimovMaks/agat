@@ -34,20 +34,31 @@ var
   _filterContdocZakazNrec: comp;
   _filterContdocRSNrec: comp;
   _filterFlag: byte;
+  _tabN: tTabN;
+  _datePay: date;
 as select
   _ea.sGetAttrId(coContDoc, contdoc.nrec, attrnam_contdoc_zakaz) (fieldname=ContDocZakaz),
   _ea.sGetAttrId(coContDoc, contdoc.nrec, attrnam_contdoc_rs)    (fieldname=ContDocRS)
 from contdoc,
-     tHiddenSrclist, srclist hsrclist, tZakazRS
+     tHiddenSrclist, srclist hsrclist, tZakazRS,
+     AllMemo AllMemoMarkList,
+     SrcList SrcListAddMark
 where ((
-  //if(factotpusk.vactype=1, 6, 41) == partdoc.typeoper and
-  //factotpusk.cprikaz              == partdoc.cdoc and
-  //factotpusk.person               == contdoc.person and
-  //partdoc.nrec                    == contdoc.cpart and
-  //1                               == contdoc.wrec and
   factotpusk.ccontdoc             == contdoc.nrec and
-  tHiddenSrclist.refdoc           == hsrclist.refdoc
+  tHiddenSrclist.refdoc           == hsrclist.refdoc and
+
+  coX$Users                       == AllMemoMarkList.wTable and
+  UserId                          == AllMemoMarkList.cRec and
+  word(-102)                      == AllMemoMarkList.Npp and
+
+  True                            == SrcListAddMark.Visible and
+  _tabN                           == SrcListAddMark.TabN and
+  ''                              == SrcListAddMark.StrTabN and
+  _datePay                        == SrcListAddMark.DatePay
+
 ));
+
+file fMarkList;
 
 //#region Процедуры и функции для установки фильтров
 
@@ -286,6 +297,41 @@ window wSetFilter 'Установка/снятие фильтра';
   end;
 end;
 
+window wMarkTabn 'Пометка по табельным номерам' escClose doAccept;
+  show(,,40,)
+
+  screen scDate;
+    show(,,,3) fixed_y;
+    fields
+      _datePay: noprotect;
+<<
+
+`Дата выплаты`.@@@@@@@@@@
+>>
+  end;
+
+  text AllMemoMarkList.Mem;
+    show(,4,,20);
+
+  screen scBtn;
+    show(,21,,) fixed_y;
+    buttons
+      cmDoOk, default;
+      cmCancel;
+<<
+          <. Продолжить .> <. Отмена .>
+>>
+  end;
+
+  handleevent
+    cmInit: if not ReadMyDsk(_datePay, 'PickOtpFList_datePay', false) _datePay := cur_date;
+    cmDone: SaveMyDsk(_datePay, 'PickOtpFList_datePay');
+    cmDoOk: putcommand(cmDefault);
+    cmDefault: SaveMyDsk(_datePay, 'PickOtpFList_datePay');
+  end;
+
+end; //window wMarkTabn
+
 window WPICKOTP;
 
   browse BPICKOTP (,,sci1EnIns);
@@ -303,6 +349,49 @@ window WPICKOTP;
     cmHotkeys:
     {
       puthotcommand(runloadmenu(loadmenu('mnuPICKOTPFLIST')))
+    }
+    cmValue9:  //Пометка по табельным номерам
+    {
+      if getfirst AllMemoMarkList != tsOk
+      {
+        ClearBuffer(tnAllMemoMarkList);
+        AllMemoMarkList.wTable := coX$Users;
+        AllMemoMarkList.cRec := UserId;
+        AllMemoMarkList.Npp := word(-102);
+        insert current AllMemoMarkList;
+      }
+
+      if runwindowmodal(wMarkTabn) = cmDefault
+      {
+        update current AllMemoMarkList;
+
+        if getfirst AllMemoMarkList = tsOk
+        if fMarkList.OpenMemo(AllMemoMarkList.Mem)
+        {
+          var s, undefinedRecs: string = '';
+
+          while not fMarkList.Eof
+          {
+            fMarkList.ReadLn(s);
+            _tabN := trim(s);
+            if _tabN > 0
+            {
+              _loop SrcListAddMark
+                update current SrcListAddMark set SrcListAddMark.Marked := true;
+              if getfirst SrcListAddMark != tsOk
+                undefinedRecs += ' ' + _tabN;
+            }
+          }
+          fMarkList.Close;
+
+          if undefinedRecs != ''
+            message('Не найдены табельные номера ' + undefinedRecs);
+        }
+
+        rereadrecord(#SrcList);
+
+      }
+
     }
   end;
 
@@ -327,4 +416,5 @@ end.
 mnuPICKOTPFLIST menu
 {
   - 'Фильтр', cmFilterSave, 'Установка фильтра';
+  - 'Пометка по табельным номерам', cmValue9, 'Пометка по табельным номерам';
 }
