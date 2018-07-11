@@ -1,0 +1,177 @@
+#include myVschetB.vih
+#include ExtAttr.vih
+
+#component "AGAT"
+
+#include SplitBasedoc.vih
+interface SplitBasedoc;
+
+var
+  _basedocNrec     : comp;
+  _total1          : double;
+  _procOpl1        : double;
+  _total2          : double;
+  _procOpl2        : double;
+  _newBasedocNrec  : comp;
+  _newBasedocNumber: string;
+  _newBasedocDate  : date;
+  _myVschetPB      : myVSchetPB new;
+  _extAttr         : iExtAttr;
+
+create view
+as select BaseDoc.Nrec
+from BaseDoc,
+     BaseDoc NewBaseDoc
+where((
+  _basedocNrec    == BaseDoc.Nrec and
+  _newBasedocNrec == NewBaseDoc.Nrec
+));
+
+parameters _basedocNrec;
+
+window wUI 'Разделение ДО' escClose;
+  show(,,38,10);
+
+  screen sc1;
+    fields
+      BaseDoc.Total        : [2,'\2p[|-]3666`666`666`666.88'], Skip;
+      BaseDoc.ProcOpl      : [,'\4p666.8888'], Skip;
+      [fTotal1]   Total1   : [,'\2p[|-]3666`666`666`666.88'], noprotect;
+      [fProcOpl1] ProcOpl1 : [,'\4p666.8888'], noprotect;
+      [fTotal2]   Total2   : [,'\2p[|-]3666`666`666`666.88'], noprotect;
+      [fProcOpl2] ProcOpl2 : [,'\4p666.8888'], noprotect;
+      _newBasedocNumber    : noprotect;
+      _newBasedocDate      : noprotect;
+    buttons
+      cmOk;
+      cmCancel;
+<<
+        `Сумма предоплаты``Процент`
+ Тек. ДО .@@@@@@@@@@@@@@@ .@@@@@@@@@
+ ДО1     .@@@@@@@@@@@@@@@ .@@@@@@@@@
+ ДО2     .@@@@@@@@@@@@@@@ .@@@@@@@@@
+
+`Номер формируемого ДО`.@@@@@@@@@@@@
+`Дата формируемого ДО` .@@@@@@@@@@@@
+
+        <. Продолжить .> <. Отмена .>
+>>
+  end;
+
+  handleevent
+
+    cmCheckField:
+    {
+      case curfield of
+        #fTotal1, #fTotal2, #fProcOpl1, #fProcOpl2: RereadRecord;
+      end;
+    }
+
+    cmOk:
+    {
+      CloseWindowEx(wUI, cmDefault);
+    }
+
+  end;
+
+end;
+
+//#region ISplitBasedoc
+
+function ISplitBasedoc.SetBaseDocNrec(aBaseDocNrec: comp): boolean;
+{
+  result := false;
+  _basedocNrec := aBaseDocNrec;
+  if getfirst BaseDoc = tsOk
+  {
+    _total1   := BaseDoc.Total;
+    _procOpl1 := BaseDoc.ProcOpl;
+    _total2   := 0;
+    _procOpl2 := 0;
+    _newBasedocNumber := BaseDoc.NoDoc;
+    _newBasedocDate := BaseDoc.dDoc;
+    result := BaseDoc.VidDoc = 111;
+  }
+}
+
+function ISplitBasedoc.ShowUI: word;
+{
+  result := RunWindowModal(wUI);
+}
+
+function ISplitBasedoc.SplitBasedoc: comp;
+{
+  result := 0;
+  if _myVschetPB.SetPos(BaseDoc.Nrec)
+  {
+    _myVschetPB.SetTotal(_total1);
+    _newBaseDocNrec:= _myVschetPB.CopyDOWithNoChecks(BaseDoc.Nrec, 1000 + BaseDoc.VidDoc, 0, false, 0, 1);
+    if _myVschetPB.SetPos(_newBaseDocNrec)
+    {
+      _myVschetPB.SetTotal(_total2);
+      _myVschetPB.SetNmbAndDate(_newBasedocNumber, _newBasedocDate);
+      _extAttr.sSetAttrId(coBaseDoc, _newBaseDocNrec, ATTRNAM_SOGL, '');
+      _extAttr.sSetAttrId(coBaseDoc, _newBaseDocNrec, ATTRNAM_PBUH, '');
+      _extAttr.sSetAttrId(coBaseDoc, _newBaseDocNrec, ATTRNAM_PKAZ, '');
+      _extAttr.sSetAttrId(coBaseDoc, _newBaseDocNrec, ATTRNAM_PDIR, '');
+      _extAttr.sSetAttrId(coBaseDoc, _newBaseDocNrec, ATTRNAM_PPEU, '');
+      _extAttr.coSetAttrId(coBaseDoc, _newBaseDocNrec, ATTRNAM_BUH  , 0, '');
+      _extAttr.coSetAttrId(coBaseDoc, _newBaseDocNrec, ATTRNAM_KAZN , 0, '');
+      _extAttr.coSetAttrId(coBaseDoc, _newBaseDocNrec, ATTRNAM_DIR  , 0, '');
+      _extAttr.coSetAttrId(coBaseDoc, _newBaseDocNrec, ATTRNAM_PEU  , 0, '');
+    }
+    result := _newBaseDocNrec;
+  }
+}
+
+procedure SetTotal1(value: double);
+{
+  _total1   := if(value < 0, 0, if(value > BaseDoc.Total, BaseDoc.Total, value));
+  _procOpl1 := if(BaseDoc.Total != 0, _total1 / BaseDoc.Total * BaseDoc.ProcOpl, 0);
+  _total2   := BaseDoc.Total - _total1;
+  _procOpl2 := if(BaseDoc.Total != 0, _total2 / BaseDoc.Total * BaseDoc.ProcOpl, 0);
+}
+property ISplitBasedoc.Total1: double read _total1 write SetTotal1(result);
+
+procedure SetTotal2(value: double);
+{
+  _total2   := if(value < 0, 0, if(value > BaseDoc.Total, BaseDoc.Total, value));
+  _procOpl2 := if(BaseDoc.Total != 0, _total2 / BaseDoc.Total * BaseDoc.ProcOpl, 0);
+  _total1   := BaseDoc.Total - _total2;
+  _procOpl1 := if(BaseDoc.Total != 0, _total1 / BaseDoc.Total * BaseDoc.ProcOpl, 0);
+}
+property ISplitBasedoc.Total2: double read _total2 write SetTotal2(result);
+
+procedure SetProcOpl2(value: double);
+{
+  _procOpl2 := if(value < 0, 0, if(value > BaseDoc.ProcOpl, BaseDoc.ProcOpl, value));
+  _total2   := BaseDoc.Total * _procOpl2 / BaseDoc.ProcOpl;
+  _total1   := BaseDoc.Total - _total2;
+  _procOpl1 := if(BaseDoc.Total != 0, _total1 / BaseDoc.Total * BaseDoc.ProcOpl, 0);
+}
+property ISplitBasedoc.ProcOpl2: double read _procOpl2 write SetProcOpl2(result);
+
+procedure SetProcOpl1(value: double);
+{
+  _procOpl1 := if(value < 0, 0, if(value > BaseDoc.ProcOpl, BaseDoc.ProcOpl, value));
+  _total1   := BaseDoc.Total * _procOpl1 / BaseDoc.ProcOpl;
+  _total2   := BaseDoc.Total - _total1;
+  _procOpl2 := if(BaseDoc.Total != 0, _total2 / BaseDoc.Total * BaseDoc.ProcOpl, 0);
+}
+property ISplitBasedoc.ProcOpl1: double read _procOpl1 write SetProcOpl1(result);
+
+//#endregion ISplitBasedoc
+
+handleevent
+
+  cmInit:
+  {
+    if SetBaseDocNrec(_basedocNrec)
+      if ShowUI = cmDefault
+        SplitBasedoc;
+    CloseInterface(cmDefault);
+  }
+
+end;
+
+end.
