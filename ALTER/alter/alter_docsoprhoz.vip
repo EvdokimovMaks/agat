@@ -5,6 +5,7 @@
 const
   cmCalcSFByTicket = 39991;
   cmCalcSFByTaxes = 39992;
+  cmSplitBaseFinSum = 39993;
 end;
 
 bmpCalcSFByTaxes BITMAP "calcSFByTaxes.bmp"
@@ -30,6 +31,171 @@ alter interface docsoprhoz;
 overload
   procedure OnPick;
 end;
+
+table struct tSplitSum (
+  npp: longint,
+  cBaseDoc: comp,
+  cStepDoc: comp,
+  cPredoplDO: comp,
+  Sum: double
+) with index (
+  i01 = npp (unique)
+);
+
+create view
+var
+  _splitSumCnt: longint;
+from tSplitSum;
+
+window ag_wSplitSum 'Разбивка суммы' escClose;
+
+  procedure RefreshSplitSumTable;
+  {
+    PushPos(#tSplitSum);
+    delete all tSplitSum where (tSplitSum.npp > _splitSumCnt);
+
+    var i: longint = 0;
+    var totalSum: double = 0;
+    for(i := 1; i <= _splitSumCnt; i++)
+    {
+      if getfirst tSplitSum where ((i == tSplitSum.npp)) != tsOk
+        insert tSplitSum set tSplitSum.npp        := i,
+                             tSplitSum.cStepDoc   := SoprHoz.cStepDoc,
+                             tSplitSum.cBaseDoc   := BaseFin.cBaseDoc,
+                             tSplitSum.cPredoplDO := BaseFin.cPredoplDO;
+      if i < _splitSumCnt
+        totalSum += tSplitSum.Sum;
+      else
+        tSplitSum.Sum := SoprHoz.Summa - totalSum;
+      update current tSplitSum;
+    }
+    PopPos(#tSplitSum);
+  }
+
+  screen ag_scSplitSum;
+    show(,,,4) fixed_y;
+    fields
+      SoprHoz.Summa: [, '\2p[|-]3666`666`666`666.88'], skip;
+      _splitSumCnt: noprotect;
+    buttons
+      cmOk;
+<<
+
+  `Сумма для разбивки`.@@@@@@@@@@
+  `Количество разбиений`    .@@@@         <. Выполнить .>
+>>
+  end;
+
+  browse ag_brSplitSum (,, sci13Esc);
+    show(,5,,);
+    table tSplitSum;
+    fields
+      tSplitSum.npp '№': [3], skip, NoAutoSize;
+      [ag_SplitSumBaseDoc] ShowKau(cgKau_BaseDoc, tSplitSum.cBaseDoc) 'Документ основание': [30], protect, pickbutton;
+      [ag_SplitSumPredoplDO] ShowKau(cgKau_BaseDoc, tSplitSum.cPredoplDO) 'Предопл. ДО': [30], protect, pickbutton;
+      tSplitSum.Sum 'Сумма': [10,2], NoProtect;
+  end;
+
+  tableevent table tSplitSum;
+    cmUpdateRecord:
+    {
+      update current tSplitSum;
+      RefreshSplitSumTable;
+      rereadrecord(tntSplitSum);
+    }
+  end;
+
+  handleevent
+    cmInit:
+    {
+      _splitSumCnt := 2;
+      delete all tSplitSum;
+      RefreshSplitSumTable;
+      rereadrecord(tntSplitSum);
+    }
+    cmPick:
+    {
+      case curfield of
+        #ag_SplitSumBaseDoc:
+        {
+          var myGetBDoc: comp = tSplitSum.cBaseDoc;
+          var myGetSDoc: comp = tSplitSum.cStepDoc;
+          var myGetOrgDoc: comp = SoprHoz.cOrg;
+          var mySumma: double = SoprHoz.Summa;
+          if RunInterface(F_SoprHoz::GetDBase, true, 2, 101, myGetBDoc, myGetSDoc, myGetOrgDoc, mySumma) = cmDefault
+          {
+            set tSplitSum.cBaseDoc := myGetBDoc;
+            set tSplitSum.cStepDoc := myGetSDoc;
+            if tSplitSum.Sum = 0 set tSplitSum.Sum := mySumma;
+            UpdateTable;
+          }
+        }
+        #ag_SplitSumPredoplDO:
+        {
+          var myGetBDoc: comp = tSplitSum.cPredoplDO;
+          var myGetSDoc: comp = 0;
+          var myGetOrgDoc: comp = SoprHoz.cOrg;
+          var mySumma: double = SoprHoz.Summa;
+          if RunInterface(F_SoprHoz::GetDBase, true, 2, 111, myGetBDoc, myGetSDoc, myGetOrgDoc, mySumma) = cmDefault
+          {
+            set tSplitSum.cPredoplDO := myGetBDoc;
+            if tSplitSum.Sum = 0 set tSplitSum.Sum := mySumma;
+            UpdateTable;
+          }
+        }
+      end;
+    }
+    cmOk:
+    {
+      var soprhozNrec: comp = SoprHoz.Nrec;
+      _loop tSplitSum
+      {
+        SoprHoz.Summa      := tSplitSum.Sum;
+        SoprHoz.cStepDoc   := tSplitSum.cStepDoc;
+        SoprHoz.cPredoplDO := tSplitSum.cPredoplDO;
+        SoprHoz.Nrec       := 0;
+        onInsertRecord;
+      }
+      if getfirst SoprHoz where ((soprhozNrec == SoprHoz.Nrec)) = tsOk
+      {
+        iDoc.GetBufferDoc(vrDoc);
+        DeleteMarker(vlMarker, SoprHoz.NRec);
+        DeleteCurrent(true);
+        RereadRecord(#SoprHoz);
+      }
+      CloseWindowEx(ag_wSplitSum, cmDefault);
+    }
+  end; //handleevent window ag_wSplitSum
+
+end; //window ag_wSplitSum
+
+handleevent
+  cmCheckField:
+  {
+    case curfield of
+      #_splitSumCnt:
+      {
+        if _splitSumCnt < 2 _splitSumCnt := 2;
+        RefreshSplitSumTable;
+        rereadrecord(tntSplitSum);
+      }
+      #tSplitSum.Sum:
+      {
+        UpdateTable;
+      }
+      else
+        inherited::handleevent(cmCheckField);
+    end;
+  }
+end;
+
+WindowEvent wiBaseFin;
+  cmHotKeys:
+    PutHotCommand(RunDynMenu('F_SoprHoz::mnuDocBaseFin;SEPARATOR;F_SoprHoz::AG_mnuDocBaseFin'));
+  cmSplitBaseFinSum:
+    RunWindowModal(ag_wSplitSum);
+end;
+
 
 create view vGetDS
 var
@@ -71,52 +237,52 @@ procedure OnPick;
 }
 
 Window wiEditSoprHoz
-ToolBar tbCalcSFByMenu;
+  ToolBar tbCalcSFByMenu;
 
-var
-  _sfHelper: AGAT::SFHelper;
+  var
+    _sfHelper: AGAT::SFHelper;
 
-handleevent
+  handleevent
 
-cmCalcSFByTicket:
-{
-  var rslt: boolean;
-  _try
+  cmCalcSFByTicket:
   {
-    rslt := _sfHelper.CalcSFBySoprhozRRTickets(soprhoz.nrec);
+    var rslt: boolean;
+    _try
+    {
+      rslt := _sfHelper.CalcSFBySoprhozRRTickets(soprhoz.nrec);
+    }
+
+    _except
+      on ExAvOtchNotFound : message('Хозоперация сформирована не по авансовому отчету. Расчет прерван',error);
+      on ExBasedocNotFound: message('Не найден счет. Расчет прерван',error);
+      on ExSchfactNotFound: message('Не найден счет-фактура для расчета. Расчет прерван',error);
+      on ExPersonNotFound : message('В авансовом отчете не указан сотрудник. Расчет прерван',error);
+      on ExSoprhozNotFound: message('Не найдена хозоперация. Расчет прерван',error);
+      on ExTaxesNotFound: message('Не определены налоги по билетам для сотрудника в ДО. Расчет прерван',error);
+
+    if rslt runinterface(L_SF::SchFact, soprhoz.cschfact, 2, 0, 0, 0, 0, 0, 0, 0, 2);
   }
 
-  _except
-    on ExAvOtchNotFound : message('Хозоперация сформирована не по авансовому отчету. Расчет прерван',error);
-    on ExBasedocNotFound: message('Не найден счет. Расчет прерван',error);
-    on ExSchfactNotFound: message('Не найден счет-фактура для расчета. Расчет прерван',error);
-    on ExPersonNotFound : message('В авансовом отчете не указан сотрудник. Расчет прерван',error);
-    on ExSoprhozNotFound: message('Не найдена хозоперация. Расчет прерван',error);
-    on ExTaxesNotFound: message('Не определены налоги по билетам для сотрудника в ДО. Расчет прерван',error);
-
-  if rslt runinterface(L_SF::SchFact, soprhoz.cschfact, 2, 0, 0, 0, 0, 0, 0, 0, 2);
-}
-
-cmCalcSFByTaxes:
-{
-  var rslt: boolean;
-  _try
+  cmCalcSFByTaxes:
   {
-    rslt := _sfHelper.CalcSFBySoprhozRRTaxes(soprhoz.nrec);
+    var rslt: boolean;
+    _try
+    {
+      rslt := _sfHelper.CalcSFBySoprhozRRTaxes(soprhoz.nrec);
+    }
+
+    _except
+      on ExAvOtchNotFound : message('Хозоперация сформирована не по авансовому отчету. Расчет прерван',error);
+      on ExBasedocNotFound: message('Не найден счет. Расчет прерван',error);
+      on ExSchfactNotFound: message('Не найден счет-фактура для расчета. Расчет прерван',error);
+      on ExPersonNotFound : message('В авансовом отчете не указан сотрудник. Расчет прерван',error);
+      on ExSoprhozNotFound: message('Не найдена хозоперация. Расчет прерван',error);
+      on ExTaxesNotFound: message('Не определены налоги по сборам для сотрудника в ДО. Расчет прерван',error);
+
+    if rslt runinterface(L_SF::SchFact, soprhoz.cschfact, 2, 0, 0, 0, 0, 0, 0, 0, 2);
   }
 
-  _except
-    on ExAvOtchNotFound : message('Хозоперация сформирована не по авансовому отчету. Расчет прерван',error);
-    on ExBasedocNotFound: message('Не найден счет. Расчет прерван',error);
-    on ExSchfactNotFound: message('Не найден счет-фактура для расчета. Расчет прерван',error);
-    on ExPersonNotFound : message('В авансовом отчете не указан сотрудник. Расчет прерван',error);
-    on ExSoprhozNotFound: message('Не найдена хозоперация. Расчет прерван',error);
-    on ExTaxesNotFound: message('Не определены налоги по сборам для сотрудника в ДО. Расчет прерван',error);
-
-  if rslt runinterface(L_SF::SchFact, soprhoz.cschfact, 2, 0, 0, 0, 0, 0, 0, 0, 2);
-}
-
-end; //handleevent
+  end; //handleevent
 
 end; //window
 
@@ -126,4 +292,9 @@ CalcSoprHozBy menu
 {
   - 'Расчет сумм счета-фактуры по билетам', cmCalcSFByTicket, , , , , sci1Esc;
   - 'Расчет сумм счета-фактуры по налогам и сборам', cmCalcSFByTaxes, , , , , sci1Esc;
+}
+
+AG_mnuDocBaseFin menu
+{
+  - 'Разбивка суммы', cmSplitBaseFinSum, , , , , sci1Esc;
 }
