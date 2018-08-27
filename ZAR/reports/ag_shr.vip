@@ -1,0 +1,421 @@
+//Отчет по штатному расписанию
+#include Query.vih
+#include CatFunc.vih
+#include UserReport.vih
+
+#component "AGAT"
+
+interface ag_shr 'АГАТ. Штатное расписание' escclose;
+show(,,26,5);
+
+//Структурные единицы штатного расписания,
+//действующие на дату отчета
+table struct tCatSS (
+  Nrec: comp,
+  cParent: comp,
+  Code: string[100],
+  Name: string
+) with index (
+  i00 = Nrec (unique),
+  i01 = cParent + Code
+);
+
+table struct tSS (
+  cCatSS   : comp,
+  cSS      : comp,
+  cPost    : comp,
+  cCateg   : comp,
+  cPodgr   : comp,
+  Qty      : double,
+  Salary   : double,
+  BonusVred: double,
+  BonusPrem: double,
+  BonusSekr: double
+) with index (
+  i01 = cCatSS
+);
+
+table struct tTotals (
+  cCatSS: comp,
+  wType : word, //0 - по подразделению, 1 - по подразделению/подгруппе, 2 - по подразделению/подгруппе/категории
+  cPodgr: comp,
+  cCateg: comp,
+  Qty   : double,
+  Sum   : double
+) with index (
+  i01 = wType + cCatSS,
+  i02 = wType + cCatSS + cPodgr,
+  i03 = wType + cCatSS + cPodgr + cCateg
+);
+
+
+var
+  _catFunc: CatalogsFunctions;
+  pXL: XLSRepBuilder;
+  _date: date;
+
+create view
+var
+  _cCatSSParent: comp;
+as select
+  CatSSChild.Nrec
+from
+  Catalogs CatSSChild,
+  tCatSS,
+  tSS,
+  RaiseStS,
+  Catalogs CatRaise,
+  RaiseAlg,
+  tTotals,
+  tTotals tTotals0,
+  tTotals tTotals1,
+  tTotals tTotals2
+where ((
+  _cCatSSParent      == CatSSChild.cParent and
+  (CatSSChild.DatN <= _date and (CatSSChild.DatOk = 0 or CatSSChild.DatOk >= _date)) and
+  tSS.cSS            == RaiseStS.StaffStr  and
+  RaiseStS.RaiseType == CatRaise.Nrec      and
+  RaiseStS.Nrec      == RaiseAlg.RaiseStSt and
+  0                  == tTotals0.wType     and
+  tSS.cCatSS         == tTotals0.cCatSS    and
+  1                  == tTotals1.wType     and
+  tSS.cCatSS         == tTotals1.cCatSS    and
+  tSS.cPodgr         == tTotals1.cPodgr    and
+  2                  == tTotals2.wType     and
+  tSS.cCatSS         == tTotals2.cCatSS    and
+  tSS.cPodgr         == tTotals2.cPodgr    and
+  tSS.cCateg         == tTotals2.cCateg
+))
+;
+
+create view vRep
+var
+  _cCatSS: comp;
+as select
+  tSS.cCatSS
+from
+  tCatSS tCatSSTop,
+  tCatSS tCatSSChild,
+  tCatSS,
+  tSS,
+  Catalogs CatPost,
+  SpKau SpkPodgr,
+  SpKau SpkCateg,
+  tTotals tTotals0,
+  tTotals tTotals1,
+  tTotals tTotals2
+where ((
+  0               == tCatSSTop.cParent   and
+  _cCatSS         == tCatSSChild.cParent and
+  _cCatSS         == tCatSS.Nrec         and
+  tCatSS.Nrec     == tSS.cCatSS          and
+  tSS.cPost       == CatPost.Nrec        and
+  tSS.cPodgr      == spkPodgr.Nrec       and
+  tSS.cCateg      == spkCateg.Nrec       and
+  0               == tTotals0.wType      and
+  _cCatSS         == tTotals0.cCatSS     and
+  1               == tTotals1.wType      and
+  _cCatSS         == tTotals1.cCatSS     and
+  2               == tTotals2.wType      and
+  _cCatSS         == tTotals2.cCatSS     and
+  tTotals1.cPodgr == tTotals2.cPodgr
+));
+
+
+
+screen sc1;
+  fields
+    _date: noprotect;
+  buttons
+    cmOk, default;
+    cmCancel;
+<<
+
+`Дата отчета`.@@@@@@@@@@
+
+<.Продолжить.> <.Отмена.>
+>>
+end;
+
+
+procedure PrepareData;
+{
+  //Записываем в tCatSS действующие на дату _date структурные единицы штатного расписания
+  delete all tCatSS;
+  var mCatSS   : TPtr    = InitMarker('', 8, 500, 100, false);   //маркер для иерархического обхода СЕ ШР
+  var cCatSSTop: comp    = _catFunc.GetCatalogsNRec(-11);        //нрек Catalogs "Структурные единицы штатного расписания"
+  var i        : longint = 0;
+
+  InsertMarker(mCatSS, cCatSSTop);
+
+  for(i := 0; GetMarker(mCatSS, i, _cCatSSParent); i++)
+    _loop CatSSChild
+    {
+      insert tCatSS set tCatSS.Nrec    := CatSSChild.Nrec,
+                        tCatSS.cParent := if(CatSSChild.cParent = cCatSSTop, 0, CatSSChild.cParent),
+                        tCatSS.Code    := CatSSChild.Code,
+                        tCatSS.Name    := CatSSChild.Name;
+      InsertMarker(mCatSS, CatSSChild.Nrec);
+    }
+  DoneMarker(mCatSS, '');
+
+  //Заполняем таблицу tSS единицами ШР
+  delete all tSS;
+  insert tSS (cCatSS, cSS, cPost, cCateg, cPodgr, Qty, Salary)
+  select
+    tCatSS.Nrec,
+    ss.Nrec,
+    ss.Post,
+    avCateg.vComp,
+    avPodgr.vComp,
+    ss.WorkStations,
+    ss.TaxRate
+  from
+    tCatSS,
+    StaffStruct ss,
+    KlKatego,
+    AttrVal avCateg,
+    AttrVal avPodgr
+  where ((
+    tCatSS.Nrec                 == ss.Department    and
+    (ss.dInput <= _date and (ss.dClose = 0 or ss.dClose >= _date)) and
+    ss.EmpCategory              == KlKatego.Nrec    and
+    coKlKatego                  == avCateg.wTable   and
+    KlKatego.Nrec               == avCateg.cRec     and
+    ATTRNAM_NREC_KLKATEGO_CATEG == avCateg.cAttrNam and
+    coKlKatego                  == avPodgr.wTable   and
+    KlKatego.Nrec               == avPodgr.cRec     and
+    ATTRNAM_NREC_KLKATEGO_PODGR == avPodgr.cAttrNam
+  ));
+
+  //В таблице tSS заполняем суммы надбавок, рассчитываем итоги
+  delete all tTotals;
+  _loop tSS
+  {
+    _loop RaiseStS
+      _loop RaiseAlg
+      {
+        var rSum: double = if(RaiseAlg.RaiseAttr = 2, tSS.Salary * RaiseAlg.Sum / 100, RaiseAlg.Sum);
+        if getfirst CatRaise = tsOk
+          case locase(CatRaise.Name) of
+           'надбавка за секретность': tSS.BonusSekr += rSum;
+           'доплата за вредность повременщикам',
+           'доплата за вредность сдельщикам',
+           'доплата за вредность специалистам': tSS.BonusVred += rSum;
+           'премия': tSS.BonusPrem += rSum;
+          end;
+      }
+    update current tSS;
+
+    if getfirst tTotals0 != tsOk
+      insert tTotals0 set tTotals0.wType := 0,
+                          tTotals0.cCatSS := tSS.cCatSS;
+    update current tTotals0
+      set tTotals0.Qty := tTotals0.Qty + tSS.Qty,
+          tTotals0.Sum := tTotals0.Sum + tSS.Salary + tSS.BonusVred + tSS.BonusPrem + tSS.BonusSekr;
+
+    if getfirst tTotals1 != tsOk
+      insert tTotals1 set tTotals1.wType := 1,
+                          tTotals1.cCatSS := tSS.cCatSS,
+                          tTotals1.cPodgr := tSS.cPodgr;
+    update current tTotals1
+      set tTotals1.Qty := tTotals1.Qty + tSS.Qty,
+          tTotals1.Sum := tTotals1.Sum + tSS.Salary + tSS.BonusVred + tSS.BonusPrem + tSS.BonusSekr;
+
+    if getfirst tTotals2 != tsOk
+      insert tTotals2 set tTotals2.wType := 2,
+                          tTotals2.cCatSS := tSS.cCatSS,
+                          tTotals2.cPodgr := tSS.cPodgr,
+                          tTotals2.cCateg := tSS.cCateg;
+    update current tTotals2
+      set tTotals2.Qty := tTotals2.Qty + tSS.Qty,
+          tTotals2.Sum := tTotals2.Sum + tSS.Salary + tSS.BonusVred + tSS.BonusPrem + tSS.BonusSekr;
+  }
+}
+
+procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
+{
+  set vRep._cCatSS := cCatStaffStruct;
+  if vRep.getfirst tCatSS = tsOk
+  {
+    var npp: longint = 1;
+    vRep._loop tSS
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Level'    , wLevel);
+      pXL.SetTblStringFldValue('SSName'   , if(npp = 1, vRep.tCatSS.Name, ''));
+      pXL.SetTblStringFldValue('SSCode'   , if(npp = 1, vRep.tCatSS.Code, ''));
+      pXL.SetTblStringFldValue('PostName' , if(vRep.getfirst CatPost  = tsOk, vRep.CatPost.Name, ''));
+      pXL.SetTblStringFldValue('Categ'    , if(vRep.getfirst SpkCateg = tsOk, vRep.SpkCateg.Name, ''));
+      pXL.SetTblStringFldValue('Podgr'    , if(vRep.getfirst SpkPodgr = tsOk, vRep.SpkPodgr.Name, ''));
+      pXL.SetTblNumberFldValue('Qty'      , vRep.tSS.Qty);
+      pXL.SetTblNumberFldValue('Salary'   , vRep.tSS.Salary);
+      pXL.SetTblNumberFldValue('BonusVred', vRep.tSS.BonusVred);
+      pXL.SetTblNumberFldValue('BonusPrem', vRep.tSS.BonusPrem);
+      pXL.SetTblNumberFldValue('BonusSekr', vRep.tSS.BonusSekr);
+      pXL.SetTblNumberFldValue('Total'    , vRep.tSS.Salary + vRep.tSS.BonusVred + vRep.tSS.BonusPrem + vRep.tSS.BonusSekr);
+      pXL.SetTblStringFldValue('Comments' , '');
+      pXL.SetTblNumberFldValue('NPP'      , npp++);
+      pXL.InsTblRow;
+    }
+
+    var m: TPtr = InitMarker('', 8, 50, 10, false);
+
+    vRep._loop tCatSSChild
+      InsertMarker(m, vRep.tCatSSChild.Nrec);
+
+    var i: longint = 0;
+    var c: comp = 0;
+    for(i := 0; GetMarker(m, i, c); i++)
+      PrintXlsNode(c, wLevel + 1);
+
+    DoneMarker(m, '');
+  }
+
+  set vRep._cCatSS := cCatStaffStruct;
+  if vRep.getfirst tCatSS = tsOk
+  {
+    if vRep.getfirst tTotals0 = tsOk
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Level'    , wLevel);
+      pXL.SetTblNumberFldValue('NPP'      , -1);
+      pXL.SetTblStringFldValue('PostName' , 'Итого по ' + vRep.tCatSS.Name);
+      pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals0.Qty);
+      pXL.SetTblNumberFldValue('Total'    , vRep.tTotals0.Sum);
+      pXL.InsTblRow;
+    }
+
+    vRep._loop tTotals1
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Level'    , wLevel);
+      pXL.SetTblNumberFldValue('NPP'      , -2);
+      pXL.SetTblStringFldValue('PostName' , 'В том числе ' + ShowKau(KODGRKAU_PODGR, vRep.tTotals1.cPodgr));
+      pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals1.Qty);
+      pXL.SetTblNumberFldValue('Total'    , vRep.tTotals1.Sum);
+      pXL.InsTblRow;
+
+      vRep._loop tTotals2
+      {
+        pXL.ClearTblBuffer;
+        pXL.SetTblNumberFldValue('Level'    , wLevel);
+        pXL.SetTblNumberFldValue('NPP'      , -3);
+        pXL.SetTblStringFldValue('PostName' , 'В т.ч. ' + ShowKau(KODGRKAU_CATEG, vRep.tTotals2.cCateg) +
+                                              ' ' + ShowKau(KODGRKAU_PODGR, vRep.tTotals2.cPodgr));
+        pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals2.Qty);
+        pXL.SetTblNumberFldValue('Total'    , vRep.tTotals2.Sum);
+        pXL.InsTblRow;
+      }
+
+    }
+
+  }
+
+}
+
+
+procedure PrintXlsReport(isCreateXLT: boolean; sXLTFileName: string);
+{
+  var sXLSFileName: string = if(isCreateXLT,
+                                pXL.CreateXLT(sXLTFileName, True),
+                                pXL.CreateReport(sXLTFileName, True));
+
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Level');
+  pXL.CreateTblFld('Npp');
+  pXL.CreateTblFld('SSName');
+  pXL.CreateTblFld('SSCode');
+  pXL.CreateTblFld('PostName');
+  pXL.CreateTblFld('Categ');
+  pXL.CreateTblFld('Podgr');
+  pXL.CreateTblFld('Qty');
+  pXL.CreateTblFld('Salary');
+  pXL.CreateTblFld('BonusVred');
+  pXL.CreateTblFld('BonusPrem');
+  pXL.CreateTblFld('BonusSekr');
+  pXL.CreateTblFld('Total');
+  pXL.CreateTblFld('Comments');
+
+  if not isCreateXLT
+    vRep._loop tCatSSTop
+      PrintXlsNode(vRep.tCatSSTop.Nrec);
+
+  pXL.PublishTbl('Main');
+
+  var totalQty: double = 0;
+  var totalSum: double = 0;
+  _loop tTotals where ((0 == tTotals.wType))
+  {
+    totalQty += tTotals.Qty;
+    totalSum += tTotals.Sum;
+  }
+
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('dRep', _date);
+  pXL.SetNumberVar('TotalQty', totalQty);
+  pXL.SetNumberVar('TotalSum', totalSum);
+  pXL.PublishVar;
+
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+handleevent
+
+cmOk:
+{
+  StartNewVisual(vtRotateVisual, vfTimer, 'Формирование отчета', 0);
+  PrepareData;
+  PrintXlsReport(false, TranslatePath('%StartPath%xls\AG_SHR.xltm'));
+  StopVisual('', 0);
+}
+
+cmInit:
+{
+  if not ReadMyDsk(_date, 'ag_shr_date', false) _date := cur_date;
+}
+
+cmDone:
+{
+  SaveMyDsk(_date, 'ag_shr_date');
+}
+
+end;
+
+end.
+
+
+
+VipInterface UserReport_ag_shr Implements IUserReport licensed(free);
+Interface UserReport_ag_shr;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::ag_shr);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Штатное расписание';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'STAFFMAINMENU';
+    end;
+  end;
+end.

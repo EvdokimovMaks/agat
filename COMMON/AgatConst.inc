@@ -9,6 +9,8 @@ const
   KODGRKAU_KORPORATIVNIE_KARTI                  : word = 10880; //Корпоративные карты
   KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA           : word = 10695; //Режим использования счета
   KODGRKAU_IGK                                  : word = 10527; //2015 Идентификатор государственного контракта
+  KODGRKAU_PODGR                                : word = 10057; //Подгруппа персонала (НВП/ПТП/...)
+  KODGRKAU_CATEG                                : word = 10036; //Категории (руководители/специалисты/...)
 
   //внешние атрибуты для лицевых счетов
   ATTRNAM_NREC_LSCHET_KORPORATIVNAYA_KARTA : comp = 0001000000000F16h;
@@ -53,6 +55,10 @@ const
 
   //внешние атрибуты в каталоге банков организаций
   ATTRNAM_NREC_KATBANK_IGK                        : comp = 00010000000009BFh; //Идентификатор гос.контракта, ссылается на exclassseg
+
+  //внешние атрибуты в списке категорий
+  ATTRNAM_NREC_KLKATEGO_PODGR                     : comp = 0001000000001B5Bh; //Подгруппа персонала - пользовательская аналитика KODGRKAU_PODGR
+  ATTRNAM_NREC_KLKATEGO_CATEG                     : comp = 0001000000001B5Ch; //Категория персонала - пользовательская аналитика KODGRKAU_CATEG
 
   //предопределенные услуги
   KATUSL_NREC_SUTOCHNIE : comp = 00010000000003FEh; //Суточные
