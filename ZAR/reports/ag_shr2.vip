@@ -1,0 +1,425 @@
+//Отчет по штатному расписанию
+#include Query.vih
+#include CatFunc.vih
+#include UserReport.vih
+#include DeptIer.vih
+
+#component "AGAT"
+
+interface ag_shr2 'АГАТ. Штатное расписание 2' escclose;
+show(,,26,5);
+
+table struct tCatDep (
+  Nrec   : comp,
+  cParent: comp,
+  Code   : string[100],
+  Name   : string
+) with index (
+  i00 = Nrec,
+  i01 = cParent + Code
+);
+
+table struct tSS (
+  cCatDep  : comp,
+  Podgr    : string[50],
+  Categ    : string[50],
+  Qty      : double,
+  Salary   : double
+) with index (
+  i01 = cCatDep + Podgr + Categ
+);
+
+var
+  _departIer: DepartIer;
+  _catFunc: CatalogsFunctions;
+  pXL: XLSRepBuilder;
+  _date: date;
+  _flags: comp;
+
+create view
+as select
+  tCatDep.Nrec
+from
+  tCatDep,
+  tSS
+;
+
+create view vRep
+var
+  _cCatDep: comp;
+  _cCatDepTop: comp;
+  _sCateg: string;
+  _sPodgr: string;
+as select
+  tSS.cCatDep
+from
+  tCatDep tCatDepTop,
+  tCatDep tCatDepChild,
+  tCatDep tCatDep,
+  tSS
+where ((
+  _cCatDepTop     == tCatDepTop.cParent   and
+  _cCatDep        == tCatDepChild.cParent and
+  _cCatDep        == tCatDep.Nrec         and
+  _cCatDep        == tSS.cCatDep          and
+  _sPodgr         == tSS.Podgr            and
+  _sCateg         == tSS.Categ
+));
+
+
+screen sc1;
+  fields
+    _date: noprotect;
+  buttons
+    cmOk, default;
+    cmCancel;
+<<
+
+`Дата отчета`.@@@@@@@@@@
+
+<.Продолжить.> <.Отмена.>
+>>
+end;
+
+
+//#region sql query qCatDep
+sql query qCatDep =
+  insert tCatDep (Nrec, cParent, Name, Code)
+  select
+    CatHist.cCat    as Nrec,
+    CatHist.cParent as cParent,
+    CatHist.Name    as Name,
+    Catalogs.Code   as Code
+  from
+    Catalogs
+    inner join (
+      select CatHist.cCat, max(CatHist.Dat1) MaxDate: date
+      from CatHist
+      where :dateSts >= CatHist.Dat1 and (CatHist.wFld1 <> 2 or #Date(0,0,0) = CatHist.Dat2 or :dateSts <= CatHist.Dat2)
+      group by CatHist.cCat
+    ) CatH1 on (Catalogs.NRec = CatH1.cCat)
+    inner join (
+      select CatHist.cCat, CatHist.Dat1, max(cast(CatHist.lastuser as integer)) MaxNpp
+      from CatHist
+      where :dateSts >= CatHist.Dat1 and (CatHist.wFld1 <> 2 or #Date(0,0,0) = CatHist.Dat2 or :dateSts <= CatHist.Dat2)
+      group by CatHist.cCat, CatHist.Dat1
+    ) CatH2 on (Catalogs.NRec = CatH2.cCat and CatH1.MaxDate = CatH2.Dat1)
+    inner join CatHist on (Catalogs.NRec = CatHist.cCat and CatH1.MaxDate = CatHist.Dat1 and CatH2.MaxNpp = cast(CatHist.lastuser as integer))
+  where
+    Catalogs.lPr = 0 and Catalogs.MainLink = (select NRec from Catalogs where :topEntry = SysCode) and
+    case :topEntry when -11 then 1 else 0 end <> CatHist.bMulti and
+    Catalogs.DatN <= :dateSts and (Catalogs.DatOk = 0 or Catalogs.DatOk >= :dateSts)
+;
+//#endregion sql query qCatDep
+
+//#region sql query qSS
+sql query qSS =
+  Select
+    tCatDep.Nrec                                     as cCatDep,
+    coalesce(spkPodgr.Name, '')                      as Podgr,
+    coalesce(spkCateg.Name, '') + case when coalesce(spkPodgr.Name, '') = 'ПТП' and coalesce(spkCateg.Name, '') = 'Рабочие'
+                                       then case when ss.PayModel = 20 then ' Сд.' else ' П.' end
+                                       else ''
+                                  end                as Categ,
+    sum(ssHist.hWorkStations)                        as Qty,
+    sum(ssHist.hTaxRate + coalesce(tRaise.Summa, 0)) as Salary
+  from
+    tCatDep
+  join StaffStruct ss
+    on ss.Department = tCatDep.Nrec and
+       ss.dInput <= :dateSts and
+       (ss.dClose = 0 or ss.dClose >= :dateSts )
+  join (Select StaffStr, max(wFld) as wFld
+        from HistoryStr
+        where dHist <= :dateSts
+        group by StaffStr) ssHistLast on ssHistLast.StaffStr = ss.Nrec
+  join HistoryStr ssHist
+    on ssHist.StaffStr = ss.Nrec and ssHist.wFld = ssHistLast.wFld and ssHist.hWorkStations > 0
+  left join KlKatego
+    on KlKatego.Nrec = ssHist.cSpr2
+  left join AttrVal avCateg
+    on avCateg.wTable = 16005 and        //coKlKatego
+       avCateg.cRec = KlKatego.Nrec and
+       avCateg.cAttrNam = :cAttrNamCateg //ATTRNAM_NREC_KLKATEGO_CATEG
+  left join SpKau spkCateg
+    on spkCateg.Nrec = avCateg.vComp
+  left join AttrVal avPodgr
+    on avPodgr.wTable = 16005 and        //coKlKatego
+       avPodgr.cRec = KlKatego.Nrec and
+       avPodgr.cAttrNam = :cAttrNamPodgr //ATTRNAM_NREC_KLKATEGO_PODGR
+  left join SpKau spkPodgr
+    on spkPodgr.Nrec = avPodgr.vComp
+  left join ( select
+                Str_RHist.cStaffStr,
+                sum(case when Str_RHist.wHAttr = 2 then ssHist.hTaxRate * Str_RHist.RHSum / 100 else Str_RHist.RHSum end) as Summa
+              from
+                Str_RHist
+              join RaiseStS
+                on RaiseStS.Nrec = Str_RHist.cRaiseStS
+              join Catalogs CatRaise
+                on CatRaise.Nrec = RaiseStS.RaiseType
+              join (Select StaffStr, max(wFld) as wFld
+                    from HistoryStr
+                    where dHist <= :dateSts
+                    group by StaffStr) ssHistLast on ssHistLast.StaffStr = Str_RHist.cStaffStr
+              join HistoryStr ssHist
+                on ssHist.StaffStr = Str_RHist.cStaffStr and ssHist.wFld = ssHistLast.wFld
+              where
+                Str_RHist.dRec <= :dateSts and (Str_RHist.dEnd = 0 or Str_RHist.dEnd >= :dateSts)
+              group by Str_RHist.cStaffStr
+            ) tRaise
+    on tRaise.cStaffStr = ss.Nrec
+  group by
+    tCatDep.Nrec,
+    coalesce(spkPodgr.Name, ''),
+    coalesce(spkCateg.Name, '') + case when coalesce(spkPodgr.Name, '') = 'ПТП' and coalesce(spkCateg.Name, '') = 'Рабочие'
+                                       then case when ss.PayModel = 20 then ' Сд.' else ' П.' end
+                                       else ''
+                                  end
+;
+//#endregion sql query qSS
+
+
+function CreateSqlTmpTables: integer;
+{
+  //Готовим sql таблицу tCatDep со структурными единицами ШР, действующими на дату _date
+  var s: longint = 0;
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table tCatDep (Nrec: comp, cParent: comp, Name: string, Code: string[100]);');
+  result := sqlCreateTmpTable(s, ctmNormal);
+  if result != tsOk exit;
+}
+
+
+procedure DropSqlTmpTables;
+{
+  //Дропаем созданные sql таблицы
+  sqlDropTmpTable('tCatDep');
+}
+
+
+procedure PrepareData;
+{
+  //Заполняем sql таблицу tCatDep действующими на дату _date структурными единицами ШР
+  var rslt: integer = queryManager.createQuery(qCatDep)
+                                  .setParam('dateSts', _date)
+                                  .setParam('topEntry', -11)
+                                  .execute
+                                  .errorCode;
+  if rslt != tsOk { Message('Ошибка выборки структурных единиц ШР: ' + rslt, error); exit; }
+
+  //Заполняем таблицу tSS вакансиями ШР
+  var q: IQuery = queryManager.createQuery(qSS)
+                              .setParam('dateSts', _date)
+                              .setParam('cAttrNamCateg', ATTRNAM_NREC_KLKATEGO_CATEG)
+                              .setParam('cAttrNamPodgr', ATTRNAM_NREC_KLKATEGO_PODGR);
+  rslt := q.execute.errorCode;
+  if rslt != tsOk { Message('Ошибка выборки вакансий ШР: ' + rslt, error); exit; }
+  sqlCopyInto(q, tntSS, true);
+
+  //Заполняем временные таблицы интерфейса
+  mtClear(tntCatDep, mfNormal);
+  var q1: IQuery = queryManager.createQuery('select * from tCatDep').execute;
+  sqlCopyInto(q1, tntCatDep, true);
+}
+
+
+function RepGetQty(sPodgr: string; sCateg: string): double;
+{
+  vRep._sCateg := sCateg;
+  vRep._sPodgr := sPodgr;
+  if vRep.getfirst tSS = tsOk
+    result := vRep.tSS.Qty
+  else
+    result := 0;
+}
+
+
+function RepGetSum(sPodgr: string; sCateg: string): double;
+{
+  vRep._sCateg := sCateg;
+  vRep._sPodgr := sPodgr;
+  if vRep.getfirst tSS = tsOk
+    result := vRep.tSS.Salary
+  else
+    result := 0;
+}
+
+
+procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
+{
+  var wLevelTmp: word = wLevel;
+  //Вакансии по текущему узлу структурных единиц ШР
+  set vRep._cCatDep := cCatStaffStruct;
+  if vRep.getfirst tCatDep = tsOk
+  {
+    if vRep.getfirst tCatDepChild = tsOk
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Level'    , wLevelTmp);
+      pXL.SetTblNumberFldValue('Type'     , 1);
+      pXL.SetTblStringFldValue('DepCode'  , vRep.tCatDep.Code);
+      pXL.SetTblStringFldValue('DepName'  , vRep.tCatDep.Name + ' ИТОГО');
+      pXL.InsTblRow;
+      wLevelTmp++;
+    }
+
+    pXL.ClearTblBuffer;
+    pXL.SetTblNumberFldValue('Level'         , wLevelTmp);
+    pXL.SetTblNumberFldValue('Type'          , 0);
+    pXL.SetTblStringFldValue('DepCode'       , vRep.tCatDep.Code);
+    pXL.SetTblStringFldValue('DepName'       , vRep.tCatDep.Name);
+    pXL.SetTblNumberFldValue('Qty_PTP_Ruk'   , RepGetQty('ПТП', 'Руководители'));
+    pXL.SetTblNumberFldValue('Qty_PTP_Spc'   , RepGetQty('ПТП', 'Специалисты'));
+    pXL.SetTblNumberFldValue('Qty_PTP_Rab_Sd', RepGetQty('ПТП', 'Рабочие Сд.'));
+    pXL.SetTblNumberFldValue('Qty_PTP_Rab_P' , RepGetQty('ПТП', 'Рабочие П.'));
+    pXL.SetTblNumberFldValue('Qty_AUP_Ruk'   , RepGetQty('АУП', 'Руководители'));
+    pXL.SetTblNumberFldValue('Qty_AUP_Spc'   , RepGetQty('АУП', 'Специалисты'));
+    pXL.SetTblNumberFldValue('Qty_NVP_Ruk'   , RepGetQty('НВП', 'Руководители'));
+    pXL.SetTblNumberFldValue('Qty_NVP_Spc'   , RepGetQty('НВП', 'Специалисты'));
+    pXL.SetTblNumberFldValue('Qty_NVP_Rab'   , RepGetQty('НВП', 'Рабочие'));
+    pXL.SetTblNumberFldValue('Qty_NGR'       , RepGetQty('   ', ''));
+    pXL.SetTblNumberFldValue('Sum_PTP_Ruk'   , RepGetSum('ПТП', 'Руководители'));
+    pXL.SetTblNumberFldValue('Sum_PTP_Spc'   , RepGetSum('ПТП', 'Специалисты'));
+    pXL.SetTblNumberFldValue('Sum_PTP_Rab_Sd', RepGetSum('ПТП', 'Рабочие Сд.'));
+    pXL.SetTblNumberFldValue('Sum_PTP_Rab_P' , RepGetSum('ПТП', 'Рабочие П.'));
+    pXL.SetTblNumberFldValue('Sum_AUP_Ruk'   , RepGetSum('АУП', 'Руководители'));
+    pXL.SetTblNumberFldValue('Sum_AUP_Spc'   , RepGetSum('АУП', 'Специалисты'));
+    pXL.SetTblNumberFldValue('Sum_NVP_Ruk'   , RepGetSum('НВП', 'Руководители'));
+    pXL.SetTblNumberFldValue('Sum_NVP_Spc'   , RepGetSum('НВП', 'Специалисты'));
+    pXL.SetTblNumberFldValue('Sum_NVP_Rab'   , RepGetSum('НВП', 'Рабочие'));
+    pXL.SetTblNumberFldValue('Sum_NGR'       , RepGetSum('   ', ''));
+    pXL.InsTblRow;
+
+    //Записываем в маркер подчиненные узлы структурных единиц ШР
+    var m: TPtr = InitMarker('', 8, 50, 10, false);
+    vRep._loop tCatDepChild
+      InsertMarker(m, vRep.tCatDepChild.Nrec);
+    //Выводим данные по подчиненным структурным единицам ШР
+    var i: longint = 0;
+    var c: comp = 0;
+    for(i := 0; GetMarker(m, i, c); i++)
+      PrintXlsNode(c, wLevel + 1);
+    //Убиваем маркер
+    DoneMarker(m, '');
+  }
+
+}
+
+
+procedure PrintXlsReport(isCreateXLT: boolean; sXLTFileName: string);
+{
+  var sXLSFileName: string = if(isCreateXLT,
+                                pXL.CreateXLT(sXLTFileName, True),
+                                pXL.CreateReport(sXLTFileName, True));
+
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Level');
+  pXL.CreateTblFld('Type');
+  pXL.CreateTblFld('DepCode');
+  pXL.CreateTblFld('DepName');
+  pXL.CreateTblFld('Qty_PTP_Ruk');
+  pXL.CreateTblFld('Qty_PTP_Spc');
+  pXL.CreateTblFld('Qty_PTP_Rab_Sd');
+  pXL.CreateTblFld('Qty_PTP_Rab_P');
+  pXL.CreateTblFld('Qty_AUP_Ruk');
+  pXL.CreateTblFld('Qty_AUP_Spc');
+  pXL.CreateTblFld('Qty_NVP_Ruk');
+  pXL.CreateTblFld('Qty_NVP_Spc');
+  pXL.CreateTblFld('Qty_NVP_Rab');
+  pXL.CreateTblFld('Qty_NGR');
+  pXL.CreateTblFld('Sum_PTP_Ruk');
+  pXL.CreateTblFld('Sum_PTP_Spc');
+  pXL.CreateTblFld('Sum_PTP_Rab_Sd');
+  pXL.CreateTblFld('Sum_PTP_Rab_P');
+  pXL.CreateTblFld('Sum_AUP_Ruk');
+  pXL.CreateTblFld('Sum_AUP_Spc');
+  pXL.CreateTblFld('Sum_NVP_Ruk');
+  pXL.CreateTblFld('Sum_NVP_Spc');
+  pXL.CreateTblFld('Sum_NVP_Rab');
+  pXL.CreateTblFld('Sum_NGR');
+
+  if not isCreateXLT
+  {
+    vRep._cCatDepTop := _catFunc.GetCatalogsNRec(-11);
+    vRep._loop tCatDepTop
+      PrintXlsNode(vRep.tCatDepTop.Nrec);
+  }
+
+  pXL.PublishTbl('Main');
+
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('dRep', _date);
+  pXL.PublishVar;
+
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+handleevent
+
+cmOk:
+{
+  StartNewVisual(vtRotateVisual, vfTimer, 'Формирование отчета', 0);
+  var rslt: integer = CreateSqlTmpTables;
+  if rslt = tsOk
+  {
+    PrepareData;
+    PrintXlsReport(false, TranslatePath('%StartPath%xls\ag_shr2.xltm'));
+  }
+  else
+    Message('Ошибка создания временных таблиц: ' + rslt);
+  DropSqlTmpTables;
+  StopVisual('', 0);
+}
+
+cmInit:
+{
+  if not ReadMyDsk(_date, 'ag_shr2_date', false) _date := cur_date;
+  if not ReadMyDsk(_flags, 'ag_shr2_flags', false) _flags := 0;
+}
+
+cmDone:
+{
+  SaveMyDsk(_date, 'ag_shr2_date');
+  SaveMyDsk(_flags, 'ag_shr2_flags');
+}
+
+end;
+
+end.
+
+
+
+VipInterface UserReport_ag_shr2 Implements IUserReport licensed(free);
+Interface UserReport_ag_shr2;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::ag_shr2);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Штатное расписание 2';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'STAFFMAINMENU';
+    end;
+  end;
+end.
