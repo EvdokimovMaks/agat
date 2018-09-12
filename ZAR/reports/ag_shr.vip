@@ -7,7 +7,7 @@
 #component "AGAT"
 
 interface ag_shr 'АГАТ. Штатное расписание' escclose;
-show(,,26,5);
+show(,,26,7);
 
 table struct tCatDep (
   Nrec   : comp,
@@ -53,6 +53,7 @@ var
   _catFunc: CatalogsFunctions;
   pXL: XLSRepBuilder;
   _date: date;
+  _flags: comp;
 
 create view
 as select
@@ -77,6 +78,8 @@ from
   Catalogs CatPost,
   SpKau SpkPodgr,
   SpKau SpkCateg,
+  Appointments App,
+  Persons,
   tTotals tTotals0,
   tTotals tTotals1,
   tTotals tTotals2
@@ -88,6 +91,9 @@ where ((
   tSS.cPost       == CatPost.Nrec         and
   tSS.cPodgr      == spkPodgr.Nrec        and
   tSS.cCateg      == spkCateg.Nrec        and
+  tSS.cSS         == App.StaffStr         and
+  (App.AppointDate <= _date and (App.DismissDate = 0 or App.DismissDate >= _date)) and
+  App.Person      == Persons.Nrec         and
   0               == tTotals0.wType       and
   _cCatDep        == tTotals0.cCatDep     and
   1               == tTotals1.wType       and
@@ -101,12 +107,15 @@ where ((
 screen sc1;
   fields
     _date: noprotect;
+    _flags: noprotect;
   buttons
     cmOk, default;
     cmCancel;
 <<
 
 `Дата отчета`.@@@@@@@@@@
+
+  [.] Отображать сотрудников`
 
 <.Продолжить.> <.Отмена.>
 >>
@@ -168,7 +177,7 @@ sql query qSS =
         where dHist <= :dateSts
         group by StaffStr) ssHistLast on ssHistLast.StaffStr = ss.Nrec
   join HistoryStr ssHist
-    on ssHist.StaffStr = ss.Nrec and ssHist.wFld = ssHistLast.wFld
+    on ssHist.StaffStr = ss.Nrec and ssHist.wFld = ssHistLast.wFld and ssHist.hWorkStations > 0
   left join KlKatego
     on KlKatego.Nrec = ssHist.cSpr2
   left join AttrVal avCateg
@@ -380,7 +389,16 @@ procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
       pXL.SetTblNumberFldValue('BonusPrem', vRep.tSS.BonusPrem);
       pXL.SetTblNumberFldValue('BonusSekr', vRep.tSS.BonusSekr);
       pXL.SetTblNumberFldValue('Total'    , vRep.tSS.Salary + vRep.tSS.BonusVred + vRep.tSS.BonusPrem + vRep.tSS.BonusSekr);
-      pXL.SetTblStringFldValue('Comments' , '');
+      if (_flags and 1) = 1
+      {
+        var isFirstCommentStr: boolean = true;
+        vRep._loop App
+          if vRep.getfirst Persons = tsOk
+          {
+            pXL.AddTblStringFldValue('Comments', if(isFirstCommentStr, '', ''#13#10'') + GetSurnameWithInitials(vRep.Persons.FIO));
+            isFirstCommentStr := false;
+          }
+      }
       pXL.SetTblNumberFldValue('NPP'      , npp++);
       pXL.InsTblRow;
     }
@@ -513,11 +531,13 @@ cmOk:
 cmInit:
 {
   if not ReadMyDsk(_date, 'ag_shr_date', false) _date := cur_date;
+  if not ReadMyDsk(_flags, 'ag_shr_flags', false) _flags := 0;
 }
 
 cmDone:
 {
   SaveMyDsk(_date, 'ag_shr_date');
+  SaveMyDsk(_flags, 'ag_shr_flags');
 }
 
 end;
