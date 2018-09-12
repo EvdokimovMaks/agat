@@ -104,6 +104,41 @@ where ((
 ));
 
 
+create view vTotals
+var
+  _cCatDep: comp;
+as select
+  tCatDepChild.Nrec
+from
+  tCatDep tCatDepChild,
+  tTotals tTotalsChild,
+  tTotals tTotalsCur,
+  tTotals tTotals2,
+  tTotals tTotals1,
+  tTotals tTotals0
+where ((
+  vTotals._cCatDep    == tCatDepChild.cParent and
+
+  2                   == tTotalsChild.wType   and
+  tCatDepChild.Nrec   == tTotalsChild.cCatDep and
+
+  2                   == tTotalsCur.wType     and
+  vTotals._cCatDep    == tTotalsCur.cCatDep   and
+  tTotalsChild.cPodgr == tTotalsCur.cPodgr    and
+  tTotalsChild.cCateg == tTotalsCur.cCateg    and
+
+  2                   == tTotals2.wType       and
+  vTotals._cCatDep    == tTotals2.cCatDep     and
+
+  1                   == tTotals1.wType       and
+  vTotals._cCatDep    == tTotals1.cCatDep     and
+  tTotals2.cPodgr     == tTotals1.cPodgr      and
+
+  0                   == tTotals0.wType       and
+  vTotals._cCatDep    == tTotals0.cCatDep
+));
+
+
 screen sc1;
   fields
     _date: noprotect;
@@ -224,50 +259,19 @@ sql query qSS =
 
 //#region sql queries Totals
 sql query qTotals2 =
-  Insert tTotals(cCatDep, wType, cPodgr, cCateg, Qty, Sum)
   Select
     tSS.cCatDep,
-    2,
+    2 as wType,
     tSS.cPodgr,
     tSS.cCateg,
-    sum(tSS.Qty),
-    sum(tSS.Salary + tSS.BonusVred + tSS.BonusPrem + tSS.BonusSekr)
+    sum(tSS.Qty) as Qty,
+    sum(tSS.Salary + tSS.BonusVred + tSS.BonusPrem + tSS.BonusSekr) as Sum
   from
     tSS
   group by
     tSS.cCatDep,
     tSS.cPodgr,
     tSS.cCateg
-;
-sql query qTotals1 =
-  Insert tTotals(cCatDep, wType, cPodgr, Qty, Sum)
-  Select
-    tTotals.cCatDep,
-    1,
-    tTotals.cPodgr,
-    Sum(tTotals.Qty),
-    Sum(tTotals.Sum)
-  from
-    tTotals
-  where
-    tTotals.wType = 2
-  group by
-    tTotals.cCatDep,
-    tTotals.cPodgr
-;
-sql query qTotals0 =
-  Insert tTotals(cCatDep, wType, Qty, Sum)
-  Select
-    tTotals.cCatDep,
-    0,
-    Sum(tTotals.Qty),
-    Sum(tTotals.Sum)
-  from
-    tTotals
-  where
-    tTotals.wType = 1
-  group by
-    tTotals.cCatDep
 ;
 //#endregion sql queries Totals
 
@@ -322,6 +326,79 @@ procedure DropSqlTmpTables;
   sqlDropTmpTable('tTotals');
 }
 
+procedure CalcHierTotals(__cCatDep: comp);
+{
+  //Записываем в маркер нреки подчиненных подразделений
+  var m: TPtr = InitMarker('', 8, 50, 10, false);
+  vTotals._cCatDep := __cCatDep;
+  vTotals._loop tCatDepChild
+    InsertMarker(m, vTotals.tCatDepChild.Nrec);
+
+  //Подсчитываем итоги по подчиненным подразделениям
+  var i: longint = 0;
+  var c: comp = 0;
+  for(i := 0; GetMarker(m, i, c); i++)
+    CalcHierTotals(c);
+  DoneMarker(m, '');
+
+  //Подсчитываем итоги по текущему подразделению
+  vTotals._cCatDep := __cCatDep;
+  vTotals._loop tCatDepChild
+    vTotals._loop tTotalsChild
+      if vTotals.getFirst tTotalsCur != tsOk
+      {
+        vTotals.tTotalsCur.wType   := 2;
+        vTotals.tTotalsCur.cCatDep := __cCatDep;
+        vTotals.tTotalsCur.cPodgr  := vTotals.tTotalsChild.cPodgr;
+        vTotals.tTotalsCur.cCateg  := vTotals.tTotalsChild.cCateg;
+        vTotals.tTotalsCur.Qty     := vTotals.tTotalsChild.Qty;
+        vTotals.tTotalsCur.Sum     := vTotals.tTotalsChild.Sum;
+        vTotals.Insert current tTotalsCur;
+      }
+      else
+      {
+        vTotals.tTotalsCur.Qty += vTotals.tTotalsChild.Qty;
+        vTotals.tTotalsCur.Sum += vTotals.tTotalsChild.Sum;
+        vTotals.Update current tTotalsCur;
+      }
+
+  //Подсчитываем итоги по текущему подразделению в разрезах "подразделение/подгруппа", "подразделение в целом"
+  vTotals._loop tTotals2
+  {
+    if vTotals.getFirst tTotals1 != tsOk
+    {
+      vTotals.ClearBuffer(vTotals.tntTotals1);
+      vTotals.tTotals1.wType   := 1;
+      vTotals.tTotals1.cCatDep := vTotals.tTotals2.cCatDep;
+      vTotals.tTotals1.cPodgr  := vTotals.tTotals2.cPodgr;
+      vTotals.tTotals1.Qty     := vTotals.tTotals2.Qty;
+      vTotals.tTotals1.Sum     := vTotals.tTotals2.Sum;
+      vTotals.Insert current tTotals1;
+    }
+    else
+    {
+      vTotals.tTotals1.Qty     += vTotals.tTotals2.Qty;
+      vTotals.tTotals1.Sum     += vTotals.tTotals2.Sum;
+      vTotals.Update current tTotals1;
+    }
+    if vTotals.getFirst tTotals0 != tsOk
+    {
+      vTotals.ClearBuffer(vTotals.tntTotals0);
+      vTotals.tTotals0.wType   := 0;
+      vTotals.tTotals0.cCatDep := vTotals.tTotals2.cCatDep;
+      vTotals.tTotals0.Qty     := vTotals.tTotals2.Qty;
+      vTotals.tTotals0.Sum     := vTotals.tTotals2.Sum;
+      vTotals.Insert current tTotals0;
+    }
+    else
+    {
+      vTotals.tTotals0.Qty     += vTotals.tTotals2.Qty;
+      vTotals.tTotals0.Sum     += vTotals.tTotals2.Sum;
+      vTotals.Update current tTotals0;
+    }
+  }
+}
+
 procedure PrepareData;
 {
   //Заполняем sql таблицу tCatDep действующими на дату _date структурными единицами ШР
@@ -341,18 +418,6 @@ procedure PrepareData;
                       .errorCode;
   if rslt != tsOk { Message('Ошибка выборки вакансий ШР: ' + rslt, error); exit; }
 
-  //Заполняем sql таблицу tTotals итогами по категориям
-  rslt := queryManager.createQuery(qTotals2).execute.errorCode;
-  if rslt != tsOk { Message('Ошибка расчета итогов по категориям:' + rslt, error); exit; }
-
-  //Заполняем sql таблицу tTotals итогами по подгруппам
-  rslt := queryManager.createQuery(qTotals1).execute.errorCode;
-  if rslt != tsOk { Message('Ошибка расчета итогов по подгруппам:' + rslt, error); exit; }
-
-  //Заполняем sql таблицу tTotals итогами по подразделениям
-  rslt := queryManager.createQuery(qTotals0).execute.errorCode;
-  if rslt != tsOk { Message('Ошибка расчета итогов по структурным единицам ШР:' + rslt, error); exit; }
-
   //Заполняем временные таблицы интерфейса
   mtClear(tntCatDep, mfNormal);
   var q1: IQuery = queryManager.createQuery('select * from tCatDep').execute;
@@ -362,9 +427,18 @@ procedure PrepareData;
   var q2: IQuery = queryManager.createQuery('select * from tSS').execute;
   sqlCopyInto(q2, tntSS, true);
 
+  //Заполняем таблицу tTotals итогами без учета иерархии
   mtClear(tntTotals, mfNormal);
-  var q3: IQuery = queryManager.createQuery('select * from tTotals').execute;
-  sqlCopyInto(q3, tntTotals, true);
+  var q: IQuery = queryManager.createQuery(qTotals2);
+  rslt := q.execute.errorCode;
+  if rslt = tsOk
+    sqlCopyInto(q, tntTotals, true);
+  else
+    Message('Ошибка расчета итогов по категориям:' + rslt, error);
+  //Дополняем таблицу tTotals итогами с учетом иерархии
+  vRep._cCatDepTop := _catFunc.GetCatalogsNRec(-11);
+    vRep._loop tCatDepTop
+      CalcHierTotals(vRep.tCatDepTop.Nrec);
 }
 
 procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
@@ -374,33 +448,49 @@ procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
   if vRep.getfirst tCatDep = tsOk
   {
     var npp: longint = 1;
-    vRep._loop tSS
+
+    if vRep.getfirst tSS != tsOk
     {
-      pXL.ClearTblBuffer;
-      pXL.SetTblNumberFldValue('Level'    , wLevel);
-      pXL.SetTblStringFldValue('SSName'   , if(npp = 1, vRep.tCatDep.Name, ''));
-      pXL.SetTblStringFldValue('SSCode'   , if(npp = 1, vRep.tCatDep.Code, ''));
-      pXL.SetTblStringFldValue('PostName' , if(vRep.getfirst CatPost  = tsOk, vRep.CatPost.Name, ''));
-      pXL.SetTblStringFldValue('Categ'    , if(vRep.getfirst SpkCateg = tsOk, vRep.SpkCateg.Name, ''));
-      pXL.SetTblStringFldValue('Podgr'    , if(vRep.getfirst SpkPodgr = tsOk, vRep.SpkPodgr.Name, ''));
-      pXL.SetTblNumberFldValue('Qty'      , vRep.tSS.Qty);
-      pXL.SetTblNumberFldValue('Salary'   , vRep.tSS.Salary);
-      pXL.SetTblNumberFldValue('BonusVred', vRep.tSS.BonusVred);
-      pXL.SetTblNumberFldValue('BonusPrem', vRep.tSS.BonusPrem);
-      pXL.SetTblNumberFldValue('BonusSekr', vRep.tSS.BonusSekr);
-      pXL.SetTblNumberFldValue('Total'    , vRep.tSS.Salary + vRep.tSS.BonusVred + vRep.tSS.BonusPrem + vRep.tSS.BonusSekr);
-      if (_flags and 1) = 1
+      if vRep.getfirst tTotals0 = tsOk
+        if vRep.tTotals0.Qty > 0
+        {
+          pXL.ClearTblBuffer;
+          pXL.SetTblNumberFldValue('Level'    , wLevel);
+          pXL.SetTblStringFldValue('SSName'   , vRep.tCatDep.Name);
+          pXL.SetTblNumberFldValue('NPP'      , npp++);
+          pXL.InsTblRow;
+        }
+    }
+    else
+    {
+      vRep._loop tSS
       {
-        var isFirstCommentStr: boolean = true;
-        vRep._loop App
-          if vRep.getfirst Persons = tsOk
-          {
-            pXL.AddTblStringFldValue('Comments', if(isFirstCommentStr, '', ''#13#10'') + GetSurnameWithInitials(vRep.Persons.FIO));
-            isFirstCommentStr := false;
-          }
+        pXL.ClearTblBuffer;
+        pXL.SetTblNumberFldValue('Level'    , wLevel);
+        pXL.SetTblStringFldValue('SSName'   , if(npp = 1, vRep.tCatDep.Name, ''));
+        pXL.SetTblStringFldValue('SSCode'   , if(npp = 1, vRep.tCatDep.Code, ''));
+        pXL.SetTblStringFldValue('PostName' , if(vRep.getfirst CatPost  = tsOk, vRep.CatPost.Name, ''));
+        pXL.SetTblStringFldValue('Categ'    , if(vRep.getfirst SpkCateg = tsOk, vRep.SpkCateg.Name, ''));
+        pXL.SetTblStringFldValue('Podgr'    , if(vRep.getfirst SpkPodgr = tsOk, vRep.SpkPodgr.Name, ''));
+        pXL.SetTblNumberFldValue('Qty'      , vRep.tSS.Qty);
+        pXL.SetTblNumberFldValue('Salary'   , vRep.tSS.Salary);
+        pXL.SetTblNumberFldValue('BonusVred', vRep.tSS.BonusVred);
+        pXL.SetTblNumberFldValue('BonusPrem', vRep.tSS.BonusPrem);
+        pXL.SetTblNumberFldValue('BonusSekr', vRep.tSS.BonusSekr);
+        pXL.SetTblNumberFldValue('Total'    , vRep.tSS.Salary + vRep.tSS.BonusVred + vRep.tSS.BonusPrem + vRep.tSS.BonusSekr);
+        if (_flags and 1) = 1
+        {
+          var isFirstCommentStr: boolean = true;
+          vRep._loop App
+            if vRep.getfirst Persons = tsOk
+            {
+              pXL.AddTblStringFldValue('Comments', if(isFirstCommentStr, '', ''#13#10'') + GetSurnameWithInitials(vRep.Persons.FIO));
+              isFirstCommentStr := false;
+            }
+        }
+        pXL.SetTblNumberFldValue('NPP'      , npp++);
+        pXL.InsTblRow;
       }
-      pXL.SetTblNumberFldValue('NPP'      , npp++);
-      pXL.InsTblRow;
     }
 
     //Записываем в маркер подчиненные узлы структурных единиц ШР
