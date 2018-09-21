@@ -1,0 +1,165 @@
+//Синхронизация цен в спецификации ДО с ценами в спецификации доп.соглашения/договора
+
+#include MyVSchetB.vih
+
+#component "M_MNPLAN"
+
+VipInterface Algoritm_5124 Implements oAlgoritm_Sys;
+Interface Algoritm_5124;
+
+table struct tSpStep (
+  Nrec     : comp,
+  dNewPrice: double,
+  wMode    : word,
+  sComment : string
+) with index (
+  i01 = Nrec
+);
+
+var
+  _setSpStepPrice: ISetSpStepPrice;
+
+create view
+var
+  _basedocNrec: comp;
+as select
+  BaseDoc.Nrec
+from
+  BaseDoc
+ ,StepDoc
+ ,SpStep
+ ,SpDocs
+ ,tSpStep
+where ((
+  _basedocNrec   == BaseDoc.Nrec     and
+  BaseDoc.Nrec   == StepDoc.cBaseDoc and
+  StepDoc.Nrec   == SpStep.cStepDoc  and
+  SpStep.cSpDocs == SpDocs.Nrec      and
+  SpStep.Nrec    == tSpStep.Nrec
+));
+
+window wRslt 'Корректировка цен в ДО' escClose;
+  browse br1;
+    show(,,,19);
+    table SpStep;
+    fields
+      {Font={Bold=(tSpStep.wMode = 1);}};
+      SpStep.npp '№': [5], protect, noautosize;
+      ShowKau(if(SpStep.PrMc = 1, cgKau_KatMc, cgKau_KatUsl), SpStep.cMcUsl) 'Матценность / услуга': [30], protect;
+      SpStep.KolSkl 'Количество':[12,3], protect;
+      SpStep.Price 'Цена в ДО': [12,'\2p[|-]3666`666`666`666.88'], protect;
+      tSpStep.dNewPrice 'Новая цена': [12,'\2p[|-]3666`666`666`666.88'], protect;
+      tSpStep.sComment 'Комментарий': [40], protect;
+  end;
+  screen sc1;
+    show(,20,,) fixed_y;
+    buttons
+      cmOk;
+      cmCancel;
+<<
+
+                                                     <.Установить новые цены.> <.Отмена.>
+>>
+  end;
+  handleevent
+    cmOk:
+    {
+      _loop SpStep
+        if getfirst tSpStep = tsOk
+        {
+          if tSpStep.wMode = 0 continue;
+          _setSpStepPrice.SetSpStepPrice(BaseDoc.Nrec, SpStep.Nrec, tSpStep.dNewPrice);
+        }
+      CloseWindowEx(wRslt, cmDefault);
+    }
+  end;
+end;
+
+Function RunInter(wflag: word; var pt: TRecAcc): boolean;
+{
+  result := false;
+  wflag := wflag;
+
+  _baseDocNrec := pt.cpNrec;
+  if getfirst BaseDoc != tsOk
+  {
+    Message('Не найден ДО Nrec = ' + String(_baseDocNrec, 0, 0), error);
+    exit;
+  }
+
+  case BaseDoc.VidDoc of
+    101: GetVipRef(_setSpStepPrice, 'L_BASEDOC::myVschetB');
+    111: GetVipRef(_setSpStepPrice, 'L_BASEDOC::myVschetPB');
+    else
+    {
+      Message('Данный тип документов не поддерживается');
+      exit;
+    }
+  end;
+
+  if NullVipRef(_setSpStepPrice)
+  {
+    Message('Ошибка инициализации пересчета цен', error);
+    exit;
+  }
+
+  mtClear(tntSpStep, mfNormal);
+  if getfirst StepDoc = tsOk
+    _loop SpStep
+    {
+      ClearBuffer(tntSpStep);
+      if getfirst SpDocs = tsOk
+      {
+        tSpStep.dNewPrice := SpDocs.Price;
+        tSpStep.wMode     := if(tSpStep.dNewPrice = SpStep.Price, 0, 1);
+        tSpStep.sComment  := if(tSpStep.dNewPrice = SpStep.Price,
+                                'Цены в договоре и в ДО одинаковы. Цена не будет изменена.',
+                                'Цена будет изменена');
+      }
+      else
+      {
+        tSpStep.dNewPrice := SpStep.Price;
+        tSpStep.sComment := 'Нет ссылки на позицию договора. Цена не будет изменена.';
+      }
+      insert current tSpStep;
+    }
+  RunWindowModal(wRslt);
+  result := true;
+}
+
+function InitInter(var pt: TRecAcc): boolean;
+{
+  pt.cFormpl := pt.cFormpl;
+
+  result := true;
+}
+
+Function DoneInter(var pt: TRecAcc): boolean;
+{
+  pt.Position := pt.Position;
+  DoneInter := true;
+}
+
+function GetNum: word;
+{
+  GetNum := 5124;
+}
+
+function GetName: string; {
+  GetName := 'АГАТ. Синхронизация цен в спецификации ДО с ценами в спецификации доп.соглашения/договора';
+}
+
+function GetMemo (st:oSteckCommonString): boolean; {
+  GetMemo := true;
+  st.push(string(''));
+}
+
+function GetNameInter: string; {
+  GetNameInter := 'Algoritm_5124' ;
+}
+
+function GetNameInterPr: string; {
+  GetNameInterPr := 'AlgoritmSetup_5124' ;
+}
+
+end.
