@@ -22,6 +22,7 @@ var
 create view
 var
   _basedocNrec: comp;
+  _dogovorNrec: comp;
 as select
   BaseDoc.Nrec
 from
@@ -29,12 +30,21 @@ from
  ,StepDoc
  ,SpStep
  ,SpDocs
+ ,Dogovor
+ ,SpDocs SpDocs1
  ,tSpStep
 where ((
   _basedocNrec   == BaseDoc.Nrec     and
   BaseDoc.Nrec   == StepDoc.cBaseDoc and
   StepDoc.Nrec   == SpStep.cStepDoc  and
   SpStep.cSpDocs == SpDocs.Nrec      and
+  _dogovorNrec   == Dogovor.Nrec     and
+
+  Dogovor.TiDk   == SpDocs1.TiDk     and
+  Dogovor.Nrec   == SpDocs1.cDoc     and
+  SpStep.PrMc    == SpDocs1.PrMc     and
+  (SpDocs1.cMcUsl = SpStep.cMcUsl)   and
+
   SpStep.Nrec    == tSpStep.Nrec
 ));
 
@@ -103,24 +113,57 @@ Function RunInter(wflag: word; var pt: TRecAcc): boolean;
     exit;
   }
 
+  var isSpDocsFound: byte;
+
   mtClear(tntSpStep, mfNormal);
   if getfirst StepDoc = tsOk
     _loop SpStep
     {
+      isSpDocsFound := 0;
       ClearBuffer(tntSpStep);
+
       if getfirst SpDocs = tsOk
       {
         tSpStep.dNewPrice := SpDocs.Price;
-        tSpStep.wMode     := if(tSpStep.dNewPrice = SpStep.Price, 0, 1);
-        tSpStep.sComment  := if(tSpStep.dNewPrice = SpStep.Price,
-                                'Цены в договоре и в ДО одинаковы. Цена не будет изменена.',
-                                'Цена будет изменена');
+        isSpDocsFound := 1;
       }
       else
       {
-        tSpStep.dNewPrice := SpStep.Price;
-        tSpStep.sComment := 'Нет ссылки на позицию договора. Цена не будет изменена.';
+        _dogovorNrec := if(BaseDoc.cAppDogovor != 0, BaseDoc.cAppDogovor, BaseDoc.cDogovor);
+        if getfirst Dogovor = tsOk
+        {
+          _loop SpDocs1
+          {
+            if tSpStep.dNewPrice != 0 and tSpStep.dNewPrice = SpStep.Price
+            {
+              isSpDocsFound := 2;
+              break;
+            }
+            tSpStep.dNewPrice := SpStep.Price;
+            isSpDocsFound := 1;
+          }
+        }
       }
+
+      case isSpDocsFound of
+        0:
+        {
+          tSpStep.dNewPrice := SpStep.Price;
+          tSpStep.sComment  := 'Не найдена позиция договора. Цена не будет изменена.';
+        }
+        1:
+        {
+          tSpStep.wMode     := if(tSpStep.dNewPrice = SpStep.Price, 0, 1);
+          tSpStep.sComment  := if(tSpStep.dNewPrice = SpStep.Price,
+                                  'Цены в договоре и в ДО одинаковы. Цена не будет изменена.',
+                                  'Цена будет изменена');
+        }
+        2:
+        {
+          tSpStep.dNewPrice := SpStep.Price;
+          tSpStep.sComment  := 'В договоре две(или более) позиции с такой МЦ/услугой и разной ценой. Цена не будет изменена.';
+        }
+      end;
       insert current tSpStep;
     }
   RunWindowModal(wRslt);
