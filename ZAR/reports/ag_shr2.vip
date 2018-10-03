@@ -55,15 +55,18 @@ as select
 from
   tCatDep tCatDepTop,
   tCatDep tCatDepChild,
-  tCatDep tCatDep,
-  tSS
+  tCatDep,
+  tSS,
+  tSS tSS1
 where ((
   _cCatDepTop     == tCatDepTop.cParent   and
   _cCatDep        == tCatDepChild.cParent and
   _cCatDep        == tCatDep.Nrec         and
   _cCatDep        == tSS.cCatDep          and
   _sPodgr         == tSS.Podgr            and
-  _sCateg         == tSS.Categ
+  _sCateg         == tSS.Categ            and
+  _cCatDep        == tSS1.cCatDep         and
+  (tSS1.Qty <> 0 or tSS1.Salary <> 0)
 ));
 
 
@@ -109,6 +112,16 @@ sql query qCatDep =
     Catalogs.lPr = 0 and Catalogs.MainLink = (select NRec from Catalogs where :topEntry = SysCode) and
     case :topEntry when -11 then 1 else 0 end <> CatHist.bMulti and
     Catalogs.DatN <= :dateSts and (Catalogs.DatOk = 0 or Catalogs.DatOk >= :dateSts)
+  union all
+    select
+      Catalogs.Nrec        as Nrec,
+      #comp(0)             as cParent,
+      'Штатное расписание' as Name,
+      'ШР'                 as Code
+    from
+      Catalogs
+    where
+      Catalogs.SysCode = :topEntry
 ;
 //#endregion sql query qCatDep
 
@@ -122,7 +135,7 @@ sql query qSS =
                                        else ''
                                   end                as Categ,
     sum(ssHist.hWorkStations)                        as Qty,
-    sum(ssHist.hTaxRate + coalesce(tRaise.Summa, 0)) as Salary
+    sum((ssHist.hTaxRate + coalesce(tRaise.Summa, 0)) * ssHist.hWorkStations)  as Salary
   from
     tCatDep
   join StaffStruct ss
@@ -264,32 +277,35 @@ procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
       wLevelTmp++;
     }
 
-    pXL.ClearTblBuffer;
-    pXL.SetTblNumberFldValue('Level'         , wLevelTmp);
-    pXL.SetTblNumberFldValue('Type'          , 0);
-    pXL.SetTblStringFldValue('DepCode'       , vRep.tCatDep.Code);
-    pXL.SetTblStringFldValue('DepName'       , vRep.tCatDep.Name);
-    pXL.SetTblNumberFldValue('Qty_PTP_Ruk'   , RepGetQty('ПТП', 'Руководители'));
-    pXL.SetTblNumberFldValue('Qty_PTP_Spc'   , RepGetQty('ПТП', 'Специалисты'));
-    pXL.SetTblNumberFldValue('Qty_PTP_Rab_Sd', RepGetQty('ПТП', 'Рабочие Сд.'));
-    pXL.SetTblNumberFldValue('Qty_PTP_Rab_P' , RepGetQty('ПТП', 'Рабочие П.'));
-    pXL.SetTblNumberFldValue('Qty_AUP_Ruk'   , RepGetQty('АУП', 'Руководители'));
-    pXL.SetTblNumberFldValue('Qty_AUP_Spc'   , RepGetQty('АУП', 'Специалисты'));
-    pXL.SetTblNumberFldValue('Qty_NVP_Ruk'   , RepGetQty('НВП', 'Руководители'));
-    pXL.SetTblNumberFldValue('Qty_NVP_Spc'   , RepGetQty('НВП', 'Специалисты'));
-    pXL.SetTblNumberFldValue('Qty_NVP_Rab'   , RepGetQty('НВП', 'Рабочие'));
-    pXL.SetTblNumberFldValue('Qty_NGR'       , RepGetQty('   ', ''));
-    pXL.SetTblNumberFldValue('Sum_PTP_Ruk'   , RepGetSum('ПТП', 'Руководители'));
-    pXL.SetTblNumberFldValue('Sum_PTP_Spc'   , RepGetSum('ПТП', 'Специалисты'));
-    pXL.SetTblNumberFldValue('Sum_PTP_Rab_Sd', RepGetSum('ПТП', 'Рабочие Сд.'));
-    pXL.SetTblNumberFldValue('Sum_PTP_Rab_P' , RepGetSum('ПТП', 'Рабочие П.'));
-    pXL.SetTblNumberFldValue('Sum_AUP_Ruk'   , RepGetSum('АУП', 'Руководители'));
-    pXL.SetTblNumberFldValue('Sum_AUP_Spc'   , RepGetSum('АУП', 'Специалисты'));
-    pXL.SetTblNumberFldValue('Sum_NVP_Ruk'   , RepGetSum('НВП', 'Руководители'));
-    pXL.SetTblNumberFldValue('Sum_NVP_Spc'   , RepGetSum('НВП', 'Специалисты'));
-    pXL.SetTblNumberFldValue('Sum_NVP_Rab'   , RepGetSum('НВП', 'Рабочие'));
-    pXL.SetTblNumberFldValue('Sum_NGR'       , RepGetSum('   ', ''));
-    pXL.InsTblRow;
+    if vRep.getfirst tSS1 = tsOk
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Level'         , wLevelTmp);
+      pXL.SetTblNumberFldValue('Type'          , 0);
+      pXL.SetTblStringFldValue('DepCode'       , vRep.tCatDep.Code);
+      pXL.SetTblStringFldValue('DepName'       , vRep.tCatDep.Name);
+      pXL.SetTblNumberFldValue('Qty_PTP_Ruk'   , RepGetQty('ПТП', 'Руководители'));
+      pXL.SetTblNumberFldValue('Qty_PTP_Spc'   , RepGetQty('ПТП', 'Специалисты'));
+      pXL.SetTblNumberFldValue('Qty_PTP_Rab_Sd', RepGetQty('ПТП', 'Рабочие Сд.'));
+      pXL.SetTblNumberFldValue('Qty_PTP_Rab_P' , RepGetQty('ПТП', 'Рабочие П.'));
+      pXL.SetTblNumberFldValue('Qty_AUP_Ruk'   , RepGetQty('АУП', 'Руководители'));
+      pXL.SetTblNumberFldValue('Qty_AUP_Spc'   , RepGetQty('АУП', 'Специалисты'));
+      pXL.SetTblNumberFldValue('Qty_NVP_Ruk'   , RepGetQty('НВП', 'Руководители'));
+      pXL.SetTblNumberFldValue('Qty_NVP_Spc'   , RepGetQty('НВП', 'Специалисты'));
+      pXL.SetTblNumberFldValue('Qty_NVP_Rab'   , RepGetQty('НВП', 'Рабочие'));
+      pXL.SetTblNumberFldValue('Qty_NGR'       , RepGetQty('', ''));
+      pXL.SetTblNumberFldValue('Sum_PTP_Ruk'   , RepGetSum('ПТП', 'Руководители'));
+      pXL.SetTblNumberFldValue('Sum_PTP_Spc'   , RepGetSum('ПТП', 'Специалисты'));
+      pXL.SetTblNumberFldValue('Sum_PTP_Rab_Sd', RepGetSum('ПТП', 'Рабочие Сд.'));
+      pXL.SetTblNumberFldValue('Sum_PTP_Rab_P' , RepGetSum('ПТП', 'Рабочие П.'));
+      pXL.SetTblNumberFldValue('Sum_AUP_Ruk'   , RepGetSum('АУП', 'Руководители'));
+      pXL.SetTblNumberFldValue('Sum_AUP_Spc'   , RepGetSum('АУП', 'Специалисты'));
+      pXL.SetTblNumberFldValue('Sum_NVP_Ruk'   , RepGetSum('НВП', 'Руководители'));
+      pXL.SetTblNumberFldValue('Sum_NVP_Spc'   , RepGetSum('НВП', 'Специалисты'));
+      pXL.SetTblNumberFldValue('Sum_NVP_Rab'   , RepGetSum('НВП', 'Рабочие'));
+      pXL.SetTblNumberFldValue('Sum_NGR'       , RepGetSum('', ''));
+      pXL.InsTblRow;
+    }
 
     //Записываем в маркер подчиненные узлы структурных единиц ШР
     var m: TPtr = InitMarker('', 8, 50, 10, false);
@@ -342,7 +358,7 @@ procedure PrintXlsReport(isCreateXLT: boolean; sXLTFileName: string);
 
   if not isCreateXLT
   {
-    vRep._cCatDepTop := _catFunc.GetCatalogsNRec(-11);
+    vRep._cCatDepTop := 0; //_catFunc.GetCatalogsNRec(-11);
     vRep._loop tCatDepTop
       PrintXlsNode(vRep.tCatDepTop.Nrec);
   }
