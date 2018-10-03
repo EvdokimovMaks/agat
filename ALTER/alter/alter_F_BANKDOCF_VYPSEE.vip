@@ -10,6 +10,7 @@ overload
   Function CreateNewPlPor(sum: double; sumVal: double; NewNRec: comp): boolean;
   Function GetNumber(_TiDkGal, _TiDk: word; _Descr: TDescr; _DatVip : date; _NoDok: string): string;
   Function PlPor_FindByDateVipSum: boolean;
+  Function ObjVypSee.Init(_parCurDate: date; _parTipVip: word; _parMyBank: comp; _parNRecBDF: comp): boolean;
 end;
 
 extendformats scSeePlPor, brAllDocs;
@@ -31,6 +32,8 @@ create view
 as select
   if(IsValid(tnTmpPlPorExt), ShowKau(cgKau_BaseDoc, TmpPlPorExt.cBaseDoc), '') (fieldName=BaseDocFld)
 from tmpPlPorExt,
+     BaseDoc plporBaseDoc,
+     StepDoc plporStepDoc,
      soprhoz plporSoprhoz,
      schfact plporSchfact,
      basefin plporBasefin,
@@ -41,11 +44,31 @@ from tmpPlPorExt,
      ) tmpTotal
 where ((
   tmpPlPor.Nrec         == tmpPlPorExt.Nrec      and
+  tmpPlPorExt.cBaseDoc  == plporBaseDoc.Nrec     and
+  plporBaseDoc.Nrec     == plporStepDoc.cBaseDoc and
   plpor.tidk            == plporSoprhoz.tipdoc   and
   plpor.nrec            == plporSoprhoz.csoprdoc and
   plporSoprhoz.cschfact == plporSchfact.nrec     and
   plpor.nrec            == plporBasefin.cPlPor   and
   root                  == tmpPlPorMarked.Nrec   and (FoundMarker(markProcess, tmpPlPorMarked.Nrec))
+));
+
+create view vSetBD
+var
+  _cPlPor    : comp;
+  _cBaseDoc  : comp;
+  _bAsked    : boolean;
+  _bOverwrite: boolean;
+from
+  TmpPlPor
+ ,TmpPlPorExt
+ ,BaseDoc
+ ,StepDoc
+where ((
+      _cPlPor   == TmpPlPor.Nrec
+  and _cPlPor   == TmpPlPorExt.Nrec
+  and _cBaseDoc == BaseDoc.Nrec
+  and _cBaseDoc == StepDoc.cBaseDoc
 ));
 
 procedure RefreshMarkedSum;
@@ -77,6 +100,12 @@ Browse brAllDocs 'Все документы'('Просмотр документов банковской выписки', hcBan
 end;
 end;
 
+Function Init(_parCurDate: date; _parTipVip: word; _parMyBank: comp; _parNRecBDF: comp): boolean;
+{
+  result := Inherited::Init(_parCurDate, _parTipVip, _parMyBank, _parNRecBDF);
+  mtClear(tnTmpPlPorExt, mfNormal);
+}
+
 Function CreateNewPlPor(sum: double; sumVal: double; NewNRec: comp): boolean;
 {
   result := inherited::CreateNewPlPor(sum, sumVal, NewNRec);
@@ -90,6 +119,31 @@ Function CreateNewPlPor(sum: double; sumVal: double; NewNRec: comp): boolean;
       plpor.nodok := _plporHelper.GetNewPlporNumber(plpor.tidkgal, year(plpor.datvip));
       IsUpdateNeeded := True;
     }
+
+    if getfirst TmpPlPorExt = tsOk
+      if getfirst plporBaseDoc = tsOk
+      {
+        if getfirst plporStepDoc = tsOk
+        {
+          plpor.cStepDoc := plporStepDoc.Nrec;
+          IsUpdateNeeded := True;
+        }
+
+        var c: comp;
+        var s: string;
+
+        c := piExtAttr.coGetAttr(coBaseDoc, plporBaseDoc.Nrec, 'Исполнитель договора');
+        s := piExtAttr.sGetAttr (coBaseDoc, plporBaseDoc.Nrec, 'Исполнитель договора');
+        piExtAttr.coSetAttr(coPlPor, PlPor.Nrec, 'Исполнитель договора', c, s);
+
+        c := piExtAttr.coGetAttr(coBaseDoc, plporBaseDoc.Nrec, 'Объект строительства');
+        s := piExtAttr.sGetAttr (coBaseDoc, plporBaseDoc.Nrec, 'Объект строительства');
+        piExtAttr.coSetAttr(coPlPor, PlPor.Nrec, 'Объект строительства', c, s);
+
+        c := piExtAttr.coGetAttr(coBaseDoc, plporBaseDoc.Nrec, 'Статья ДДС');
+        s := piExtAttr.sGetAttr (coBaseDoc, plporBaseDoc.Nrec, 'Статья ДДС');
+        piExtAttr.coSetAttr(coPlPor, PlPor.Nrec, 'Статья ДДС', c, s);
+      }
 
     oExtAttr.sSetAttrId(9015, plpor.nrec, ATTRNAM_NREC_PLPOR_NOMER_V_BANKE, TmpPlPor.nodok);
 
@@ -189,10 +243,60 @@ Function PlPor_FindByDateVipSum: boolean;
 
 procedure SetBaseDoc(tmpPlPorNrec: comp; BaseDocNrec: comp);
 {
-  if getfirst TmpPlPorExt where ((tmpPlPorNrec == TmpPlPorExt.Nrec)) = tsOk
-    update current TmpPlPorExt set TmpPlPorExt.cBaseDoc := BaseDocNrec;
-  else
-    insert TmpPlPorExt set TmpPlPorExt.Nrec := tmpPlPorNrec, TmpPlPorExt.cBaseDoc := BaseDocNrec;
+  vSetBD._cPlPor := tmpPlPorNrec;
+  if vSetBD.getfirst TmpPlPor = tsOk
+  {
+    var bRazlOrg: boolean = false;
+    var bRazlSch: boolean = false;
+
+    vSetBD._cBaseDoc := BaseDocNrec;
+    if vSetBD.getfirst BaseDoc = tsOk
+    {
+      bRazlOrg := if(isKontragentPol(vSetBD.TmpPlPor.TiDkGal, vSetBD.TmpPlPor.Priznak),
+                     vSetBD.BaseDoc.cOrg != vSetBD.TmpPlPor.cPol,
+                     vSetBD.BaseDoc.cOrg != vSetBD.TmpPlPor.cPlat);
+
+      bRazlSch := if(isKontragentPol(vSetBD.TmpPlPor.TiDkGal, vSetBD.TmpPlPor.Priznak),
+                     vSetBD.BaseDoc.cBank != vSetBD.TmpPlPor.cBankPol,
+                     vSetBD.BaseDoc.cBank != vSetBD.TmpPlPor.cBankPlat);
+    }
+
+    if (bRazlOrg or bRazlSch) and (not vSetBD._bAsked)
+    {
+      vSetBD._bAsked := true;
+      vSetBD._bOverwrite := Message('Разные Контрагент/Cчет в ДО и платежных документах.'#13 +
+                                    'Установить в платежные документы Контрагент/Счет из ДО?', YesNo) = cmYes;
+    }
+
+    if vSetBD.getfirst TmpPlPorExt != tsOk
+    {
+      vSetBD.ClearBuffer(vSetBD.tnTmpPlPorExt);
+      vSetBD.TmpPlPorExt.Nrec := tmpPlPorNrec;
+      vSetBD.TmpPlPorExt.cBaseDoc := BaseDocNrec;
+      vSetBD.insert current TmpPlPorExt;
+    }
+    else
+    {
+      vSetBD.TmpPlPorExt.cBaseDoc := BaseDocNrec;
+      vSetBD.update current TmpPlPorExt;
+    }
+
+    if (bRazlOrg or bRazlSch) and vSetBD._bOverwrite
+    {
+      if isKontragentPol(vSetBD.TmpPlPor.TiDkGal, vSetBD.TmpPlPor.Priznak)
+      {
+        vSetBD.TmpPlPor.cPol := vSetBD.BaseDoc.cOrg;
+        vSetBD.TmpPlPor.cBankPol := vSetBD.BaseDoc.cBank;
+      }
+      else
+      {
+        vSetBD.TmpPlPor.cPlat := vSetBD.BaseDoc.cOrg;
+        vSetBD.TmpPlPor.cBankPlat := vSetBD.BaseDoc.cBank;
+      }
+      vSetBD.Update current TmpPlPor;
+    }
+
+  }
 }
 
 tableevent table TmpPlPor;
@@ -202,8 +306,10 @@ tableevent table TmpPlPor;
       #BaseDocFld:
       {
         var c: comp = 0;
-        if _bfManager.Get_BaseDoc(false, tmpPlPor.Priznak, if(tmpPlPor.Priznak = 1, 101, 201), c, 0, 0, 0)
+        if _bfManager.Get_BaseDoc(false, tmpPlPor.Priznak, if(tmpPlPor.Priznak = 1, 101, 201), c, 0,
+          if(isKontragentPol(TmpPlPor.TiDkGal, TmpPlPor.Priznak), TmpPlPor.cPol, TmpPlPor.cPlat), 0)
         {
+          vSetBD._bAsked := false;
           if GetMarkerCount(markProcess) = 0
             SetBaseDoc(TmpPlPor.Nrec, c);
           else
