@@ -1,6 +1,7 @@
 #include PlporHelper.vih
 #include Query.vih
 #include BFManager.vih
+#include SchFactFunctions.vih
 
 #component "F_BANKDOCF"
 
@@ -27,6 +28,8 @@ var
   _qFindPlpor: IQuery;
   _bfManager: BFManager;
   _markedSum: double;
+  _SFFunc: VISchFunc;
+  _mSF: TPtr;
 
 create view
 as select
@@ -35,6 +38,11 @@ from tmpPlPorExt,
      BaseDoc plporBaseDoc,
      StepDoc plporStepDoc,
      soprhoz plporSoprhoz,
+     stepdoc soprhozStepDoc1,
+     spstep  soprhozSpStep1,
+     basedoc soprhozBaseDoc2,
+     stepdoc soprhozStepDoc2,
+     spstep  soprhozSpStep2,
      schfact plporSchfact,
      basefin plporBasefin,
      tmpPlPor tmpPlPorMarked,
@@ -48,6 +56,14 @@ where ((
   plporBaseDoc.Nrec     == plporStepDoc.cBaseDoc and
   plpor.tidk            == plporSoprhoz.tipdoc   and
   plpor.nrec            == plporSoprhoz.csoprdoc and
+
+  plporSoprHoz.cStepDoc == soprhozStepDoc1.Nrec    and
+  soprhozStepDoc1.Nrec  == soprhozSpStep1.cStepDoc and
+
+  plporSoprHoz.cPredoplDO == soprhozBaseDoc2.Nrec     and
+  soprhozBaseDoc2.Nrec    == soprhozStepDoc2.cBaseDoc and
+  soprhozStepDoc2.Nrec    == soprhozSpStep2.cStepDoc and
+
   plporSoprhoz.cschfact == plporSchfact.nrec     and
   plpor.nrec            == plporBasefin.cPlPor   and
   root                  == tmpPlPorMarked.Nrec   and (FoundMarker(markProcess, tmpPlPorMarked.Nrec))
@@ -81,7 +97,7 @@ procedure RefreshMarkedSum;
 Panel panButtons;
 Screen scSeePlPor '' ('', hcBankdSVypisWork, sci1EnEsc);
 fields
-  _markedSum: ['[|-]3666`666`666`666`666.88'], Skip;
+  _markedSum: ['\2p[|-]3666`666`666`666`666.88'], Skip;
 buttons
   cmUpdateTotals, [singleline];
 <<
@@ -104,6 +120,12 @@ Function Init(_parCurDate: date; _parTipVip: word; _parMyBank: comp; _parNRecBDF
 {
   result := Inherited::Init(_parCurDate, _parTipVip, _parMyBank, _parNRecBDF);
   mtClear(tnTmpPlPorExt, mfNormal);
+}
+
+Function IsProcentPoSdelkam(wPrMc: word; ccMcUsl: comp): boolean;
+{
+  //Проценты по сделкам, на остаток на счете,Проценты за использован.чужими ден. средствами,Проценты по предоставленному займу
+  result := wPrMc = 2 and (ccMcUsl = 000100000000036Bh or ccMcUsl = 0001000000000339h or ccMcUsl = 00010000000001D7h);
 }
 
 Function CreateNewPlPor(sum: double; sumVal: double; NewNRec: comp): boolean;
@@ -166,20 +188,31 @@ Function CreateNewPlPor(sum: double; sumVal: double; NewNRec: comp): boolean;
     if IsUpdateNeeded
       update current PlPor;
 
-    _loop plporSoprhoz
-    {
-      if getfirst plporSchfact = tsOk
-      {
-        if delete current plporSchfact = tsOk
-          update current plporSoprhoz set plporSoprhoz.cschfact := 0;
-      }
-    }
-
     if (getfirst plporBaseFin = tsOk) and IsValid(tnTmpPlPorExt) and TmpPlPorExt.cBaseDoc != 0
     {
       _bfManager.BaseDoc2BaseFin(plporBaseFin.Nrec, TmpPlPorExt.cBaseDoc, false, true);
     }
 
+    _loop plporSoprhoz
+    {
+      var bDelSchF: boolean = false;
+
+      if getfirst soprhozStepDoc1 = tsOk
+        _loop soprhozSpStep1
+          if IsProcentPoSdelkam(soprhozSpStep1.PrMc, soprhozSpStep1.cMcUsl)
+            bDelSchF := true;
+
+      if not bDelSchF
+        _loop soprhozBaseDoc2
+          _loop soprhozStepDoc2
+            _loop soprhozSpStep2
+              if IsProcentPoSdelkam(soprhozSpStep2.PrMc, soprhozSpStep2.cMcUsl)
+                bDelSchF := true;
+
+      if bDelSchF
+        _loop plporSchfact
+          InsertMarker(_mSF, plporSchFact.Nrec);
+    }
   }
 
 }
@@ -328,6 +361,15 @@ end;
 
 
 handleevent
+
+cmValue8:
+{
+  _mSF:= InitMarker('', 8, 10, 10, true);
+  inherited::handleevent(cmValue8);
+  if GetMarkerCount(_mSF) > 0
+    _SFFunc.DoPacket(1, _mSF, true);
+  DoneMarker(_mSF, '');
+}
 
 cmIdle:
 {
