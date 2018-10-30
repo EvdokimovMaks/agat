@@ -16,8 +16,8 @@ const
   ATTRNAM_NREC_LSCHET_KORPORATIVNAYA_KARTA : comp = 0001000000000F16h;
 
   //внешние атрибуты для приказов на командировки
-  ATTRNAM_NREC_PRIKAZ_ZAKAZ_ZATRAT         : comp = 0001000000000F17h; //Заказ затрат - ссылка на системную аналитику Заказ
-  ATTRNAM_NREC_PRIKAZ_VID_RASHODOV         : comp = 0001000000000F18h; //Вид расходов - ссылка на польз. аналитику KODGRKAU_VID_RASHODOV_PRIKAZA_NA_KOMANDIROVKU
+  ATTRNAM_NREC_PRIKAZ_ZAKAZ_ZATRAT                : comp = 0001000000000F17h; //Заказ затрат - ссылка на системную аналитику Заказ
+  ATTRNAM_NREC_PRIKAZ_VID_RASHODOV                : comp = 0001000000000F18h; //Вид расходов - ссылка на польз. аналитику KODGRKAU_VID_RASHODOV_PRIKAZA_NA_KOMANDIROVKU
 
   //внешние атрибуты для расшифровки командировок, АО, РКО
   ATTRNAM_NREC_RASHDOC_RS_SPISANIYA               : comp = 0001000000000F19h; //Расчетный счет списания - ссылка на пользовательскую аналитику KODGRKAU_RS
@@ -26,6 +26,10 @@ const
   ATTRNAM_NREC_RASHDOC_STATYA_STRUKTURI_CENI      : comp = 0001000000000F1Ch; //Статья структуры цены - ссылка на системную аналитику Статьи затрат объектов строительства
   ATTRNAM_NREC_RASHDOC_KONTRAGENT                 : comp = 0001000000000F1Dh; //Контрагент - ссылка на системную аналитику Организации
   ATTRNAM_NREC_RASHDOC_DOGOVOR                    : comp = 0001000000000F1Eh; //Договор контрагента - ссылка на системную аналитику Договоры
+
+  //внешние атрибуты для договора
+  ATTRNAM_NREC_DOGOVOR_STZ                        : comp = 00010000000000B3h; //Статья расходов (коммерческих, накладных) - ссылка на пользовательскую аналитику
+
 
   //внешние атрибуты для ДО
   ATTRNAM_NREC_BASEDOC_ISPOLNITEL_DOGOVORA        : comp = 000100000000005Bh; //Исполнитель договора - ссылка на подразделение
@@ -61,21 +65,21 @@ const
   ATTRNAM_NREC_KLKATEGO_CATEG                     : comp = 0001000000001B5Ch; //Категория персонала - пользовательская аналитика KODGRKAU_CATEG
 
   //предопределенные услуги
-  KATUSL_NREC_SUTOCHNIE : comp = 00010000000003FEh; //Суточные
+  KATUSL_NREC_SUTOCHNIE                           : comp = 00010000000003FEh; //Суточные
 
   //целевой учет
-  SALDTUNE_NREC_DEFAULT : comp = 0001000000000001h; //Настройка целевого учета по умолчанию
+  SALDTUNE_NREC_DEFAULT                           : comp = 0001000000000001h; //Настройка целевого учета по умолчанию
 
   //статусы ДО
-  KATNOTES_NREC_BASEDOC_OFORML : comp = 40009D44C1790C6Bh; //оформляемый
-  KATNOTES_NREC_BASEDOC_ISPOLN : comp = 400056A46A9AD669h; //исполняемый
-  KATNOTES_NREC_BASEDOC_OPLACH : comp = 0001000000000077h; //оплачен
-  KATNOTES_NREC_BASEDOC_REESTR : comp = 000100000000007Eh; //в реестре
-  KATNOTES_NREC_BASEDOC_OTLOJ  : comp = 0001000000000150h; //Отложен
-  KATNOTES_NREC_BASEDOC_ZAKR   : comp = 4000485AB57C8F9Dh; //закрытый
+  KATNOTES_NREC_BASEDOC_OFORML                    : comp = 40009D44C1790C6Bh; //оформляемый
+  KATNOTES_NREC_BASEDOC_ISPOLN                    : comp = 400056A46A9AD669h; //исполняемый
+  KATNOTES_NREC_BASEDOC_OPLACH                    : comp = 0001000000000077h; //оплачен
+  KATNOTES_NREC_BASEDOC_REESTR                    : comp = 000100000000007Eh; //в реестре
+  KATNOTES_NREC_BASEDOC_OTLOJ                     : comp = 0001000000000150h; //Отложен
+  KATNOTES_NREC_BASEDOC_ZAKR                      : comp = 4000485AB57C8F9Dh; //закрытый
 
   //Виды договоров
-  VIDDOG_NREC_D_SCHETA_GAR_PISMA : comp = 0001000000000051h; //Д_Счета, гарантийные письма (без договора)
+  VIDDOG_NREC_D_SCHETA_GAR_PISMA                  : comp = 0001000000000051h; //Д_Счета, гарантийные письма (без договора)
 
   //Значения КАУ
   SPKAU_NREC_REJIM_ISPOLZOVANIYA_SCHETA_3MLN      : comp = 000100000000139Eh;  //ссылка на пользовательскую аналитику KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA
@@ -84,10 +88,11 @@ const
   PLANSSCH_NREC_2013                              : comp = 000100000000000Eh;  //План счетов 2013 г
 
   //КАУ
-  cgKau_Claim      = 5191;  //Строка заявки
-  cgKau_SrBessr    = 10753; //2016 Срочная/бессрочная лицензия
-  cgKau_ContractId = 10527; //Идентификатор госконтракта
-  cgKau_RBP        = 163;   //2005. Расходы будущих периодов
+  cgKau_Claim      : word = 5191;  //Строка заявки
+  cgKau_SrBessr    : word = 10753; //2016 Срочная/бессрочная лицензия
+  cgKau_ContractId : word = 10527; //Идентификатор госконтракта
+  cgKau_RBP        : word = 163;   //2005. Расходы будущих периодов
+  cgKau_StZ2013    : word = 10016; //2013 Статьи затрат
 
   //Настройки подписантов
   FEESIGNERS_CONSTREP_FINDIR_SLZAP                : word = 32001; //Настройка подписантов в отчете к ДО "Финансовая дирекция. Служебная записка"
@@ -102,6 +107,9 @@ const
 
   //Группы ДО
   GROUPSCH_NREC_USERSETS     = 000100000000013Bh;  //Пользовательские наборы
+
+  //Коды таблиц соответствий
+  FPKATIMP_CODE_STZ2013_STZSTROY                   : string = '20'; //Договора. 2013 Статьи затрат - Статьи затрат объектов строительства
 
   STATLOG_TIPDOC_INDENT = 30000;
 end;
