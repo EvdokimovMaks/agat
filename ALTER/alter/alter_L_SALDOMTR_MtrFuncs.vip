@@ -1,0 +1,73 @@
+#include MTRFuncs.vih
+#include Query.vih
+
+#component "L_SaldoMtr"
+
+alter interface MtrFuncs;
+
+overload
+  Function OMTRFuncs.LinkMtrToSpec (_wTable: Word; _cTable: Comp; _cSaldTune: Comp = 0; _cObjBuild: Comp = 0; _cZatr: Comp = 0): Comp;
+end;
+
+var
+  _qStZ: IQuery;
+
+sql query qStZ =
+select
+  AddSumTune.Nrec
+from
+  SpDocs
+left join CalPlan
+  on CalPlan.Nrec = SpDocs.cDoc
+join Dogovor
+  on Dogovor.Nrec = case SpDocs.TiDk
+                      when 400 then SpDocs.cDoc
+                      when 401 then SpDocs.cDoc
+                      when 403 then CalPlan.cDogovor
+                      else #comp(0)
+                    end
+join AttrNam
+  on AttrNam.wTable = 1707 and
+     AttrNam.Name   = 'Статья расходов (коммерческих, накладных)'
+join AttrVal
+  on AttrVal.wTable   = 1707         and
+     AttrVal.cRec     = Dogovor.Nrec and
+     AttrVal.cAttrNam = AttrNam.Nrec
+join SpKau spkStZ
+  on spkStZ.Nrec = AttrVal.vComp
+join FpKatImp
+  on FpKatImp.Code = :Code
+join FpImpRel
+  on FpImpRel.cMain    = FpKatImp.Nrec and
+     FpImpRel.ImpKodAn = :ImpKodAn     and
+     FpImpRel.cImpMean = spkStZ.Nrec
+join AddSumTune
+  on AddSumTune.Nrec = FpImpRel.cMean
+where
+  SpDocs.Nrec = :cSpDocs and
+  Dogovor.Direct = 2
+;
+function GetStZBySpDocs(cSpDocs: comp): comp;
+{
+  if (_qStZ = NullRef)
+    _qStZ := queryManager.createQuery(qStZ)
+                         .setParam('Code', FPKATIMP_CODE_STZ2013_STZSTROY)
+                         .setParam('ImpKodAn', cgKau_StZ2013);
+
+  _qStZ.setParam('cSpdocs', cSpDocs);
+
+  result := 0;
+  if _qStZ.execute.errorCode = tsOk
+    if _qStZ.fetch.errorCode = tsOk
+      result := _qStZ.row.ValAt(1);
+}
+
+Function LinkMtrToSpec (_wTable: Word; _cTable: Comp; _cSaldTune: Comp = 0; _cObjBuild: Comp = 0; _cZatr: Comp = 0): Comp;
+{
+  if _wTable = coSpDocs
+    _cZatr := GetStZBySpDocs(_cTable);
+  result := inherited::LinkMtrToSpec(_wTable, _cTable, _cSaldTune, _cObjBuild, _cZatr);
+}
+
+
+end.
