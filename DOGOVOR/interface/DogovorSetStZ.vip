@@ -1,0 +1,377 @@
+#include GetKau.vih
+#include Query.vih
+#include MTRFuncs.vih
+#include Marker.vih
+#include UserReport.vih
+#component "AGAT"
+
+interface DogovorSetStZ 'Проверка статей затрат в договорах' escClose;
+
+table struct tDogovor
+(
+  Nrec: comp,
+  cDogovor: comp,
+  dDoc: date,
+  TiDk: word,
+  sType: string[20],
+  NoDoc: string[100],
+  KatOrgName: string,
+  KatNotesName: string[40],
+  Descr: string[20],
+  DesGr: string[4],
+  dBeg: date,
+  dEnd: date,
+  cStZ: comp,
+  cStStroy: comp,
+  Summa: double,
+  Flags: byte
+)
+with index
+(
+  idx0 = Nrec(unique),
+  idx1 = cDogovor + dDoc + NoDoc
+);
+
+table struct tSpDocs
+(
+  Nrec    : comp,
+  cDogovor: comp,
+  wType   : comp,
+  cStStroy: comp
+) with index (
+  idx0 = Nrec(Unique),
+  idx1 = cDogovor + wType
+);
+
+var
+  _dBeg: date;
+  _dEnd: date;
+  _qData: IQuery;
+  _qSpDocs: IQuery;
+  _marker: IMarker(Marker) new;
+#include MTRFuncs.var
+#include GetKau.var
+
+
+create view
+//var
+//  _cDogovor: comp;
+as select
+  tDogovor.Nrec
+from
+  tDogovor
+ ,tDogovor tDog
+ ,tDogovor tDogCh
+ ,SpKau spkDogStZ
+ ,AddSumTune
+ ,tSpDocs
+where ((
+//      _cDogovor     == tDog.cDogovor
+      tDog.Nrec     == tDogCh.cDogovor
+  and tDog.cStZ     == spkDogStZ.Nrec
+  and tDog.cStStroy == AddSumTune.Nrec
+));
+
+
+create view vCheck
+var
+  _cCheckDog: comp;
+from
+  tDogovor
+ ,tSpDocs tSpDocs0
+ ,tSpDocs tSpDocs1
+ ,tDogovor tPrntDogovor
+where ((
+      _cCheckDog         == tDogovor.Nrec
+
+  and tDogovor.Nrec      == tSpDocs0.cDogovor
+  and 0                  == tSpDocs0.wType
+  and (tSpDocs0.cStStroy != tDogovor.cStStroy)
+
+  and tDogovor.Nrec      == tSpDocs1.cDogovor
+  and 1                  == tSpDocs1.wType
+  and (tSpDocs1.cStStroy != tDogovor.cStStroy)
+
+  and tDogovor.cDogovor  == tPrntDogovor.Nrec
+));
+
+function GetInfoFld(i: byte): string;
+{
+  result := '';
+  case i of
+    1: if(tDog.Flags and 1) = 1 result := 'Отсутствует соответствие статьи договора и статьи кап.строя';
+    2: if(tDog.Flags and 2) = 2 result := 'Не совпадают статья договора и статья в спецификации договора';
+    3: if(tDog.Flags and 4) = 4 result := 'Не совпадают статья договора и статья в спецификации календарного плана';
+  end;
+}
+
+Window wFilters 'Параметры отбора договоров' escClose doAccept;
+  show at (,,40, 4);
+  screen scFilters;
+    fields
+      _dBeg: noProtect;
+      _dEnd: noProtect;
+
+<<
+
+  `Период с`.@@@@@@@@@@`по`.@@@@@@@@@@
+
+>>
+  end; // screen scFilters
+
+end; //window wFilters
+
+browse brDogovor (,,sci1EnEsc);
+  show(,,,18);
+  table tDog;
+  recmarker = _marker {tDog.Nrec};
+  fields
+    if(tDog.Flags > 0, 'Требует изменений', 'Корректный') 'Состояние': [10], protect;
+    tDog.sType 'Документ': [5], protect;
+    tDog.Descr 'Дескриптор': [5], protect;
+    tDog.dDoc 'Дата закл.' : [10], protect;
+    tDog.NoDoc 'Внутр.номер': [20], protect;
+    tDog.dBeg 'Нач. действия': [10], protect;
+    tDog.dEnd 'Окон. действия': [10], protect;
+    tDog.KatNotesName 'Статус': [20], protect;
+    tDog.KatOrgName 'Контрагент': [40], protect;
+    tDog.Summa 'Сумма':[,'\2p[|-]3666`666`666`666`666`666.88'], protect;
+    spkDogStZ.Code + ' ' + spkDogStZ.Name 'Статья затрат': [30], protect, {font={backColor=if((tDog.Flags and (2+4)) > 0, 13, 0)}};
+    AddSumTune.Name 'Статья соотв.': [30], protect, {font={backColor=if((tDog.Flags and 1) > 0, 12, 0)}};
+end; //tree trDogovor
+
+screen scInfo (,,sci1EnEsc);
+  show(,19,,) fixed_y;
+  table tDog;
+  fields
+    GetInfoFld(1): Skip;
+    GetInfoFld(2): Skip;
+    GetInfoFld(3): Skip;
+<<
+.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+end;
+
+//tableevent table tDog;
+//  cmTreeTop      : _cDogovor := 0;
+//  cmTreeUp       : _cDogovor := tDog.cDogovor;
+//  cmTreeDown     : _cDogovor := tDog.Nrec;
+//  cmTreeNodeType : if TreeIsTerminal(trDogovor) TreeSetNodeType(trDogovor, ntfText);
+//  cmTreeNeedOwner: TreeJumpToRecord(trDogovor, tDog.cDogovor);
+//end; //tableevent table tDog
+
+
+procedure CheckDogovor(cDogovor: comp);
+{
+  vCheck._cCheckDog := cDogovor;
+  if vCheck.getfirst tDogovor = tsOk
+  {
+    var tmpFlags: byte = tDogovor.Flags;
+
+    if vCheck.tDogovor.cStZ != 0 and tDogovor.cStStroy = 0
+      vCheck.tDogovor.Flags := 1;
+    else
+      vCheck.tDogovor.Flags := 0;
+
+    if vCheck.getfirst tSpDocs0 = tsOk
+      vCheck.tDogovor.Flags += 2;
+
+    if vCheck.getfirst tSpDocs1 = tsOk
+      vCheck.tDogovor.Flags += 4;
+
+    if vCheck.tDogovor.Flags != tmpFlags
+      vCheck.update current tDogovor;
+  }
+}
+
+sql query qData =
+  select
+    Dogovor.Nrec,
+    Dogovor.cDogovor,
+    Dogovor.TiDk,
+    case when Dogovor.TiDk = 400 then 'Договор'
+         else case when Dogovor.cZamena = #comp(0) then 'Уточн.согл.'
+              else 'Отм.согл.' end
+    end as sType,
+    Dogovor.dBeg,
+    Dogovor.dEnd,
+    Dogovor.NoDoc,
+    Dogovor.dDoc,
+    Dogovor.Descr,
+    Dogovor.DesGr,
+    Dogovor.Summa,
+    coalesce(spkStZ2013.Nrec, #comp(0)) as cStZ,
+    coalesce(AddSumTune.Nrec, #comp(0)) as cStStroy,
+    coalesce(KatOrg.Name, '') as KatOrgName,
+    coalesce(KatNotes.Name, '') as KatNotesName
+  from
+    Dogovor
+  left join AttrVal avStZ
+    on avStZ.wTable = :coDogovor and
+       avStZ.cRec = Dogovor.Nrec and
+       avStZ.cAttrNam = :cAttrNam
+  left join SpKau spkStZ2013
+    on spkStZ2013.Nrec = avStZ.vComp
+  left join KatOrg
+    on KatOrg.Nrec = Dogovor.cOrg
+  left join KatNotes
+    on KatNotes.Nrec = Dogovor.cNote
+  join FpKatImp
+    on FpKatImp.Code = :FpKatImpCode
+  left join FpImpRel
+    on FpImpRel.cMain    = FpKatImp.Nrec and
+       FpImpRel.cImpMean = avStZ.vComp
+  left join AddSumTune
+    on AddSumTune.Nrec = FpImpRel.cMean
+  where
+    Dogovor.Direct = 2 and
+    Dogovor.DDoc between :dBeg and :dEnd
+;
+
+sql query qSpDocs =
+  select
+    SpDocs.Nrec,
+    Dogovor.Nrec as cDogovor,
+    0 as wType,
+    coalesce(SpecMtr.cKau[1], #comp(0)) as cStStroy
+  from
+    Dogovor
+  join SpDocs
+    on SpDocs.TiDk = Dogovor.TiDk and
+       SpDocs.cDoc = Dogovor.Nrec
+  left join SpecMtr
+    on SpecMtr.coTable = :coSpDocs and
+       SpecMtr.cSpec = SpDocs.Nrec
+  where
+    Dogovor.Direct = 2 and
+    Dogovor.DDoc between :dBeg and :dEnd
+
+  union all
+
+  select
+    SpDocs.Nrec,
+    Dogovor.Nrec as cDogovor,
+    1 as wType,
+    coalesce(SpecMtr.cKau[1], #comp(0)) as cStStroy
+  from
+    Dogovor
+  join CalPlan
+    on CalPlan.cDogovor = Dogovor.Nrec and
+       CalPlan.DirectMC <> 0
+  join SpDocs
+    on SpDocs.TiDk = 403 and
+       SpDocs.cDoc = CalPlan.Nrec
+  left join SpecMtr
+    on SpecMtr.coTable = :coSpDocs and
+       SpecMtr.cSpec = SpDocs.Nrec
+  where
+    Dogovor.Direct = 2 and
+    Dogovor.DDoc between :dBeg and :dEnd
+;
+procedure PrepareData;
+{
+  if _qData = NullRef
+    _qData := queryManager.createQuery(qData)
+                          .setParam('coDogovor', coDogovor)
+                          .setParam('cAttrNam', ATTRNAM_NREC_DOGOVOR_STZ)
+                          .setParam('FpKatImpCode', FPKATIMP_CODE_STZ2013_STZSTROY);
+  _qData.setParam('dBeg', _dBeg);
+  _qData.setParam('dEnd', _dEnd);
+  if _qData.execute.errorCode = tsOk
+  {
+    mtClear(tntDogovor, mfNormal);
+    sqlCopyInto(_qData, tntDogovor, true);
+  }
+  else
+    Message('Ошибка выборки данных qData: ' + _qData.errorCode, error);
+
+  if _qSpDocs = NullRef
+    _qSpDocs := queryManager.createQuery(qSpDocs).setParam('coSpDocs', coSpDocs);
+  _qSpDocs.setParam('dBeg', _dBeg);
+  _qSpDocs.setParam('dEnd', _dEnd);
+  if _qSpDocs.execute.errorCode = tsOk
+  {
+    mtClear(tntSpDocs, mfNormal);
+    sqlCopyInto(_qSpDocs, tntSpDocs, true);
+  }
+  else
+    Message('Ошибка выборки данных qSpDocs: ' + _qSpDocs.errorCode, error);
+
+  _loop tDogovor
+    CheckDogovor(tDogovor.Nrec);
+
+//  _cDogovor := 0;
+//  _loop tDog
+//  {
+//    err4 := 0;
+//    _loop  tDogCh
+//      if tDogCh.Flags != 0 { err4 := 8; break; }
+//    if err4 != 0
+//      update current tDog set tDog.Flags := tDog.Flags + err4;
+//  }
+}
+
+
+handleevent
+
+  cmFilterSave:
+  {
+    RunWindowModal(wFilters);
+    PrepareData;
+    RereadRecord(tntDogovor);
+  }
+
+  cmInit:
+  {
+    if not ReadMyDSK(_dBeg, '_dBeg_DogovorSetStZ', true) _dBeg := Date(1, 1, Year(Cur_Date));
+    if not ReadMyDSK(_dEnd, '_dEnd_DogovorSetStZ', true) _dEnd := Date(31, 12, Year(_dBeg));
+    RunWindowModal(wFilters);
+    PrepareData;
+  }
+
+  cmDone:
+  {
+    SaveMyDSK(_dBeg, '_dBeg_DogovorSetStZ');
+    SaveMyDSK(_dEnd, '_dEnd_DogovorSetStZ');
+  }
+
+end;
+
+
+end.
+
+
+VipInterface UserReport_DogovorSetStZ Implements IUserReport licensed(free);
+Interface UserReport_DogovorSetStZ;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::DogovorSetStZ);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Проверка статей затрат в договорах';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    Level := Level;
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'DOGOVOR';
+    end;
+  end;
+end.
