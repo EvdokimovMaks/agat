@@ -1,3 +1,8 @@
+//Issue #000 Дополнительные поля по договору
+//Issue #000 Кнопки Directum
+//Issue #??? Установка статьи затрат в ЦУ к новой позиции договора из атрибута шапки договора
+//Issue #327 Перенос статусов ПКП в момент создания отменяющего соглашения из предыдущего
+
 #include ExtAttr.Vih
 #include ExtClassEx.vih
 #include SaldTune.vih
@@ -8,7 +13,19 @@
 
 alter interface dogovor;
 
+overload
+  Procedure CancelCurrentDogovor;
+end;
+
 ExtendFormats BRDOGOVORSELECTMAIN;
+
+table struct ag_TmpNotes (
+  cCalPlan: comp,
+  Status: word,
+  cNote: comp
+) with index (
+  i01 = cCalPlan
+);
 
 var
   cidHelper: AGAT::ContractIDHelper;
@@ -44,7 +61,8 @@ from attrval avVidDey,
      attrval avPotreb,
      attrval avISK,
      attrval avSMP,
-     attrval avStZ
+     attrval avStZ,
+     ag_TmpNotes
 where ((
       #JoinDogovorAttrval(281474976710829, avVidDey)
   and #JoinDogovorAttrval(281474976710827, avZakaz)
@@ -65,6 +83,73 @@ where ((
   and avStZ.vComp                    == FpImpRel.cImpMean
 ))
 ;
+
+//Для статусов ПКП при формировании отменяющего соглашения
+//см. CancelCurrentDogovor
+create view vCancelD
+  var
+    _cDogovor: comp;
+from
+  Dogovor ChildDog
+ ,TmpDogKOD
+ ,CalPlan
+ ,ag_TmpNotes
+where ((
+      vCancelD._cDogovor == ChildDog.cDogovor
+  and TmpDogKOD.Nrec     == CalPlan.cDogovor
+  and CalPlan.Nrec       == ag_TmpNotes.cCalPlan
+));
+
+//Формирует отменяющее соглашение к договору (#327)
+Procedure CancelCurrentDogovor;
+{
+  var bChangeStatus: boolean = true; //Признак - менять ли статусы ПКП отменяющего соглашения на Оформляемый
+  //анализируем настройку Агат.Управление договорами / Режим установки статусов ПКП при формировании отм.согл.
+  case wGetTune('AGAT.DOGOVOR.OTMSOGL_PKP_STATUS') of
+    0: bChangeStatus := false;
+    1: bChangeStatus := true;
+    2: bChangeStatus := Message('Изменить статусы ПКП отменяющего соглашения на "Оформляемый"', YesNo) = cmYes;
+  end;
+
+  if bChangeStatus
+  {
+    //Запоминаем статусы ПКП договора и его подчиненных договоров
+    mtClear(tnag_TmpNotes, mfNormal);
+    var c: comp = Dogovor.Nrec;
+    var i: longint = 0;
+    var m: TPtr = InitMarker('', 8, 10, 10, false);
+    InsertMarker(m, c);
+    for (i := 0; GetMarker(m, i, c); i++)
+    {
+      insert ag_TmpNotes (cCalPlan, Status, cNote)
+      select CalPlan.Nrec, CalPlan.Status, CalPlan.cNote
+      from CalPlan
+      where (( c == CalPlan.cDogovor ));
+
+      vCancelD._cDogovor := c;
+      vCancelD._loop ChildDog
+        InsertMarker(m, vCancelD.ChildDog.Nrec);
+    }
+    DoneMarker(m, '');
+
+    //запускаем стандартное формирование отменяющего соглашения
+    inherited::CancelCurrentDogovor;
+
+    //Восстанавливаем статусы ПКП договора и подчиненных договоров
+    vCancelD._loop TmpDogKOD
+      vCancelD._loop CalPlan
+        if vCancelD.getfirst ag_TmpNotes = tsOk
+          if vCancelD.ag_TmpNotes.Status != vCancelD.CalPlan.Status or
+             vCancelD.ag_TmpNotes.cNote  != vCancelD.CalPlan.cNote
+          {
+            vCancelD.update current CalPlan set Status := vCancelD.ag_TmpNotes.Status,
+                                                cNote  := vCancelD.ag_TmpNotes.cNote;
+          }
+  }
+  else
+    inherited::CancelCurrentDogovor;
+}
+
 
 //#region Визуальная часть
 
