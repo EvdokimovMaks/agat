@@ -256,6 +256,22 @@ CONST
 CONST
        cmFindWithValue                                = 126;
 CONST
+       cmMoveTabbedSheetPage                          = 127;
+CONST
+       cmHyperLink                                    = 128;
+CONST
+       cmDefaultFilterView                            = 129;
+CONST
+       cmSetBrowserTune                               = 130;
+CONST
+       cmCBSearch                                     = 131;
+CONST
+       cmCheckCopyPasteHL                             = 132;
+CONST
+       cmWrapPanel                                    = 133;
+CONST
+       cmUnwrapPanel                                  = 134;
+CONST
        cmHotKeys                                      = 300;
 CONST
        cmFileOpen                                     = 301;
@@ -275,11 +291,47 @@ CONST
        cmFileDoubleClicked                            = 308;
 CONST
        cmGetPanelByTblNum                             = 309;
-
+CONST
+       cmCopyCurRowBrowseTo                           = 310;
+CONST
+       cmCopyVisRowsBrowseTo                          = 311;
+CONST
+       cmCopyAllBrowseTo                              = 312;
+CONST
+       cmCopyMarkBrowseTo                             = 313;
+CONST
+       cmGroupRsOpen                                  = 314;
+CONST
+       cmGroupRsClose                                 = 315;
+CONST
+       cmSetLocalMenuOptions                          = 316;
+CONST
+       cmGroupRsExpand                                = 317;
+CONST
+       cmGroupRsCollapse                              = 318;
+CONST
+       cmChangeInterfaceConfiguration                 = 319;
 CONST
        cmImportMemo                                   = 320;
+CONST
+       cmBeginRecordModification                      = 321;
+CONST
+       cmEndRecordModification                        = 322;
+CONST
+       cmUndoInputValue                               = 323;
+CONST
+       cmSetBrowseFilter                              = 324;
+CONST
+       cmBeginFieldEdit                               = 325;
+CONST
+       cmEndFieldEdit                                 = 326;
+CONST
+       cmTreeSwitched                                 = 327;
+CONST
+       cmGetTreeMode                                  = 328;
 
-
+CONST
+       cmBeforeAppRun                                 = 337;
 CONST
        cmDoReleaseLicense                             = 338;
 CONST
@@ -575,7 +627,7 @@ CONST
 CONST
        cmFilterSelectOper_InRange                     = 484;
 CONST
-       cmFilterSelectOper_Like                        = 485;
+       cmFilterSelectOper_Period                      = 485;
 CONST
        cmFilterSelectOper_Blank                       = 486;
 CONST
@@ -590,6 +642,10 @@ CONST
        cmFilterSelectOper_Beginning                   = 491;
 CONST
        cmFilterSelectOper_Finishing                   = 492;
+CONST
+       cmFilterSelectOper_Null                        = 493;
+CONST
+       cmFilterSelectOper_NotNull                     = 494;
 
 CONST
        cmEditorPlaceOnly                              = 498;
@@ -1042,21 +1098,16 @@ CONST
        cmSetCompOpt                                   = 802;
 CONST
        cmAboutRegNumber                               = 803;
-
 CONST
        cmRunAllFunctionsList                          = 804;
 CONST
        cmRunUsersFunctionsList                        = 805;
 CONST
        cmRunHistoryCallsList                          = 806;
-
 CONST
-       cmButilPath                                    = 807;
+       cmInternalSort                                 = 807;
 CONST
-       cmDefaultDoctorConfig                          = 808;
-
-CONST
-       cmDict                                         = 809;
+       cmInternalGroup                                = 808;
 
 CONST
        cmAQABeforeRestoreDatabase                     = 810;
@@ -1083,16 +1134,12 @@ CONST
 
 CONST
        cmWindowCreated                                = 824;
-
 CONST
        cmCopyToClipboard                              = 825;
 CONST
        cmPasteFromClipboard                           = 826;
-
-
 CONST
        cmNotificationStart                            = 827;
-
 CONST
        cmGetCurrentTick                               = 828;
 CONST
@@ -1299,7 +1346,12 @@ CONST
        cmFDTunes                                     = 936;
 CONST
        cmOpt3                                        = 937;
-
+CONST
+       cmTreeAltS                                    = 938;
+CONST
+       cmTreeAllExpand                               = 939;
+CONST
+       cmTreeAllCollapse                             = 940;
 CONST
        cmResLib                                      = 941;
 CONST
@@ -2076,6 +2128,26 @@ CONST
        cmPasteLM                                      = 1340;
 CONST
        cmCutLM                                        = 1341;
+CONST  
+       cmGetHeaderImageValue                          = 1342;
+CONST  
+       cmGetStaticFontAttr                            = 1343;
+CONST  
+       cmRunHlFromMemo                                = 1344;
+CONST  
+       cmGetHeaderAlign                               = 1345;
+CONST  
+       cmGetTabbedSheetImage                          = 1346;
+CONST
+       cmCopyHyperLM                                  = 1347;
+CONST
+       cmInfoParametersAbout                          = 1348; 
+CONST 
+       cmAtlLogDeferred                               = 1349;
+CONST 
+       cmPasteHyperLM                                 = 1350;
+CONST 
+       cmOptimumColumnW                               = 1351;
 
 // !! Диапазон 2000 - 2099 прикладной, константы в него не добавлять !!
 
@@ -2387,6 +2459,10 @@ CONST
        scAtlTreePick                                  = 24;
 CONST
        scAtlInsDel                                    = 25;
+CONST
+       scIfaceFilterView                              = 26;
+CONST
+       scAtlDel                                       = 27;
 
 CONST
        scFiltersList                                  = 101;
@@ -2421,6 +2497,12 @@ CONST
 
 CONST
        scMemoView                                     = 120;
+CONST
+       scBrowserTuneMain                              = 121;
+CONST
+       scBrowserTuneSort                              = 122;
+CONST
+       scBrowserTuneFilter                            = 123;
 
 CONST
        scLovelyHistory                                = 125;
@@ -2559,10 +2641,6 @@ CONST
        scAtlCalcProtocol                              = 340;
 
 CONST
-       scCfgSelAttr2                                  = 343;
-CONST
-       scCfgSelAttr3                                  = 344;
-CONST
        scCfgClassifier                                = 345;
 CONST
        scCfgClassifierTree                            = 346;
@@ -2668,6 +2746,8 @@ CONST
        scAtlLogTune                                   = 399;
 CONST
        scAtlLogView                                   = 400;
+CONST
+       scIfaceGroupRecords                            = 401;
 
 CONST
        kbEqual                                        = 3389;
@@ -3243,6 +3323,10 @@ CONST
        ftPassword   = 28;
 CONST
        ftSQLParamPtr = 29;
+CONST
+       ftWideChar   = 30;
+CONST
+       ftWideString = 31;
 
 CONST
        hisLovelyFunctions_Input = 175;
@@ -3368,6 +3452,21 @@ CONST
        fdHelpButton    = 16;
 CONST
        fdSaveButton    = 32;
+CONST
+       fdFileEditor    = 64;
+
+CONST
+       zfsBold      =   1;
+CONST
+       zfsItalic    =   2;
+CONST
+       zfsUnderline =   4;
+CONST
+       zfsSline     =   8;
+CONST
+       zfsColor     =  64;
+CONST               
+       zfsAttrib    = 128;
 
 CONST
        cdNormal     = 0;
@@ -3855,6 +3954,8 @@ CONST
   tgiMarker          = 14;  //
 CONST
   tgiColumnMarker    = 15;  //
+CONST
+  tgiSmartTree       = 16;  //
   // DialogToolbar
 CONST
   tgdEdit            = 30;  //  kbCtrlIns, kbShiftIns, kbAltBkSpace
@@ -4146,3 +4247,28 @@ const
   spdtMonth  = 5;
 const
   spdtYear   = 6;
+
+//sqlFlushIntoTmp
+const
+  FIT_Create = 1;
+const
+  FIT_Truncate = 2;
+const
+  FIT_ByName = 4;
+const
+  FIT_IndexLater = 8;
+
+
+//Coding
+const
+  cpACP    = 1251;
+const
+  cpOEMCP  = 866;
+const
+  cpUTF8   = 65001;
+const
+  cpUTF16L = 1200;
+const
+  cpUTF16B = 1201;
+const
+  cpKOI8   = 20866;

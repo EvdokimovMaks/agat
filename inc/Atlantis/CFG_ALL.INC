@@ -117,6 +117,7 @@ const cfpSpinMax            = 1072;
 
 const cfpFixing             = 1073;
 const cfpEditButton         = 1074;
+const cfpHeaderImgName      = 1075;
 
 const cfpLines              = 1169;
 const cfpIdle               = 1170;
@@ -191,6 +192,32 @@ const cfpImgName            = 1223;
 
 const cfpTabbedSheetOrder   = 1224;
 const cfpMenuName           = 1225;
+
+const cfpFontUline          = 1226;
+const cfpFontSline          = 1227;
+const cfpHyperlink          = 1228;
+
+const cfpCurRowFontBold     = 1229;
+const cfpCurRowFontItalic   = 1230;
+const cfpCurRowFontUline    = 1231;
+const cfpCurRowFontSline    = 1232;
+const cfpCurRowFontColor    = 1233;
+const cfpCurRowFontBackColor= 1234;
+const cfpFontSize           = 1235;
+const cfpAnchorLeft         = 1236;
+const cfpAnchorTop          = 1237;
+const cfpAnchorRight        = 1238;
+const cfpAnchorBottom       = 1239;
+const cfpHeaderAlign        = 1240;
+const cfpTabImageName       = 1241;
+const cfpBrowserViewFlags   = 1242;
+const cfpRowColorDark       = 1243;
+const cfpVDelimiterWidth    = 1244;
+const cfpHDelimiterWidth    = 1245;
+const cfpCfgName            = 1246;
+const cfpCfgStoreName       = 1247;
+const cfpLessValue          = 1248;
+
 //=============================================================================
 // Флаги свойства
 //=============================================================================

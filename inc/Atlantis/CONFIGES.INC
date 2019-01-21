@@ -30,6 +30,7 @@ const
   csMemoryUse   = 'MemoryUse';
   csDesigner    = 'Designer';
   csRepository  = 'Repository';
+  isDuplicates  = 'LogDuplicates';
 
 // Внутреняя секция для multibase
   csInternalDataBase       = '__InternalDB__';
@@ -57,7 +58,6 @@ const
     poVersion             = 'Version';
 
   isTrimDosFileName       = 'TrimFileName';
-  isEmulate210            = 'Emulate210';
   isDeltaDouble           = 'DeltaDouble';
   isShowAllDigits         = 'ShowAllDigits';
   isDefaultFormat         = 'DefaultFormat';
@@ -172,6 +172,7 @@ const
     pkTmpFilesShortDirectory = 'TShort';
   isHelpFilesPath         = 'HelpFilesPath';
   isWebHelpURL            = 'WebHelpURL';
+  isLogs                  = 'LogFilesDirectory';
 
 // список параметров секции csDeskTop
   isEnableHelpLine        = 'EnableHelpLine';
@@ -267,6 +268,10 @@ const
   isDSQLUnknownIdReaction = 'DSQLUnknownIdReaction';
   isDSQLShowOverflowWarning = 'DSQLShowOverflowWarning';
   isDSQLForcePrefetch     = 'DSQLForcePrefetch';
+  isSpanManySemaphorNames = 'SpanManySemaphorNames';
+  isCountRecordDeletePach = 'CountRecordDeletePach';
+  isDisableSqlImpl        = 'DisableSqlImpl';
+  isRCacheOptions         = 'RCacheOptions';
 
 // список параметров секции csVip
   isProjectFile           = 'Project'; // Файл проекта
@@ -357,6 +362,8 @@ const
     pkPassword            = 'P';
   isUserOffice            = 'UserOffice';
     pkUserOffice          = 'UO';
+  isNTS                   = 'NTSecurity';
+    poNTS                 = 'NTS';
   isEnableDuplicateUser   = 'EnableDuplicateUser';
   isSetToMainMenu         = 'MainMenuNoLic';
 
@@ -513,6 +520,7 @@ const
   isTraceDataBaseDriverExtendedMode = 'TraceDataBaseDriverExtendedMode';
   isTraceDataBaseDriverExtendedSize = 'TraceDataBaseDriverExtendedSize';
   isCalcOptions           = 'CalcOptions';
+  isSQLExprLogs           = 'SQLExprLogs';
 
 // список параметров секции csSQLDriver
   isSQLServer             = 'SQLServer';
@@ -532,7 +540,6 @@ const
   isNotDSN                = 'NotDSN';
   isClearJournalBlockSize  = 'ClearJournalBlockSize';
   isClearJournalBlockSizeForJTables = 'ClearJournalBlockSizeForJTables';
-//параметр для определения типа сортировки (только для оракела). Возможные значения: STANDART | ORDERBY | HINT_ORDERBY
   isSortType              = 'SortType';
   isBrowsingPreloadCount  = 'BrowsingPreloadCount';
   isManageJRights         = 'ManageJRights';
@@ -550,6 +557,8 @@ const
   isUseTop = 'UseTop';
   isNavigationMaximumTop = 'NavigationMaximumTop';
   isNavigationNoLock = 'NavigationNoLock';
+  isParameterizedLimit = 'ParameterizedLimit';
+  isNavigationDefaultLimit = 'NavigationDefaultLimit';
 
 // Список параметров секции csInternal
 // Эти параметры регистрируются только в процессе работы программы.
@@ -563,6 +572,9 @@ const
   isDefaultTemp           = 'DefaultTemp';//заведено для переинициализации юзера.
   isDefaultOutput         = 'DefaultOutput';//лежат параметры с макросами, если они есть
   isDefaultUser           = 'DefaultUser';
+  isDefaultLogs           = 'DefaultLogs';
+  isAqaMode               = 'AQAMode';
+  isInternalFileMask      = 'InternalFileMask';
 
 // список параметров секции csBtrieve
   isDetectBtrieve         = 'DetectBtrieve'; // метод коннекта к btrieve'у
@@ -629,6 +641,9 @@ const
   isColorerCatalog        = 'ColorerCatalog';
   isCopyPasteKeyMask      = 'CopyPasteKeyMask';
   isNoFilterFindFile      = 'NoFilterFindFile';
+  isBrowserViewFlags      = 'BrowserViewFlags';
+  isNoActivMode           = 'NoActivMode';
+  isSearchFromCBbyCharacter = 'SearchFromCBbyCharacter';
 
 // список параметров секции csKey
   isSharedPath            = 'SharedPath';
@@ -661,6 +676,7 @@ const
   isAQALogFile            = 'LogFile';
   isAQADelay              = 'Delay';
   isAQAStartPlan          = 'StartPlan';
+  isAQAStartPlanContinue  = 'StartPlanContinue';
   isAQAImportArchive      = 'ImportArchive';
   isAQASilentMode         = 'SilentMode';
   isAQAContinueMode       = 'ContinueMode';
@@ -770,3 +786,14 @@ const
   isNoCheckResource             = 'NoCheckResource';
   isWaitServerVisualDelay       = 'WaitServerVisualDelay';
   isLocalNetworkMode            = 'LocalNetworkMode';
+
+//--------------------------------------------------------
+  ppsNone     = 0;   // нигде не установлен, значение установлено при инициализации в дефольное значение типа
+  ppsDefault  = 1;   // присвоено в при регистрации в функции RegisterParameterEx
+  ppsConfig   = 2;   // присвоено в конфигурационном файле
+  ppsFunction = 4;   // установлено в прикладном коде через функцию Set...Parameter
+  ppsTune     = 8;   // установлено в интерфейсе настройки параметров (для этого нужно будет сделать 101.64171)
+  ppsNotFind  = 255; // параметр не найден
+
+  pprHistory  = 0;   // возвратить маску, где устанавливалось значение (неважно, менялось оно при этом или нет)
+  pprCurrent  = 1;   // возвратить константу, где установлено текущее значение

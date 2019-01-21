@@ -1,4 +1,7 @@
 const
+  FReportDllName = 'FReport' + {$ifdef Win64}'64x' +{$endif} '.dll';
+  FREditorExeName = 'FREditor' + {$ifdef Win64}'64x' +{$endif} '.exe';
+
   // Константы для TreeManager.
   tmtNoTree  = 0; // Не дерево или не учавствует в построении дерева.
   tmtManager = 1; // Поле, в котором будет прорисовано дерево.
@@ -26,6 +29,7 @@ const
   frPrintParam       = 21;
   frMailParam        = 22;
   frEmbeddedID       = 30;
+  frInternalParams   = 64; // Для передачи внутренних параметров.
 
   // Константы типа действия над отчетом.
   frcShowReport     = 1000;
@@ -36,10 +40,11 @@ const
   frcPrepareReport  = 1005;
   frcCreateReport   = 1006;
 
-  frDelimeter = WideChar($2605);
-  frGroupsDelimeter = ',';
-  // Замена frGroupsDelimeter на frDelimeter трудоемка и нецелесообразна, т.к. затрагивает Get_GropupCommaText и хранение списка групп в Variables отчета (необходимо будет поддерживать и старый разделитель для совместимости).
-  // На стороне Атлантиса затрагивает InitGroupList ds2fr.pas и модуль frres.pas.
+  frDelimiter = WideChar($2605);
+  frGroupsDelimiter = ',';
+  // Замена frGroupsDelimeter на frDelimeter трудоемка и нецелесообразна, т.к. затрагивает хранение списка групп в Variables отчета "GalaxyGroupList" (необходимо будет поддерживать и старый разделитель для совместимости).
+  // Необходимо на стороне Атлантиса доработать модуль frres.pas (пересобрать все ресурсы на frres.exe) и функцию RunFReportByGroup.
+
   // А также зарегистрированную для VIP функцию RunFReportByGroup.
 
   csFRDestroy = 1;

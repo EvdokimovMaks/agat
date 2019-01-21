@@ -195,7 +195,23 @@ const
   tsCannotRenameCurrentUser                = 358; // Текущего юзера нельзя переименовывать или менять ему оффис
   tsModifyDeniedInUnknownBranch            = 359;
 
-	tsRecursiveCallToBuildGraph							 = 360;
+    tsRecursiveCallToBuildGraph                          = 360;
+    tsInvalidTableReferencedInOrder          = 361;
+    tsBrowseListStructureMismatch            = 362;
+    tsBrowseListFilterValuesMismatch         = 363;
+    tsInvalidPosInBrowseList                 = 364;
+    tsTableReferencedInExprNotPresentInFrom  = 365;
+    tsPracticalOverflow                      = 366;
+    tsTheoreticalOverflow                    = 367;
+    tsRecentExecuteFailed                    = 368;
+    tsFetchAfterNotSelect                    = 369;
+    tsUserNameTooLong                        = 370;
+    tsUserNameBadSymbols                     = 371;
+    tsCursorDroppedTran                      = 372;
+    tsCursorDroppedOther                     = 373;
+    tsCannotDropOnlineUser                   = 374;
+    tsStateSaverRecursion                    = 375;
+    tsPasswordCheckFailed                    = 376;
 
   tsOperationAbortedByTrigger              = 30000;
   tsOperationAbortedByUser                 = 30001;

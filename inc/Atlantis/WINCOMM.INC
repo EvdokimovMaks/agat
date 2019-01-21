@@ -51,6 +51,9 @@
   // для областей ввода (Screen, Browse, Memo, EmbeddedPanel) $0000FF00
   mofFixedXSize          = $00000100; // не масштабируется по горизонтали
   mofFixedYSize          = $00000200; // не масштабируется по вертикали
+  mofWrapedX             = $00000400; // скрыта в рамку
+  mofWrapedY             = $00000800; // скрыта в рамку
+  mofWraped              = $00000C00; // скрыта в рамку
 
   // для браузеров и деревьев $00FF0000
   mofBrowserSlideMask    = $00030000;
@@ -108,6 +111,8 @@
   //Помеченные колонки в броузере
   mofSelectedColumn = $00004000;
   mofActivLabel     = $00008000;
+  mofHeaderImage    = $00800000;
+  mofBrCheckBox     = $20000000; // Колонка в броузе/дереве - CheckBox
 
 
 const
@@ -207,6 +212,7 @@ const
   rifLockInterpr   = 4; // заблокировать интерпретатор
   rifNoInit        = 8; // не выполнять cmGetInserted
   rifExtDebug      =16; // работает внешний отладчик проверить точки
+  rifLockNamedConf =32; // блокировать поименованные конфигурации
 
  (*  Общая структура номера поля (на сервере)
 
@@ -262,4 +268,8 @@ const
   bpmOpenRegion     = 3;
   bpmCloseRegion    = 4;
 
-
+  // Anchor
+  anLeft   = 1;
+  anTop    = 2;
+  anRight  = 4;
+  anBottom = 8;
