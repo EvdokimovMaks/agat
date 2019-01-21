@@ -39,7 +39,7 @@
   cgFilter_Security = 33;   // ценные бумаги
   cgFilter_Veksl    = 34;   // векселя
 
-  // для оразноски по статьям Приоритет/Статья/Initer(по сумме или по проценту)
+  // для разноски по статьям Приоритет/Статья/Initer(по сумме или по проценту)
   _wVxodim_BegPos   = 0;
   _wVxodim_Long     = 1;
   _wPrior_BegPos    = _wVxodim_Long;
@@ -140,6 +140,7 @@
   ctVZAIM_MASTER   =   2; // взаимозачет
   ctCONVERT        =   3; // конвертация
   ctVZAIM_SLAVE    =   4; // взаимозачет
+  ctTRANSFER_PS    =   5; // перевод средств
   // тип Фоп для конвертации
   ctOWN_SECURITY   =  31; // гашение соб.цен.бумаг
   ctOWN_VEKSL      =  32; // гашение соб.векселя
@@ -597,6 +598,7 @@
   cgOfpTP_Avans     = 1; //'авансовый'
   cgOfpTP_Shtraf    = 2; //'штрафные санкции'
   cgOfpTP_Convert   = 3; //'конвертация'
+  cgOfpTP_Transfer  = 4; //'перевод средств'
 
   OFP_Prefix  =
 !  #ifdef ComponentVersion
@@ -1132,3 +1134,12 @@
 // Тип платежного средства по умолчанию
   cgPayMean_Noncash = 0; // Безналичные деньги
   cgPayMean_Encash  = 1; // Наличные деньги
+
+  //----------------------------------------------------------------------------
+  // Типы лимитов
+  cgLim_DayBalance    = 0;  // лимит остатка (минимальное значение)
+  cgLim_AvDayBalance  = 1;  // лимит среднедневного остатка
+  cgLim_MaxDayBalance = 2;  // лимит остатка (максимальное значение)
+  cgLim_EqDayBalance  = 3;  // лимит остатка (строгое соответствие)
+  cgLim_MonthRashod   = 4;  // лимит расхода на месяц
+

@@ -96,7 +96,7 @@ LoopPodrName
     Str_Sex := '†…™ˆ›'
   else
   {
-    Str_Sex := '…‘‹›…'
+    Str_Sex := '…‘‹›…';
     VozGrpup := '0';
   }
 
@@ -179,7 +179,7 @@ LoopPodrName
     Str_Sex := '†…™ˆ›'
   else
   {
-    Str_Sex := '…‘‹›…'
+    Str_Sex := '…‘‹›…';
     VozGrpup := '0';
   }
 

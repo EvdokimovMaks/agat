@@ -376,10 +376,10 @@ PAGE {
      sKateg   : comp
      sTmp    : string
      not_first_page : boolean
-     Admin_Marker: longint
-     Spec_Marker : longint
-     Clerk_Marker: longint
-     Work_Marker : longint
+     Admin_Marker: TPtr
+     Spec_Marker : TPtr
+     Clerk_Marker: TPtr
+     Work_Marker : TPtr
      IndexNo     : longint
 .EndVar
 .Fields

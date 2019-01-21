@@ -14,6 +14,7 @@ CodeOKPO
 НаименованиеКраткое
 INN
 KPP
+CodeOGRIP
 CodeOGRUL
 FormSobs
 НомерПачки ДатаСостав: date
@@ -24,7 +25,7 @@ FormSobs
 "РБТД","РБТД","^","^"
 "ПАПЧК",^,"^",1
 "ТИПД","АНКТ",^
-^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^
 .{ NexpPersLoop70 CheckEnter
 .fields
 НомерДок
@@ -107,7 +108,7 @@ FormSobs
 Телефоны
 .endfields
 ^ ^ ^ ^
-^ ^ ^
+^ ^ ^ 
 !
 ^^
 ^^^^^^^^^
@@ -158,8 +159,8 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Анкетные данные'
 .begin
-  PachCnt :=0
-  DocCnt  :=0
+  PachCnt :=0;
+  DocCnt  :=0;
 end.
 .{ AllPachLoop70 CheckEnter
 <?xml version="1.0" encoding="cp866"?>
@@ -233,7 +234,7 @@ end.
       <ДатаСоставления>^</ДатаСоставления>
     </ВХОДЯЩАЯ_ОПИСЬ>
 .begin
-  PachCnt := PachCnt + 1
+  PachCnt := PachCnt + 1;
   DocCnt  := 1;
 end.
 .fields
@@ -264,7 +265,7 @@ end.
   if пол = 'Ж'
     sex10 := 'ЖЕНСКИЙ'
   else
-    sex10 := 'МУЖСКОЙ'
+    sex10 := 'МУЖСКОЙ';
 
   AdrStr := '';
   if trim(АдрПрописки_Страна_сокр) = ''
@@ -513,8 +514,8 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Заявление об обмене'
 .begin
-  PachCnt :=0
-  DocCnt  :=0
+  PachCnt :=0;
+  DocCnt  :=0;
 end.
 .{ AllPachLoop70 CheckEnter
 <?xml version="1.0" encoding="cp866"?>
@@ -538,6 +539,7 @@ end.
 !  (Word(НомерДок) + DocCnt)
   INN
   KPP
+  CodeOGRIP
   CodeOGRUL
   FormSobs
   my_pred
@@ -553,8 +555,12 @@ end.
           <ИНН>^</ИНН>
           <КПП>^</КПП>
         </НалоговыйНомер>
-        <КодЕГРИП></КодЕГРИП>
+.{?internal;CodeOGRIP <> '' 
+        <КодЕГРИП>^</КодЕГРИП>
+.}
+.{?internal;CodeOGRUL <> '' 
         <КодЕГРЮЛ>^</КодЕГРЮЛ>
+.}
         <Форма>^</Форма>
         <НаименованиеОрганизации>^</НаименованиеОрганизации>
         <НаименованиеКраткое>^</НаименованиеКраткое>
@@ -587,7 +593,7 @@ end.
       <ДатаСоставления>^</ДатаСоставления>
     </ВХОДЯЩАЯ_ОПИСЬ>
 .begin
-  PachCnt := PachCnt + 1
+  PachCnt := PachCnt + 1;
   DocCnt  :=1;
 end.
 .{ NexpPersLoop70 CheckEnter
@@ -644,9 +650,9 @@ end.
 .begin
   sex10 := '';
   if ПолИзмен = 'Ж'
-    sex10 := 'ЖЕНСКИЙ'
+    sex10 := 'ЖЕНСКИЙ';
   if ПолИзмен = 'М'
-    sex10 := 'МУЖСКОЙ'
+    sex10 := 'МУЖСКОЙ';
 end.
 .{?internal;ПолИзмен <> ''
         <Пол>^</Пол>
@@ -910,8 +916,8 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Заявление о выдаче дубликата'
 .begin
-  PachCnt :=0
-  DocCnt  :=0
+  PachCnt :=0;
+  DocCnt  :=0;
 end.
 .{ AllPachLoop70 CheckEnter
 <?xml version="1.0" encoding="cp866"?>
@@ -985,7 +991,7 @@ end.
       <ДатаСоставления>^</ДатаСоставления>
     </ВХОДЯЩАЯ_ОПИСЬ>
 .begin
-  PachCnt := PachCnt + 1
+  PachCnt := PachCnt + 1;
   DocCnt  :=1;
 end.
 .{ NexpPersLoop70 CheckEnter
@@ -1048,9 +1054,9 @@ end.
 .begin
   sex10 := '';
   if ПолИзмен = 'Ж'
-    sex10 := 'ЖЕНСКИЙ'
+    sex10 := 'ЖЕНСКИЙ';
   if ПолИзмен = 'М'
-    sex10 := 'МУЖСКОЙ'
+    sex10 := 'МУЖСКОЙ';
 end.
 .{?internal;ПолИзмен <> ''
         <Пол>^</Пол>
@@ -1297,8 +1303,8 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Справка о смерти'
 .begin
-  PachCnt :=0
-  DocCnt  :=0
+  PachCnt :=0;
+  DocCnt  :=0;
 end.
 .{ AllPachLoop70 CheckEnter
 <?xml version="1.0" encoding="cp866"?>
@@ -1316,7 +1322,7 @@ end.
 .begin
   my_pred := Upcase(Trim(Replace(Наименование, '"', '"' )));
   my_pred2:= Upcase(Trim(Replace(НаименованиеКраткое, '"', '"' )));
-  DocCnt  :=1
+  DocCnt  :=1;
   EndPach := false;
 end.
 .fields
@@ -1372,7 +1378,7 @@ end.
       <ДатаСоставления>^</ДатаСоставления>
     </ВХОДЯЩАЯ_ОПИСЬ>
 .begin
-  PachCnt := PachCnt + 1
+  PachCnt := PachCnt + 1;
   DocCnt  :=1
 end.
 .{ NexpPersLoop70 CheckEnter

@@ -25,7 +25,7 @@
  Пол
  NameGrPodr
  NameCex
- Npp Tabn Fio МесяцВыплаты: word МесяцНачисленияЗА: word МесяцНачисленияВ: word ГодНачисленияВ: word  ГодНачисленияЗА: word
+ Npp Tabn Fio МесяцВыплаты: word МесяцНачисленияВ: word МесяцНачисленияЗА: word ГодНачисленияВ: word  ГодНачисленияЗА: word
  Dolgnost KodOp Dney Chasf Summa Proc Summa4 Summa5
  ItogFio DneyFio ChasfFio SummaFio Summa4Fio Summa5Fio
  ItgNameCex

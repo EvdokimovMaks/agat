@@ -17,6 +17,7 @@
 .Fields
 Организация  ОКПО
 TitleDocNrec : comp
+sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа  дата_составления
@@ -38,7 +39,7 @@ prim
 ФиоРук
 
 .EndFields
-^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^
 ^ ^ ^ ^
 sum_str                   ^

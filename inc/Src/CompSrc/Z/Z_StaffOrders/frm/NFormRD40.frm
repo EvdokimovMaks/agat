@@ -13,6 +13,7 @@
 Организация
 ОКПО
 TitleDocNrec : comp
+sBarCode
 PersNrec : comp
 AppointNrec : comp
 Номер_Приказа
@@ -41,7 +42,7 @@ FIO_1
 ДолжнРук
 ФиоРук
 .EndFields
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^
 .{ PushReasonCycle CheckEnter
 ^

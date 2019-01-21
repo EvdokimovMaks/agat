@@ -59,6 +59,8 @@ function UCH_RAZR: Word; external 'G_ZARPL.DLL';
 function UCH_TARIF: Double; external 'G_ZARPL.DLL';
 function UCH_DATAN: Date; external 'G_ZARPL.DLL';
 function UCH_DATOK: Date; external 'G_ZARPL.DLL';
+function UCH_DATF: Date; external 'G_ZARPL.DLL';
+function UCH_DATSETTING: Date; external 'G_ZARPL.DLL';
 function UCH_CHASF: Double; external 'G_ZARPL.DLL';
 function UCH_KOLDN: Double; external 'G_ZARPL.DLL';
 function UCH_KOLDNGR: Double; external 'G_ZARPL.DLL';
@@ -210,10 +212,6 @@ function InitStavSV: boolean; external 'G_ZARPL.DLL';
 procedure DoneStav; external 'G_ZARPL.DLL';
 function Get_Nalog(word, double, Date, var double, word): Double; external 'G_ZARPL.DLL';
 function Get_NalogSV(word, double, Date, var double, word): Double; external 'G_ZARPL.DLL';
-function InitReGetSV(Date): boolean; external 'G_ZARPL.DLL';
-function InitReGetESN: boolean; external 'G_ZARPL.DLL';
-procedure DoneReGetESN; external 'G_ZARPL.DLL';
-procedure ReGetESN(comp, word, Integer, double, double); external 'G_ZARPL.DLL';
 procedure FillNach; external 'G_ZARPL.DLL';
 procedure DelPerevod(comp, word, Integer, word); external 'G_ZARPL.DLL';
 function ZarFot (word, comp): boolean; external 'G_ZARPL.DLL';
@@ -351,6 +349,7 @@ function GetCurCex(Integer): Comp; external 'G_ZARPL.DLL';
 function TestFile(string, word): integer; external 'G_ZARPL.DLL';
 function GetFirstTabN(word): longint; external 'G_ZARPL.DLL';
 function GetNextTabN(word): longint; external 'G_ZARPL.DLL';
+function DoEndTaskDB(_cLSchet: comp): word; external 'G_ZARPL.DLL';
 function GetFirstDay: string; external 'G_ZARPL.DLL';
 function GetNextDay: string; external 'G_ZARPL.DLL';
 function StavNinOkl(Integer, word): Double; external 'G_ZARPL.DLL';
@@ -599,6 +598,27 @@ function RunRaznoska(_distr: word    // #docl Режим распределенного расчета (кон
                   ; external 'G_SumDivide.dll#RunRaznoska';
 
 #doc
+Предварительная разноска БД
+#end
+function RunRaznoskaDB(_distr: word     // Режим распределенного расчета
+                     , _param: longint  // Параметры расчета, описанные в inc\Money.ccm, как cgRaznoska_..., cgDivide_..., cgWhence_...
+                     , _beg: date       // Дата начала разноски
+                     , _end: date       // Дата окончания разноски
+                     , _activity: comp  // Фильтр для НИОКР
+                     , _uidServer: longint  // Идентификатор сервера распр. расчета БД
+                      ): boolean        // true - успешно
+                    ; external 'G_SumDivide.dll#RunRaznoskaDB';
+
+#doc
+Расчет зарплаты с передачей параметров через БД
+#end
+function RunPayrollDB(_distr: word    // #docl Режим распределенного расчета (константы cgDistr_... из Money.ccm)
+                    , _param: longint // #docl Параметры расчета (константы cgPayroll_... и cgWhence_... из Money.ccm)
+                    , _uidServer: longint  // Идентификатор сервера распр. расчета БД                    ,
+                     ): boolean       // #docl Код ошибки (0 - успешно)
+                   ; external 'G_Zarpl.dll#RunPayrollDB';
+
+#doc
 Количество обработанных разноской лицевых счетов
 #end
 function Raznoska_Count: longint; external 'G_SumDivide.dll#Raznoska_Count';
@@ -633,6 +653,7 @@ function RunPayroll(_distr: word    // #docl Режим распределенного расчета (конс
                   , _param: longint // #docl Параметры расчета (константы cgPayroll_... и cgWhence_... из Money.ccm)
                    ): boolean       // #docl Код ошибки (0 - успешно)
                  ; external 'G_Zarpl.dll#RunPayroll';
+
 
 #doc
 Количество посчитанных лицевых счетов

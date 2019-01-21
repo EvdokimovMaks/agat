@@ -12,7 +12,7 @@
 //------------------------------------------------------------------------------
 const
   // пустая дата
-  lc_dEmpty : date = Date(0, 0, 0);
+  lc_dEmpty : date = To_Date(0,0,0);
 end; // const
 
 #endif//__TRLibSchFact_Inc__

@@ -73,18 +73,19 @@
   #define __TaskInfo__         // Использование словарных таблиц TaskInfo, TaskLink вместо одноименных табличных объектов.
   #define __FastClose__        // FastClose - быстрое закрытие
   #define __RasprZatr__        // Объекты сбора затрат (УКС)
-
+  #define New_Tables_BlankBln
   #define __10139621__         // по проблеме 101.39621
   #define __102_78067__        // по проблеме 102.78067
   #define __102_102363__       // по проблеме 102.102363
- #else
+  #define __102_169098__       // по проблеме 102.169098
+#else
   #define __F_DocOb__          // Модуль документооборот исключен из поставки 9.1
 #end
 !-------------------------------------------------------------------------------
 
 #ifdef Atl52                   // Начиная с 5.2.02 Atl52 на Vip определен автоматически
-  #define Atl51
-  #define __Filial__           // Филиальность. Несколько предприятий в одной БД.
+  #define Atl51                // Устаревший (Из CompSrc убран по ПИР 102.142686, в PreDefs.inc оставлен для совместимости)
+  #define __Filial__           // Устаревший (Из CompSrc убран по ПИР 102.142686, в PreDefs.inc оставлен для совместимости)
 #end
 
 #ifdef Gal8_1
@@ -92,7 +93,7 @@
     #define GalVersion 8.10    // Версия Галактики. Используется для версии компонент.
   #end
   #define Gal8_0
-  #define ComponentVersion     // Компонентность без словаря (все таблицы общие)
+  #define ComponentVersion     // Устаревший (Из CompSrc убран по ПИР 102.142686, в PreDefs.inc оставлен для совместимости)
   #define __Post__             // Модуль Почтамт
   #define __PLPOR_NEWFUNCS__
   #define __StatusInPriceL__

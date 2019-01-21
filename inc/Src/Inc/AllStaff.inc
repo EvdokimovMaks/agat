@@ -4,7 +4,7 @@
 // Константы для разделения сущностей таблицы SpAllStaff по полю SpAllStaff.wNoCon
 //------------------------------------------------------------------------------
 
-cgAllStaffProtocol        = 1; // для протокола сообщений
+cgAllStaffProtocol        = 1; // для хранимого протокола сообщений
 cgAllStaffCandidatDX      = 3;
 cgAllStaffImportSAP       = 4; // для протокола сообщений при импорте из SAP
 cgAllStaffContract        = 5;
@@ -18,3 +18,7 @@ cgUserReminder            = 12; // Блокнот событий: сохраненные напоминания поль
 cgAllStaffLinkHistorySHR  = 13;
 cgRPD90Tune               = 14;
 cgBlisnetViolation        = 15; //нарушения режима больничного
+
+cgAllStaffChangePeriod    = 23; // протокол перехода к новому периоду
+
+cgAllStaffRPD38           = 38; // Плановые отпуска в РПД-38

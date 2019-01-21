@@ -22,6 +22,7 @@
 дата_составления
 
 TitleDocNrec : comp
+sBarCode
 
 Title1
 Dummy
@@ -47,6 +48,7 @@ Body
 номер_документа               ^
 дата_составления              ^
 TitleDocNrec : comp           ^
+sBarCode		      ^
 
 .{RD43_CycleT1  CheckEnter
 Title1                        ^

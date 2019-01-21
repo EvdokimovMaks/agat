@@ -12,6 +12,7 @@
 .Fields
 Организация  ОКПО
 TitleDocNrec : comp
+sBarCode
 номер_документа  дата_составления
 
 ContDocNrec : comp
@@ -43,7 +44,7 @@ PassportsGivenBy                        //Кем выдан
 ContractNmb                             //Номер трудового договора
 ContractDate                            //Дата трудового договора
 
-ADDRProp                                //Место прописки
+ADDRProp                                //Место регистрации
 ADDRReg                                 //Место временной регистрации
 FIOSokr                                 //Фамилия с инициалами
 
@@ -52,7 +53,7 @@ FIOSokr                                 //Фамилия с инициалами
 
 .EndFields
 
-^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^
 .{ NformRD50aCycle CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^

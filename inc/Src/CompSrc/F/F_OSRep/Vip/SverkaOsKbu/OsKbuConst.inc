@@ -11,6 +11,8 @@ const
   cgIznos    : word = 2; // сумма износа
   cgMonthIzn : word = 4; // сумма износа за месяц
   cgOstStoim : word = 8; // остаточная стоимость
+  cgUpdIzn   : word = 16; // корректировка амортизации
+  cgStoimL   : word = 32; // Ликвидационная стоимость
   
   cgNoBuhData: word = 64;
   // значения поля parTiDk
@@ -88,24 +90,24 @@ end;
 #define DefKAU11 UserDeskRep.ResWord[const_cwDefKau1 + 9]
 #define DefKAU12 UserDeskRep.ResWord[const_cwDefKau1 + 10]
 
-#define wKAU7 UserDeskRep.ResWord[const_cwKau1 + 22]
-#define wKAU8 UserDeskRep.ResWord[const_cwKau1 + 23]
-#define wKAU9 UserDeskRep.ResWord[const_cwKau1 + 24]
-#define wKAU10 UserDeskRep.ResWord[const_cwKau1 + 25]
-#define wKAU11 UserDeskRep.ResWord[const_cwKau1 + 26]
-#define wKAU12 UserDeskRep.ResWord[const_cwKau1 + 27]
+#define wKAU7 UserDeskRep.ResWord[const_cwKau1 + 23]
+#define wKAU8 UserDeskRep.ResWord[const_cwKau1 + 24]
+#define wKAU9 UserDeskRep.ResWord[const_cwKau1 + 25]
+#define wKAU10 UserDeskRep.ResWord[const_cwKau1 + 26]
+#define wKAU11 UserDeskRep.ResWord[const_cwKau1 + 27]
+#define wKAU12 UserDeskRep.ResWord[const_cwKau1 + 28]
 
-#define cKAU7 UserDeskRep.ResComp[const_cwKau1 + 22]
-#define cKAU8 UserDeskRep.ResComp[const_cwKau1 + 23]
-#define cKAU9 UserDeskRep.ResComp[const_cwKau1 + 24]
-#define cKAU10 UserDeskRep.ResComp[const_cwKau1 + 25]
-#define cKAU11 UserDeskRep.ResComp[const_cwKau1 + 26]
-#define cKAU12 UserDeskRep.ResComp[const_cwKau1 + 27]
+#define cKAU7 UserDeskRep.ResComp[const_cwKau1 + 23]
+#define cKAU8 UserDeskRep.ResComp[const_cwKau1 + 24]
+#define cKAU9 UserDeskRep.ResComp[const_cwKau1 + 25]
+#define cKAU10 UserDeskRep.ResComp[const_cwKau1 + 26]
+#define cKAU11 UserDeskRep.ResComp[const_cwKau1 + 27]
+#define cKAU12 UserDeskRep.ResComp[const_cwKau1 + 28]
 
-#define mKAU7 UserDeskRep.ResWord[const_cwKau1 + 28]
-#define mKAU8 UserDeskRep.ResWord[const_cwKau1 + 29]
-#define mKAU9 UserDeskRep.ResWord[const_cwKau1 + 30]
-#define mKAU10 UserDeskRep.ResWord[const_cwKau1 + 31]
-#define mKAU11 UserDeskRep.ResWord[const_cwKau1 + 32]
-#define mKAU12 UserDeskRep.ResWord[const_cwKau1 + 33]
+#define mKAU7 UserDeskRep.ResWord[const_cwKau1 + 29]
+#define mKAU8 UserDeskRep.ResWord[const_cwKau1 + 30]
+#define mKAU9 UserDeskRep.ResWord[const_cwKau1 + 31]
+#define mKAU10 UserDeskRep.ResWord[const_cwKau1 + 32]
+#define mKAU11 UserDeskRep.ResWord[const_cwKau1 + 33]
+#define mKAU12 UserDeskRep.ResWord[const_cwKau1 + 34]
 #endif

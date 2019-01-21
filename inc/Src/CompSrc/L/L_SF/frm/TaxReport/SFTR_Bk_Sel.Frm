@@ -103,17 +103,20 @@
   var SumNDS10 : double;  SumNDS10 := Summ5                    ;
   var SumNDSNo : double;  SumNDSNo := Summ7                    ;
 
+  var SumRub18_Vsego : double;  SumRub18_Vsego := if(not isNDS20 and IsIncItog, Summ1, 0);
+  var SumNDS18_Vsego : double;  SumNDS18_Vsego := if(not isNDS20 and IsIncItog, Summ2, 0);
+
   ClearAdvRecord(Buff);
-  Buff.NumPP           := NumPP          ;  // 01. Порядковый номер записи                                                                                                      
-  Buff.KodOp           := KodOp          ;  // 02. Код вида операции                                                                                                            
+  Buff.NumPP           := NumPP          ;  // 01. Порядковый номер записи
+  Buff.KodOp           := KodOp          ;  // 02. Код вида операции
   Buff.DatSF           := DatFact        ;  // 03. Дата счета-фактуры продавца
   Buff.NomSF           := NomSF          ;  // 03. Номер счета-фактуры продавца
   Buff.DatRevSF        := DatRevSF       ;  // 04. Дата исправления счета-фактуры продавца
-  Buff.NomRevSF        := NomRevSF       ;  // 04. Номер исправления счета-фактуры продавца                                                                                     
-  Buff.DatCorrV        := DatCorrV       ;  // 05. Дата корректировочного счета-фактуры продавца                                                                                
-  Buff.NomCorrV        := NomCorrV       ;  // 05. Номер корректировочного счета-фактуры продавца                                                                               
-  Buff.DatRevCorrV     := DatRevCorrV    ;  // 06. Дата исправления корректировочного счета-фактуры продавца                                                                    
-  Buff.NomRevCorrV     := NomRevCorrV    ;  // 06. Номер исправления корректировочного счета-фактуры продавца                                                                   
+  Buff.NomRevSF        := NomRevSF       ;  // 04. Номер исправления счета-фактуры продавца
+  Buff.DatCorrV        := DatCorrV       ;  // 05. Дата корректировочного счета-фактуры продавца
+  Buff.NomCorrV        := NomCorrV       ;  // 05. Номер корректировочного счета-фактуры продавца
+  Buff.DatRevCorrV     := DatRevCorrV    ;  // 06. Дата исправления корректировочного счета-фактуры продавца
+  Buff.NomRevCorrV     := NomRevCorrV    ;  // 06. Номер исправления корректировочного счета-фактуры продавца
   Buff.KontrNameNazn   := KontrNameNazn  ;  // 07. Наименование покупателя
   Buff.KontrINN        := KontrINN       ;  // 08. ИНН покупателя
   Buff.KontrKPP        := KontrKPP       ;  // 08. КПП покупателя
@@ -129,6 +132,8 @@
   Buff.SumNDS18        := SumNDS18       ;  // 17. Сумма НДС по счету-фактуре, разница стоимости по корректировочному счету- фактуре, в рублях и копейках, по ставке 18 процентов
   Buff.SumNDS10        := SumNDS10       ;  // 18. Сумма НДС по счету-фактуре, разница стоимости по корректировочному счету- фактуре, в рублях и копейках, по ставке 10 процентов
   Buff.SumNDSNo        := SumNDSNo       ;  // 19. Стоимость продаж, освобождаемых от налога, по счету-фактуре, разница стоимости по корректировочному счету-фактуре в рублях и копейках
+  Buff.SumRub18_Vsego  := SumRub18_Vsego ;  // ВСЕГО 14. Стоимость продаж, облагаемых налогом, по счету-фактуре, разница стоимости по корректировочному счету-фактуре (без НДС) в рублях и копейках, по ставке 18 процентов
+  Buff.SumNDS18_Vsego  := SumNDS18_Vsego ;  // ВСЕГО 17. Сумма НДС по счету-фактуре, разница стоимости по корректировочному счету- фактуре, в рублях и копейках, по ставке 18 процентов
 
   pSpy.ReportRecDataBkSel(Buff);
 end.

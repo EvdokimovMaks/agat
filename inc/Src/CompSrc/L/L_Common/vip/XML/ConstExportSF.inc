@@ -16,4 +16,5 @@ const
   cg_ExpSfNalStRasch   = 2048; // налоговая ставка СФ расчетная
   cg_ExpSfNalStProc    = 4096; // налоговая ставка СФ процентная
   cg_ExpSfVarNameMCUsl = 8192; // выводить вариант наименования МЦ/услуги
+  cg_ExpUpdWithoutSF   = 16384; // выгрузка УПД без СФ
 end;

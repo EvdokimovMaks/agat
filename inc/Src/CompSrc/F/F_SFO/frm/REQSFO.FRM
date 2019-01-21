@@ -17,6 +17,7 @@
     IsCustom := True;
 end.
 .Fields
+  ShDopSize1 : String ShDopSize2 : String
 // Шапка требования
   dNumber : String  dDate : Date  fDesGr : String  fDescr : String
   PersName : String  TabN : String  CardN : String
@@ -38,6 +39,7 @@ end.
   Подписант_Должность : String
   Подписант_Роль : String
 .endFields
+   ^ ^
 .{
    ^ ^ ^ ^
    ^ ^ ^
@@ -65,26 +67,22 @@ end.
    CommonFormHeader  MyOrgName
    dNumber   DateToStr(dDate, 'DD/MM/YYYY')
    PersName  TabN  CardN
-   r_Rost  r_od1  r_od2  r_ob  r_ob2
+   r_Rost  r_od1  r_ob
+   r_gu  r_perch  r_isz
+   if (IsCustom, '  ' + 'погоны' + ' ', '')
+   if (IsCustom, r_pog, '')
+   if (ShDopSize1 <> '', '  ' + ShDopSize1 + ' ', '')
+   if (ShDopSize1 <> '', r_od2, '')
+   if (ShDopSize2 <> '', '  ' + ShDopSize2 + ' ', '')
+   if (ShDopSize2 <> '', r_ob2, '')
 .endFields
 .{
  И ^
  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
  Требование №  Б^ Б от  Б^ Б на выдачу специальной (форменной) одежды
  работнику:  Б^ Б  Таб. №:  Б^ Б  Карточка №:  Б^ Б
- размеры:рост  Б^ Б  одежда1  Б^ Б  одежда2  Б^ Б  обувь1  Б^ Б  обувь2  Б^ Б
-.{?INTERNAL; not (IsCustom)
-.Fields
-  r_gu  r_perch  r_isz
-.endFields
-         гол.убор  Б^ Б  перчатки  Б^ Б  СИЗОД  Б^ Б
-.}
-.{?INTERNAL; (IsCustom)
-.Fields
-  r_gu  r_perch  r_isz  r_pog
-.endFields
-         гол.убор  Б^ Б  перчатки  Б^ Б  СИЗОД  Б^ Б  погоны  Б^ Б
-.}
+ размеры:рост  Б^ Б  одежда  Б^ Б  обувь  Б^ Б  гол.убор  Б^ Б
+         перчатки  Б^ Б  СИЗОД  Б^ Б^ Б^ Б^ Б^ Б^ Б^ Б
 .Fields
    MOLToName  PodrToName
    MOLFrName  PodrFrName
@@ -130,7 +128,14 @@ end.
    CommonFormHeader  MyOrgName
    dNumber   DateToStr(dDate, 'DD/MM/YYYY')
    PersName  TabN  CardN
-   r_Rost  r_od1  r_od2  r_ob  r_ob2
+   r_Rost  r_od1  r_ob
+   r_gu  r_perch  r_isz
+   if (IsCustom, '  ' + 'погоны' + ' ', '')
+   if (IsCustom, r_pog, '')
+   if (ShDopSize1 <> '', '  ' + ShDopSize1 + ' ', '')
+   if (ShDopSize1 <> '', r_od2, '')
+   if (ShDopSize2 <> '', '  ' + ShDopSize2 + ' ', '')
+   if (ShDopSize2 <> '', r_ob2, '')
 .endFields
 .{
 .begin
@@ -142,19 +147,8 @@ end.
  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
  Требование №  Б^ Б от  Б^ Б на выдачу специальной (форменной) одежды
  работнику:  Б^ Б  Таб. №:  Б^ Б  Карточка №:  Б^ Б
- размеры:рост  Б^ Б  одежда1  Б^ Б  одежда2  Б^ Б  обувь1  Б^ Б  обувь2  Б^ Б
-.{?INTERNAL; not (IsCustom)
-.Fields
-  r_gu  r_perch  r_isz
-.endFields
-         гол.убор  Б^ Б  перчатки  Б^ Б  СИЗОД  Б^ Б
-.}
-.{?INTERNAL; (IsCustom)
-.Fields
-  r_gu  r_perch  r_isz  r_pog
-.endFields
-         гол.убор  Б^ Б  перчатки  Б^ Б  СИЗОД  Б^ Б  погоны  Б^ Б
-.}
+ размеры:рост  Б^ Б  одежда  Б^ Б  обувь  Б^ Б  гол.убор  Б^ Б
+         перчатки  Б^ Б  СИЗОД  Б^ Б^ Б^ Б^ Б^ Б^ Б^ Б
 .Fields
    MOLToName  PodrToName
    MOLFrName  PodrFrName

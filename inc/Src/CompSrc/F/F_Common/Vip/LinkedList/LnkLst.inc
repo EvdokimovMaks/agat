@@ -16,6 +16,7 @@ const
   lc_DocInfoExtAttrName_dArendStart    = 'dArendStart'  ;  // Дата начала аренды
   lc_DocInfoExtAttrName_dArendEnd      = 'dArendEnd'    ;  // Дата окончания аренды
   lc_DocInfoExtAttrName_cArendator     = 'cArendator'   ;  // Организация арендатор
+  lc_DocInfoExtAttrName_cDogovor       = 'cDogovor'     ;  // Договор
   lc_DocInfoExtAttrName_inArend        = 'inArend'      ;  // Передано в аренду
   lc_DocInfoExtAttrName_cEd            = 'cEd'          ;  // Единицы измерения
 

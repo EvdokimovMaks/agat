@@ -27,6 +27,8 @@ type
     CORG           : Comp;            { организация-получатель налога         }
     DOPNALOG       : Double;          { доп. ставка налога                    }
     NALUCH         : Word;            { 0-не входит в нал.учет, 1-входит      }
+    TOLERANS       : array [1..2] of Double;{ Предельное отклонение ручных налогов }
+    WCONTROL       : Word;            { Контроль отклонения                   }
     KATNALOG_NREC  : Comp;            { Номер записи                          }
     KATNALOG_ATL_LASTDATE: Date;      { Дата последней модификации            }
     KATNALOG_ATL_LASTTIME: Time;      { Время последней модификации           }
@@ -61,30 +63,30 @@ const
     FNCGRNAL=9;
     FNCNALOG=10;
     FNCORG=18;
-    FNCUSL=38;
+    FNCUSL=42;
     FNCVAL=13;
-    FNCVIDNAL=33;
+    FNCVIDNAL=37;
     FNDNALOG=1;
     FNDOPNALOG=19;
-    FNFORMULA=30;
-    FNISAGREG=36;
-    FNKATNALOG_ATL_BRANCH=27;
-    FNKATNALOG_ATL_LASTDATE=22;
-    FNKATNALOG_ATL_LASTTIME=23;
-    FNKATNALOG_ATL_LASTUSER=24;
-    FNKATNALOG_ATL_ORIGINOFFICE=25;
-    FNKATNALOG_ATL_OWNER=26;
-    FNKATNALOG_ISCUSTOM=32;
-    FNKATNALOG_NREC=21;
-    FNKOD=28;
+    FNFORMULA=34;
+    FNISAGREG=40;
+    FNKATNALOG_ATL_BRANCH=31;
+    FNKATNALOG_ATL_LASTDATE=26;
+    FNKATNALOG_ATL_LASTTIME=27;
+    FNKATNALOG_ATL_LASTUSER=28;
+    FNKATNALOG_ATL_ORIGINOFFICE=29;
+    FNKATNALOG_ATL_OWNER=30;
+    FNKATNALOG_ISCUSTOM=36;
+    FNKATNALOG_NREC=25;
+    FNKOD=32;
     FNNALD1=14;
     FNNALD2=15;
     FNNALOG=11;
     FNNALUCH=20;
-    FNNAME=29;
-    FNNPP=35;
-    FNOUTUCH=37;
-    FNPRIOR=31;
+    FNNAME=33;
+    FNNPP=39;
+    FNOUTUCH=41;
+    FNPRIOR=35;
     FNSPGRNAL_ATL_BRANCH=8;
     FNSPGRNAL_ATL_LASTDATE=3;
     FNSPGRNAL_ATL_LASTTIME=4;
@@ -94,5 +96,8 @@ const
     FNSPGRNAL_ISCUSTOM=16;
     FNSPGRNAL_NREC=2;
     FNSUMNAL=12;
-    FNTIPNALOG=34;
+    FNTIPNALOG=38;
+    FNTOLERANS1=21;
+    FNTOLERANS2=22;
+    FNWCONTROL=24;
 {$ENDIF}

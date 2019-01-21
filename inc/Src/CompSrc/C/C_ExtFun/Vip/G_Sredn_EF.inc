@@ -391,7 +391,8 @@ function Restrict_D2_Inval возвращает дату окончания оплачиваемых дней больнично
    датой наступления инвалидности в период больничного. В этом случае оплачиваемые дни
    больничного ограничиваются датой, предшествующей дате регистрации в МСЭ.
 #end
-function RESTRICT_D2_INVAL(date, date, comp, word): date; external 'G_SUMDIVIDE.DLL';
+
+function RESTRICT_D2_INVAL(date, date, word, word): date; external 'G_SUMDIVIDE.DLL';
 
 Function SetKolDn_D1_D2_Shift(double,
                               Date,Date,Date,
@@ -442,5 +443,3 @@ function D_O_Shift(double, date, date, date, String, comp, word, double, longint
 
 function D_O_ProcFSS(double, date, date, date, String, comp, word, double, longint, longint, longint,
                    double, word): date;  external 'G_SUMDIVIDE.DLL';
-
-

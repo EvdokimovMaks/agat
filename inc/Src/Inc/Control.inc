@@ -692,6 +692,7 @@
  ContrMinSumma = 0.00000001;  // для вссяческих расчетов и калькуляций
  ContrMinSumma_Report  = 0.001;  // для отчетов без аналогичных настроек
  ContrMinAmount_Report = 0.0001; // для отчетов без аналогичных настроек
+ ContrMinSummaVerySmall  = 0.001;  // для калькулирования
  
  FictNorm_Spis   = 7777; // фиктивные нормы при списаниях на продукцию
  FantomNorm_Spis = 7778; // нормы списания на продукцию по фантомным МЦ (листы допустимых замен)
@@ -898,9 +899,13 @@
   AnalNoOpred     = 'Объект не определен';
   AnalNaslBudj    = 'Наследование';
   AnalNaslSum_BR  = 'Из базы';
+  AnalNaslPB_Nazn = 'Из назначения';
+  AnalNasl_Syn    = 'Из синонима';
   
   cnstAnalSendAll    = 0; //любые объекты поставщики
   cnstAnalNaslPB     = 0; //'Из баланса'
+  cnstAnalNasl_Nazn  = 7; //'Из назначения'
+  cnstAnalNasl_Syn   = 8; //'Из синонима'
 
   cnstAnalKonkr      = 1; //Конкретный объект
   cnstNoOpred        = 2; //Объект не определен

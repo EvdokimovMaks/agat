@@ -8,6 +8,7 @@ function NREC_13 : Comp; external 'G_ZARPL.DLL';
 function PROC_ST(comp, word, date, date): Double; external 'G_ZARPL.DLL';
 function TarSCoef(double,word, word, word, date): double; external 'G_ZARPL.DLL';
 function Proc_Refin(word,date): Double; external 'G_ZARPL.DLL';
+function Changed_Refin(word,double,date,date) : double; external 'G_ZARPL.DLL';
 function NrSumma: double; external 'g_zarpl.dll';
 function NrPrem: double; external 'g_zarpl.dll';
 
@@ -376,6 +377,16 @@ function LsNar: comp; external 'g_zarpl.dll';
 #end
 function OperNar: comp; external 'g_zarpl.dll';
 
+#doc
+  Процент понижения премии из записи спецификации наряда
+#end
+function NRBONUSREDPRC: double; external 'g_zarpl.dll';
+
+#doc
+  Процент премии записи спецификации наряда
+#end
+function NRBONUSPRC: double; external 'g_zarpl.dll';
+
 function NachDVH(word,word): Double; external 'G_ZARPL.DLL';
 
 #doc
@@ -701,6 +712,12 @@ procedure TabHelpZap(PrPos:longint, NrecPrMNew : comp, MOtch : word, YOtch : wor
   </ul>
 #end
 function SRPRDOPL(VO: longint, DB: date, DE: date): double; external 'G_ZARPL.DLL';
+
+#doc
+   Минимальная заработная плата (базовая величина)
+   D - дата (date(ДД,MM,ГГГГ))
+#end
+function MINZPBASESUMMA(D: date): double; external 'G_ZARPL.DLL';
 
 #doc
    Минимальная заработная плата для окладников

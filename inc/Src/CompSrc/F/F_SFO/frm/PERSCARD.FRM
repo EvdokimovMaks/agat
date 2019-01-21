@@ -17,6 +17,10 @@
   if (Lic_ItemExists('Custom'))
     IsCustom := True;
 end.
+.Fields
+  DopSize1 : String DopSize2 : String
+.endFields
+  ^ ^
 .{
 .Fields
   OrgName : String  ОКПО : String  CardNo : String  sostDate : Date
@@ -115,10 +119,10 @@ end.
   OrgName  CardNo  FIO TabN  Pol  Cex
   Podr  Rost
   Prof  Od1
-  if (Longint(InDate) = 0, '', DateToStr(InDate, 'DD/MM/YYYY'))  Od2
-  if (Longint(chDate) = 0, '', DateToStr(chDate, 'DD/MM/YYYY'))  Ob
-  if (Longint(uvDate) = 0, '', DateToStr(uvDate, 'DD/MM/YYYY'))  Ob2
-  Perch  GUb  ISZ
+  if (Longint(InDate) = 0, '', DateToStr(InDate, 'DD/MM/YYYY'))  Ob
+  if (Longint(chDate) = 0, '', DateToStr(chDate, 'DD/MM/YYYY'))  Perch
+  if (Longint(uvDate) = 0, '', DateToStr(uvDate, 'DD/MM/YYYY'))  GUb
+  ISZ  Pog  DopSize1  Od2  DopSize2  Ob2
 .endFields
   ^
   ^
@@ -131,18 +135,19 @@ end.
 Табельный номер  @@@@@@@@@@                             Пол         @@@
 Цех(Отдел)  &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 Вышестоящее &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&          Рост      &&&&&
-Профессия (должность) &&&&&&&&&&&&&&&&&&&&&&&&  Размеры:одежды1   &&&&&
-Дата поступления на работу          @@@@@@@@@@          одежды2   &&&&&
-Дата изменения норм (проф., должн.) @#@@@@@@@@          обуви1    &&&&&
-Дата увольнения                     @#@@@@@@@@          обуви2    &&&&&
-                                                        перчаток  &&&&&
-                                                        гол.убора &&&&&
+Профессия (должность) &&&&&&&&&&&&&&&&&&&&&&&&  Размеры:одежды    &&&&&
+Дата поступления на работу          @@@@@@@@@@          обуви     &&&&&
+Дата изменения норм (проф., должн.) @#@@@@@@@@          перчаток  &&&&&
+Дата увольнения                     @#@@@@@@@@          гол.убора &&&&&
                                                         СИЗОД     &&&&&
 .{?INTERNAL; (IsCustom)
-.Fields
-  Pog
-.endFields
                                                         погон     &&&&&
+.}
+.{?INTERNAL; (DopSize1 <> '')
+                                                @@@@@@@@@@@@@@@@@ &&&&&
+.}
+.{?INTERNAL; (DopSize2 <> '')
+                                                @@@@@@@@@@@@@@@@@ &&&&&
 .}
 
 Предусмотрено по утвержденным нормам

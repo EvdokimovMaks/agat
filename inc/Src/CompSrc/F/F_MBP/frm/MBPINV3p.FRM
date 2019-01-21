@@ -32,11 +32,12 @@
   TipName : Word
   isCopy  : Word
   PageNum : Word
+  VidStoim: Word
 .endFields
   #CommissionBody(MBPInvProtPlus)
   NRec - ^
   ^ ^  ^ ^ ^ ^  ^ ^  ^ ^ ^  ^
-  ^ ^  ^ ^ ^ ^  ^ ^
+  ^ ^  ^ ^ ^ ^  ^ ^  ^
 .{
 .Fields
   MBPName : String  MBPKod : String
@@ -242,7 +243,12 @@ end.
                                                     (¤®«¦­®áâì)                    (¯®¤¯¨áì)                                 (à áè¨äà®¢ª  ¯®¤¯¨á¨)
 
 .}
-    à®¨§¢¥¤¥­® á­ïâ¨¥ ä ªâ¨ç¥áª¨å ®áâ âª®¢ æ¥­­®áâ¥© ¯® á®áâ®ï­¨î ­  "__" _________________________  ____ £.
+.fields
+  DateToStr(begDate, 'DD')
+  DateToStr(begDate, 'mon')
+  DateToStr(begDate, 'YYYY')
+.endfields
+    à®¨§¢¥¤¥­® á­ïâ¨¥ ä ªâ¨ç¥áª¨å ®áâ âª®¢ æ¥­­®áâ¥© ¯® á®áâ®ï­¨î ­  "ÿ„@~@@ÿ„" ÿ„@~@@@@@@@@@@@@@@@@@@@@ÿ„  ÿ„@~@@@@ÿ„ £.
 .fields
   'true' : 's'
 .endfields
@@ -321,21 +327,21 @@ end.
   MBPInfo
   MBPKod  EdKod  Ed  Price
   if (InvNum = '', '-', InvNum)  if(PasNum = '', '-', PasNum)
-  fctKol  fctKol * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price - tSum)
-  cntKol  cntKol * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price - tSum)
+  fctKol  fctKol * if (VidStoim = 0, Price, Price - tSum)
+  cntKol  cntKol * if (VidStoim = 0, Price, Price - tSum)
 .endFields
 ³&'&&& ³@@@@@@@@@³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@º@@@@@@@@@@@@@@³@@@@@@º@@@@@@@@@@º&'&&&&&&&&.&&³@@@@@@@@@@³@@@@@@@@@@³&&&'#&&.&&³&'#&&&&&&&&&&&&&.&&º&&&'#&&.&&³&'#&&&&&&&&&&&&&.&&³
 .[f
 .Fields
   NpPg
   if (isCopy = 1, PgFctKol, 0.0)
-  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), 0.0)
+  if (isCopy = 1, if (VidStoim = 0, PgFctSum, PgFctSum - PgFIzSum), 0.0)
   if (isCopy = 2, 0.0, PgCntKol)
-  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, PgCntSum, PgCntSum - PgCIzSum))
+  if (isCopy = 2, 0.0, if (VidStoim = 0, PgCntSum, PgCntSum - PgCIzSum))
   DoubleToStr(NpPg, '\m4')
   if (isCopy = 1, GetKolStr(PgFctKol), '')
-  if (isCopy = 1, DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), '\2p\m4'), '')
-  if (isCopy = 1, GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum)), '')
+  if (isCopy = 1, DoubleToStr(if (VidStoim = 0, PgFctSum, PgFctSum - PgFIzSum), '\2p\m4'), '')
+  if (isCopy = 1, GetKopStr(if (VidStoim = 0, PgFctSum, PgFctSum - PgFIzSum)), '')
 .endFields
 ÃÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÊÍÍÍÍÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÊÄÄÄÄÄÄÄÄÄÄÊÍÍÍÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÎÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
 ³ÿ&&&&& ÿ³                                                                                                       ÿˆâ®£®ÿ  ³ÿ&&&'#&&.&&ÿ³ÿ&'#&&&&&&&&&&&&&.&&ÿ³ÿ&&&'#&&.&&ÿ³ÿ&'#&&&&&&&&&&&&&.&&ÿ³
@@ -357,13 +363,13 @@ end.
   StrKol + 1
   Npp
   if (isCopy = 1, TotFctKol, 0.0)
-  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), 0.0)
+  if (isCopy = 1, if (VidStoim = 0, TotFctSum, TotFctSum - TotFIzSum), 0.0)
   if (isCopy = 2, 0.0, TotCntKol)
-  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, TotCntSum, TotCntSum - TotCIzSum))
+  if (isCopy = 2, 0.0, if (VidStoim = 0, TotCntSum, TotCntSum - TotCIzSum))
   DoubleToStr(Npp, '\m4')
   if (isCopy = 1, GetKolStr(TotFctKol), '')
-  if (isCopy = 1, DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), '\2p\m4'), '')
-  if (isCopy = 1, GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum)), '')
+  if (isCopy = 1, DoubleToStr(if (VidStoim = 0, TotFctSum, TotFctSum - TotFIzSum), '\2p\m4'), '')
+  if (isCopy = 1, GetKopStr(if (VidStoim = 0, TotFctSum, TotFctSum - TotFIzSum)), '')
 .endFields
 ^
 .{?Internal;(PageNum = 0);
@@ -567,7 +573,7 @@ end.
   if (Izn > 0, String(Izn), '')
   Ed  DateToStr(dOst, 'DD/MM/YYYY')
   fctKol  cntKol  Price  fctKol - cntKol
-  (fctKol - cntKol) * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price*(1 - Izn/100))
+  (fctKol - cntKol) * if (VidStoim = 0, Price, Price*(1 - Izn/100))
 
   totNed  totIzl
 .endFields
@@ -592,8 +598,8 @@ end.
 ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÁÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
 .]h
 .begin
-  if (fctKol > cntKol) totIzl := totIzl + (fctKol - cntKol) * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price*(1 - Izn/100));
-  if (fctKol < cntKol) totNed := totNed + (cntKol - fctKol) * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price*(1 - Izn/100));
+  if (fctKol > cntKol) totIzl := totIzl + (fctKol - cntKol) * if (VidStoim = 0, Price, Price*(1 - Izn/100));
+  if (fctKol < cntKol) totNed := totNed + (cntKol - fctKol) * if (VidStoim = 0, Price, Price*(1 - Izn/100));
 end.
 @@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@ @@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@ @@@@ &&&&&& @@@@@@@@@@@ @@@@@@@@@@ &'#&&&.&& &'#&&&.&& &'&&&&&&&&&&.&& &'#&&&.&& &'#&&&&&&&&&&&&&.&&
 .}
@@ -686,6 +692,8 @@ end.
   if (Longint(DocDate) > 0, DateToStr(DocDate, 'DD/MM/YYYY'), '')
   if (Longint(begDate) > 0, DateToStr(begDate, 'DD/MM/YYYY'), '')
   if (Longint(endDate) > 0, DateToStr(endDate, 'DD/MM/YYYY'), '')
+  Nom
+  if (Longint(begDate) > 0, DateToStr(begDate, 'DD/MM/YYYY'), '')
 .endFields
 .begin
   Npp := startNpp - 1
@@ -718,7 +726,7 @@ end.
                                                                                                                                               ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
                                                                                                                                               ³  ®¬¥à ¤®ªã¬¥­â    ³  „ â  á®áâ ¢«¥­¨ï  ³
                                                                                                                                               ÌÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¹
-                                                                                ÿ‘ ‹ ˆ — ˆ ’ … ‹ œ  € Ÿ   ‚ … „ Ž Œ Ž ‘ ’ œÿ                   º                    ³                    º
+                                                                                ÿ‘ ‹ ˆ — ˆ ’ … ‹ œ  € Ÿ   ‚ … „ Ž Œ Ž ‘ ’ œÿ                   º@~@@@@@@@@@@@@@@@@@@³@~@@@@@@@@@@@@@@@@@@º
                                                                                                                                               ÈÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼
                                                                          ÿà¥§ã«ìâ â®¢ ¨­¢¥­â à¨§ æ¨¨ â®¢ à­®-¬ â¥à¨ «ì­ëå æ¥­­®áâ¥©ÿ
 
@@ -738,8 +746,13 @@ end.
                   ÿ„@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ„     ÿ„@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ÿ„
                                    ¤®«¦­®áâì                                                                             ä ¬¨«¨ï, ¨¬ï, ®âç¥áâ¢®
 .}
+.fields
+  DateToStr(begDate, 'DD')
+  DateToStr(begDate, 'mon')
+  DateToStr(begDate, 'YYYY')
+.endfields
 
-             ¯® á®áâ®ï­¨î ­   "_____" ________________________  _________ £.
+             ¯® á®áâ®ï­¨î ­   "ÿ„@~@@ÿ„" ÿ„@~@@@@@@@@@@@@@@@@@@@@ÿ„  ÿ„@~@@@@ÿ„ £.
 
              à¨ ¨­¢¥­â à¨§ æ¨¨ ãáâ ­®¢«¥­® á«¥¤ãîé¥¥:
 .fields
@@ -808,15 +821,15 @@ end.
   MBPInfo
   MBPKod  EdKod  Ed  InvNum  PasNum
   if (fctKol > cntKol, fctKol - cntKol, 0.0)
-  if (fctKol > cntKol, (fctKol - cntKol) * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price * (1 - Izn/100)), 0.0)
+  if (fctKol > cntKol, (fctKol - cntKol) * if (VidStoim = 0, Price, Price * (1 - Izn/100)), 0.0)
   if (fctKol < cntKol, cntKol - fctKol, 0.0)
-  if (fctKol < cntKol, (cntKol - fctKol) * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price * (1 - Izn/100)), 0.0)
+  if (fctKol < cntKol, (cntKol - fctKol) * if (VidStoim = 0, Price, Price * (1 - Izn/100)), 0.0)
 .endFields
 ³&&&³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@º@@@@@@@@@@@@@³@@@@@@@@º@@@@@@@@@@º@@@@@@@@³@@@@@@@@@@³&#'&&&&&&.&&³&#'&&&&&&&&&.&&³&#'&&&&&&.&&³&#'&&&&&&&&&.&&º      ³         ³             ³      ³         ³             ³
 .[f
 .Fields
-  PgIzlKol  if (wGetTune('Fin.MBP.OstStoim') = 0, PgIzlSum, PgIzlSum - PgIzlIzn)
-  PgNedKol  if (wGetTune('Fin.MBP.OstStoim') = 0, PgNedSum, PgNedSum - PgNedIzn)
+  PgIzlKol  if (VidStoim = 0, PgIzlSum, PgIzlSum - PgIzlIzn)
+  PgNedKol  if (VidStoim = 0, PgNedSum, PgNedSum - PgNedIzn)
   ãå£ «â¥à_”ˆŽ
 .endFields
 ÀÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÊÍÍÍÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÊÄÄÄÄÄÄÄÄÄÄÊÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÎÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄ´
@@ -1117,21 +1130,21 @@ end.
   Npp
   MBPInfo
   MBPKod  Ed  Price
-  fctKol  fctKol * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price - tSum)
-  cntKol  cntKol * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price - tSum)
+  fctKol  fctKol * if (VidStoim = 0, Price, Price - tSum)
+  cntKol  cntKol * if (VidStoim = 0, Price, Price - tSum)
 .endfields
     ³@~@@@@@³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@³@@@@@@@@@@@@@@@@@@³@@@@@@@@@@@@@@@³&'&&&&&&&&&&&&&&&&.&&³&&&&&&&&&&&'#&&.&&³&'#&&&&&&&&&&&&&&&.&&³&&&&&&&&&&&'&&&.&&³&'&&&&&&&&&&&&&&&&.&&³
 .[f
 .fields
   NpPg
   if (isCopy = 1, PgFctKol, 0.0)
-  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), 0.0)
+  if (isCopy = 1, if (VidStoim = 0, PgFctSum, PgFctSum - PgFIzSum), 0.0)
   if (isCopy = 2, 0.0, PgCntKol)
-  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, PgCntSum, PgCntSum - PgCIzSum))
+  if (isCopy = 2, 0.0, if (VidStoim = 0, PgCntSum, PgCntSum - PgCIzSum))
   DoubleToStr(NpPg, '\m4')
   if (isCopy = 1, GetKolStr(PgFctKol), '')
-  if (isCopy = 1, DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), '\2p\m4'), '')
-  if (isCopy = 1, GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum)), '')
+  if (isCopy = 1, DoubleToStr(if (VidStoim = 0, PgFctSum, PgFctSum - PgFIzSum), '\2p\m4'), '')
+  if (isCopy = 1, GetKopStr(if (VidStoim = 0, PgFctSum, PgFctSum - PgFIzSum)), '')
 .endFields
     ÃÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
     ³ÿ@~@@@@@ÿ³                                                                          ÿ        ÿ       ³      ÿ ˆ’ŽƒŽÿ         ³ÿ&&&&&&&&&&&'#&&.&&ÿ³ÿ&'#&&&&&&&&&&&&&&&.&&ÿ³ÿ&&&&&&&&&&&'#&&.&&ÿ³ÿ&'#&&&&&&&&&&&&&&&.&&ÿ³
@@ -1153,13 +1166,13 @@ end.
   StrKol + 1
   Npp
   if (isCopy = 1, TotFctKol, 0.0)
-  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), 0.0)
+  if (isCopy = 1, if (VidStoim = 0, TotFctSum, TotFctSum - TotFIzSum), 0.0)
   if (isCopy = 2, 0.0, TotCntKol)
-  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, TotCntSum, TotCntSum - TotCIzSum))
+  if (isCopy = 2, 0.0, if (VidStoim = 0, TotCntSum, TotCntSum - TotCIzSum))
   DoubleToStr(Npp, '\m4')
   if (isCopy = 1, GetKolStr(TotFctKol), '')
-  if (isCopy = 1, DoubleToStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), '\2p\m4'), '')
-  if (isCopy = 1, GetKopStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum)), '')
+  if (isCopy = 1, DoubleToStr(if (VidStoim = 0, TotFctSum, TotFctSum - TotFIzSum), '\2p\m4'), '')
+  if (isCopy = 1, GetKopStr(if (VidStoim = 0, TotFctSum, TotFctSum - TotFIzSum)), '')
 .endFields
 ^
                                                                                                                                                                                       &&-ï áâà ­¨æ  ä®à¬ë 6-¨­¢
@@ -1485,20 +1498,20 @@ end.
   Npp
   MBPInfo
   MBPKod  Ed  EdKod  Price
-  fctKol  fctKol * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price - tSum)
-  cntKol  cntKol * if (wGetTune('Fin.MBP.OstStoim') = 0, Price, Price - tSum)
+  fctKol  fctKol * if (VidStoim = 0, Price, Price - tSum)
+  cntKol  cntKol * if (VidStoim = 0, Price, Price - tSum)
 .endfields
     ³@~@@@@@³@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@º@@@@@@@@@@@@@@@@@@º@@@@@@@@@@@@@@º@@@@@@@@@@@@@³&'&&&&&&&&&&&&&&&&.&&³&&&&&'#&&.&&³&'#&&&&&&&&&&&&&&&.&&º&&&&&'&&&.&&³&'&&&&&&&&&&&&&&&&.&&³
 .[f
 .fields
   NpPg
   if (isCopy = 1, PgFctKol, 0.0)
-  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum), 0.0)
+  if (isCopy = 1, if (VidStoim = 0, PgFctSum, PgFctSum - PgFIzSum), 0.0)
   if (isCopy = 2, 0.0, PgCntKol)
-  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, PgCntSum, PgCntSum - PgCIzSum))
+  if (isCopy = 2, 0.0, if (VidStoim = 0, PgCntSum, PgCntSum - PgCIzSum))
   DoubleToStr(NpPg, '\m4')
   if (isCopy = 1, GetKolStr(PgFctKol), '')
-  if (isCopy = 1, GetStoimStr(if (wGetTune('Fin.MBP.OstStoim') = 0, PgFctSum, PgFctSum - PgFIzSum)), '')
+  if (isCopy = 1, GetStoimStr(if (VidStoim = 0, PgFctSum, PgFctSum - PgFIzSum)), '')
 .endFields
     ÃÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÊÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÊÄÄÄÄÄÄÄÄÄÄÄÄÄÄÊÍÍÍÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÎÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
     ³ÿ@~@@@@@ÿ³                                                                                               ÿˆ’ŽƒŽÿ  ³                     ³ÿ&&&&&'#&&.&&ÿ³ÿ&'#&&&&&&&&&&&&&&&.&&ÿ³ÿ&&&&&'#&&.&&ÿ³ÿ&'#&&&&&&&&&&&&&&&.&&ÿ³
@@ -1519,12 +1532,12 @@ end.
   'true' : 's'
   Npp
   if (isCopy = 1, TotFctKol, 0.0)
-  if (isCopy = 1, if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum), 0.0)
+  if (isCopy = 1, if (VidStoim = 0, TotFctSum, TotFctSum - TotFIzSum), 0.0)
   if (isCopy = 2, 0.0, TotCntKol)
-  if (isCopy = 2, 0.0, if (wGetTune('Fin.MBP.OstStoim') = 0, TotCntSum, TotCntSum - TotCIzSum))
+  if (isCopy = 2, 0.0, if (VidStoim = 0, TotCntSum, TotCntSum - TotCIzSum))
   DoubleToStr(Npp, '\m4')
   if (isCopy = 1, GetKolStr(TotFctKol), '')
-  if (isCopy = 1, GetStoimStr(if (wGetTune('Fin.MBP.OstStoim') = 0, TotFctSum, TotFctSum - TotFIzSum)), '')
+  if (isCopy = 1, GetStoimStr(if (VidStoim = 0, TotFctSum, TotFctSum - TotFIzSum)), '')
 .endFields
 ^
                                                                                                                                                                                  @NP@-ï áâà ­¨æ  ä®à¬ë ü ˆ‚-3

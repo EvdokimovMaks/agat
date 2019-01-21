@@ -10,6 +10,7 @@
   .form NFormRD42Form
 .Hide
 .Fields
+sBarCode
 Организация
 ОКПО
 Номер_Приказа
@@ -47,7 +48,7 @@ NeedNote
 ContDocNrec
 PersNrec
 .EndFields
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^
 .{ NformRD42Cycle  CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^ ^

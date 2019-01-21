@@ -18,6 +18,7 @@
 
 .Fields
 
+sBarCode
 организация ОКПО
 номер_документа
 дата_составления
@@ -37,7 +38,7 @@ TabN
 
 .EndFields
 
-^ ^ ^ ^
+^ ^ ^ ^ ^
 .{ NformRD32aCycle CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^
 .}

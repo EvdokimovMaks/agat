@@ -42,7 +42,7 @@
     ppTypeSummaVal       = 5;        // тип поля сумма в валюте
     ppTypeKoeff          = 6;        // тип поля Коэффициент
     ppTypeTrEqKol        = 7;        // тип поля Трудоемкость
-    ppTypeTime           = 8;        // тип поля Время
+    ppTypeTime           = 8;        // тип поля Врем
     ppTypeSwitchOnOff    = 9;        // тип поля Переключатель (да/нет)
     ppTypeStrQuant     : string = 'Количество ';   // тип поля количество
     ppTypeStrCost      : string = 'Цена в ';       // тип поля цена в НДЕ
@@ -51,7 +51,7 @@
     ppTypeStrSummaVal  : string = 'Сумма в валюте';// тип поля сумма в валюте
     ppTypeStrKoeff     : string = 'Коэффициент';   // тип поля Коэффициент
     ppTypeStrTrEqKol   : string = 'Трудоемкость';  // тип поля Трудоемкость
-    ppTypeStrTime      : string = 'Время';         // тип поля Время
+    ppTypeStrTime      : string = 'Время';         // тип поля Врем
     ppTypeStrSwitchOnOff  : string = 'Переключатель (да/нет)';  // тип поля Переключатель (да/нет)
 
     ppStrPlanQuant    : string = 'Кол.план';
@@ -136,27 +136,6 @@
         tpStrSpCorpoBalance : string =  'Позиция плановых остатков';
     tpStrOperPlan     : string =  'Оперативный план заказов';
         tpStrSpOperPlan   : string =  'Позиция оперативного плана заказов';
-
-    tpStrClaimPrimDecl         : string =  'Годовая Первичная Заявка Заявителя';
-    tpStrSpClaimPrimDecl       : string =  'Позиция Годовой Первичной Заявки Заявителя';
-    tpStrClaimPrimCurator      : string =  'Годовая Первичная Заявка Куратора';
-    tpStrSpClaimPrimCurator    : string =  'Позиция Годовой Первичной Заявки Куратора';
-    tpStrClaimPrimFinancier    : string =  'Годовая Первичная Заявка Финансистов';
-    tpStrSpClaimPrimFinancier  : string =  'Позиция Годовой Первичной Заявки Финансистов';
-    tpStrBudgetYearPurch       : string =  'Годовой Бюджет Закупок';
-    tpStrSpBudgetYearPurch     : string =  'Позиция Годового Бюджета Закупок';
-    tpStrJournalConsolidated   : string =  'Консолидированный Журнал';
-    tpStrSpJournalConsolidated : string =  'Позиция Консолидированного Журнала';
-    tpStrClaimConsolidated     : string =  'Консолидированная Заявка';
-    tpStrSpClaimConsolidated   : string =  'Позиция Консолидированной Заявки';
-    tpStrStandard              : string =  'Норматив';
-    tpStrSpStandard            : string =  'Позиция Норматива';
-    tpStrTEO                   : string =  'ТЭО';
-    tpStrSpTEO                 : string =  'ПозицияТЭО';
-    tpStrOPZ                   : string = 'Оперативная первичная заявка';
-    tpStrSpOPZ                 : string = 'Позиция ОПЗ';
-
-
     tpStrZClient      : string =  'Заявка';
         tpStrSpZClient    : string =  'Позиция заявки';
     tpStrDogovor      : string =  'Договор';
@@ -180,6 +159,37 @@
         toStrSpDebitOrder : string =  'Позиция расходного ордера';
         tpStrMGCard       : string =  'Производственный формуляр';
 
+    tpStrClaimPrimDecl         : string = 'Годовая Первичная Заявка Заявителя';
+    tpStrSpClaimPrimDecl       : string = 'Позиция Годовой Первичной Заявки Заявителя';
+    tpStrClaimPrimCurator      : string = 'Годовая Первичная Заявка Куратора';
+    tpStrSpClaimPrimCurator    : string = 'Позиция Годовой Первичной Заявки Куратора';
+    tpStrClaimPrimFinancier    : string = 'Годовая Первичная Заявка Финансистов';
+    tpStrSpClaimPrimFinancier  : string = 'Позиция Годовой Первичной Заявки Финансистов';
+    tpStrBudgetYearPurch       : string = 'Годовой Бюджет Закупок';
+    tpStrSpBudgetYearPurch     : string = 'Позиция Годового Бюджета Закупок';
+    tpStrJournalConsolidated   : string = 'Консолидированный Журнал';
+    tpStrSpJournalConsolidated : string = 'Позиция Консолидированного Журнала';
+    tpStrClaimConsolidated     : string = 'Консолидированная Заявка';
+    tpStrSpClaimConsolidated   : string = 'Позиция Консолидированной Заявкиа';
+    tpStrStandards             : string = 'Нормативы';
+    tpStrSpStandards           : string = 'Позиция Нормативов';
+    tpStrTEO                   : string = 'ТЭО';
+    tpStrSpTEO                 : string = 'Позиция ТЭО';
+    tpStrOPZ                   : string = 'Оперативная первичная заявка';
+    tpStrSpOPZ                 : string = 'Позиция ОПЗ';
+    tpStrKit                   : string = 'Набор/комплект';
+    tpStrSpKit                 : string = 'Позиция набора/комплекта';
+
+    toStrGrAnClaimPrimDecl       : string =  'Группа для <Годовой Первичной Заявки Заявителя>';
+    toStrGrAnClaimPrimCurator    : string =  'Группа для <Годовой Первичной Заявки Куратора>';
+    toStrGrAnClaimPrimFinancier  : string =  'Группа для <Годовой Первичной Заявки Финансистов>';
+    toStrGrAnBudgetYearPurch     : string =  'Группа для <Годового Бюджета Закупок>';
+    toStrGrAnJournalConsolidated : string =  'Группа для <Консолидированного Журнала>';
+    toStrGrAnClaimConsolidated   : string =  'Группа для <Консолидированной Заявкиа>';
+    toStrGrAnStandards           : string =  'Группа для <Нормативов>';
+    toStrGrAnTEO                 : string =  'Группа для <ТЭО>';
+    toStrGrAnClaimOPZ            : string =  'Группа для <Оперативной Первичной Заявки>';
+
     toStrGrAnPlan         : string =  'Группа для <Производственного плана>';
     toStrGrAnNeedMt       : string =  'Группа для <Потребности в материалах>';
     toStrGrAnNeedTr       : string =  'Группа для <Потребности в трудовых ресурсах>';
@@ -194,15 +204,6 @@
     toStrGrAnCorpoDelivery: string =  'Группа для <Корпоративного плана поставок>';
     toStrGrAnCorpoManuf   : string =  'Группа для <Корпоративного плана производства>';
     toStrGrAnCorpoBalance : string =  'Группа для <Плановых остатков>';
-
-    tpStrStrGrClaimPrimDecl       : string =  'Группа для <Годовой Первичной Заявки Заявителя>';
-    tpStrStrGrClaimPrimCurator    : string =  'Группа для <Годовой Первичной Заявки Куратора>';
-    tpStrStrGrClaimPrimFinancier  : string =  'Группа для <Годовой Первичной Заявки Финансистов>';
-    tpStrStrGrBudgetYearPurch     : string =  'Группа для <Годового Бюджета Закупок>';
-    tpStrStrGrJournalConsolidated : string =  'Группа для <Консолидированного Журнала>';
-    tpStrStrGrClaimConsolidated   : string =  'Группа для <Консолидированной Заявки>';
-    tpStrStrGrStandards           : string =  'Группа для <Норматива>';
-    tpStrStrGrTEO                 : string =  'Группа для <ТЭО>';
 
 
    //... типы статусов
@@ -364,7 +365,7 @@
     toMGCard             = 114; // Производственный формуляр
     toPersPod            = 115; // Подписанты
 
-    toTCVTmpl            = 120; // Шаблон ТРК
+        toTCVTmpl            = 120; // Шаблон ТРК
 
     toNoteBene           = 150; // Акт замен
     toNBSIzm             = 151; // ресурсы "На замену" в акте замен
@@ -374,11 +375,15 @@
     toMcAndUsl           = 155; // МЦ и услуга в накладных
     toKaReason           = 156; // Каталог причин введения изменений по актам замен и извещений
 
+    toWayAccou           = 160; // Шаблон для документов планирования производства
+
     toRepClaim         = 200;// отчет "Печать и сравнение заявок"
     toRepMnPlan        = 201;// отчет "Печать и сравнение документов"
     toRepCDSB          = 202;// отчеты "Контроль переработки ДС за рубежом"
     toRepBOM           = 203;// отчеты модуля "Спецификации продуктов"
     toRepOPZ           = 211;// отчеты "Печать оперативных планов"
+
+    toOMTS             = 215; // константа для ОМТС
 
     toTheme            = 230;
 
@@ -492,15 +497,13 @@
 
     toControl_BuildPD = 611;  // Для протоколов формирования первичных документов
     toControl_CheckPD = 612;  // Для протоколов корректировки первичных документов
-    toBudjet          = 620;  // Сметы контроллинга
-
-    toClaimPrimDecl        = 700;  // Годовая Первичная Заявка Заявителя
-    toClaimPrimCurator     = 701;  // Годовая Первичная Заявка Куратора
-    toClaimPrimFinancier   = 702;  // Годовая Первичная Заявка Финансистов
-    toBudgetYearPurch      = 703;  // Годовой Бюджет Закупок
-    toJournalConsolidated  = 704;  // Консолидированный Журнал
-    toClaimConsolidated    = 705;  // Консолидированная Заявка
-    toStandards            = 706;  // Нормативы
+    toClaimPrimDecl        = 700;  // первичная заявка заявителя
+    toClaimPrimCurator     = 701;  // первичная заявка куратора
+    toClaimPrimFinancier   = 702;  // первичная заявка финансиста
+    toBudgetYearPurch      = 703;  // годовой бюджет
+    toJournalConsolidated  = 704;  // консолидированный журнал
+    toClaimConsolidated    = 705;  // консолидированная заявка
+    toStandards            = 706;  // нормативы
     toTEO                  = 707;  // ТЭО
     toKit                  = 708;  // наборы/комплекты (плановый документ)
     toSpKit                = 709;  // спецификация наборов/комплектов (плановый документ)
@@ -512,12 +515,16 @@
     toSpClaimConsolidated  = 715;
     toSpStandards          = 716;
     toSpTEO                = 717;
-    toClaimOPZ             = 718;  // Оперативная первичная заявка
-    toSpOPZ                = 719;  // Позиция ОПЗ
+    toClaimOPZ             = 718;  // оперативная первичная заявка
+    toSpOPZ                = 719;  // позиция оперативной первичной заявки
 
-                toQPHead         = 11000; // паспорт качества
-                toQPLine         = 11001; // строка паспорта качества
-                toQPMove         = 11002; // строка журнала изменений качества
+    toPlanSnabOMTS         = 721; // планы снабжения для ОМТС (ТрансНефть)
+
+    toLimit                = 730;
+
+    toQPHead         = 11000; // паспорт качества
+    toQPLine         = 11001; // строка паспорта качества
+    toQPMove         = 11002; // строка журнала изменений качества
     toQualProbe      = 11123; // проба качества
     toSpQualProbe    = 11146; // спецификацию пробы качества
     toQualTest       = 11124; // тест качества
@@ -544,8 +551,11 @@
     cPickMarshSp        = 19897;
     cPickSpMnPlanInterf = 20000;
     cPickKatPartyRsvOp  = 20001;  // для интерфейса выбора Партии МЦ журнала резервирования
-        cPickClaimInterf        = 20002;  // для пометки позиций заявки
-        cPickVariaPlWrkFnd  = 20003;  // для пометки вариантов планирования
+    cPickClaimInterf    = 20002;  // для пометки позиций заявки
+    cPickVariaPlWrkFnd  = 20003;  // для пометки вариантов планирования
+    cPickMnPlanAfterRunAlg = 20004; // накачивать список созданных док-ов после вып.алг
+    cPickSpMnPlanAfterRunAlg = 20005; // накачивать список позиций созданных док-ов после вып.алг
+
         cPickIstInOutDoc    = 19898;  // для интерфейса выбора входящих/исходящих документов
     cPickDestInOutDoc   = 19899;  // для интерфейса выбора входящих/исходящих документов
     cPickBufDoc         = 19900;
@@ -564,6 +574,7 @@
         cPickGanttSpMnPlanInterf = 19913; // построение диаграммы ганта.
 
     cPickSpMnPlAlg_65 = 20100; // Позиции SpMnPl добавленные/измененные 65-м алгоритмом расчета
+
     //.. категория(типы изделий) из КаtMc или KatUsl
     tiPurchased   = 0;
     tiManufacture = 1;
@@ -833,6 +844,12 @@
   NameDoc_Anal4    = 6 ; // По аналитике 4
   NameDoc_Anal5    = 7 ; // По аналитике 5
   NameDoc_vPlan    = 8 ; // По группе документов
+  NameDoc_DocNum   = 9 ; // По номеру документа
+  //.... константы для формирования номера документов
+  NumDoc_Null          = 0 ; // Не участвует в формировании
+  NumDoc_MnPlanIerCode = 1 ; // Вышестоящий заказ (код)
+  NumDoc_vPlanCode     = 2 ; // Группа документов (код)
+  NumDoc_AutoInc       = 3 ; // Автоинкрементируемая часть
   //....
   //----------------------------------------------------------------
   //.... константы функционального назначения полей в представлениях
@@ -842,9 +859,9 @@
   toFunFld_Plan_Fact        = 2 ;     // Фактическое количество
   toFunFld_Plan_NZP         = 4 ;     // в НЗП
   toFunFld_Plan_NormNZP     = 8 ;     // норматив НЗП
-  toFunFld_Plan_PlCost      = 16;     // Плановая  цена
+  toFunFld_Plan_PlCost      = 16;     // Плановая╨ цена
   toFunFld_Plan_PlSum       = 32;     // Плановая сумма
-  toFunFld_Plan_FactCost    = 64;     // Фактическая  цена
+  toFunFld_Plan_FactCost    = 64;     // Фактическая╨ цена
   toFunFld_Plan_FactSum     = 128;    // Фактическая сумма
   toFunFld_Plan_PlanTrEm    = 256;    // Плановая трудоемкость
   toFunFld_Plan_FactTrEm    = 512;    // Фактическая трудоемкость
@@ -916,7 +933,7 @@
   toFunFld_PlanSvod_Fact         = 2 ;     // Фактическое количество
   toFunFld_PlanSvod_NZP          = 4 ;     // в НЗП
   toFunFld_PlanSvod_NormNZP      = 8 ;     // норматив НЗП
-  toFunFld_PlanSvod_PlCost       = 16;     // Плановая  цена
+  toFunFld_PlanSvod_PlCost       = 16;     // Плановая╨ цена
   toFunFld_PlanSvod_PlSum        = 32;     // Плановая сумма
               // ... для toCorpoNeed
               // ... для toCorpoDelivery
@@ -994,6 +1011,7 @@
         cntQTypeKS600   =  600; // НВП (складская)
         cntQTypeKS630   =  630; // Акт пересортицы
         cntQTypeKS632   =  632; // Акт передачи между объектами
+        cntQTypeKS635   =  635; // Ведомость переработки
         cntQTypeKS501   =  501; // НОС
         cntQTypeKS502   =  502; // НГП
         cntQTypeKS503   =  503; // НВС
@@ -1036,7 +1054,7 @@
   dbBtrieve   = 3;  // СУБД Btrieve
   dbPostgreSQL = 4; // СУБД PostgreSQL
 
-    // константы для дополнительных уловий запуска алгоритмов
+    // константы для дополнительных уcловий запуска алгоритмов
   toCloseCtrl_F3 = 1; // Закрытие интерфейса "Редактор позиции документа" iEditValSpMnP
 
 #define planoper

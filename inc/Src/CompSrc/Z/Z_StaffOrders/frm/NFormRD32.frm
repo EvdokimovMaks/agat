@@ -18,6 +18,7 @@
 
 .Fields
 
+sBarCode
 организация
 ОКПО
 номер_документа
@@ -40,7 +41,7 @@ prim
 
 .EndFields
 
-^ ^ ^ ^
+^ ^ ^ ^ ^
 ^ ^ ^ ^
 .{ NformRD32Cycle CheckEnter
 ^ ^ ^ ^ ^ ^

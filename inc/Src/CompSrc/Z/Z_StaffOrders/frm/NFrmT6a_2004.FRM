@@ -13,6 +13,7 @@
 Организация
 ОКПО
 TitleDocNrec        : comp
+sBarCode
 номер_документа
 дата_составления
 !.{ myPsnCycle6 CheckEnter
@@ -67,6 +68,7 @@ sFoundation_
 Организация               ^
 ОКПО                      ^
 TitleDocNrec              ^
+sBarCode		  ^
 номер_документа           ^
 дата_составления          ^
 

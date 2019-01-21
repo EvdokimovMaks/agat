@@ -27,7 +27,11 @@ Const
   szPerch = 6;
   szIndSZ = 7;
   szPogon = 8;
-  szObuv2 = 9;
+  szObuv2 = 9; // 10 - запасной для нового размера
+  szClimZn = 11;
+  szCatEmp = 12;
+  szProtCl = 13; // 14 - запасной для нового атрибута
+  szGender = 15;
 
   rfUnConfReq = 0; // Флаги разнесенности требования на выдачу.
   rfConfReq   = 1;

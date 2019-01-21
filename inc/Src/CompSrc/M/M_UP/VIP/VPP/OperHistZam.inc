@@ -4,18 +4,14 @@
 #define __OperHistZam_inc__
 
 const
- cntNumVersion_Tune_Alg260 = 3;
+ cntNumVersion_Tune_Alg260 = 4;
 end;
 
 const
-  cntAlg260_SetDocSrc_Tek      = 0;
-!  cntAlg260_SetDocSrc_Another  = 2;
-end;
-
-const
-  cntAlg260_SetDocDst_Tek     = 0;
-!  cntAlg260_SetDocDst_New     = 1;
-!  cntAlg260_SetDocDst_Another = 2;
+  cntAlg260_SetDoc_Tek     = 0;
+!  cntAlg260_SetDoc_New     = 1;
+!  cntAlg260_SetDoc_Another = 2;
+  cntAlg260_SetDoc_Sel      = 3;      // ??????????????????? zzzzzzzzzzzzzzzzzzzzzzzzz
 end;
 
 const
@@ -23,7 +19,7 @@ const
   cntAlg260_Mode_HistZam_Ren      = 1;
   cntAlg260_Mode_HistZam_Copy     = 2;
   cntAlg260_Mode_HistZam_Del      = 3;
-  cntAlg260_Mode_HistZam_Otkat_PK = 4;
+  cntAlg260_Mode_HistZam_Otkat_RC = 4;
   cntAlg260_Mode_HistZam_Otkat_Z  = 5;
   cntAlg260_Mode_HistZam_Correct  = 6;
 end;

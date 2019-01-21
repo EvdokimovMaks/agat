@@ -498,7 +498,7 @@
     #StreamObjectName.write(#iFeeSigners.GetSignersList(0));
 
     // * Председатель:
-    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_PredCom))
+    if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_PredCom)))
     {
       #StreamObjectName.write(#iFeeSigners.GetSignerNRec);        // Председатель_nRec
       #StreamObjectName.write(#iFeeSigners.GetSignerFIO(1));      // Председатель_ФИО
@@ -509,7 +509,7 @@
     else
       #StreamObjectName.skipFormat(5);
 
-    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_ChlenCom))
+    if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_ChlenCom)))
     {
       wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
       // Количество_подписантов
@@ -518,7 +518,7 @@
       if (#iFeeSigners.GetSignerFirst)
       {
 
-        For (wFeeSignersNum := 1; wFeeSignersNum <= wFeeSignersCount; wFeeSignersNum := wFeeSignersNum + 1)
+        For (wFeeSignersNum := 1; wFeeSignersNum <= wFeeSignersCount; wFeeSignersNum++)
         {
           // Входим в цикл по подписантам
           #StreamObjectName.PutEventById(feDoLoop, fcFeeSignersMember_#FormName);
@@ -537,7 +537,7 @@
       #StreamObjectName.skipFormat(1);
 
     // Ответственные
-    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_Otvetstv))
+    if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_Otvetstv)))
     {
       wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
       // Количество_ответственных
@@ -545,7 +545,7 @@
 
       if (#iFeeSigners.GetSignerFirst)
       {
-        For (wFeeSignersNum := 1; wFeeSignersNum <= wFeeSignersCount; wFeeSignersNum := wFeeSignersNum + 1)
+        For (wFeeSignersNum := 1; wFeeSignersNum <= wFeeSignersCount; wFeeSignersNum++)
         {
           // Входим в цикл по ответственным
           #StreamObjectName.PutEventById(feDoLoop, fcFeeSignersResponsible_#FormName);
@@ -593,6 +593,134 @@
     #StreamObjectName.skipFormat(4 + 5 + 1 + 1 + 5 + 5);
 }
 #end
+//-----------------------------------------------------------------------------
+// Макроопределение вывод комиссии в поток на основе ПОДПИСАНТОВ для складского учета.
+//   iFeeSigners      - имя переменной объекта подписантов (типа FeeSigners)
+//   StreamObjectName - имя объекта потока
+//   FormName         - Имя формы
+//   FioType          - вернуть фамилию подписанта в зависимости от флага
+//   IsNeedDopInfo    - и доп. информация при необходимости  для подписанта
+//   PosType          - вернуть должность текущего подписанта
+#declare WriteFeeSigners_Sklad(iFeeSigners,StreamObjectName,FormName,FioType,IsNeedDopInfo,PosType)
+{
+  // Группа : boolean
+  #StreamObjectName.write(#iFeeSigners.FeeSignersIsValid);
+
+  // Если установлена Группа
+  if (#iFeeSigners.FeeSignersIsValid)
+  {
+    // * Подписанты:
+     var wFeeSignersNum : word;
+     var wFeeSignersCount : word;
+
+    // cFeeSignersNRec - Ссылка на выбранную группу
+    #StreamObjectName.write(#iFeeSigners.GetFeeSigners);
+
+    // Имя_группы, имя выбранной группы
+    #StreamObjectName.write(#iFeeSigners.GetFeeSignersName);
+
+     // Список_подписантов - в формате установленом пользователем (члены комиссии)
+    #StreamObjectName.write(#iFeeSigners.GetSignersList(4));
+
+    // Информация_о_председателе - в формате установленом пользователем
+    #StreamObjectName.write(#iFeeSigners.GetSignersList(0));
+
+    // * Председатель:
+    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_PredCom))
+    {
+      #StreamObjectName.write(#iFeeSigners.GetSignerNRec);                          // Председатель_nRec
+      #StreamObjectName.write(#iFeeSigners.GetSignerFioEx(FioType,IsNeedDopInfo));  // Председатель_ФИО
+      #StreamObjectName.write(#iFeeSigners.GetSignerTabN);                          // Председатель_Табельный_Номер
+      #StreamObjectName.write(#iFeeSigners.GetSignerPosition(PosType));             // Председатель_Должность
+      #StreamObjectName.write(#iFeeSigners.GetSignerRole);                          // Председатель_Роль
+    }
+    else
+      #StreamObjectName.skipFormat(5);
+
+    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_ChlenCom))
+    {
+      wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
+      // Количество_подписантов
+      #StreamObjectName.write(wFeeSignersCount);
+
+      if (#iFeeSigners.GetSignerFirst)
+      {
+
+        For (wFeeSignersNum := 1; wFeeSignersNum <= wFeeSignersCount; wFeeSignersNum := wFeeSignersNum + 1)
+        {
+          // Входим в цикл по подписантам
+          #StreamObjectName.PutEventById(feDoLoop, fcFeeSignersMember_#FormName);
+
+          #StreamObjectName.write(#iFeeSigners.GetSignerNRec);                         // Подписант_nRec
+          #StreamObjectName.write(#iFeeSigners.GetSignerFioEx(FioType,IsNeedDopInfo)); // Подписант_ФИО
+          #StreamObjectName.write(#iFeeSigners.GetSignerTabN);                         // Подписант_Табельный_Номер
+          #StreamObjectName.write(#iFeeSigners.GetSignerPosition(PosType));            // Подписант_Должность
+          #StreamObjectName.write(#iFeeSigners.GetSignerRole);                         // Подписант_Роль
+          if (not #iFeeSigners.GetSignerNext)
+            break;
+        }
+      }
+    }
+    else
+      #StreamObjectName.skipFormat(1);
+
+    // Ответственные
+    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_Otvetstv))
+    {
+      wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
+      // Количество_ответственных
+      #StreamObjectName.write(wFeeSignersCount);
+
+      if (#iFeeSigners.GetSignerFirst)
+      {
+        For (wFeeSignersNum := 1; wFeeSignersNum <= wFeeSignersCount; wFeeSignersNum := wFeeSignersNum + 1)
+        {
+          // Входим в цикл по ответственным
+          #StreamObjectName.PutEventById(feDoLoop, fcFeeSignersResponsible_#FormName);
+
+          #StreamObjectName.write(#iFeeSigners.GetSignerNRec);                         // Ответственный_nRec
+          #StreamObjectName.write(#iFeeSigners.GetSignerFioEx(FioType,IsNeedDopInfo)); // Ответственный_ФИО
+          #StreamObjectName.write(#iFeeSigners.GetSignerTabN);                         // Ответственный_Табельный_Номер
+          #StreamObjectName.write(#iFeeSigners.GetSignerPosition(PosType));            // Ответственный_Должность
+          #StreamObjectName.write(#iFeeSigners.GetSignerRole);                         // Ответственный_Роль
+          if (not #iFeeSigners.GetSignerNext)
+            break;
+        }
+      }
+    }
+    else
+      #StreamObjectName.skipFormat(1);
+
+     // * Директор:
+    if (#iFeeSigners.RestrictFeeByRole(2, 'Direct'))
+    {
+      #StreamObjectName.write(#iFeeSigners.GetSignerNRec);                           // Руководитель_nRec
+      #StreamObjectName.write(#iFeeSigners.GetSignerFioEx(FioType,IsNeedDopInfo));   // Руководитель_ФИО
+      #StreamObjectName.write(#iFeeSigners.GetSignerTabN);                           // Руководитель_Табельный_Номер
+      #StreamObjectName.write(#iFeeSigners.GetSignerPosition(PosType));              // Руководитель_Должность
+      #StreamObjectName.write(#iFeeSigners.GetSignerRole);                           // Руководитель_Роль
+    }
+    else
+      #StreamObjectName.skipFormat(5);
+
+    // * Главный Бухгалтер:
+    if (#iFeeSigners.RestrictFeeByRole(2, 'GlBux'))
+    {
+      #StreamObjectName.write(#iFeeSigners.GetSignerNRec);                          // Глав.Бух_nRec
+      #StreamObjectName.write(#iFeeSigners.GetSignerFioEx(FioType,IsNeedDopInfo));  // Глав.Бух_ФИО
+      #StreamObjectName.write(#iFeeSigners.GetSignerTabN);                          // Глав.Бух_Табельный_Номер
+      #StreamObjectName.write(#iFeeSigners.GetSignerPosition(PosType));             // Глав.Бух_Должность
+      #StreamObjectName.write(#iFeeSigners.GetSignerRole);                          // Глав.Бух_Роль
+    }
+    else
+      #StreamObjectName.skipFormat(5);
+
+    #iFeeSigners.ClearRestriction;
+  }
+  else
+    #StreamObjectName.skipFormat(4 + 5 + 1 + 1 + 5 + 5);
+}
+#end
 
 //-----------------------------------------------------------------------------
 // Макроопределение вывод комиссии в поток на основе ПОДПИСАНТОВ.
@@ -621,7 +749,7 @@
     #StreamObjectName.write('');   // ФИО_и_Должность_членов_комиссии
 
     // * Председатель:
-    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_PredCom))
+    if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_PredCom)))
     {
       #StreamObjectName.write(#iFeeSigners.GetSignerNRec);        // Председатель_nRec
       #StreamObjectName.write(#iFeeSigners.GetSignerFIO(1));      // Председатель_ФИО
@@ -631,7 +759,7 @@
     else
       #StreamObjectName.skipFormat(4);
 
-    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_ChlenCom))
+    if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_ChlenCom)))
     {
       wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
       #StreamObjectName.write(wFeeSignersCount);  // Количество_подписантов
@@ -675,7 +803,7 @@
     SignersByOneLine := #iFeeSigners.GetSignersList(3);
 
     // Ответственные
-    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_Otvetstv))
+    if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_Otvetstv)))
     {
 
       wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
@@ -735,7 +863,7 @@
   if (#iFeeSigners.FeeSignersIsValid) //
   {
     var wFeeSignersNum, wFeeSignersCount : word;
-    // if (#iFeeSigners.RestrictFeeByRole(1, cgRole_ChlenCom))
+    // if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_ChlenCom)))
     // {
       wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
       // Выгрузка полей таблицы FeeSigners в XLT-шаблон
@@ -793,7 +921,7 @@
   // Если установлена выборка группы
   if (#iFeeSigners.FeeSignersIsValid) // Выгрузка полей таблицы FeeSigners в XLT-шаблон
   {
-    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_ChlenCom))
+    if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_ChlenCom)))
       if (#iFeeSigners.GetSignerFirst)
         do
         {
@@ -831,8 +959,8 @@
 // Вывод Полностью совпадает с коммисией   WriteXltResponsibleTable(iResponsible,pXL);, вплоть до имен выводимых полей
 #declare WriteXltFeeSignersTableOSResponsible(iFeeSigners,StreamXLT)
 {
-  var wFeeSignersNum : word;
-  var wFeeSignersCount : word;  wFeeSignersCount :=0;
+  var wFeeSignersNum   : word;
+  var wFeeSignersCount : word = 0;
 
   // Ответственные
   pXL.CreateTbl('Responsible');  // Создаем таблицу  Responsible
@@ -842,7 +970,7 @@
   pXL.CreateTblFld('Ответственное_лицо_Табельный_Номер');
   pXL.CreateTblFld('Ответственное_лицо_Должность');
 
-  if (#iFeeSigners.RestrictFeeByRole(1, cgRole_Otvetstv))
+  if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_Otvetstv)))
     wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
 
   // Выгрузка полей таблицы Responsible в XLT-шаблон
@@ -906,7 +1034,7 @@
   // Если установлена выборка группы подписантов
   if (#iFeeSigners.FeeSignersIsValid) //
   {
-   // if (#iFeeSigners.RestrictFeeByRole(1, cgRole_ChlenCom))
+   // if (#iFeeSigners.RestrictFeeByRole(1, string(cgRole_ChlenCom)))
    // {
     wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
     // Выгрузка полей таблицы FeeSigners в XLT-шаблон
@@ -1256,7 +1384,7 @@
   if (#iFeeSigners.FeeSignersIsValid) // Выгрузка полей таблицы FeeSigners
   {
     var wFeeSignersNum, wFeeSignersCount : word;
-    if (#iFeeSigners.RestrictFeeByRole(1, cgRole_ChlenCom))
+    if (#iFeeSigners.RestrictFeeByRole(1, String(cgRole_ChlenCom)))
     {
       wFeeSignersCount := #iFeeSigners.GetFeeSignersCount;
       if (#iFeeSigners.GetSignerFirst)
