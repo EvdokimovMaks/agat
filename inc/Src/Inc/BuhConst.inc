@@ -484,6 +484,7 @@
   cgLink_ReesKU    = 5;  // Связь реестра по перечислениям в банк с приказом на командировку
   cgLink_PrimPlDoc = 7;  // Связь платежного поручения с вышестоящим
   cgLink_DepKDoc   = 11; // Связь между депонентной карточкой и документом
+  cgLink_Surcharge = 27; // Связь Доплата НДС - Авансовый платеж
 //------------------------------------------------------------------------------
 // Типы записей спецификации (RashDoc.TipDoc) в интерфейсе Rashifr
   cgRashDoc_BZKR  = 1;  // Расшифровка бюджетной Заявки на кассовый расход (СоПП, СоВПП)
@@ -671,3 +672,42 @@
 //режим отображения статей бюджета в платежных документах
   cgViewStBud_BySoprHoz = 1; // по хозяйственной операции
   cgViewStBud_ByPlatDoc = 2; // по платежному документу
+
+// Константы видов платежей
+  cgVidPlatReglament = 0; //регламентный
+  cgVidPlatShtraf    = 1; //штрафные санкции
+  cgVidPlatAvansMC   = 2; //авансы за товары
+  cgVidPlatAvansUsl  = 3; //авансы за услуги
+  cgVidPlatLinkToRet = 4; //связь с возвратом платежа
+  cgVidPlatReturn    = 5; //возврат платежа
+  cgVidPlatNoDistr   = 6; //не распределяемый платеж
+  cgVidPlatProvision = 7; //обеспечительный платеж
+
+  // константы для фильтров с жесткими подцепкими
+  cupPerson     = 1; //для Объекта расчета
+  cupReload     = 2; //для Объекта расчета
+  cupFilt_SSP   = 3; //для фильтра в ССП
+  cupFilt_KatOS = 4; //для фильтра в Инветарной картотеке
+
+  //Константы ККТ для ФФД 1.05 и 1.1
+  //Предмет расчета
+  cgiKKTObjMethod_Product       = 1; // товар
+  cgiKKTObjMethod_Service       = 4; // услуга
+  cgiKKTObjMethod_Payment       = 10;// платеж
+  //Способы расчета
+  cgiKKTCalcMethod_PrePay100    = 1; // предоплата 100%
+  cgiKKTCalcMethod_PrePay       = 2; // предоплата
+  cgiKKTCalcMethod_Avans        = 3; // аванс
+  cgiKKTCalcMethod_FullPay      = 4; // полный расчет
+  cgiKKTCalcMethod_HalfPay      = 5; // частичный расчет и кредит
+  cgiKKTCalcMethod_CreditTransf = 6; // передача в кредит
+  cgiKKTCalcMethod_CreditPay    = 7; // оплата кредита
+  //Режим распределения
+  cgiKKTDistr_DO                = 1; // распределение по позициям ДО
+  cgiKKTDistr_KatSopr           = 2; // распределение по позиция накладной
+
+  //------------------------------------------------------------------------------
+  // виды налогов в фин.контуре
+  cgiNalFin_Auto                = 0; // автоматические налоги
+  cgiNalFin_Manual              = 1; // ручные налоги
+  cgiNalFin_Info                = 2; // справочные налоги

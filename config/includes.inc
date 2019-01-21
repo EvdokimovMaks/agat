@@ -28,7 +28,6 @@
 /i:"../BASEDOC/Alter" 
 /i:"../BASEDOC/cnf" 
 /i:"../BASEDOC/Interface" 
-/i:"../BASEDOC/Logs" 
 /i:"../BASEDOC/MyVschetB" 
 /i:"../BASEDOC/Reports" 
 /i:"../BUDGET/interface" 

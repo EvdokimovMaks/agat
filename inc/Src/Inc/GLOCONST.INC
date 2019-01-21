@@ -142,6 +142,7 @@
   cgAttrType_Memo     =  4;   // 4 -  MEMO
   cgAttrType_Comp     =  5;   // 5 -  Comp
   cgAttrType_Switch   =  6;   // 6 -  Переключатель, доступен только для конфигуратора
+  cgAttrType_Bool     =  7;   // 7 -  BOOLEAN
 //-----------------------------------------------
 // Для получения параметров связи с DDE сервером
   DDE_ServerName   = 0;

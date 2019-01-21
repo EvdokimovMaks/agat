@@ -114,8 +114,10 @@
   cgTreeGroupCorrespondO   = 33;  // группа соответствия аналитике основного счета
   cgTreeGroupCorrespondK   = 34;  // группа соответствия аналитике корр. счета
   cgTreeGroupSodr    = 35;  // содержание проводки
-  cgTreeExtElem1     = 36;
-  cgTreeExtElem2     = 37;
+  cgTreeExtElem1     = 36;  // внешняя группировка 1
+  cgTreeExtElem2     = 37;  // внешняя группировка 2
+  cgTreeExtElem3     = 50;  // внешняя группировка 3
+  cgTreeExtElem4     = 51;  // внешняя группировка 4
 
   cgTreeGroupTotal   = 65000; // Итого по отчету (не должно пересекаться с кодами аналитик)
 

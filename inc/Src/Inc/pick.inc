@@ -60,6 +60,7 @@
   cgPick_AlgFields    =   202;  // выбор полей таблиц для алгоритма в алгоритмах (ОС)
   cgPick_UserDeskRep  =   449;  // выбор настроек отчетов из таблицы UserDeskRep
   cgPick_CodeOp       =   450;  // выбор кодов операций при печати книг продаж/покупок
+  cgPick_TypeMC       =   11532;// TypeMC см.interface M_Control\GetTypMC
 
   cgPick_ExClassName  =   632;  // Имена (Внешняя классификация)
   cgPick_ExClassSegm  =   633;  // Сегменты (Внешняя классификация)
