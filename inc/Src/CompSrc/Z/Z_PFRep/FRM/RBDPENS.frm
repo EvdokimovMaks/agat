@@ -83,7 +83,7 @@ Pu1LikePu2 : word
 .fields
 ®¬’¥ª çª¨
 .endfields
-___Š…– ^ €—Šˆ
+___END ^ €—Šˆ
 .end
 .{ RBDOPPU CheckEnter
 .fields
@@ -167,7 +167,7 @@ end.
 .fields
 _PachNum
 .endfields
-___Š…– ^ €—Šˆ
+___END ^ €—Šˆ
 .begin _PachNum := _PachNum + 1; end.
 .end
 .{ RBDOPPU CheckEnter
@@ -255,7 +255,7 @@ end.
 .fields
 ®¬¥à çª¨
 .endfields
-___Š…– ^ €—Šˆ
+___END ^ €—Šˆ
 .end
 .{ RBDOPPU CheckEnter
 .}
@@ -342,7 +342,7 @@ end.
 .fields
 ®¬¥à çª¨
 .endfields
-___Š…– ^ €—Šˆ
+___END ^ €—Šˆ
 .end
 .{ RBDOPPU CheckEnter
 .}

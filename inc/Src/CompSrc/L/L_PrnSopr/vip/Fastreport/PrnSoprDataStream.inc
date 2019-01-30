@@ -278,6 +278,7 @@ Datastream fr_prndata
 //гл. бухгалтер
     [GlBuhName           ] oPrnSoprFun.GetGlBuhName(fr_dochead.KatSoprNRec, fr_dochead.GBuhName);
     [val_name            ] if (oPrnSoprFun.GetValName(fr_dochead.KatSopr_cVal) = '', sGetTune('NDE.NAMERUBL'), oPrnSoprFun.GetValName(fr_dochead.KatSopr_cVal));
+    [val_nameUPD         ] if (oPrnSoprFun.GetValNameUPD(fr_dochead.KatSopr_cVal) = '', Trim(sGetTune('Nalog.Rus.NDE_FullName')), oPrnSoprFun.GetValNameUPD(fr_dochead.KatSopr_cVal));
     [val_kod             ] if (oPrnSoprFun.GetValCode(fr_dochead.KatSopr_cVal) = '', sGetTune('NDE.RUBLISO') , oPrnSoprFun.GetValCode(fr_dochead.KatSopr_cVal));
     [PlatSch             ] oPrnSoprFun.FindPlat(fr_dochead.SchFact_NRec);
 //номер счета-фактуры для корректировочного УПД

@@ -490,7 +490,7 @@ end.
 begin
    WriteInForm := '0,00';
    if (_sum <> 0)
-     WriteInForm := DoubleToStr(_sum,'[|-]36666666666667,8899')
+     WriteInForm := DoubleToStr(_sum,'[|-]36666666666667,88')
    else if (_sum = 0) and (prizn = 1 or prizn = 0)
      WriteInForm := '0,00';
    // уплаченные взносы для любого типа сотрудника выводятся числом
@@ -537,10 +537,10 @@ if(Trim(RegPFNum)<>'',Trim(RegPFNum),' ')
 if(Trim(Pred)<>'',UpCase(Trim(Pred)),' ')
 LPadCh(string(pach_nmb),'0',9)
 if(Trim(string(PersonsNumb))<>'',Trim(string(PersonsNumb)),' ')
-if(CharF<>2, DoubleToStr(Pach_NachItog,'[|-]36666666666667,8899'),'0,00')
-if(CharF<>2, DoubleToStr(Pach_BolnItog,'[|-]36666666666667,8899'),'0,00')
-if(CharF<>2, DoubleToStr(Pach_UdItog+Pach_28VzItog+Pach_6VzItog,'[|-]36666666666667,8899'), '0,00') // Сумма удержания (1%) + пенсионных взносов (28%) + страховых взносов (6%) по пачке
-if(CharF<>2, DoubleToStr(Pach_UdUplItog+Pach_28VzUplItog+Pach_6VzUplItog,'[|-]36666666666667,8899'), '0,00') // Сумма уплаченного удержания (1%) + уплаченных взносов 34%(28+6) по пачке
+if(CharF<>2, DoubleToStr(Pach_NachItog,'[|-]36666666666667,88'),'0,00')
+if(CharF<>2, DoubleToStr(Pach_BolnItog,'[|-]36666666666667,88'),'0,00')
+if(CharF<>2, DoubleToStr(Pach_UdItog+Pach_28VzItog+Pach_6VzItog,'[|-]36666666666667,88'), '0,00') // Сумма удержания (1%) + пенсионных взносов (28%) + страховых взносов (6%) по пачке
+if(CharF<>2, DoubleToStr(Pach_UdUplItog+Pach_28VzUplItog+Pach_6VzUplItog,'[|-]36666666666667,88'), '0,00') // Сумма уплаченного удержания (1%) + уплаченных взносов 34%(28+6) по пачке
 .endfields
 ЗГЛВ=1.6=
 <ПАЧК=^=^=^=^= = =1=
@@ -566,13 +566,13 @@ if(Trim(Initial2)<>'',UpCase(Trim(Initial2)),' ')
 if(Trim(HP)<>'',UpCase(Trim(HP)),' ')
 if(Trim(Dog_Num)<>'',Trim(Dog_Num),' ')
 if(day(Dog_Date)<>0,DateToStr(Dog_Date,'DD/MM/YYYY'),' ')
-if((CharF <> 2)and(ISum1      <> 0),DoubleToStr(ISum1,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISum2      <> 0),DoubleToStr(ISum2,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISumUd1    <> 0),DoubleToStr(ISumUd1,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISum28Vz   <> 0),DoubleToStr(ISum28Vz,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISum6Vz    <> 0),DoubleToStr(ISum6Vz,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISumUdUpl1 <> 0),DoubleToStr(ISumUdUpl1,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISumVzUpl  <> 0),DoubleToStr(ISumVzUpl,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISum1      <> 0),DoubleToStr(ISum1,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISum2      <> 0),DoubleToStr(ISum2,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISumUd1    <> 0),DoubleToStr(ISumUd1,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISum28Vz   <> 0),DoubleToStr(ISum28Vz,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISum6Vz    <> 0),DoubleToStr(ISum6Vz,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISumUdUpl1 <> 0),DoubleToStr(ISumUdUpl1,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISumVzUpl  <> 0),DoubleToStr(ISumVzUpl,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
 if((CharF <> 2),string(KolNach),' ')
 if((CharF <> 2),string(KolStag),' ')
 curdate
@@ -627,7 +627,7 @@ end.
 .fields
 pach_nmb
 .endfields
-___КОНЕЦ ^ ПАЧКИ
+___END ^ ПАЧКИ
 .begin
   pach_nmb:= pach_nmb + 1;
   nomer:= 0;
