@@ -1,0 +1,183 @@
+#include XlReport.vih
+#include UserReport.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface RezervOtpNaKonecGoda 'Отчет по резервам на отпуска на конец года' escClose;
+show (,,30, 5);
+var
+  _wYear: word;
+  _rs: IResultSet;
+  pXL: XLSRepBuilder;
+
+sql query q =
+  select
+    case when spkAn96.Name like 'АУП%' then 'АУП'
+         when spkAn96.Name like 'ВОХР%' then 'ВОХР'
+         when spkAn96.Name like 'НВП%' then 'НВП'
+         when spkAn96.Name like 'О/Л%' then 'О/Л'
+         when spkAn96.Name like 'ПТП%' then 'ПТП'
+         when spkAn96.Name like 'Столовая%' then 'Столовая'
+         when spkAn96.Name like 'Трансп.цех%' then 'Трансп.цех'
+         when spkAn96.Name like 'Гостиница%' then 'Гостиница'
+         when spkAn96.Name like 'Мед.амбулатория%' then 'Мед.амбулатория'
+         else 'Проч.'
+    end as An96Name,
+    sum(t.SumSal) as SumSal, sum(t.SumBud) as SumBud
+  from (select kauos[2] as cAn96, sum(-sumOb) as SumSal, 0 as SumBud
+        from oborot
+        where scheto='896' and subossch='01' and datob between 1 and :dRep
+        group by kauos[2]
+        union all
+        select kauks[2], sum(sumob), 0
+        from oborot
+        where schetk='896' and subschk='01' and datob between 1 and :dRep
+        group by kauks[2]
+        union all
+        select ckaud[2], 0, sum(summa)
+        from sumvidop
+        where mesn=12 and yearn=:year and vidoplp=207 and mesv=12 and yearv=:year
+        group by ckaud[2]
+       ) t
+  left join SpKau spkAn96 on spkAn96.Nrec = t.cAn96
+  group by
+    case when spkAn96.Name like 'АУП%' then 'АУП'
+         when spkAn96.Name like 'ВОХР%' then 'ВОХР'
+         when spkAn96.Name like 'НВП%' then 'НВП'
+         when spkAn96.Name like 'О/Л%' then 'О/Л'
+         when spkAn96.Name like 'ПТП%' then 'ПТП'
+         when spkAn96.Name like 'Столовая%' then 'Столовая'
+         when spkAn96.Name like 'Трансп.цех%' then 'Трансп.цех'
+         when spkAn96.Name like 'Гостиница%' then 'Гостиница'
+         when spkAn96.Name like 'Мед.амбулатория%' then 'Мед.амбулатория'
+         else 'Проч.'
+    end
+  having round(sum(t.SumSal),1) <> 0 or round(sum(t.SumBud),1) <> 0
+  order by An96Name
+;
+
+function bParamsValid: boolean;
+{
+  result := false;
+  if _wYear < 1900 or _wYear > 2100
+  {
+    Message('Укажите год в диапазоне [1900..2100]', error);
+    exit;
+  }
+  result := true;
+}
+
+function bPrepareData: boolean;
+{
+  var dRep: date = To_Date(31, 12, _wYear);
+  _rs := queryManager.createQuery(q)
+                     .setParam('dRep', dRep)
+                     .setParam('Year', _wYear)
+                     .getResultSet;
+  result := _rs != nullref;
+  if not result
+    Message('Ошибка выполнения запроса выборки данных', error);
+}
+
+procedure ShowExcelReport(sXLTFileName: string; isCreateXLT: boolean);
+{
+  var sXLSFileName: string = if(isCreateXLT, pXL.CreateXLT(sXLTFileName, True), pXL.CreateReport(sXLTFileName, True));
+  pXL.CreateVar(sXLSFileName);
+  pXL.SetStringVar('Year', _wYear);
+  pXL.PublishVar;
+  pXL.CreateTbls(sXLSFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Npp');
+  pXL.CreateTblFld('An96Name');
+  pXL.CreateTblFld('Saldo96');
+  pXL.CreateTblFld('SumOtpBudPer');
+  if (not isCreateXLT)
+  {
+    var npp: longint = 0;
+    if _rs.getFirst = tsOk do
+    {
+      npp++;
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Npp', npp);
+      pXL.SetTblStringFldValue('An96Name', _rs.row.Val('An96Name'));
+      pXL.SetTblNumberFldValue('Saldo96', double(_rs.row.Val('SumSal')));
+      pXL.SetTblNumberFldValue('SumOtpBudPer', double(_rs.row.Val('SumBud')));
+      pXL.InsTblRow;
+    } while _rs.getNext = tsOk;
+  }
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisconnectExcel;
+}
+
+screen scParams (,,sci1EnEsc);
+  fields
+    _wYear: NoProtect, SpinButton [1, 1900, 2100];
+  buttons
+    cmOk, default;
+    cmCancel;
+<<
+
+ `Год` .@@@@@@@@@@
+
+ <. Продолжить .> <. Отмена .>
+>>
+end;
+
+handleevent
+
+  cmOk:
+  {
+    if bParamsValid
+      if bPrepareData
+        ShowExcelReport(TranslatePath('%StartPath%Xls\RezervOtpNaKonecGoda.xltm'), false);
+  }
+
+  cmInit:
+  {
+    if not ReadMyDsk(_wYear, 'RezervOtpNaKonecGoda_wYear', false) _wYear := Year(Cur_Date) - 1;
+  }
+
+  cmDone:
+  {
+    SaveMyDsk(_wYear, 'RezervOtpNaKonecGoda_wYear');
+  }
+
+end;
+
+end.
+
+VipInterface UserReport_RezervOtpNaKonecGoda Implements IUserReport licensed(free);
+Interface UserReport_RezervOtpNaKonecGoda;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(AGAT::RezervOtpNaKonecGoda);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Агат. Отчет по резервам на отпуска на конец года';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    #__UNUSED__(Level)
+    GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'STAFFMAINMENU';
+      2 : VisibleInModule := 'MenuZarp';
+    end;
+  end;
+end.
