@@ -7,59 +7,284 @@
 VipInterface Algoritm_5124 Implements oAlgoritm_Sys;
 Interface Algoritm_5124;
 
+const
+  wMode_DoNotModify: word = 0;
+  wMode_Update: word = 1;
+  wMode_Remove: word = 2;
+  wMode_Create: word = 3;
+  wFlags_McUsl: word = 1;
+  wFlags_Price: word = 2;
+  wFlags_Nal  : word = 4;
+  wFlags_CU   : word = 8;
+  wFlags_Kol  : word = 16;
+  wFlags_SpDoc: word = 32;
+end;
+
 table struct tSpStep (
   Nrec     : comp,
-  dNewPrice: double,
+  Npp      : word,
+  cSpDocs  : comp,
   wMode    : word,
-  sComment : string
+  wFlags   : word,
+  wControl : word
 ) with index (
-  i01 = Nrec
+  i01 = Nrec,
+  i02 = cSpDocs,
+  i03 = Npp
 );
 
 var
   _setSpStepPrice: ISetSpStepPrice;
+  _wTiDk         : word;
+  _cDoc          : comp;
+  _wFlagsControl : word;
+  _basedocNrec   : comp;
+
+function GetModeFld: string; forward;
+function GetFlagsFld(wFl: word): string; forward;
+function GetSpStepBrFld: string; forward;
+function GetSpDocsBrFld: string; forward;
 
 create view
-var
-  _basedocNrec: comp;
-  _dogovorNrec: comp;
 as select
-  BaseDoc.Nrec
+  GetModeFld()(FieldName=ModeFld)
+ ,GetFlagsFld(wFlags_McUsl)(FieldName=FlagsFld_McUsl)
+ ,GetFlagsFld(wFlags_Price)(FieldName=FlagsFld_Price)
+ ,GetFlagsFld(wFlags_Nal  )(FieldName=FlagsFld_Nal)
+ ,GetFlagsFld(wFlags_CU   )(FieldName=FlagsFld_CU)
+ ,GetFlagsFld(wFlags_SpDoc)(FieldName=FlagsFld_SpDoc)
+ ,GetFlagsFld(wFlags_Kol)  (FieldName=FlagsFld_Kol)
+ ,GetSpStepBrFld()(FieldName=SpStepBrFld)
+ ,GetSpDocsBrFld()(FieldName=SpDocsBrFld)
 from
   BaseDoc
  ,StepDoc
  ,SpStep
- ,SpDocs
- ,Dogovor
- ,SpDocs SpDocs1
+
  ,tSpStep
+ ,SpStep SpStep1
+ ,SpDocs SpDocsByMcUsl
+ ,SpDocs SpDocs1
+ ,SpecMtr SpDocsSpecMtr
+ ,SpecMtr SpStepSpecMtr
+
+ ,tSpStep tSpStepBr (i03)
+ ,SpStep SpStepBr
+ ,SpDocs SpDocsBr
+ ,SpecMtr SpStepBrSpecMtr
+ ,SpecMtr SpDocsBrSpecMtr
 where ((
-  _basedocNrec   == BaseDoc.Nrec     and
-  BaseDoc.Nrec   == StepDoc.cBaseDoc and
-  StepDoc.Nrec   == SpStep.cStepDoc  and
-  SpStep.cSpDocs == SpDocs.Nrec      and
-  _dogovorNrec   == Dogovor.Nrec     and
+      _basedocNrec    == BaseDoc.Nrec
+  and BaseDoc.Nrec    == StepDoc.cBaseDoc
+  and StepDoc.Nrec    == SpStep.cStepDoc
 
-  Dogovor.TiDk   == SpDocs1.TiDk     and
-  Dogovor.Nrec   == SpDocs1.cDoc     and
-  SpStep.PrMc    == SpDocs1.PrMc     and
-  (SpDocs1.cMcUsl = SpStep.cMcUsl)   and
+  and tSpStep.Nrec    == SpStep1.Nrec
+  and tSpStep.cSpDocs == SpDocs1.Nrec
 
-  SpStep.Nrec    == tSpStep.Nrec
+  and SALDTUNE_NREC_DEFAULT == SpDocsSpecMtr.cSaldTune
+  and coSpDocs              == SpDocsSpecMtr.coTable
+  and tSpStep.cSpDocs       == SpDocsSpecMtr.cSpec
+
+  and SALDTUNE_NREC_DEFAULT == SpStepSpecMtr.cSaldTune
+  and coSpStep              == SpStepSpecMtr.coTable
+  and tSpStep.Nrec          == SpStepSpecMtr.cSpec
+
+  and _wTiDk          == SpDocsByMcUsl.TiDk
+  and _cDoc           == SpDocsByMcUsl.cDoc
+  and SpStep1.PrMc    == SpDocsByMcUsl.PrMc
+  and (SpStep1.cMcUsl  = SpDocsByMcUsl.cMcUsl)
+
+  and tSpStepBr.Nrec    == SpStepBr.Nrec
+  and tSpStepBr.cSpDocs == SpDocsBr.Nrec
+
+  and SALDTUNE_NREC_DEFAULT == SpStepBrSpecMtr.cSaldTune
+  and coSpStep              == SpStepBrSpecMtr.coTable
+  and tSpStepBr.Nrec        == SpStepBrSpecMtr.cSpec
+
+  and SALDTUNE_NREC_DEFAULT == SpDocsBrSpecMtr.cSaldTune
+  and coSpDocs              == SpDocsBrSpecMtr.coTable
+  and tSpStepBr.cSpDocs     == SpDocsBrSpecMtr.cSpec
 ));
 
-window wRslt 'Корректировка цен в ДО' escClose;
+create view vSetSpDocs
+var
+  _cSpDocs: comp;
+as select
+  SpDocs.Nrec
+from
+  SpDocs
+ ,tSpStep
+where ((
+      vSetSpDocs._cSpDocs == SpDocs.Nrec
+  and vSetSpDocs._cSpDocs == tSpStep.cSpDocs
+));
+
+create view vNewSpStep
+as select
+  SpDocs.Nrec
+from
+  SpDocs
+ ,tSpStep
+ ,tSpStep tSpStep0
+where ((
+      _wTiDk      == SpDocs.TiDk
+  and _cDoc       == SpDocs.cDoc
+  and SpDocs.Nrec == tSpStep.cSpDocs
+  and comp(0)     == tSpStep0.cSpDocs
+));
+
+create view vSpDocsPrice
+var
+  _cSpDocs: comp;
+as select
+  SpDocs.Nrec
+from
+  SpDocs
+ ,Dogovor
+ ,CalPlan
+where ((
+  _cSpDocs        == SpDocs.Nrec
+  and SpDocs.cDoc == Dogovor.Nrec
+  and SpDocs.cDoc == CalPlan.Nrec
+));
+
+//Возвращает цену без ндс по позиции договора/дс/пкп с нреком cSpD
+function SpDocsPriceNoNds(cSpD: comp): double;
+{
+  result := 0;
+  vSpDocsPrice._cSpDocs := cSpD;
+  if vSpDocsPrice.getfirst SpDocs = tsOk
+  {
+    result := vSpDocsPrice.SpDocs.Price;
+    if vSpDocsPrice.SpDocs.TiDk = 403
+    {
+      if vSpDocsPrice.getfirst CalPlan = tsOk
+        if vSpDocsPrice.CalPlan.VhodNal = 1
+          result -= if(vSpDocsPrice.SpDocs.Kol != 0, vSpDocsPrice.SpDocs.SumNds / vSpDocsPrice.SpDocs.Kol, 0);
+    }
+    else
+    {
+      if vSpDocsPrice.getfirst Dogovor = tsOk
+        if vSpDocsPrice.Dogovor.VhodNal = 1
+          result -= if(vSpDocsPrice.SpDocs.Kol != 0, vSpDocsPrice.SpDocs.SumNds / vSpDocsPrice.SpDocs.Kol, 0);
+    }
+  }
+}
+
+//Возвращает цену без ндс по позиции текущего ДО
+function SpStepPriceNoNds(dPrice: double; dKolSkl: double; dSumNds: double): double;
+{
+  result := dPrice - if(BaseDoc.VhodNal = 1 and dKolSkl != 0, dSumNds / dKolSkl, 0);
+}
+
+//#region Функции, возвращающие значения полей из вьюхи
+
+function GetSpStepBrFld: string;
+{
+  result := if(getfirst SpStepBr = tsOk,
+               ShowKau(if(SpStepBr.PrMc = 1, cgKau_KatMc, cgKau_KatUsl), SpStepBr.cMcUsl),
+               '');
+}
+
+function GetSpDocsBrFld: string;
+{
+  result := if(getfirst SpDocsBr = tsOk,
+               ShowKau(if(SpDocsBr.PrMc = 1, cgKau_KatMc, cgKau_KatUsl), SpDocsBr.cMcUsl),
+               '');
+}
+
+function GetModeFld: string;
+{
+  result := Case(tSpStepBr.wMode;
+                 wMode_DoNotModify: 'Без изменений',
+                 wMode_Update: 'Изменение: ' +
+                               if((tSpStepBr.wFlags and wFlags_McUsl) > 0, 'МЦ/Усл ', '') +
+                               if((tSpStepBr.wFlags and wFlags_Price) > 0, 'Цена ', '') +
+                               if((tSpStepBr.wFlags and wFlags_Nal) > 0, 'НалГр ', '') +
+                               if((tSpStepBr.wFlags and wFlags_CU) > 0, 'ЦУ ', '') +
+                               if((tSpStepBr.wFlags and wFlags_Kol) > 0, 'Кол ', '') +
+                               if((tSpStepBr.wFlags and wFlags_SpDoc) > 0, 'Ссылка ', ''),
+                 wMode_Remove: 'Будет удалена',
+                 wMode_Create: 'Будет создана';
+                 'Режим не определен (' + tSpStepBr.wMode + ')');
+}
+
+function GetFlagsFld(wFl: word): string;
+{
+  result := 'Без изменений';
+  if tSpStepBr.wMode = wMode_Remove
+    result := 'Удаление'
+  else if tSpStepBr.wMode = wMode_Create
+    result := 'Создание'
+  else if tSpStepBr.wMode = wMode_Update and ((tSpStepBr.wFlags and wFl) = wFl)
+    case wFl of
+      wFlags_McUsl: result := 'Изменение. В ДО "' + ShowKau(if(SpStepBr.PrMc = 1, cgKau_KatMc, cgKau_KatUsl), SpStepBr.cMcUsl) +
+                              '"; в договоре "' + ShowKau(if(SpDocsBr.PrMc = 1, cgKau_KatMc, cgKau_KatUsl), SpDocsBr.cMcUsl) + '"';
+      wFlags_Price: result := 'Изменение. В ДО ' + SpStepPriceNoNds(SpStepBr.Price, SpStepBr.KolSkl, SpStepBr.NDS) +
+                              '; в договоре ' + SpDocsPriceNoNds(SpDocsBr.Nrec);
+      wFlags_Kol  : result := 'Изменение. В ДО ' + SpStepBr.Kol +
+                              '; в договоре ' + SpDocsBr.Kol;
+      wFlags_Nal  : result := 'Изменение. В ДО "' + ShowKau(cgKau_GrNal, SpStepBr.cGrNal) +
+                              '"; в договоре "' + ShowKau(cgKau_GrNal, SpDocsBr.cGrNal) + '"';
+      wFlags_CU   :
+      {
+        if getfirst SpStepBrSpecMtr = tsOk {}
+        if getfirst SpDocsBrSpecMtr = tsOk {}
+        result := 'Изменение. Не совпадает' + if(SpStepBrSpecMtr.cObj != SpDocsBrSpecMtr.cObj, ' Заказ', '') +
+                  if(SpStepBrSpecMtr.cKau[1] != SpDocsBrSpecMtr.cKau[1], ' Статья затрат', '') +
+                  if(SpStepBrSpecMtr.cKau[2] != SpDocsBrSpecMtr.cKau[2], ' Подразделение', '') +
+                  if(SpStepBrSpecMtr.cKau[3] != SpDocsBrSpecMtr.cKau[3], ' Сотрудник', '') +
+                  if(SpStepBrSpecMtr.cKau[4] != SpDocsBrSpecMtr.cKau[4], ' Позиция вх. заявки', '') +
+                  if(SpStepBrSpecMtr.cKau[5] != SpDocsBrSpecMtr.cKau[5], ' Кау5', '') +
+                  if(SpStepBrSpecMtr.cKau[6] != SpDocsBrSpecMtr.cKau[6], ' Кау6', '') +
+                  if(SpStepBrSpecMtr.cKau[7] != SpDocsBrSpecMtr.cKau[7], ' Кау7', '') +
+                  if(SpStepBrSpecMtr.cKau[8] != SpDocsBrSpecMtr.cKau[8], ' Кау8', '') +
+                  if(SpStepBrSpecMtr.cKau[9] != SpDocsBrSpecMtr.cKau[9], ' Кау9', '') + '.';
+      }
+      wFlags_SpDoc: result := 'Изменение. В ДО ' + if(SpStepBr.cSpDocs = 0, 'не указана', String(SpStepBr.cSpDocs, 0, 0)) +
+                              ', будет ссылаться на позицию договора №' + SpDocsBr.Code + ' (' + String(SpDocsBr.Nrec, 0, 0) + ')';
+    end;
+}
+
+//#endregion Функции, возвращающие значения полей из вьюхи
+
+window wRslt 'Корректировка спецификации ДО по Договору/ДС/ПКП' escClose;
+  show(,,120,);
   browse br1;
-    show(,,,19);
-    table SpStep;
+    show(,,,11);
+    table tSpStepBr;
     fields
-      {Font={Bold=(tSpStep.wMode = 1);}};
-      SpStep.npp '№': [5], protect, noautosize;
-      ShowKau(if(SpStep.PrMc = 1, cgKau_KatMc, cgKau_KatUsl), SpStep.cMcUsl) 'Матценность / услуга': [30], protect;
-      SpStep.KolSkl 'Количество':[12,3], protect;
-      SpStep.Price 'Цена в ДО': [12,'\2p[|-]3666`666`666`666.88'], protect;
-      tSpStep.dNewPrice 'Новая цена': [12,'\2p[|-]3666`666`666`666.88'], protect;
-      tSpStep.sComment 'Комментарий': [40], protect;
+      tSpStepBr.Npp '№': [5], protect, noautosize;
+      SpStepBrFld 'Позиция ДО': [30], protect;
+      SpDocsBrFld 'Позиция Договора/ДС/ПКП': [30], protect;
+      ModeFld 'Корректировка': [30], protect,
+      {Font={BackColor=Case(tSpStepBr.wMode;
+                            wMode_Update: 17,
+                            wMode_Remove: 18,
+                            wMode_Create: 11;
+                            0);}
+      };
+  end;
+  screen scFlags;
+    show(,12,,19) fixed_y;
+    table tSpStepBr;
+    fields
+      tSpStepBr.wFlags: NoProtect;
+      FlagsFld_McUsl : Protect;
+      FlagsFld_Price : Protect;
+      FlagsFld_Nal   : Protect;
+      FlagsFld_CU    : Protect;
+      FlagsFld_Kol   : Protect;
+      FlagsFld_SpDoc : Protect;
+<<
+
+    [.] МЦ/Услуга`       .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    [.] Цена без НДС`    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    [.] Налоги`          .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    [.] Целевой учет`    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    [.] Количество`      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    [.] Позиция договора`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
   end;
   screen sc1;
     show(,20,,) fixed_y;
@@ -68,35 +293,193 @@ window wRslt 'Корректировка цен в ДО' escClose;
       cmCancel;
 <<
 
-                                                     <.Установить новые цены.> <.Отмена.>
+                                                  <. Установить новые цены .> <. Отмена .>
 >>
+  end;
+  tableevent table tSpStepBr;
+    cmCheckField: RescanPanel(tntSpStepBr);
+    cmUpdateRecord: update current tSpStepBr;
   end;
   handleevent
     cmOk:
     {
-      _loop SpStep
+      /*_loop SpStep
         if getfirst tSpStep = tsOk
         {
           if tSpStep.wMode = 0 continue;
           _setSpStepPrice.SetSpStepPrice(BaseDoc.Nrec, SpStep.Nrec, tSpStep.dNewPrice);
-        }
+        }*/
       CloseWindowEx(wRslt, cmDefault);
     }
   end;
 end;
 
-Function RunInter(wflag: word; var pt: TRecAcc): boolean;
+
+window wConfig 'Параметры корректировки спецификации ДО по Договору/ДС/ПКП' doAccept, escClose;
+  show(,,30,9);
+  screen scConfig;
+    fields
+      _wFlagsControl: noprotect;
+    buttons
+      cmOk1, default;
+      cmCancel;
+<<
+ Контролировать соответствие
+   [.] Матценность/услуга`
+   [.] Цена`
+   [.] Налоговая ставка`
+   [.] Целевой учет`
+   [.] Количество`
+
+ <. Продолжить .> <. Отмена .>
+>>
+  end;
+  handleevent
+    cmInit: if not ReadMyDsk(_wFlagsControl, 'AG_alt5124_wFlagsControl', false) _wFlagsControl := 0FFFFh;
+    cmDone: SaveMyDsk(_wFlagsControl, 'AG_alt5124_wFlagsControl');
+    cmOk1: PutCommand(cmDefault);
+  end;
+end;
+
+//Устанавливает ссылку на SpDocs в текущую позицию tSpStep
+//Проверяет, что SpDocs относится к правильному Договору/ДС/ПКП
+//Проверяет, что нет другой позиции tSpStep с такой же ссылкой на SpDocs
+function SetSpDocs(cSpD: comp): boolean;
 {
   result := false;
-  wflag := wflag;
+  vSetSpDocs._cSpDocs := cSpD;
+  if vSetSpDocs.getfirst SpDocs = tsOk
+    if vSetSpDocs.SpDocs.TiDk = _wTiDk and vSetSpDocs.SpDocs.cDoc = _cDoc
+      if vSetSpDocs.getfirst tSpStep != tsOk
+      {
+        tSpStep.cSpDocs := cSpD;
+        result := true;
+      }
+}
 
+procedure PrepareData;
+{
+  mtClear(tntSpStep, mfNormal);
+
+  _loop SpStep
+  {
+    ClearBuffer(tntSpStep);
+    tSpStep.Nrec    := SpStep.Nrec;
+    tSpStep.Npp     := SpStep.Npp;
+    tSpStep.wMode   := wMode_DoNotModify;
+    tSpStep.wFlags  := 0;
+    tSpStep.wControl:= _wFlagsControl;
+    //Сначала определяем ссылку на SpDocs непосредственно по ссылке в позиции спецификации ДО
+    SetSpDocs(SpStep.cSpDocs);
+    insert current tSpStep;
+  }
+  //Определяем ссылки на SpDocs по МЦ/Услуге
+  _loop tSpStep
+  {
+    if tSpStep.cSpDocs != 0 continue;
+    if getfirst SpStep1 = tsOk
+      _loop SpDocsByMcUsl
+        if SetSpDocs(SpDocsByMcUsl.Nrec) break;
+    update current tSpStep;
+  }
+  //Добавляем позиции которые есть в SpDocs и нет в SpStep
+  vNewSpStep._loop SpDocs
+    if vNewSpStep.getfirst tSpStep != tsOk
+    {
+      if vNewSpStep.getfirst tSpStep0 = tsOk
+      {
+        vNewSpStep.update current tSpStep0
+          set tSpStep0.cSpDocs = vNewSpStep.SpDocs.Nrec,
+              tSpStep0.wControl = 0FFFFh;
+      }
+      else
+      {
+        ClearBuffer(tntSpStep);
+        tSpStep.Nrec := 0;
+        tSpStep.Npp  := if(getlast tSpStepBr = tsOk, tSpStepBr.Npp + 1, 1);
+        tSpStep.cSpDocs := vNewSpStep.SpDocs.Nrec;
+        tSpStep.wControl := _wFlagsControl;
+        insert current tSpStep;
+      }
+    }
+  //Устанавливаем wMode и wFlags
+  _loop tSpStep
+  {
+    if getfirst SpStep1 != tsOk
+    {
+      tSpStep.wMode := wMode_Create;
+      tSpStep.wFlags := 0FFFFh;
+    }
+    else if getfirst SpDocs1 != tsOk
+    {
+      tSpStep.wMode := wMode_Remove;
+    }
+    else
+    {
+      if (tSpStep.wControl and wFlags_McUsl) = wFlags_McUsl and
+         (SpStep1.cMcUsl != SpDocs1.cMcUsl or SpStep1.PrMc != SpDocs1.PrMc)
+        tSpStep.wFlags += wFlags_McUsl;
+
+      if (tSpStep.wControl and wFlags_Price) = wFlags_Price and
+         (SpStepPriceNoNds(SpStep1.Price, SpStep1.KolSkl, SpStep1.NDS) != SpDocsPriceNoNds(SpDocs1.Nrec))
+        tSpStep.wFlags += wFlags_Price;
+
+      if (tSpStep.wControl and wFlags_Nal) = wFlags_Nal and
+         (SpStep1.cGrNal != SpDocs1.cGrNal)
+        tSpStep.wFlags += wFlags_Nal;
+
+      if (tSpStep.wControl and wFlags_Kol) = wFlags_Kol and
+         (SpStep1.Kol != SpDocs1.Kol)
+        tSpStep.wFlags += wFlags_Kol;
+
+      if (tSpStep.wControl and wFlags_CU) = wFlags_CU
+        if getfirst SpDocsSpecMtr = tsOk
+        {
+          if getfirst SpStepSpecMtr = tsOk
+          {
+            if SpDocsSpecMtr.cObj    != SpStepSpecMtr.cObj or
+               SpDocsSpecMtr.cKau[1] != SpStepSpecMtr.cKau[1] or
+               SpDocsSpecMtr.cKau[2] != SpStepSpecMtr.cKau[2] or
+               SpDocsSpecMtr.cKau[3] != SpStepSpecMtr.cKau[3] or
+               SpDocsSpecMtr.cKau[4] != SpStepSpecMtr.cKau[4] or
+               SpDocsSpecMtr.cKau[5] != SpStepSpecMtr.cKau[5] or
+               SpDocsSpecMtr.cKau[6] != SpStepSpecMtr.cKau[6] or
+               SpDocsSpecMtr.cKau[7] != SpStepSpecMtr.cKau[7] or
+               SpDocsSpecMtr.cKau[8] != SpStepSpecMtr.cKau[8] or
+               SpDocsSpecMtr.cKau[9] != SpStepSpecMtr.cKau[9]
+              tSpStep.wFlags += wFlags_CU;
+          }
+          else
+            tSpStep.wFlags += wFlags_CU;
+        }
+
+      if SpStep1.cSpDocs != SpDocs1.Nrec
+        tSpStep.wFlags += wFlags_SpDoc;
+
+      if tSpStep.wFlags > 0
+          tSpStep.wMode := wMode_Update;
+    }
+    update current tSpStep;
+  } // _loop tSpStep Устанавливаем wMode и wFlags
+}
+
+Function RunInter(wflag: word; var pt: TRecAcc): boolean;
+{ #__UNUSED__(wflag)
+  result := false;
+  //Позиционируемся на ДО
   _baseDocNrec := pt.cpNrec;
   if getfirst BaseDoc != tsOk
   {
     Message('Не найден ДО Nrec = ' + String(_baseDocNrec, 0, 0), error);
     exit;
   }
-
+  //Позиционируемся на этап ДО
+  if getfirst StepDoc != tsOk
+  {
+    Message('Не найден этап ДО (SpStep)', error);
+    exit;
+  }
+  //Инициализируем интерфейс, который будет модифицировать ДО
   case BaseDoc.VidDoc of
     101: GetVipRef(_setSpStepPrice, 'L_BASEDOC::myVschetB');
     111: GetVipRef(_setSpStepPrice, 'L_BASEDOC::myVschetPB');
@@ -106,66 +489,37 @@ Function RunInter(wflag: word; var pt: TRecAcc): boolean;
       exit;
     }
   end;
-
   if NullVipRef(_setSpStepPrice)
   {
     Message('Ошибка инициализации пересчета цен', error);
     exit;
   }
-
-  var isSpDocsFound: byte;
-
-  mtClear(tntSpStep, mfNormal);
-  if getfirst StepDoc = tsOk
-    _loop SpStep
-    {
-      isSpDocsFound := 0;
-      ClearBuffer(tntSpStep);
-
-      if getfirst SpDocs = tsOk
-      {
-        tSpStep.dNewPrice := SpDocs.Price;
-        isSpDocsFound := 1;
-      }
-      else
-      {
-        _dogovorNrec := if(BaseDoc.cAppDogovor != 0, BaseDoc.cAppDogovor, BaseDoc.cDogovor);
-        if getfirst Dogovor = tsOk
-        {
-          _loop SpDocs1
-          {
-            if tSpStep.dNewPrice != 0 and tSpStep.dNewPrice = SpStep.Price
-            {
-              isSpDocsFound := 2;
-              break;
-            }
-            tSpStep.dNewPrice := SpDocs1.Price;
-            isSpDocsFound := 1;
-          }
-        }
-      }
-
-      case isSpDocsFound of
-        0:
-        {
-          tSpStep.dNewPrice := SpStep.Price;
-          tSpStep.sComment  := 'Не найдена позиция договора. Цена не будет изменена.';
-        }
-        1:
-        {
-          tSpStep.wMode     := if(tSpStep.dNewPrice = SpStep.Price, 0, 1);
-          tSpStep.sComment  := if(tSpStep.dNewPrice = SpStep.Price,
-                                  'Цены в договоре и в ДО одинаковы. Цена не будет изменена.',
-                                  'Цена будет изменена');
-        }
-        2:
-        {
-          tSpStep.dNewPrice := SpStep.Price;
-          tSpStep.sComment  := 'В договоре две(или более) позиции с такой МЦ/услугой и разной ценой. Цена не будет изменена.';
-        }
-      end;
-      insert current tSpStep;
-    }
+  //Окно настроек
+  RunWindowModal(wConfig);
+  //Определяем тип и ссылку на главный документ - Договор / ДС / ПКП
+  if BaseDoc.cCalPlan != 0
+  {
+    _wTiDk := 403;
+    _cDoc := BaseDoc.cCalPlan;
+  }
+  else if BaseDoc.cAppDogovor != 0
+  {
+    _wTiDk := 401;
+    _cDoc := BaseDoc.cAppDogovor;
+  }
+  else
+  {
+    _wTiDk := 400;
+    _cDoc := BaseDoc.cDogovor;
+  }
+  if _cDoc = 0
+  {
+    Message('В ДО не указан договор', error);
+    exit;
+  }
+  //Заполняем временную таблицу со спецификацией ДО и признаками модификации
+  PrepareData;
+  //Показываем окно с временной таблицей пользователю, из которого он запустит обновление данных (или откажется)
   RunWindowModal(wRslt);
   result := true;
 }
