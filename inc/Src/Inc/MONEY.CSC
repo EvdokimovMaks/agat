@@ -130,3 +130,5 @@ sci1478InsMPEsc         =   7221;
 sci1378InsMPEsc         =   7222;
 sci1478EscInsC8CC       =   7223;
 scArOtp1                =   7224;
+scOtpusk138             =   7225;
+scOtpusk18              =   7226;

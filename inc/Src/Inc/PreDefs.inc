@@ -351,8 +351,17 @@
   #define TPtr longint
   #define TSurrPtr longint
   #define TSumma double
+
+  #if(#__TOOLVERSION__ >= 5005.033)
+      #define __FRAPI_NewFormat__
+  #endif
 #end
+
+// распределенный расчет ЗП через БД, Indy, Лимит
+#define ZarDistributeDB
 
 !-------------------------------------------------------------------------------
 #end // _Predefs_inc_Included
 !-------------------------------------------------------------------------------
+// спец.решение (временное) для Асконы по банковской выписке
+#define __Ascona_BVAcquire__

@@ -94,7 +94,7 @@ const
   ceD_Obj_RevocationRequestAttachment                 = 67;
   ceD_Obj_XmlSignatureRejectionAttachment             = 68;
   ceD_Obj_ReconciliationActAttachment                 = 69;
-
+  ceD_Obj_RecipientTitleAttachment                    = 70;
 
   ceD_Funcs_GetOrganizationByInn              = 1;
   ceD_Funcs_PostCurDiadocMessage              = 2;
@@ -875,6 +875,9 @@ const
 
   ceD_ReceiptAttach_ParentEntityId                                   = 1;
   ceD_ReceiptAttach_SignedContent                                    = 2;
+
+  ceD_ReceipTitleAttach_ParentEntityId                               = 1;
+  ceD_ReceipTitleAttach_SignedContent                                = 2;
 
   ceD_DoctSign_ParentEntityId                                        = 1;
   ceD_DoctSign_Signature                                             = 2;

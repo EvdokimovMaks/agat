@@ -209,6 +209,19 @@
   cgBuhFilter_KauK6     = 65017;
   cgBuhFilter_PodrK     = 65018;
 
+  cgBuhFilter_KauD7     = 65020;
+  cgBuhFilter_KauD8     = 65021;
+  cgBuhFilter_KauD9     = 65022;
+  cgBuhFilter_KauD10    = 65023;
+  cgBuhFilter_KauD11    = 65024;
+  cgBuhFilter_KauD12    = 65025;
+  cgBuhFilter_KauK7     = 65026;
+  cgBuhFilter_KauK8     = 65027;
+  cgBuhFilter_KauK9     = 65028;
+  cgBuhFilter_KauK10    = 65029;
+  cgBuhFilter_KauK11    = 65030;
+  cgBuhFilter_KauK12    = 65031;
+
   // ModeSet1 - Маски для параметров основного фильтра
   maskSchetD  =      1; // 0001h;
   maskSubD    =      2; // 0002h;
@@ -387,7 +400,7 @@
   // результат количество/в валюте
     cgPAT_ResVal       =  0; // результат в валюте
     cgPAT_ResKol       =  1; // результат количество
-    cgPAT_NDEValDoc    =  2; // результат в НДЕ и валюте документа  
+    cgPAT_NDEValDoc    =  2; // результат в НДЕ и валюте документа
   // сальдо/обороты/проводки
     cgPAT_Saldo        =  0; // сальдо
     cgPAT_Oborot       =  1; // обороты
@@ -682,6 +695,11 @@
   cgVidPlatReturn    = 5; //возврат платежа
   cgVidPlatNoDistr   = 6; //не распределяемый платеж
   cgVidPlatProvision = 7; //обеспечительный платеж
+
+// Константы для типов хозяйственных операций
+  cgiPlat_Summa     = 0;   // хозоперация - сумма
+  cgiPlat_Komm      = 1;   // хозоперация - комиссия
+  cgiPlat_Bal       = 2;   // хозоперация - баланс
 
   // константы для фильтров с жесткими подцепкими
   cupPerson     = 1; //для Объекта расчета

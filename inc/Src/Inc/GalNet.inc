@@ -61,10 +61,11 @@ Const
 #include staff.inc      // Константы "Кадров"
 #include osnma.inc      // константы ОС и НМА
 #include veksl.inc      // константы векселей
-//#include wt.inc         // Константы табеля учета рабочего времени
-//#include ZBasement.INC  // Константы базовых сущностей заработной платы
-//#include ZService.inc // Константы флагов отработки сервисной функции (настройка UP.ZAR.INDEKSSERVICE)
-//#include PrVidoplChoice.inc //Константы PrVidopl.Choice
+#include wt.inc         // Константы табеля учета рабочего времени
+#include ZBasement.INC  // Константы базовых сущностей заработной платы
+#include ZService.inc // Константы флагов отработки сервисной функции (настройка UP.ZAR.INDEKSSERVICE)
+#include PrVidoplChoice.inc //Константы PrVidopl.Choice
+#include KindWork.inc // Константы видов работ
 //------------------------------------------------------------------------------
 #include tpp.inc
 #include tpp.ccm
@@ -114,5 +115,5 @@ Const
 #include ExcelFormat.inc // Константы для форматов Excel (решена проблемма 102.31867)
 #include AllStaff.inc    // Константы для таблицы SpAllStaff
 #include DelRaise.inc    // Константы для таблицы DelRaise
-//#include PaymentEnterings.inc // Доп. входимости
-//#include Otpusk.inc      // Константы отпусков
+#include PaymentEnterings.inc // Доп. входимости
+#include Otpusk.inc      // Константы отпусков

@@ -272,6 +272,8 @@ CONST
 CONST
        cmUnwrapPanel                                  = 134;
 CONST
+       cmSkipHyperLink                                = 135;
+CONST
        cmHotKeys                                      = 300;
 CONST
        cmFileOpen                                     = 301;
@@ -646,6 +648,8 @@ CONST
        cmFilterSelectOper_Null                        = 493;
 CONST
        cmFilterSelectOper_NotNull                     = 494;
+CONST
+       cmFilterSelectOper_MultiContain                = 495;
 
 CONST
        cmEditorPlaceOnly                              = 498;
@@ -1108,7 +1112,6 @@ CONST
        cmInternalSort                                 = 807;
 CONST
        cmInternalGroup                                = 808;
-
 CONST
        cmAQABeforeRestoreDatabase                     = 810;
 CONST
@@ -2148,6 +2151,12 @@ CONST
        cmPasteHyperLM                                 = 1350;
 CONST 
        cmOptimumColumnW                               = 1351;
+CONST
+       cmOlapCloseWindow                              = 1352;
+CONST
+       cmApdateDeskBtns                               = 1353;
+CONST
+       cmGetCurDeskMenu                               = 1354;
 
 // !! Диапазон 2000 - 2099 прикладной, константы в него не добавлять !!
 
@@ -2503,6 +2512,8 @@ CONST
        scBrowserTuneSort                              = 122;
 CONST
        scBrowserTuneFilter                            = 123;
+CONST
+       scBrowserTuneSearch                            = 124;
 
 CONST
        scLovelyHistory                                = 125;
@@ -2549,6 +2560,16 @@ CONST
        scExtAttrComp                                  = 150;
 CONST
        scExtClassifier                                = 151;
+CONST
+       scParamEditorMain                              = 160;
+CONST
+       scParamEditorPick                              = 161;
+CONST
+       scParamEditorPickDef                           = 162;
+CONST
+       scParamEditorDef                               = 163;
+CONST
+       scParamEditorSelect                            = 164;
 
 CONST
        sciAqaViewOneSegment                           = 296;
@@ -3456,6 +3477,9 @@ CONST
        fdFileEditor    = 64;
 
 CONST
+       fdeEncoding     = 1;
+
+CONST
        zfsBold      =   1;
 CONST
        zfsItalic    =   2;
@@ -3956,6 +3980,8 @@ CONST
   tgiColumnMarker    = 15;  //
 CONST
   tgiSmartTree       = 16;  //
+CONST
+  tgiWindows         = 17;  //
   // DialogToolbar
 CONST
   tgdEdit            = 30;  //  kbCtrlIns, kbShiftIns, kbAltBkSpace
@@ -3975,6 +4001,8 @@ CONST
   tgeLovelyNavigator = 57;  // AllFunctions, LovelyFunctions, CallsHistory
 CONST
   tgeEdit            = 58;  // kbCtrlL, kbCtrlF7, kbCtrlEnter, kbCtrlG
+CONST
+  tgeWindows         = 59;  //
   // Others toolbar
 CONST
   tgoFile            = 70;  // cmOpen
@@ -3982,6 +4010,8 @@ CONST
   tgoCommon          = 71;  // kbF1, kbAltX, kbCtrlF4
 CONST
   tgoLovelyNavigator = 72;  // AllFunctions, LovelyFunctions, CallsHistory
+CONST
+  tgoWindows         = 73;  //
   //Galagraph toolbar
 CONST
   tggSpecificActions = 80;  // cmCopyToClipboard, cmSaveAs, cmPrint
@@ -3993,6 +4023,8 @@ CONST
   tggCommon          = 83;  // kbF1, kbAltX, kbCtrlF4
 CONST
   tggLovelyNavigator = 84;  // AllFunctions, LovelyFunctions, CallsHistory
+CONST
+  tggWindows         = 85;  //
 
 CONST
   tgmFile            = 90;  // cmOpen
@@ -4003,7 +4035,10 @@ CONST
 CONST
   tgmMemo            = 93;  // cmMemoImport, cmMemoExport, cmPrefix
 CONST
-  tgmeFile            = 94;  // cmOpen, cmSave, cmSaveAs
+  tgmWindows         = 101;  //
+
+CONST
+  tgmeFile           = 94;  // cmOpen, cmSave, cmSaveAs
 CONST
   tgmeBlocks          = 95;  // cmCopy, cmCut, cmPaste, cmDelete
                              // cmReadBlock, cmWriteBlock, cmSumBlock, ???
@@ -4017,6 +4052,8 @@ CONST
   tgmeEdit            = 99;  // kbCtrlL, kbCtrlF7, kbCtrlEnter, kbCtrlG
 CONST
   tgmeMemo            = 100; // cmMemoImport, cmMemoExport, cmPrefix
+CONST
+  tgmeWindows         = 102;  //
 CONST
   tguUserDefined     = 128;  // User-defined groups.
 
