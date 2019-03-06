@@ -12,8 +12,11 @@ const
   KODGRKAU_PODGR                                : word = 10057; //Подгруппа персонала (НВП/ПТП/...)
   KODGRKAU_CATEG                                : word = 10036; //Категории (руководители/специалисты/...)
 
+  //внешние атрибуты для Партий
+  ATTRNAM_NREC_KATPARTY_GOD_VIPUSKA               : comp = 0001000000001E99h;
+
   //внешние атрибуты для лицевых счетов
-  ATTRNAM_NREC_LSCHET_KORPORATIVNAYA_KARTA : comp = 0001000000000F16h;
+  ATTRNAM_NREC_LSCHET_KORPORATIVNAYA_KARTA        : comp = 0001000000000F16h;
 
   //внешние атрибуты для приказов на командировки
   ATTRNAM_NREC_PRIKAZ_ZAKAZ_ZATRAT                : comp = 0001000000000F17h; //Заказ затрат - ссылка на системную аналитику Заказ
