@@ -22,9 +22,11 @@ c0p1 c0p2 c0p3 c0p4 c0p5 c0p6 c0p7
 cCurPS sCurPS
 c1f1
 c2f1 c2f2
-c4p1 c4p2 cSoprHoz c4p3 c4p3a c4p4 PlatPolNrec c4p5 c4p5a c4p5b c4p5c
-c4p6 c4p6v CursObValD  SubKCursD c4p7 c4p7v CursObValK SubKCursK
+c4p1 c4p2 cSoprHoz c4p3 c4p3a c4p4 PlatPolNrec c4p5
+operationDescr1
+c4p5b c4p5c c4p6 c4p6v CursObValD  SubKCursD c4p7 c4p7v CursObValK SubKCursK
 BaseDocDate ValSimv CursOnDate
+operationDescr
 c4_p1 c4_p1v SumSubKValD SumSubKCursD c4_p2 c4_p2v SumSubKValK SumSubKCursK
 c3_p1 c3_p1v SumSchKValD SumSchKCursD c3_p2 c3_p2v SumSchKCValK SumSchKCursK
 c2_p1 c2_p1v SumSubOValD SumSubOCursD c2_p2 c2_p2v SumSubOValK SumSubOCursK
@@ -61,7 +63,7 @@ c4p3a    кор счет     ^
 c4p4     субсчет кор  ^
 PlatPolNrec - NRec Плательщика/Получателя ^
 c4p5      Плательщик/Получатель  ^
-c4p5a     Содержание операции    ^
+operationDescr1     Содержание операции 1    ^
 c4p5b     ДО                     ^
 c4p5c     NRec проводки          ^
 c4p6      обороты по дебету      ^
@@ -76,6 +78,11 @@ SubKCursK кредит(валюта на курс)      ^
 BaseDocDate   Дата платежного документа ^
 CursOnDate    Курс валюты на дату операции ^
 ValSimv       Символ Валюты(в проводке)^
+.{ CheckEnter OperationNames_GrupVed
+    {
+      operationDescr    Содержание операции    ^
+    }
+.}
 .}
 Сумма по корр субсчету
 c4_p1          обороты по дебету     ^
@@ -136,7 +143,9 @@ c0p1 c0p2 c0p3 c0p4
 sCurPS
 c1f1
 c2f1 c2f2
-c4p1 c4p2 c4p3 c4p3a c4p4 c4p5 c4p5a c4p6 c4p7
+c4p1 c4p2 c4p3 c4p3a c4p4 c4p5
+operationDescr1 c4p6 c4p7
+operationDescr
 c4_p1 c4_p2
 c3_p1 c3_p2
 c2_p1 c2_p2
@@ -175,6 +184,9 @@ end.
 .{
 .{
 @@@@@@@@@@ @@@@@@ @@@@@ @@@@ @@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &#'&&&&&&&&&&&&&&&& &#'&&&&&&&&&&&&&&&&
+.{checkenter OperationNames_GrupVed
+                                                                  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.}
 .}
  БСумма по корреспондирующему субсчету                                                                          &'&&&&&&&&&&&&&&&&&& &'&&&&&&&&&&&&&&&&& Б
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -222,7 +234,9 @@ MyOrg
 c0p1 c0p2 c0p3 c0p6
 c1f1
 c2f1 c2f2
-c4p1 c4p2 c4p3 c4p3a c4p4 c4p5 c4p5a c4p6v c4p7v
+c4p1 c4p2 c4p3 c4p3a c4p4 c4p5
+operationDescr1 c4p6v c4p7v
+operationDescr
 c4_p1v c4_p2v
 c3_p1v c3_p2v
 c2_p1v c2_p2v
@@ -260,6 +274,9 @@ end.
 .{
 .{
 @@@@@@@@@@ @@@@@@ @@@@@ @@@@ @@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &#'&&&&&&&&&&&&&&&& &#'&&&&&&&&&&&&&&&&
+.{checkenter OperationNames_GrupVed
+                                                                  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.}
 .}
  БСумма по корреспондирующему субсчету                                                                          &'&&&&&&&&&&&&&&&&&& &'&&&&&&&&&&&&&&&&& Б
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -308,7 +325,9 @@ c0p1 c0p2 c0p3
 c1f1
 c2f1 c2f2
 c0p5 c0p7 c0p5 c0p7
-c4p1 c4p2 c4p3 c4p3a c4p4 c4p5 c4p5a c4p6 c4p6v c4p7 c4p7v
+c4p1 c4p2 c4p3 c4p3a c4p4 c4p5
+operationDescr1 c4p6 c4p6v c4p7 c4p7v
+operationDescr
 c4_p1 c4_p1v c4_p2 c4_p2v
 c3_p1 c3_p1v c3_p2 c3_p2v
 c2_p1 c2_p1v c2_p2 c2_p2v
@@ -345,6 +364,9 @@ end.
 .{
 .{
 @@@@@@@@@@ @@@@@@ @@@@@ @@@@ @@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &#'&&&&&&&&&&&&&&&& &#'&&&&&&&&&&&&&&&& &#'&&&&&&&&&&&&&&&& &#'&&&&&&&&&&&&&&&&
+.{checkenter OperationNames_GrupVed
+                                                              @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.}
 .}
  БСумма по корреспондирующему субсчету                                                                 &'&&&&&&&&&&&&&&&&& &'&&&&&&&&&&&&&&&&& &'&&&&&&&&&&&&&&&&& &'&&&&&&&&&&&&&&&&& Б
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -397,13 +419,13 @@ c0p1 c0p2 c0p3
 c1f1
 c2f1 c2f2
 c0p5 c0p5 c0p5 c0p5
-c4p1 c4p2 c4p3 c4p3a c4p4 ValSimv CursOnDate c4p5a
-c4p6 CursObValD SubKCursD c4p7 CursObValK SubKCursK
+c4p1 c4p2 c4p3 c4p3a c4p4 ValSimv CursOnDate
+operationDescr1 c4p6 CursObValD SubKCursD c4p7 CursObValK SubKCursK
+operationDescr
 c4_p1  SumSubKValD SumSubKCursD c4_p2 SumSubKValK  SumSubKCursK
 c3_p1  SumSchKValD SumSchKCursD c3_p2 SumSchKCValK SumSchKCursK
 c2_p1  SumSubOValD SumSubOCursD c2_p2 SumSubOValK  SumSubOCursK
 c1_p1  SumSchValD  SumSchCursD  c1_p2 SumSchValK   SumSchCursK
-
 .endfields
 .begin
   MyOrg := oHistory.sGetField(coKatOrg, coGetTune('Myorg'), 'REP.KATORGNAME', StrToDate(c0p3,'DD/MM/YYYY'));
@@ -436,6 +458,9 @@ end.
 .{
 .{
 @@@@@@@@@@ @@@@@@@@ @@@@@ @@@@ @@@@@  @@@@@    &'&&&&&&&  @@@@@@@@@@@@@@@@@@@@@@@   &#'&&&&&&&&&&&&&&&& &#'&&&&&&&&&&&&&&&&  &#'&&&&&&&&&&&&&&&&  &#'&&&&&&&&&&&&&&&&  &#'&&&&&&&&&&&&&&&&  &#'&&&&&&&&&&&&&&&&
+.{checkenter OperationNames_GrupVed
+                                                          @@@@@@@@@@@@@@@@@@@@@@@
+.}
 .}
  БСумма по корреспондирующему субсчету                                                &'&&&&&&&&&&&&&&&&& &'&&&&&&&&&&&&&&&&&  &'&&&&&&&&&&&&&&&&&  &'&&&&&&&&&&&&&&&&&  &'&&&&&&&&&&&&&&&&&  &'&&&&&&&&&&&&&&&&& Б
 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

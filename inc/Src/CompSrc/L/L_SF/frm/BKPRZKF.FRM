@@ -1416,6 +1416,7 @@ end.
 #include bkprzkf3.frn    // новые для РФ (с 01.01.2012)
 #include bkprzkf7.frn    // новые для РФ (с 14.08.2014)
 #include bkprzkf8.frn    // новые для РФ (с 01.10.2017)
+#include bkprzkf9.frn    // новые для РФ (с 01.01.2019)
 #include bkprzkf1.frn    // для Беларуси
 #include bkprzkd.frn     // Дополнительная книга для РФ
 #include bkprzkd1.frn    // Дополнительная книга для РФ c 01.01.2012

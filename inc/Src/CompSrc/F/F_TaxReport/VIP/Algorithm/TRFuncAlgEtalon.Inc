@@ -96,6 +96,7 @@ const
   lc_TRAlg_NDPI_Grp_GUID = 'C3EEC1B0-5335-4E05-B0E2-8572EB7710AD';
     lc_TRAlg_NDPI_Alg_G2014_GUID = '956E969E-2C47-47D4-BC76-BBE7C57B2F81';
     lc_TRAlg_NDPI_Alg_G2015_GUID = '436E969E-2C56-47D4-BC76-BBE7C57B3F721';
+    lc_TRAlg_NDPI_Alg_G2019_GUID = '5568BCE8-B513-423B-B695-4635768913C4';
 
   // группа и алгоритм по налогу по УСН
   lc_TRAlg_USN_Grp_GUID = '81223EBB-C301-4D3F-81A1-D6DB417C767D';
@@ -150,6 +151,7 @@ const
   // группа и алгоритм по акцизам на этиловый спирт, алкогольную и (или) подакцизную спиртосодержащую продукцию (1151090)
   lc_TRAlg_AKCALK_Grp_GUID = '56321ED8-409C-447F-B5A0-88B5FB256B67';
     lc_TRAlg_AKCALK_Alg_G2016_GUID = 'E5D16351-BBA9-409A-9C4B-4209AE6F2D08';
+    lc_TRAlg_AKCALK_Alg_G2019_GUID = '0D685F7E-5B79-4252-9FBA-B340F165E38D';
 
   // группа и алгоритм уведомления о контролируемых иностранных компаниях (1120416)
   lc_TRAlg_UvKik_Grp_GUID = '80B5F4F0-F8D4-478A-9756-F5DCC833E64C';

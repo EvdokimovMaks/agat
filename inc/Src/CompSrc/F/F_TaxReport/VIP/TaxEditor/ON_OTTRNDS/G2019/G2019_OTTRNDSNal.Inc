@@ -60,32 +60,39 @@ const
   // пути на данные разделов требования
   lc_RXX_ParentNodePath : string = 'ФайлТреб/Документ/ПрилТребНДС';
 
-  lc_R08_ParentNodePath : string = lc_RXX_ParentNodePath + '/СведРазд8';
-  lc_R08_SlavedNodePath : string = lc_R08_ParentNodePath + '/КнПокСтр';
+  lc_R08_ParentNodePath  : string = lc_RXX_ParentNodePath + '/СведРазд8';
+  lc_R08_SlavedNodePath  : string = lc_R08_ParentNodePath + '/КнПокСтр';
+  lc_R08P_SlavedNodePath : string = lc_R08_ParentNodePath + '/КнПокСтрПоясн';
 
-  lc_R8D_ParentNodePath : string = lc_RXX_ParentNodePath + '/СведРазд8.1';
-  lc_R8D_SlavedNodePath : string = lc_R8D_ParentNodePath + '/КнПокДЛСтр';
+  lc_R8D_ParentNodePath  : string = lc_RXX_ParentNodePath + '/СведРазд8.1';
+  lc_R8D_SlavedNodePath  : string = lc_R8D_ParentNodePath + '/КнПокДЛСтр';
+  lc_R8DP_SlavedNodePath : string = lc_R8D_ParentNodePath + '/КнПокДЛСтрПоясн';
 
-  lc_R09_ParentNodePath : string = lc_RXX_ParentNodePath + '/СведРазд9';
-  lc_R09_SlavedNodePath : string = lc_R09_ParentNodePath + '/КнПродСтр';
+  lc_R09_ParentNodePath  : string = lc_RXX_ParentNodePath + '/СведРазд9';
+  lc_R09_SlavedNodePath  : string = lc_R09_ParentNodePath + '/КнПродСтр';
+  lc_R09P_SlavedNodePath : string = lc_R09_ParentNodePath + '/КнПродСтрПоясн';
 
-  lc_R9D_ParentNodePath : string = lc_RXX_ParentNodePath + '/СведРазд9.1';
-  lc_R9D_SlavedNodePath : string = lc_R9D_ParentNodePath + '/КнПродДЛСтр';
+  lc_R9D_ParentNodePath  : string = lc_RXX_ParentNodePath + '/СведРазд9.1';
+  lc_R9D_SlavedNodePath  : string = lc_R9D_ParentNodePath + '/КнПродДЛСтр';
+  lc_R9DP_SlavedNodePath : string = lc_R9D_ParentNodePath + '/КнПродДЛСтрПоясн';
 
-  lc_R10_ParentNodePath : string = lc_RXX_ParentNodePath + '/СведРазд10';
-  lc_R10_SlavedNodePath : string = lc_R10_ParentNodePath + '/ЖУчВыстСчФСтр';
+  lc_R10_ParentNodePath  : string = lc_RXX_ParentNodePath + '/СведРазд10';
+  lc_R10_SlavedNodePath  : string = lc_R10_ParentNodePath + '/ЖУчВыстСчФСтр';
+  lc_R10P_SlavedNodePath : string = lc_R10_ParentNodePath + '/ЖУчВыстСчФСтрПоясн';
 
-  lc_R11_ParentNodePath : string = lc_RXX_ParentNodePath + '/СведРазд11';
-  lc_R11_SlavedNodePath : string = lc_R11_ParentNodePath + '/ЖУчПолучСчФСтр';
+  lc_R11_ParentNodePath  : string = lc_RXX_ParentNodePath + '/СведРазд11';
+  lc_R11_SlavedNodePath  : string = lc_R11_ParentNodePath + '/ЖУчПолучСчФСтр';
+  lc_R11P_SlavedNodePath : string = lc_R11_ParentNodePath + '/ЖУчПолучСчФСтрПоясн';
 
-  lc_R12_ParentNodePath : string = lc_RXX_ParentNodePath + '/СведРазд12';
-  lc_R12_SlavedNodePath : string = lc_R12_ParentNodePath + '/ВыстСчФ_173.5';
+  lc_R12_ParentNodePath  : string = lc_RXX_ParentNodePath + '/СведРазд12';
+  lc_R12_SlavedNodePath  : string = lc_R12_ParentNodePath + '/ВыстСчФ_173.5';
+  lc_R12P_SlavedNodePath : string = lc_R12_ParentNodePath + '/ВыстСчФ_173.5Поясн';
 
-  lc_NetKnigaProd_ParentNodePath  : string = lc_RXX_ParentNodePath          + '/НетКнигаПрод';
-  lc_NetKnigaProd_SlavedNodePath  : string = lc_NetKnigaProd_ParentNodePath + '/НеподтвЗаписи';
+  lc_NetKnigaProd_ParentNodePath : string = lc_RXX_ParentNodePath          + '/НетКнигаПрод';
+  lc_NetKnigaProd_SlavedNodePath : string = lc_NetKnigaProd_ParentNodePath + '/НеподтвЗаписи';
 
-  lc_SvedKS_ParentNodePath  : string = lc_RXX_ParentNodePath    + '/СведКС';
-  lc_SvedKS_SlavedNodePath  : string = lc_SvedKS_ParentNodePath + '/СведКСОдин';
+  lc_SvedKS_ParentNodePath : string = lc_RXX_ParentNodePath    + '/СведКС';
+  lc_SvedKS_SlavedNodePath : string = lc_SvedKS_ParentNodePath + '/СведКСОдин';
 
   // список документов
   lc_DocListSeparator  = ';'         ;  // разделитель списка документов
@@ -104,7 +111,12 @@ const
 
   lc_NullDate : date = To_Date(0,0,0);
 end; // const
-
+//------------------------------------------------------------------------------
+const
+  // Константы для глобальных номеров в документах системы
+  lc_GlobalCodeSF_Sell : Word = 72; // Счет-фактура наша       (cwGlobalCodeSF_Sell в sfconst.Inc)
+  lc_GlobalCodeSF_Buy  : Word = 73; // Счет-фактура поставщика (cwGlobalCodeSF_Buy  в sfconst.Inc)
+end; // const
 //------------------------------------------------------------------------------
 // Атрибуты документа
 Type TDRMDocAttr = record

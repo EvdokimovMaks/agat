@@ -67,3 +67,5 @@ const cfErrLoadObjectError                = -27;
     // не получилось загрузить объект
 const cfErrStoreResourceNotFound          = -28;
     // не найден ресурс для сохранения конфигурации
+const cfErrFunctionNotExist               = -29;
+    // функция не существует

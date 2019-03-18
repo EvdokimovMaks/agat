@@ -54,10 +54,10 @@ type
 {$endif}
 
 {$ifdef __MTtabledef__}
-{อออออออออออออ ’ กซจๆ  : ILMARKER_PMARKER "ILMarker=>PMARKER" ออออออออออออออ}
+{อออออออออออออ ’ กซจๆ  : L_COMMON::ILMARKER_PMARKER "L_COMMON::ILMarker=>PMARKER" ออออออออออออออ}
 type
   pILMARKER_PMARKER = ^tILMARKER_PMARKER;
-  tILMARKER_PMARKER = record   { - ILMarker=>PMARKER }
+  tILMARKER_PMARKER = record   { - L_COMMON::ILMarker=>PMARKER }
     PNREC          : Comp;            { pNRec                                 }
     OWNER          : LongInt;         { Owner                                 }
     IMAGENAME      : String;          { ImageName                             }
@@ -83,5 +83,5 @@ const
   tiIBYNPP               = 1;  { NPP(M Up)                               }
 
 const
-  mtILMARKER_PMARKER = 'ILMARKER=>PMARKER';
+  mtILMARKER_PMARKER = 'L_COMMON::ILMARKER=>PMARKER';
 {$endif __MTtabledef__}

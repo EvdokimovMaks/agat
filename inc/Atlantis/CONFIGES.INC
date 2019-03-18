@@ -27,10 +27,8 @@ const
   csAPI         = 'API';
   csConfigurator= 'Configurator';
   csMacro       = 'Macro';
-  csMemoryUse   = 'MemoryUse';
   csDesigner    = 'Designer';
   csRepository  = 'Repository';
-  isDuplicates  = 'LogDuplicates';
 
 // Внутреняя секция для multibase
   csInternalDataBase       = '__InternalDB__';
@@ -230,6 +228,7 @@ const
   isExclusiveTables       = 'ExclusiveTables';
   isCompatibleMode        = 'Compatible210';
   isDataBaseID            = 'DatabaseName';
+  isSchemaID		  = 'SchemaName';
   isSchemeAlias           = 'SchemeAlias';
   isDefaultDB             = 'DefaultDB';
   isTempTableInMem        = 'TempTableInMem';
@@ -392,10 +391,10 @@ const
     pkVisualType          = 'VISUAL';    // Тип визуализации
   ppStartPath             = 'StartPath';
   ppClientStartPath       = 'ClientStartPath';
-  ppCurPath               = 'CurPath';   // Директория запуска программы
-  ppClientCurPath         = 'ClientCurPath';// Директория запуска программы
+  ppCurPath               = 'CurPath';   // Путь запуска программы
+  ppClientCurPath         = 'ClientCurPath';// Путь запуска программы
   ppExeName               = 'ExeName';
-  ppRoot                  = 'Root';         // корневая директория для всех файлов юзера
+  ppRoot                  = 'Root';         // корневой каталог для всех файлов юзера
   ppClientRoot            = 'ClientRoot';   // на сервере клиентский root
   isFileMask              = 'EditorFileMask';
     pkFileMask            = 'W';
@@ -559,6 +558,7 @@ const
   isNavigationNoLock = 'NavigationNoLock';
   isParameterizedLimit = 'ParameterizedLimit';
   isNavigationDefaultLimit = 'NavigationDefaultLimit';
+  isDuplicates              = 'LogDuplicates';
 
 // Список параметров секции csInternal
 // Эти параметры регистрируются только в процессе работы программы.
@@ -788,12 +788,74 @@ const
   isLocalNetworkMode            = 'LocalNetworkMode';
 
 //--------------------------------------------------------
-  ppsNone     = 0;   // нигде не установлен, значение установлено при инициализации в дефольное значение типа
+  ppsNone     = 0;   // нигде не установлен, значение установлено при инициализации в дефолтное значение типа
   ppsDefault  = 1;   // присвоено в при регистрации в функции RegisterParameterEx
   ppsConfig   = 2;   // присвоено в конфигурационном файле
   ppsFunction = 4;   // установлено в прикладном коде через функцию Set...Parameter
-  ppsTune     = 8;   // установлено в интерфейсе настройки параметров (для этого нужно будет сделать 101.64171)
+  ppsTune     = 8;   // установлено в интерфейсе настройки параметров
   ppsNotFind  = 255; // параметр не найден
 
   pprHistory  = 0;   // возвратить маску, где устанавливалось значение (неважно, менялось оно при этом или нет)
   pprCurrent  = 1;   // возвратить константу, где установлено текущее значение
+
+// Метки границ диапазонов допустимых значений параметров
+  BeginRange  = '@_Begin_@';          // Метка нижней границы диапазона
+  EndRange    = '@_End_@';            // Метка верхней границы диапазона
+
+// Типы параметров
+  ptNoSuchParameter = 0;
+  ptBoolean         = 1;
+  ptDouble          = 2;
+  ptString          = 3;
+  ptLongint         = 4;
+  ptPath            = 5;
+  ptFile            = 7;
+  ptMacro           = 8;
+  ptComp            = 9;
+
+// Типы синонимов
+  ptKey             = 0;  // ключ
+  ptOption          = 1;  // опция
+  ptSwitch          = 2;  // переключатель
+
+// Флаги параметров
+  ifWriteCommonFile         =     1;  // Записывается в общий файл конфигурации
+  ifWriteUsersFile          =     2;  // Записывается в файл конфигурации пользователя
+  ifMayBeCollected          =     8;  // Значения могут накапливаться в списке параметров
+  ifStringTrim              =    16;  // Надо ли вытирать пробелы на краях строки
+  ifStringUpCase            =    32;  // Приводить содержимое строки к верхнему регистру
+  ifCanDuplicate            =    64;  // Можно ли хранить дубликаты параметров
+  ifHelpNotAvail            =   128;  // Подсказка по параметру не выдается
+  ifNoExpandPath            =   256;  // Не прибавлять CurPath к параметру ptFile или ptPath
+  ifNoTranslateMacro        =   512;  // Не раскрывать макросы
+  ifDontAllowInClientConfig =  1024;  // не клиентский параметр
+  ifDontMargeClientConfig   =  2048;  // раздельный параметр
+  ifDeprecated              = 16384;  // Устаревший параметр, принять, но выдать сообщение
+  ifMaskParam               = 32768;  // параметр содержит значение битовой маски (для проверки корректности ввода)
+
+// Флаги макро
+  ifGetFullPathName         =     1;  // При работе TranslateMacro добавить ppCurPath
+
+// Флаги секций
+  sfEnableCreateNew         =     1;  // В секцию можно добавлять параметры пользователю
+  sfUserSection             =     2;  // Это секция, придуманная пользователем для самого
+  sfHelpNotAvail            =   128;  // Подсказка по секции не выдается
+  sfDontAllowInClientConfig =  1024;  // не клиентская секция
+  sfDontMargeClientConfig   =  2048;  // раздельная секция
+
+// Флаги засылки значения
+  ifAppendParameter         =     0;  // Очистить параметр до засылки в него нового значения
+  ifClearParameter          =     1;  // Очистить параметр до засылки в него нового значения
+  ifNoModifiedFlag          =     2;  // Не выставлять поле Modifed у параметра
+
+// Флаги выборки значения
+  ifFirstParameter          =     0;  // Взять первый параметр из списка или вообще первый
+  ifNextParameter           =     1;  // Взять следующий параметр из списка или никакой если его нет
+
+// Флаги формирования конфигурационного файла
+  pesNone                   =     0;  // Не определено 
+  pesSkipDeprecate          =     1;  // Не выводить устаревшие параметры
+  pesSkipDefault            =     2;  // Не выводить параметры, значения которых совпадают со значениями по умолчанию
+  pesSkipComment            =     4;  // Не выводить комментарии
+  pesOnlyUsers              =     8;  // Выводить только те параметры, которые имеют флаг ifWriteUsersFile
+  pesParameters             =     1;  // Выводить в формате [Секция]Параметр= (формат ini-файла)

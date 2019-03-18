@@ -44,8 +44,8 @@ const
   frGroupsDelimiter = ',';
   // Замена frGroupsDelimeter на frDelimeter трудоемка и нецелесообразна, т.к. затрагивает хранение списка групп в Variables отчета "GalaxyGroupList" (необходимо будет поддерживать и старый разделитель для совместимости).
   // Необходимо на стороне Атлантиса доработать модуль frres.pas (пересобрать все ресурсы на frres.exe) и функцию RunFReportByGroup.
-
   // А также зарегистрированную для VIP функцию RunFReportByGroup.
+  frParamsDelimiter = ';';
 
   csFRDestroy = 1;
   csDestroyAfterClosePreview = 2;
@@ -63,119 +63,4 @@ type
     Name        : ShortString; // Имя поля в DataSet-е
     Title       : ShortString; // Заголовок колонки в BROWSE или TREE
     ViewFormat  : ShortString; // Формат отображения данных колонки
-  end;
-
-  PfrxBiffExportParam = ^frxBiffExportParam;
-  frxBiffExportParam = record
-    Pages           : ShortString;
-    PageBreaks      : WordBool;
-    PagesPerSheet   : LongInt;
-    Picture         : WordBool;
-    DeleteEmptyRows : WordBool;
-    Formulas        : WordBool;
-    ShowDialog      : WordBool;
-    OpenAfterExport : WordBool;
-  end;
-
-  PfrxXMLExportParam = ^frxXMLExportParam;
-  frxXMLExportParam = record
-    Pages           : ShortString;
-    SuppressPageHeadersFooters : WordBool;
-    WYSIWYG         : WordBool;
-    PageBreaks      : WordBool;
-    Background      : WordBool;
-    SplitMode       : Byte;
-    RowsCount       : LongInt;
-    ShowDialog      : WordBool;
-    OpenAfterExport : WordBool;
-  end;
-
-  PfrxRTFExportParam = ^frxRTFExportParam;
-  frxRTFExportParam = record
-    Pages           : ShortString;
-    Picture         : WordBool;
-    WISYWIG         : WordBool;
-    PageBreaks      : WordBool;
-    SuppressPageHeadersFooters : WordBool;
-    HeaderFooter    : LongInt;
-    ShowDialog      : WordBool;
-    OpenAfterExport : WordBool;
-  end;
-
-  PfrxPDFExportParam = ^frxPDFExportParam;
-  frxPDFExportParam = record
-    Pages           : ShortString;
-    Compressed      : WordBool;
-    EmbedFonts      : WordBool;
-    HighResolution  : WordBool;
-    Outline         : WordBool;
-    Background      : WordBool;
-    Quality         : LongInt;
-    ShowDialog      : WordBool;
-    OpenAfterExport : WordBool;
-  end;
-
-  PfrxODExportParam = ^frxODExportParam;
-  frxODExportParam = record
-    Pages           : ShortString;
-    SuppressPageHeadersFooters : WordBool;
-    WISYWIG         : WordBool;
-    PageBreaks      : WordBool;
-    Background      : WordBool;
-    ShowDialog      : WordBool;
-    OpenAfterExport : WordBool;
-  end;
-
-  PfrxHTMLExportParam = ^frxHTMLExportParam;
-  frxHTMLExportParam = record
-    Pages           : ShortString;
-    Styles          : WordBool;
-    FixedWidth      : WordBool;
-    AllInOneFolder  : WordBool;
-    MultiPage       : WordBool;
-    PageNavigator   : WordBool;
-    Background      : WordBool;
-    PictureType     : Byte;
-    ShowDialog      : WordBool;
-    OpenAfterExport : WordBool;
-  end;
-
-  PfrxSimpleTextExportParam = ^frxSimpleTextExportParam;
-  frxSimpleTextExportParam = record
-    Pages           : ShortString;
-    PageBreaks      : WordBool;
-    EmptyLines      : WordBool;
-    Frames          : WordBool;
-    OEM             : WordBool;
-    ShowDialog      : WordBool;
-    OpenAfterExport : WordBool;
-  end;
-
-  PfrxXLSXExportParam = ^frxXLSXExportParam;
-  frxXLSXExportParam = record
-    Pages           : ShortString;
-    SuppressPageHeadersFooters : WordBool;
-    Picture         : WordBool;
-    DeleteEmptyRows : WordBool;
-    ShowDialog      : WordBool;
-    OpenAfterExport : WordBool;
-  end;
-
-  PfrxPrintParam = ^frxPrintParam;
-  frxPrintParam = record
-    Pages       : ShortString;
-    PrinterName : ShortString;
-    PrintToFile : WordBool;
-    FileName    : ShortString;
-    CopiesCount : LongInt;
-    Collate     : WordBool;
-    ShowDialog  : WordBool;
-  end;
-
-  PfrxSendMailParam = ^frxSendMailParam;
-  frxSendMailParam = record
-    MailTo     : WideString;
-    Subject    : WideString;
-    Body       : WideString;
-    ShowDialog : WordBool;
   end;
