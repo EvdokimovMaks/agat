@@ -34,7 +34,7 @@ table struct tSpStep (
 );
 
 var
-  _setSpStepPrice: ISetSpStepPrice;
+  _basedocModify : IBaseDocModify;
   _wTiDk         : word;
   _cDoc          : comp;
   _wFlagsControl : word;
@@ -44,6 +44,7 @@ function GetModeFld: string; forward;
 function GetFlagsFld(wFl: word): string; forward;
 function GetSpStepBrFld: string; forward;
 function GetSpDocsBrFld: string; forward;
+procedure PrepareData; forward;
 
 create view
 as select
@@ -171,6 +172,29 @@ function SpDocsPriceNoNds(cSpD: comp): double;
   }
 }
 
+//Возвращает цену с ндс по позиции договора/дс/пкп с нреком cSpD
+function SpDocsPriceWithNds(cSpD: comp): double;
+{
+  result := 0;
+  vSpDocsPrice._cSpDocs := cSpD;
+  if vSpDocsPrice.getfirst SpDocs = tsOk
+  {
+    result := vSpDocsPrice.SpDocs.Price;
+    if vSpDocsPrice.SpDocs.TiDk = 403
+    {
+      if vSpDocsPrice.getfirst CalPlan = tsOk
+        if vSpDocsPrice.CalPlan.VhodNal != 1
+          result += if(vSpDocsPrice.SpDocs.Kol != 0, vSpDocsPrice.SpDocs.SumNds / vSpDocsPrice.SpDocs.Kol, 0);
+    }
+    else
+    {
+      if vSpDocsPrice.getfirst Dogovor = tsOk
+        if vSpDocsPrice.Dogovor.VhodNal != 1
+          result += if(vSpDocsPrice.SpDocs.Kol != 0, vSpDocsPrice.SpDocs.SumNds / vSpDocsPrice.SpDocs.Kol, 0);
+    }
+  }
+}
+
 //Возвращает цену без ндс по позиции текущего ДО
 function SpStepPriceNoNds(dPrice: double; dKolSkl: double; dSumNds: double): double;
 {
@@ -248,6 +272,60 @@ function GetFlagsFld(wFl: word): string;
 
 //#endregion Функции, возвращающие значения полей из вьюхи
 
+procedure UpdateCurrentSpStep;
+{
+  if getfirst SpStep1 != tsOk
+  {
+    Message('Не найдена позиция спецификации ДО SpStep.Nrec = ' + String(tSpStep.Nrec, 0, 0), error);
+    exit;
+  }
+  if getfirst SpDocs1 != tsOk
+  {
+    Message('Не найдена позиция спецификации договора/дс/пкп SpDocs.Nrec = ' + String(tSpStep.cSpDocs, 0, 0), error);
+    exit;
+  }
+  if not _basedocModify.SetSpStepPos(tSpStep.Nrec)
+  {
+    Message('Интерфейс модификации ДО: не найдена позиция спецификации SpStep.Nrec = ' + String(tSpStep.Nrec, 0, 0), error);
+    exit;
+  }
+  if (tSpStep.wFlags and wFlags_McUsl) = wFlags_McUsl
+    _basedocModify.SetSpStepMcUsl(SpDocs1.PrMc, SpDocs1.cMcUsl);
+
+  if (tSpStep.wFlags and wFlags_Price) = wFlags_Price
+  {
+    _basedocModify.SetSpStepPrice(if(BaseDoc.VhodNal = 1,
+                                     SpDocsPriceWithNds(SpDocs1.Nrec),
+                                     SpDocsPriceNoNds(SpDocs1.Nrec)));
+  }
+
+  if (tSpStep.wFlags and wFlags_Nal) = wFlags_Nal
+    _basedocModify.SetSpStepGrNal(SpDocs1.cGrNal);
+
+  if (tSpStep.wFlags and wFlags_Kol) = wFlags_Kol
+    _basedocModify.SetSpStepKol(SpDocs1.Kol);
+
+  if (tSpStep.wFlags and wFlags_SpDoc) = wFlags_SpDoc
+    _basedocModify.SetSpStepSpDocs(tSpStep.cSpDocs);
+
+  if (tSpStep.wFlags and wFlags_CU) = wFlags_CU
+  {
+    if getfirst SpDocsSpecMtr = tsOk
+      _basedocModify.SetSpStepSpecMtr(SpDocsSpecMtr.Buffer);
+  }
+
+}
+
+procedure RemoveCurrentSpStep;
+{
+
+}
+
+procedure CreateCurrentSpStep;
+{
+
+}
+
 window wRslt 'Корректировка спецификации ДО по Договору/ДС/ПКП' escClose;
   show(,,120,);
   browse br1;
@@ -293,7 +371,7 @@ window wRslt 'Корректировка спецификации ДО по Договору/ДС/ПКП' escClose;
       cmCancel;
 <<
 
-                                                  <. Установить новые цены .> <. Отмена .>
+                                                                            <. Обновить спецификацию ДО .> <. Отмена .>
 >>
   end;
   tableevent table tSpStepBr;
@@ -303,13 +381,21 @@ window wRslt 'Корректировка спецификации ДО по Договору/ДС/ПКП' escClose;
   handleevent
     cmOk:
     {
-      /*_loop SpStep
-        if getfirst tSpStep = tsOk
-        {
-          if tSpStep.wMode = 0 continue;
-          _setSpStepPrice.SetSpStepPrice(BaseDoc.Nrec, SpStep.Nrec, tSpStep.dNewPrice);
-        }*/
-      CloseWindowEx(wRslt, cmDefault);
+      var cnt: longint = RecordsInTable(tntSpStep);
+      StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak, 'Обновление позиций спецификации ДО', cnt);
+      _loop tSpStep
+      {
+        case tSpStep.wMode of
+          wMode_Update: UpdateCurrentSpStep;
+          wMode_Remove: RemoveCurrentSpStep;
+          wMode_Create: CreateCurrentSpStep;
+        end;
+        if not NextVisual break;
+      }
+      _basedocModify.RecalcBaseDoc(True);
+      PrepareData;
+      ReReadRecord(tntSpStepBr);
+      StopVisual('', 0);
     }
   end;
 end;
@@ -390,7 +476,7 @@ procedure PrepareData;
       {
         vNewSpStep.update current tSpStep0
           set tSpStep0.cSpDocs = vNewSpStep.SpDocs.Nrec,
-              tSpStep0.wControl = 0FFFFh;
+              tSpStep0.wControl = _wFlagsControl or wFlags_McUsl or wFlags_Price or wFlags_Kol;
       }
       else
       {
@@ -481,17 +567,22 @@ Function RunInter(wflag: word; var pt: TRecAcc): boolean;
   }
   //Инициализируем интерфейс, который будет модифицировать ДО
   case BaseDoc.VidDoc of
-    101: GetVipRef(_setSpStepPrice, 'L_BASEDOC::myVschetB');
-    111: GetVipRef(_setSpStepPrice, 'L_BASEDOC::myVschetPB');
+    101: GetVipRef(_basedocModify, 'L_BASEDOC::myVschetB');
+    111: GetVipRef(_basedocModify, 'L_BASEDOC::myVschetPB');
     else
     {
       Message('Данный тип документов не поддерживается');
       exit;
     }
   end;
-  if NullVipRef(_setSpStepPrice)
+  if NullVipRef(_basedocModify)
   {
-    Message('Ошибка инициализации пересчета цен', error);
+    Message('Ошибка инициализации интерфейса для модификации ДО', error);
+    exit;
+  }
+  if not _basedocModify.SetBaseDocPos(BaseDoc.Nrec)
+  {
+    Message('Интерфейс модификации ДО: не найден ДО', error);
     exit;
   }
   //Окно настроек
