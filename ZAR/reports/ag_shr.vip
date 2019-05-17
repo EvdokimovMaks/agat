@@ -7,7 +7,7 @@
 #component "AGAT"
 
 interface ag_shr 'АГАТ. Штатное расписание' escclose;
-show(,,26,7);
+show(,,60,8);
 
 table struct tCatDep (
   Nrec   : comp,
@@ -54,6 +54,7 @@ var
   pXL: XLSRepBuilder;
   _date: date;
   _flags: comp;
+  _mDep: TPtr;
 
 create view
 as select
@@ -138,11 +139,29 @@ where ((
   vTotals._cCatDep    == tTotals0.cCatDep
 ));
 
+function GetDepFld: string;
+{
+  result := '';
+  var cnt: longint = GetMarkerCount(_mDep);
+  case cnt of
+    0: result := 'Все подразделения';
+    1:
+    {
+      var c: comp = 0;
+      if GetMarker(_mDep, 0, c)
+        result := _catFunc.GetCatalogsName(c);
+    }
+    else
+      result := 'Выбрано подразделений: ' + cnt;
+  end;
+}
+
 
 screen sc1;
   fields
     _date: noprotect;
-    _flags: noprotect;
+    _flags: noprotect, noframe;
+    [DepFld] GetDepFld: protect, pickbutton;
   buttons
     cmOk, default;
     cmCancel;
@@ -151,6 +170,7 @@ screen sc1;
 `Дата отчета`.@@@@@@@@@@
 
   [.] Отображать сотрудников`
+  [.] Фильтр по подразделениям`.@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 <.Продолжить.> <.Отмена.>
 >>
@@ -162,7 +182,7 @@ sql query qCatDep =
   insert tCatDep (Nrec, cParent, Name, Code)
   select
     CatHist.cCat    as Nrec,
-    CatHist.cParent as cParent,
+    coalesce(CatParent.Nrec, CatTop.Nrec) as cParent,
     CatHist.Name    as Name,
     Catalogs.Code   as Code
   from
@@ -180,10 +200,13 @@ sql query qCatDep =
       group by CatHist.cCat, CatHist.Dat1
     ) CatH2 on (Catalogs.NRec = CatH2.cCat and CatH1.MaxDate = CatH2.Dat1)
     inner join CatHist on (Catalogs.NRec = CatHist.cCat and CatH1.MaxDate = CatHist.Dat1 and CatH2.MaxNpp = cast(CatHist.lastuser as integer))
+    inner join Catalogs CatTop on CatTop.SysCode = :topEntry
+    left  join Catalogs CatParent on CatParent.Nrec = CatHist.cParent %CatParentFltr
   where
-    Catalogs.lPr = 0 and Catalogs.MainLink = (select NRec from Catalogs where :topEntry = SysCode) and
+    Catalogs.lPr = 0 and Catalogs.MainLink = CatTop.Nrec and
     case :topEntry when -11 then 1 else 0 end <> CatHist.bMulti and
     Catalogs.DatN <= :dateSts and (Catalogs.DatOk = 0 or Catalogs.DatOk >= :dateSts)
+    %WhereFltr
   union all
     select
       Catalogs.Nrec        as Nrec,
@@ -287,8 +310,16 @@ sql query qTotals2 =
 
 function CreateSqlTmpTables: integer;
 {
-  //Готовим sql таблицу tCatDep со структурными единицами ШР, действующими на дату _date
   var s: longint = 0;
+
+  //Готовим sql таблицу с фильтрами
+  sqlFreeStr(s);
+  sqlAddStr(s, 'table TmpFltr (cRec: comp);');
+  result := sqlCreateTmpTable(s, ctmNormal);
+  if result != tsOk exit;
+
+
+  //Готовим sql таблицу tCatDep со структурными единицами ШР, действующими на дату _date
   sqlFreeStr(s);
   sqlAddStr(s, 'table tCatDep (Nrec: comp, cParent: comp, Name: string, Code: string[100]);');
   result := sqlCreateTmpTable(s, ctmNormal);
@@ -312,7 +343,7 @@ function CreateSqlTmpTables: integer;
   if result != tsOk exit;
 
   //Готовим таблицу с итогами по структурным единицам ШР, подгруппами и категориями
-  sqlFreeStr(s)
+  sqlFreeStr(s);
   sqlAddStr(s, 'table tTotals (');
   sqlAddStr(s, '  cCatDep: comp,');
   sqlAddStr(s, '  wType  : word,');
@@ -331,6 +362,7 @@ function CreateSqlTmpTables: integer;
 procedure DropSqlTmpTables;
 {
   //Дропаем созданные sql таблицы
+  sqlDropTmpTable('TmpFltr');
   sqlDropTmpTable('tCatDep');
   sqlDropTmpTable('tSS');
   sqlDropTmpTable('tTotals');
@@ -411,10 +443,26 @@ procedure CalcHierTotals(__cCatDep: comp);
 
 procedure PrepareData;
 {
+
+  //Признак, что применен фильтр по подразделениям
+  var isDepFltrSet: boolean = (_flags and 2) = 2 and GetMarkerCount(_mDep) > 0;
+
+  //Если есть фильтр по подразделениям - пишем нреки выбранных подразделений в sql-таблицу TmpFltr
+  if isDepFltrSet
+  {
+    var qFltr: IQuery = queryManager.createQuery('insert TmpFltr (cRec) Values (:cRec)');
+    var cFltrRec: comp = 0;
+    var lFltrInd: longint = 0;
+    for (lFltrInd := 0; GetMarker(_mDep, lFltrInd, cFltrRec); lFltrInd++)
+      qFltr.setParam('cRec', cFltrRec).execute;
+  }
+
   //Заполняем sql таблицу tCatDep действующими на дату _date структурными единицами ШР
   var rslt: integer = queryManager.createQuery(qCatDep)
                                   .setParam('dateSts', _date)
                                   .setParam('topEntry', -11)
+                                  .setMacro('CatParentFltr', if(isDepFltrSet, 'and CatParent.Nrec in (select cRec from TmpFltr)', ''))
+                                  .setMacro('WhereFltr', if(isDepFltrSet, 'and Catalogs.Nrec in (select cRec from TmpFltr)', ''))
                                   .execute
                                   .errorCode;
   if rslt != tsOk { Message('Ошибка выборки структурных единиц ШР: ' + rslt, error); exit; }
@@ -619,6 +667,36 @@ procedure PrintXlsReport(isCreateXLT: boolean; sXLTFileName: string);
 
 handleevent
 
+cmPick:
+{
+  case curfield of
+    #DepFld:
+    {
+      StoreMarker(_mDep, 'CatalogsMarker');
+      if RunInterface('Z_STAFFCAT::PickCatalog2', -11, 0, 100, 0) = cmDefault
+      {
+        DoneMarker(_mDep, '');
+        _mDep := InitMarker('CatalogsMarker', 8, 30, 10, true);
+        set _flags := _flags or 2;
+        rereadrecord;
+      }
+    }
+  end;
+}
+
+cmDelOnProtect:
+{
+  case curfield of
+    #DepFld:
+    {
+      ClearMarker(_mDep);
+      if (_flags and 2) = 2
+        set _flags := _flags xor 2;
+      rereadrecord;
+    }
+  end;
+}
+
 cmOk:
 {
   StartNewVisual(vtRotateVisual, vfTimer, 'Формирование отчета', 0);
@@ -638,12 +716,14 @@ cmInit:
 {
   if not ReadMyDsk(_date, 'ag_shr_date', false) _date := cur_date;
   if not ReadMyDsk(_flags, 'ag_shr_flags', false) _flags := 0;
+  _mDep := InitMarker('ag_shr_mDep', 8, 30, 10, true);
 }
 
 cmDone:
 {
   SaveMyDsk(_date, 'ag_shr_date');
   SaveMyDsk(_flags, 'ag_shr_flags');
+  DoneMarker(_mDep, 'ag_shr_mDep');
 }
 
 end;
@@ -666,9 +746,9 @@ Interface UserReport_ag_shr;
   end;
 
   function GetGroupName (Level : Word) : String;
-  begin
+  {#__UNUSED__(Level)
     GetGroupName := '';
-  end;
+  };
 
   function GetPriority : Integer;
   begin
