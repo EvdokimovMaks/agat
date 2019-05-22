@@ -67,7 +67,6 @@ wKauKs6: word  cKauKs6: comp
 c1p9 c1p10 c1p11 c1p11d 
 ! Ссылка на документ
 cSoprHoz
-cSoprHoz2
 c1p12 c1p13  c1p14 c1p15 c1p16 c1p17
 c1p18 c1p19
 c2p0 c2p1 c2p4 c2p2 c2p3 GroupKol
@@ -151,7 +150,6 @@ c1p10   Подразделение   ^
 c1p11   содержание проводки   ^
 c1p11d  содержание документа  ^
 cSoprHoz - Ссылка на документ ^
-cSoprHoz2 - Ссылка на документ ^
 
 c1p12   документ N      ^
 c1p13   тип документа   ^

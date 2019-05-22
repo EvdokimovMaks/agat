@@ -13,10 +13,10 @@
 (Типовая форма № Т-51)
 #end
 .set name='VedT51'
+!.group ' VedT51_1'
 .p 42
 .hide
 .fields
-  sNumDoc
   Pred
   OKPO
   Day1
@@ -30,15 +30,10 @@
   NaimK20
   NaimK23
   NaimK24
-  NameSignatory
-  PostSignatory
 .endfields
  ^
  ^
- ^
  ^^^^ ^^^^^^^
- NameSignatory ^
- PostSignatory ^
 !
 .{ coPordLoop CheckEnter
 .fields
@@ -249,12 +244,10 @@ end.
 .end
 .}
 .fields
-  PostSignatory
-  NameSignatory
-  Day3 Mes3 год3
+ Day3 Mes3 год3
  'true':'s'
 .endfields
- Р                                                       Ведомость составил Р@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                       @@@@@@@@@@@@@@@@@@@@@@@@@@
+ Р                                                       Ведомость составил И
  И                                                                           ----------------------------------    -----------------  -------------------------- И
  И                                                                                         должность                    подпись           расшифровка подписи И
  И                                                                     "&&" ^ &&&& г. Р

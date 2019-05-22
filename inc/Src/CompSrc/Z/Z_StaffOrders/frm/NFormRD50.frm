@@ -13,7 +13,6 @@
 Организация
 ОКПО
 TitleDocNrec : comp
-sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа
@@ -55,7 +54,6 @@ FIOSokr
 Организация                   ^
 ОКПО                          ^
 TitleDocNrec : comp           ^
-sBarCode		      ^
 PersNrec : comp               ^
 AppointNrec : comp            ^
 номер_документа               ^

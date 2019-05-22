@@ -194,6 +194,57 @@
      ВСЕГО                &&&&&
 .endform
 
+
+.LINKFORM "Национальный состав работающих - графики" PROTOTYPE IS staff_gr
+.group "Национальный состав работающих - графики"
+.Var iNmb : integer
+     sNat : string
+     not_first_page : boolean
+.EndVar
+.Fields
+  dToDate
+  iNmb sNat
+.EndFields
+.GRAF
+GRAPHREPORT {
+Query "Вид графика" {
+  MyGraphType  GraphType  "Тип графика" "Pie";
+  MyGraphDim   GraphDim   "Трехмерные эффекты" "2D";
+}
+PAGE {
+  GRAPH as MyGraphType as MyGraphDim {
+    UPTITLE "НАЦИОНАЛЬНЫЙ СОСТАВ РАБОТАЮЩИХ на @@@@@@@@@@";
+    DATA  {
+.{staff_gr_CycleFiltr  CheckEnter
+.}
+.{staff_gr_Ctrl1  CheckEnter
+.Begin
+  iNmb := 0;
+  if (Length(Nationality) <> 0)
+    sNat := Nationality;
+  else
+    sNat := 'не указано';
+ End.
+.{staff_gr_Ctrl2  CheckEnter
+.{staff_gr_Ctrl3  CheckEnter
+.{staff_gr_Persons  CheckEnter
+.Begin
+  iNmb := iNmb + 1;
+ End.
+.}
+.}
+.}
+.{?internal;trim(sNat)<>'ОБОБЩЕНИЕ'
+ ^, "^";
+.}
+.}
+          } // Data
+    SERIE {}
+  }  }
+} //GRAPHREPORT
+.endform
+
+
 .LINKFORM "Справка о наличии работающих" PROTOTYPE IS staff_gr
 .group "Справка о наличии работающих"
 .p 60
@@ -256,7 +307,51 @@
  └─────────────────────┴────────────┘
      ВСЕГО                &&&&&
 .endform
-
+.LINKFORM "Справка о наличии работающих - графики" PROTOTYPE IS staff_gr
+.group "Справка о наличии работающих - графики"
+.Var iNmb : integer
+     sNat : string
+.EndVar
+.Fields
+  dToDate
+  iNmb sNat
+.EndFields
+.GRAF
+GRAPHREPORT {
+Query "Вид графика" {
+  MyGraphType  GraphType  "Тип графика" "Pie";
+  MyGraphDim   GraphDim   "Трехмерные эффекты" "2D";
+}
+PAGE {
+  GRAPH as MyGraphType as MyGraphDim {
+    UPTITLE "СПРАВКА О НАЛИЧИИ РАБОТАЮЩИХ на @@@@@@@@@@";
+    DATA  {
+.{staff_gr_CycleFiltr  CheckEnter
+.}
+.{staff_gr_Ctrl1  CheckEnter
+.Begin
+  iNmb := 0;
+  if (Length(PostL) <> 0)
+    sNat := Header1;
+  else
+    sNat := 'не указано';
+ End.
+.{staff_gr_Ctrl2  CheckEnter
+.{staff_gr_Ctrl3  CheckEnter
+.{staff_gr_Persons  CheckEnter
+.Begin
+  iNmb := iNmb + 1;
+ End.
+.}
+.}
+.}
+ ^, "^";
+.}
+          } // Data
+    SERIE {}
+  }  }
+} //GRAPHREPORT
+.endform
 .LINKFORM "Справка по категориям работников" PROTOTYPE IS staff_gr
 .group "Справка по категориям работников"
 .DEFO LANDSCAPE
@@ -281,10 +376,10 @@
      sKateg   : comp
      sTmp    : string
      not_first_page : boolean
-     Admin_Marker: TPtr
-     Spec_Marker : TPtr
-     Clerk_Marker: TPtr
-     Work_Marker : TPtr
+     Admin_Marker: longint
+     Spec_Marker : longint
+     Clerk_Marker: longint
+     Work_Marker : longint
      IndexNo     : longint
 .EndVar
 .Fields
@@ -377,9 +472,9 @@ Work_Marker  := InitMarker('Unlo4grp_Work_Marker', 8, 10, 1);
         begin
         if SearchMarker(Work_Marker, sKateg, IndexNo) then
            iWork   := iWork + 1;
-        end;
       end;
     end;
+  end;
  End.
 .}
 .}
@@ -641,6 +736,62 @@ Work_Marker  := InitMarker('Unlo4grp_Work_Marker', 8, 10, 1);
 .}
  └─────────────────────┴────────────┘
      ВСЕГО                &&&&&
+.endform
+.LINKFORM "Национальный состав подразделения - графики" PROTOTYPE IS staff_gr
+.group "Национальный состав подразделения - графики"
+.Var iNmb : integer
+     sNat : string
+     sFltrVal : string
+.EndVar
+.Fields
+  dToDate
+  sFltrVal
+  iNmb sNat
+.EndFields
+.GRAF
+GRAPHREPORT {
+Query "Вид графика" {
+  MyGraphType  GraphType  "Тип графика" "Pie";
+  MyGraphDim   GraphDim   "Трехмерные эффекты" "2D";
+}
+PAGE {
+  GRAPH as MyGraphType as MyGraphDim {
+.Begin
+   sFltrVal := '';
+ End.
+.{staff_gr_CycleFiltr  CheckEnter
+.Begin
+   if (Trim(FiltrCode) = '=')
+     sFltrVal := FiltrString;
+ End.
+.}
+    UPTITLE "НАЦИОНАЛЬНЫЙ СОСТАВ РАБОТАЮЩИХ на ^. ^.";
+    DATA  {
+.{staff_gr_Ctrl1  CheckEnter
+.Begin
+  iNmb := 0;
+  if (Length(Nationality) <> 0)
+    sNat := Nationality;
+  else
+    sNat := 'не указано';
+ End.
+.{staff_gr_Ctrl2  CheckEnter
+.{staff_gr_Ctrl3  CheckEnter
+.{staff_gr_Persons  CheckEnter
+.Begin
+  iNmb := iNmb + 1;
+ End.
+.}
+.}
+.}
+.{?internal;trim(sNat)<>'ОБОБЩЕНИЕ'
+ ^, "^";
+.}
+.}
+          } // Data
+    SERIE {}
+  }  }
+} //GRAPHREPORT
 .endform
 .LINKFORM "Пофамильные списки" PROTOTYPE IS staff_gr
 .group "Пофамильные списки"

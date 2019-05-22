@@ -8,7 +8,7 @@ Table STRUCT MemSpSopr "Таблица в памяти"
 , dGodnParty    : Date 
 , dCreateParty  : DateTime
 , TekSaldoOst   : double
-, SpSoprKolFact : double
+, SpSoprKolOpl  : double
 , ManualTax     : word
 , wNpp          : word
 , ccPodr        : tNRec

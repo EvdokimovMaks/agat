@@ -12,10 +12,6 @@ Datastream fr_prndata
   [nu_gruz       ]  sGetTune('Doc.SD.AbbrField.Gruz');
   [wFillCol10    ]  wGetTune('Doc.SD.PrnNakl.Torg12Col10');
   [bSymbolEAC    ]  wGetTune('Doc.SD.PrintEAC');
-  [NoNDSStZero   ]  sGetTune('Doc.SD.AbbrField.NoNDSStZero');
-  [NoNDSSummZero ]  sGetTune('Doc.SD.AbbrField.NoNDSSummZero');
-  [NDSStZero     ]  sGetTune('Doc.SD.AbbrField.NDSStZero');
-  [NDSSummZero   ]  sGetTune('Doc.SD.AbbrField.NDSSummZero');
 
   //округления
   Table fr_rounds
@@ -278,7 +274,6 @@ Datastream fr_prndata
 //гл. бухгалтер
     [GlBuhName           ] oPrnSoprFun.GetGlBuhName(fr_dochead.KatSoprNRec, fr_dochead.GBuhName);
     [val_name            ] if (oPrnSoprFun.GetValName(fr_dochead.KatSopr_cVal) = '', sGetTune('NDE.NAMERUBL'), oPrnSoprFun.GetValName(fr_dochead.KatSopr_cVal));
-    [val_nameUPD         ] if (oPrnSoprFun.GetValNameUPD(fr_dochead.KatSopr_cVal) = '', Trim(sGetTune('Nalog.Rus.NDE_FullName')), oPrnSoprFun.GetValNameUPD(fr_dochead.KatSopr_cVal));
     [val_kod             ] if (oPrnSoprFun.GetValCode(fr_dochead.KatSopr_cVal) = '', sGetTune('NDE.RUBLISO') , oPrnSoprFun.GetValCode(fr_dochead.KatSopr_cVal));
     [PlatSch             ] oPrnSoprFun.FindPlat(fr_dochead.SchFact_NRec);
 //номер счета-фактуры для корректировочного УПД
@@ -450,9 +445,6 @@ Datastream fr_prndata
     [cane_ord_val         ]  fr_docspecif.CenaOrdVal;               // Цена_ордера_вал
     [sPrim                ]  fr_docspecif.sPrim;                    // sPrimechanie
     [sPrimV               ]  fr_docspecif.sPrimV;                   // sPrimechanieV
-    [PrNDS                ]  fr_docspecif.PrNDS;
-    [StNDS                ]  fr_docspecif.StNDS;
-
 ! Поля для форм ТТН-1 и ТН-2
     [nazvanie_dop         ]  oPrnSoprFun.GetNazvanieDop(fr_docspecif.MCName, fr_docspecif.MCKod, fr_docspecif.DopInfo, fr_docspecif.CountryIn);
     [kolFTTN              ]  DoubleToStr(fr_docspecif.KolF, Kol_Pr);
@@ -509,14 +501,14 @@ Datastream fr_prndata
     [NastrEdCode          ]  oPrnSoprFun.NastrEdIzm(oPrnSoprFun.GetUthEdKod(fr_docspecif.SpSoprNRec), oPrnSoprFun.GetOtpEdKod(fr_docspecif.SpSoprNRec));
     [CHTN_dOpr            ]  fr_docspecif.CHTN_dOpr;
     [akciz                ]  DoubleToStr(fr_docspecif.CExciseNak, Cena_Pr);
-    [PrnSoprGTD1          ]  oPrnSoprFun.PrnSoprGTD(fr_docspecif.PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 0);  //код страны товара
-    [PrnSoprGTD2          ]  oPrnSoprFun.PrnSoprGTD(fr_docspecif.PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 1);  //страна товара
-    [PrnSoprGTD3          ]  oPrnSoprFun.PrnSoprGTD(fr_docspecif.PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 2);  //номер таможенной декларации
+    [PrnSoprGTD1          ]  oPrnSoprFun.PrnSoprGTD(PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 0);  //код страны товара
+    [PrnSoprGTD2          ]  oPrnSoprFun.PrnSoprGTD(PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 1);  //страна товара
+    [PrnSoprGTD3          ]  oPrnSoprFun.PrnSoprGTD(PrMc, fr_dochead.SchFact_NRec, fr_docspecif.SpSoprNRec, 2);  //номер таможенной декларации
 ! Поля для соглашения и корректировочного документа ПИР 102.137440
     [KDKolOld             ] DoubleToStr(oPrnSoprFun.GetKDKolOld  (fr_docspecif.SpSoprNRec), Kol_Pr);
     [KDKolNew             ] DoubleToStr(oPrnSoprFun.GetKDKolNew  (fr_docspecif.SpSoprNRec), Kol_Pr);
-    [KDPriceOld           ] DoubleToStr(oPrnSoprFun.GetKDPriceOld(fr_docspecif.SpSoprNRec), Cena_Pr);
-    [KDPriceNew           ] DoubleToStr(oPrnSoprFun.GetKDPriceNew(fr_docspecif.SpSoprNRec), Cena_Pr);
+    [KDPriceOld           ] DoubleToStr(oPrnSoprFun.GetKDPriceOld(fr_docspecif.SpSoprNRec), Kol_Pr);
+    [KDPriceNew           ] DoubleToStr(oPrnSoprFun.GetKDPriceNew(fr_docspecif.SpSoprNRec), Kol_Pr);
     [KDSummaOldBN         ] DoubleToStr(oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDNalogOld(fr_docspecif.SpSoprNRec), Cena_Pr);
     [KDSummaNewBN         ] DoubleToStr(oPrnSoprFun.GetKDSummaNew(fr_docspecif.SpSoprNRec) - oPrnSoprFun.GetKDNalogNew(fr_docspecif.SpSoprNRec), Cena_Pr);
     [KDSumma1BN           ] DoubleToStr(if ((oPrnSoprFun.GetKDSummaOld(fr_docspecif.SpSoprNRec)
@@ -599,9 +591,6 @@ Datastream fr_prndata
                                         Abs (oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1)), 0), Cena_Pr);
     [KDSumma2Isp          ] DoubleToStr(if ((oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1)) > 0,
                                              oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 0) - oPrnSoprFun.GetKNSumma(fr_docspecif.SpSoprNRec, 1), 0), Cena_Pr);
-
-    [LNameTTN             ] LongNTTN(fr_docspecif.SpSoprNRec);    
-    [LongNameTTN          ] AllMemo.Mem;
   );
 
 
@@ -1502,7 +1491,7 @@ Datastream fr_prndata
 
       // запрашивать подписантов для ТОРГ-12 и УПД только для расходных документов
       case wForm of
-        7, 8, 12:
+        7, 8:
         {
           var oSDfuns: SDfuns;
 
@@ -1547,7 +1536,7 @@ Datastream fr_prndata
       if (oGetPersSign.Persons[6] <> 0) oPrnSoprFun.GetFIOPost(oGetPersSign.Persons[6], sFIO6, sPost6);
 
       case wForm of
-        7, 8, 12:
+        7, 8:
         {
           if (oGetPersSign.FeeSigners <> '')
           {
@@ -1618,36 +1607,6 @@ Datastream fr_prndata
                   {
                     sFIO5  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
                     sPost5 := iFeeSigners.GetSignerPosition(1);
-                  }
-                }
-              }
-              12: // подписанты для Корректировочного УПД
-              {
-                iFeeSigners.InitFeeSignersExt   (cgReport_7405, false, false);
-                iFeeSigners.FindFeeSignersByName(cgReport_7405, oGetPersSign.FeeSigners);
-
-                // Если установлена Группа
-                if iFeeSigners.FeeSignersIsValid
-                {
-                  cGrPodp := iFeeSigners.GetFeeSigners;
-
-                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'За руководителя организации')
-                  {
-                    sFIO1  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
-                    sPost1 := iFeeSigners.GetSignerPosition(1);
-                  }
-
-                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'За главного бухгалтера')
-                  {
-                    sFIO2  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
-                    sPost2 := iFeeSigners.GetSignerPosition(1);
-                  }
-
-                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'Ответственный за правильность оформления факта хозяйственной жизни')
-                  {
-                    sFIO3  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
-                    sFIO3  := if(boolean(InStr(sFIO3, sFIO2)), iFeeSigners.GetSignerFIOEx(if(oGetPersSign.Params = 0, 1, 7), false), sFIO3);
-                    sPost3 := iFeeSigners.GetSignerPosition(1);
                   }
                 }
               }

@@ -2,6 +2,7 @@
 {═════════════ Таблица : GETSOMKATNAZNA "GETSOMKATNAZNA" ══════════════}
 type
   String255        = String[255];
+  String80        = String[80];
   String20        = String[20];
   String250        = String[250];
   pGETSOMKATNAZNA = ^tGETSOMKATNAZNA;
@@ -27,7 +28,7 @@ type
     KATNAZNA_CSTZATR: Comp;           { Ссылка на статью затрат               }
     CSMET          : Comp;            { Ссылка на абстр. бюджет               }
     COWNER         : Comp;            { Ссылка на вышестоящее назначение      }
-    KATNAZNA_NAME  : String;          { наименование назначения               }
+    KATNAZNA_NAME  : String80;        { наименование назначения               }
     NAZCODE        : String20;        { Код назначения                        }
     STZATR_NAME    : String250;       { Наименование статьи расходов/доходов  }
     VIDNAZN        : Word;            { вид назначения(1-нет движ. в произв)  }

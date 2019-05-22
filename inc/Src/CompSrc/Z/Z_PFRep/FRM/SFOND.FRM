@@ -242,14 +242,14 @@
  RDataDog                        : string
 .endvar
 .begin
-  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) );
-  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) );
-  pach_nmb:= PachNumBegin;
-  TypeChars := 'ИСХД';
-  nomer   := 0;
-  KolNach := 0;
-  SumNach := 0;
-  SumBoln := 0;
+  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) )
+  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) )
+  pach_nmb:= PachNumBegin
+  TypeChars := 'ИСХД'
+  nomer   := 0
+  KolNach := 0
+  SumNach := 0
+  SumBoln := 0
   MyPersonCounter := 0;
   PersonCounterOut:= 0;
  end.
@@ -299,12 +299,12 @@ end.
  else if CharF  = 2
    TypeChars := 'ОТМН'
  else if CharF  = 3
-   TypeChars := 'ПЕНС';
+   TypeChars := 'ПЕНС'
  if (квартал = '1') or (квартал = '2')then kvartal:= '2'
  else
  if (квартал = '3') or (квартал = '4') then kvartal:= '4'
  else
-   kvartal:= '0';
+   kvartal:= '0'
 ! else kvartal:= квартал
  IF (Word(ДеньЗак)<>0)and(Word(МесяцЗак)<>0)and(Word(ГодЗак)<>0)
   RDataDog:= string(Date(Word(ДеньЗак), Word(МесяцЗак), Word(ГодЗак)))
@@ -332,9 +332,9 @@ end.
    KolStag
 .endfields
 .begin
-  KolNach:= 0;
-  SumNach:= 0;
-  SumBoln:= 0;
+  KolNach:= 0
+  SumNach:= 0
+  SumBoln:= 0
  FSum11 := Double(Sum11);
  FSum12 := Double(Sum12);
  FSum21 := Double(Sum21);
@@ -435,13 +435,13 @@ end.
   end;
   if Okrug = 2
   {
-    rrr   := '666666666666667.88';
-    rrr_2 := '-666666666666667.88';
+    rrr   := '666666666666667.88'
+    rrr_2 := '-666666666666667.88'
   }
   else if Okrug = 0
   {
-    rrr   :='666666666666667';
-    rrr_2 :='-666666666666667';
+    rrr   :='666666666666667'
+    rrr_2 :='-666666666666667'
   }
 end.
 "ИНДС",^,"^","^","^","^","^",^,^,"^","^","^","^","РУБ",^,^,^,^,"^",^,^
@@ -519,8 +519,8 @@ end.
 .}
 .{
 .begin
- my_nach_st:= Нач_стажа;
- my_kon_st := Кон_стажа;
+ my_nach_st:= Нач_стажа
+ my_kon_st := Кон_стажа
  IF Исчисл_труд_стаж_доп_свед1=0 then
   RИсчисл_труд_стаж_доп_свед1:='0'
  else
@@ -550,7 +550,7 @@ end.
  if  Исчисл_труд_стаж_доп_свед1_Lgot=0 then
   RИсчисл_труд_стаж_доп_свед1_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед1_Lgot:= string(Исчисл_труд_стаж_доп_свед1_Lgot);
+  RИсчисл_труд_стаж_доп_свед1_Lgot:= string(Исчисл_труд_стаж_доп_свед1_Lgot)
  if  Исчисл_труд_стаж_доп_свед2_Lgot=0 then
   RИсчисл_труд_стаж_доп_свед2_Lgot:= '0'
  else
@@ -605,14 +605,14 @@ end.
  RDataDog                        : string
 .endvar
 .begin
-  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) );
-  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) );
- pach_nmb:= PachNumBegin;
- nomer  := 0;
- KolNach:= 0;
- SumNach:= 0;
- SumBoln:= 0;
- Counter:= 1;
+  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) )
+  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) )
+ pach_nmb:= PachNumBegin
+ nomer  := 0
+ KolNach:= 0
+ SumNach:= 0
+ SumBoln:= 0
+ Counter:= 1
 end.
 .{
 .{?internal;(nomer=0)
@@ -638,12 +638,12 @@ end.
  else if CharF  = 2
    TypeChars := 'ОТМН'
  else if CharF  = 3
-   TypeChars := 'ПЕНС';
+   TypeChars := 'ПЕНС'
  if (квартал = '1') or (квартал = '2')then kvartal:= '2'
  else
  if (квартал = '3') or (квартал = '4') then kvartal:= '4'
  else
-   kvartal:= '0';
+   kvartal:= '0'
 ! else kvartal:= квартал
  IF (Word(ДеньЗак)<>0)and(Word(МесяцЗак)<>0)and(Word(ГодЗак)<>0)
   RDataDog:= string(Date(Word(ДеньЗак), Word(МесяцЗак), Word(ГодЗак)))
@@ -671,9 +671,9 @@ end.
    KolStag
 .endfields
 .begin
- KolNach:= 0;
- SumNach:= 0;
- SumBoln:= 0;
+ KolNach:= 0
+ SumNach:= 0
+ SumBoln:= 0
  FSum11 := Double(Sum11);
  FSum12 := Double(Sum12);
  FSum21 := Double(Sum21);
@@ -774,13 +774,13 @@ end.
   end;
   if Okrug = 2
   {
-    rrr   := '666666666666667.88';
-    rrr_2 := '-666666666666667.88';
+    rrr   := '666666666666667.88'
+    rrr_2 := '-666666666666667.88'
   }
   else if Okrug = 0
   {
-    rrr   :='666666666666667';
-    rrr_2 :='-666666666666667';
+    rrr   :='666666666666667'
+    rrr_2 :='-666666666666667'
   }
 end.
 "ИНДС",^,"^","^","^","^","^",^,^,"^","^","^","^","РУБ",^,^,^,^,"^",^,^
@@ -859,8 +859,8 @@ end.
 .}
 .{
 .begin
- my_nach_st:= Нач_стажа;
- my_kon_st := Кон_стажа;
+ my_nach_st:= Нач_стажа
+ my_kon_st := Кон_стажа
  IF Исчисл_труд_стаж_доп_свед1=0 then
   RИсчисл_труд_стаж_доп_свед1:='0'
  else
@@ -890,11 +890,11 @@ end.
  if  Исчисл_труд_стаж_доп_свед1_Lgot=0 then
   RИсчисл_труд_стаж_доп_свед1_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед1_Lgot:= string(Исчисл_труд_стаж_доп_свед1_Lgot);
+  RИсчисл_труд_стаж_доп_свед1_Lgot:= string(Исчисл_труд_стаж_доп_свед1_Lgot)
  if  Исчисл_труд_стаж_доп_свед2_Lgot=0 then
   RИсчисл_труд_стаж_доп_свед2_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед2_Lgot:= string(Исчисл_труд_стаж_доп_свед2_Lgot);
+  RИсчисл_труд_стаж_доп_свед2_Lgot:= string(Исчисл_труд_стаж_доп_свед2_Lgot)
  end.
 "^",^,"^",^,^,"^"
 .{ CheckEnter Vred2
@@ -948,13 +948,13 @@ end.
 
 .endvar
 .begin
-  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) );
-  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) );
-  pach_nmb:= PachNumBegin;
-  nomer   := 0;
-  KolNach := 0;
-  SumNach := 0;
-  SumBoln := 0;
+  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) )
+  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) )
+  pach_nmb:= PachNumBegin
+  nomer   := 0
+  KolNach := 0
+  SumNach := 0
+  SumBoln := 0
   MyPersonCounter := 0;
   PersonCounterOut:= 0;
  end.
@@ -1004,12 +1004,12 @@ end.
  else if CharF  = 2
    TypeChars := 'ОТМН'
  else if CharF  = 3
-   TypeChars := 'ПЕНС';
+   TypeChars := 'ПЕНС'
  if (квартал = '1') or (квартал = '2')then kvartal:= '2'
  else
  if (квартал = '3') or (квартал = '4') then kvartal:= '4'
  else
-   kvartal:= '0';
+   kvartal:= '0'
 ! else kvartal:= квартал
  IF (Word(ДеньЗак)<>0)and(Word(МесяцЗак)<>0)and(Word(ГодЗак)<>0)
   RDataDog:= string(Date(Word(ДеньЗак), Word(МесяцЗак), Word(ГодЗак)))
@@ -1037,9 +1037,9 @@ end.
    KolStag
 .endfields
 .begin
-  KolNach:= 0;
-  SumNach:= 0;
-  SumBoln:= 0;
+  KolNach:= 0
+  SumNach:= 0
+  SumBoln:= 0
  FSum11 := Double(Sum11);
  FSum12 := Double(Sum12);
  FSum21 := Double(Sum21);
@@ -1140,13 +1140,13 @@ end.
   end;
   if Okrug = 2
   {
-    rrr   := '666666666666667.88';
-    rrr_2 := '-666666666666667.88';
+    rrr   := '666666666666667.88'
+    rrr_2 := '-666666666666667.88'
   }
   else if Okrug = 0
   {
-    rrr   :='666666666666667';
-    rrr_2 :='-666666666666667';
+    rrr   :='666666666666667'
+    rrr_2 :='-666666666666667'
   }
 end.
 "ИНДС",^,"^","^","^","^","^",^,^,"^","^","^","^","РУБ",^,^,^,^,"^",^,^
@@ -1239,8 +1239,8 @@ end.
 .}
 .{
 .begin
- my_nach_st:= Нач_стажа;
- my_kon_st := Кон_стажа;
+ my_nach_st:= Нач_стажа
+ my_kon_st := Кон_стажа
  IF Исчисл_труд_стаж_доп_свед1=0 then
   RИсчисл_труд_стаж_доп_свед1:='0'
  else
@@ -1277,11 +1277,11 @@ end.
  if  Исчисл_труд_стаж_доп_свед1_Lgot=0 then
   RИсчисл_труд_стаж_доп_свед1_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot));
+  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot))
  if  Исчисл_труд_стаж_доп_свед2_Lgot=0 then
   RИсчисл_труд_стаж_доп_свед2_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot));
+  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot))
  if  Выслуга_лет_доп_свед3_lgot=0 then
   RВыслуга_лет_доп_свед3_lgot:= '0.00'
  else

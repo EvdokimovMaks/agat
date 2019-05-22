@@ -33,9 +33,9 @@
 .fields
     nRecMC a1 NomenklN a2 NameMC a3 nRecOtpEd NameUchEd NameMCandBARandEd
     a4 Massa1 a5 Volume1
-    nRec_Sopr Name_Doc Nomer_Nakl Date_Nakl Date_Proved
+    nRec_Sopr Nomer_Nakl Date_Nakl
 .endfields
-^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
 !------------ начало цикла по накладным --------------------------------------
 .{
 !------------ начало цикла по интервалам -------------------------------------

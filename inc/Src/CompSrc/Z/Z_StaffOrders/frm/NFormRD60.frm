@@ -19,7 +19,6 @@
 Организация
 ОКПО
 TitleDocNrec : comp
-sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа
@@ -46,7 +45,6 @@ Reason
 Организация                   ^
 ОКПО                          ^
 TitleDocNrec : comp           ^
-sBarCode		      ^
 PersNrec : comp               ^
 AppointNrec : comp            ^
 номер_документа               ^

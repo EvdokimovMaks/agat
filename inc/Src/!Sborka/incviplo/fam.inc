@@ -2,7 +2,7 @@
 {═════════════ Таблица : FAMI "FAMI" ══════════════}
 type
   String20        = String[20];
-  String255        = String[255];
+  String150        = String[150];
   String60        = String[60];
   pFAMI = ^tFAMI;
   tFAMI = record   { - FAMI }
@@ -11,7 +11,7 @@ type
     P2             : Double;          { p2                                    }
     TABN           : LongInt;         { Табельный номер                       }
     STRTABN        : String20;        { строковое значение табельного номера  }
-    NAME           : String;          { наименование подразделения            }
+    NAME           : String150;       { наименование подразделения            }
     FIO            : String60;        { Фамилия, Имя, Отчество                }
   end;
 const

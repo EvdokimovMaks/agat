@@ -84,8 +84,6 @@
   iehMarkDO     = 11400;   // заголовок ДО
   iehPrik       = 11500;    // приказы на командировки
   iesPrik       = 11600;    // приказы на командировки
-  iehMilk       = 11700;
-  iesMilk       = 11800;
   // флаги
   ieBoth        = 0;    // для экспорта и импорта
   ieImport      = 1;    // для импорта
@@ -145,7 +143,6 @@
   ieMbpIn     = 36;
   ieMarkDO    = 37;
   iePrikaz    = 38;     // приказы на командировки
-  ieMilk      = 39;
   // для ExImLogR
   // статус операции :
   ieExported       = 0;        // экспортирован
@@ -179,7 +176,7 @@
   clDocumentSignature  = 1;
 
   // Версия справочника полей
-  ieVersionOfFields = '8.0.93';
+  ieVersionOfFields = '8.0.90';
 
   // флаги поля IEHEad.Reestr
   mskReestr             =  1;//01h;    // маска флага реестра
@@ -228,5 +225,3 @@
   cg_objVkladka     = 3;
   cg_CreateKatMC    = 1;//создание МЦ при её отсутствии
   cg_DublicateInLog = 2;//вывод в лог предупреждения о дубликации
-
-  cg_RepeatExport = 'Признак экспорта';

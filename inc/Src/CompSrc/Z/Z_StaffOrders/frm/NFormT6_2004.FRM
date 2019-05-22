@@ -12,7 +12,6 @@
 .Fields
 Организация  ОКПО
 TitleDocNrec : comp
-sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа  дата_составления
@@ -148,7 +147,6 @@ ContDocNrec : comp
           @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ по ОКПО  │@@@@@@@@│
                            наименование организации                                                                    └────────┘
           TitleDocNrec (TitleDoc.NRec) ^
-	  sBarCode ^
           PersNRec (Persons.NRec) ^
           AppointNrec (Appointments.NR) ^
 

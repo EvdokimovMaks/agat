@@ -31,4 +31,3 @@ function GetStartedServCount: longint;                        external 'ZarDistr
 function GetStartedServerName: string;                        external 'ZarDistribute.dll#GetStartedServerName';
 function GetStartedServerDescr: string;                       external 'ZarDistribute.dll#GetStartedServerDescr';
 function GetStartedServerPort: word;                          external 'ZarDistribute.dll#GetStartedServerPort';
-function SetConnectionType(_ct: word): word;                  external 'ZarDistribute.dll#SetConnectionType';

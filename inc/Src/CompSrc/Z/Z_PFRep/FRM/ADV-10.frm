@@ -106,8 +106,8 @@ vSredch12, vMonthVznos12, v2MonthVznos12 : double;
 .begin
   NumDoc := 0;
   _Adv10Pach :=    LongInt(Adv10Pach);
-  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) );
-  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) );
+  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) )
+  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) )
  end.
 .{ CheckEnter ADV10
 .fields
@@ -525,8 +525,8 @@ vSredch12, vMonthVznos12, v2MonthVznos12 : double;
 .begin
   NumDoc := 0;
   _Adv10Pach :=    LongInt(Adv10Pach);
-  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) );
-  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) );
+  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) )
+  my_pred := Upcase( Trim( Replace( Pred, '"', '''' ) ) )
  end.
 .{ CheckEnter ADV10
 .fields
@@ -948,21 +948,21 @@ vMonthVznos12, v2MonthVznos12 : double;
    p1 := 'X'
   else if (квартал = string(2))
 {
-   p2 := 'X';
-   p1 := 'X';
+   p2 := 'X'
+   p1 := 'X'
 }
   else if (квартал = string(3))
 {
-   p3 := 'X';
-   p2 := 'X';
-   p1 := 'X';
+   p3 := 'X'
+   p2 := 'X'
+   p1 := 'X'
 }
   else if квартал = string(4)
 {
-   p4 := 'X';
-   p3 := 'X';
-   p2 := 'X';
-   p1 := 'X';
+   p4 := 'X'
+   p3 := 'X'
+   p2 := 'X'
+   p1 := 'X'
 }
 
 vMonthVznos1:= 0; v2MonthVznos1:= 0;
@@ -1090,7 +1090,7 @@ Dolgok
   {
    vMonthVznos6 :=  vMonthVznos5 +  Double(MonthVznos6);
    v2MonthVznos6 := v2MonthVznos5 + Double(MonthVznosOut6);
-   ConstM6 := TarifConst6;
+   ConstM6 := TarifConst6
   SZV5_ИТОГ := vMonthVznos6;
   SZV6_ИТОГ := v2MonthVznos6;
   }

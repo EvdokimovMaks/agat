@@ -29,12 +29,11 @@ Const
 
 // Константы видимости документов для пользователя
 
-  dcAllModif        = 0; // все права
-  dcOwnOnly         = 1; // только со своим дескриптором
-  dcGrpRead         = 2; // свои-изменение, по группе - чтение
-  dcGrpModif        = 3; // все права в рамках группы
-  dcOwnModifAllRead = 4; // свои - изменение, по всем - чтение
-  dcGrpModifAllRead = 5; // все права в рамках группы, по всем - чтение
-  dcReadOnly        = 6; // только чтение 
+  dcAllModif = 0;
+  dcOwnOnly  = 1;
+  dcGrpRead  = 2;
+  dcGrpModif = 3;
+  dcOwnModifAllRead = 4;
+  dcGrpModifAllRead = 5;
 
 // end;

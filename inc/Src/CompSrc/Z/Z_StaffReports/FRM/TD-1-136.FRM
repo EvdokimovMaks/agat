@@ -17,7 +17,6 @@
 .Hide
 .Fields
 
-sBarCode		 
 KatOrg_Name
 KatOrg_OKPO
 INN
@@ -92,7 +91,6 @@ FIO2
 
 .endFields
 
-sBarCode		 ^
 KatOrg_Name              ^
 KatOrg_OKPO              ^
 INN                      ^

@@ -2,14 +2,14 @@
 {═════════════ Таблица : PDRZ "PDRZ" ══════════════}
 type
   String20        = String[20];
-  String255        = String[255];
+  String150        = String[150];
   pPDRZ = ^tPDRZ;
   tPDRZ = record   { - PDRZ }
     PRPDRZ         : Comp;            { prPdrz                                }
     PRPODR         : Comp;            { prPodr                                }
     NREC           : Comp;            { Номер записи                          }
     KOD            : String20;        { код подразделения                     }
-    NAME           : String;          { наименование подразделения            }
+    NAME           : String150;       { наименование подразделения            }
   end;
 const
   tiSTANDARD             = 0;  { KOD(nM Up)                              }

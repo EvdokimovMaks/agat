@@ -19,7 +19,6 @@
 Организация
 ОКПО
 TitleDocNrec : comp
-sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа
@@ -51,7 +50,6 @@ Prim
 Организация                   ^
 ОКПО                          ^
 TitleDocNrec : comp           ^
-sBarCode		      ^	
 PersNrec : comp               ^
 AppointNrec : comp            ^
 номер_документа               ^

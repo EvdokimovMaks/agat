@@ -12,7 +12,6 @@
 .Fields
 Организация  ОКПО
 TitleDocNrec : comp
-sBarCode
 номер_документа  дата_составления
 ContDocNrec : comp
 PersNrec : comp
@@ -37,7 +36,7 @@ post2
 
 .EndFields
 
-^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^
 .{ myPsnCycle5a_z_2004 CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^

@@ -28,14 +28,8 @@ Const
   otsBarKodAndState = 19;               // штрихкод
   otsKDKolDiff      = 20;               // количество в корректировочном документе
   otsOtvPodr        = 21;               // Центр ответственности
-  #ifdef  __COFilial__
-  otsCOFilial       = 22;               // ЦО - Филиал
-  #end
   otsCU             = 23;               // Целевой учет
   otsParty          = 24;               // Партия
-  otsKatNazna       = 25;               // Каталог назначений
-  otsStrOwnMc       = 26;               // Признак собственной/несобственной услуги
-  otsKatPodr1_name  = 27;               // Подразделение
 end;
 
 #end

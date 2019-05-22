@@ -109,7 +109,6 @@ function  doTxoGetExtAttr(String, String, Comp) : Double;                       
 function  dTxoGetExtAttr(String, String, Comp) : Date;                                   external 'G_TXO.DLL';
 function  tTxoGetExtAttr(String, String, Comp) : Time;                                   external 'G_TXO.DLL';
 function  coTxoGetExtAttr(String, String, Comp) : Comp;                                  external 'G_TXO.DLL';
-function  boTxoGetExtAttr(String, String, Comp) : boolean;                               external 'G_TXO.DLL';
 function coTxoGetRealExtAttr(String, String, Comp) : Comp;                               external 'G_TXO.DLL';
 function  sTxoGetRealExtAttr(String, String, Comp) : string;                             external 'G_TXO.DLL';
 function doTxoGetRealExtAttr(String, String, Comp) : double;                             external 'G_TXO.DLL';

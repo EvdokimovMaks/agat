@@ -625,7 +625,7 @@ end.
 .fields
 pach_nmb
 .endfields
-___END ^ €—Šˆ
+___Š…– ^ €—Šˆ
 .begin
   pach_nmb:= pach_nmb + 1;
   nomer:= 0;

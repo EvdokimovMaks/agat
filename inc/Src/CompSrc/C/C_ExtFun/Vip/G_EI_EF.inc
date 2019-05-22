@@ -325,6 +325,23 @@ function GetEnvString(sName: string): string;  external 'G_ExpImp.dll';
 function XML_New                                                       : #TPtr; external 'G_ExpImp.dll';
 
 #doc
+  Возвращает количество узлов в документе
+</breaf>
+<br>
+Параметра
+<ul>
+  <li>адрес указателя на XML-документ
+  <li>адрес указателя на гл. узел заголовка документа
+  <li>название элемента, являющегося документом
+</ul>
+<br>
+Результат:<br>
+  Количество узлов в документе
+#end
+Function XML_CountDoc(#TPtr, #TPtr, string) : longint; external 'G_ExpImp.dll';
+
+
+#doc
 Загрузка XML-документа из файла
 </breaf>
 <br>
@@ -338,22 +355,6 @@ function XML_New                                                       : #TPtr; 
 true - успешно, false - ошибка
 #end
 function XML_LoadDoc      (#TPtr, string)                            : boolean; external 'G_ExpImp.dll';
-
-#doc
-  Поиск первого загружаемого документа из XML-файла
-</breaf>
-<br>
-Параметра
-<ul>
-  <li>адрес указателя на XML-документ
-  <li>адрес указателя на гл. узел заголовка документа
-  <li>название искомого узла
-</ul>
-<br>
-Результат:<br>
-  количество узлов в xml
-#end
-function XML_CountDoc (#TPtr, #TPtr, string)               : longint; external 'G_ExpImp.dll';
 
 #doc
   Поиск первого загружаемого документа из XML-файла
@@ -406,8 +407,6 @@ function XML_FindNextDoc  (#TPtr, #TPtr, comp, comp)               : #TPtr; exte
 #end
 function ImportXMLField   (#TPtr, comp, #TPtr, comp)               : string;  external 'G_ExpImp.dll';
 
-
-function ImportXMLFieldEx1   (#TPtr, comp, #TPtr, string)               : string;  external 'G_ExpImp.dll';
 #doc
 Импорт  поля
 <breaf>
@@ -619,21 +618,7 @@ Function MemoryStream_GetPos(#TPtr) : longint; external 'G_ExpImp.dll';
 размер PMemoStream
 #end
 Function MemoryStream_GetSize(#TPtr) : longint; external 'G_ExpImp.dll';
-#doc
-Замена подстроки в PMemoStream
-</breaf>
-<br>
-Параметры:
-<ul>
-<li>адрес указателя на PMemoStream
-<li>искомая строка
-<li>заменяемая строка
-</ul>
-Результат:<br>
-размер PMemoStream
-#end
 
-Function MemoryStream_Replace(#TPtr, string, string) : longint; external 'G_ExpImp.dll';
 
 #doc
 Инициализация и возврат указателя на DOMDocument
@@ -685,19 +670,6 @@ True - если успешно
 #end
 function XMLDOMDoc_Save                        (#TPtr, string)           : boolean; external 'G_ExpImp.dll';
 
-function XMLDOMDoc_SaveEx(
-  DocumentHandle: #TPtr, // IXMLDOMDocument2
-  FileName: string
-  ): longint; // OleError
-  external 'G_ExpImp.dll';
-
-procedure XMLDOMDoc_LogXml(
-  DocumentHandle: #TPtr, // IXMLDOMDocument2
-  ALevel: word, // уровень логирования
-  ATitle: string // заголовок
-  );
-  external 'G_ExpImp.dll';
-
 #doc
 Получение корневого элемента
 </breaf>
@@ -724,15 +696,7 @@ function XMLDOMDoc_DocumentElement             (#TPtr)                   : #TPtr
 Результат:<br>
 адрес указателя на XMLDOMNode
 #end
-function XMLDOMDoc_CreateNode(
-  NodeHandle: #TPtr,         // IXMLDOMDocument
-  aiType: integer,           // тип узла
-  asName: string,            // наименование узла
-  NamespaceURI: string       // пространство имён
-  ): #TPtr;                  // IXMLDOMNode;
-  external 'G_ExpImp.dll';
-
-
+function XMLDOMDoc_CreateNode                  (#TPtr, integer, string)  : #TPtr; external 'G_ExpImp.dll';
 #doc
 Создание узла "Attribute"
 </breaf>
@@ -870,215 +834,6 @@ function XMLDOMDoc_CreateTextNode              (#TPtr, string)           : #TPtr
 #end
 function XMLDOMDoc_CreateTextNodeEx            (#TPtr, var anytype)           : #TPtr; external 'G_ExpImp.dll';
 
-//------------------------------------------------------------------------------
-// выполнить валидацию документа и получить ссылку на интерфес разбора ошибок
-  Function XMLDOMDoc_Validate(
-    DocumentHandle: #TPtr // IXMLDOMDocument2
-    ): #TPtr;             //  IXMLDOMParseError
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // получить ссылку на интерфейс разбора ошибок
-  Function XMLDOMDoc_Get_ParseError (
-    DocumentHandle: #TPtr // IXMLDOMDocument2
-    ): #TPtr;                   // IXMLDOMParseError
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // установить признак автоматической валидации при разборе
-  procedure XMLDOMDoc_Set_ValidateOnParse(
-    DocumentHandle: #TPtr, // IXMLDOMDocument2
-    IsValidating: boolean  // значение признака автоматической валидации при разборе
-    );
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // установить признак автоматического разрешения внешних ссылок при разборе
-  procedure XMLDOMDoc_Set_ResolveExternals(
-    DocumentHandle: #TPtr, // IXMLDOMDocument2
-    IsResolving: boolean   // значение признака
-    );
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // получить ссылку на интерфейс доступа к информации о пространствах имён
-  function XMLDOMDoc_Get_Namespaces(
-    DocumentHandle: #TPtr // IXMLDOMDocument2
-    ): #TPtr;                   // IXMLDOMSchemaCollection
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // получить ссылку на интерфейс доступа к информации о схемах документа
-  function XMLDOMDoc_Get_Schemas(
-    DocumentHandle: #TPtr // IXMLDOMDocument
-    ): #TPtr;                   // IXMLDOMSchemaCollection
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // установить ссылку на интерфейс доступа к информации о схемах документа
-  procedure XMLDOMDoc_Set_Schemas(
-    DocumentHandle: #TPtr,        // IXMLDOMDocument
-    SchemaCollectionHandle: #TPtr // IXMLDOMSchemaCollection
-    );
-    external 'G_ExpImp.dll';
-
-// установить значение свойства документа
-  procedure XMLDOMDoc_SetProperty(
-    DocumentHandle: #TPtr, // IXMLDOMDocument
-    Name: string,          // имя свойства
-    Value: string          // значение свойства
-    );
-    external 'G_ExpImp.dll';
-
-
-//==============================================================================
-//                                                       IXMLDOMSchemaCollection
-//==============================================================================
-  // создать кэш схем и возвращает указатель на интерфейс IXMLDOMSchemaCollection
-  function XMLDOMSchemaCache_New
-    : #TPtr; // IXMLDOMSchemaCollection
-    external 'G_ExpImp.dll';
-
-  // добавить в коллекцию схем новый элемент
-  function XMLDOMSchemaCollection_Add(
-    SchemaCollectionHandle: #TPtr, // IXMLDOMSchemaCollection
-    NamespaceURI: string,          // URI пространства имён
-    SchemaDocHandle: #TPtr         // IXMLDOMDocument2
-    ): longint; // HResult
-    external 'G_ExpImp.dll';
-
-  // получить ссылку на корневой узел описателя пространства имён
-  function XMLDOMSchemaCollection_Get(
-    SchemaCollectionHandle: #TPtr, // IXMLDOMSchemaCollection
-    NamespaceURI: string                 // URI пространства имён
-    ): #TPtr;                            // IXMLDOMNode
-    external 'G_ExpImp.dll';
-
-  // удалить пространство имён из коллекции схем
-  procedure XMLDOMSchemaCollection_Remove(
-    SchemaCollectionHandle: #TPtr, // IXMLDOMSchemaCollection
-    NamespaceURI: string                 // URI пространства имён
-    );
-    external 'G_ExpImp.dll';
-
-
-  // добавить в коллекцию схем содержимое другой коллекции схем
-  function XMLDOMSchemaCollection_AddCollection(
-    SchemaCollectionHandle: #TPtr, // IXMLDOMSchemaCollection
-    OtherCollectionHandle: #TPtr   // IXMLDOMSchemaCollection
-    ): LongInt;
-    external 'G_ExpImp.dll';
-
-  // получить количество элементов в коллекции схем
-  function XMLDOMSchemaCollection_Get_Length(
-    SchemaCollectionHandle: #TPtr  // IXMLDOMSchemaCollection
-    ): LongInt;
-    external 'G_ExpImp.dll';
-
-  // получить URI элемента в коллекции схем
-  function XMLDOMSchemaCollection_Get_NamespaceURI(
-    SchemaCollectionHandle: #TPtr, // IXMLDOMSchemaCollection
-    Index: LongInt                       // индекс элемента (от 0)
-    ): string;                           // URI пространства имён
-    external 'G_ExpImp.dll';
-
-  // установить признак необходимости автоматической валидации добавляемых в коллекцию документов
-  function XMLDOMSchemaCollection_Set_ValidateOnLoad(
-    SchemaCollectionHandle: #TPtr, // IXMLDOMSchemaCollection2
-    IsValidating: boolean          // значение признака
-    ): longint; // HResult
-    external 'G_ExpImp.dll';
-
-  // выполнить валидацию добавленных в коллекцию документов
-  function XMLDOMSchemaCollection_Validate(
-    SchemaCollectionHandle: #TPtr // IXMLDOMSchemaCollection2
-    ): longint; // HResult;
-    external 'G_ExpImp.dll';
-
-//==============================================================================
-//                                                             IXMLDOMParseError
-//==============================================================================
-  // получить код ошибки
-  function XMLDOMParseError_Get_ErrorCode(
-    ParseErrorHandle: #TPtr // IXMLDOMParseError
-    ): LongInt;
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // получить текст ошибки
-  function XMLDOMParseError_Get_Reason(
-    ParseErrorHandle: #TPtr // IXMLDOMParseError
-    ): string;
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // получить номер строки с ошибкой
-  function XMLDOMParseError_Get_Line(
-    ParseErrorHandle: #TPtr // IXMLDOMParseError
-    ): LongInt;
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // получить позицию в строке с ошибкой
-  function XMLDOMParseError_Get_LinePos(
-    ParseErrorHandle: #TPtr // IXMLDOMParseError
-    ): LongInt;
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // получить смещение ошибочного символа в файле
-  function XMLDOMParseError_Get_FilePos(
-    ParseErrorHandle: #TPtr // IXMLDOMParseError
-    ): LongInt;
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // получить путь к ошибочному элементу в XPath-нотации
-  function XMLDOMParseError_Get_ErrorXPath(
-    ParseErrorHandle: #TPtr // IXMLDOMParseError2
-    ): String;
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-  // получить интерфейс списка ошибок
-  function XMLDOMParseError_Get_AllErrors(
-    ParseErrorHandle: #TPtr // IXMLDOMParseError2
-    ): #TPtr; // IXMLDOMParseErrorCollection
-    external 'G_ExpImp.dll';
-//------------------------------------------------------------------------------
-  procedure XMLDOMParseError_Log(
-    ParseErrorHandle: #TPtr); // IXMLDOMParseError2
-    external 'G_ExpImp.dll';
-
-//==============================================================================
-//                                                   IXMLDOMParseErrorCollection
-//==============================================================================
-  // получить элемент списка ошибок
-  function XMLDOMParseErrorCollection_Get_Item(
-    ParseErrorCollectionHandle: #TPtr, // IXMLDOMParseErrorCollection
-    Index: Longint
-    ): #TPtr; // IXMLDOMParseError2
-    external 'G_ExpImp.dll';
-
-  // получить длину списка ошибок
-  function XMLDOMParseErrorCollection_Get_Length(
-    ParseErrorCollectionHandle: #TPtr // IXMLDOMParseErrorCollection
-    ): Longint;
-    external 'G_ExpImp.dll';
-
-  // получить описатель следующего элемента списка
-  function XMLDOMParseErrorCollection_Get_Next(
-    ParseErrorCollectionHandle: #TPtr // IXMLDOMParseErrorCollection
-    ): #TPtr; // IXMLDOMParseError2
-    external 'G_ExpImp.dll';
-
-  // сбросить указатель элементов списка ошибок
-  procedure XMLDOMParseErrorCollection_Reset(
-    ParseErrorCollectionHandle: #TPtr // IXMLDOMParseErrorCollection
-    );
-    external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
 #doc
 Чтение NodeValue для узла "Attribute"
 </breaf>
@@ -1208,39 +963,6 @@ true - успешно, false - ошибка
 #end
 function XMLDOMElement_SetAttribute            (#TPtr, string, string)   : boolean; external 'G_ExpImp.dll';
 
-//------------------------------------------------------------------------------
-#doc
-  Возвращает список DOM-узлов с заданным тегом
-#end
-function XMLDOMElement_GetElementsByTagName(
-  #doc
-    Дескриптор интерфейса DOM-элемента, задающего контекст поиска (IXMLDOMElement)
-  #end
-  ElementHandle: #TPtr,
-  #doc
-    Имя тега
-  #end
-  TagName: string
-  ): #TPtr; // #docl Список найденных DOM-узлов            // IXMLDOMNodeList
-  external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-#doc
-  Добавляет или заменяет атрибут DOM-элемента
-#end
-function XMLDOMElement_SetAttributeNode(
-  #doc
-    Дескриптор интрефейса DOM-элемента (IXMLDOMElement)
-  #end
-  ElementHandle: #TPtr,
-  #doc
-    Дескриптор интерфейса DOM-атрибута (IXMLDOMAttribute)
-  #end
-  AttributeHandle: #TPtr
-  ): #TPtr;  // #docl Дескриптор интерфейса заменённого DOM-атрибута (IXMLDOMAttribute) с таким же именем или 0
-  external 'G_ExpImp.dll';
-//------------------------------------------------------------------------------
-
 #doc
 Добавление атрибута (больше 255 символов) к элементу
 </breaf>
@@ -1266,39 +988,6 @@ function XMLDOMElement_SetAttributeEx            (#TPtr, string, var anytype)   
 #end
 procedure XMLDOMNode_Set_Text            (#TPtr, var anytype); external 'G_ExpImp.dll';
 
-//------------------------------------------------------------------------------
-#doc
-  Устанавливает текстовое содержимое DOM-узла
-#end
-procedure XMLDOMNode_SetText(
-  #doc
-    Дескриптор интерфейса DOM-узла (IXMDOMNode)
-  #end
-  NodeHandle: #TPtr,
-  #doc
-    Текст узла
-  #end
-  Text: string
-  );
-  external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-#doc
-  Копирует содержимое файла в текст DOM-узла</brief>. Содержимое файла предварительно кодируется в Base64. Целевой DOM-узел должен быть вставлен в документ.
-#end
-
-function XMLDOMNode_SetTextFromFileRadix64(
-  #doc
-    Дескриптор интерфейса целевого DOM-узла (IXMLDomNode)
-  #end
-  NodeHandle: #TPtr,
-  #doc
-    Имя файла
-  #end
-  FileName: string
-  ): longint;
-  external 'G_ExpImp.dll';
-
 #doc
 Подвязка узла к узлу-родителю
 </breaf>
@@ -1311,25 +1000,6 @@ function XMLDOMNode_SetTextFromFileRadix64(
 адрес указателя на XMLDOMNamedNodeMap
 #end
 function XMLDOMNode_AppendChild                (#TPtr, #TPtr)          : #TPtr; external 'G_ExpImp.dll';
-
-#doc
-  Удаляет дочерний узел
-#end
-Function XMLDOMNode_RemoveChild(
-  NodeHandle: #TPtr,     // IXMLDOMNode
-  ChildNodeHandle: #TPtr // IXMLDOMNode
-  ): #TPtr;              // IXMLDOMNode
-  external 'G_ExpImp.dll';
-
-#doc
-  Добавляет новый узел перед данным дочерним, если он задан, или в конец списка дочерних узлов, иначе
-#end
-function XMLDOMNode_InsertBefore(
-    NodeHandle: #TPtr,         // IXMLDOMNode
-    NewChildNodeHandle: #TPtr, // IXMLDOMNode
-    RefChildNodeHandle: #TPtr  // IXMLDOMNode
-    ): longint;                // OLEResult
-  external 'G_ExpImp.dll';
 
 #doc
 Чтение Attributes для узла "Node"
@@ -1391,126 +1061,17 @@ function XMLDOMNode_get_NodeName               (#TPtr)                   : strin
 #end
 function XMLDOMNode_Get_text               (#TPtr)                   : string;  external 'G_ExpImp.dll';
 
-//------------------------------------------------------------------------------
 #doc
-  Загружает текстовое содержимое DOM-узла в мемо-поле</brief>.
-  При этом выполняется перекодирование данных из Юникода в ОЕМ. Возвращает длину считанной строки.
+ Освобождение ссылки на XMLDOMNode
+ </breaf>
+ Параметры:
+ <ul>
+ <li>адрес указателя на узел
+ <\ul>
+ Результат:<br>
+true - успешно, false - ошибка
 #end
-function XMLDOMNode_Get_LongText(
-  #doc
-    Дескриптор интерфейса DOM-узла
-  #end
-  HodeHandle: #TPtr,
-  #doc
-    Мемо-поле
-  #end
-  var MemoField: anytype
-  ): longint; //#docl Длина считанной строки
-  external 'G_ExpImp.dll';
-
-#doc
-  Возвращает список DOM-узлов, соответствующих XPath-запросу</brief>. Для установки пространства имён, в контексте
-  которого будет выполняться поиск узлов, используйте вызов <link externalfunction XMLDOMDoc_SetProperty/>:
-  <PRE class=example>XMLDOMDoc_SetProperty(DocHandle, 'SelectionNamespaces', 'xmlns:x="http://Some.Namespace.org"');</PRE>
-#end
-function XMLDOMNode_SelectNodes(
-  #doc
-    Дескриптор интерфейса DOM-узла, задающего контекст поиска (IXMLDOMNode)
-  #end
-  NodeHandle: #TPtr,
-  #doc
-    Текст XPath-запроса
-  #end
-  QueryString: string
-  ): #TPtr //  #docl Дескриптор интерфейса списка найденных DOM-узлов (IXMLDOMNodeList)
-; external 'G_ExpImp.dll';
-
-#doc
-  Возвращает дескриптор интерфейса DOM-узла, соответствующего XPath-запросу</brief>. Для установки пространства имён, в контексте
-  которого будет выполняться поиск узла, используйте вызов <link externalfunction XMLDOMDoc_SetProperty/>:
-  <PRE class=example>XMLDOMDoc_SetProperty(DocHandle, 'SelectionNamespaces', 'xmlns:x="http://Some.Namespace.org"');</PRE>
-#end
-function XMLDOMNode_SelectSingleNode(
-  #doc
-    Дескриптор интерфейса DOM-узла, задающего контекст поиска (IXMLDOMNode)
-  #end
-  NodeHandle: #TPtr,
-  #doc
-    Текст XPath-запроса
-  #end
-  QueryString: string
-  ): #TPtr; // #docl Дескриптор интерфейса первого DOM-узла, соответствующего XPath-запросу (IXMLDOMNode) или 0, если DOM-узел не был найден
-  external 'G_ExpImp.dll';
-
-#doc
-  Возвращает префикс имени DOM-узла
-#end
-function XMLDOMNode_Get_Prefix(
-  #doc
-    Дескриптор интерфейса DOM-узла (IXMLDOMNode)
-  #end
-  NodeHandle: #TPtr
-  ): string; // #docl Префикс имени DOM-узла
-  external 'G_ExpImp.dll';
-
-#doc
-  Возвращает имя DOM-узла без префикса
-#end
-function XMLDOMNode_Get_BaseName(
-  #doc
-    Дескриптор интрефейса DOM-узла (IXMLDOMNode)
-  #end
-  NodeHandle: #TPtr
-  ): string; // #docl Имя DOM-узла без префикса
-  external 'G_ExpImp.dll';
-
-#doc
-  Возвращает пространство имён DOM-узла
-#end
-function XMLDOMNode_Get_NamespaceURI(
-  #doc
-    Дескриптор интерфейса DOM-узла (IXMLDOMNode)
-  #end
-  NodeHandle: #TPtr
-  ): string; // #docl Пространство имён DOM-узла
-  external 'G_ExpImp.dll';
-
-#doc
-  Устанавливает значение узла</brief>. Только для NODE_ATTRIBUTE, NODE_CDATA_SECTION, NODE_COMMENT, NODE_PROCESSING_INSTRUCTION, NODE_TEXT.
-#end
-procedure XMLDOMNode_Set_NodeValue(
-  #doc
-    Дескриптор интерфейса DOM-узла (IXMLDOMNode)
-  #end
-  NodeHandle: #TPtr,
-  #doc
-    Новое значение DOM-узла
-  #end
-  Value: string
-  );
-  external 'G_ExpImp.dll';
-
-#doc
-  Возвращает значение узла</brief>. Только для NODE_ATTRIBUTE, NODE_CDATA_SECTION, NODE_COMMENT, NODE_PROCESSING_INSTRUCTION, NODE_TEXT.
-#end
-function XMLDOMNode_Get_NodeValue(
-  #doc
-    Дескриптор интерфейса DOM-узла (IXMLDOMNode)
-  #end
-  NodeHandle: #TPtr
-  ): string; // #docl Текущее значение DOM-узла
-  external 'G_ExpImp.dll';
-
-#doc
-  Освобождает ссылку на интерфейс DOM-узла по его дескриптору
-#end
-function XMLDOMNode_Release(
-  #doc
-    Дескриптор интерфейса DOM-узла
-  #end
-  NodeHandle: #TPtr
-  ): boolean; // #docl true - успешно, false - ошибка
-  external 'G_ExpImp.dll';
+function XMLDOMNode_Release                    (#TPtr)                   : boolean; external 'G_ExpImp.dll';
 
 #doc
 Чтение Length для узла "NamedNodeMap"
@@ -1564,43 +1125,6 @@ function XMLDOMNodeList_get_Length             (#TPtr)                   : longi
 #end
 function XMLDOMNodeList_get_Item               (#TPtr, longint)          : #TPtr; external 'G_ExpImp.dll';
 
-
-#doc
-  Устанавливает указатель на начало списка DOM-узлов
-#end
-// установить указатель на начало списка
-procedure XMLDOMNodeList_Reset(
-  #doc
-    Дескриптор интерфейса списка DOM-узлов (IXMLDOMNodeList)
-  #end
-  NodeListHandle: #TPtr
-  );
-  external 'G_ExpImp.dll';
-
-#doc
-  Возвращает ссылку на интерфейс следующего узла в списке
-#end
-function XMLDOMNodeList_NextNode(
-  #doc
-    Дескриптор интерфейса списка DOM-узлов (IXMLDOMNodeList)
-  #end
-  NodeListHandle: #TPtr
-  ): #TPtr;      // #docl Дескриптор интерфейса очередного DOM-узла в списке (IXMLDOMNode);
-  external 'G_ExpImp.dll';
-
-#doc
-  Преобразует интерфейс DOM-узла в интерфейс DOM-элемента
-#end
-function XMLDOMNodeAsElement(
-  #doc
-    Дескриптор интерфейса DOM-узла (IXMLDOMNode)
-  #end
-  NodeHandle: #TPtr
-  ): #TPtr;  // #docl Дескриптор интерфейса DOM-элемента (IXMLDOMElement) или 0, если преобразование было неудачным
-  external 'G_ExpImp.dll';
-
-//==============================================================================
-
 #doc
 Чтение списка элементов по TagName
 </breaf>
@@ -1627,192 +1151,6 @@ function XMLDOMDoc_GetElementsByTagName        (#TPtr, string)           : #TPtr
   true - успешно, false - ошибка
 #end
 function XMLDOMDoc_Done                        (#TPtr)                   : boolean; external 'G_ExpImp.dll';
-
-
-//------------------------------------------------------------------------------
-#doc
-  Освобождает ссылку на произвольный DOM-интерфейс по его дескриптору</brief>. Значение дескриптора обнуляется.
-#end
-procedure XMLDOM_Release(
-  var Handle: #TPtr // #docl Дескриптор DOM-интерфейса
-  );
-  external 'G_ExpImp.dll';
-
-//------------------------------------------------------------------------------
-#doc
-  Загружает содержимое документа из ресурса
-#end
-function XMLDOMDoc_LoadFromResource(
-  #doc
-    Дескриптор DOM-документа (IXMLDOMDocument2)
-  #end
-  DocumentHandle: #TPtr,
-  #doc
-    Имя ресурса (см. #additem)
-  #end
-  ResourceName: string
-  ): boolean;
-  external 'G_ExpImp.dll';
-
-#doc
-  Загрузить содержимое документа из мемо-поля
-#end
-function XMLDOMDoc_LoadFromMemo(
-  #doc
-    Дескриптор DOM-документа (IXMLDOMDocument2)
-  #end
-  DocumentHandle: #TPtr,
-  #doc
-    Мемо-поле
-  #end
-  var MemoField: AnyType
-  ): boolean;
-  external 'G_ExpImp.dll';
-
-#doc
-  Сохраняет содержимое документа в буфер</brief>. Память для буфера выделяется динамически.
-#end
-function XMLDOMDoc_StoreToBuffer(
-  #doc
-    Дескриптор DOM-документа (IXMLDOMDocument2)
-  #end
-  DocumentHandle: #TPtr,
-  #doc
-    Дескриптор буфера
-  #end
-  var BufferHandle: #TPtr,
-  #doc
-    Размер буфера
-  #end
-  var BufferLength: LongInt
-  ): boolean;
-  external 'G_ExpImp.dll';
-
-#doc
-  Сохраняет содержимое буфера в мемо-поле
-#end
-procedure StoreBufferToMemo(
-  #doc
-    Дескриптор буфера
-  #end
-  BufferHandle: #TPtr,
-  #doc
-    Размер буфера
-  #end
-  BufferLength: longint,
-  #doc
-    Мемо-поле
-  #end
-  var MemoField: AnyType
-  );
-  external 'G_ExpImp.dll';
-
-#doc
-  Сохраняет содержимое мемо-поля в буфере</brief>. Память для буфера выделяется динамически.
-#end
-procedure StoreMemoToBuffer(
-  #doc
-    Мемо-поле
-  #end
-  var MemoField: anytype,
-  #doc
-    Дескриптор буфера
-  #end
-  var BufferHandle: #TPtr,
-  #doc
-     буфера
-  #end
-  var BufferLength: longint
-  );
-  external 'G_ExpImp.dll';
-
-#doc
-  Освобождает буфер</brief>, созданный вызовами функций <link externalfunction XMLDOMDoc_StoreToBuffer/>, <link externalfunction StoreMemoToBuffer/>
-#end
-function FreeBuffer(
-  #doc
-    Дескриптор буфера
-  #end
-  var BufferHandle: #TPtr,
-  #doc
-    Размер буфера
-  #end
-  BufferLength: longint
-  ): boolean;
-  external 'G_ExpImp.dll';
-
-#doc
-  Строит DOM-шаблон произвольного поддерева по XSD-схеме, ассоциированной с данным документом
-#end
-function XMLDOMDoc_BuildDOMTemplate(
-  #doc
-    Дескриптор DOM-документа (IXMLDOMDocument2)
-  #end
-  DocumentHandle: #TPtr,
-  #doc
-    Пространство имён, в котором определён корневой элемент поддерева
-  #end
-  NameSpace: string,
-  #doc
-    Путь к корневому элементу в формате [/]aaa[/bbb[...]]
-  #end
-  RootElementPath: string,
-  #doc
-    Строковый массив vip с путями к необязательным или переключаемым узлам в поддереве, которые необходимо включить в шаблон; формат пути [/]{aaa|*}[/{bbb|*}[...]]; путь указывается относительно корня
-  #end
-  var Hints: array
-  ): #TPtr; // #docl Корневой элемент поддерева (IXMLDOMElement)</bfief>
-  external 'G_ExpImp.dll';
-
-#doc
-  Получает информацию об ошибке OLEAUTOMATION по её коду
-#end
-function GetErrorInfo(
-  #doc
-    Код ошибки
-  #end
-  OleResult: longint,
-  #doc
-    Информация об источнике
-  #end
-  var SourceField: string,
-  #doc
-    Описание ошибки
-  #end
-  var DescriptionField: string
-  ): longint; // #docl = OleResult
-  external 'G_ExpImp.dll';
-
-#doc
-  Протоколирует информацию об ошибке OLEAUTOMATION по её коду
-#end
-function LogOleError(
-  #doc
-    Код ошибки
-  #end
-  OleResult: LongInt
-  ): longint; // #docl = OleResult
-  external 'G_ExpImp.dll';
-
-#doc
-  Сохраняет содержимое мемо-поля в лог SmartInspect как текст XML-файла
-#end
-procedure SiLogMemoAsXml(
-  #doc
-    Мемо-поле
-  #end
-  var MemoField: anytype,
-  #doc
-    Уровень критичности сообщения
-  #end
-  Level: word,
-  #doc
-    Заголовок сообщения
-  #end
-  Title: string
-  ); 
-  external 'G_ExpImp.dll';
-
 
 //------------------------------------------------------------------------------
 #doc

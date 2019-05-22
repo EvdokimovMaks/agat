@@ -27,7 +27,6 @@ Table STRUCT Sdo4sopr "Для создания ДО по накладным"
 , Netto         : double
 , MTara         : double
 , Price         : double
-, RSumma        : double
 , cPriceList    : comp
 , dPrice        : Date
 , cStepDoc      : comp
@@ -48,7 +47,6 @@ Table STRUCT Sdo4sopr "Для создания ДО по накладным"
 , wMcProp       : word        // С-собственный, Н-несобственный товар/услуга
 , cRemKompl     : comp        // комплектующее ремонта
 , cOwner        : comp
-, wTipMoney     : word
 )
 
 With Index
@@ -89,7 +87,6 @@ With Index
 (
   TmDocNal01  =  NRec(Unique, Surrogate)
 , TmDocNal02  =  cSpDoc + TipDoc + cNalog + cGrNal + cVal + cOrg + Nalog
-, TmDocNal03  =  cNalog + cGrNal
 );
 
 #end // _SDO4SOPR_INC

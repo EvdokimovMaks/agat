@@ -3,6 +3,7 @@
 type
   String1        = String[1];
   String20        = String[20];
+  String150        = String[150];
   String255        = String[255];
   String40        = String[40];
   pVDANPLZ = ^tVDANPLZ;
@@ -19,7 +20,7 @@ type
     CPOL           : Comp;            { Код Получателя                        }
     CBANKPOL       : Comp;            { Код Банка пол-теля                    }
     KATPODR_KOD    : String20;        { код подразделения                     }
-    KATPODR_NAME   : String;          { наименование подразделения            }
+    KATPODR_NAME   : String150;       { наименование подразделения            }
     KATORG_NAME    : String;          { наим.организации или ФИО физ.лица     }
     KATORG_OKPO    : String20;        { код по ОКПО                           }
     KATBANK_MFO1   : String40;        { код МФО                               }

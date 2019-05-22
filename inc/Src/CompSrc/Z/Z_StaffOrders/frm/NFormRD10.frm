@@ -21,7 +21,6 @@
 Š
 
 TitleDoc_Nrec
-sBarCode
 ContDoc_Nrec
 Person_Nrec
 Appointments_Nrec
@@ -68,7 +67,6 @@ Raise_Appoint
 Š                    ^
 
 TitleDoc_Nrec           ^
-sBarCode		^
 ContDoc_Nrec            ^
 Person_Nrec             ^
 Appointments_Nrec       ^

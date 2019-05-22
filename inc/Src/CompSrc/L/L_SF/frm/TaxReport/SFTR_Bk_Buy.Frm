@@ -91,32 +91,29 @@
   SumNDSRub                  // 16. Сумма НДС по счету-фактуре, разница суммы НДС по корректировочному счету-фактуре, принимаемая к вычету, в рублях и копейках
 .EndFields
 .begin
-  var SumNDSRub_Vsego : double;  SumNDSRub_Vsego := if (IsIncItog, SumNDSRub, 0);
-
   ClearAdvRecord(Buff);
-  Buff.NumPP           := NumPP          ;  // 01. Порядковый номер записи
-  Buff.KodOp           := KodOp          ;  // 02. Код вида операции
+  Buff.NumPP           := NumPP          ;  // 01. Порядковый номер записи                                                                                                      
+  Buff.KodOp           := KodOp          ;  // 02. Код вида операции                                                                                                            
   Buff.DatSF           := DatFact        ;  // 03. Дата счета-фактуры продавца
   Buff.NomSF           := NomSF          ;  // 03. Номер счета-фактуры продавца
   Buff.DatRevSF        := DatRevSF       ;  // 04. Дата исправления счета-фактуры продавца
-  Buff.NomRevSF        := NomRevSF       ;  // 04. Номер исправления счета-фактуры продавца
-  Buff.DatCorrV        := DatCorrV       ;  // 05. Дата корректировочного счета-фактуры продавца
-  Buff.NomCorrV        := NomCorrV       ;  // 05. Номер корректировочного счета-фактуры продавца
-  Buff.DatRevCorrV     := DatRevCorrV    ;  // 06. Дата исправления корректировочного счета-фактуры продавца
-  Buff.NomRevCorrV     := NomRevCorrV    ;  // 06. Номер исправления корректировочного счета-фактуры продавца
-  Buff.sSomeDateOplata := sSomeDateOplata;  // 07. Номер и дата документа, подтверждающего уплату налога
-  Buff.DatOpr          := DatOpr         ;  // 08. Дата принятия на учет товаров (работ,услуг), имущественных прав
-  Buff.KontrNameNazn   := KontrNameNazn  ;  // 09. Наименование продавца
-  Buff.KontrINN        := KontrINN       ;  // 10. ИНН продавца
-  Buff.KontrKPP        := KontrKPP       ;  // 10. КПП продавца
-  Buff.MediatorName    := MediatorName   ;  // 11. Наименование посредника
-  Buff.MediatorINN_KPP := MediatorINN_KPP;  // 12. ИНН/КПП посредника
+  Buff.NomRevSF        := NomRevSF       ;  // 04. Номер исправления счета-фактуры продавца                                                                                     
+  Buff.DatCorrV        := DatCorrV       ;  // 05. Дата корректировочного счета-фактуры продавца                                                                                
+  Buff.NomCorrV        := NomCorrV       ;  // 05. Номер корректировочного счета-фактуры продавца                                                                               
+  Buff.DatRevCorrV     := DatRevCorrV    ;  // 06. Дата исправления корректировочного счета-фактуры продавца                                                                    
+  Buff.NomRevCorrV     := NomRevCorrV    ;  // 06. Номер исправления корректировочного счета-фактуры продавца                                                                   
+  Buff.sSomeDateOplata := sSomeDateOplata;  // 07. Номер и дата документа, подтверждающего уплату налога                                                                        
+  Buff.DatOpr          := DatOpr         ;  // 08. Дата принятия на учет товаров (работ,услуг), имущественных прав                                                              
+  Buff.KontrNameNazn   := KontrNameNazn  ;  // 09. Наименование продавца                                                                                                        
+  Buff.KontrINN        := KontrINN       ;  // 10. ИНН продавца                                                                                                                 
+  Buff.KontrKPP        := KontrKPP       ;  // 10. КПП продавца                                                                                                                 
+  Buff.MediatorName    := MediatorName   ;  // 11. Наименование посредника                                                                                                      
+  Buff.MediatorINN_KPP := MediatorINN_KPP;  // 12. ИНН/КПП посредника                                                                                                           
   Buff.GTDCountry      := GTDCountry     ;  // 13. Номер таможенной декларации
   Buff.GTDNomer        := GTDNomer       ;  // 13. Номер таможенной декларации
   Buff.KodNameVal      := KodNameVal     ;  // 14. Наименование и код валюты
   Buff.SumValSF        := SumValSF       ;  // 15. Стоимость покупок по счету-фактуре, разница стоимости по корректировочному счету-фактуре (включая НДС) в валюте счета-фактуры
-  Buff.SumNDSRub       := SumNDSRub      ;  // 16. Сумма НДС по счету-фактуре, разница суммы НДС по корректировочному счету-фактуре, принимаемая к вычету, в рублях и копейках
-  Buff.SumNDSRub_Vsego := SumNDSRub_Vsego;  // ВСЕГО 16. Сумма НДС по счету-фактуре, разница суммы НДС по корректировочному счету-фактуре, принимаемая к вычету, в рублях и копейках
+  Buff.SumNDSRub       := SumNDSRub      ;  // 16. Сумма НДС по счету-фактуре, разница суммы НДС по корректировочному счету-фактуре, принимаемая к вычету, в рублях и копейках  
 
   pSpy.ReportRecDataBkBuy(Buff);
 end.

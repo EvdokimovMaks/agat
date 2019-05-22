@@ -17,25 +17,21 @@
 .p 42
 .hide
 .fields
-  sNumDoc
-  Pred
-  OKPO
-  DATAO : date
-  Day1 Day2 Mes1 God1
-  NaimK8 NaimK9 NaimK10 NaimK14
-  DataOtch: date
-  NameSignatory
-  PostSignatory
+ Pred
+ OKPO
+ DATAO : date
+ Day1 Day2 Mes1 God1
+ NaimK8 NaimK9 NaimK10 NaimK14
 .endfields
  ^
  ^
  ^
+ ^^^^
+ ^^^^
+.fields
+ DataOtch: date
+.endfields
  ^
- ^^^^
- ^^^^
- DataOtch ^
- NameSignatory ^
- PostSignatory ^
 .{ AllPArtsLoop CheckEnter
 .{ PordLoop CheckEnter
 .fields

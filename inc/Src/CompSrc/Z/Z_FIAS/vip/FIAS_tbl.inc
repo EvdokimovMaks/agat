@@ -34,7 +34,7 @@ Const
   cgTbl_KladrStreet  = 21;
   cgTbl_AltNames     = 22;
 
-  // Константы для обращения к элементам массива со значениями полей импортируемой записи (AddrObjXX - sTerr)
+  // Константы для обращения к элементам массива со значениями полей импортируемой записи
   cgFld_ACTSTATUS  = 01;
   cgFld_AOGUID     = 02;
   cgFld_AOID       = 03;
@@ -86,30 +86,5 @@ Const
   cgFld_IntEnd     = 47;
   cgFld_IntStart   = 48;
   cgFld_IntStatus  = 49;
-
-  // Константы для обращения к элементам массива со значениями полей импортируемой записи (HouseXX - House)
-  cgFld_HOUSE_POSTAlCODE = 50;
-  cgFld_HOUSE_IFNSFL     = 51;
-  cgFld_HOUSE_TERRIFNSFL = 52;
-  cgFld_HOUSE_IFNSUL     = 53;
-  cgFld_HOUSE_TERRIFNSUL = 54;
-  cgFld_HOUSE_OKATO      = 55;
-  cgFld_HOUSE_OKTMO      = 56;
-  cgFld_HOUSE_UPDATEDATE = 57;
-  cgFld_HOUSE_HOUSENUM   = 58;
-  cgFld_HOUSE_ESTSTATUS  = 59;
-  cgFld_HOUSE_BUILDNUM   = 60;
-  cgFld_HOUSE_STRUCNUM   = 61;
-  cgFld_HOUSE_STRSTATUS  = 62;
-  cgFld_HOUSE_HOUSEID    = 63;
-  cgFld_HOUSE_HOUSEGUID  = 64;
-  cgFld_HOUSE_AOGUID     = 65;
-  cgFld_HOUSE_STARTDATE  = 66;
-  cgFld_HOUSE_ENDDATE    = 67;
-  cgFld_HOUSE_STATSTATUS = 68;
-  cgFld_HOUSE_NORMDOC    = 69;
-  cgFld_HOUSE_COUNTER    = 70;
-  cgFld_HOUSE_CADNUM     = 71;
-  cgFld_HOUSE_DIVTYPE    = 72;
 
 end;

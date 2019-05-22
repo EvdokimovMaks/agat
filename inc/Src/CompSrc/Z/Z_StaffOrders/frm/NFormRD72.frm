@@ -11,7 +11,6 @@
 .Hide
 .Fields
 NRecTitleDoc : comp
-sBarCode
 
 
 Org
@@ -36,7 +35,7 @@ primechanie
 
 .EndFields
 
- ^ ^ ^ ^ ^ ^
+ ^ ^ ^ ^ ^
 .{ NformRD72Cycle CheckEnter
 
 ^ ^ ^ ^ ^ ^ ^

@@ -16,7 +16,6 @@ const
   lc_DocInfoExtAttrName_dArendStart    = 'dArendStart'  ;  // Дата начала аренды
   lc_DocInfoExtAttrName_dArendEnd      = 'dArendEnd'    ;  // Дата окончания аренды
   lc_DocInfoExtAttrName_cArendator     = 'cArendator'   ;  // Организация арендатор
-  lc_DocInfoExtAttrName_cDogovor       = 'cDogovor'     ;  // Договор
   lc_DocInfoExtAttrName_inArend        = 'inArend'      ;  // Передано в аренду
   lc_DocInfoExtAttrName_cEd            = 'cEd'          ;  // Единицы измерения
 
@@ -38,7 +37,6 @@ const
   lc_DocInfoExtAttrName_wFNSOrg        = 'wFNSOrg'      ;   // Режим учета в налоговом органе
   lc_DocInfoExtAttrName_sFNSOKTMO      = 'sFNSOKTMO'    ;   // ОКТМО налогового органа ФНС
   lc_DocInfoExtAttrName_sFNSCode       = 'sFNSCode'     ;   // Код налогового органа ФНС
-  lc_DocInfoExtAttrName_IsSmenaNM      = 'IsSmenaNM'    ;   // Сменить ИФНС с начала месяца
 
   // налог на недвижимость
   lc_DocInfoExtAttrName_IsImNotTax     = 'IsImNotTax'   ;   // Не подлежит налогообложению
@@ -67,7 +65,7 @@ const
 
   // Особенности налогообложения
   lc_DocInfo_ImFeatures_ESGSBit      : word  = 1;   // входит в состав ЕСГС
-  lc_DocInfo_ImFeatures_NoLgBit      : word  = 2;   // нет льготы для ДИ
+  lc_DocInfo_ImFeatures_NoLgBit      : word  = 2;   // нет льготы для 3-10 амортизационной группы (код льготы 2010257)
   lc_DocInfo_ImFeatures_Kzhd         : word  = 4;   // применять Кжд
 
   // Код вида имущества

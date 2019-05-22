@@ -11,28 +11,18 @@
 .hide
 .fields
  NRecTitleDoc : comp
- sBarCode
  Name_Company
  Date_order
  Number_order
  NeedMainNote : word
  MainNote
- NeedMainHeader : word
- MainHeader1
- MainHeader2
- MainHeader3
 .endfields
  NRecTitleDoc ^
- sBarCode ^
  Name_Company: ^
  Date_order: ^
  Number_order: ^
  NeedMainNote : @
  MainNote ^
- NeedMainHeader : @
- MainHeader1 ^
- MainHeader2 ^
- MainHeader3 ^
 !По распорядительному действию
 .{ Consolidated_Report1 CheckEnter
 .fields

@@ -90,8 +90,8 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Анкеты на магнитных носителях'
 .begin
-  PachCnt :=0;
-  DocCnt  :=0;
+  PachCnt :=0
+  DocCnt  :=0
 end.
 .{ AllPachLoop400 CheckEnter
 .fields
@@ -109,8 +109,8 @@ end.
 "ПАЧК",^,"ОПИСЬ","ОП61","^",1,0,"","","","","",0,0,0,0,0,0,0,0,0
 "ТИПД","АНКТ",^
 .begin
-  PachCnt := PachCnt + 1;
-  DocCnt  :=0;
+  PachCnt := PachCnt + 1
+  DocCnt  :=0
 end.
 .{ NexpPersLoop400 CheckEnter
 .fields
@@ -154,8 +154,8 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Заявление об обмене на бумажных бланках'
 .begin
-  PachCnt := 0;
-  DocCnt  := 0;
+  PachCnt := 0
+  DocCnt  := 0
   strStandart := 'СТАНДАРТ';
 end.
 .{ AllPachLoop400 CheckEnter
@@ -174,8 +174,8 @@ end.
 "ПАЧК",^,"ОПИСЬ","ОП61","^",1,0,"","","","","",0,0,0,0,0,0,0,0,0
 "ТИПД","ОБМН",^
 .begin
-  PachCnt := PachCnt + 1;
-  DocCnt  :=0;
+  PachCnt := PachCnt + 1
+  DocCnt  :=0
 end.
 .{ NexpPersLoop400 CheckEnter
 .fields
@@ -233,8 +233,8 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Заявление о выдаче на бумажных бланках'
 .begin
-  PachCnt :=0;
-  DocCnt  :=0;
+  PachCnt :=0
+  DocCnt  :=0
 end.
 .{ AllPachLoop400 CheckEnter
 .fields
@@ -252,8 +252,8 @@ end.
 "ПАЧК",^,"ОПИСЬ","ОП61","^",1,0,"","","","","",0,0,0,0,0,0,0,0,0
 "ТИПД","ДУБЛ",^
 .begin
-  PachCnt := PachCnt + 1;
-  DocCnt  :=0;
+  PachCnt := PachCnt + 1
+  DocCnt  :=0
 end.
 .{ NexpPersLoop400 CheckEnter
 .fields
@@ -297,8 +297,8 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Справка о смерти'
 .begin
-  PachCnt :=0;
-  DocCnt  :=0;
+  PachCnt :=0
+  DocCnt  :=0
 end.
 .{ AllPachLoop400 CheckEnter
 .fields
@@ -316,8 +316,8 @@ end.
 "ПАЧК",^,"ОПИСЬ","ОП61","^",1,0,"","","","","",0,0,0,0,0,0,0,0,0
 "ТИПД","СМРТ",^
 .begin
-  PachCnt := PachCnt + 1;
-  DocCnt  :=0;
+  PachCnt := PachCnt + 1
+  DocCnt  :=0
   ГдеРаботал :=  UpCase(my_pred);
 end.
 .{ NexpPersLoop400 CheckEnter

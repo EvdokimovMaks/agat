@@ -13,7 +13,6 @@
 
 .Fields
 NRecTitleDoc : comp
-sBarCode
 
 организация
 ОКПО
@@ -39,7 +38,7 @@ PersNrec: comp
 
 .EndFields
 
-^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^
 .{ NformRD71aCycle CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}

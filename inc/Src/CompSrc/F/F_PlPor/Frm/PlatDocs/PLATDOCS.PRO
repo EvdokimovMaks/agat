@@ -212,9 +212,6 @@ PlatUNNnew PlatKPPnew
 PlatNameForeign
 PlatAddrForeign
 PlatResidenceForeign
-PlatNameForeignLatin
-PlatAddrForeignLatin
-PlatResidenceForeignLatin
 !
 PlatGOrgName PlatGOrgKBK
 !
@@ -232,9 +229,6 @@ PolOKTMO
 PolNameForeign
 PolAddrForeign
 PolResidenceForeign
-PolNameForeignLatin
-PolAddrForeignLatin
-PolResidenceForeignLatin
 !
 PolBankName
 PolBankAddr PolBankMFO1 PolBankMFO2 PolBankSchet1 PolBankSchet2 PolBankSchet3
@@ -763,9 +757,6 @@ PlatKPPnew          КПП ^
 PlatNameForeign       Наименование ^
 PlatAddrForeign       Адрес ^
 PlatResidenceForeign  Месторасположение (город, страна) ^
-PlatNameForeignLatin  Наименование (латиница) ^
-PlatAddrForeignLatin  Адрес (латиница) ^
-PlatResidenceForeign  Месторасположение (город, страна) латиница ^
 
 // 2 поля - головная организация плательщика
 PlatGOrgName        наименование ^
@@ -805,9 +796,6 @@ PolOKTMO           ОКТМО ^
 PolNameForeign       Наименование ^
 PolAddrForeign       Адрес ^
 PolResidenceForeign  Месторасположение (город, страна) ^
-PolNameForeignLatin  Наименование (латиница) ^
-PolAddrForeignLatin  Адрес (латиница) ^
-PolResidenceForeign  Месторасположение (город, страна) латиница ^
 
 // 11 полей - банк получателя
 PolBankName           наименование  ^

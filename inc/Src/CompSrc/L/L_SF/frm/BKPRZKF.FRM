@@ -264,9 +264,7 @@ end.
  SumValSF:double
  SumNDSRub:double
  Summ1:double            // 11
- Summ1_20:double
- Summ2:double
- Summ2_20:double
+ Summ2:double            // 12
  Summ3:double            // 13
  Summ4:double            // 14
  Summ5:double            // 15
@@ -296,7 +294,7 @@ end.
  NumUpl:word
 .endfields
 0abcdefg123abcdef 4567a89101234567ab8920abcd 123ab
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^^ ^^^^^^^^^^ ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^ ^^^^^^^
 .begin
  ISummA    += if (IsIncItog, SummA, 0.0);
  ISumVal   += if (IsIncItog, SumVal, 0.0);
@@ -393,14 +391,12 @@ end.
  AllSumIn3:    double            // 14a
  AllSumIn4:    double            // 14b
  AllSumm23:    double            // 14c
- AllSumm1_20:  double          
  AllSumm1_18:  double            // 15
- AllSumm2_20:  double 
  AllSumm2_18:  double            // 15a
  AllSummNDS:   double
 .endfields
  12345678901ab234abc5a
- ^^^^^^^^^^^^^^^^^^^^^^^^
+ ^^^^^^^^^^^^^^^^^^^^^^
 .}
 .}
 .begin
@@ -1416,10 +1412,8 @@ end.
 #include bkprzkf3.frn    // новые для РФ (с 01.01.2012)
 #include bkprzkf7.frn    // новые для РФ (с 14.08.2014)
 #include bkprzkf8.frn    // новые для РФ (с 01.10.2017)
-#include bkprzkf9.frn    // новые для РФ (с 01.01.2019)
 #include bkprzkf1.frn    // для Беларуси
 #include bkprzkd.frn     // Дополнительная книга для РФ
 #include bkprzkd1.frn    // Дополнительная книга для РФ c 01.01.2012
 #include bkprzkd2.frn    // Дополнительная книга для РФ с 14.08.2014
 #include bkprzkd3.frn    // Дополнительная книга для РФ с 01.10.2017
-#include bkprzkd4.frn    // Дополнительная книга для РФ с 01.01.2019

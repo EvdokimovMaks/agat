@@ -133,15 +133,15 @@ sNameFile
   my_pred, my_pred2: string[100];
 .endvar
 .begin
-  pach_nmb:= PachNumBegin;
+  pach_nmb:= PachNumBegin
   if ( ( OkrugVzn and 1 ) = 1 )
     rrr   := '[|-]36666666666667'
   else
     rrr   := '[|-]36666666666667.88';
 
   ТипКавычек  := if( wQuotes = 0, '"', '&quot;' );
-  my_pred  := Replace( Upcase( Trim( НазваниеПред ) ), '"', ТипКавычек );
-  my_pred2 := Replace( Upcase( Trim( НазваниеПредКраткое ) ), '"', ТипКавычек );
+  my_pred  := Replace( Upcase( Trim( НазваниеПред ) ), '"', ТипКавычек )
+  my_pred2 := Replace( Upcase( Trim( НазваниеПредКраткое ) ), '"', ТипКавычек )
 end.
 <?xml version="1.0" encoding="cp866"?>
 <ФайлПФР>

@@ -13,7 +13,6 @@
 .Fields
 Организация ОКПО
 TitleDocNrec : comp
-sBarCode
 ContDocNrec  : comp
 PersNrec     : comp
 NewAppNrec   : comp
@@ -116,7 +115,6 @@ StaffStrOldSeqNmb
                            наименование организации                                                                    └────────┘
 
 TitleDocNrec  ^
-sBarCode      ^
 ContDocNrec   ^
 PersNrec      ^
 NewAppNrec    ^

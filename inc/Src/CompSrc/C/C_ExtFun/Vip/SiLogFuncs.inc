@@ -13,14 +13,12 @@
   </brief>
 #end
 procedure SiLogDll_Enable; external 'SILog.dll#SiEnable';
-
 #doc
   <brief>
     Выключение диагностического протокола.
   </brief>
 #end
 procedure SiLogDll_Disable; external 'SILog.dll#SiDisable';
-
 #doc
   <brief>
     Сообщает включен ли диагностический протокол.
@@ -38,7 +36,6 @@ function  SiLogDll_GetEnabled: Boolean; external 'SILog.dll#SiGetEnabled';
   </ul>
 #end
 procedure SiLogDll_LogMessage(ATitle: String); external 'SILog.dll#SiLogMessage';
-
 #doc
   <brief>
     Записать в диагностический протокол предупреждающее сообщение.
@@ -50,7 +47,6 @@ procedure SiLogDll_LogMessage(ATitle: String); external 'SILog.dll#SiLogMessage'
   </ul>
 #end
 procedure SiLogDll_LogWarning(ATitle: String); external 'SILog.dll#SiLogWarning';
-
 #doc
   <brief>
     Записать в диагностический протокол сообщение об ошибке.
@@ -62,7 +58,6 @@ procedure SiLogDll_LogWarning(ATitle: String); external 'SILog.dll#SiLogWarning'
   </ul>
 #end
 procedure SiLogDll_LogError(ATitle: String); external 'SILog.dll#SiLogError';
-
 #doc
   <brief>
     Записать в диагностический протокол сообщение об исключительной ситуации.
@@ -74,30 +69,6 @@ procedure SiLogDll_LogError(ATitle: String); external 'SILog.dll#SiLogError';
   </ul>
 #end
 procedure SiLogDll_LogFatal(ATitle: String); external 'SILog.dll#SiLogFatal';
-
-#doc
-  <brief>
-    Записать в диагностический протокол сообщение об отладке.
-  </brief>
-
-  <h3>Параметры</h3>
-  <ul>
-    <li><code>ATitle</code> - логируемое сообщение.</li>
-  </ul>
-#end
-procedure SiLogDll_LogDebug(ATitle: String); external 'SILog.dll#SiLogDebug';
-
-#doc
-  <brief>
-    Записать в диагностический протокол сообщение о подробностях.
-  </brief>
-
-  <h3>Параметры</h3>
-  <ul>
-    <li><code>ATitle</code> - логируемое сообщение.</li>
-  </ul>
-#end
-procedure SiLogDll_LogVerbose(ATitle: String); external 'SILog.dll#SiLogVerbose';
 
 #doc
   <brief>

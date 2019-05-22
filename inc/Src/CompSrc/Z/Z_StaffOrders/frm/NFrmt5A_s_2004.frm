@@ -12,7 +12,6 @@
 .Fields
 Организация  ОКПО
 TitleDocNrec : comp
-sBarCode
 номер_документа  дата_составления
 ContDocNrec : comp
 PersNrec : comp
@@ -40,7 +39,7 @@ contract_end
 
 .EndFields
 
-^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^
 .{ myPsnCycle5a_s_2004 CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^

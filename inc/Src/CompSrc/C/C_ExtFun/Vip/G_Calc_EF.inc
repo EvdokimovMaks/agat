@@ -8,7 +8,6 @@ function NREC_13 : Comp; external 'G_ZARPL.DLL';
 function PROC_ST(comp, word, date, date): Double; external 'G_ZARPL.DLL';
 function TarSCoef(double,word, word, word, date): double; external 'G_ZARPL.DLL';
 function Proc_Refin(word,date): Double; external 'G_ZARPL.DLL';
-function Changed_Refin(word,double,date,date) : double; external 'G_ZARPL.DLL';
 function NrSumma: double; external 'g_zarpl.dll';
 function NrPrem: double; external 'g_zarpl.dll';
 

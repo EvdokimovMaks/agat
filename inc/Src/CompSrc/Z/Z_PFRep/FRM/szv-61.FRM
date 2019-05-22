@@ -314,16 +314,16 @@ end.
   RDataDog                        : string
 .endvar
 .begin
-  my_inn   := Upcase( Trim( Replace( inn, '"', '''' ) ) );
-  my_pred  := Replace( Upcase( Trim( Pred ) ), '"', '&quot;' );
-  my_pred2 := Replace( Upcase( Trim( PredShort ) ), '"', '&quot;' );
-  pach_nmb:= PachNumBegin;
+  my_inn   := Upcase( Trim( Replace( inn, '"', '''' ) ) )
+  my_pred  := Replace( Upcase( Trim( Pred ) ), '"', '&quot;' )
+  my_pred2 := Replace( Upcase( Trim( PredShort ) ), '"', '&quot;' )
+  pach_nmb:= PachNumBegin
   CodeDopTarr := 'АВИА';
-  TypeChars := 'ИСХД';
-  nomer   := 0;
-  KolNach := 0;
-  SumNach := 0;
-  SumBoln := 0;
+  TypeChars := 'ИСХД'
+  nomer   := 0
+  KolNach := 0
+  SumNach := 0
+  SumBoln := 0
   MyPersonCounter := 0;
   PersonCounterOut:= 0;
  end.
@@ -378,13 +378,13 @@ end.
  }
   if Okrug = 2
   {
-    rrr   := '666666666666667.88';
-    rrr_2 := '-666666666666667.88';
+    rrr   := '666666666666667.88'
+    rrr_2 := '-666666666666667.88'
   }
   else if Okrug = 0
   {
-    rrr   :='666666666666667';
-    rrr_2 :='-666666666666667';
+    rrr   :='666666666666667'
+    rrr_2 :='-666666666666667'
   }
   EndPach := false;
   nomer := nomer+1;
@@ -479,7 +479,7 @@ end.
  IF (Word(ДеньЗак)<>0)and(Word(МесяцЗак)<>0)and(Word(ГодЗак)<>0)
   RDataDog:= string(Date(Word(ДеньЗак), Word(МесяцЗак), Word(ГодЗак)))
  else
-  RDataDog:='';
+  RDataDog:=''
 
   AdrStr := '';
   if trim(АдрПрописки_Страна_сокр) = ''
@@ -691,8 +691,8 @@ curdate
   DoubleToStr(Double(RВыслуга_лет_доп_свед_3),'666666666666667.88')
 .endfields
 .begin
- my_nach_st := Нач_стажа;
- my_kon_st  := Кон_стажа;
+ my_nach_st := Нач_стажа
+ my_kon_st  := Кон_стажа
  NppStrLgot := 1;
 
  IF (Исчисл_труд_стаж_доп_свед1=0) or (trim(Исчисл_труд_стаж_доп_свед1) = '') then
@@ -813,11 +813,11 @@ end.
  if  (Исчисл_труд_стаж_доп_свед1_Lgot=0)or(trim(Исчисл_труд_стаж_доп_свед1_Lgot) = '') then
   RИсчисл_труд_стаж_доп_свед1_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot));
+  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot))
  if  (Исчисл_труд_стаж_доп_свед2_Lgot=0) or (trim(Исчисл_труд_стаж_доп_свед2_Lgot) = '') then
   RИсчисл_труд_стаж_доп_свед2_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot));
+  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot))
 
  if  (Выслуга_лет_доп_свед_3_lgot=0) //or(trim(Выслуга_лет_доп_свед_3_lgot) = '') then
   RВыслуга_лет_доп_свед_3_lgot:= '0.00'
@@ -975,16 +975,16 @@ end.
   RDataDog                        : string
 .endvar
 .begin
-  my_inn   := Upcase( Trim( Replace( inn, '"', '''' ) ) );
-  my_pred  := Replace( Upcase( Trim( Pred ) ), '"', '&quot;' );
-  my_pred2 := Replace( Upcase( Trim( PredShort ) ), '"', '&quot;' );
-  pach_nmb:= PachNumBegin;
+  my_inn   := Upcase( Trim( Replace( inn, '"', '''' ) ) )
+  my_pred  := Replace( Upcase( Trim( Pred ) ), '"', '&quot;' )
+  my_pred2 := Replace( Upcase( Trim( PredShort ) ), '"', '&quot;' )
+  pach_nmb:= PachNumBegin
   CodeDopTarr := 'АВИА';
-  TypeChars := 'ИСХД';
-  nomer   := 0;
-  KolNach := 0;
-  SumNach := 0;
-  SumBoln := 0;
+  TypeChars := 'ИСХД'
+  nomer   := 0
+  KolNach := 0
+  SumNach := 0
+  SumBoln := 0
   MyPersonCounter := 0;
   PersonCounterOut:= 0;
  end.
@@ -1039,13 +1039,13 @@ end.
  }
   if Okrug = 2
   {
-    rrr   := '666666666666667.88';
-    rrr_2 := '-666666666666667.88';
+    rrr   := '666666666666667.88'
+    rrr_2 := '-666666666666667.88'
   }
   else if Okrug = 0
   {
-    rrr   :='666666666666667';
-    rrr_2 :='-666666666666667';
+    rrr   :='666666666666667'
+    rrr_2 :='-666666666666667'
   }
   EndPach := false;
   nomer := nomer+1;
@@ -1140,7 +1140,7 @@ end.
  IF (Word(ДеньЗак)<>0)and(Word(МесяцЗак)<>0)and(Word(ГодЗак)<>0)
   RDataDog:= string(Date(Word(ДеньЗак), Word(МесяцЗак), Word(ГодЗак)))
  else
-  RDataDog:='';
+  RDataDog:=''
 
   AdrStr := '';
   if trim(АдрПрописки_Страна_сокр) = ''
@@ -1258,8 +1258,8 @@ curdate
   DoubleToStr(Double(RВыслуга_лет_доп_свед_3),'666666666666667.88')
 .endfields
 .begin
- my_nach_st := Нач_стажа;
- my_kon_st  := Кон_стажа;
+ my_nach_st := Нач_стажа
+ my_kon_st  := Кон_стажа
  NppStrLgot := 1;
 
  IF (Исчисл_труд_стаж_доп_свед1=0) or (trim(Исчисл_труд_стаж_доп_свед1) = '') then
@@ -1380,11 +1380,11 @@ end.
  if  (Исчисл_труд_стаж_доп_свед1_Lgot=0)or(trim(Исчисл_труд_стаж_доп_свед1_Lgot) = '') then
   RИсчисл_труд_стаж_доп_свед1_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot));
+  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot))
  if  (Исчисл_труд_стаж_доп_свед2_Lgot=0) or (trim(Исчисл_труд_стаж_доп_свед2_Lgot) = '') then
   RИсчисл_труд_стаж_доп_свед2_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot));
+  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot))
 
  if  (Выслуга_лет_доп_свед_3_lgot=0) //or(trim(Выслуга_лет_доп_свед_3_lgot) = '') then
   RВыслуга_лет_доп_свед_3_lgot:= '0.00'
@@ -1541,16 +1541,16 @@ end.
   RDataDog                        : string
 .endvar
 .begin
-  my_inn   := Upcase( Trim( Replace( inn, '"', '''' ) ) );
-  my_pred  := Replace( Upcase( Trim( Pred ) ), '"', '&quot;' );
-  my_pred2 := Replace( Upcase( Trim( PredShort ) ), '"', '&quot;' );
-  pach_nmb:= PachNumBegin;
+  my_inn   := Upcase( Trim( Replace( inn, '"', '''' ) ) )
+  my_pred  := Replace( Upcase( Trim( Pred ) ), '"', '&quot;' )
+  my_pred2 := Replace( Upcase( Trim( PredShort ) ), '"', '&quot;' )
+  pach_nmb:= PachNumBegin
   CodeDopTarr := 'АВИА';
-  TypeChars := 'ИСХД';
-  nomer   := 0;
-  KolNach := 0;
-  SumNach := 0;
-  SumBoln := 0;
+  TypeChars := 'ИСХД'
+  nomer   := 0
+  KolNach := 0
+  SumNach := 0
+  SumBoln := 0
   MyPersonCounter := 0;
   PersonCounterOut:= 0;
  end.
@@ -1606,13 +1606,13 @@ end.
 
   if Okrug = 2
   {
-    rrr   := '666666666666667.88';
-    rrr_2 := '-666666666666667.88';
+    rrr   := '666666666666667.88'
+    rrr_2 := '-666666666666667.88'
   }
   else if Okrug = 0
   {
-    rrr   :='666666666666667';
-    rrr_2 :='-666666666666667';
+    rrr   :='666666666666667'
+    rrr_2 :='-666666666666667'
   }
   EndPach := false;
   nomer := nomer+1;
@@ -1707,7 +1707,7 @@ end.
  IF (Word(ДеньЗак)<>0)and(Word(МесяцЗак)<>0)and(Word(ГодЗак)<>0)
   RDataDog:= string(Date(Word(ДеньЗак), Word(МесяцЗак), Word(ГодЗак)))
  else
-  RDataDog:='';
+  RDataDog:=''
 
   AdrStr := '';
   if trim(АдрПрописки_Страна_сокр) = ''
@@ -1825,8 +1825,8 @@ curdate
   DoubleToStr(Double(RВыслуга_лет_доп_свед_3),'666666666666667.88')
 .endfields
 .begin
- my_nach_st := Нач_стажа;
- my_kon_st  := Кон_стажа;
+ my_nach_st := Нач_стажа
+ my_kon_st  := Кон_стажа
  NppStrLgot := 1;
 
  IF (Исчисл_труд_стаж_доп_свед1=0) or (trim(Исчисл_труд_стаж_доп_свед1) = '') then
@@ -1947,11 +1947,11 @@ end.
  if  (Исчисл_труд_стаж_доп_свед1_Lgot=0)or(trim(Исчисл_труд_стаж_доп_свед1_Lgot) = '') then
   RИсчисл_труд_стаж_доп_свед1_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot));
+  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot))
  if  (Исчисл_труд_стаж_доп_свед2_Lgot=0) or (trim(Исчисл_труд_стаж_доп_свед2_Lgot) = '') then
   RИсчисл_труд_стаж_доп_свед2_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot));
+  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot))
 
  if  (Выслуга_лет_доп_свед_3_lgot=0) //or(trim(Выслуга_лет_доп_свед_3_lgot) = '') then
   RВыслуга_лет_доп_свед_3_lgot:= '0.00'
@@ -2112,16 +2112,16 @@ end.
   RDataDog                        : string
 .endvar
 .begin
-  my_inn   := Upcase( Trim( inn ) );
-  my_pred  := Upcase( Trim( Pred ));
-  my_pred2 :=  Upcase( Trim( PredShort ));
-  pach_nmb:= PachNumBegin;
+  my_inn   := Upcase( Trim( inn ) )
+  my_pred  := Upcase( Trim( Pred ))
+  my_pred2 :=  Upcase( Trim( PredShort ))
+  pach_nmb:= PachNumBegin
   CodeDopTarr := 'АВИА';
-  TypeChars := 'ИСХД';
-  nomer   := 0;
-  KolNach := 0;
-  SumNach := 0;
-  SumBoln := 0;
+  TypeChars := 'ИСХД'
+  nomer   := 0
+  KolNach := 0
+  SumNach := 0
+  SumBoln := 0
   MyPersonCounter := 0;
   PersonCounterOut:= 0;
  end.
@@ -2176,13 +2176,13 @@ end.
  }
   if Okrug = 2
   {
-    rrr   := '666666666666667.88';
-    rrr_2 := '-666666666666667.88';
+    rrr   := '666666666666667.88'
+    rrr_2 := '-666666666666667.88'
   }
   else if Okrug = 0
   {
-    rrr   :='666666666666667';
-    rrr_2 :='-666666666666667';
+    rrr   :='666666666666667'
+    rrr_2 :='-666666666666667'
   }
   EndPach := false;
   nomer := nomer+1;
@@ -2233,7 +2233,7 @@ end.
  IF (Word(ДеньЗак)<>0)and(Word(МесяцЗак)<>0)and(Word(ГодЗак)<>0)
   RDataDog:= string(Date(Word(ДеньЗак), Word(МесяцЗак), Word(ГодЗак)))
  else
-  RDataDog:='';
+  RDataDog:=''
 
   AdrStr := '';
   if trim(АдрПрописки_Страна_сокр) = ''
@@ -2337,9 +2337,9 @@ curdate
 .begin
 
  if  WorkCond <> ''
-   НаличиеВзнДопТар := НаличиеВзнДопТар + 1;
- my_nach_st := Нач_стажа;
- my_kon_st  := Кон_стажа;
+   НаличиеВзнДопТар := НаличиеВзнДопТар + 1
+ my_nach_st := Нач_стажа
+ my_kon_st  := Кон_стажа
  NppStrLgot := 1;
 
  IF (Исчисл_труд_стаж_доп_свед1=0) or (trim(Исчисл_труд_стаж_доп_свед1) = '') then
@@ -2460,11 +2460,11 @@ end.
  if  (Исчисл_труд_стаж_доп_свед1_Lgot=0)or(trim(Исчисл_труд_стаж_доп_свед1_Lgot) = '') then
   RИсчисл_труд_стаж_доп_свед1_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot));
+  RИсчисл_труд_стаж_доп_свед1_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед1_Lgot))
  if  (Исчисл_труд_стаж_доп_свед2_Lgot=0) or (trim(Исчисл_труд_стаж_доп_свед2_Lgot) = '') then
   RИсчисл_труд_стаж_доп_свед2_Lgot:= '0'
  else
-  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot));
+  RИсчисл_труд_стаж_доп_свед2_Lgot:= UpCase(string(Исчисл_труд_стаж_доп_свед2_Lgot))
 
  if  (Выслуга_лет_доп_свед_3_lgot=0) //or(trim(Выслуга_лет_доп_свед_3_lgot) = '') then
   RВыслуга_лет_доп_свед_3_lgot:= '0.00'
@@ -2557,12 +2557,12 @@ end.
 if Взносы_страх_часть > 0
   ВзносыОПС := 'ДА'
 else
-  ВзносыОПС := 'НЕТ';
+  ВзносыОПС := 'НЕТ'
 
 if НаличиеВзнДопТар > 0
   ВзносыДопТар := 'ДА'
 else
-  ВзносыДопТар := 'НЕТ';
+  ВзносыДопТар := 'НЕТ'
 end.
 .fields
 ВзносыОПС

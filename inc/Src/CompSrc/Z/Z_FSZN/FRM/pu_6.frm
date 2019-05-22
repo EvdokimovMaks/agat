@@ -347,7 +347,7 @@ end.
 begin
   WriteInForm := '0,00';
   if (_sum <> 0)
-    WriteInForm := DoubleToStr(_sum,'[|-]36666666666667,88')
+    WriteInForm := DoubleToStr(_sum,'[|-]36666666666667,8899')
   else if (_sum = 0) and (prizn = 1)
     WriteInForm := '0,00';
 end.
@@ -396,14 +396,14 @@ if(CharF = 0, 'И',if(CharF = 1, 'К', if(CharF = 2, 'О', if(CharF = 3, 'П',' ')))
 if(квартал = 1,1,if(квартал = 12, 2, if(квартал = 123, 3, if(квартал = 1234, 4,' '))))
 God
 
-if(CharF<>2, DoubleToStr(Pach_NachItog,'[|-]36666666666667,88'),' ')
-if(CharF<>2, DoubleToStr(Pach_VzItog,'[|-]36666666666667,88'),' ')
-if(CharF<>2, DoubleToStr(Pach_VzItogUpl,'[|-]36666666666667,88'),' ')
+if(CharF<>2, DoubleToStr(Pach_NachItog,'[|-]36666666666667,8899'),' ')
+if(CharF<>2, DoubleToStr(Pach_VzItog,'[|-]36666666666667,8899'),' ')
+if(CharF<>2, DoubleToStr(Pach_VzItogUpl,'[|-]36666666666667,8899'),' ')
 if(Trim(PersonsNumb)<>'',Trim(PersonsNumb),' ')  // кол-во листов в пачке
-if(CHARF=0 or CHARF=3, DoubleToStr(Pach_NachY,'[|-]36666666666667,88'),' ')
-if(CHARF=0 or CHARF=3, DoubleToStr(Pach_Nach1,'[|-]36666666666667,88'),' ')
-if(CHARF=0 or CHARF=3, DoubleToStr(Pach_Nach2,'[|-]36666666666667,88'),' ')
-if(CHARF=0 or CHARF=3, DoubleToStr(Pach_Nach3,'[|-]36666666666667,88'),' ')
+if(CHARF=0 or CHARF=3, DoubleToStr(Pach_NachY,'[|-]36666666666667,8899'),' ')
+if(CHARF=0 or CHARF=3, DoubleToStr(Pach_Nach1,'[|-]36666666666667,8899'),' ')
+if(CHARF=0 or CHARF=3, DoubleToStr(Pach_Nach2,'[|-]36666666666667,8899'),' ')
+if(CHARF=0 or CHARF=3, DoubleToStr(Pach_Nach3,'[|-]36666666666667,8899'),' ')
 .endfields
 ЗГЛВ=1.5=
 <ПАЧК=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=>
@@ -578,9 +578,9 @@ if(Trim(Initial1 )<> '',UpCase(Trim(Initial1)),' ')
 if(Trim(Initial2) <> '',UpCase(Trim(Initial2)),' ')
 if(максимальный_процент <> 0.00, DoubleToStr(максимальный_процент, '\2p[|-]3666 666 666 666 666 667,8'), ' ')
 
-if((CharF <> 2)and(ISum1 <> 0),DoubleToStr(ISum1,'[|-]36666666666667,88'), SpaceOfZeroForTotal(HP))
-if((CharF <> 2)and(ISum2 <> 0),DoubleToStr(ISum2,'[|-]36666666666667,88'), SpaceOfZeroForTotal(HP))
-if((CharF <> 2)and(ISum3 <> 0),DoubleToStr(ISum3,'[|-]36666666666667,88'), SpaceOfZeroForTotal(HP))
+if((CharF <> 2)and(ISum1 <> 0),DoubleToStr(ISum1,'[|-]36666666666667,8899'), SpaceOfZeroForTotal(HP))
+if((CharF <> 2)and(ISum2 <> 0),DoubleToStr(ISum2,'[|-]36666666666667,8899'), SpaceOfZeroForTotal(HP))
+if((CharF <> 2)and(ISum3 <> 0),DoubleToStr(ISum3,'[|-]36666666666667,8899'), SpaceOfZeroForTotal(HP))
 if(CharF <> 2,KolNach,' ')
 KolStag
 curdate
@@ -707,7 +707,7 @@ end.
 .fields
 pach_nmb
 .endfields
-___END ^ ПАЧКИ
+___КОНЕЦ ^ ПАЧКИ
 .begin
   pach_nmb:= pach_nmb + 1;
   nomer:= 0;

@@ -227,10 +227,10 @@ type
 {$endif}
 
 {$ifdef __MTtabledef__}
-{อออออออออออออ ’ กซจๆ  : F_BUHREP::BUHDLG01_KATH "F_BUHREP::BUHDLG01=>KATH" ออออออออออออออ}
+{อออออออออออออ ’ กซจๆ  : BUHDLG01_KATH "BUHDLG01=>KATH" ออออออออออออออ}
 type
   pBUHDLG01_KATH = ^tBUHDLG01_KATH;
-  tBUHDLG01_KATH = record   { - F_BUHREP::BUHDLG01=>KATH }
+  tBUHDLG01_KATH = record   { - BUHDLG01=>KATH }
     NPP            : Word;            { NPP                                   }
     IKAU           : Word;            { IKAU                                  }
     WKAU           : Word;            { WKAU                                  }
@@ -248,7 +248,7 @@ const
   tiKATH03               = 2;  { IKAU(M)                                 }
 
 const
-  mtBUHDLG01_KATH = 'F_BUHREP::BUHDLG01=>KATH';
+  mtBUHDLG01_KATH = 'BUHDLG01=>KATH';
 {อออออออออออออ ’ กซจๆ  : F_BUHREP::PICKBUH "PICKBUH" ออออออออออออออ}
 type
   pPICKBUH = ^tPICKBUH;

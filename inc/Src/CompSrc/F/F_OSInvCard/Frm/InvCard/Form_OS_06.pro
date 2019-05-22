@@ -33,7 +33,6 @@
   Настройка_Метод_Учета                  : word      // 0 -стоимость за единицу, 1 -общая стоимость
 
   WriteKauBySchet                        : word      // Печатать аналитику по счету (0-нет, 1-да)
-  IsWriteDivisionOne                     : word      // Признак печати раздела 1    (0-да, 1-нет)
   WriteDivisionOne                       : word      // Печать раздела 1
                                                      // 0 - на момент поступления
                                                      // 1 - на момент печати
@@ -269,7 +268,6 @@
   Метод_Учета                            - ^
   Настройка_Метод_Учета                  - ^
   WriteKauBySchet                        - ^
-  IsWriteDivisionOne                     - ^
   WriteDivisionOne                       - ^
   isWriteSrokonDate                      - ^
   WriteOsnovOperation                    - ^
