@@ -1,0 +1,174 @@
+#include PD_ICellSchema.vih
+#include Query.vih
+#include PD_Context.vih
+
+#component "PD_AGAT"
+
+vipInterface PD_CellSchema_ForDistr implements PD_ICellSchema, PD_InitByFormPl;
+
+interface PD_CellSchema_ForDistr;
+
+const
+  ForDistr_Mode_St: word = 0;
+  ForDistr_Mode_Av: word = 1;
+  ForDistr_Mode_Ok: word = 2;
+  cTipOper_Fact   : comp = 000100000000186Fh;
+end;
+
+var
+  _q: IQuery;
+
+create view
+var
+  _cFormPl    : comp;
+  _cPlPor     : comp;
+  _cKatStroy  : comp;
+  _cAddSumTune: comp;
+as select
+  FormPl.NRec
+from
+  FormPl
+ ,PlPor
+ ,Oborot
+ ,Oborot OborotB
+where ((
+      _cFormPl == FormPl.NRec
+
+  and _cPlPor  == PlPor.Nrec
+
+  and PlPor.TiDk      == Oborot.TiDk
+  and PlPor.Nrec      == Oborot.cSoprDoc
+  and (Oborot.SchetO   = '35100'
+  and  Oborot.SchetK   = '36200'
+  and  Oborot.DatOb   <> 0
+  and  Oborot.KauOs[3] = _cKatStroy
+  and  Oborot.KauKs[3] = _cKatStroy
+  and  Oborot.KauOs[4] = _cAddSumTune
+  and  Oborot.KauOs[6] = cTipOper_Fact)
+
+  and PlPor.TiDk       == OborotB.TiDk
+  and PlPor.Nrec       == OborotB.cSoprDoc
+  and (OborotB.SchetO   = '851'
+  and  OborotB.SchetK   = '862'
+  and  OborotB.DatOb   <> 0
+  and  OborotB.KauOs[4] = _cKatStroy
+  and  OborotB.KauKs[3] = _cKatStroy)
+));
+
+sql query qValueSt =
+  select
+    sum(SumOb): double
+  from Oborot
+  where
+    TiDk = :tidk and cSoprDoc = :cPlPor and
+    SchetO = '35100' and SchetK = '36200' and
+    KauKs[3] = :cKatStroy and KauOs[3] = :cKatStroy and
+    DatOb <> 0 and
+    KauOs[4] = :cAddSumTune and
+    KauOs[6] = :cTipOper
+;
+
+sql query qValueAvOk =
+  select
+    sum(SumOb): double
+  from Oborot
+  where
+    TiDk = :tidk and cSoprDoc = :cPlPor and
+    SchetO = '851' and SchetK = '862' and
+    KauKs[3] = :cKatStroy and KauOs[4] = :cKatStroy and
+    DatOb <> 0
+;
+
+function isEditable(cell: PD_ICell; context: ObjRef): boolean;
+{
+  var p: PD_IParams = PD_IContext(context).params;
+  result := FormPl.ResWord[1] = ForDistr_Mode_St and p.cPlPor != 0;
+}
+
+function getValue(cell: PD_ICell; context: ObjRef): variant;
+{
+  var p: PD_IParams = PD_IContext(context).params;
+
+  var wTiDk: word = 0;
+
+  _cPlPor := p.cPlPor;
+  if getfirst PlPor = tsOk
+    wTiDk := PlPor.TiDk;
+  else
+    wTiDk := 0;
+
+  result := double(_q.setParam('cKatStroy', p.cKatStroy)
+                     .setParam('cPlPor', p.cPlPor)
+                     .setParam('cAddSumTune', cell.row.cAddSumTune)
+                     .setParam('tidk', wTiDk)
+                     .getResultValue);
+}
+
+function getOborot(cPlPor: comp; cKatStroy: comp; cAddSumTune: comp): type$oborot;
+{
+  _cPlPor      := cPlPor;
+  if getfirst PlPor = tsOk
+  {
+    _cKatStroy   := cKatStroy;
+    _cAddSumTune := cAddSumTune;
+    if getfirst Oborot = tsOk
+      result := Oborot.Buffer;
+    else
+      ClearAdvRecord(result);
+  }
+  else
+    ClearAdvRecord(result);
+}
+
+function setValue(cell: PD_ICell; value: variant; context: ObjRef): boolean;
+{
+  cell.value := double(value);
+  if cell.row.parent != nullRef
+    PD_IContext(context).recalcCell(cell.row.parent.getCell(cell.col));
+  result := true;
+}
+
+procedure initQuery;
+{
+  case FormPl.ResWord[1] of
+    ForDistr_Mode_St:
+    {
+      _q := queryManager.createQuery(qValueSt).setParam('cTipOper', cTipOper_Fact);
+    }
+    ForDistr_Mode_Av:
+    {
+      var l: longint = 0;
+      sqlAddStr(l, qValueAvOk);
+      sqlAddStr(l, 'and SubSchK in (''01'',''02'',''03'',''09'',''12'',''14'')');
+      _q := queryManager.createQuery(l);
+    }
+    ForDistr_Mode_Ok:
+    {
+      var l: longint = 0;
+      sqlAddStr(l, qValueAvOk);
+      sqlAddStr(l, 'and SubSchK not in (''01'',''02'',''03'',''09'',''12'',''14'')');
+      _q := queryManager.createQuery(l);
+    }
+  end;
+}
+
+function initByFormPl(cFormPl: comp): boolean;
+{
+  result := false;
+  _cFormPl := cFormPl;
+  if getfirst FormPl != tsOk
+    exit;
+
+  initQuery;
+
+  result := _q != nullRef;
+}
+
+function setupIfcName: string;
+{
+  result := 'PD_AGAT::PD_CellSchemaSetup_ForDistr';
+}
+
+property name: string read 'К распределению';
+
+end.
