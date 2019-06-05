@@ -3,6 +3,7 @@
 #include Query.vih
 #include PD_Context.vih
 #include PD_CellSchema_Base.vih
+#include ExtAttr.vih
 
 #component "PD_AGAT"
 
@@ -19,6 +20,7 @@ end;
 
 var
   _q: IQuery;
+  #include ExtAttr.var
 
 create view
 var
@@ -33,28 +35,38 @@ from
  ,PlPor
  ,Oborot
  ,Oborot OborotB
+ ,SoprHoz SoprHozB
+ ,UsersDoc
+ ,SpCash
 where ((
       _cFormPl == FormPl.NRec
 
   and _cPlPor  == PlPor.Nrec
 
-  and PlPor.TiDk      == Oborot.TiDk
-  and PlPor.Nrec      == Oborot.cSoprDoc
-  and (Oborot.SchetO   = '35100'
-  and  Oborot.SchetK   = '36200'
-  and  Oborot.DatOb   <> 0
-  and  Oborot.KauOs[3] = _cKatStroy
-  and  Oborot.KauKs[3] = _cKatStroy
-  and  Oborot.KauOs[4] = _cAddSumTune
-  and  Oborot.KauOs[6] = cTipOper_Fact)
+  and PlPor.TiDk         == Oborot.TiDk
+  and PlPor.Nrec         == Oborot.cSoprDoc
+  and (Oborot.SchetO      = '35100'
+  and  Oborot.SchetK      = '36200'
+  and  Oborot.DatOb      <> 0
+  and  Oborot.KauOs[3]    = _cKatStroy
+  and  Oborot.KauKs[3]    = _cKatStroy
+  and  Oborot.KauOs[4]    = _cAddSumTune
+  and  Oborot.KauOs[6]    = cTipOper_Fact)
 
-  and PlPor.TiDk       == OborotB.TiDk
-  and PlPor.Nrec       == OborotB.cSoprDoc
-  and (OborotB.SchetO   = '851'
-  and  OborotB.SchetK   = '862'
-  and  OborotB.DatOb   <> 0
-  and  OborotB.KauOs[4] = _cKatStroy
-  and  OborotB.KauKs[3] = _cKatStroy)
+  and PlPor.TiDk         == OborotB.TiDk
+  and PlPor.Nrec         == OborotB.cSoprDoc
+  and (OborotB.SchetO     = '851'
+  and  OborotB.SchetK     = '862'
+  and  OborotB.DatOb     <> 0
+  and  OborotB.KauOs[4]   = _cKatStroy
+  and  OborotB.KauKs[3]   = _cKatStroy)
+
+  and OborotB.cSoprHoz   == SoprHozB.Nrec
+
+  and PlPor.tidkgal      == UsersDoc.TipGal
+  and PlPor.TiDk         == UsersDoc.TipUsers
+  and UsersDoc.cCashBank == SpCash.cCashBank
+  and PLANSSCH_NREC_2013 == SpCash.cPlansSch
 ));
 
 sql query qValueSt =
@@ -107,7 +119,84 @@ function getValue(cell: PD_ICell; context: ObjRef): variant;
                      .getResultValue);
 }
 
-function getOborot(cPlPor: comp; cKatStroy: comp; cAddSumTune: comp): type$oborot;
+function getSpCashKau(wKau: word; ind: byte): comp;
+{
+  result := 0;
+  if getfirst UsersDoc = tsOk
+    if getfirst SpCash = tsOk
+      if SpCash.TblOs[ind] = wKau
+        result := SpCash.KauOs[ind];
+}
+
+function getIGK: comp;
+{
+  result := getSpCashKau(cgKau_ContractId, 1);
+  if result = 0
+    result := oExtAttr.coGetAttrId(coKatStroy, _cKatStroy, ATTRNAM_NREC_KATSTROY_IGK);
+}
+
+function getRS: comp;
+{
+  result := getSpCashKau(KODGRKAU_RS, 2);
+}
+
+function getAvansOkRasch: comp;
+{
+  case OborotB.SubSchK of
+    '01', '02', '03', '09', '12', '14':
+      result := SPKAU_NREC_PRINADL_AVANS_AVANS;
+    else
+      result := SPKAU_NREC_PRINADL_AVANS_OKRASCH;
+  end;
+}
+
+procedure createOborot(sum: double);
+{
+  if getfirst OborotB != tsOk exit;
+  if getfirst SoprHozB != tsOk exit;
+  ClearBuffer(#Oborot);
+  Oborot.TiDk       := PlPor.TiDk;
+  Oborot.TiDkGal    := PlPor.TiDkGal;
+  Oborot.cSoprDoc   := PlPor.Nrec;
+  Oborot.cSoprHoz   := SoprHozB.Nrec;
+  Oborot.cPlansSch  := PLANSSCH_NREC_TEHN; //Технический план счетов
+  Oborot.Descr      := PlPor.Descr;
+  Oborot.DesGr      := PlPor.DesGr;
+  Oborot.SchetO     := '35100';
+  Oborot.SubOsSch   := '';
+  Oborot.TblOs[1]   := cgKau_ContractId; //ИГК
+  Oborot.TblOs[2]   := KODGRKAU_RS; //Номер р/с
+  Oborot.TblOs[3]   := cgKau_ObjBuild;
+  Oborot.TblOs[4]   := cgKau_StZatr;
+  Oborot.TblOs[6]   := cgKau_TipOper; //тип операции
+  Oborot.KauOs[1]   := getIGK;
+  Oborot.KauOs[2]   := getRS;
+  Oborot.KauOs[3]   := _cKatStroy;
+  Oborot.KauOs[4]   := _cAddSumTune;
+  Oborot.KauOs[6]   := cTipOper_Fact;
+  Oborot.KodSPO     := 0;
+  Oborot.SchetK     := '36200';
+  Oborot.SubSchK    := '';
+  Oborot.TblKs[1]   := cgKau_KatOrg;
+  Oborot.TblKs[2]   := cgKau_Dogovor;
+  Oborot.TblKs[3]   := cgKau_ObjBuild;
+  Oborot.TblKs[4]   := cgKau_PrinadlAvans;
+  Oborot.KauKs[1]   := SoprHozB.cOrg;
+  Oborot.KauKs[2]   := SoprHozB.cDogovor;
+  Oborot.KauKs[3]   := _cKatStroy;
+  Oborot.KauKs[4]   := getAvansOkRasch;
+  Oborot.KodSPK     := 0;
+  Oborot.DatOb      := PlPor.DatOb;
+  Oborot.DataOt     := PlPor.DatVip;
+  Oborot.NoDok      := PlPor.NoDok;
+  Oborot.SumOb      := sum;
+  Oborot.VhProp     := '+';
+  Oborot.DBSchetO   := '5100';
+  Oborot.KrSchetK   := '6200';
+  insert current Oborot;
+}
+
+procedure setOborot(cPlPor: comp; cKatStroy: comp; cAddSumTune: comp; sum: double);
 {
   _cPlPor      := cPlPor;
   if getfirst PlPor = tsOk
@@ -115,19 +204,46 @@ function getOborot(cPlPor: comp; cKatStroy: comp; cAddSumTune: comp): type$oboro
     _cKatStroy   := cKatStroy;
     _cAddSumTune := cAddSumTune;
     if getfirst Oborot = tsOk
-      result := Oborot.Buffer;
-    else
-      ClearAdvRecord(result);
+    {
+      if sum = 0
+        delete current Oborot;
+      else
+        update current Oborot set Oborot.SumOb := sum;
+    }
+    else if sum != 0
+      createOborot(sum);
   }
-  else
-    ClearAdvRecord(result);
 }
 
 function setValue(cell: PD_ICell; value: variant; context: ObjRef): boolean;
 {
-  cell.value := double(value);
-  if cell.row.parent != nullRef
-    PD_IContext(context).recalcCell(cell.row.parent.getCell(cell.col));
+  var c: PD_IContext = PD_IContext(context);
+  var p: PD_IParams = c.params;
+  var r: PD_IRow = PD_IRow(cell.row);
+
+  setOborot(p.cPlPor, p.cKatStroy, r.cAddSumTune, value);
+
+  c.recalcCell(cell);
+  c.recalcCell(r.getCell(5));
+  c.recalcCell(r.getCell(9));
+  c.recalcCell(r.getCell(13));
+  c.recalcCell(r.getCell(14));
+  c.recalcCell(r.getCell(15));
+  c.recalcCell(r.getCell(16));
+  c.recalcCell(r.getCell(17));
+
+  if r.parent != nullRef
+  {
+    c.recalcCell(r.parent.getCell(8));
+    c.recalcCell(r.parent.getCell(5));
+    c.recalcCell(r.parent.getCell(9));
+    c.recalcCell(r.parent.getCell(13));
+    c.recalcCell(r.parent.getCell(14));
+    c.recalcCell(r.parent.getCell(15));
+    c.recalcCell(r.parent.getCell(16));
+    c.recalcCell(r.parent.getCell(17));
+  }
+
   result := true;
 }
 
