@@ -48,6 +48,7 @@ const
   ATTRNAM_NREC_PLPOR_NOMER_V_BANKE                : comp = 00010000000014D2h; //яНомерДокументаВБанке - при импорте исходящих платежек из клиент-банка им присваивается свой номер.
                                                                               //для нахождения соответствия с документом банка в этом атрибуте хранится банковский номер документа
   ATTRNAM_NREC_PLPOR_REJIM_ISPOLZOVANIYA_SCHETA   : comp = 000100000000077Ah; //Режим использования счета - ссылка на пользовательскую аналитику KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA
+  ATTRNAM_NREC_PLPOR_DDS                          : comp = 0001000000000090h; //Статья ДДС
 
   //внешние атрибуты заявок
   ATTRNAM_NREC_CLAIM_TU                           : comp = 0001000000000421h; //Технические условия - строка с комментарием к позиции заявки
@@ -87,15 +88,19 @@ const
   //Значения КАУ
   SPKAU_NREC_REJIM_ISPOLZOVANIYA_SCHETA_3MLN      : comp = 000100000000139Eh;  //ссылка на пользовательскую аналитику KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA
                                                                                //2.8_в соответсвии с пп. З п. 2 ст. 8.3 ФЗ  № 275 для оплаты иных расходов на сумму не более 3 мл ( ИГК -> Общий 3 мил.)
+  SPKAU_NREC_PRINADL_AVANS_AVANS                  : comp = 00010000000001DEh;  //ссылка на пользовательскую аналитику Платежи: принадлежность к авансу = "Аванс"
+  SPKAU_NREC_PRINADL_AVANS_OKRASCH                : comp = 00010000000001DFh;  //ссылка на пользовательскую аналитику Платежи: принадлежность к авансу = "Окончательный расчет"
   //Планы счетов
   PLANSSCH_NREC_2013                              : comp = 000100000000000Eh;  //План счетов 2013 г
-
+  PLANSSCH_NREC_TEHN                              : comp = 40017E58EB0A93F3h;  //Технический план счетов
   //КАУ
-  cgKau_Claim      : word = 5191;  //Строка заявки
-  cgKau_SrBessr    : word = 10753; //2016 Срочная/бессрочная лицензия
-  cgKau_ContractId : word = 10527; //Идентификатор госконтракта
-  cgKau_RBP        : word = 163;   //2005. Расходы будущих периодов
-  cgKau_StZ2013    : word = 10016; //2013 Статьи затрат
+  cgKau_Claim       : word = 5191;  //Строка заявки
+  cgKau_SrBessr     : word = 10753; //2016 Срочная/бессрочная лицензия
+  cgKau_ContractId  : word = 10527; //Идентификатор госконтракта
+  cgKau_RBP         : word = 163;   //2005. Расходы будущих периодов
+  cgKau_StZ2013     : word = 10016; //2013 Статьи затрат
+  cgKau_TipOper     : word = 11273; //тип операции
+  cgKau_PrinadlAvans: word = 10008; //Платежи: принадлежность к авансу
 
   //Настройки подписантов
   FEESIGNERS_CONSTREP_FINDIR_SLZAP                : word = 32001; //Настройка подписантов в отчете к ДО "Финансовая дирекция. Служебная записка"
@@ -115,4 +120,10 @@ const
   FPKATIMP_CODE_STZ2013_STZSTROY                   : string = '20'; //Договора. 2013 Статьи затрат - Статьи затрат объектов строительства
 
   STATLOG_TIPDOC_INDENT = 30000;
+
+  //Типы настроек в таблице FormPl
+  FORMPL_TYPEALG_ROWS             : word = 28000;
+  FORMPL_TYPEALG_CELLSCHEMAS      : word = 28001;
+  FORMPL_TYPEALG_ROWSCHEMAS       : word = 28002;
+  FORMPL_TYPEALG_CHANGE_STATUS_TXO: word = 28003;
 end;
