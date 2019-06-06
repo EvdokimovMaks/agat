@@ -1,0 +1,109 @@
+#include Marker.vih
+#include Query.vih
+#include PD_ChangeStatusTxo.vih
+
+#component "PD_AGAT"
+
+interface PD_SetCalPlanTxo;
+
+table struct TmpCalPlan
+(
+  Nrec: comp
+ ,cDogovor: comp
+ ,DDDoc: date
+ ,DNoDoc: string[100]
+ ,DDoc: date
+ ,NoDoc: string[100]
+)
+with index
+(
+  IDX0 = DDDoc + DNoDoc + DDoc + NoDoc
+);
+
+var
+  _chStatusTxo: PD_ChangeStatusTxo;
+  _m: IMarker(Marker) new;
+
+create view
+as select
+  TmpCalPlan.Nrec
+from
+  TmpCalPlan
+ ,CalPlan
+ ,Dogovor
+ ,MagOper
+ ,HozOper
+where ((
+      TmpCalPlan.Nrec     == CalPlan.Nrec
+  and TmpCalPlan.cDogovor == Dogovor.Nrec
+  and 403                 == MagOper.TipDoc
+  and TmpCalPlan.Nrec     == MagOper.cSoprDoc
+  and PLANSSCH_NREC_TEHN  == MagOper.cPlansSch
+  and MagOper.cHozOper    == HozOper.Nrec
+))
+;
+
+browse br1 (,,sci1Esc);
+  show(,,,20);
+  table TmpCalPlan;
+  recmarker = _m {TmpCalPlan.Nrec};
+  fields
+    TmpCalPlan.DDDoc 'Дата договора': [10], protect;
+    TmpCalPlan.DNoDoc 'Номер договра': [10], protect;
+    TmpCalPlan.DDoc 'Дата ПКП': [10], protect;
+    TmpCalPlan.NoDoc 'Номер ПКП': [10], protect;
+    HozOper.Name1 'ТХО': [30], protect;
+end;
+
+screen sc1(,,sci1Esc);
+  show(,21,,) fixed_y;
+  buttons
+    cmOk, default;
+<<
+  <.Продолжить.>
+>>
+end;
+
+sql query qData =
+select
+  cp.Nrec, d2.Nrec as cDogovor, d2.dDoc as DDDoc, d2.NoDoc as DNoDoc, cp.dfrom as DDoc, cp.nodoc as NoDoc
+from CalPlan cp
+join Dogovor d on d.nrec = cp.cDogovor
+left join Dogovor d1 on d1.Nrec = d.cDogovor
+join Dogovor d2 on d2.Nrec = coalesce(d1.nrec, d.nrec)
+outer apply (select count(*) as cnt
+             from spdocs
+             join specmtr on specmtr.cotable = 1723 and specmtr.cspec = spdocs.nrec
+             where spdocs.tidk = 403 and spdocs.cdoc = cp.nrec and specmtr.cobj <> #comp(0) and specmtr.cobj <> #comp(4611969475094101269)
+            ) t
+where cp.DirectMc = 2 and cp.Status = 1 and coalesce(t.cnt, 0) > 0
+;
+
+handleevent
+
+  cmInit:
+  {
+    var q: IQuery = queryManager.createQuery(qData);
+    if q.execute.errorCode = tsOk
+      sqlCopyInto(q, tnTmpCalPlan, true);
+  }
+
+  cmOk:
+  {
+    SubBounds(tbRMTmpCalPlan1);
+    AddBounds(tbRMTmpCalPlan2);
+    startnewvisual(vtIndicatorVisual, vfTimer + vfBreak, 'Формирование ТХО', _m.count);
+    _loop _m
+    {
+      _chStatusTxo.process(403, TmpCalPlan.Nrec, 0, 281474976710821);
+      if not nextvisual break;
+    }
+    SubBounds(tbRMTmpCalPlan2);
+    AddBounds(tbRMTmpCalPlan1);
+    stopvisual('', 0);
+    RereadRecord(tnTmpCalPlan);
+  }
+
+end;
+
+end.
