@@ -1,0 +1,257 @@
+#include Query.vih
+
+#component "PD_AGAT"
+
+interface PD_MainDistrReserve 'Распределение резерва ДС' escClose;
+
+
+table struct TmpData (
+  NRec          : comp
+ ,Lvl           : byte
+ ,cParent       : comp
+ ,Name          : string[80]
+ ,cOrg          : comp
+ ,cDogovor      : comp
+ ,SumZakl       : double
+ ,SumOpl        : double
+ ,SumVibFact    : double
+ ,SumVibReestr  : double
+ ,SumVibRezerv  : double
+ ,SumRezerv3mln : double
+ ,SumKrZ        : double
+) with index (
+  i00 = Nrec (unique, surrogate)
+ ,i01 = Lvl + cOrg
+ ,i02 = cParent + Name
+);
+
+var
+  _cKatStroy: comp;
+  _cAddSumTune: comp;
+  _qData: IQuery;
+
+create view
+var
+  _cParent: comp;
+as select
+  TmpDataTree.SumZakl - TmpDataTree.SumOpl - TmpDataTree.SumVibFact (fieldname = SumZaklFld)
+ ,TmpDataTree.SumZakl - TmpDataTree.SumOpl - TmpDataTree.SumVibFact - TmpDataTree.SumVibReestr - TmpDataTree.SumVibRezerv (fieldname = SumZaklFld1)
+from
+  TmpData
+ ,TmpData TmpDataTree
+where ((
+  _cParent == TmpDataTree.cParent
+))
+;
+
+parameters _cKatStroy, _cAddSumTune;
+
+tree tr1 (,,Sci13EscTreeI);
+  table TmpDataTree;
+  fields
+    TmpDataTree.Name 'Заказ','Контрагент','Договор':
+      [30], protect;
+    SumZaklFld 'Сумма по','заключенному','договору':
+      [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
+    TmpDataTree.SumKrZ 'Сумма','кредиторской','задолженности':
+      [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
+    SumZaklFld1 'Сумма по закл.дог.','с учетом операций','"Реестр" и "Резерв"':
+      [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
+    TmpDataTree.SumVibRezerv 'Сумма','резерва','':
+      [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
+    TmpDataTree.SumRezerv3mln 'в т.ч. в пределах','3 млн','':
+      [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
+end;
+
+//#region Построение иерархии
+
+procedure SumTmpData(var buf: type$TmpData; sumBuf: type$TmpData);
+{
+  buf.SumZakl       += sumBuf.SumZakl;
+  buf.SumOpl        += sumBuf.SumOpl;
+  buf.SumVibFact    += sumBuf.SumVibFact;
+  buf.SumVibReestr  += sumBuf.SumVibReestr;
+  buf.SumVibRezerv  += sumBuf.SumVibRezerv;
+  buf.SumRezerv3mln += sumBuf.SumRezerv3mln;
+  buf.SumKrZ        += sumBuf.SumKrZ;
+}
+
+create view vHier
+as select
+  TmpData.Nrec
+from
+  TmpData
+ ,TmpData TmpDataOrg
+ ,TmpData TmpDataTop
+where ((
+      0            == TmpData.Lvl
+  and 1            == TmpDataOrg.Lvl
+  and TmpData.cOrg == TmpDataOrg.cOrg
+  and 2            == TmpDataTop.Lvl
+));
+procedure createTmpDataHier;
+{
+  vHier.ClearBuffer(vHier.tnTmpDataTop);
+  vHier.TmpDataTop.Lvl := 2;
+  vHier.TmpDataTop.Name := 'Итого по заказу';
+  vHier.insert current TmpDataTop;
+
+  vHier._loop TmpData
+  {
+    if vHier.getfirst TmpDataOrg != tsOk
+    {
+      vHier.ClearBuffer(vHier.tnTmpDataOrg);
+      vHier.TmpDataOrg.Lvl := 1;
+      vHier.TmpDataOrg.cOrg := vHier.TmpData.cOrg;
+      vHier.TmpDataOrg.Name := ShowKau(cgKau_KatOrg, vHier.TmpDataOrg.cOrg);
+      vHier.TmpDataOrg.cParent := vHier.TmpDataTop.Nrec;
+      vHier.insert current TmpDataOrg;
+    }
+
+    SumTmpData(vHier.TmpDataOrg.Buffer, vHier.TmpData.Buffer);
+    vHier.update current TmpDataOrg;
+
+    vHier.TmpData.cParent := vHier.TmpDataOrg.Nrec;
+    vHier.TmpData.Name := ShowKau(cgKau_Dogovor, vHier.TmpData.cDogovor);
+    vHier.update current TmpData;
+
+    SumTmpData(vHier.TmpDataTop.Buffer, vHier.TmpData.Buffer);
+  }
+
+  vHier.update current TmpDataTop;
+}
+
+//#endregion Построение иерархии
+
+//#region query qData
+sql query qData =
+select
+  oZakl.cOrg,
+  oZakl.cDogovor,
+  oZakl.Sum as SumZakl,
+  coalesce(oOpl.Sum, 0) as SumOpl,
+  coalesce(oVib.SumFact, 0) as SumVibFact,
+  coalesce(oVib.SumReestr, 0) as SumVibReestr,
+  coalesce(oVib.SumRezerv, 0) as SumVibRezerv,
+  coalesce(oVib.SumRezerv3mln, 0) as SumRezerv3mln,
+  case when coalesce(od6076.Sum, 0) < coalesce(ok6076.Sum, 0)
+       then coalesce(ok6076.Sum, 0) - coalesce(od6076.Sum, 0)
+       else 0
+  end as SumKrZ
+
+from (
+  select o.KauKs[1] as cOrg,
+         case when d.cDogovor <> #comp(0) then d.cDogovor else d.Nrec end as cDogovor,
+         sum(o.SumOb) as Sum
+  from Oborot o
+  join Dogovor d  on d.Nrec = o.KauKs[2]
+  join AddSumTune st on st.Nrec = o.KauKs[4]
+  where
+      o.SchetO   = ''
+  and o.SchetK   = '30000'
+  and o.DatOb    > 0
+  and o.KauKs[3] = :cKatStroy
+  and (st.Nrec = :cAddSumTune or st.cNode = :cAddSumTune)
+  group by o.KauKs[1], case when d.cDogovor <> #comp(0) then d.cDogovor else d.Nrec end
+) oZakl
+
+outer apply (
+  select sum(SumOb) as Sum
+  from Oborot o
+  where
+      (o.SchetO = '860' or (o.SchetO = '876' and o.SubOsSch in ('18','19','23','2301')))
+  and (o.SchetK = '851')
+  and (o.KauOs[2] = oZakl.cDogovor)
+  and ( o.SubSchK in ('01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22') or
+        (o.TblKs[1] = 10527 and o.KauKs[1] = #comp(0001000000001186h))) //Идентификатор не определен на 01.09.2015 (для сальдо по 51 счету)
+  and (o.KauOs[4] = :cKatStroy)
+  and (o.DatOb > 0)
+) oOpl
+
+outer apply (
+  select
+    sum(case when o.KauKs[6] = #comp(000100000000186Fh) then o.SumOb else 0 end) as SumFact
+   ,sum(case when o.KauKs[6] = #comp(000100000000186Eh) then o.SumOb else 0 end) as SumReestr
+   ,sum(case when o.KauKs[6] = #comp(000100000000186Dh) then o.SumOb else 0 end) as SumRezerv
+   ,sum(case when o.KauKs[6] = #comp(000100000000186Dh) and o.KauKs[5] = #comp(000100000000139Eh) then o.SumOb else 0 end) as SumRezerv3mln
+  from Oborot o
+  join AddSumTune st on st.Nrec = o.KauKs[4]
+  where
+      o.SchetO = '30000'
+  and o.SchetK = '35100'
+  and o.DatOb > 0
+  and o.KauOs[1] = oZakl.cOrg
+  and o.KauOs[2] = oZakl.cDogovor
+  and o.KauKs[3] = :cKatStroy
+  and (st.Nrec = :cAddSumTune or st.cNode = :cAddSumTune)
+) oVib
+
+outer apply (
+  select round(sum(SumOb), 2) as Sum
+  from Oborot o
+  where
+      ( (o.SchetO = '860' and o.KauOs[4] = :cKatStroy) or
+        (o.SchetO = '876' and o.SubOsSch in ('18', '19', '23', '2301') and o.KauOs[3] = :cKatStroy) )
+  and o.DatOb > 0
+  and o.KauOs[1] = oZakl.cOrg
+  and o.KauOs[2] = oZakl.cDogovor
+) od6076
+
+outer apply (
+  select round(sum(SumOb), 2) as Sum
+  from Oborot o
+  where
+      ( (o.SchetK = '860' and o.KauKs[4] = :cKatStroy) or
+        (o.SchetK = '876' and o.SubSchK in ('18', '19', '23', '2301') and o.KauKs[3] = :cKatStroy) )
+  and o.DatOb > 0
+  and o.KauKs[1] = oZakl.cOrg
+  and o.KauKs[2] = oZakl.cDogovor
+) ok6076
+;
+//#endregion query qData
+
+procedure prepareData;
+{
+  mtClear(tnTmpData, mfNormal);
+  if _qData.execute.errorCode = tsOk
+    sqlCopyInto(_qData, tnTmpData, true);
+  createTmpDataHier;
+
+  if TreeGetFirstEx(tr1) do {
+    if not TreeIsTerminal(tr1) TreeOpenNode(tr1);
+  } while TreeGetNextEx(tr1)
+}
+
+tableevent table TmpDataTree;
+
+  cmTreeTop:
+    _cParent := 0;
+
+  cmTreeUp:
+    _cParent := TmpDataTree.cParent;
+
+  cmTreeDown:
+    _cParent := TmpDataTree.Nrec;
+
+  cmTreeNodeType:
+    if TreeIsTerminal(tr1)
+        TreeSetNodeType(tr1, ntfText);
+
+  cmTreeNeedOwner:
+    TreeJumpToRecord(tr1, TmpDataTree.cParent);
+
+end;
+
+handleevent
+
+  cmInit:
+  {
+    _qData := queryManager.createQuery(qData)
+                          .setParam('cKatStroy', _cKatStroy)
+                          .setParam('cAddSumTune', _cAddSumTune);
+    prepareData;
+  }
+
+end;
+
+end.
