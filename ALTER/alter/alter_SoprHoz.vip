@@ -5,10 +5,30 @@ alter interface SoprHoz
 
 var
   _qZakVibDO: IQuery;
+  _qExtInfoPKP: IQuery;
+
+function getStatus(w: word): string;
+{
+  result := case(w;
+                 0: '(Оформл.)',
+                 1: '(Исп.)',
+                 2: '(Приост.)',
+                 3: '(Раст.)';
+                 '(Ст:' + w + ')');
+}
 
 create view
-as select *
-from mnplan TrudPotr
+as select
+  if(isValid(tnAgTopDogovor), agTopDogovor.NoDoc + getStatus(agTopDogovor.Status), '') +
+  if(isValid(tnAgAppDogovor), ' ДС: ' + agAppDogovor.NoDoc + getStatus(agAppDogovor.Status), '') (fieldName = DogovorFld)
+from
+  mnplan TrudPotr
+ ,Dogovor agTopDogovor
+ ,Dogovor agAppDogovor
+where ((
+      SoprHoz.cDogovor    == agTopDogovor.Nrec
+  and SoprHoz.cAppDogovor == agAppDogovor.Nrec
+))
 bounds ByStatusTrudPotr = SoprHoz.cSoprDoc /== TrudPotr.nRec and (TrudPotr.cStatus = 00010000000000E2h);
 
 sql query qZakVibDO =
@@ -27,11 +47,29 @@ function extInfoDO: string;
       result += _qZakVibDO.row.valAt(1) + ' ';
 }
 
+sql query qExtInfoPKP =
+  select distinct SubString(KatStroy.Name, 1, InStr(' ', KatStroy.Name + ' ', 1) - 1)
+  from SpDocs
+  join SpecMtr on SpecMtr.coTable = 1723 and SpecMtr.cSpec = SpDocs.Nrec
+  join KatStroy on KatStroy.Nrec = SpecMtr.cObj
+  where SpDocs.TiDk = 403 and SpDocs.cDoc = :cCalPlan
+;
+
+function extInfoPKP: string;
+{
+  result := '';
+  _qExtInfoPKP.setParam('cCalPlan', SoprHoz.cSoprDoc);
+  if _qExtInfoPKP.execute.errorCode = tsOk
+    while _qExtInfoPKP.fetch.errorCode = tsOk
+      result += _qExtInfoPKP.row.valAt(1) + ' ';
+}
+
 function extInfo: string;
 {
   result := '';
   case SoprHoz.TiDkGal of
     41, 43: result := extInfoDO;
+    403: result := extInfoPKP;
   end;
 }
 
@@ -40,6 +78,7 @@ Browse brSoprHozTblSum ('Разноска хозяйственных документов по ТХО. <Alt+B> - Огр
   Show at (, , , 22);
   Table SoprHoz;
   fields
+    DogovorFld 'Договор': [20], protect;
     extInfo 'Доп. информация': [30], protect;
 end;
 
@@ -55,6 +94,7 @@ cminit:
     if BoundActive(tbByStatusTrudPotr) SubBounds(tbByStatusTrudPotr);
   }
   _qZakVibDO := queryManager.createQuery(qZakVibDO);
+  _qExtInfoPKP := queryManager.createQuery(qExtInfoPKP);
   if (inherited::handleevent(cminit) = heAbort) Abort;
 }
 end;
