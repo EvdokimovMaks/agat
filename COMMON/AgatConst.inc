@@ -101,6 +101,7 @@ const
   cgKau_StZ2013     : word = 10016; //2013 Статьи затрат
   cgKau_TipOper     : word = 11273; //тип операции
   cgKau_PrinadlAvans: word = 10008; //Платежи: принадлежность к авансу
+  cgKau_RashStZatr  : word = 11309; //Расшифровка статьи затрат
 
   //Настройки подписантов
   FEESIGNERS_CONSTREP_FINDIR_SLZAP                : word = 32001; //Настройка подписантов в отчете к ДО "Финансовая дирекция. Служебная записка"
@@ -126,4 +127,7 @@ const
   FORMPL_TYPEALG_CELLSCHEMAS      : word = 28001;
   FORMPL_TYPEALG_ROWSCHEMAS       : word = 28002;
   FORMPL_TYPEALG_CHANGE_STATUS_TXO: word = 28003;
+
+  //Типы операций
+  TYPOPER_REZERV                  : comp = 000100000000186Dh;
 end;

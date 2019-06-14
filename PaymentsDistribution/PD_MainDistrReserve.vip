@@ -1,3 +1,6 @@
+#include ExtAttr.vih
+#include GetKau.vih
+#include Dogovor.vih
 #include Query.vih
 
 #component "PD_AGAT"
@@ -22,45 +25,85 @@ table struct TmpData (
 ) with index (
   i00 = Nrec (unique, surrogate)
  ,i01 = Lvl + cOrg
- ,i02 = cParent + Name
+ ,i02 = Lvl + cDogovor
+ ,i03 = cParent + Name
 );
 
 var
   _cKatStroy: comp;
+  _cRS: comp;
+  _cIGK: comp;
   _cAddSumTune: comp;
   _qData: IQuery;
+#include ExtAttr.var
+#include GetKau.var
 
 create view
 var
   _cParent: comp;
 as select
-  TmpDataTree.SumZakl - TmpDataTree.SumOpl - TmpDataTree.SumVibFact (fieldname = SumZaklFld)
- ,TmpDataTree.SumZakl - TmpDataTree.SumOpl - TmpDataTree.SumVibFact - TmpDataTree.SumVibReestr - TmpDataTree.SumVibRezerv (fieldname = SumZaklFld1)
+  TmpDataTree.SumOpl + TmpDataTree.SumVibFact (fieldname = SumOplFld)
+ ,(TmpDataTree.SumZakl - TmpDataTree.SumOpl - TmpDataTree.SumVibFact) (fieldname = SumZaklFld)
+ ,(TmpDataTree.SumZakl - TmpDataTree.SumOpl - TmpDataTree.SumVibFact - TmpDataTree.SumVibReestr - TmpDataTree.SumVibRezerv) (fieldname = SumZaklFld1)
+ ,ShowKau(Oborot.TblOs[1], Oborot.KauOs[1]) (fieldname = OrgFld)
+ ,ShowKau(Oborot.TblOs[2], Oborot.KauOs[2]) (fieldname = DogFld)
+ ,ShowKau(Oborot.TblKs[5], Oborot.KauKs[5]) (fieldname = RejIspFld)
+ ,ShowKau(Oborot.TblOs[4], Oborot.KauOs[4]) (fieldname = StZFld)
+ ,ShowKau(Oborot.TblOs[5], Oborot.KauOs[5]) (fieldname = RashFld)
 from
   TmpData
  ,TmpData TmpDataTree
+ ,Oborot
+ ,SpCash
 where ((
-  _cParent == TmpDataTree.cParent
+      _cParent == TmpDataTree.cParent
+
+  and '30000'  == Oborot.SchetO
+  and '35100'  == Oborot.SchetK
+  and (Oborot.KauOs[3] = _cKatStroy and Oborot.KauKs[4] = _cAddSumTune and Oborot.KauKs[6] = TYPOPER_REZERV)
+
+  and PLANSSCH_NREC_2013 == SpCash.cPlansSch
+  and (SpCash.TblOs[1] = KODGRKAU_IGK and SpCash.KauOs[1] = _cIGK and SpCash.TblOs[2] = KODGRKAU_RS)
 ))
+condition ByOrg = Oborot.KauOs[1] = TmpDataTree.cOrg
+condition ByDog = Oborot.KauOs[2] = TmpDataTree.cDogovor
 ;
 
 parameters _cKatStroy, _cAddSumTune;
 
 tree tr1 (,,Sci14EscTreeI);
+  show(,,,15);
   table TmpDataTree;
   fields
     TmpDataTree.Name 'Заказ','Контрагент','Договор':
       [30], protect, editButton;
-    SumZaklFld 'Сумма по','заключенному','договору':
+    TmpDataTree.SumZakl 'Сумма по','заключенному','договору':
+      [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
+    SumOplFld 'Сумма оплачено','по договору':
+      [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
+    SumZaklFld 'Сумма по договору',' минус оплачено':
       [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
     TmpDataTree.SumKrZ 'Сумма','кредиторской','задолженности':
       [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
-    SumZaklFld1 'Сумма по закл.дог.','с учетом операций','"Реестр" и "Резерв"':
+    SumZaklFld1 'Сумма по закл.дог.','с учетом операций','"Реестр","Резерв","Факт"':
       [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
     TmpDataTree.SumVibRezerv 'Сумма','резерва','':
       [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
     TmpDataTree.SumRezerv3mln 'в т.ч. в пределах','3 млн','':
       [14, '\2p[|-]3666`666`666`666`666`666`666~88'], protect;
+end;
+
+browse brOborot (,,Sci1378Esc);
+  show(,16,,);
+  table Oborot;
+  fields
+    Oborot.DatOb 'Дата': [10], noProtect;
+    OrgFld 'Контрагент': [20], Protect;
+    DogFld 'Договор': [20], Protect;
+    RejIspFld 'Режим использования счета': [20], Protect, PickButton;
+    StZFld 'Статья затрат': [20], Protect, PickButton;
+    RashFld 'Расшифровка ст.затр.': [20], Protect, PickButton;
+    Oborot.SumOb 'Сумма': [14, '\2p[|-]3666`666`666`666`666`666~88'], noProtect;
 end;
 
 //#region Построение иерархии
@@ -132,8 +175,6 @@ select
   coalesce(oOpl.Sum, 0) as SumOpl,
   coalesce(oVib.SumFact, 0) as SumVibFact,
   coalesce(oVib.SumReestr, 0) as SumVibReestr,
-  coalesce(oVib.SumRezerv, 0) as SumVibRezerv,
-  coalesce(oVib.SumRezerv3mln, 0) as SumRezerv3mln,
   case when coalesce(od6076.Sum, 0) < coalesce(ok6076.Sum, 0)
        then coalesce(ok6076.Sum, 0) - coalesce(od6076.Sum, 0)
        else 0
@@ -172,8 +213,6 @@ outer apply (
   select
     sum(case when o.KauKs[6] = #comp(000100000000186Fh) then o.SumOb else 0 end) as SumFact
    ,sum(case when o.KauKs[6] = #comp(000100000000186Eh) then o.SumOb else 0 end) as SumReestr
-   ,sum(case when o.KauKs[6] = #comp(000100000000186Dh) then o.SumOb else 0 end) as SumRezerv
-   ,sum(case when o.KauKs[6] = #comp(000100000000186Dh) and o.KauKs[5] = #comp(000100000000139Eh) then o.SumOb else 0 end) as SumRezerv3mln
   from Oborot o
   join AddSumTune st on st.Nrec = o.KauKs[4]
   where
@@ -210,16 +249,112 @@ outer apply (
 ;
 //#endregion query qData
 
+create view vRezerv
+as select
+  Oborot.Nrec
+from
+  Oborot
+ ,TmpData TmpDataZakaz
+ ,TmpData TmpDataOrg
+ ,TmpData TmpDataDog
+ ,TmpData
+where ((
+      '30000'  == Oborot.SchetO
+  and '35100'  == Oborot.SchetK
+  and (Oborot.KauOs[3] = _cKatStroy and Oborot.KauKs[4] = _cAddSumTune and Oborot.KauKs[6] = TYPOPER_REZERV)
+
+  and 2 == TmpDataZakaz.Lvl
+
+  and 1 == TmpDataOrg.Lvl and Oborot.KauOs[1] == TmpDataOrg.cOrg
+
+  and 0 == TmpDataDog.Lvl and Oborot.KauOs[2] == TmpDataDog.cDogovor
+));
+procedure recalcRezerv;
+{
+  var is3Mln: boolean = false;
+  vRezerv.update TmpData set TmpData.SumVibRezerv := 0, TmpData.SumRezerv3mln := 0;
+  if vRezerv.getfirst TmpDataZakaz != tsOk exit;
+  vRezerv._loop Oborot
+  {
+    is3Mln := vRezerv.Oborot.KauKs[5] = SPKAU_NREC_REJIM_ISPOLZOVANIYA_SCHETA_3MLN;
+    if vRezerv.Oborot.KauOs[1] != 0
+    {
+      if vRezerv.getfirst TmpDataOrg != tsOk
+      {
+        vRezerv.ClearBuffer(vRezerv.tnTmpDataOrg);
+        vRezerv.TmpDataOrg.cParent       := vRezerv.TmpDataZakaz.Nrec;
+        vRezerv.TmpDataOrg.cOrg          := vRezerv.Oborot.KauOs[1];
+        vRezerv.TmpDataOrg.SumVibRezerv  := vRezerv.Oborot.SumOb;
+        vRezerv.TmpDataOrg.SumRezerv3mln := if(is3Mln, vRezerv.Oborot.SumOb, 0);
+        vRezerv.TmpDataOrg.Lvl           := 1;
+        vRezerv.insert current TmpDataOrg;
+      }
+      else
+      {
+        vRezerv.TmpDataOrg.SumVibRezerv  += vRezerv.Oborot.SumOb;
+        vRezerv.TmpDataOrg.SumRezerv3mln += if(is3Mln, vRezerv.Oborot.SumOb, 0);
+        vRezerv.update current TmpDataOrg;
+      }
+    }
+
+    if vRezerv.Oborot.KauOs[2] != 0
+    {
+      if vRezerv.getfirst TmpDataDog != tsOk
+      {
+        vRezerv.ClearBuffer(vRezerv.tnTmpDataDog);
+        vRezerv.TmpDataDog.cParent       := vRezerv.TmpDataOrg.Nrec;
+        vRezerv.TmpDataDog.cOrg          := vRezerv.Oborot.KauOs[1];
+        vRezerv.TmpDataDog.cDogovor      := vRezerv.Oborot.KauOs[2];
+        vRezerv.TmpDataDog.SumVibRezerv  := vRezerv.Oborot.SumOb;
+        vRezerv.TmpDataDog.SumRezerv3mln := if(is3Mln, vRezerv.Oborot.SumOb, 0);
+        vRezerv.insert current TmpDataDog;
+      }
+      else
+      {
+        vRezerv.TmpDataDog.SumVibRezerv  += vRezerv.Oborot.SumOb;
+        vRezerv.TmpDataDog.SumRezerv3mln += if(is3Mln, vRezerv.Oborot.SumOb, 0);
+        vRezerv.update current TmpDataDog;
+      }
+    }
+
+    vRezerv.TmpDataZakaz.SumVibRezerv  += vRezerv.Oborot.SumOb;
+    vRezerv.TmpDataZakaz.SumRezerv3mln += if(is3Mln, vRezerv.Oborot.SumOb, 0);
+  }
+  vRezerv.update current TmpDataZakaz;
+}
+
 procedure prepareData;
 {
   mtClear(tnTmpData, mfNormal);
   if _qData.execute.errorCode = tsOk
     sqlCopyInto(_qData, tnTmpData, true);
   createTmpDataHier;
+  recalcRezerv;
 
   if TreeGetFirstEx(tr1) do {
     if not TreeIsTerminal(tr1) TreeOpenNode(tr1);
   } while TreeGetNextEx(tr1)
+}
+
+procedure setOborotConditions;
+{
+  case TmpDataTree.Lvl of
+    0:
+    {
+      if not ConditionActiveInLeave(tcByOrg, tnOborot) PushConditionForLeave(tcByOrg, tnOborot);
+      if not ConditionActiveInLeave(tcByDog, tnOborot) PushConditionForLeave(tcByDog, tnOborot);
+    }
+    1:
+    {
+      if not ConditionActiveInLeave(tcByOrg, tnOborot) PushConditionForLeave(tcByOrg, tnOborot);
+      if ConditionActiveInLeave(tcByDog, tnOborot) PopConditionForLeave(tcByDog, tnOborot);
+    }
+    else
+    {
+      if ConditionActiveInLeave(tcByOrg, tnOborot) PopConditionForLeave(tcByOrg, tnOborot);
+      if ConditionActiveInLeave(tcByDog, tnOborot) PopConditionForLeave(tcByDog, tnOborot);
+    }
+  end;
 }
 
 tableevent table TmpDataTree;
@@ -243,10 +378,79 @@ tableevent table TmpDataTree;
   cmEdit:
   {
     if TmpDataTree.Lvl = 0
-      RunInterfaceNoModal(L_Dogovor::Dogovor, 0, 0, 0, 0, TmpDataTree.cDogovor, TmpDataTree.cDogovor, NullRef);
+      RunInterfaceNoModal(L_Dogovor::Dogovor, 0, 0, 0, 0, TmpDataTree.cDogovor, TmpDataTree.cDogovor, IFilterDog(NullRef));
+  }
+
+  cmPositionChanged:
+  {
+    setOborotConditions;
+    RereadRecord(tnOborot);
   }
 
 end;
+
+
+tableevent table Oborot;
+
+  cmSetDefault:
+  {
+    ClearBuffer(#Oborot);
+    Oborot.cPlansSch  := PLANSSCH_NREC_TEHN; //Технический план счетов
+    Oborot.Descr      := sGetTune('USER.DESCR');
+    Oborot.DesGr      := sGetTune('USER.DESGR');
+    Oborot.SchetO     := '30000';
+    if TmpDataTree.Lvl <= 1
+    {
+      Oborot.TblOs[1] := cgKau_KatOrg;
+      Oborot.KauOs[1] := TmpDataTree.cOrg;
+    }
+    if TmpDataTree.Lvl = 0
+    {
+      Oborot.TblOs[2] := cgKau_Dogovor;
+      Oborot.KauOs[2] := TmpDataTree.cDogovor;
+    }
+    Oborot.TblOs[3]   := cgKau_ObjBuild;
+    Oborot.KauOs[3]   := _cKatStroy;
+    Oborot.SchetK     := '35100';
+    Oborot.TblKs[1]   := KODGRKAU_IGK;
+    Oborot.KauKs[1]   := _cIGK;
+    Oborot.TblKs[2]   := KODGRKAU_RS;
+    Oborot.KauKs[2]   := _cRS;
+    Oborot.TblKs[3]   := cgKau_ObjBuild;
+    Oborot.KauKs[3]   := _cKatStroy;
+    Oborot.TblKs[4]   := cgKau_StZatr;
+    Oborot.KauKs[4]   := _cAddSumTune;
+    Oborot.TblKs[6]   := cgKau_TipOper;
+    Oborot.KauKs[6]   := TYPOPER_REZERV;
+    Oborot.DatOb      := Cur_Date;
+    Oborot.DataOt     := Cur_Date;
+    Oborot.DBSchetO   := '0000';
+    Oborot.KrSchetK   := '5100';
+  }
+
+  cmInsertRecord:
+  {
+    insert current Oborot;
+    recalcRezerv;
+    RereadRecord(tnTmpDataTree);
+  }
+
+  cmUpdateRecord:
+  {
+    update current Oborot;
+    recalcRezerv;
+    RereadRecord(tnTmpDataTree);
+  }
+
+  cmDeleteRecord:
+  {
+    delete current Oborot;
+    recalcRezerv;
+    RereadRecord(tnTmpDataTree);
+  }
+
+end;
+
 
 handleevent
 
@@ -255,9 +459,82 @@ handleevent
     _qData := queryManager.createQuery(qData)
                           .setParam('cKatStroy', _cKatStroy)
                           .setParam('cAddSumTune', _cAddSumTune);
+
+    _cIGK := oExtAttr.coGetAttrId(coKatStroy, _cKatStroy, ATTRNAM_NREC_KATSTROY_IGK);
+
+    if _cIGK = 0
+    {
+      Message('Не определен ИГК по заказу. Заполните внешний атрибут к заказу', error);
+      Abort;
+      exit;
+    }
+
+    if getfirst SpCash = tsOk
+      _cRS := SpCash.KauOs[2];
+
+    if _cRS = 0
+    {
+      Message('Не определен расчетный счет по заказу. Заполните аналитику расчетного счета предприятия', error);
+      Abort;
+      exit;
+    }
+
     prepareData;
   }
 
+  cmPick:
+  {
+    case CurField of
+      #RejIspFld:
+      {
+        var c: comp = Oborot.KauKs[5];
+        if iGetKau.GetCodeKau(cgiPick, KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA, c) > 0
+        {
+          set Oborot.TblKs[5] := KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA;
+          set Oborot.KauKs[5] := c;
+        }
+      }
+      #StZFld:
+      {
+        var c: comp = Oborot.KauOs[4];
+        if iGetKau.GetCodeKau(cgiPick, cgKau_StZatr, c) > 0
+        {
+          set Oborot.TblOs[4] := cgKau_StZatr;
+          set Oborot.KauOs[4] := c;
+        }
+      }
+      #RashFld:
+      {
+        var c: comp = Oborot.KauOs[5];
+        if iGetKau.GetCodeKau(cgiPick, cgKau_RashStZatr, c) > 0
+        {
+          set Oborot.TblOs[5] := cgKau_RashStZatr;
+          set Oborot.KauOs[5] := c;
+        }
+      }
+    end;
+  }
+
+  cmDelOnProtect:
+  {
+    case CurField of
+      #RejIspFld:
+      {
+        set Oborot.TblKs[5] := 0;
+        set Oborot.KauKs[5] := 0;
+      }
+      #StZFld:
+      {
+        set Oborot.TblOs[4] := 0;
+        set Oborot.KauOs[4] := 0;
+      }
+      #RashFld:
+      {
+        set Oborot.TblOs[5] := 0;
+        set Oborot.KauOs[5] := 0;
+      }
+    end;
+  }
 end;
 
 end.
