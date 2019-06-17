@@ -16,12 +16,14 @@ var
   _cSoprDoc: comp;
   _cPlansSch: comp;
   _cKatSopr: comp;
+  _cBaseDoc: comp;
 as select
   SoprHoz.NRec
 from
   SoprHoz
  ,MagOper
  ,KatSopr
+ ,BaseDoc
 where ((
       _wTiDkGal        == SoprHoz.TiDkGal
   and _cSoprDoc        == SoprHoz.cSoprDoc
@@ -29,6 +31,7 @@ where ((
   and SoprHoz.cSoprDoc == MagOper.cSoprDoc
   and _cPlansSch       == MagOper.cPlansSch
   and _cKatSopr        == KatSopr.Nrec
+  and _cBaseDoc        == BaseDoc.Nrec
 ));
 
 function findSoprHoz(wTiDkGal: word; cSoprDoc: comp): boolean;
@@ -38,7 +41,7 @@ function findSoprHoz(wTiDkGal: word; cSoprDoc: comp): boolean;
   result := getfirst SoprHoz = tsOk;
 }
 
-function bindTxo(ccPlansSch: comp; ccHozOper: comp): boolean;
+function bindTxo(ccPlansSch: comp; ccHozOper: comp; isCorr: boolean = false): boolean;
 {
   result := false;
 
@@ -53,7 +56,12 @@ function bindTxo(ccPlansSch: comp; ccHozOper: comp): boolean;
     if ccHozOper = 0
       result := iTxoBind.UnBind(#TSoprHozX(SoprHoz.BufferP));
     else
-      result := iTxoBind.Execute(#TSoprHozX(SoprHoz.BufferP));
+    {
+      if isCorr
+        result := iTxoBind.ExecuteCorr(#TSoprHozX(SoprHoz.BufferP), 1);
+      else
+        result := iTxoBind.Execute(#TSoprHozX(SoprHoz.BufferP));
+    }
   }
   else
   {
@@ -65,7 +73,12 @@ function bindTxo(ccPlansSch: comp; ccHozOper: comp): boolean;
       if ccHozOper = 0
         result := iTxoBind.UnBindInReg(#TSoprHozX(SoprHoz.BufferP), ccPlansSch);
       else
-        result := iTxoBind.ExecuteInReg(#TSoprHozX(SoprHoz.BufferP), ccPlansSch);
+      {
+        if isCorr
+          result := iTxoBind.ExecuteCorrInReg(#TSoprHozX(SoprHoz.BufferP), 1, ccPlansSch);
+        else
+          result := iTxoBind.ExecuteInReg(#TSoprHozX(SoprHoz.BufferP), ccPlansSch);
+      }
     }
   }
 
@@ -82,12 +95,18 @@ function getTiDkGal(wDocType: word; pDoc: comp): word;
       if getfirst KatSopr = tsOk
         result := KatSopr.VidSopr;
     }
+    40:
+    {
+      _cBaseDoc := pDoc;
+      if getfirst BaseDoc = tsOk
+        result := case(BaseDoc.VidDoc; 101: 41, 111: 43, 201: 51, 211: 53; wDocType);
+    }
   end;
 }
 
 sql query qRule =
-  select top 1
-    FormPl.ResComp[3] as cPlansSch, FormPl.ResComp[4] as cHozOper, FormPl.Code as npp
+  select
+    FormPl.ResComp[3] as cPlansSch, FormPl.ResComp[4] as cHozOper, FormPl.ResWord[2] as wCorr, FormPl.Code as npp
   from FormPl
   where
         (FormPl.TypeAlg = :TypeAlg )
@@ -104,16 +123,18 @@ function process(wDocType: word; pDoc: comp; cOldKatNotes: comp; cNewKatNotes: c
 
   var wTiDkGal: word = getTiDkGal(wDocType, pDoc);
 
-  var q: IQuery = queryManager.createQuery(qRule)
-                              .setParam('TypeAlg', FORMPL_TYPEALG_CHANGE_STATUS_TXO)
-                              .setParam('wTiDkGal', wTiDkGal)
-                              .setParam('cOldKatNotes', cOldKatNotes)
-                              .setParam('cNewKatNotes', cNewKatNotes);
+  var rs: IResultSet = queryManager.createQuery(qRule)
+                                   .setParam('TypeAlg', FORMPL_TYPEALG_CHANGE_STATUS_TXO)
+                                   .setParam('wTiDkGal', wTiDkGal)
+                                   .setParam('cOldKatNotes', cOldKatNotes)
+                                   .setParam('cNewKatNotes', cNewKatNotes)
+                                   .getResultSet;
 
-  if q.execute.errorCode = tsOk
-    if q.fetch.errorCode = tsOk
-      if findSoprHoz(wTiDkGal, pDoc)
-        result := bindTxo(q.row.val('cPlansSch'), q.row.val('cHozOper'));
+
+  if rs.getFirst = tsOk do {
+    if findSoprHoz(wTiDkGal, pDoc)
+      result := bindTxo(rs.row.val('cPlansSch'), rs.row.val('cHozOper'), rs.row.val('wCorr') = 1);
+  } while rs.getNext = tsOk;
 }
 
 end.
