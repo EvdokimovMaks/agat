@@ -35,6 +35,7 @@ var
   _cIGK: comp;
   _cAddSumTune: comp;
   _qData: IQuery;
+  _mAddSumTune: TPtr;
 #include ExtAttr.var
 #include GetKau.var
 
@@ -48,25 +49,34 @@ as select
  ,ShowKau(Oborot.TblOs[1], Oborot.KauOs[1]) (fieldname = OrgFld)
  ,ShowKau(Oborot.TblOs[2], Oborot.KauOs[2]) (fieldname = DogFld)
  ,ShowKau(Oborot.TblKs[5], Oborot.KauKs[5]) (fieldname = RejIspFld)
+ ,ShowKau(Oborot.TblOs[3], Oborot.KauOs[3]) (fieldname = ZakFld)
  ,ShowKau(Oborot.TblOs[4], Oborot.KauOs[4]) (fieldname = StZFld)
  ,ShowKau(Oborot.TblOs[5], Oborot.KauOs[5]) (fieldname = RashFld)
+ ,if(isValid(tnKatDoc), KatDoc.Name, '') (fieldname = TipDocFld)
 from
   TmpData
  ,TmpData TmpDataTree
  ,Oborot
  ,SpCash
  ,Dogovor
+ ,KatDoc
+ ,AddSumTune AddSumTuneChild
 where ((
       _cParent == TmpDataTree.cParent
 
-  and '30000'  == Oborot.SchetO
-  and '35100'  == Oborot.SchetK
-  and (Oborot.KauOs[3] = _cKatStroy and Oborot.KauKs[4] = _cAddSumTune and Oborot.KauKs[6] = TYPOPER_REZERV)
+  and '35100'    == Oborot.SchetK
+  and _cKatStroy == Oborot.KauKs[3]
+  and 0          << Oborot.DatOb
+  and ( Oborot.SchetO = '30000' and FoundMarker(_mAddSumTune, Oborot.KauKs[4]) and Oborot.KauKs[6] = TYPOPER_REZERV)
 
   and PLANSSCH_NREC_2013 == SpCash.cPlansSch
   and (SpCash.TblOs[1] = KODGRKAU_IGK and SpCash.KauOs[1] = _cIGK and SpCash.TblOs[2] = KODGRKAU_RS)
 
   and Oborot.KauOs[2] == Dogovor.Nrec
+
+  and Oborot.cSoprHoz == SoprHoz.Nrec
+
+  and _cAddSumTune == AddSumTuneChild.cNode
 ))
 condition ByOrg = Oborot.KauOs[1] = TmpDataTree.cOrg
 condition ByDog = Oborot.KauOs[2] = TmpDataTree.cDogovor
@@ -100,10 +110,13 @@ browse brOborot (,,Sci1378Esc);
   show(,16,,);
   table Oborot;
   fields
+    TipDocFld 'Документ': [20], Protect;
+    Oborot.SodPr 'Содержание': [20], NoProtect;
     Oborot.DatOb 'Дата': [10], noProtect;
     OrgFld 'Контрагент': [20], Protect, PickButton;
     DogFld 'Договор': [20], Protect, PickButton;
     RejIspFld 'Режим использования счета': [20], Protect, PickButton;
+    ZakFld 'Заказ затрат': [20], Protect, PickButton;
     StZFld 'Статья затрат': [20], Protect, PickButton;
     RashFld 'Расшифровка ст.затр.': [20], Protect, PickButton;
     Oborot.SumOb 'Сумма': [14, '\2p[|-]3666`666`666`666`666`666~88'], noProtect;
@@ -252,6 +265,8 @@ outer apply (
 ;
 //#endregion query qData
 
+//#region Расчет резерва
+
 create view vRezerv
 as select
   Oborot.Nrec
@@ -262,15 +277,18 @@ from
  ,TmpData TmpDataDog
  ,TmpData
 where ((
-      '30000'  == Oborot.SchetO
-  and '35100'  == Oborot.SchetK
-  and (Oborot.KauOs[3] = _cKatStroy and Oborot.KauKs[4] = _cAddSumTune and Oborot.KauKs[6] = TYPOPER_REZERV)
+      '35100'    == Oborot.SchetK
+  and _cKatStroy == Oborot.KauKs[3]
+  and 0          << Oborot.DatOb
+  and ( vRezerv.Oborot.SchetO = '30000' and
+        FoundMarker(_mAddSumTune, vRezerv.Oborot.KauKs[4]) and
+        vRezerv.Oborot.KauKs[6] = TYPOPER_REZERV )
 
   and 2 == TmpDataZakaz.Lvl
 
-  and 1 == TmpDataOrg.Lvl and Oborot.KauOs[1] == TmpDataOrg.cOrg
+  and 1 == TmpDataOrg.Lvl and vRezerv.Oborot.KauOs[1] == TmpDataOrg.cOrg
 
-  and 0 == TmpDataDog.Lvl and Oborot.KauOs[2] == TmpDataDog.cDogovor
+  and 0 == TmpDataDog.Lvl and vRezerv.Oborot.KauOs[2] == TmpDataDog.cDogovor
 ));
 procedure recalcRezerv;
 {
@@ -329,6 +347,8 @@ procedure recalcRezerv;
   vRezerv.update current TmpDataZakaz;
   StopVisual;
 }
+
+//#endregion Расчет резерва
 
 procedure prepareData;
 {
@@ -418,8 +438,6 @@ tableevent table Oborot;
       Oborot.TblOs[2] := cgKau_Dogovor;
       Oborot.KauOs[2] := TmpDataTree.cDogovor;
     }
-    Oborot.TblOs[3]   := cgKau_ObjBuild;
-    Oborot.KauOs[3]   := _cKatStroy;
     Oborot.SchetK     := '35100';
     Oborot.TblKs[1]   := KODGRKAU_IGK;
     Oborot.KauKs[1]   := _cIGK;
@@ -435,6 +453,7 @@ tableevent table Oborot;
     Oborot.DataOt     := Cur_Date;
     Oborot.DBSchetO   := '0000';
     Oborot.KrSchetK   := '5100';
+    Oborot.SodPr      := 'Ручной резерв';
   }
 
   cmInsertRecord:
@@ -468,6 +487,11 @@ handleevent
     _qData := queryManager.createQuery(qData)
                           .setParam('cKatStroy', _cKatStroy)
                           .setParam('cAddSumTune', _cAddSumTune);
+
+    _mAddSumTune := InitMarker('', 8, 10, 10, true);
+    InsertMarker(_mAddSumTune, _cAddSumTune);
+    _loop AddSumTuneChild
+      InsertMarker(_mAddSumTune, AddSumTuneChild.Nrec);
 
     _cIGK := oExtAttr.coGetAttrId(coKatStroy, _cKatStroy, ATTRNAM_NREC_KATSTROY_IGK);
 
@@ -543,6 +567,15 @@ handleevent
           set Oborot.KauOs[1] := if(getfirst Dogovor = tsOk, Dogovor.cOrg, 0);
         }
       }
+      #ZakFld:
+      {
+        var c: comp = Oborot.KauOs[3];
+        if iGetKau.GetCodeKau(cgiPick, cgKau_ObjBuild, c) > 0
+        {
+          set Oborot.TblOs[3] := cgKau_ObjBuild;
+          set Oborot.KauOs[3] := c;
+        }
+      }
     end;
   }
 
@@ -575,6 +608,11 @@ handleevent
       {
         set Oborot.TblOs[2] := 0;
         set Oborot.KauOs[2] := 0;
+      }
+      #ZakFld:
+      {
+        set Oborot.TblOs[3] := 0;
+        set Oborot.KauOs[3] := 0;
       }
     end;
   }
