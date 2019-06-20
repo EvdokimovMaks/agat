@@ -1,0 +1,204 @@
+#include PD_ChangeStatusTxo.vih
+#include Marker.vih
+#include Query.vih
+#include GetKau.vih
+
+#component "PD_AGAT"
+
+interface PD_SetDOTxo 'Контроль наличия проводок в ТПС по ДО' escClose;
+
+table struct TmpBD
+(
+  Nrec: comp
+ ,VidDoc: word
+ ,DDoc: date
+ ,NoDoc: string[100]
+ ,Name: string
+ ,sZakaz: string
+ ,cNote: comp
+) with index (
+  IDX0 = DDoc + NoDoc
+);
+
+var
+  _chStatusTxo: PD_ChangeStatusTxo;
+  _cKatStroy: comp;
+  _m: IMarker(Marker) new;
+
+#include GetKau.var
+
+create view
+as select
+  if(isValid(tnKatStroy), KatStroy.Name, '')(fieldname = KatStroyFld)
+from
+  KatStroy
+ ,TmpBD
+ ,KatNotes
+ ,MagOper
+ ,HozOper
+where ((
+      _cKatStroy          == KatStroy.Nrec
+  and TmpBD.cNote         == KatNotes.Nrec
+  and if(TmpBD.VidDoc = 101, 41, 43) == MagOper.TipDoc
+  and TmpBD.Nrec          == MagOper.cSoprDoc
+  and PLANSSCH_NREC_TEHN  == MagOper.cPlansSch
+  and MagOper.cHozOper    == HozOper.Nrec
+))
+;
+
+browse br1 (,,sci14Esc);
+  show(,,,20);
+  table TmpBD;
+  recmarker = _m {TmpBD.Nrec};
+  fields
+    TmpBD.DDoc 'Дата ДО': [10], protect;
+    TmpBD.NoDoc 'Номер ДО': [10], protect, editButton;
+    KatNotes.Name 'Статус': [10], protect;
+    TmpBD.Name 'Наименование': [30], protect;
+    TmpBD.sZakaz 'Заказы': [20], protect;
+    HozOper.Name1 'ТХО': [30], protect;
+end;
+
+screen sc1(,,sci1Esc);
+  show(,21,,) fixed_y;
+  buttons
+    cmOk, default;
+<<
+  <.Сформировать проводки.>
+>>
+end;
+
+window wParams 'Параметры' escClose doAccept;
+  show(,,40,5);
+  screen scParams (,,sci13EnEsc);
+    table KatStroy;
+    fields
+      KatStroyFld: Protect, PickButton;
+    buttons
+      cmOk;
+<<
+
+`Заказ`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                        <. Продолжить .>
+>>
+  end;
+  handleevent
+    cmOk: PutCommand(cmDefault);
+    cmInit:
+    {
+      ReadMyDsk(_cKatStroy, 'PD_SetDOTxo_cKatStroy', false);
+      RereadRecord(tnKatStroy);
+    }
+    cmPick:
+    {
+      if iGetKau.GetCodeKau(cgiPick, cgKau_ObjBuild, _cKatStroy) > 0
+        set _cKatStroy := _cKatStroy;
+      RereadRecord(tnKatStroy);
+    }
+    cmDone:
+    {
+      SaveMyDsk(_cKatStroy, 'PD_SetDOTxo_cKatStroy');
+    }
+  end;
+end;
+
+sql Query qData =
+  select
+    BaseDoc.Nrec,
+    BaseDoc.VidDoc,
+    BaseDoc.DDoc,
+    BaseDoc.NoDoc,
+    BaseDoc.Name,
+    GETDOZAKAZ(BaseDoc.Nrec) as sZakaz,
+    BaseDoc.cNote
+  from BaseDoc
+  outer apply (select count(*) as cnt
+               from StepDoc
+               join SpStep on SpStep.cStepDoc = StepDoc.Nrec
+               left join specmtr on specmtr.cotable = 1104 and specmtr.cspec = SpStep.Nrec
+               left join AttrVal av on av.wTable = 1104 and av.cRec = SpStep.Nrec and av.cAttrNam = #comp(0001000000000A87h)
+               where
+                   StepDoc.cBaseDoc = BaseDoc.Nrec
+               and (specmtr.cobj = :cKatStroy or av.vComp = :cKatStroy )
+              ) t
+  where
+      BaseDoc.VidDoc in (101, 111)
+  and BaseDoc.cNote in (#comp(281474976710782), #comp(281474976710775))
+  and coalesce(t.cnt, 0) > 0
+;
+
+handleevent
+
+  cmInit:
+  {
+    if RunWindowModal(wParams) != cmDefault Abort;
+    var q: IQuery = queryManager.createQuery(qData).setParam('cKatStroy', _cKatStroy);
+    if q.execute.errorCode = tsOk
+      sqlCopyInto(q, tnTmpBD, true);
+  }
+
+  cmOk:
+  {
+    SubBounds(tbRMTmpBD1);
+    AddBounds(tbRMTmpBD2);
+    startnewvisual(vtIndicatorVisual, vfTimer + vfBreak, 'Формирование ТХО', _m.count);
+    _loop _m
+    {
+      _chStatusTxo.process(40, TmpBD.Nrec, 0, TmpBD.cNote);
+      if not nextvisual break;
+    }
+    SubBounds(tbRMTmpBD2);
+    AddBounds(tbRMTmpBD1);
+    stopvisual('', 0);
+    RereadRecord(tnTmpBD);
+  }
+
+  cmEdit:
+  {
+    if TmpBD.VidDoc = 101 {
+      runinterfacenomodal(L_BASEDOC::VSCHETB, TmpBD.Nrec);
+    } else {
+      runinterfacenomodal(L_BASEDOC::VSCHETPB, TmpBD.Nrec);
+    }
+  }
+
+end;
+
+end.
+
+
+VipInterface UserReport_SetDOTxo Implements IUserReport licensed(free);
+Interface UserReport_SetDOTxo;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(PD_AGAT::PD_SetDOTxo);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Контроль наличия проводок в ТПС по ДО';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1)
+      GetGroupName := 'Распределение платежей'
+    else
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'B_Finans';
+    end;
+  end;
+end.

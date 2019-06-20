@@ -1,5 +1,7 @@
 #include Marker.vih
 #include Query.vih
+#include ExtAttr.vih
+#include Dogovor.vih
 #include PD_ChangeStatusTxo.vih
 
 #component "PD_AGAT"
@@ -10,10 +12,12 @@ table struct TmpCalPlan
 (
   Nrec: comp
  ,cDogovor: comp
+ ,cDS: comp
  ,DDDoc: date
  ,DNoDoc: string[100]
  ,DDoc: date
  ,NoDoc: string[100]
+ ,sZakaz: string
 )
 with index
 (
@@ -23,19 +27,22 @@ with index
 var
   _chStatusTxo: PD_ChangeStatusTxo;
   _m: IMarker(Marker) new;
+#include ExtAttr.var
 
 create view
 as select
-  TmpCalPlan.Nrec
+  oExtAttr.sGetAttrID(coDogovor, DS.Nrec, 281474976710835) (fieldname = DSStZFld)
 from
   TmpCalPlan
  ,CalPlan
  ,Dogovor
+ ,Dogovor DS
  ,MagOper
  ,HozOper
 where ((
       TmpCalPlan.Nrec     == CalPlan.Nrec
   and TmpCalPlan.cDogovor == Dogovor.Nrec
+  and TmpCalPlan.cDS      == DS.Nrec
   and 403                 == MagOper.TipDoc
   and TmpCalPlan.Nrec     == MagOper.cSoprDoc
   and PLANSSCH_NREC_TEHN  == MagOper.cPlansSch
@@ -43,15 +50,18 @@ where ((
 ))
 ;
 
-browse br1 (,,sci1Esc);
+browse br1 (,,sci14Esc);
   show(,,,20);
   table TmpCalPlan;
   recmarker = _m {TmpCalPlan.Nrec};
   fields
     TmpCalPlan.DDDoc 'Дата договора': [10], protect;
     TmpCalPlan.DNoDoc 'Номер договра': [10], protect;
+    [DSFld] DS.NoDoc + ' ' + DS.DDoc 'Доп.согл.': [10], protect, editButton;
+    DSStZFld 'ДС Статья затрат': [10], protect;
     TmpCalPlan.DDoc 'Дата ПКП': [10], protect;
     TmpCalPlan.NoDoc 'Номер ПКП': [10], protect;
+    TmpCalPlan.sZakaz 'Заказы': [10], protect;
     HozOper.Name1 'ТХО': [30], protect;
 end;
 
@@ -66,7 +76,7 @@ end;
 
 sql query qData =
 select
-  cp.Nrec, d2.Nrec as cDogovor, d2.dDoc as DDDoc, d2.NoDoc as DNoDoc, cp.dfrom as DDoc, cp.nodoc as NoDoc
+  cp.Nrec, d2.Nrec as cDogovor, d.Nrec as cDS, d2.dDoc as DDDoc, d2.NoDoc as DNoDoc, cp.dfrom as DDoc, cp.nodoc as NoDoc
 from CalPlan cp
 join Dogovor d on d.nrec = cp.cDogovor
 left join Dogovor d1 on d1.Nrec = d.cDogovor
@@ -76,7 +86,15 @@ outer apply (select count(*) as cnt
              join specmtr on specmtr.cotable = 1723 and specmtr.cspec = spdocs.nrec
              where spdocs.tidk = 403 and spdocs.cdoc = cp.nrec and specmtr.cobj <> #comp(0) and specmtr.cobj <> #comp(4611969475094101269)
             ) t
-where cp.DirectMc = 2 and cp.Status = 1 and coalesce(t.cnt, 0) > 0
+where cp.DirectMc = 2 and cp.Status = 1 and coalesce(t.cnt, 0) > 0 and d.status <> 3
+;
+
+sql query qZakaz =
+select distinct ks.name
+from SpDocs
+join specmtr on specmtr.cotable = 1723 and specmtr.cspec = spdocs.nrec
+join katstroy ks on ks.nrec = specmtr.cobj
+where spdocs.tidk = 403 and spdocs.cdoc = :cCalPlan
 ;
 
 handleevent
@@ -86,6 +104,22 @@ handleevent
     var q: IQuery = queryManager.createQuery(qData);
     if q.execute.errorCode = tsOk
       sqlCopyInto(q, tnTmpCalPlan, true);
+    var q1: IQuery = queryManager.createQuery(qZakaz);
+
+    StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, 'Заполнение колонки Заказы', RecordsInTable(tnTmpCalPlan));
+    _loop TmpCalPlan
+    {
+      q1.setParam('cCalPlan', TmpCalPlan.Nrec);
+      if q1.execute.errorCode = tsOk
+        while q1.fetch.errorCode = tsOk
+        {
+          var s: string = q1.row.valAt(1) + ' ';
+          TmpCalPlan.sZakaz += substr(s, 1, pos(' ', s));
+        }
+      if TmpCalPlan.sZakaz != '' update current TmpCalPlan;
+      if not NextVisual break;
+    }
+    StopVisual;
   }
 
   cmOk:
@@ -102,6 +136,16 @@ handleevent
     AddBounds(tbRMTmpCalPlan1);
     stopvisual('', 0);
     RereadRecord(tnTmpCalPlan);
+  }
+
+  cmEdit:
+  {
+    case curfield of
+      #DSFld:
+      {
+        RunInterfaceNoModal(L_Dogovor::Dogovor, 0, 0, 0, 0, TmpCalPlan.cDS, TmpCalPlan.cDS, IFilterDog(NullRef));
+      }
+    end;
   }
 
 end;
