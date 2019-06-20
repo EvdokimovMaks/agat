@@ -1,0 +1,176 @@
+#include PD_Context.vih
+#include PD_ObjectRepository.vih
+#include PD_RowProvider.vih
+#include PD_IIterator.vih
+#include PD_Params.vih
+#include PD_CalcSession.vih
+
+#component "PD_AGAT"
+
+interface PD_Context;
+
+var
+  _colCnt: byte;
+  _repo: PD_IObjectRepository;
+  _rowProvider: PD_IRowProvider;
+  _rows: PD_ObjectList noAuto;
+  _params: PD_IParams noAuto;
+  _recalcSession: PD_ICalcSession;
+
+constructor init;
+{
+  result := false;
+}
+
+constructor _PD_Context(colCnt: byte);
+{
+  _colCnt := colCnt;
+  _repo := PD_IObjectRepository(new(PD_ObjectRepository));
+  _rowProvider := PD_IRowProvider(new(PD_RowProvider, _PD_RowProvider(_repo, _repo)));
+  _params := PD_IParams(new(PD_Params, _PD_Object(_repo)));
+  result := true;
+}
+
+destructor done;
+{
+  _repo.freeAll;
+  _rowProvider := nullRef;
+  if _rows != nullRef
+  {
+    _rows.free;
+    _rows := nullRef;
+  }
+  _params := nullRef;
+}
+
+function cell(row: PD_IRow; col: byte): PD_ICell;
+{
+  result := row.getCell(col);
+}
+
+function cellByRowId(rowId: longint; col: byte): PD_ICell;
+{
+  result := cell(PD_IRow(_repo.get(rowId)), col);
+}
+
+function cellById(cellId: longint): PD_ICell;
+{
+  result := PD_ICell(_repo.get(cellId));
+}
+
+function cellValue(rowId: longint; col: byte): variant;
+{
+  result := cellByRowId(rowId, col).value;
+}
+
+//#region Recalc
+
+function initRecalcSession: boolean;
+{
+  if _recalcSession = nullRef
+  {
+    _recalcSession := PD_ICalcSession(new(PD_CalcSession));
+    result := _recalcSession != nullRef;
+  }
+  else
+    result := false;
+}
+
+procedure destroyRecalcSession;
+{
+  if _recalcSession != nullRef
+    freeVipInterface(_recalcSession);
+}
+
+procedure recalcCell(c: PD_ICell);
+{
+  if c = nullRef exit;
+  var isNewRecalcSessionCreated: boolean = initRecalcSession;
+  if not _recalcSession.isCalculated(c)
+  {
+    if c.schema != nullRef
+      c.value := c.schema.getValue(c, self);
+    else
+      c.value := '';
+    _recalcSession.add(c);
+  }
+  if isNewRecalcSessionCreated destroyRecalcSession;
+}
+
+procedure recalcRow(r: PD_IRow);
+{
+  if r = nullRef exit;
+  var isNewRecalcSessionCreated: boolean = initRecalcSession;
+  var i: byte = 0;
+  for(i := 1; i <= _colCnt; i++)
+    recalcCell(r.getCell(i));
+  if isNewRecalcSessionCreated destroyRecalcSession;
+}
+
+procedure recalcRows(rl: PD_ObjectList);
+{
+  if rl = nullRef exit;
+  var isNewRecalcSessionCreated: boolean = initRecalcSession;
+  var it: PD_IIterator = nullRef;
+  for(it := rl.iterator; it.hasNext; it.next)
+  {
+    var r: PD_IRow = PD_IRow(it.get);
+    recalcRows(r.children);
+    recalcRow(r);
+  }
+  if isNewRecalcSessionCreated destroyRecalcSession;
+}
+
+procedure recalcAll;
+{
+  recalcRows(rows);
+}
+
+//#endregion Recalc
+
+procedure createRowCell(row: PD_IRow; col: byte);
+{
+  var c: PD_ICell noAuto;
+  c := PD_ICell(new(PD_Cell, _PD_Object(_repo)));
+  c.row    := row;
+  c.col    := col;
+  c.schema := row.schema.cellSchema(col);
+  row.setCell(col, c);
+}
+
+procedure createRowsCells(rowsList: PD_ObjectList); forward;
+
+procedure createRowCells(row: PD_IRow);
+{
+  if row = nullRef exit;
+  var i: byte = 0;
+  for(i := 1; i <= _colCnt; i++)
+    createRowCell(row, i);
+  createRowsCells(row.children);
+}
+
+procedure createRowsCells(rowsList: PD_ObjectList);
+{
+  if rowsList = nullRef exit;
+  var iter: PD_IIterator = nullRef;
+  for(iter := rowsList.iterator; iter.hasNext; iter.next)
+    createRowCells(PD_IRow(iter.get));
+}
+
+procedure loadRows;
+{
+  _rows := _rowProvider.rows;
+  createRowsCells(_rows);
+}
+
+function getRows: PD_ObjectList;
+{
+  if _rows = nullRef loadRows;
+  result := _rows;
+}
+
+property repo: PD_IObjectRepository read _repo;
+property rowProvider: PD_IRowProvider read _rowProvider;
+property rows: PD_ObjectList read getRows;
+property params: PD_IParams read _params;
+end.

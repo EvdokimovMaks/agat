@@ -1,0 +1,184 @@
+#include GetSNote.vih
+
+#component "PD_AGAT"
+
+vipinterface PD_GetSomKatNotesParams implements IGetSomKatNotes;
+interface PD_GetSomKatNotesParams;
+  property bFromStatLog     : boolean read false;
+  property bSelectOnlySystem: boolean read false;
+end.
+
+interface PD_EditChangeStatusTxoRules 'Правила привязки ТХО при изменении статусов документов' escClose;
+show(,,120,);
+
+var
+  _getSomKatNotesParams: IGetSomKatNotes(PD_GetSomKatNotesParams);
+
+create view
+as select
+  if(isValid(tnKatNotes1), KatNotes1.Name, 'Любой статус') (fieldname = KatNotes1Fld)
+ ,if(isValid(tnKatNotes2), KatNotes2.Name, 'Любой статус') (fieldname = KatNotes2Fld)
+ ,if(isValid(tnPlansSch), PlansSch.Name, 'Все') (fieldname = PlansSchFld)
+ ,if(isValid(tnHozOper), HozOper.Name1, 'Удалить ТХО') (fieldname = HozOperFld)
+from
+  FormPl
+ ,KatDoc
+ ,KatNotes KatNotes1
+ ,KatNotes KatNotes2
+ ,PlansSch
+ ,HozOper
+where ((
+      FORMPL_TYPEALG_CHANGE_STATUS_TXO == FormPl.TypeAlg
+  and FormPl.ResWord[1]                == KatDoc.TiDkGal
+  and FormPl.ResComp[1]                == KatNotes1.Nrec
+  and FormPl.ResComp[2]                == KatNotes2.Nrec
+  and FormPl.ResComp[3]                == PlansSch.Nrec
+  and FormPl.ResComp[4]                == HozOper.Nrec
+))
+order by FormPl.Code;
+
+function getLastCode: integer;
+{
+  result := 0;
+  sql select max(Code) from FormPl where TypeAlg = :(FORMPL_TYPEALG_CHANGE_STATUS_TXO)
+  into (result);
+}
+
+procedure pickKatDoc;
+{
+  var w: word = FormPl.ResWord[1];
+  if runinterface(F_KatDoc::KatDoc, cgiPick, 0, w) = cmDefault
+    if w != FormPl.ResWord[1]
+    {
+      set FormPl.ResWord[1] := w;
+      set FormPl.ResComp[1] := 0;
+      set FormPl.ResComp[2] := 0;
+      set FormPl.ResComp[4] := 0;
+    }
+  rescanPanel(tnFormPl);
+}
+
+procedure pickKatNotes(var cNote: comp);
+{
+  if not isValidAll(tnKatDoc)
+  {
+    selectField(#KatDoc.Name);
+    putCommand(cmPick);
+    exit;
+  }
+  if runinterface(L_Dogovor::GetSomKatNotes, FormPl.ResWord[1], 0, 0, false, cNote, _getSomKatNotesParams) = cmDefault
+  {
+    setModified(true);
+    rescanPanel(tnFormPl);
+  }
+}
+
+procedure pickPlansSch;
+{
+  if runinterface(F_PlansSch::GetPlansSch, FormPl.ResComp[3]) = cmDefault
+    set FormPl.ResComp[3] := FormPl.ResComp[3];
+}
+
+procedure pickHozOper;
+{
+  if not isValidAll(tnKatDoc)
+  {
+    selectField(#KatDoc.Name);
+    putCommand(cmPick);
+    exit;
+  }
+  if runinterface(F_TXO::GetHozOper, FormPl.ResComp[3], FormPl.ResWord[1], 0, FormPl.ResComp[4], cgiPick) = cmDefault
+    set FormPl.ResComp[4] := FormPl.ResComp[4];
+}
+
+browse brRules (,,sci1378Esc);
+  table FormPl;
+  fields
+    FormPl.Code       '№ п/п': [4], noProtect, noAutoSize;
+    FormPl.ResWord[1] 'Код': [8], protect, noAutoSize, pickButton;
+    KatDoc.Name 'Тип документа': [30], protect, pickButton;
+    KatNotes1Fld 'Статус - откуда': [20], protect, pickButton;
+    KatNotes2Fld 'Статус - куда': [20], protect, pickButton;
+    FormPl.ResWord[2] 'Новая/корректировка': [10], [list 0 'Новая (старые проводки будут удалены)', 1 'Корректировка'], protect;
+    PlansSchFld 'План счетов ТХО': [20], protect, pickButton;
+    HozOperFld 'ТХО': [30], protect, pickButton;
+end; //browse brRules
+
+tableevent table FormPl;
+
+  cmSetDefault:
+  {
+    clearBuffer(tnFormPl);
+    FormPl.TypeAlg := FORMPL_TYPEALG_CHANGE_STATUS_TXO;
+    FormPl.Code := getLastCode + 1;
+  }
+  cmInsertRecord: insert current FormPl;
+  cmUpdateRecord: update current FormPl;
+  cmDeleteRecord: delete current FormPl;
+
+end; //tableevent table FormPl
+
+
+handleevent
+
+  cmPick:
+  {
+    case CurField of
+      #FormPl.ResWord[1], #KatDoc.Name: pickKatDoc;
+      #KatNotes1Fld: pickKatNotes(FormPl.ResComp[1]);
+      #KatNotes2Fld: pickKatNotes(FormPl.ResComp[2]);
+      #PlansSchFld: pickPlansSch;
+      #HozOperFld: pickHozOper;
+    end;
+  }
+
+  cmDelOnProtect:
+  {
+    case CurField of
+      #FormPl.ResWord[1], #KatDoc.Name: set FormPl.ResWord[1] := 0;
+      #KatNotes1Fld: set FormPl.ResComp[1] := 0;
+      #KatNotes2Fld: set FormPl.ResComp[2] := 0;
+      #PlansSchFld: set FormPl.ResComp[3] := 0;
+      #HozOperFld: set FormPl.ResComp[4] := 0;
+    end;
+  }
+
+end;
+
+end.
+
+
+VipInterface UserReport_GetSomKatNotesParams Implements IUserReport licensed(free);
+Interface UserReport_GetSomKatNotesParams;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(PD_AGAT::PD_EditChangeStatusTxoRules);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Настройки формирования ТХО при изменении статусов документов';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1)
+      GetGroupName := 'Распределение платежей'
+    else
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'B_Finans';
+    end;
+  end;
+end.

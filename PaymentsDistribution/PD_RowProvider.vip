@@ -1,0 +1,80 @@
+#include PD_RowProvider.vih
+#include PD_Row.vih
+#include PD_RowSchema.vih
+
+#component "PD_AGAT"
+
+interface PD_RowProvider;
+
+var
+  _rowRepository: PD_IObjectRepository;
+
+create view
+var
+  _cGroup: comp;
+  _cFormPl: comp;
+as select
+  FormPl.Nrec
+from
+  FormPl
+ ,FormPl FormPlByNrec
+where ((
+      FORMPL_TYPEALG_ROWS == FormPl.TypeAlg
+  and _cGroup             == FormPl.cGroup
+  and _cFormPl            == FormPlByNrec.Nrec
+));
+
+constructor _PD_Object(repo: PD_IObjectRepository);
+{
+  result := inherited::_PD_Object(repo);
+  _rowRepository := repo;
+}
+
+constructor _PD_RowProvider(repo: PD_IObjectRepository; rowRepository: PD_IObjectRepository);
+{
+  result := _PD_Object(repo);
+  _rowRepository := rowRepository;
+  result &= _rowRepository != nullRef;
+}
+
+procedure PD_IObject.free;
+{
+  inherited::free;
+  _rowRepository := nullRef;
+}
+
+procedure addRows(l: PD_ObjectList; parentRow: PD_IRow; cGr: comp);
+{
+  _cGroup := cGr;
+  var m: TPtr = initMarker('', 8, 10, 100, true);
+  _loop FormPl
+    insertMarker(m, FormPl.Nrec);
+
+  var i: longint = 0;
+  for(i := 0; getMarker(m, i, _cFormPl); i++)
+    if getfirst FormPlByNrec = tsOk
+    {
+      var row: PD_IRow;
+      row := PD_IRow(new(PD_Row, _PD_Object(_rowRepository)));
+      row.parent := parentRow;
+      row.name := FormPlByNrec.Name;
+      row.code := FormPlByNrec.ResCode[1];
+      row.npp  := FormPlByNrec.Razdel;
+      row.cAddSumTune := FormPlByNrec.ResComp[1];
+      row.schema := PD_IRowSchema(new(PD_RowSchema, _PD_RowSchema(_rowRepository, FormPlByNrec.ResComp[2])));
+      l.add(row);
+      addRows(row.children, row, _cFormPl);
+    }
+
+  doneMarker(m, '');
+}
+
+function rows: PD_ObjectList;
+{
+  var l: PD_ObjectList noAuto;
+  l := new(PD_ObjectList, _PD_Object(_rowRepository));
+  addRows(l, nullRef, 0);
+  result := l;
+}
+
+end.

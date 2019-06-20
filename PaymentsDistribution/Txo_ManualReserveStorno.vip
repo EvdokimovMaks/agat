@@ -1,0 +1,284 @@
+#include TxoApi.vih
+#include Query.vih
+#include PlPorSimple.vih
+#include ChkSoprHoz.vih
+
+#component "AGAT"
+
+VipInterface Txo_ManualReserveStorno Implements ObjTxoIdentPlugin;
+interface Txo_ManualReserveStorno;
+
+const
+  TIPDOC_BS: word = 15816; //Раздел бухсправок "Сторно резерва по ДО"
+end;
+
+var
+  _qRezerv: IQuery;
+#include PlPorSimple.var
+#include ChkSoprHoz.var
+
+create view
+var
+  _cBaseDoc: comp;
+as select
+  BaseDoc.NRec
+from
+  BaseDoc
+ ,StepDoc
+ ,PlPor
+ ,SoprHoz
+ ,Oborot
+where ((
+      _cBaseDoc == BaseDoc.Nrec
+  and _cBaseDoc == StepDoc.cBaseDoc
+  and TIPDOC_BS == PlPor.TiDk
+  and (StepDoc.Nrec = PlPor.cStepDoc)
+  and PlPor.TiDk == SoprHoz.TipDoc
+  and PlPor.Nrec == SoprHoz.cSoprDoc
+  and SoprHoz.Nrec == Oborot.cSoprHoz
+));
+
+function GetInfo : string;
+{
+  result := 'Агат. Сторно резерва по ДО';
+}
+
+function ParamMaster : string;
+{
+  result := '';
+}
+
+sql query qBaseDoc =
+select
+  BaseDoc.cOrg as dt1
+ ,BaseDoc.cDogovor as dt2
+ ,sd.cZak as dt3
+ ,sd.cSt as dt4
+ ,sd.cStRas as dt5
+ ,sd.cIGKVib as kt1
+ ,sd.cRSVib as kt2
+ ,sd.cZakVib as kt3
+ ,sd.cStVib as kt4
+ ,sd.cRejimVib as kt5
+ ,sd.Summa * case when BaseDoc.VidDoc = 101 then 1 else BaseDoc.ProcOpl / 100 end as sum
+from (select
+        SpecMtr.cObj                       as cZak
+       ,SpecMtr.cKau[1]                    as cSt
+       ,coalesce(avStRas.vComp, #comp(0))  as cStRas
+       ,coalesce(avIGK.vComp, #comp(0))    as cIGKVib
+       ,coalesce(avRS.vComp, #comp(0))     as cRSVib
+       ,coalesce(avZakVib.vComp, #comp(0)) as cZakVib
+       ,coalesce(avStVib.vComp, #comp(0))  as cStVib
+       ,coalesce(avRejim.vComp, #comp(0))  as cRejimVib
+       ,sum(SpStep.Summa + case when BaseDoc.VhodNal = 2 then SpStep.Nds else 0 end) as Summa
+      from BaseDoc
+      join StepDoc on StepDoc.cBaseDoc = BaseDoc.Nrec
+      join SpStep on SpStep.cStepDoc = StepDoc.Nrec
+      join SpecMtr on SpecMtr.coTable = 1104 and SpecMtr.cSpec = SpStep.Nrec
+      left join AttrVal avZakVib on avZakVib.wTable = 1104 and avZakVib.cRec = SpStep.Nrec and avZakVib.cAttrNam = #comp(0001000000000A87h)        //Заказ выбытия ДС
+      left join KatStroy on KatStroy.Nrec = avZakVib.vComp                                                                                         //Заказ выбытия
+      left join AttrVal avIGK on avIGK.wTable = 2101 and avIGK.cRec = KatStroy.Nrec and avIGK.cAttrNam = #comp(00010000000004CCh)                  //ИГК по заказу выбытия
+      left join AttrVal avRS on avRS.wTable = 1104 and avRS.cRec = SpStep.Nrec and avRS.cAttrNam = #comp(0001000000000A86h)                        //Р/счет списания ДС
+      left join AttrVal avRejim on avRejim.wTable = 1104 and avRejim.cRec = SpStep.Nrec and avRejim.cAttrNam = #comp(000100000000079Eh)            //Режим использования счета
+      left join AttrVal avStVib on avStVib.wTable = 1104 and avStVib.cRec = SpStep.Nrec and avStVib.cAttrNam = #comp(0001000000000A88h)            //Статья структуры цены по заказу выбытия
+      left join AttrVal avStRas on avStRas.wTable = 1104 and avStRas.cRec = SpStep.Nrec and avStRas.cAttrNam = #comp(0001000000001FABh)            //Расшифровка статьи затрат
+      where BaseDoc.Nrec = :CurSoprDoc
+      group by
+        SpecMtr.cObj
+       ,SpecMtr.cKau[1]
+       ,coalesce(avStRas.vComp, #comp(0))
+       ,coalesce(avIGK.vComp, #comp(0))
+       ,coalesce(avRS.vComp, #comp(0))
+       ,coalesce(avZakVib.vComp, #comp(0))
+       ,coalesce(avStVib.vComp, #comp(0))
+       ,coalesce(avRejim.vComp, #comp(0))
+     ) sd
+join BaseDoc on BaseDoc.Nrec = :CurSoprDoc
+;
+
+sql query qRezerv =
+select
+  sum(SumOb) as Sum
+ ,kauks[4] as cAddSumTune
+from Oborot
+join AddSumTune on AddSumTune.Nrec = :kt4
+where
+      scheto = '30000'
+  and schetk = '35100'
+  and datob <> 0
+  and kauos[1]  = :dt1
+  and kauos[2]  = :dt2
+  and kauos[3]  = :dt3
+  and kauos[4]  = :dt4
+  and kauos[5]  = :dt5
+  and kauks[1]  = :kt1
+  and kauks[2]  = :kt2
+  and kauks[3]  = :kt3
+  and (AddSumTune.Nrec = kauks[4] or AddSumTune.cNode = kauks[4] )
+  and kauks[5]  = :kt5
+  and kauks[6]  = #comp(000100000000186Dh) //Резерв
+  and cSoprDoc  = #comp(0) //ручной резерв - без ссылки на документ
+group by kauks[4]
+;
+
+function findPlPor: boolean;
+{
+  if getfirst PlPor = tsOk { result := true; exit; }
+  ClearBuffer(#PlPor);
+  PlPor.NoDok    := piPlPor.PlPor_GetNewNumber(cgDoc_0010, TIPDOC_BS, sGetTune('User.Descr'), Cur_Date);
+  PlPor.TiDkGal  := cgDoc_0010;
+  PlPor.TiDk     := TIPDOC_BS;
+  PlPor.Descr    := sGetTune('User.Descr');
+  PlPor.DesGr    := sGetTune('User.DesGr');
+  PlPor.FilialNo := lGetTune('Konsolid.FilialNo');
+  PlPor.DatOb    := cur_date;
+  PlPor.DatVip   := PlPor.DatOb;
+  PlPor.YearDoc  := Year(PlPor.DatOb);
+  PlPor.Direct   := 1;
+  PlPor.ModeDoc  := 2050;
+  PlPor.cStepDoc := StepDoc.Nrec;
+  result := insert current PlPor = tsOk;
+  iChkSH.CheckDoc(piPlPor.GetDocBuff(PlPor.Buffer), cgSilentMakeSH);
+}
+
+function findSoprHoz: boolean;
+{
+  result := getfirst SoprHoz = tsOk;
+}
+
+function createOborot(dt1, dt2, dt3, dt4, dt5, kt1, kt2, kt3, kt4, kt5: comp; sum: double): boolean;
+{
+  result := false;
+  if not findPlPor exit;
+  if not findSoprHoz exit;
+  ClearBuffer(#Oborot);
+  Oborot.TiDk       := PlPor.TiDk;
+  Oborot.TiDkGal    := PlPor.TiDkGal;
+  Oborot.cSoprDoc   := PlPor.Nrec;
+  Oborot.cSoprHoz   := SoprHoz.Nrec;
+  Oborot.cPlansSch  := PLANSSCH_NREC_TEHN;
+  Oborot.Descr      := PlPor.Descr;
+  Oborot.DesGr      := PlPor.DesGr;
+  Oborot.DatOb      := PlPor.DatVip;
+  Oborot.DataOt     := PlPor.DatVip;
+  Oborot.NoDok      := PlPor.NoDok;
+  Oborot.VhProp     := '+';
+  Oborot.SodPr      := 'Строно резерва по ДО №' + BaseDoc.NoDoc + ' от ' + BaseDoc.DDoc + ' ' + BaseDoc.Name;
+
+  Oborot.SchetO     := '30000';
+  Oborot.TblOs[1]   := if(dt1 = 0, 0, cgKau_KatOrg);
+  Oborot.KauOs[1]   := dt1;
+  Oborot.TblOs[2]   := if(dt2 = 0, 0, cgKau_Dogovor);
+  Oborot.KauOs[2]   := dt2;
+  Oborot.TblOs[3]   := if(dt3 = 0, 0, cgKau_ObjBuild);
+  Oborot.KauOs[3]   := dt3;
+  Oborot.TblOs[4]   := if(dt4 = 0, 0, cgKau_StZatr);
+  Oborot.KauOs[4]   := dt4;
+  Oborot.TblOs[5]   := if(dt5 = 0, 0, cgKau_RashStZatr);
+  Oborot.KauOs[5]   := dt5;
+  Oborot.SchetK     := '35100';
+  Oborot.TblKs[1]   := if(kt1 = 0, 0, KODGRKAU_IGK);
+  Oborot.KauKs[1]   := kt1;
+  Oborot.TblKs[2]   := if(kt2 = 0, 0, KODGRKAU_RS);
+  Oborot.KauKs[2]   := kt2;
+  Oborot.TblKs[3]   := if(kt3 = 0, 0, cgKau_ObjBuild);
+  Oborot.KauKs[3]   := kt3;
+  Oborot.TblKs[4]   := if(kt4 = 0, 0, cgKau_StZatr);
+  Oborot.KauKs[4]   := kt4;
+  Oborot.TblKs[5]   := if(kt5 = 0, 0, KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA);
+  Oborot.KauKs[5]   := kt5;
+  Oborot.TblKs[6]   := cgKau_TipOper;
+  Oborot.KauKs[6]   := TYPOPER_REZERV;
+  Oborot.SumOb      := -sum;
+  Oborot.DBSchetO   := '0000';
+  Oborot.KrSchetK   := '5100';
+  result := insert current Oborot = tsOk;
+}
+
+function storno(dt1, dt2, dt3, dt4, dt5, kt1, kt2, kt3, kt4, kt5: comp; sum: double): double;
+{
+  result := sum;
+  var r: double = 0; //сумма доступного резерва
+  _qRezerv.setParam('dt1', dt1);
+  _qRezerv.setParam('dt2', dt2);
+  _qRezerv.setParam('dt3', dt3);
+  _qRezerv.setParam('dt4', dt4);
+  _qRezerv.setParam('dt5', dt5);
+  _qRezerv.setParam('kt1', kt1);
+  _qRezerv.setParam('kt2', kt2);
+  _qRezerv.setParam('kt3', kt3);
+  _qRezerv.setParam('kt4', kt4);
+  _qRezerv.setParam('kt5', kt5);
+  if _qRezerv.execute.errorCode = tsOk
+    while _qRezerv.fetch.errorCode = tsOk and result > 0
+    {
+      r := _qRezerv.row.valAt(1);
+      kt4 := _qRezerv.row.valAt(2);
+
+      if r > 0
+      {
+        if r > result
+        {
+          if createOborot(dt1, dt2, dt3, dt4, dt5, kt1, kt2, kt3, kt4, kt5, result) result := 0;
+        }
+        else
+        {
+          if createOborot(dt1, dt2, dt3, dt4, dt5, kt1, kt2, kt3, kt4, kt5, r) result -= r;
+        }
+      }
+
+    }
+}
+
+function storno3(dt1, dt2, dt3, dt4, dt5, kt1, kt2, kt3, kt4, kt5: comp; sum: double): double;
+{
+  result := sum;
+  if sum <= 0 exit;
+  sum := storno(dt1, dt2, dt3, dt4, dt5, kt1, kt2, kt3, kt4, kt5, sum); //заказ статья
+  if sum > 0
+  {
+    sum := storno(dt1, dt2, 0, dt4, dt5, kt1, kt2, kt3, kt4, kt5, sum); //без заказа по статье
+    if sum > 0
+      sum := storno(dt1, dt2, 0, 0, 0, kt1, kt2, kt3, kt4, kt5, sum); //без заказа без статьи
+  }
+  result := sum;
+}
+
+procedure StoreCycles(hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  #__UNUSED__(hTxo)
+  _qRezerv := queryManager.createQuery(qRezerv);
+
+  _cBaseDoc := buf.cSoprDoc;
+  if getfirst BaseDoc != tsOk exit;
+  if getfirst StepDoc != tsOk exit;
+
+  if getfirst PlPor = tsOk
+    _loop SoprHoz
+      delete all Oborot;
+
+  var rs: IResultSet = queryManager.createQuery(qBaseDoc).setParam('CurSoprDoc', _cBaseDoc).getResultSet;
+  if rs.getfirst = tsOk do
+  {
+    var sum: double = rs.row.val('sum');
+    if sum <= 0 continue;
+    sum := storno3(rs.row.val('dt1'), rs.row.val('dt2'), rs.row.val('dt3'), rs.row.val('dt4'), rs.row.val('dt5'),
+                   rs.row.val('kt1'), rs.row.val('kt2'), rs.row.val('kt3'), rs.row.val('kt4'), rs.row.val('kt5'),
+                   sum);
+    if sum <= 0 continue;
+    sum := storno3(rs.row.val('dt1'),                 0, rs.row.val('dt3'), rs.row.val('dt4'), rs.row.val('dt5'),
+                   rs.row.val('kt1'), rs.row.val('kt2'), rs.row.val('kt3'), rs.row.val('kt4'), rs.row.val('kt5'),
+                   sum);
+    if sum <= 0 continue;
+    sum := storno3(                0,                 0, rs.row.val('dt3'), rs.row.val('dt4'), rs.row.val('dt5'),
+                   rs.row.val('kt1'), rs.row.val('kt2'), rs.row.val('kt3'), rs.row.val('kt4'), rs.row.val('kt5'),
+                   sum);
+  } while rs.getnext = tsOk;
+  if IsValidAll(tnPlPor)
+  {
+    iChkSH.CheckDoc(piPlPor.GetDocBuff(PlPor.Buffer), cgSilentMakeSH);
+    iChkSH.CheckDoc(piPlPor.GetDocBuff(PlPor.Buffer), cgMakeDoc);
+  }
+}
+
+end.

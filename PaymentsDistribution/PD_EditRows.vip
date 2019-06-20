@@ -1,0 +1,187 @@
+#include GetKau.vih
+
+#component "PD_AGAT"
+
+interface PD_EditRows 'Редактирование строк интерфейса разноски платежей' escClose;
+
+#include GetKau.var
+
+create view
+var
+  _cGroup: comp;
+as select
+  if(isValid(tnAddSumTune), AddSumTune.Name, '') (fieldname = StZatrFld)
+ ,if(isValid(tnFormPlRowSchema), FormPlRowSchema.Name, '') (fieldname = RowSchemaFld)
+from
+  FormPl
+ ,AddSumTune
+ ,FormPl FormPlRowSchema
+where ((
+      FORMPL_TYPEALG_ROWS == FormPl.TypeAlg
+  and _cGroup             == FormPl.cGroup
+  and FormPl.ResComp[1]   == AddSumTune.Nrec
+  and FormPl.ResComp[2]   == FormPlRowSchema.Nrec
+))
+order by FormPl.Razdel;
+
+tree trRows (,,Sci1378EscTreePlus);
+  table FormPl;
+  fields
+    FormPl.Razdel '№ п/п': [10], noProtect, noAutoSize;
+    FormPl.Name 'Наименование': [30], noProtect;
+    FormPl.ResCode[1] 'Код': [10], noProtect;
+    StZatrFld 'Статья объекта строительства': [30], protect, pickButton;
+    RowSchemaFld 'Настройки строки': [30], protect, pickButton, editButton;
+end;
+
+tableevent table FormPl;
+  cmTreeTop:
+    _cGroup := 0;
+
+  cmTreeUp:
+    _cGroup := FormPl.cGroup;
+
+  cmTreeDown:
+    _cGroup := FormPl.Nrec;
+
+  cmTreeNodeType:
+    if TreeIsTerminal(trRows)
+        TreeSetNodeType(trRows, ntfText);
+
+  cmTreeNeedOwner:
+    TreeJumpToRecord(trRows, FormPl.cGroup);
+
+  cmInsertRecord:
+    insert current FormPl;
+
+  cmUpdateRecord:
+    update current FormPl;
+
+  cmDeleteRecord:
+    delete current FormPl;
+end;
+
+procedure insertFormPl(cGr: comp);
+{
+  clearBuffer(tnFormPl);
+  FormPl.cGroup := cGr;
+  FormPl.TypeAlg := FORMPL_TYPEALG_ROWS;
+  insert current FormPl;
+  TreeJumpToRecord(trRows, FormPl.Nrec);
+  RescanPanel(tnFormPl);
+}
+
+handleevent
+
+  cmPick:
+  {
+    case curField of
+      #StZatrFld:
+      {
+        var c: comp = FormPl.ResComp[1];
+        if iGetKau.GetCodeKau(cgiPick, cgKau_StZatr, c) > 0
+          set FormPl.ResComp[1] := c;
+      }
+      #RowSchemaFld:
+      {
+        if RunInterface(PD_AGAT::PD_PickRowSchema, FormPl.ResComp[2]) = cmDefault
+          set FormPl.ResComp[2];
+      }
+    end;
+  }
+
+  cmDelOnProtect:
+  {
+    case curField of
+      #StZatrFld: set FormPl.ResComp[1] := 0;
+      #RowSchemaFld: set FormPl.ResComp[2] := 0;
+    end;
+  }
+
+  cmEdit:
+  {
+    case curField of
+      #RowSchemaFld:
+      {
+        if isValid(tnFormPlRowSchema)
+        {
+          PutCommand(cmEdit);
+          RunInterface(PD_AGAT::PD_EditRowSchema, FormPl.ResComp[2]);
+        }
+      }
+    end;
+  }
+
+  cmInsert:
+  {
+    if isValid(tnFormPl)
+      PutHotCommand(RunMenu('PD_AGAT::mnuPD_EditRows_Insert'))
+    else
+      PutCommand(cmAltInsert);
+    Stop;
+  }
+
+  cmAltInsert:
+  {
+    updateTable;
+    insertFormPl(FormPl.cGroup);
+  }
+
+  cmInsLowLevel:
+  {
+    updateTable;
+    insertFormPl(FormPl.Nrec);
+  }
+
+  cmDelete:
+  {
+    TreeDelTree(trRows);
+    ReReadRecord(tnFormPl);
+    Stop;
+  }
+
+end;
+
+end.
+
+mnuPD_EditRows_Insert menu
+{
+- 'Добавить на текущий уровень', cmAltInsert, 'Добавить на текущий уровень', , 'Alt+F7', kbAltF7, sci1Esc;
+- 'Добавить на подчиненный уровень', cmInsLowLevel, 'Добавить на подчиненный уровень', , 'Ctrl+F7', kbCtrlF7, sci1Esc;
+}
+
+
+VipInterface UserReport_EditRows Implements IUserReport licensed(free);
+Interface UserReport_EditRows;
+  create view dummy;
+  procedure Run;
+  begin
+    runinterfacenomodal(PD_AGAT::PD_EditRows);
+  end;
+
+  function GetReportName: String;
+  begin
+    GetReportName := 'Настройки строк';
+  end;
+
+  function GetGroupName (Level : Word) : String;
+  begin
+    if (Level = 1)
+      GetGroupName := 'Распределение платежей'
+    else
+      GetGroupName := '';
+  end;
+
+  function GetPriority : Integer;
+  begin
+    GetPriority := 0;
+  end;
+
+  function VisibleInModule(Ind : Byte) : String;
+  begin
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'B_Finans';
+    end;
+  end;
+end.

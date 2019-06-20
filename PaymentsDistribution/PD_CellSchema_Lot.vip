@@ -1,0 +1,97 @@
+#include PD_Object.vih
+#include PD_ICellSchema.vih
+#include PD_Context.vih
+#include PD_CellSchemaBase.vih
+
+#component "PD_AGAT"
+
+vipInterface PD_CellSchema_Lot(PD_CellSchemaBase) implements PD_ICellSchema, PD_InitByFormPl;
+
+interface PD_CellSchema_Lot;
+
+var
+  _isEditable  : boolean;
+  _cFormPl     : comp;
+  _sFormula    : string;
+
+create view
+as select
+  FormPl.NRec
+from
+  FormPl
+where ((
+  _cFormPl == FormPl.NRec
+));
+
+function isEditable(cell: PD_ICell; context: ObjRef): boolean;
+{
+  #__UNUSED__(cell, context)
+  result := _isEditable;
+}
+
+function getCellValue(ind: byte; row: PD_IRow; context: PD_IContext): string;
+{
+  if ind = 0 { result := ''; exit; }
+  var c: PD_ICell = row.getCell(ind);
+  context.recalcCell(c);
+  result := c.value;
+  if result = '' result := 0;
+}
+
+function getTokenValue(s: string; cell: PD_ICell; context: PD_IContext): string;
+{
+  if UpCase(s) like 'C%'
+    result := getCellValue(byte(SubStr(s, 2, 3)), cell.row, context);
+  else
+    result := '''''';
+}
+
+function parseFormula(cell: PD_ICell; context: PD_IContext): variant;
+{
+  var s: string = _sFormula;
+  var k1, k2: byte = 0;
+  for(k1 := pos('{', s); k1 > 0; k1 := pos('{', s))
+  {
+    k2:= pos('}', s);
+    s := SubStr(s, 1, k1 - 1) + getTokenValue(SubStr(s, k1 + 1, k2 - k1 - 1), cell, context) + SubStr(s, k2 + 1, 255);
+  }
+  var err: string = '';
+  result := LotExpressionFunc(s, err);
+  if err != ''
+    result := err;
+}
+
+function getValue(cell: PD_ICell; context: ObjRef): variant;
+{
+  result := parseFormula(cell, PD_IContext(context));
+}
+
+function setValue(cell: PD_ICell; value: variant; context: ObjRef): boolean;
+{
+  #__UNUSED__(context)
+  cell.value := value;
+  result := true;
+}
+
+function initByFormPl(cFormPl: comp): boolean;
+{
+  result := true;
+
+  _cFormPl := cFormPl;
+
+  if getfirst FormPl != tsOk
+    exit;
+
+  _isEditable := FormPl.ResWord[1] = 1;
+
+  _sFormula := FormPl.ResName[1] + FormPl.ResName[2] + FormPl.ResName[3];
+}
+
+function setupIfcName: string;
+{
+  result := 'PD_AGAT::PD_CellSchemaSetup_Lot';
+}
+
+property name: string read 'Выражение Lot';
+
+end.

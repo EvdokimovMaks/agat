@@ -1,6 +1,7 @@
 #include BasedocHelper.vih
 #include Query.vih
 #include AtlProtocol.vih
+#include PD_ChangeStatusTxo.vih
 
 #component "AGAT"
 
@@ -22,6 +23,7 @@ sql query qSelectSumOplNoExcludes =
 var
   _qSumOplNoExcludes: IQuery;
   _sGroupSch: string;
+  _changeStatusTxo: PD_ChangeStatusTxo;
 
 create view
 as select *
@@ -69,15 +71,22 @@ procedure IBasedocHelper.RecalcBasedocStatus(aBasedocNrec: comp; aExcludeBasefin
     fullPaid := (sumOpl-basedoc.total) > -1;
     if fullPaid and basedoc.cnote != BASEDOC_CNOTE_FULLPAID
     {
+      _changeStatusTxo.process(40, basedoc.nrec, basedoc.cnote, BASEDOC_CNOTE_FULLPAID);
       basedoc.cnote := BASEDOC_CNOTE_FULLPAID;
       update current basedoc;
     }
     else if (not fullPaid) and basedoc.cnote = BASEDOC_CNOTE_FULLPAID
     {
       if getlast StatLog where ((40 == StatLog.DocType and basedoc.nrec == StatLog.cDoc)) = tsOk
+      {
+        _changeStatusTxo.process(40, basedoc.nrec, basedoc.cnote, StatLog.cNewNote);
         basedoc.cnote := StatLog.cNewNote;
+      }
       else
+      {
+        _changeStatusTxo.process(40, basedoc.nrec, basedoc.cnote, BASEDOC_CNOTE_ISPOLN);
         basedoc.cnote := BASEDOC_CNOTE_ISPOLN;
+      }
       update current basedoc;
     }
   }
@@ -164,6 +173,9 @@ function IBasedocHelper.SetStatus(aBasedocNrec: comp; aKatnotesNrec: comp; aCrea
       statlog.timeoper  := cur_time;
       insert current statlog;
     }
+
+    if rslt = tsOk
+      _changeStatusTxo.process(40, basedoc.nrec, oldKatnotesNrec, aKatnotesNrec);
 
     result := rslt = tsOk;
 

@@ -1,0 +1,126 @@
+#include PD_Object.vih
+#include PD_ICellSchema.vih
+#include Query.vih
+#include PD_Context.vih
+#include PD_CellSchemaBase.vih
+
+#component "PD_AGAT"
+
+vipInterface PD_CellSchema_Vip4App(PD_CellSchemaBase) implements PD_ICellSchema, PD_InitByFormPl;
+  public:
+  destructor done;
+end;
+
+interface PD_CellSchema_Vip4App;
+
+var
+  _isEditable  : boolean;
+  _cFormPl     : comp;
+  _cKatStroy   : comp;
+  _cPlPor      : comp;
+  _cAddSumTune : comp;
+  _scriptHandle: longint;
+  _scriptName  : string;
+
+create view
+as select
+  FormPl.NRec
+from
+  FormPl
+where ((
+  _cFormPl == FormPl.NRec
+));
+
+file f;
+
+function getScriptName: string;
+{
+  if _scriptName = ''
+    _scriptName := 'PD_CellSchema_Vip4App_' + string(_cFormPl, 0, 0) + '_' + DateToStr(Cur_Date, 'DDMMYYYY') + TimeToStr(Cur_Time, 'HHMMSSSSS');
+  result := _scriptName;
+}
+
+function isEditable(cell: PD_ICell; context: ObjRef): boolean;
+{
+  #__UNUSED__(cell, context)
+  result := _isEditable;
+}
+
+function getValue(cell: PD_ICell; context: ObjRef): variant;
+{
+  var c: PD_IContext = PD_IContext(context);
+
+  _cKatStroy   := c.params.cKatStroy;
+  _cPlPor      := c.params.cPlPor;
+  _cAddSumTune := PD_IRow(cell.row).cAddSumTune;
+
+  vaBindParameter(_scriptHandle, _cFormPl);
+  vaBindParameter(_scriptHandle, _cKatStroy);
+  vaBindParameter(_scriptHandle, _cPlPor);
+  vaBindParameter(_scriptHandle, _cAddSumTune);
+
+  if not vaExecute(_scriptHandle, result)
+  {
+    message('Ошибка выполнения скрипта ' + getScriptName + ''#13'' + vaErrorText, error);
+    result := '';
+  }
+}
+
+function setValue(cell: PD_ICell; value: variant; context: ObjRef): boolean;
+{
+  #__UNUSED__(context)
+  cell.value := value;
+  result := true;
+}
+
+function initByFormPl(cFormPl: comp): boolean;
+{
+  result := true;
+
+  _cFormPl := cFormPl;
+
+  if getfirst FormPl != tsOk
+    exit;
+
+  _isEditable := FormPl.ResWord[1] = 1;
+
+  _scriptName := '';
+  var i: longint = vaGetFreeHandle;
+  vaAddStr(i,' script ' + getScriptName + '(cFormPl: comp; cKatStroy: comp; cPlPor: comp; cAddSumTune: comp): variant;');
+
+  if f.OpenMemo(FormPl.Comment)
+  {
+    var l: longint = 0;
+    var s: string = '';
+    while not f.EOF
+    {
+      f.ReadLn(s);
+      vaAddStr(i, s);
+    }
+    f.Close;
+  }
+
+  _scriptHandle := vaCompile(i);
+  if _scriptHandle = -1
+  {
+    message(vaErrorText, error);
+    result := false;
+  }
+
+  vaFreeSource(i);
+}
+
+function setupIfcName: string;
+{
+  result := 'PD_AGAT::PD_CellSchemaSetup_Vip4App';
+}
+
+destructor done;
+{
+  inherited::done;
+  vaFree(_scriptHandle);
+}
+
+property name: string read 'Пользовательский скрипт';
+
+end.

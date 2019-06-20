@@ -1,0 +1,111 @@
+#include Query.vih
+
+#component "PD_AGAT"
+
+interface PD_PickPlPor 'Выбор стороннего платежного поручения' escClose doAccept;
+show(,,150,);
+
+table struct PD_TmpPlPor (
+  Nrec: comp,
+  cKatStroy: comp,
+  NoDok: string[20],
+  DatVip: date,
+  SumOb: double
+) with index (
+  i01 = Nrec
+ ,i02 = DatVip + NoDok
+);
+
+var
+  _cKatStroy: comp;
+  _cPlPor: comp;
+
+create view
+as select
+  if(isValid(tnKatOrg), KatOrg.Name, '') (fieldName = OrgFld)
+ ,if(isValid(tnAvDDS), avDDS.vString, '') (fieldName = DDSFld)
+ ,if(isValid(tnKatStroy), KatStroy.Name, '') (fieldName = KatStroyFld)
+from
+  PD_TmpPlPor
+ ,PD_TmpPlPor PD_TmpPlPor1 (i02)
+ ,PlPor
+ ,KatOrg
+ ,KatStroy
+ ,AttrVal avDDS
+where ((
+      PD_TmpPlPor1.Nrec      == PlPor.Nrec
+
+  and PlPor.cPlat            == KatOrg.Nrec
+
+  and PD_TmpPlPor1.cKatStroy == KatStroy.Nrec
+
+  and coPlPor                == avDDS.wTable
+  and PD_TmpPlPor1.Nrec      == avDDS.cRec
+  and ATTRNAM_NREC_PLPOR_DDS == avDDS.cAttrNam
+))
+;
+
+parameters _cKatStroy, _cPlPor;
+
+browse brPlPor (,,sci14Esc);
+  table PD_TmpPlPor1;
+  fields
+    PD_TmpPlPor1.DatVip 'Выписано': [10], protect;
+    PlPor.DatOb 'Оплачено': [10], protect;
+    PD_TmpPlPor1.NoDok 'Номер': [10], protect;
+    PlPor.SumPlat 'Сумма п/п': [14, '\2p[|-]3666`666`666`666`666`666`666.88'], protect;
+    PD_TmpPlPor1.SumOb 'Сумма по проводкам': [14, '\2p[|-]3666`666`666`666`666`666`666.88'], protect;
+    OrgFld 'Плательщик': [30], protect;
+    DDSFld 'Статья ДДС': [30], protect;
+    KatStroyFld 'Заказ': [30], protect;
+end; // browse brPlPor
+
+
+sql query qPlPor =
+  select PlPor.Nrec, PlPor.NoDok, PlPor.DatVip, t.cKatStroy, t.SumOb
+  from ( select cSoprDoc as cPlPor, KauOs[4] as cKatStroy, sum(SumOb) as SumOb
+         from Oborot
+         where SchetO = '851' and SchetK = '862' and DatOb <> 0 and TiDkGal = 2 %filter
+         group by cSoprDoc, KauOs[4]
+       ) t
+  join PlPor on PlPor.Nrec = t.cPlPor
+;
+
+procedure prepareData;
+{
+  mtClear(#PD_TmpPlPor, mfNormal);
+  var q: IQuery = queryManager.createQuery(qPlPor);
+  if _cKatStroy != 0
+    q.setMacro('filter', 'and KauOs[4] = #comp(' + string(_cKatStroy,0,0) + ') and KauKs[3] = #comp(' + string(_cKatStroy,0,0) + ')');
+  else
+    q.setMacro('filter', 'and KauOs[4] = KauKs[3] and KauOs[4] <> #comp(0)');
+  if q.execute.errorCode = tsOk
+    sqlCopyInto(q, #PD_TmpPlPor, true);
+}
+
+handleevent
+
+  cmEdit:
+  {
+    if isValid(tnPlPor)
+      runinterface(F_PlPor::PlPor, PlPor.TiDkGal, PlPor.TiDk, PlPor.Nrec);
+  }
+
+  cmInit:
+  {
+    prepareData;
+    if _cPlPor != 0
+      if getfirst PD_TmpPlPor1 where ((_cPlPor == PD_TmpPlPor1.Nrec)) = tsOk {}
+    rereadRecord(#PD_TmpPlPor1);
+  }
+
+  cmDefault:
+  {
+    _cPlPor := PD_TmpPlPor1.Nrec;
+    if _cKatStroy = 0
+      _cKatStroy := PD_TmpPlPor1.cKatStroy;
+  }
+
+end;
+
+end.
