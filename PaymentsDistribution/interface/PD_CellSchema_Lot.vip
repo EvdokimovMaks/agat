@@ -2,10 +2,15 @@
 #include PD_ICellSchema.vih
 #include PD_Context.vih
 #include PD_CellSchemaBase.vih
+#include PD_FormulaToken.vih
 
 #component "PD_AGAT"
 
+
 vipInterface PD_CellSchema_Lot(PD_CellSchemaBase) implements PD_ICellSchema, PD_InitByFormPl;
+public:
+  procedure PD_IObject.free;
+end;
 
 interface PD_CellSchema_Lot;
 
@@ -13,6 +18,8 @@ var
   _isEditable  : boolean;
   _cFormPl     : comp;
   _sFormula    : string;
+  _token       : PD_IFormulaToken;
+  _parser      : PD_FormulaParser;
 
 create view
 as select
@@ -29,41 +36,20 @@ function isEditable(cell: PD_ICell; context: ObjRef): boolean;
   result := _isEditable;
 }
 
-function getCellValue(ind: byte; row: PD_IRow; context: PD_IContext): string;
+function token: PD_IFormulaToken;
 {
-  if ind = 0 { result := ''; exit; }
-  var c: PD_ICell = row.getCell(ind);
-  context.recalcCell(c);
-  result := c.value;
-  if result = '' result := 0;
-}
-
-function getTokenValue(s: string; cell: PD_ICell; context: PD_IContext): string;
-{
-  if UpCase(s) like 'C%'
-    result := getCellValue(byte(SubStr(s, 2, 3)), cell.row, context);
-  else
-    result := '''''';
-}
-
-function parseFormula(cell: PD_ICell; context: PD_IContext): variant;
-{
-  var s: string = _sFormula;
-  var k1, k2: byte = 0;
-  for(k1 := pos('{', s); k1 > 0; k1 := pos('{', s))
-  {
-    k2:= pos('}', s);
-    s := SubStr(s, 1, k1 - 1) + getTokenValue(SubStr(s, k1 + 1, k2 - k1 - 1), cell, context) + SubStr(s, k2 + 1, 255);
-  }
-  var err: string = '';
-  result := LotExpressionFunc(s, err);
-  if err != ''
-    result := err;
+  if _token = nullRef
+    _token := _parser.parse(_sFormula);
+  result := _token;
 }
 
 function getValue(cell: PD_ICell; context: ObjRef): variant;
 {
-  result := parseFormula(cell, PD_IContext(context));
+  var err: string = '';
+  result := LotExpressionFunc(token.value(cell, PD_IContext(context)), err);
+  if err != ''
+    result := err;
+  // result := parseFormula(cell, PD_IContext(context));
 }
 
 function setValue(cell: PD_ICell; value: variant; context: ObjRef): boolean;
@@ -90,6 +76,17 @@ function initByFormPl(cFormPl: comp): boolean;
 function setupIfcName: string;
 {
   result := 'PD_AGAT::PD_CellSchemaSetup_Lot';
+}
+
+procedure PD_IObject.free;
+{
+  if _token != nullRef
+  {
+    _token.free;
+    _token := nullRef;
+  }
+  _parser := nullRef;
+  inherited::free;
 }
 
 property name: string read 'Выражение Lot';
