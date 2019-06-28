@@ -1,0 +1,166 @@
+#include PD_FormulaToken.vih
+
+#component "PD_AGAT"
+
+//------------------------------------------------------------------------------
+interface PD_FormulaTokenChain;
+
+var
+  _nextToken: PD_IFormulaToken;
+
+constructor _PD_FormulaTokenChain(next: PD_IFormulaToken);
+{
+  _nextToken := next;
+  result := true;
+}
+
+procedure free;
+{
+  if _nextToken != nullRef
+    _nextToken.free;
+  _nextToken := nullRef;
+}
+
+function selfValue(cell: PD_ICell; context: PD_IContext): string;
+{
+  #__UNUSED__(cell, context)
+  result := '';
+}
+
+function value(cell: PD_ICell; context: PD_IContext): string;
+{
+  result := selfValue(cell, context) +
+            if(_nextToken != nullRef, _nextToken.value(cell, context), '');
+}
+
+end.
+
+
+//------------------------------------------------------------------------------
+interface PD_FormulaTokenConst;
+
+var
+  _value: string;
+
+constructor _PD_FormulaTokenConst(s: string; next: PD_IFormulaToken);
+{
+  _value := s;
+  result := _PD_FormulaTokenChain(next);
+}
+
+function selfValue(cell: PD_ICell; context: PD_IContext): string;
+{
+  #__UNUSED__(cell, context)
+  result := _value;
+}
+
+end.
+
+
+//------------------------------------------------------------------------------
+interface PD_FormulaTokenCurrentRowCell;
+
+var
+  _cellIndex: byte;
+
+constructor _PD_FormulaTokenCurrentRowCell(cellIndex: byte; next: PD_IFormulaToken);
+{
+  _cellIndex := cellIndex;
+  result := _PD_FormulaTokenChain(next);
+}
+
+function selfValue(cell: PD_ICell; context: PD_IContext): string;
+{
+  if _cellIndex = 0 or cell = nullRef or context = nullRef { result := ''''''; exit; }
+  var c: PD_ICell = cell.row.getCell(_cellIndex);
+  context.recalcCell(c);
+  result := c.value;
+}
+
+end.
+
+
+//------------------------------------------------------------------------------
+interface PD_FormulaTokenCell;
+
+var
+  _cellIndex: byte;
+  _row: PD_IRow;
+  _rowFname: string[20];
+
+constructor _PD_FormulaTokenCell(rowFname: string[20]; cellIndex: byte; next: PD_IFormulaToken);
+{
+  _rowFname := rowFname;
+  _cellIndex := cellIndex;
+  result := _PD_FormulaTokenChain(next);
+}
+
+function selfValue(cell: PD_ICell; context: PD_IContext): string;
+{
+  result := '''''';
+  if context = nullRef or _rowFname = '' exit;
+  if _row = nullRef
+  {
+    _row := context.rowByName(_rowFname);
+    if _row = nullRef exit;
+  }
+  var c: PD_ICell = _row.getCell(_cellIndex);
+  context.recalcCell(c);
+  result := c.value;
+}
+
+procedure PD_IFormulaToken.free;
+{
+  _row := nullRef;
+  if _nextToken != nullRef
+    _nextToken.free;
+  _nextToken := nullRef;
+
+}
+
+end.
+
+
+//------------------------------------------------------------------------------
+interface PD_FormulaParser;
+
+function newConstToken(s: string; next: PD_IFormulaToken): PD_IFormulaToken;
+{
+  result := PD_IFormulaToken(new(PD_FormulaTokenConst, _PD_FormulaTokenConst(s, next)));
+}
+
+function newCellToken(s: string; next: PD_IFormulaToken): PD_IFormulaToken;
+{
+  s := Trim(s);
+  if s like '%,%'
+  {
+    var k: byte = Pos(',', s);
+    result := PD_IFormulaToken(new(PD_FormulaTokenCell,
+      _PD_FormulaTokenCell(Trim(SubStr(s, 1, k-1)), Byte(Trim(SubStr(s, k + 1, 255))), next)
+    ));
+  }
+  else
+    result := PD_IFormulaToken(new(PD_FormulaTokenCurrentRowCell,
+      _PD_FormulaTokenCurrentRowCell(Byte(Trim(s)), next)
+    ));
+}
+
+function parse(s: string): PD_IFormulaToken;
+{
+  var k: byte;
+  s := trim(s);
+  if s like '{%}%'
+  {
+    k := Pos('}', s);
+    result := newCellToken(SubStr(s, 2, k - 2), parse(SubStr(s, k + 1, 255)));
+  }
+  else if s like '%{%}%'
+  {
+    k := Pos('{', s);
+    result := newConstToken(SubStr(s, 1, k - 1), parse(SubStr(s, k, 255)));
+  }
+  else
+    result := newConstToken(s, nullRef);
+}
+
+end.
