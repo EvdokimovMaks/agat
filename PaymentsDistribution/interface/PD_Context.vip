@@ -27,7 +27,7 @@ constructor _PD_Context(colCnt: byte);
 {
   _colCnt := colCnt;
   _repo := PD_IObjectRepository(new(PD_ObjectRepository));
-  _rowProvider := PD_IRowProvider(new(PD_RowProvider, _PD_RowProvider(_repo, _repo)));
+  _rowProvider := PD_IRowProvider(new(PD_RowProvider, _PD_Object(_repo)));
   _params := PD_IParams(new(PD_Params, _PD_Object(_repo)));
   result := true;
 }
@@ -45,30 +45,21 @@ destructor done;
   _params := nullRef;
 }
 
-function cell(row: PD_IRow; col: byte): PD_ICell;
+function rowById(rowId: longint): PD_IRow;
 {
-  result := row.getCell(col);
-}
-
-function cellByRowId(rowId: longint; col: byte): PD_ICell;
-{
-  result := cell(PD_IRow(_repo.get(rowId)), col);
-}
-
-function cellById(cellId: longint): PD_ICell;
-{
-  result := PD_ICell(_repo.get(cellId));
-}
-
-function cellValue(rowId: longint; col: byte): variant;
-{
-  result := cellByRowId(rowId, col).value;
+  result := PD_IRow(_repo.get(rowId));
 }
 
 function rowByName(fname: string): PD_IRow;
 {
   var rowId: longint = FindItem(_rowNames, fname);
   result := if(rowId = -1, nullRef, PD_IRow(_repo.get(rowId)));
+}
+
+function cellValue(rowId: longint; col: byte): variant;
+{
+  var r: PD_IRow = rowById(rowId);
+  result := if(r = nullRef, '', r.getValue(col));
 }
 
 //#region Recalc
@@ -90,17 +81,17 @@ procedure destroyRecalcSession;
     freeVipInterface(_recalcSession);
 }
 
-procedure recalcCell(c: PD_ICell);
+procedure recalcCell(r: PD_IRow; col: byte);
 {
-  if c = nullRef exit;
+  if r = nullRef exit;
   var isNewRecalcSessionCreated: boolean = initRecalcSession;
-  if not _recalcSession.isCalculated(c)
+  if not _recalcSession.isCalculated(r.id, col)
   {
-    if c.schema != nullRef
-      c.value := c.schema.getValue(c, self);
+    if r.cellSchema(col) != nullRef
+      r.setValue(col, r.cellSchema(col).getValue(r, col, PD_IContext(self)));
     else
-      c.value := '';
-    _recalcSession.add(c);
+      r.setValue(col, '');
+    _recalcSession.add(r.id, col);
   }
   if isNewRecalcSessionCreated destroyRecalcSession;
 }
@@ -111,7 +102,7 @@ procedure recalcRow(r: PD_IRow);
   var isNewRecalcSessionCreated: boolean = initRecalcSession;
   var i: byte = 0;
   for(i := 1; i <= _colCnt; i++)
-    recalcCell(r.getCell(i));
+    recalcCell(r, i);
   if isNewRecalcSessionCreated destroyRecalcSession;
 }
 
@@ -136,36 +127,6 @@ procedure recalcAll;
 
 //#endregion Recalc
 
-procedure createRowCell(row: PD_IRow; col: byte);
-{
-  if row = nullRef or col = 0 exit;
-  var c: PD_ICell noAuto;
-  c := PD_ICell(new(PD_Cell, _PD_Object(_repo)));
-  c.row    := row;
-  c.col    := col;
-  c.schema := if(row.schema = nullRef, nullRef, row.schema.cellSchema(col));
-  row.setCell(col, c);
-}
-
-procedure createRowsCells(rowsList: PD_ObjectList); forward;
-
-procedure createRowCells(row: PD_IRow);
-{
-  if row = nullRef exit;
-  var i: byte = 0;
-  for(i := 1; i <= _colCnt; i++)
-    createRowCell(row, i);
-  createRowsCells(row.children);
-}
-
-procedure createRowsCells(rowsList: PD_ObjectList);
-{
-  if rowsList = nullRef exit;
-  var iter: PD_IIterator = nullRef;
-  for(iter := rowsList.iterator; iter.hasNext; iter.next)
-    createRowCells(PD_IRow(iter.get));
-}
-
 procedure saveRowsNames(rowsList: PD_ObjectList);
 {
   if rowsList = nullRef exit;
@@ -183,7 +144,6 @@ procedure loadRows;
 {
   _rows := _rowProvider.rows;
   saveRowsNames(_rows);
-  createRowsCells(_rows);
 }
 
 function getRows: PD_ObjectList;
