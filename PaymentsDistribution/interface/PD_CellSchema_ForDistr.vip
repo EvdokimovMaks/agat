@@ -53,21 +53,31 @@ where ((
   and  Oborot.KauOs[4]    = _cAddSumTune
   and  Oborot.KauOs[6]    = cTipOper_Fact)
 
-  and PlPor.TiDk         == OborotB.TiDk
+  and PlPor.tidkgal      == UsersDoc.TipGal
+  and PlPor.TiDk         == UsersDoc.TipUsers
+  and UsersDoc.cCashBank == SpCash.cCashBank
+  and PLANSSCH_NREC_2013 == SpCash.cPlansSch
+))
+
+bounds OborotB_Os =
+      PlPor.TiDk         == OborotB.TiDk
   and PlPor.Nrec         == OborotB.cSoprDoc
   and (OborotB.SchetO     = '851'
   and  OborotB.SchetK     = '862'
   and  OborotB.DatOb     <> 0
   and  OborotB.KauOs[4]   = _cKatStroy
   and  OborotB.KauKs[3]   = _cKatStroy)
-
   and OborotB.cSoprHoz   == SoprHozB.Nrec
 
-  and PlPor.tidkgal      == UsersDoc.TipGal
-  and PlPor.TiDk         == UsersDoc.TipUsers
-  and UsersDoc.cCashBank == SpCash.cCashBank
-  and PLANSSCH_NREC_2013 == SpCash.cPlansSch
-));
+bounds OborotB_Kr =
+      PlPor.TiDk         == OborotB.TiDk
+  and PlPor.Nrec         == OborotB.cSoprDoc
+  and (OborotB.SchetO     = ''
+  and  OborotB.SchetK     = '30000'
+  and  OborotB.DatOb     <> 0
+  and  OborotB.KauKs[3]   = _cKatStroy)
+  and OborotB.cSoprHoz   == SoprHozB.Nrec
+;
 
 sql query qValueSt =
   select
@@ -97,7 +107,8 @@ function isEditable(row: PD_IRow; col: byte; context: PD_IContext): boolean;
 {
   #__UNUSED__(row, col)
   var p: PD_IParams = context.params;
-  result := FormPl.ResWord[1] = ForDistr_Mode_St and p.cPlPor != 0;
+  result := FormPl.ResWord[1] = ForDistr_Mode_St and
+            if(row.wType = 1, p.cPlPorKredit != 0, p.cPlPor != 0);
 }
 
 function getValue(row: PD_IRow; col: byte; context: PD_IContext): variant;
@@ -107,14 +118,16 @@ function getValue(row: PD_IRow; col: byte; context: PD_IContext): variant;
 
   var wTiDk: word = 0;
 
-  _cPlPor := p.cPlPor;
+  _cPlPor := if(row.wType = 1, p.cPlPorKredit, p.cPlPor);
   if getfirst PlPor = tsOk
     wTiDk := PlPor.TiDk;
   else
     wTiDk := 0;
 
-  result := double(_q.setParam('cKatStroy', p.cKatStroy)
-                     .setParam('cPlPor', p.cPlPor)
+  var cKs: comp = if(row.wType = 1, p.cKatStroyKredit, p.cKatStroy);
+
+  result := double(_q.setParam('cKatStroy', cKs)
+                     .setParam('cPlPor', _cPlPor)
                      .setParam('cAddSumTune', row.cAddSumTune)
                      .setParam('tidk', wTiDk)
                      .getResultValue);
@@ -151,10 +164,28 @@ function getAvansOkRasch: comp;
   end;
 }
 
-procedure createOborot(sum: double);
+function findSoprHozB(isKredit: boolean): boolean;
 {
-  if getfirst OborotB != tsOk exit;
-  if getfirst SoprHozB != tsOk exit;
+  if isKredit
+  {
+    if BoundActive(tbOborotB_Os) SubBounds(tbOborotB_Os);
+    if not BoundActive(tbOborotB_Kr) AddBounds(tbOborotB_Kr);
+  }
+  else
+  {
+    if BoundActive(tbOborotB_Kr) SubBounds(tbOborotB_Kr);
+    if not BoundActive(tbOborotB_Os) AddBounds(tbOborotB_Os);
+  }
+  if getfirst OborotB != tsOk
+    result := false;
+  else
+    result := getfirst SoprHozB = tsOk;
+}
+
+procedure createOborot(sum: double; isKredit: boolean);
+{
+  if not findSoprHozB(isKredit) exit;
+
   ClearBuffer(#Oborot);
   Oborot.TiDk       := PlPor.TiDk;
   Oborot.TiDkGal    := PlPor.TiDkGal;
@@ -197,7 +228,7 @@ procedure createOborot(sum: double);
   insert current Oborot;
 }
 
-procedure setOborot(cPlPor: comp; cKatStroy: comp; cAddSumTune: comp; sum: double);
+procedure setOborot(cPlPor: comp; cKatStroy: comp; cAddSumTune: comp; sum: double; isKredit: boolean);
 {
   _cPlPor      := cPlPor;
   if getfirst PlPor = tsOk
@@ -212,15 +243,20 @@ procedure setOborot(cPlPor: comp; cKatStroy: comp; cAddSumTune: comp; sum: doubl
         update current Oborot set Oborot.SumOb := sum;
     }
     else if sum != 0
-      createOborot(sum);
+      createOborot(sum, isKredit);
   }
 }
 
 function setValue(row: PD_IRow; col: byte; value: variant; context: PD_IContext): boolean;
 {
+
   var p: PD_IParams = context.params;
 
-  setOborot(p.cPlPor, p.cKatStroy, row.cAddSumTune, value);
+  setOborot(if(row.wType = 1, p.cPlPorKredit, p.cPlPor),
+            if(row.wType = 1, p.cKatStroyKredit, p.cKatStroy),
+            row.cAddSumTune,
+            value,
+            row.wType = 1);
 
   context.recalcRow(row);
 
