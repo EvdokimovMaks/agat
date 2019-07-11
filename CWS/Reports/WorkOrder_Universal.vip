@@ -204,56 +204,51 @@ sql query qZakaz =
   join katstroy ks on vz.ZakazNrec = ks.nrec
   left join kaureff on kaureff.cotable=2101 and kaureff.crec=ks.nrec and kaureff.wkau=2
   left join katpodr ntk on coalesce(kaureff.ckau,#comp(0)) = ntk.nrec
-  left join (select ks.nrec, max(cp.nrec) as ccalplan, max(d.nrec) as cdogovor, max(coalesce(es.name,'')) as priceKind
-             from dogovor d
-             join calplan cp on d.nrec = cp.cdogovor and cp.directmc=1 and cp.status <> 3
-             join spdocs spd on cp.nrec = spd.cdoc and 403 = spd.tidk
-             join specmtr sm on 1723 = sm.cotable and #comp(0001000000000001h) = sm.csaldtune and spd.nrec = sm.cspec
-             join katstroy ks on sm.cobj = ks.nrec
-             left join exclassval ev on 1723=ev.wtable and 124=ev.classcode and spd.nrec=ev.crec
-             left join exclassseg es on coalesce(ev.cclassseg,#comp(0)) = es.nrec
-             where d.direct=1 and d.status <> 3
-             group by ks.nrec) attr on ks.nrec = attr.nrec
+  outer apply (select max(cp.nrec) as ccalplan, max(d.nrec) as cdogovor, max(coalesce(es.name,'')) as priceKind
+               from dogovor d
+               join calplan cp on d.nrec = cp.cdogovor and cp.directmc=1 and cp.status <> 3
+               join spdocs spd on cp.nrec = spd.cdoc and 403 = spd.tidk
+               join specmtr sm on sm.csaldtune = #comp(0001000000000001h) and sm.cotable = 1723 and sm.cspec = spd.nrec and sm.cobj = ks.nrec
+               left join exclassval ev on 1723=ev.wtable and 124=ev.classcode and spd.nrec=ev.crec
+               left join exclassseg es on coalesce(ev.cclassseg,#comp(0)) = es.nrec
+               where d.direct=1 and d.status <> 3) attr
   left join calplan cp on coalesce(attr.ccalplan,#comp(0)) = cp.nrec
   //трудоемкость по объекту строительства
   left join attrval avtrud on 2101=avtrud.wtable and #comp(0001000000000113h)=avtrud.cattrnam and ks.nrec=avtrud.crec    //вн.аттр. к объекту строительства "трудоемкость"
   //трудоемкость по МК
-  left join (select spsetan.ckau as KatStroyNrec, sum((cast(paramvol.value[2] as double)) / case when normas.dnormed>0 then normas.dnormed else 1 end) as value
-             from spsetan
-             join katmarsh on 2 = katmarsh.tobject and spsetan.kodgrkau = katmarsh.cobject and 1 = katmarsh.active
-             join marsh_sp msp on katmarsh.nrec = msp.cmarsh
-             join normas on 11005=normas.tmaster and msp.nrec=normas.cmaster and 102=normas.normsort
-             join paramvol on 11000=paramvol.tobject and normas.nrec=paramvol.cobject
-             where spsetan.upgroup = 40
-             group by spsetan.ckau) as trudKatMarsh on ks.nrec = trudKatMarsh.KatStroyNrec
+  outer apply (select sum((cast(paramvol.value[2] as double)) / case when normas.dnormed>0 then normas.dnormed else 1 end) as value
+               from spsetan
+               join katmarsh on 2 = katmarsh.tobject and spsetan.kodgrkau = katmarsh.cobject and 1 = katmarsh.active
+               join marsh_sp msp on katmarsh.nrec = msp.cmarsh
+               join normas on 11005=normas.tmaster and msp.nrec=normas.cmaster and 102=normas.normsort
+               join paramvol on 11000=paramvol.tobject and normas.nrec=paramvol.cobject
+               where spsetan.upgroup = 40 and spsetan.ckau = ks.nrec) as trudKatMarsh
   left join addsumobj on #comp(40015542D9B27825h) = addsumobj.caddsumtune and 2101 = addsumobj.cotable and ks.nrec = addsumobj.ckatstroy
   //ФактОЗП
-  left join (select spm.canval1 as katstroynrec, sum(vsp.kol) as summa
-             from mnplan mp
-             join fpperiod per on mp.canval1 = per.nrec and per.dbeg <= ?
-             join spmnplan spm on mp.nrec = spm.cmnplan and spm.wkodgr1=40
-             join spmnpl spl on spm.nrec = spl.cspmnplan and 22 = spl.wkolan and 21 = spl.wkodgr4 and mp.canval1 = spl.canval4 and 10029 = spl.wkodgr5
-                                and spl.canval5 in (select crec from fltr where filter = 2)
-             join valspmnp vsp on spl.nrec = vsp.cspmnpl
-             where mp.cwayaccou = #comp(0001000000000088h)  //шаблон "сводный наряд"
-             group by spm.canval1
-            ) FactOZP on ks.nrec = FactOZP.katstroynrec
+  outer apply (select sum(vsp.kol) as summa
+               from mnplan mp
+               join fpperiod per on mp.canval1 = per.nrec and per.dbeg <= ?
+               join spmnplan spm on mp.nrec = spm.cmnplan and spm.wkodgr1=40 and spm.canval1 = ks.nrec
+               join spmnpl spl on spm.nrec = spl.cspmnplan and 22 = spl.wkolan and 21 = spl.wkodgr4 and mp.canval1 = spl.canval4 and 10029 = spl.wkodgr5
+                                  and spl.canval5 in (select crec from fltr where filter = 2)
+               join valspmnp vsp on spl.nrec = vsp.cspmnpl
+               where mp.cwayaccou = #comp(0001000000000088h)  //шаблон "сводный наряд"
+              ) FactOZP
   //трудоемкость
-  left join (select spm.canval1 as KatstroyNrec, sum(case when tbal.Value > 0 then (vsp.kol + vsp.price) / tbal.Value else 0 end) as value
-             from mnplan mp
-             join fpperiod per on mp.canval1 = per.nrec and per.dbeg between #date(1,1,2014) and ?    //все периоды за исключением сальдо
-             join tbal on year(datetime(per.dbeg,0)) = tbal.Year and month(datetime(per.dbeg,0)) = tbal.Month
-             join spmnplan spm on mp.nrec = spm.cmnplan
-             join spmnpl spl on spm.nrec = spl.cspmnplan and
-                                22 = spl.wkolan and
-                                21 = spl.wkodgr4 and
-                                mp.canval1 = spl.canval4 and
-                                10029 = spl.wkodgr5 and
-                                spl.canval5 = #comp(00010000000008AEh)     //статья наряда "Отработано часов по заказу и виду работ за месяц"
-             join valspmnp vsp on spl.nrec = vsp.cspmnpl
-             where mp.cwayaccou = #comp(0001000000000088h) //шаблон "сводный наряд"
-             group by spm.canval1
-            ) FactTrud on ks.nrec = FactTrud.KatstroyNrec
+  outer apply (select sum(case when tbal.Value > 0 then (vsp.kol + vsp.price) / tbal.Value else 0 end) as value
+               from mnplan mp
+               join fpperiod per on mp.canval1 = per.nrec and per.dbeg between #date(1,1,2014) and ?    //все периоды за исключением сальдо
+               join tbal on year(datetime(per.dbeg,0)) = tbal.Year and month(datetime(per.dbeg,0)) = tbal.Month
+               join spmnplan spm on mp.nrec = spm.cmnplan and spm.wkodgr1=40 and spm.canval1 = ks.nrec
+               join spmnpl spl on spm.nrec = spl.cspmnplan and
+                                  22 = spl.wkolan and
+                                  21 = spl.wkodgr4 and
+                                  mp.canval1 = spl.canval4 and
+                                  10029 = spl.wkodgr5 and
+                                  spl.canval5 = #comp(00010000000008AEh)     //статья наряда "Отработано часов по заказу и виду работ за месяц"
+               join valspmnp vsp on spl.nrec = vsp.cspmnpl
+               where mp.cwayaccou = #comp(0001000000000088h) //шаблон "сводный наряд"
+              ) FactTrud
 ;
 var
   fZakaz: string;
