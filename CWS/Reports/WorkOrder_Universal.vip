@@ -5,7 +5,7 @@
 
 #component "AGAT"
 interface WorkOrder_Universal 'Сводный наряд - универсальный';
-show (,,41,10);
+show (,,41,11);
 
 type tkatpodr = record as table katpodr;
 
@@ -25,6 +25,7 @@ table struct tVal (
   PersonNrec  : comp,
   ZakazNrec   : comp,
   MarshSpNrec : comp,
+  MemoNrec    : comp,
   CostItemName: string[120],
   PostName    : string[100],
   ValueKind   : word,
@@ -82,6 +83,7 @@ table struct tZakaz (
   i00 = Nrec
 );
 
+//#region queries
 sql query qPlan =
   insert tPlan (nrec, Number, Descr, PeriodName, PeriodDBeg, PeriodDEnd, PodrNrec, PodrName, PodrCode)
   select mp.nrec, mp.number, mp.descr, per.name, per.dbeg, per.dend, kp.nrec, kp.name, kp.kod
@@ -92,8 +94,8 @@ sql query qPlan =
 ;
 
 sql query qValSums =
-  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, CostItemName, PostName, ValueKind, Value)
-  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, spk.name, coalesce(post.name,''), 0, vsp.kol
+  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, MemoNrec, CostItemName, PostName, ValueKind, Value)
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, coalesce(allmemo.nrec, #comp(0)), spk.name, coalesce(post.name,''), 0, vsp.kol
   from tPlan
   join mnplan mp on tPlan.nrec = mp.nrec
   join spmnplan spm on mp.nrec = spm.cmnplan and ((?=1) or spm.canval1 in (select crec from fltr where filter=1))
@@ -106,12 +108,13 @@ sql query qValSums =
     spl.canval5 in (select crec from fltr where filter = 2)
   join valspmnp vsp on spl.nrec = vsp.cspmnpl
   join spkau spk on spl.canval5 = spk.nrec
-  left join catalogs post on spm.canval4 = post.nrec;
+  left join catalogs post on spm.canval4 = post.nrec
+  left join allmemo on allmemo.wtable = 11038 and allmemo.crec = spm.nrec;
 
 //Время общее (отработанное + в командировке)
 sql query qValTime =
-  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, CostItemName, PostName, ValueKind, Value)
-  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, spk.name, coalesce(post.name,''), 1, vsp.kol+vsp.price
+  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, MemoNrec, CostItemName, PostName, ValueKind, Value)
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, coalesce(allmemo.nrec, #comp(0)), spk.name, coalesce(post.name,''), 1, vsp.kol+vsp.price
   from tPlan
   join mnplan mp on tPlan.nrec = mp.nrec
   join spmnplan spm on mp.nrec = spm.cmnplan and ((?=1) or spm.canval1 in (select crec from fltr where filter=1))
@@ -125,12 +128,13 @@ sql query qValTime =
   join valspmnp vsp on spl.nrec = vsp.cspmnpl
   join spkau spk on spl.canval5 = spk.nrec
   left join catalogs post on spm.canval4 = post.nrec
+  left join allmemo on allmemo.wtable = 11038 and allmemo.crec = spm.nrec
   where vsp.kol <> 0 or vsp.price <> 0;
 
 //Время в командировке
 sql query qValTimeBusinessTrip =
-  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, CostItemName, PostName, ValueKind, Value)
-  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, spk.name, coalesce(post.name,''), 2, vsp.price
+  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, MemoNrec, CostItemName, PostName, ValueKind, Value)
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, coalesce(allmemo.nrec, #comp(0)), spk.name, coalesce(post.name,''), 2, vsp.price
   from tPlan
   join mnplan mp on tPlan.nrec = mp.nrec
   join spmnplan spm on mp.nrec = spm.cmnplan and ((:everyZakaz=1) or spm.canval1 in (select crec from fltr where filter=1))
@@ -144,12 +148,13 @@ sql query qValTimeBusinessTrip =
   join valspmnp vsp on spl.nrec = vsp.cspmnpl
   join spkau spk on spk.nrec = #comp(00010000000008FDh) //статья наряда "Начислено за время нахождения на объекте" - искусственно командировочное время привязываем к этой статье
   left join catalogs post on spm.canval4 = post.nrec
+  left join allmemo on allmemo.wtable = 11038 and allmemo.crec = spm.nrec
   where vsp.price <> 0;
 
 //Время отработанное
 sql query qValTimeWorked =
-  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, CostItemName, PostName, ValueKind, Value)
-  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, spk.name, coalesce(post.name,''), 3, vsp.kol
+  insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, MemoNrec, CostItemName, PostName, ValueKind, Value)
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, coalesce(allmemo.nrec, #comp(0)), spk.name, coalesce(post.name,''), 3, vsp.kol
   from tPlan
   join mnplan mp on tPlan.nrec = mp.nrec
   join spmnplan spm on mp.nrec = spm.cmnplan and ((:everyZakaz=1) or spm.canval1 in (select crec from fltr where filter=1))
@@ -163,6 +168,7 @@ sql query qValTimeWorked =
   join valspmnp vsp on spl.nrec = vsp.cspmnpl
   join spkau spk on spk.nrec = #comp(00010000000008FBh) //статья наряда "По должностному окладу" - искусственно отработанное время на предприятии привязываем к этой статье
   left join catalogs post on spm.canval4 = post.nrec
+  left join allmemo on allmemo.wtable = 11038 and allmemo.crec = spm.nrec
   where vsp.kol <> 0;
 
 sql query qPersonAll =
@@ -250,11 +256,14 @@ sql query qZakaz =
                where mp.cwayaccou = #comp(0001000000000088h) //шаблон "сводный наряд"
               ) FactTrud
 ;
+//#endregion queries
+
 var
   fZakaz: string;
   lZakaz: longint;
   dRepBeg, dRepEnd: date;
   reportKind: byte;
+  reportFlag: byte;
   iGetKau: GetKau;
   pXL: XLSRepBuilder;
   sXLSFileName, sXLTFileName: string;
@@ -263,14 +272,17 @@ create view
 as select *
 from tVal, tBal, tPlan, tPerson, tZakaz,
      spkau,
-     tVal rVal, tPlan rPlan, tPerson rPerson, tZakaz rZakaz, tBal rBal
+     tVal rVal, tPlan rPlan, tPerson rPerson, tZakaz rZakaz, tBal rBal, AllMemo rAllMemo
 where ((
   rVal.PlanNrec           /== rPlan.nrec and
   rVal.PersonNrec         /== rPerson.nrec and
   rVal.ZakazNrec          /== rZakaz.nrec and
   year(rPlan.PeriodDBeg)  /== rBal.year and
-  month(rPlan.PeriodDBeg) /== rBal.month
+  month(rPlan.PeriodDBeg) /== rBal.month and
+  rVal.MemoNrec            == rAllMemo.Nrec
 ));
+
+file fl;
 
 create view vTopPodr
 var
@@ -298,6 +310,7 @@ fields
   dRepEnd: noprotect;
   fZakaz: protect, pickbutton;
   reportKind: [list 'Форма с 01.12.2017', 'Форма 2016', 'Старая форма' ];
+  reportFlag: noProtect;
 buttons
   cmDoOk, default;
 <<
@@ -307,6 +320,8 @@ buttons
  `Заказ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
  `Вид`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+   [.] Отображать Основание`
 
                        <. Продолжить .>
 >>
@@ -457,6 +472,7 @@ procedure MakeRep;
   sqlAddStr(s, 'PersonNrec  : comp,         ');
   sqlAddStr(s, 'ZakazNrec   : comp,         ');
   sqlAddStr(s, 'MarshSpNrec : comp,         ');
+  sqlAddStr(s, 'MemoNrec    : comp,         ');
   sqlAddStr(s, 'CostItemName: string[121],  ');
   sqlAddStr(s, 'PostName    : string,       ');
   sqlAddStr(s, 'ValueKind   : word,         ');
@@ -579,6 +595,7 @@ procedure MakeRep;
   pXL.CreateTblFld('Операция'         );
   pXL.CreateTblFld('Должность'        );
   pXL.CreateTblFld('Статья'           );
+  pXL.CreateTblFld('Основание'        );
   pXL.CreateTblFld('Время'            );
   pXL.CreateTblFld('ВремяВКомандировке');
   pXL.CreateTblFld('ВремяОтработанное');
@@ -586,6 +603,7 @@ procedure MakeRep;
   pXL.CreateTblFld('Трудоемкость'     );
   pXL.CreateTblFld('Сумма'            );
 
+  StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, 'Выгрузка в Excel', RecordsInTable(#rVal));
   _loop rVal
   {
     pXL.ClearTblBuffer;
@@ -625,6 +643,18 @@ procedure MakeRep;
     pXL.SetTblStringFldValue('Должность'          , rVal.PostName);
     pXL.SetTblStringFldValue('Статья'             , replace(rVal.CostItemName,'|',' '));
 
+    if (reportFlag and 1) = 1
+    {
+      var sMemo: string = '';
+      if getfirst rAllMemo = tsOk
+        if fl.OpenMemo(rAllMemo.Mem)
+        {
+          fl.ReadLn(sMemo);
+          fl.Close;
+        }
+      pXL.SetTblStringFldValue('Основание'        , sMemo);
+    }
+
     case rVal.ValueKind of
       ValueKind_Summa:
       {
@@ -647,7 +677,9 @@ procedure MakeRep;
     end;
 
     pXL.InsTblRow;
+    if not NextVisual break;
   }
+  StopVisual;
 
   pXL.PublishTbl('Main');
   pXL.LoadReport(sXLSFileName);
@@ -683,7 +715,7 @@ cmDoOk:
   else
     sXLTFileName := TranslatePath('%StartPath%xls\workorder_universal_2017.xlsm');
   end;
-  startnewvisual(vtRotateVisual, vfTimer, 'Формирование запроса', 0);
+  startnewvisual(vtRotateVisual, vfTimer, 'Выборка данных', 0);
   MakeRep;
   stopvisual('', 0);
 }
@@ -718,6 +750,7 @@ cminit:
   if not readmydsk(dRepBeg, 'WorkOrder_Universal_dRepBeg', false) dRepBeg := date(1,month(sub_months(cur_date,1)), year(sub_months(cur_date,1)));
   if not readmydsk(dRepEnd, 'WorkOrder_Universal_dRepEnd', false) dRepEnd := date(last_day(sub_months(cur_date,1)),month(sub_months(cur_date,1)), year(sub_months(cur_date,1)));
   if not readmydsk(reportKind, 'WorkOrder_Universal_reportKind', false) reportKind := 0;
+  if not readmydsk(reportFlag, 'WorkOrder_Universal_reportFlag', false) reportFlag := 0;
   refreshfields;
 }
 cmdone:
@@ -726,6 +759,7 @@ cmdone:
   savemydsk(dRepBeg, 'WorkOrder_Universal_dRepBeg');
   savemydsk(dRepEnd, 'WorkOrder_Universal_dRepEnd');
   savemydsk(reportKind, 'WorkOrder_Universal_reportKind');
+  savemydsk(reportFlag, 'WorkOrder_Universal_reportFlag');
 }
 end;
 end.
