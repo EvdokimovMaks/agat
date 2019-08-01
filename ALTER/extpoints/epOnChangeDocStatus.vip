@@ -1,0 +1,51 @@
+#include StatLog.vih
+#include PD_ChangeStatusTxo.vih
+#include BasedocHelper.vih
+
+#component "AGAT"
+
+handler with replace AG_epOnChangeDocStatus
+  on ExtensionPoint epOnChangeDocStatus(wDocType: word;
+                                        pDoc: comp;
+                                        wOldStatus: word;
+                                        pOldNote: comp;
+                                        wNewStatus: word;
+                                        pNewNote: comp;
+                                        StatLoger: IStatLog)
+action
+{
+  result := true;
+
+  case wDocType of
+    40:
+    {
+      //Если в ДО на закупку/предоплату закупок в статусе "в реестре"
+      //не согласована виза бухгалтерии/казначейства/ком.дирекции -
+      //запрещаем переводить ДО в другой статус
+      if pOldNote = KATNOTES_NREC_BASEDOC_REESTR
+      {
+        var helper: BasedocHelper; //хелпер для работы с ДО
+        //Получаем визы ДО
+        var vizas: IBasedocVizas;
+        vizas := helper.GetBasedocVizas(pDoc);
+        //Если хотя бы одна из виз не согласована - отменяем транзакцию
+        if (vizas.BUH.ValueNrec != SPKAU_NREC_STATUS_SOGLASOVANIYA_SOGLASOVANO) or
+           (vizas.KAZ.ValueNrec != SPKAU_NREC_STATUS_SOGLASOVANIYA_SOGLASOVANO) or
+           (vizas.DIR.ValueNrec != SPKAU_NREC_STATUS_SOGLASOVANIYA_SOGLASOVANO)
+        {
+          result := false;
+          StatLoger.ChangeStatusEnabled := false;
+          Message(''#3'Изменение статуса запрещено. Визаы бухгалтерии, коммерческой дирекции и' + chr(13) +
+                  'казначейства должны иметь значения "Согласовано"', warning);
+        }
+      }
+    }
+  end;
+
+  if result
+  {
+    var changeStatusTxo: PD_ChangeStatusTxo;
+    changeStatusTxo.process(wDocType, pDoc, pOldNote, pNewNote);
+  }
+
+}
