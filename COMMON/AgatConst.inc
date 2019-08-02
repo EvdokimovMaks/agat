@@ -11,6 +11,8 @@ const
   KODGRKAU_IGK                                  : word = 10527; //2015 Идентификатор государственного контракта
   KODGRKAU_PODGR                                : word = 10057; //Подгруппа персонала (НВП/ПТП/...)
   KODGRKAU_CATEG                                : word = 10036; //Категории (руководители/специалисты/...)
+  KODGRKAU_DDS                                  : word = 10009; //Классификатор ДДС
+  KODGRKAU_PRINADLEJNOST_AVANSU                 : word = 10008; //Платежи: принадлежность к авансу
 
   //внешние атрибуты для Партий
   ATTRNAM_NREC_KATPARTY_GOD_VIPUSKA               : comp = 0001000000001E99h;
@@ -36,6 +38,9 @@ const
 
   //внешние атрибуты для ДО
   ATTRNAM_NREC_BASEDOC_ISPOLNITEL_DOGOVORA        : comp = 000100000000005Bh; //Исполнитель договора - ссылка на подразделение
+  ATTRNAM_NREC_BASEDOC_DDS                        : comp = 000100000000008Fh; //Статья ДДС - ссылка на польз. аналитику "Классификатор ДДС"
+  ATTRNAM_NREC_BASEDOC_AVANS                      : comp = 000100000000008Dh; //Аванс/ок. расчет - ссылка на польз. аналитику "Платежи: принадлежность к авансу"
+  ATTRNAM_NREC_BASEDOC_NAZNPL                     : comp = 000100000000010Dh; //Назначение платежа - строка
 
   //внешние атрибуты для строк ДО
   ATTRNAM_NREC_SPSTEP_ZAKAZ_VIBITIYA              : comp = 0001000000000A87h; //Заказ выбытия - ссылка на системную аналитику Объекты строительства
