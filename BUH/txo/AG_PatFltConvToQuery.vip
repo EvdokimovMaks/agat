@@ -1,0 +1,163 @@
+#include AG_PatFlt.vih
+#include AG_PatFltConvToQuery.vih
+
+#component "AGAT"
+
+interface AG_PatFltConvToQuery;
+
+var
+  _flt: AG_IPatFlt;
+  _bTmpTablesPrepared: boolean;
+  _tblNameNrecFltr: string;
+  _tblNameMaskFltr: string;
+
+function getNewSqlTmpTableName(sPrefix: string): string;
+{
+  result := sPrefix + _DateTimeToStr(_CurDateTime, 'MMDDHHNNSS_SSS')
+}
+
+function prepareSqlTmpTable: boolean;
+{
+  if not _bTmpTablesPrepared
+  {
+    var s: longint = 0;
+    _tblNameNrecFltr := getNewSqlTmpTableName('TmpNrecFltr');
+    sqlAddStr(s, 'table ' + _tblNameNrecFltr + '(');
+    sqlAddStr(s, '  FltIdx: longint');
+    sqlAddStr(s, ' ,cRec: comp');
+    sqlAddStr(s, ') with index (');
+    sqlAddStr(s, '  i01 = FltIdx');
+    sqlAddStr(s, ');');
+    result := sqlCreateTmpTable(s, ctmNormal) = tsOk;
+    _bTmpTablesPrepared := result;
+    if not result exit;
+
+    sqlFreeStr(s);
+    _tblNameMaskFltr := getNewSqlTmpTableName('TmpMaskFltr');
+    sqlAddStr(s, 'table ' + _tblNameNrecFltr + '(');
+    sqlAddStr(s, '  FltIdx: longint');
+    sqlAddStr(s, ' ,Mode: word');
+    sqlAddStr(s, ' ,Mask: string');
+    sqlAddStr(s, ') with index (');
+    sqlAddStr(s, '  i01 = FltIdx + Mode');
+    sqlAddStr(s, ');');
+    result &= sqlCreateTmpTable(s, ctmNormal) = tsOk;
+    _bTmpTablesPrepared := result;
+  }
+  else
+    result := true;
+}
+
+function prepareDataForNrecFilter: boolean;
+{
+  result := sqlExecDirect('delete ' + _tblNameNrecFltr + ' where FltIdx = ' +
+                          _flt.Idx) = tsOk;
+  var fltIdx: longint = _flt.Idx;
+  var cRec: comp = 0;
+  var stmt: longint = sqlAllocStmt;
+  sqlPrepare(stmt, 'insert ' + _tblNameNrecFltr + ' (FltIdx, cRec) values (?, ?)');
+  sqlBindParam(stmt, 1, fltIdx);
+  sqlBindParam(stmt, 2, cRec);
+  if _flt.items.first do
+  {
+    cRec := _flt.items.value;
+    result &= sqlExecute(stmt) = tsOk;
+  }
+  while _flt.items.next;
+  sqlFreeStmt(stmt);
+}
+
+function fltMaskToSqlMask(mask: string): string;
+{
+  result := replace(mask, '#', '%');
+}
+
+function prepareDataForMaskFilter: boolean;
+{
+  result := sqlExecDirect('delete ' + _tblNameMaskFltr + ' where FltIdx = ' +
+                          _flt.Idx) = tsOk;
+  var fltIdx: longint = _flt.Idx;
+  var mode: word = 0;
+  var mask: string = '';
+  var stmt: longint = sqlAllocStmt;
+  sqlPrepare(stmt, 'insert ' + _tblNameMaskFltr + ' (FltIdx, Mode, Mask) values (?, ?, ?)');
+  sqlBindParam(stmt, 1, fltIdx);
+  sqlBindParam(stmt, 2, mode);
+  sqlBindParam(stmt, 3, mask);
+  if _flt.items.first do
+  {
+    mode := _flt.items.mode;
+    mask := fltMaskToSqlMask(_flt.items.value);
+    result &= sqlExecute(stmt) = tsOk;
+  }
+  while _flt.items.next;
+  sqlFreeStmt(stmt);
+}
+
+function prepareData: boolean;
+{
+  result := case(_flt.Mode;
+                 lc_PATFltMode_ByNRec: prepareDataForNrecFilter,
+                 lc_PATFltMode_ByMask: prepareDataForMaskFilter;
+                 false);
+}
+
+function toSqlStrNrecFltr(sFld: string; var lSqlStr: longint): boolean;
+{
+  sqlAddStr(lSqlStr, '(' + sFld + if(_flt.isExclude, ' not in ', ' in '));
+  sqlAddStr(lSqlStr, '(select cRec from ' + _tblNameNrecFltr);
+  sqlAddStr(lSqlStr, ' where ' + _tblNameNrecFltr + '.FltIdx=' + _flt.Idx + '))');
+  result := true;
+}
+
+function toSqlStrMaskFltr(sFld: string; var lSqlStr: longint): boolean;
+{
+  sqlAddStr(lSqlStr, '(');
+  sqlAddStr(lSqlStr, '  (select count(*) from ' + _tblNameMaskFltr);
+  sqlAddStr(lSqlStr, '   where ' + _tblNameMaskFltr + '.FltIdx=' + _flt.Idx);
+  sqlAddStr(lSqlStr, '   and ' + _tblNameMaskFltr + '.Mode=' + lc_SpPATFltMode_ByIncludeMask);
+  sqlAddStr(lSqlStr, '   and ' + sFld + ' like ' + _tblNameMaskFltr + '.mask');
+  sqlAddStr(lSqlStr, '  ) > 0 ');
+  sqlAddStr(lSqlStr, '  and');
+  sqlAddStr(lSqlStr, '  (select count(*) from ' + _tblNameMaskFltr);
+  sqlAddStr(lSqlStr, '   where ' + _tblNameMaskFltr + '.FltIdx=' + _flt.Idx);
+  sqlAddStr(lSqlStr, '   and ' + _tblNameMaskFltr + '.Mode=' + lc_SpPATFltMode_ByIncludeMask);
+  sqlAddStr(lSqlStr, '   and ' + sFld + ' like ' + _tblNameMaskFltr + '.mask');
+  sqlAddStr(lSqlStr, '  ) > 0');
+  sqlAddStr(lSqlStr, ')');
+  result := true;
+}
+
+function toSqlStr(sFltName: string; sFld: string; var lSqlStr: longint): boolean;
+{
+  result := false;
+  if not _flt.findByName(sFltName) exit;
+  if not prepareSqlTmpTable exit;
+  if not prepareData exit;
+  result := case(_flt.Mode;
+                 lc_PATFltMode_ByNRec: toSqlStrNrecFltr(sFld, lSqlStr),
+                 lc_PATFltMode_ByMask: toSqlStrMaskFltr(sFld, lSqlStr);
+                 false);
+}
+
+constructor Init;
+{
+  result := false;
+}
+
+constructor Create(flt: AG_IPatFlt);
+{
+  _flt := flt;
+  result := _flt != NullRef;
+}
+
+destructor Done;
+{
+  if _bTmpTablesPrepared
+  {
+    sqlDropTmpTable(_tblNameNrecFltr);
+    sqlDropTmpTable(_tblNameMaskFltr);
+  }
+}
+
+end.

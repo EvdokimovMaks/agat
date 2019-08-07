@@ -1,0 +1,114 @@
+#include AG_PatFlt.vih
+
+#component "AGAT"
+
+interface AG_SpPatFlt;
+
+var
+  _hSiServ: longint;
+
+  _curFltIdx: longint;
+  _curFltMode: word;
+  _curFltM: TPtr;
+
+  _curIdx: longint;
+
+procedure OnAfterFltPositionChange(flt: AG_IPatFlt);
+{
+  _curFltIdx := flt.Idx;
+  _curFltMode :=flt.Mode;
+  _curFltM := case(_curFltMode;
+                   lc_PATFltMode_ByNRec: SiServ_GetFilterMarker(_hSiServ, _curFltIdx),
+                   lc_PATFltMode_ByMask: SiServ_GetFilterMask(_hSiServ, _curFltIdx);
+                   0);
+}
+
+function maskIncludeCnt: longint;
+{
+  result := SiServ_GetMaskIncludeCount(_curFltM);
+}
+
+function maskExcludeCnt: longint;
+{
+  result := SiServ_GetMaskExcludeCount(_curFltM);
+}
+
+function cnt: longint;
+{
+  if _curFltIdx >= 0
+    result := case(_curFltMode;
+                   lc_PATFltMode_ByNRec: GetMarkerCount(_curFltM),
+                   lc_PATFltMode_ByMask: maskIncludeCnt + maskExcludeCnt;
+                   0);
+  else
+    result := 0;
+}
+
+function first: boolean;
+{
+  result := cnt > 0;
+  if result
+    _curIdx := 0;
+}
+
+function next: boolean;
+{
+  result := _curIdx + 1 < cnt;
+  if result
+    _curIdx++;
+}
+
+Constructor Init;
+{
+  result := false;
+}
+
+Constructor Create(hSiServ: longint; flt: AG_IPatFlt);
+{
+  flt := flt;
+  _hSiServ := hSiServ;
+  _curFltIdx := -1;
+  BindEvent(OnAfterFltPositionChange, flt.afterPositionChange);
+  result := _hSiServ != 0;
+}
+
+function getMode: word;
+{
+  result := case(_curFltMode;
+                 lc_PATFltMode_ByNRec: lc_SpPATFltMode_ByNRec,
+                 lc_PATFltMode_ByMask: if(_curIdx < maskIncludeCnt,
+                                          lc_SpPATFltMode_ByIncludeMask,
+                                          lc_SpPATFltMode_ByExcludeMask);
+                 0);
+}
+
+function getValue: variant;
+{
+  result := '';
+  if _curIdx < 0 or _curIdx >= cnt
+    exit;
+  case _curFltMode of
+    lc_PATFltMode_ByNRec:
+    {
+      var cAn: comp = 0;
+      if GetMarker(_curFltM, _curIdx, cAn)
+        result := cAn;
+    }
+    lc_PATFltMode_ByMask:
+    {
+      result := if(_curIdx < maskIncludeCnt,
+                   SiServ_GetMaskInclude(_curFltM, _curIdx),
+                   SiServ_GetMaskExclude(_curFltM, _curIdx - maskIncludeCnt));
+    }
+  end;
+}
+
+property Idx: longint read _curIdx;
+
+property FltIdx: longint read _curFltIdx;
+
+property Mode: word read getMode;
+
+property Value: variant read getValue;
+
+end.

@@ -1,4 +1,5 @@
 #include IdentAPI.vih
+#include AG_PatFlt.vih
 
 #component "F_PAT"
 
@@ -8,6 +9,25 @@ interface IdApi_AG_DSQL;
 
 var
   _key: string;
+  _paramGen: string;
+  _findMemoMode: word;
+  _findMemoValue: string;
+
+table struct TmpQueryParams (
+  Nrec: comp
+ ,Name: string
+ ,Type: word
+ ,Value: string
+) with index (
+  i01 = Nrec (unique, surrogate)
+);
+
+create view
+as select
+  TmpQueryParams.Nrec
+from
+  TmpQueryParams
+ ,TmpQueryParams TmpQueryParams1;
 
 procedure myLog(s: string);
 {
@@ -30,25 +50,118 @@ procedure myLogTxoApiInfoDoc(buf: TTxoApiInfoDoc);
   myLog('  buf.dEndFp   = ' + buf.dEndFp   );
 }
 
-//Инициализировать окно парметров ключа
-function InitPluginWnd( TiDkGal, SysOper : word; Key : string ) : boolean;
+
+//#region ParamGen
+
+procedure refreshParamGen;
 {
-  myLog('InitPluginWnd: TiDkGal=' + TiDkGal + '; SysOper=' + SysOper + '; Key=' + Key);
-  _key := Key;
-  result := true;
+  _paramGen := case(_findMemoMode;
+                    1: '[ТекстКод:',
+                    2: '[ТекстАббр:';
+                    '[ТекстNrec:');
+  _paramGen += _findMemoValue + ']';
+  _loop TmpQueryParams1
+  {
+    if Trim(TmpQueryParams1.Name) = '' or
+       Trim(TmpQueryParams1.Value) = ''
+      continue;
+
+    _paramGen += case(TmpQueryParams1.Type;
+                      1: '[s_',
+                      2: '[w_',
+                      3: '[do_',
+                      4: '[l_',
+                      5: '[d_';
+                      '[c_');
+    _paramGen += TmpQueryParams1.Name + ':' + TmpQueryParams1.Value + ']';
+  }
+  set _paramGen := _paramGen;
 }
+
+window wParamGen 'Параметры' escClose, doAccept;
+
+  screen scParamGen (,,sci1Esc);
+    show(,,,5) fixed_y;
+    fields
+      _paramGen: protect, centered, {font={bold=true;}};
+      _findMemoMode: [list 0 'Nrec', 1 'Код', 2 'Аббревиатура'];
+      _findMemoValue: noprotect, pickbutton;
+<<
+ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ Текстовое поле:
+ `Режим поиска`.@@@@@@@@@@@@@@@@@@@ `Значение`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+  end; // screen scParamGen
+
+  browse brQueryParams (,,sci178Esc);
+    show(,6,,);
+    table TmpQueryParams;
+    fields
+      TmpQueryParams.Name 'Параметр в SQL-запросе': [20], noprotect;
+      TmpQueryParams.Type 'Тип параметра': [10], noprotect,
+                                           [List 0 'Comp', 1 'String',
+                                                 2 'Word', 3 'Double',
+                                                 4 'LongInt', 5 'Date'];
+      TmpQueryParams.Value 'Значение': [20], noprotect;
+  end; //browse brQueryParams
+
+  tableevent table TmpQueryParams;
+    cmInsertRecord: { insert current TmpQueryParams; refreshParamGen; }
+    cmUpdateRecord: { update current TmpQueryParams; refreshParamGen; }
+    cmDeleteRecord: { delete current TmpQueryParams; refreshParamGen; }
+    cmCheckField  : refreshParamGen;
+  end;
+
+  handleevent
+
+    cmPick:
+    {
+      var pNrec: comp = if(_findMemoMode = 0, _findMemoValue, 0);
+      var pCode: word = if(_findMemoMode = 1, _findMemoValue, 0);
+      var pAbbr: string[80] = if(_findMemoMode = 2, _findMemoValue, '');
+      if RunInterface(AGAT::AG_PatMemo, cgiPick, pNrec, pCode, pAbbr) = cmDefault
+      {
+        set _findMemoValue := case(_findMemoMode;
+                                   1: pCode,
+                                   2: pAbbr;
+                                   String(pNrec,0,0));
+        refreshParamGen;
+      }
+    }
+
+    cmCheckField:
+      refreshParamGen;
+
+  end; //handleevent window wParamGen
+
+end; //window wParamGen
 
 //генерация строки параметров [Param1:"Value1"][Param2:"Value2"]
 function ParamGen : string;
 {
-  result := '';
+  refreshParamGen;
+  result := _paramGen;
+}
+
+//#endregion ParamGen
+
+
+//Инициализировать окно парметров ключа
+function InitPluginWnd( TiDkGal, SysOper : word; Key : string ) : boolean;
+{
+  #__UNUSED__(TiDkGal, SysOper)
+  _key := Key;
+  mtClear(#TmpQueryParams, mfNormal);
+  refreshParamGen;
+  result := true;
 }
 
 //разбор массива параметров [Param1:"Value1"][Param2:"Value2"]
 //(параметры уже предварительно разобраны калькулятором и переложены в массив )
 function ParamParser( hTxo : longint; TiDkGal, SysOper : word ) : boolean;
 {
-  myLog('ParamParser: hTxo=' + hTxo + '; TiDkGal=' + TiDkGal + '; SysOper=' + SysOper);
+
   result := true;
 }
 
@@ -56,8 +169,7 @@ function ParamParser( hTxo : longint; TiDkGal, SysOper : word ) : boolean;
 //во время разноске одного документа, закрытии одного счета, формирования одного FR отчета и т.п.
 procedure InitCalculation (hTxo : longint; buf : TTxoApiInfoDoc);
 {
-  myLog('InitCalculation: hTxo=' + hTxo);
-  myLogTxoApiInfoDoc(buf);
+  #__UNUSED__(hTxo, buf)
 }
 
 //конкретный расчет конкретных параметров
@@ -66,12 +178,26 @@ procedure MakeCalculation (hTxo : longint; buf : TTxoApiInfoDoc);
   myLog('MakeCalculation: hTxo=' + hTxo);
   myLogTxoApiInfoDoc(buf);
 
+  var flt: AG_IPatFlt = AG_IPatFlt(new(AG_PatFlt, Create(hTxo)));
+
+  /*
+  if flt.first do
+  {
+    myLog('  filter Name:' + flt.Name + '; Mode: ' + flt.Mode + '; WKau:' + flt.WKau + '; isExclude:' + if(flt.isExclude, 'true', 'false'));
+    if flt.items.first do
+    {
+      myLog('    item Mode:' + flt.items.Mode + '; Value:' + flt.items.Value);
+    }
+    while flt.items.next;
+  }
+  while flt.next;
   // получим ссылку на Si сервер
   var hSiServ : TPtr = patRep_GetPatSiServ(hTxo);
   myLog('  hSiServ=' + hSiServ);
   // получим
   var filtersCount: longint = SiServ_GetFiltersCount(hSiServ);
   myLog(' SiServ_GetFiltersCount=' + filtersCount);
+  */
 }
 
 //завершение расчета -  срабатывает один раз после завершения всех расчетов
@@ -89,6 +215,6 @@ VipInterface IdApiReg_AG_DSQL Implements ObjIdentApiPluginRegistrator Licensed(F
 interface IdApiReg_AG_DSQL;
 procedure DoRegisterIdents;
 {
-  AddIdent('AG_DSQL', 'SQL-запрос', 'IdApi_AG_DSQL', '');
+  AddIdent('AG_DSQL', 'SQL-запрос', 'IdApi_AG_DSQL', 'wParamGen');
 }
 end.

@@ -1,0 +1,191 @@
+#include AG_PatMemo.vih
+
+#component "AGAT"
+
+interface AG_PatMemo 'Текстовые поля для ПАТ-формул' escClose;
+show (,,75,);
+
+var
+  _mode: word;
+  _nrec: comp;
+  _code: word;
+  _abbr: string[80];
+
+create view
+as select
+  AllMemo.Nrec
+from
+  AllMemo
+ ,AllMemo AllMemoLastNpp (ALLMEMO02)
+where ((
+      ALLMEMO_WTABLE_PATMEMO == AllMemo.wTable
+  and ALLMEMO_WTABLE_PATMEMO == AllMemoLastNpp.wTable
+));
+
+parameters _mode, _nrec, _code, _abbr;
+
+function getLastNpp: word;
+{
+  result := if(getlast AllMemoLastNpp = tsOk, AllMemoLastNpp.Npp, 0);
+}
+
+window wEditPatMemo 'Редактирование текстового поля для ПАТ-формул' escClose, doAccept;
+  show(,,70,15);
+
+  panel pnEditPatMemo;
+    table AllMemo;
+
+    screen scEditPatMemo (,,sci1478Esc);
+      show(,,,4) fixed_y;
+      fields
+        AllMemo.Npp ('Код',,): noprotect;
+        AllMemo.FName ('Аббревиатура',,): noprotect;
+        AllMemo.Name ('Наименование',,): noprotect;
+<<
+
+ `Код`.@@@@@@ `Аббревиатура`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ `Наименование`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+    end; // screen scEditPatMemo
+
+    text AllMemo.Mem: OnlyOneDoc;
+      show(,5,,);
+
+  end; //panel pnEditPatMemo
+
+end; //window wEditPatMemo
+
+browse brPatMemo (,,sci1478Esc);
+  table AllMemo;
+  fields
+    AllMemo.Npp 'Код': [10], protect;
+    AllMemo.FName 'Аббревиатура': [20], protect;
+    AllMemo.Name 'Наименование': [40], protect;
+end; // browse brPatMemo
+
+tableevent table AllMemo;
+
+  cmSetDefault:
+  {
+    ClearBuffer(#AllMemo);
+    AllMemo.wTable := ALLMEMO_WTABLE_PATMEMO;
+    AllMemo.Npp := getLastNpp + 1;
+  }
+
+  cmInsertRecord:
+    insert current AllMemo;
+
+  cmUpdateRecord:
+    update current AllMemo;
+
+  cmDeleteRecord:
+    delete current AllMemo;
+
+end; //tableevent table AllMemo
+
+handleevent
+
+  cmInit:
+  {
+    if (_mode and cgiPick) = cgiPick
+      SetWindowTitle(wnMainWindow, 'Выбор текстового поля для ПАТ-формул');
+
+    if (_mode and cgiNotEdit) = cgiNotEdit
+    {
+      DisableCommand(cmEdit);
+      DisableCommand(cmInsert);
+      DisableCommand(cmDelete);
+    }
+
+    if _nrec != 0
+      findByNrec(_nrec)
+    else if _code != 0
+      findByCode(_code)
+    else if _abbr != ''
+      findByAbbr(_abbr);
+
+    RereadRecord(#AllMemo);
+  }
+
+  cmEdit:
+  {
+    RunWindowModal(wEditPatMemo);
+  }
+
+  cmInsert:
+  {
+    add(getLastNpp + 1, '', '');
+    RereadRecord(#AllMemo);
+    RunWindowModal(wEditPatMemo);
+    Stop;
+  }
+
+  cmDefault:
+  {
+    if (_mode and cgiPick) = cgiPick
+    {
+      UpdateTable;
+      _nrec := AllMemo.Nrec;
+      _code := AllMemo.Npp;
+      _abbr := AllMemo.FName;
+      CloseInterface(cmDefault);
+    }
+    else
+      PutCommand(cmEdit);
+  }
+end; //handleevent interface
+
+function openMemoFld(var fileHandle: longint): boolean;
+{
+  result := IsValidAll(#AllMemo);
+  if not result exit;
+
+  if fileHandle = 0
+    fileHandle := CreateFileHandle(CreateTmpFileName);
+  result := fileHandle != 0;
+
+  if result
+    result := File_OpenMemo(AllMemo.Mem, fileHandle);
+}
+
+function findByNrec(value: comp): boolean;
+{
+  result := getfirst AllMemo where ((ALLMEMO_WTABLE_PATMEMO == AllMemo.wTable and
+                                     (AllMemo.Nrec = value) )) = tsOk;
+}
+
+function findByCode(value: word): boolean;
+{
+  result := getfirst AllMemo where ((ALLMEMO_WTABLE_PATMEMO == AllMemo.wTable and
+                                     (AllMemo.Npp = value) )) = tsOk;
+}
+
+function findByAbbr(value: string[80]): boolean;
+{
+  result := getfirst AllMemo where ((ALLMEMO_WTABLE_PATMEMO == AllMemo.wTable and
+                                   (AllMemo.FName = value) )) = tsOk;
+}
+
+function add(newCode: word; newAbbr: string[80]; newName: string[80]): boolean;
+{
+  ClearBuffer(#AllMemo);
+  AllMemo.wTable := ALLMEMO_WTABLE_PATMEMO;
+  AllMemo.Npp    := newCode;
+  AllMemo.FName  := newAbbr;
+  AllMemo.Name   := newName;
+  result := insert current AllMemo = tsOk;
+}
+
+function save: boolean;
+{
+  result := IsValidAll(#AllMemo);
+  if result
+    result := update current AllMemo = tsOk;
+}
+
+property NRec: comp absolute AllMemo.Nrec;
+property Code: word absolute AllMemo.Npp;
+property Abbr: string[80] absolute AllMemo.FName;
+property Name: string[80] absolute AllMemo.Name;
+
+end.
