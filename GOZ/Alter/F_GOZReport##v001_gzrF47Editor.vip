@@ -1,17 +1,129 @@
-#component "F_GOZReport"
-
+#include Query.vih
 #include AG_gzrTablGKDogView.vih
+
+#component "F_GOZReport"
 
 alter interface v001_gzrF47Editor;
 
+const
+  lc_AutoPATFltName_KatStroy: string = 'авто_ТекЗаказы';
+  lc_AutoPATFltName_Dogovor_Cur: string = 'авто_ТекДоговор';
+end;
+
 overload
   constructor Init;
+  function myAddAutoPATFiltersToListForCurQuickIGK: boolean;
 end;
 
 constructor Init;
 {
   otQuickIGKDog := IgzrTablGKDogView(new(AG_gzrTablGKDogView));
   result := inherited::Init;
+}
+
+sql query qKatStroy =
+select t.Nrec
+from (select distinct KatStroy.Nrec
+      from Dogovor
+      join SpDocs on SpDocs.TiDk = Dogovor.TiDk and SpDocs.cDoc = Dogovor.Nrec
+      join SpecMtr on SpecMtr.coTable = 1723 and SpecMtr.cSpec = SpDocs.Nrec
+      join KatStroy on KatStroy.Nrec = SpecMtr.cObj
+      where Dogovor.Nrec = :cDogovor
+      union
+      select distinct KatStroy.Nrec
+      from Dogovor
+      join CalPlan on CalPlan.cDogovor = Dogovor.Nrec and CalPlan.DirectMc = Dogovor.Direct and CalPlan.Status <> 3
+      join SpDocs on SpDocs.TiDk = 403 and SpDocs.cDoc = CalPlan.Nrec
+      join SpecMtr on SpecMtr.coTable = 1723 and SpecMtr.cSpec = SpDocs.Nrec
+      join KatStroy on KatStroy.Nrec = SpecMtr.cObj
+      where Dogovor.Nrec = :cDogovor
+      union
+      select distinct KatStroy.Nrec
+      from Dogovor
+      join SpDocs on SpDocs.TiDk = Dogovor.TiDk and SpDocs.cDoc = Dogovor.Nrec
+      join SpecMtr on SpecMtr.coTable = 1723 and SpecMtr.cSpec = SpDocs.Nrec
+      join KatStroy on KatStroy.Nrec = SpecMtr.cObj
+      where Dogovor.cDogovor = :cDogovor and Dogovor.Status <> 3
+      union
+      select distinct KatStroy.Nrec
+      from Dogovor
+      join CalPlan on CalPlan.cDogovor = Dogovor.Nrec and CalPlan.DirectMc = Dogovor.Direct and CalPlan.Status <> 3
+      join SpDocs on SpDocs.TiDk = 403 and SpDocs.cDoc = CalPlan.Nrec
+      join SpecMtr on SpecMtr.coTable = 1723 and SpecMtr.cSpec = SpDocs.Nrec
+      join KatStroy on KatStroy.Nrec = SpecMtr.cObj
+      where Dogovor.cDogovor = :cDogovor and Dogovor.Status <> 3
+     ) t
+;
+
+function myAddAutoPATFiltersToListForCurQuickIGK: boolean;
+{
+  result := inherited::myAddAutoPATFiltersToListForCurQuickIGK;
+  if not result exit;
+  var isAllOk : boolean = True;
+  do
+  {
+    //#region фильтр: "Текущий договор"
+    do
+    {
+      if (not myAddAutoTblPatFlt(
+        lc_AutoPATFltName_Dogovor_Cur   // наименование фильтра
+      , cgKau_Dogovor                   // код аналитики
+      , False                           // признак: "исключая номера"
+      ) )
+      {
+        FpLog(#(__InterfaceName__)+'.myLoadPATFilterListFromFile:'+ sLastError);
+        isAllOk := False;
+        Break;
+      }
+      if (not myAddAutoTblSpPatFlt(otQuickIGKDog.cDogovor) )
+      {
+        FpLog(#(__InterfaceName__)+'.myLoadPATFilterListFromFile:'+ sLastError);
+        isAllOk := False;
+        Break;
+      }
+    }
+    while False;
+    if not isAllOk Break;
+    //#endregion фильтр: "Текущий договор"
+
+    //#region фильтр: "Заказы по текущему договору"
+    do
+    {
+      if (not myAddAutoTblPatFlt(
+        lc_AutoPATFltName_KatStroy      // наименование фильтра
+      , cgKau_ObjBuild                  // код аналитики
+      , False                           // признак: "исключая номера"
+      ) )
+      {
+        FpLog(#(__InterfaceName__)+'.myLoadPATFilterListFromFile:'+ sLastError);
+        isAllOk := False;
+        Break;
+      }
+      var q: IQuery = queryManager.createQuery(qKatStroy)
+                                  .setParam('cDogovor', otQuickIGKDog.cDogovor);
+      if q.execute.errorCode != tsOk
+      {
+        FpLog(#(__InterfaceName__)+'.SqlQueryError: qKatStroy '+ q.errorCode);
+        isAllOk := False;
+        Break;
+      }
+      while q.fetch.errorCode = tsOk
+      {
+        if (not myAddAutoTblSpPatFlt(q.row.valAt(1)))
+        {
+          FpLog(#(__InterfaceName__)+'.myLoadPATFilterListFromFile:'+ sLastError);
+          isAllOk := False;
+          Break;
+        }
+      }
+    }
+    while False;
+    if not isAllOk Break;
+    //#endregion фильтр: "Заказы по текущему договору"
+  }
+  while False;
+
+  result := isAllOk;
 }
 
 end.
