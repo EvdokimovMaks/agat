@@ -1,0 +1,325 @@
+#include Query.vih
+#include IdentAPI.vih
+#include AG_PatFlt.vih
+#include AG_DSQLPatParam.vih
+#include AG_PatParam.vih
+#include AG_PatMemo.vih
+#include AG_PatFltConvToQuery.vih
+
+#component "F_PAT"
+
+VipInterface IdApi_AG_DSQL Implements ObjIdentApiPlugin Licensed(free);
+
+interface IdApi_AG_DSQL;
+
+var
+  _params: AG_IPatParams(AG_PatParams) new;
+  _paramGen: AG_DSQLPatParamGen new;
+  _memo: AG_IPatMemo(AG_PatMemo);
+  _patFlt: AG_IPatFlt;
+  _patFltToQuery: AG_IPatFltConvToQuery;
+
+window wParams 'Параметры';
+  embedded scParams interface _paramGen;
+  end;
+end;
+
+//генерация строки параметров [Param1:"Value1"][Param2:"Value2"]
+function ParamGen : string;
+{
+  result := _paramGen.ParamGen;
+}
+
+//Инициализировать окно парметров ключа
+function InitPluginWnd( TiDkGal, SysOper : word; Key : string ) : boolean;
+{
+  result := _paramGen.Init(TiDkGal, SysOper, Key);
+}
+
+//разбор массива параметров [Param1:"Value1"][Param2:"Value2"]
+//(параметры уже предварительно разобраны калькулятором и переложены в массив )
+function ParamParser(hTxo: longint; TiDkGal, SysOper: word ): boolean;
+{
+  result := false;
+
+  var paramFactory: AG_IPatParamFactory;
+  if not GetVipRef(paramFactory, 'AGAT::AG_DSQLPatParamFactory') exit;
+
+  var paramParser: AG_IPatParamParser = AG_IPatParamParser(
+    new(AG_PatParamParser, Create(paramFactory))
+  );
+
+  var ctx: TAG_PatParamContext;
+  ctx.hTxo    := hTxo;
+  ctx.TiDkGal := TiDkGal;
+  ctx.SysOper := SysOper;
+
+  result := paramParser.parse(_params, ctx);
+}
+
+//Ищет текст запроса по нреку, коду, аббревиатуре, в зависимости от того,
+//какой параметр Pat установлен. Если текст найден - возвращает true.
+function findMemo: boolean;
+{
+  var p: AG_IPatParam;
+  p := _params.getP('ТЕКСТNREC');
+  if p != NullRef
+    result := _memo.findByNrec(comp(p.value));
+  else
+  {
+    p := _params.getP('ТЕКСТКОД');
+    if p != NullRef
+      result := _memo.findByCode(p.value);
+    else
+    {
+      p := _params.getP('ТЕКСТАББР');
+      result := if(p != NullRef, _memo.findByAbbr(p.value), false);
+    }
+  }
+}
+
+//#region TODO: Вместо всего этого ужаса сделать нормальный лексер и парсер
+
+procedure mySqlAddStr(var sqlStr: longint; s: string);
+{
+  sqlAddStr(sqlStr, s);
+  //LogStrToFile('log.txt', s);
+}
+
+procedure sqlAddStrParam(sParamName: string; var sqlStr: longint);
+{
+  var p: AG_IDSQLPatParam = AG_IDSQLPatParam(_params.getP(sParamName));
+  if p = nullRef
+    mySqlAddStr(sqlStr, '$' + sParamName);
+  else
+    p.valueToSqlStr(sqlStr);
+}
+
+procedure sqlAddStrFilter(sFilter: string; sField: string; var sqlStr: longint);
+{
+  if not _patFltToQuery.toSqlStr(sFilter, sField, sqlStr)
+    mySqlAddStr(sqlStr, '@' + sFilter + '(' + sField + ')');
+}
+
+function parseChar(s: string; var i: byte;  ch: char): boolean; //символ
+{
+  result := false;
+  if i > length(s) exit;
+  if s[i] != ch exit;
+  i++;
+  result := true;
+}
+
+function parseSpaces(s: string; var i: byte): boolean; //пробелы
+{
+  result := parseChar(s, i, ' ');
+  while result
+    result := parseChar(s, i, ' ');
+}
+
+function parseIdentifier(s: string; var i: byte): boolean; //идентификатор
+{
+  result := false;
+
+  var l: byte = length(s);
+  if i > l exit;
+
+  if not case(s[i];
+              'a'..'z': true,
+              'A'..'Z': true,
+              'а'..'я': true,
+              'А'..'Я': true,
+              '_': true;
+              false) exit;
+
+  i++;
+  while i <= l and case(s[i];
+                        '0'..'9': true,
+                        'a'..'z': true,
+                        'A'..'Z': true,
+                        'а'..'я': true,
+                        'А'..'Я': true,
+                        '[': true,
+                        ']': true,
+                        '_': true;
+                        false)
+    i++;
+  result := true;
+}
+
+function parseQuotedText(s: string; var i: byte; quote: char): boolean; //текст внутри кавычек
+{
+  result := false;
+  var l: byte = length(s);
+  while i <= l and s[i] != quote
+  {
+    i++;
+    result := true;
+  }
+}
+
+function parseQuotes(s: string; var sqlStr: longint; var i: byte; quote: char): boolean; //кавычки с текстом
+{
+  result := false;
+  var j: byte = i;
+  if not parseChar(s, j, quote) exit;
+  if not parseQuotedText(s, j, quote) exit;
+  if not parseChar(s, j, quote) exit;
+  mySqlAddStr(sqlStr, SubStr(s, i, j - i));
+  i := j;
+  result := true;
+}
+
+function parseSqlText(s: string; var sqlStr: longint; var i: byte): boolean; //other text
+{
+  result := false;
+  var j: byte = i;
+  var l: byte = length(s);
+  while j <= l and s[j] != '''' and s[j] != '"' and s[j] != '$' and s[j] != '@'
+  {
+    j++;
+    result := true;
+  }
+  if result
+  {
+    mySqlAddStr(sqlStr, SubStr(s, i, j-i));
+    i := j;
+  }
+}
+
+function parseFldName(s: string; var i: byte): boolean;
+{
+  result := false;
+  var j: byte = i;
+  var l: byte = length(s);
+  while j <= l and s[j] != '}'
+  {
+    j++;
+    result := true;
+  }
+  if result
+  {
+    i := j;
+  }
+}
+
+function parsePatFilter(s: string; var sqlStr: longint; var i: byte): boolean; //@filtername(fldname)
+{
+  result := false;
+  var j: byte = i;
+  if not parseChar(s, j, '@') exit;
+  var filterStart: byte = j;
+  if not parseIdentifier(s, j) exit;
+  var sFilter: string = SubStr(s, filterStart, j - filterStart);
+  parseSpaces(s, j);
+  if not parseChar(s, j, '{') exit;
+  parseSpaces(s, j);
+  var fldStart: byte = j;
+  if not parseFldName(s, j) exit;
+  var sFld: string = SubStr(s, fldStart, j - fldStart);
+  parseSpaces(s, j);
+  if not parseChar(s, j, '}') exit;
+  sqlAddStrFilter(sFilter, sFld, sqlStr);
+  i := j;
+  result := true;
+}
+
+function parseParam(s: string; var sqlStr: longint; var i: byte): boolean; //#param
+{
+  result := false;
+  var j: byte = i;
+  if not parseChar(s, j, '$') exit;
+  var identifierStart: byte = j;
+  if not parseIdentifier(s, j) exit;
+  sqlAddStrParam(SubStr(s, identifierStart, j - identifierStart), sqlStr);
+  i := j;
+  result := true;
+}
+
+function parseSqlStr(s: string; var sqlStr: longint; var i: byte): boolean; //#param|@filter(fld)|'quotedString'|"quotedString"|otherText
+{
+  result := parseParam(s, sqlStr, i);
+  if not result
+    result := parsePatFilter(s, sqlStr, i);
+  if not result
+    result := parseQuotes(s, sqlStr, i, '''');
+  if not result
+    result := parseQuotes(s, sqlStr, i, '"');
+  if not result
+    result := parseSqlText(s, sqlStr, i);
+  if result
+    result := parseSqlStr(s, sqlStr, i);
+}
+
+//#endregion TODO: Вместо всего этого ужаса сделать нормальный лексер и парсер
+
+procedure sqlStrFromMemo(var sqlStr: longint);
+{
+  var f: longint = CreateFileHandle(CreateTmpFileName);
+  if _memo.openMemoFld(f)
+  {
+    while not File_Eof(f) do
+    {
+      var s: string = '';
+      var i: byte = 1;
+      File_ReadLn(s, f);
+      parseSqlStr(s, sqlStr, i);
+    }
+    File_Close(f);
+  }
+}
+
+//инициализация расчета -  срабатывает один раз при первом обращении к плагину
+//во время разноске одного документа, закрытии одного счета, формирования одного FR отчета и т.п.
+procedure InitCalculation (hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  #__UNUSED__(hTxo, buf)
+}
+
+//конкретный расчет конкретных параметров
+procedure MakeCalculation (hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  _patFlt := AG_IPatFlt(new(AG_PatFlt, Create(hTxo)));
+  _patFltToQuery := AG_IPatFltConvToQuery(new(AG_PatFltConvToQuery, Create(_patFlt)));
+
+  if findMemo
+  {
+    var sqlStr: longint = 0;
+    sqlStrFromMemo(sqlStr);
+    var q: IQuery = queryManager.createQuery(sqlStr);
+    q.setParam('cSoprHoz' , buf.cSoprHoz);
+    q.setParam('TiDkGal'  , buf.TiDkGal);
+    q.setParam('TiDk'     , buf.TiDk);
+    q.setParam('cSoprDoc' , buf.cSoprDoc);
+    q.setParam('cHozOper' , buf.cHozOper);
+    q.setParam('cPlansSch', buf.cPlansSch);
+    q.setParam('KodReg'   , buf.KodReg);
+    q.setParam('cObor'    , buf.cObor);
+    q.setParam('DatOb'    , buf.DatOb);
+    q.setParam('cValut'   , buf.cValut);
+    q.setParam('dBeginFp' , buf.dBeginFp);
+    q.setParam('dEndFp'   , buf.dEndFp);
+    if q.execute.errorCode = tsOk
+      if q.fetch.errorCode = tsOk
+        TxoHeadSetResultStr(hTxo, q.row.valAt(1));
+  }
+
+}
+
+//завершение расчета -  срабатывает один раз после завершения всех расчетов
+//при разноске одного документа, закрытии одного счета, формирования одного FR отчета и т.п.
+procedure DoneCalculation (hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  #__UNUSED__(hTxo, buf)
+}
+
+end.
+
+VipInterface IdApiReg_AG_DSQL Implements ObjIdentApiPluginRegistrator Licensed(Free);
+
+interface IdApiReg_AG_DSQL;
+procedure DoRegisterIdents;
+{
+  AddIdent('AG_DSQL', 'SQL-запрос', 'IdApi_AG_DSQL', 'wParams');
+}
+end.

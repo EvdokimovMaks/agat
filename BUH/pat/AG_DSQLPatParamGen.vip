@@ -1,0 +1,127 @@
+#include AG_DSQLPatParam.vih
+#component "AGAT"
+
+interface AG_DSQLPatParamGen 'Генератор строки параметров для Pat-алгоритма AG_DSQL' escClose;
+
+table struct TmpQueryParams (
+  Nrec: comp
+ ,Name: string
+ ,Type: word
+ ,Value: string
+) with index (
+  i01 = Nrec (unique, surrogate)
+);
+
+var
+  _paramGen: string;
+  _findMemoMode: word;
+  _findMemoValue: string;
+
+create view
+as select
+  TmpQueryParams.Nrec
+from
+  TmpQueryParams
+ ,TmpQueryParams TmpQueryParams1;
+
+procedure refreshParamGen;
+{
+  _paramGen := case(_findMemoMode;
+                    1: '[ТекстКод:',
+                    2: '[ТекстАббр:';
+                    '[ТекстNrec:');
+  _paramGen += _findMemoValue + ']';
+  _loop TmpQueryParams1
+  {
+    if Trim(TmpQueryParams1.Name) = '' or
+       Trim(TmpQueryParams1.Value) = ''
+      continue;
+
+    _paramGen += case(TmpQueryParams1.Type;
+                      1: '[s_',
+                      2: '[w_',
+                      3: '[do_',
+                      4: '[l_',
+                      5: '[d_';
+                      '[c_');
+    _paramGen += TmpQueryParams1.Name + ':' + TmpQueryParams1.Value + ']';
+  }
+  set _paramGen := _paramGen;
+}
+
+screen scParamGen (,,sci1Esc);
+  show(,,,5) fixed_y;
+  fields
+    _paramGen: protect, centered, {font={bold=true;}};
+    _findMemoMode: [list 0 'Nrec', 1 'Код', 2 'Аббревиатура'];
+    _findMemoValue: noprotect, pickbutton;
+<<
+ .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+ Текстовое поле:
+ `Режим поиска`.@@@@@@@@@@@@@@@@@@@ `Значение`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+end; // screen scParamGen
+
+browse brQueryParams (,,sci178Esc);
+  show(,6,,);
+  table TmpQueryParams;
+  fields
+    TmpQueryParams.Name 'Параметр в SQL-запросе': [20], noprotect;
+    TmpQueryParams.Type 'Тип параметра': [10], noprotect,
+                                         [List 0 'Comp', 1 'String',
+                                               2 'Word', 3 'Double',
+                                               4 'LongInt', 5 'Date'];
+    TmpQueryParams.Value 'Значение': [20], noprotect;
+end; //browse brQueryParams
+
+tableevent table TmpQueryParams;
+  cmInsertRecord: { insert current TmpQueryParams; refreshParamGen; }
+  cmUpdateRecord: { update current TmpQueryParams; refreshParamGen; }
+  cmDeleteRecord: { delete current TmpQueryParams; refreshParamGen; }
+  cmCheckField  : refreshParamGen;
+end;
+
+handleevent
+
+  cmPick:
+  {
+    case CurField of
+      #_findMemoValue:
+      {
+        var pNrec: comp = if(_findMemoMode = 0, _findMemoValue, 0);
+        var pCode: word = if(_findMemoMode = 1, _findMemoValue, 0);
+        var pAbbr: string[80] = if(_findMemoMode = 2, _findMemoValue, '');
+        if RunInterface(AGAT::AG_PatMemo, cgiPick, pNrec, pCode, pAbbr) = cmDefault
+        {
+          set _findMemoValue := case(_findMemoMode;
+                                     1: pCode,
+                                     2: pAbbr;
+                                     String(pNrec,0,0));
+          refreshParamGen;
+        }
+      }
+    end;
+  }
+
+  cmCheckField:
+    refreshParamGen;
+
+end; //handleevent window wParamGen
+
+
+function ParamGen: string;
+{
+  refreshParamGen;
+  result := _paramGen;
+}
+
+function Init(TiDkGal: word; SysOper: word; Key: string): boolean;
+{
+  #__UNUSED__(TiDkGal, SysOper, Key)
+  mtClear(#TmpQueryParams, mfNormal);
+  refreshParamGen;
+  result := true;
+}
+
+end.

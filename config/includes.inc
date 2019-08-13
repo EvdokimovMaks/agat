@@ -36,6 +36,7 @@
 /i:"../BUH/interface"
 /i:"../BUH/report"
 /i:"../BUH/txo"
+/i:"../BUH/pat"
 /i:"../BUSINESSTRIP/interface"
 /i:"../BUSINESSTRIP/reports"
 /i:"../COMMON/ClaimPicker"
