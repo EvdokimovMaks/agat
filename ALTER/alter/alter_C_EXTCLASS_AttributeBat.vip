@@ -1,0 +1,77 @@
+#include StatLog.vih
+#include PD_ChangeStatusTxo.vih
+#include PD_TXOGlobalState.vih
+
+#component "C_ExtClass"
+
+alter interface AttributeBat;
+
+var
+  _PDTXOGlobalState: PD_ITXOGlobalState(PD_TXOGlobalState);
+  _PDChangeStatusTxo: PD_ChangeStatusTxo;
+  #include StatLog.var
+  _isAttrSet: boolean;
+
+create view vAG
+var
+  _cSpStep: comp;
+as select
+  SpStep.Nrec
+from
+  SpStep
+ ,StepDoc
+ ,BaseDoc
+where ((
+      _cSpStep         == SpStep.Nrec
+  and SpStep.cStepDoc  == StepDoc.Nrec
+  and StepDoc.cBaseDoc == BaseDoc.Nrec
+));
+
+handleevent
+
+  cmOk:
+  {
+    //Отключаем формирование проводок в техническом плане счетов, срабатывающее из
+    //триггера изменения ВА к спецификации ДО. Иначе если в счете 100 позиций -
+    //переформировывание проводок выполняется для счета 100 раз
+    if TableCode = coSpStep
+      _PDTXOGlobalState.value := PD_TXOGLOBALSTATE_DONT_MAKE_TXO;
+
+    inherited::handleevent(cmOk);
+
+    _isAttrSet := true;
+  }
+
+  cmDone:
+  {
+    if TableCode = coSpStep and _isAttrSet
+    {
+      var m: TPtr = InitMarker('', 8, 10, 20, true);
+      var i: longint = 0;
+      for(i := 0; GetMarker(lMarker, i, vAG._cSpStep); i++)
+      {
+        if vAG.getfirst SpStep  != tsOk continue;
+        if vAG.getfirst StepDoc != tsOk continue;
+        if vAG.getfirst BaseDoc != tsOk continue;
+        if FoundMarker(m, vAG.BaseDoc.Nrec) continue;
+        InsertMarker(m, vAG.BaseDoc.Nrec);
+        //Для счета в статусе "В реестре"
+        //переформировываем проводки в техническом плане счетов.
+        if vAG.BaseDoc.cNote = KATNOTES_NREC_BASEDOC_REESTR
+        {
+          var wOldNote: word = 0;
+          var cOldNote: comp = 0;
+          oStatLog.StatLog_GetLast(40, vAG.BaseDoc.Nrec, wOldNote, cOldNote);
+          _PDChangeStatusTxo.process(40, vAG.BaseDoc.Nrec, cOldNote, vAG.BaseDoc.cNote);
+        }
+      }
+      DoneMarker(m, '');
+      //Включаем формирование проводок в техническом плане счетов, срабатывающее из
+      //триггера изменения ВА к спецификации ДО
+      _PDTXOGlobalState.reset;
+    }
+  }
+
+end;
+
+end.
