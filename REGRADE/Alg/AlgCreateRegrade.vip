@@ -8,7 +8,7 @@ VipInterface Algoritm_5108 Implements oAlgoritm_Sys;
 Interface Algoritm_5108 '' (,hcNoContext,) EscClose, Cyan;
 
 sql query qInsertTmc =
-insert tmc (Npp, KatpodrNrec, KatmolNrec, KatstroyNrec, cKau1, cKau2, cKau3, cKau4, cKau5, cKau6, cKau7, cKau8, cKau9, KatmcNrec, Qty)
+insert tmc (Npp, KatpodrNrec, KatmolNrec, KatstroyNrec, cKau1, cKau2, cKau3, cKau4, cKau5, cKau6, cKau7, cKau8, cKau9, KatmcNrec, KatpartyNrec, Qty)
 select min(sps.npp)                   as Npp,
        ks.cpodrfrom                   as KatpodrNrec,
        ks.cmolfrom                    as KatmolNrec,
@@ -23,6 +23,7 @@ select min(sps.npp)                   as Npp,
        coalesce(spm.ckau[8],#comp(0)) as cKau8,
        coalesce(spm.ckau[9],#comp(0)) as cKau9,
        sps.cmcusl                     as KatmcNrec,
+       sps.cparty                     as KatpartyNrec,
        sum(sps.kolfact)               as Qty
 from katsopr ks
 join spsopr sps on sps.csopr=ks.nrec
@@ -40,14 +41,15 @@ group by  ks.cpodrfrom,
           coalesce(spm.ckau[7],#comp(0)),
           coalesce(spm.ckau[8],#comp(0)),
           coalesce(spm.ckau[9],#comp(0)),
-          sps.cmcusl;
+          sps.cmcusl,
+          sps.cparty;
 
 sql query qSelectTgroup =
 select distinct KatpodrNrec, KatmolNrec, KatstroyNrec, cKau1, cKau2, cKau3, cKau4, cKau5, cKau6, cKau7, cKau8, cKau9
 from tmc;
 
 sql query qSelectTmc =
-select Npp, KatpodrNrec, KatmolNrec, KatstroyNrec, cKau1, cKau2, cKau3, cKau4, cKau5, cKau6, cKau7, cKau8, cKau9, KatmcNrec, Qty, 0 as Stock
+select Npp, KatpodrNrec, KatmolNrec, KatstroyNrec, cKau1, cKau2, cKau3, cKau4, cKau5, cKau6, cKau7, cKau8, cKau9, KatmcNrec, KatpartyNrec, Qty, 0 as Stock
 from tmc;
 
 table struct tmc (
@@ -55,10 +57,10 @@ table struct tmc (
   KatpodrNrec: comp, KatmolNrec: comp, KatstroyNrec: comp,
   cKau1: comp, cKau2: comp, cKau3: comp, cKau4: comp,
   cKau5: comp, cKau6: comp, cKau7: comp, cKau8: comp,
-  cKau9: comp, KatmcNrec: comp, Qty: double, Stock: double
+  cKau9: comp, KatmcNrec: comp, KatpartyNrec: comp, Qty: double, Stock: double
 ) with index (
   i01 = KatpodrNrec + KatmolNrec + KatstroyNrec +
-        cKau1 + cKau2 + cKau3 + cKau4 + cKau5 + cKau6 + cKau7 + cKau8 + cKau9 + KatmcNrec,
+        cKau1 + cKau2 + cKau3 + cKau4 + cKau5 + cKau6 + cKau7 + cKau8 + cKau9 + KatmcNrec + KatpartyNrec,
   i02 = Npp
 );
 
@@ -106,10 +108,10 @@ procedure FillTmc(aKatsoprNrec: comp);
   sqladdstr(s, '  Npp: word, KatpodrNrec: comp, KatmolNrec: comp, KatstroyNrec: comp,');
   sqladdstr(s, '  cKau1: comp, cKau2: comp, cKau3: comp, cKau4: comp,');
   sqladdstr(s, '  cKau5: comp, cKau6: comp, cKau7: comp, cKau8: comp,');
-  sqladdstr(s, '  cKau9: comp, KatmcNrec: comp, Qty: double');
+  sqladdstr(s, '  cKau9: comp, KatmcNrec: comp, KatpartyNrec: comp, Qty: double');
   sqladdstr(s, ') with index (');
   sqladdstr(s, '  i01 = KatpodrNrec + KatmolNrec + KatstroyNrec +');
-  sqladdstr(s, '        cKau1 + cKau2 + cKau3 + cKau4 + cKau5 + cKau6 + cKau7 + cKau8 + cKau9 + Npp + KatmcNrec');
+  sqladdstr(s, '        cKau1 + cKau2 + cKau3 + cKau4 + cKau5 + cKau6 + cKau7 + cKau8 + cKau9 + Npp + KatmcNrec + KatpartyNrec');
   sqladdstr(s, ');');
   sqlcreatetmptable(s, ctmNormal);
 
@@ -203,7 +205,10 @@ procedure FillStock;
            .AddNrecToFilter(WarehouseSectionFlag_Kau9    , tGroup.cKau9);
 
     _loop tmcChild
+    {
       _params.AddNrecToFilter(WarehouseSectionFlag_Katmc, tmcChild.KatmcNrec);
+      _params.AddNrecToFilter(WarehouseSectionFlag_Katparty, tmcChild.KatpartyNrec);
+    }
 
     var ss: IStockSet;
     ss := _stock.GetStock(_params);
@@ -225,7 +230,8 @@ procedure FillStock;
                                 _stockSet.cKau7        == tmc.cKau7        and
                                 _stockSet.cKau8        == tmc.cKau8        and
                                 _stockSet.cKau9        == tmc.cKau9        and
-                                _stockSet.KatmcNrec    == tmc.KatmcNrec
+                                _stockSet.KatmcNrec    == tmc.KatmcNrec    and
+                                _stockSet.KatpartyNrec == tmc.KatpartyNrec
                               )) = tsOk
           update current tmc set tmc.Stock := _stockSet.Qty;
       }
@@ -264,7 +270,7 @@ procedure RunDistr;
     kau[8] := tmc.cKau8;
     kau[9] := tmc.cKau9;
     distrQty := if(tmc.Stock > 0, tmc.Qty - tmc.Stock, tmc.Qty);
-    _distrMatByStock.AddWarehousePartForDistr(tmc.KatpodrNrec,tmc.KatmolNrec,tmc.KatstroyNrec,tmc.KatmcNrec, kau, distrQty);
+    _distrMatByStock.AddWarehousePartForDistr(tmc.KatpodrNrec,tmc.KatmolNrec,tmc.KatstroyNrec,tmc.KatmcNrec, tmc.KatpartyNrec, kau, distrQty);
   }
 
   if _distrMatByStock.PrepareOnDate(katsopr.dsopr)
