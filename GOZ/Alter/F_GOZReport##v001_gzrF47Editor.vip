@@ -1,5 +1,6 @@
 #include Query.vih
 #include ExtAttr.vih
+#include GetKau.vih
 #include AG_gzrTablGKDogView.vih
 
 #component "F_GOZReport"
@@ -7,6 +8,7 @@
 alter interface v001_gzrF47Editor;
 
 const
+  lc_XMLFieldName_KatStroy: string = 'Заказ';
   lc_AutoPATFltName_KatStroy: string = 'агат_Заказы';
   lc_AutoPATFltName_Dogovor_Cur: string = 'агат_Договор';
   lc_AutoPATFltName_IGK: string = 'агат_ИГК';
@@ -16,9 +18,95 @@ overload
   constructor Init;
   function myAddAutoPATFiltersToListForCurQuickIGK: boolean;
   function o$gzrBaseRepEditor.RunExportData : boolean;
+  function myReCalcFormulasInContract(
+    _wCheckLevel  : word;     // режим расчета (см. cgPatCheckLevel_* в BuhConst.inc):
+                              //   cgPatCheckLevel_FullCount - расчет
+                              //   cgPatCheckLevel_CheckOnly - проверка
+    _isUseGPDF    : boolean;  // использовать ли формулы получения данных ч/з ПАТ
+    _sPATFileName : string;   // имя ПАТ файла
+    _ItemMID      : TPtr;     // ID списка позиций структуры отчета
+    _indContract  : LongInt   // индекс контракта
+  ) : boolean;
 end;
 
+var
+  _mKatStroy: TPtr;
+  _myReCalcFormulasInContract_indContract: longint;
+
 #include ExtAttr.var
+#include GetKau.var
+
+function getKatStroyFld: string; forward;
+
+create view
+as select
+  getKatStroyFld()(fieldname=KatStroyFld)
+;
+
+function getKatStroyFld: string;
+{
+  result := '';
+  var sPath: string = lc_Path_Kontrakt + GetIter(iter_Kontrakt) + '/' + lc_XMLFieldName_KatStroy;
+  var nodeCnt: LongInt = pModiRepStruct.GetNodeCountByPath(sPath);
+  var i: integer = 0;
+  for (i := 0; i < nodeCnt; i++)
+  {
+    var sCurPath: string = sPath + GetIter(i);
+    var s: string = if(getanykau(1, cgKau_ObjBuild, pModiRepStruct.GetCompValueByPath(sCurPath)), givenanname(1), '');
+    result += if(result = '', nodeCnt + ': ', ', ') + SubStr(s, 1, pos(' ', s + ' ') - 1);
+  }
+}
+
+procedure PickKatStroy;
+{
+  var selCnt: longint = iGetKau.GetCodeKau(cgiMulti, cgKau_ObjBuild, 0);
+  if selCnt  = 0 exit;
+
+  var sPath: string = lc_Path_Kontrakt + GetIter(iter_Kontrakt) + '/' + lc_XMLFieldName_KatStroy;
+  var nodeCnt: LongInt = pModiRepStruct.GetNodeCountByPath(sPath);
+
+  //удаляем лишние ноды (в структуре 10 заказов, юзер выбрал 3: с 4 по 10 ноды удаляем)
+  var i: integer = 0;
+  for(i := selCnt; i < nodeCnt; i++)
+    if not pModiRepStruct.DeleteNodeByPath(sPath + GetIter(i))
+    {
+      sLastError := pModiRepStruct.GetStLastError;
+      FpLog(#(__InterfaceName__)+'.PickKatStroy: '+sLastError);
+      Exit;
+    }
+
+  //Читаем выбранные юзером нреки в маркер
+  var m: TPtr = InitMarker(iGetKau.GetMarkerName(cgKau_ObjBuild), 8, 10, 10, true);
+  //пишем в ноды нреки заказов, выбранные пользователем
+  var c: comp;
+  for(i := 0; GetMarker(m, i, c); i++)
+  {
+    var sCurPath: string = sPath + GetIter(i);
+    if not pModiRepStruct.SetCompValueByPath(sCurPath, c)
+    {
+      FpLog(#(__InterfaceName__)+'.PickKatStroy: '+pModiRepStruct.GetStLastError);
+      break;
+    }
+    pModiRepStruct.SetIsHidenRecByPath(sCurPath, true);
+  }
+  DoneMarker(m, '');
+  RereadRecord;
+}
+
+procedure DelOnProtectKatStroy;
+{
+  var sPath: string = lc_Path_Kontrakt + GetIter(iter_Kontrakt) + '/' + lc_XMLFieldName_KatStroy;
+  var nodeCnt: LongInt = pModiRepStruct.GetNodeCountByPath(sPath);
+  var i: integer = 0;
+  for(i := nodeCnt - 1; i >= 0 ; i--)
+    if not pModiRepStruct.DeleteNodeByPath(sPath + GetIter(i))
+    {
+      sLastError := pModiRepStruct.GetStLastError;
+      FpLog(#(__InterfaceName__)+'.PickKatStroy: '+sLastError);
+      Exit;
+    }
+  RereadRecord;
+}
 
 constructor Init;
 {
@@ -147,27 +235,49 @@ function myAddAutoPATFiltersToListForCurQuickIGK: boolean;
         isAllOk := False;
         Break;
       }
-      var q: IQuery = queryManager.createQuery(qKatStroy)
-                                  .setParam('cDogovor', otQuickIGKDog.cDogovor)
-                                  .setParam('cAttrNam', ATTRNAM_NREC_DOGOVOR_ZAKAZ);
-      var rs: IResultSet = q.getResultSet;
-      if q.errorCode != tsOk
+      //Если фильтр по заказам принудительно установлен пользователем и сохранен
+      //в структуре отчета - применяем его
+      var sPath: string = lc_Path_Kontrakt + GetIter(_myReCalcFormulasInContract_indContract) + '/' + lc_XMLFieldName_KatStroy;
+      var nodeCnt: LongInt = pModiRepStruct.GetNodeCountByPath(sPath);
+      if nodeCnt > 0
       {
-        FpLog(#(__InterfaceName__)+'.SqlQueryError: qKatStroy '+ q.errorCode);
-        isAllOk := False;
-        Break;
-      }
-      if rs.getFirst = tsOk do
-      {
-        if not myAddAutoTblSpPatFlt(rs.row.valAt(1))
+        var i: integer = 0;
+        for(i := 0; i < nodeCnt; i++)
         {
-          FpLog(#(__InterfaceName__)+'.myLoadPATFilterListFromFile:'+ sLastError);
+          var cKatStroy: comp = pModiRepStruct.GetCompValueByPath(sPath + GetIter(i));
+          if not myAddAutoTblSpPatFlt(cKatStroy)
+          {
+            FpLog(#(__InterfaceName__)+'.myLoadPATFilterListFromFile:'+ sLastError);
+            isAllOk := False;
+            Break;
+          }
+          myAddMessage(2, '', 'Пат-фильтр "' + lc_AutoPATFltName_KatStroy + '": ' + ShowKau(cgKau_ObjBuild, cKatStroy));
+        }
+      }
+      else //иначе - устанавливаем фильтр по заказам по договору
+      {
+        var q: IQuery = queryManager.createQuery(qKatStroy)
+                                    .setParam('cDogovor', otQuickIGKDog.cDogovor)
+                                    .setParam('cAttrNam', ATTRNAM_NREC_DOGOVOR_ZAKAZ);
+        var rs: IResultSet = q.getResultSet;
+        if q.errorCode != tsOk
+        {
+          FpLog(#(__InterfaceName__)+'.SqlQueryError: qKatStroy '+ q.errorCode);
           isAllOk := False;
           Break;
         }
-        myAddMessage(2, '', 'Пат-фильтр "' + lc_AutoPATFltName_KatStroy + '": ' + ShowKau(cgKau_ObjBuild, rs.row.valAt(1)));
-      }
-      while rs.getNext = tsOk;
+        if rs.getFirst = tsOk do
+        {
+          if not myAddAutoTblSpPatFlt(rs.row.valAt(1))
+          {
+            FpLog(#(__InterfaceName__)+'.myLoadPATFilterListFromFile:'+ sLastError);
+            isAllOk := False;
+            Break;
+          }
+          myAddMessage(2, '', 'Пат-фильтр "' + lc_AutoPATFltName_KatStroy + '": ' + ShowKau(cgKau_ObjBuild, rs.row.valAt(1)));
+        }
+        while rs.getNext = tsOk;
+      } //if nodeCnt > 0
     }
     while False;
     if not isAllOk Break;
@@ -217,5 +327,59 @@ function myAddAutoPATFiltersToListForCurQuickIGK: boolean;
   result := isAllOk;
 }
 //------------------------------------------------------------------------------
+
+
+//------------------------------------------------------------------------------
+// Рассчитать формулы по контракту отчета
+function myReCalcFormulasInContract(
+  _wCheckLevel  : word;     // режим расчета (см. cgPatCheckLevel_* в BuhConst.inc):
+                            //   cgPatCheckLevel_FullCount - расчет
+                            //   cgPatCheckLevel_CheckOnly - проверка
+  _isUseGPDF    : boolean;  // использовать ли формулы получения данных ч/з ПАТ
+  _sPATFileName : string;   // имя ПАТ файла
+  _ItemMID      : TPtr;     // ID списка позиций структуры отчета
+  _indContract  : LongInt   // индекс контракта
+) : boolean;
+{
+  //при установке пат-фильтров во время расчета формул по контракту - необходимо знать индекс обрабатываемого контракта
+  //т.к. этот параметр не передается в функцию установки пат-фильтров myAddAutoPATFiltersToListForCurQuickIGK,
+  //сохраняем его в глобальную переменную
+  _myReCalcFormulasInContract_indContract := _indContract;
+  result := inherited::myReCalcFormulasInContract(_wCheckLevel, _isUseGPDF, _sPATFileName, _ItemMID, _indContract);
+}
+// Рассчитать формулы по контракту отчета
+//------------------------------------------------------------------------------
+
+
+extendformats scContract;
+
+Screen scContract (,, sci1Esc);
+  Table HierNavigator;
+  fields
+    KatStroyFld: protect, pickButton;
+<<
+                                                                                                                                      `Заказы`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+end; //Screen scContract
+
+TableEvent Table HierNavigator;
+
+  cmPick:
+  {
+    case CurField of
+      #KatStroyFld: PickKatStroy;
+      else inherited::handleevent(cmPick);
+    end;
+  }
+
+  cmDelOnProtect:
+  {
+    case CurField of
+      #KatStroyFld: DelOnProtectKatStroy;
+      else inherited::handleevent(cmDelOnProtect);
+    end;
+  }
+
+end; //TableEvent Table HierNavigator;
 
 end.
