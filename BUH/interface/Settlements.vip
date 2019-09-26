@@ -1,0 +1,153 @@
+#include Query.vih
+#include Settlemtnts.vih
+
+#component "AGAT"
+
+interface Settlements;
+
+table struct TmpSettl (
+  Nrec     : comp,
+  cOborot  : comp,
+  cBaseDoc : comp,
+  cKatStroy: comp,
+  wGroup   : word,
+  dOper    : date,
+  Payment  : double,
+  Shipment : double,
+  Advance  : double,
+  RepayAdv : double,
+  PostPay  : double
+) with index (
+  i01 = Nrec (unique, surrogate)
+ ,i02 = cBaseDoc + dOper + Nrec
+);
+
+var
+  _mKatStroy: TPtr;
+
+create view
+as select
+  TmpSettl.Nrec
+from
+  TmpSettl
+ ,TmpSettl PrevSettl
+where ((
+      TmpSettl.cBaseDoc  == PrevSettl.cBaseDoc
+  and TmpSettl.dOper    >>= PrevSettl.dOper
+  and (TmpSettl.Nrec      > PrevSettl.Nrec)
+));
+
+
+sql query qData =
+select
+  t.cBasedoc
+ ,t.cOborot
+ ,t.cKatStroy
+ ,t.dOper
+ ,t.Payment
+ ,t.Shipment
+ ,case
+    when o.SchetK = '851' and t.cKatStroy in (select TmpKatStroy.Nrec from TmpKatStroy) then 1
+    when o.SchetK = '851' and t.cKatStroy <> #comp(0) and t.cKatStroy <> #comp(0001000000001186h) and t.cKatStroy not in (select TmpKatStroy.Nrec from TmpKatStroy) then 2
+    else 3
+  end as wGroup
+from (
+  select
+    bd.Nrec as cBaseDoc,
+    o.Nrec  as cOborot,
+    o.DatOb as dOper,
+    o.SumOb as Payment,
+    0       as Shipment: double,
+    case when o.SchetK = '851' and o.TblKs[4] = 40 then o.KauKs[4] else #comp(0) end as cKatStroy: comp
+  from Oborot o
+  left join BaseDoc bd1 on bd1.Nrec = o.KauOs[3]
+  left join SoprHoz sh on sh.Nrec = o.cSoprHoz
+  left join StepDoc sd on sd.Nrec = sh.cStepDoc
+  left join BaseDoc bd2 on bd2.Nrec = sd.cBaseDoc
+  join BaseDoc bd on bd.Nrec = coalesce(bd1.Nrec, bd2.Nrec)
+  where
+      o.SchetO = '860'
+  and o.DatOb between 1 and :dEnd
+  and o.KauOs[4] in (select TmpKatStroy.Nrec from TmpKatStroy)
+
+  union all
+
+  select bd.Nrec, o.Nrec, o.DatOb, 0, o.SumOb, #comp(0)
+  from Oborot o
+  left join BaseDoc bd1 on bd1.Nrec = o.KauKs[3]
+  left join SoprHoz sh on sh.Nrec = o.cSoprHoz
+  left join StepDoc sd on sd.Nrec = sh.cStepDoc
+  left join BaseDoc bd2 on bd2.Nrec = sd.cBaseDoc
+  join BaseDoc bd on bd.Nrec = coalesce(bd1.Nrec, bd2.Nrec)
+  where
+      o.SchetK = '860'
+  and o.DatOb between 1 and :dEnd
+  and o.KauKs[4] in (select TmpKatStroy.Nrec from TmpKatStroy)
+
+  union all
+
+  select
+    bd.Nrec, o.Nrec, o.DatOb, o.SumOb, 0,
+    case when o.SchetK = '851' and o.TblKs[4] = 40 then o.KauKs[4] else #comp(0) end
+  from Oborot o
+  join SoprHoz sh on sh.Nrec = o.cSoprHoz
+  join StepDoc sd on sd.Nrec = sh.cStepDoc
+  join BaseDoc bd on bd.Nrec = sd.cBaseDoc
+  where
+      o.SchetO = '876'
+  and o.SubOsSch in ('19', '23', '2301')
+  and o.DatOb between 1 and :dEnd
+  and o.KauOs[3] in (select TmpKatStroy.Nrec from TmpKatStroy)
+
+  union all
+
+  select bd.Nrec, o.Nrec, o.DatOb, 0, o.SumOb, #comp(0)
+  from Oborot o
+  join SoprHoz sh on sh.Nrec = o.cSoprHoz
+  join StepDoc sd on sd.Nrec = sh.cStepDoc
+  join BaseDoc bd on bd.Nrec = sd.cBaseDoc
+  where
+      o.SchetK = '876'
+  and o.SubSchK in ('19', '23', '2301')
+  and o.DatOb between 1 and :dEnd
+  and o.KauKs[3] in (select TmpKatStroy.Nrec from TmpKatStroy)
+) t
+join Oborot o
+  on o.Nrec = t.cOborot
+;
+
+function prepareData: boolean;
+{
+  result := false ;
+  MtClear(#TmpSettl, mfNormal);
+
+
+}
+
+constructor Init;
+{
+  result := false;
+}
+
+constructor Create(mKatStroy: TPtr);
+{
+  _mKatStroy := mKatStroy;
+  result := _mKatStroy != 0;
+}
+
+property Nrec     : comp   absolute TmpSettl.Nrec     ;
+property cOborot  : comp   absolute TmpSettl.cOborot  ;
+property cBaseDoc : comp   absolute TmpSettl.cBaseDoc ;
+property cKatStroy: comp   absolute TmpSettl.cKatStroy;
+property wGroup   : word   absolute TmpSettl.wGroup   ;
+property dOper    : date   absolute TmpSettl.dOper    ;
+property Payment  : double absolute TmpSettl.Payment  ;
+property Shipment : double absolute TmpSettl.Shipment ;
+property Advance  : double absolute TmpSettl.Advance  ;
+property RepayAdv : double absolute TmpSettl.RepayAdv ;
+property PostPay  : double absolute TmpSettl.PostPay  ;
+
+index indByNrec auto;
+index indByBasedoc auto;
+
+end.
