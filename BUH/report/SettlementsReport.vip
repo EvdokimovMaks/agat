@@ -1,0 +1,233 @@
+#include AtlProtocol.vih
+#include XLReport.vih
+#include GetKau.vih
+#include Settlements.vih
+
+#component "AGAT"
+
+interface SettlementsReport 'Взаиморасчеты по заказам' escClose, doAccept;
+show(,,50, 6);
+
+var
+  _settlements: Settlements new;
+  _settl: ISettlements;
+  _mKatStroy: TPtr;
+  _dDate: date;
+  pXL: XLSRepBuilder;
+  #include GetKau.var
+
+function getKatStroyFld: string;
+{
+  result := '';
+  if GetMarkerCount(_mKatStroy) > 0
+  {
+    var c: comp = 0;
+    var i: longint = 0;
+    for(i := 0; GetMarker(_mKatStroy, i, c); i++)
+      result += if(GetAnyKau(cgAkSimple, cgKau_ObjBuild, c),
+                   if(result = '', GetMarkerCount(_mKatStroy) + ': ', ',') +
+                   SubStr(GivenAnName(cgAnName), 1, Pos(' ', GivenAnName(cgAnName) + ' ') - 1),
+                   '');
+  }
+}
+
+procedure PickKatStroy;
+{
+  if iGetKau.GetCodeKau(cgiMulti, cgKau_ObjBuild, 0) > 0
+  {
+    DoneMarker(_mKatStroy, '');
+    _mKatStroy := InitMarker(iGetKau.GetMarkerName(cgKau_ObjBuild), 8, 10, 10, true);
+    RereadRecord;
+  }
+}
+
+create view
+as select
+  getKatStroyFld()(fieldname=KatStroyFld)
+from
+  _settl
+ ,Oborot
+ ,KatDoc
+ ,SoprHoz
+ ,BaseDoc
+where ((
+      _settl.cOborot  == Oborot.Nrec
+  and Oborot.TiDkGal  == KatDoc.TiDkGal
+  and Oborot.cSoprHoz == SoprHoz.Nrec
+  and _settl.cBaseDoc == BaseDoc.Nrec
+))
+;
+
+function getCurOborotDocName: string;
+{
+  if getfirst KatDoc != tsOk
+    result := 'Неизвестный тип документа ' + Oborot.TiDkGal;
+  else
+    result := if(KatDoc.SName != '', KatDoc.SName, KatDoc.Name);
+  result += ' №' + GetNumHozDoc(Oborot.TiDkGal, Oborot.cSoprDoc);
+  result += ' от ' + GetDateHozDoc(Oborot.TiDkGal, Oborot.cSoprDoc);
+}
+
+procedure printXlsReport(sXltFileName: string; isCreateXLT: boolean);
+{
+  var sXlsFileName: string = if(isCreateXLT,
+                                pXL.CreateXLT(sXltFileName, True),
+                                pXL.CreateReport(sXltFileName, True));
+  pXL.CreateVar(sXlsFileName);
+  pXL.SetStringVar('KatStroy', KatStroyFld);
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXlsFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Nrec');
+  pXL.CreateTblFld('cOborot');
+  pXL.CreateTblFld('Проводка');
+  pXL.CreateTblFld('TiDkGal');
+  pXL.CreateTblFld('Документ');
+  pXL.CreateTblFld('ДокНомер');
+  pXL.CreateTblFld('cBaseDoc');
+  pXL.CreateTblFld('ДО');
+  pXL.CreateTblFld('cKatStroy');
+  pXL.CreateTblFld('Заказ');
+  pXL.CreateTblFld('cPaymentKS');
+  pXL.CreateTblFld('ЗаказВыбытия');
+  pXL.CreateTblFld('Группа');
+  pXL.CreateTblFld('Дата');
+  pXL.CreateTblFld('Поставка');
+  pXL.CreateTblFld('ПоставкаОплачено');
+  pXL.CreateTblFld('Платеж');
+  pXL.CreateTblFld('Аванс');
+  pXL.CreateTblFld('Постоплата');
+  pXL.CreateTblFld('ЗачетАванса');
+
+  if not isCreateXLT
+    _loop _settl
+    {
+      if _settl.Payment = 0 and _settl.Shipment = 0 continue;
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('Nrec'            , String(_settl.Nrec, 0, 0));
+      pXL.SetTblStringFldValue('cOborot'         , String(_settl.cOborot, 0, 0));
+      if getfirst Oborot = tsOk
+      {
+        pXL.SetTblStringFldValue('Проводка'      , Oborot.DbSchetO + if(Oborot.SubOsSch = '', '', '.' + Oborot.SubOsSch) + ' - ' +
+                                                   Oborot.KrSchetK + if(Oborot.SubSchK = '', '', '.' + Oborot.SubSchK));
+        pXL.SetTblStringFldValue('TiDkGal'       , Oborot.TiDkGal);
+        pXL.SetTblStringFldValue('Документ'      , getCurOborotDocName);
+        pXL.SetTblStringFldValue('ДокНомер'      , GetNumHozDoc(Oborot.TiDkGal, Oborot.cSoprDoc));
+      }
+      pXL.SetTblStringFldValue('cBaseDoc'        , String(_settl.cBaseDoc, 0, 0));
+      pXL.SetTblStringFldValue('ДО'              , if(getfirst BaseDoc = tsOk, '№' + BaseDoc.NoDoc + ' от ' + BaseDoc.DDoc, ''));
+      pXL.SetTblStringFldValue('cKatStroy'       , String(_settl.cKatStroy, 0, 0));
+      pXL.SetTblStringFldValue('Заказ'           , ShowKau(cgKau_ObjBuild, _settl.cKatStroy));
+      pXL.SetTblStringFldValue('cPaymentKS'      , String(_settl.cPaymentKS, 0, 0));
+      pXL.SetTblStringFldValue('ЗаказВыбытия'    , ShowKau(cgKau_ObjBuild, _settl.cPaymentKS));
+      pXL.SetTblNumberFldValue('Группа'          , _settl.wGroup);
+      pXL.SetTblDateFldValue  ('Дата'            , _settl.dOper);
+      pXL.SetTblNumberFldValue('Поставка'        , _settl.Shipment);
+      pXL.SetTblNumberFldValue('ПоставкаОплачено', _settl.ShipSetOff);
+      pXL.SetTblNumberFldValue('Платеж'          , _settl.Payment);
+      pXL.SetTblNumberFldValue('Аванс'           , _settl.Advance);
+      pXL.SetTblNumberFldValue('Постоплата'      , _settl.PostPay);
+      pXL.SetTblNumberFldValue('ЗачетАванса'     , _settl.AdvSetOff);
+      pXL.InsTblRow;
+    }
+
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+screen scParams (,,sci1Esc);
+  fields
+    _dDate: NoProtect;
+    KatStroyFld: Protect, PickButton;
+  buttons
+    cmOk, default;
+    cmCancel;
+<<
+
+`Дата`  .@@@@@@@@@@
+`Заказы`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                     <. Продолжить .> <. Отмена .>
+>>
+end;
+
+
+handleevent
+
+  cmPick:
+  {
+    case CurField of
+      #KatStroyFld: PickKatStroy;
+    end;
+  }
+
+  cmDefault:
+  {
+    var p: IAtlProtocol = _settlements.Protocol;
+    p.Clear;
+    p.Visible := true;
+    var logRecordId: longint = p.LogStartVisual('Выборка данных', 0);
+    _settlements.mKatStroy := _mKatStroy;
+    _settlements.dDate     := _dDate;
+    if _settlements.refresh
+      printXlsReport(TranslatePath('%StartPath%Xls\SettlementsReport.xlt'), false);
+    p.LogStopVisual;
+    if p.GetRecordStatus(logRecordId) >= APE_MESSAGE
+      p.Visible := false;
+  }
+
+  cmOk: PutCommand(cmDefault);
+
+  cmInit:
+  {
+    _mKatStroy := InitMarker('SettlementsReport_mKatStroy', 8, 10, 10, true);
+    if not ReadMyDSK(_dDate, '_dDate_SettlementsReport', true) _dDate := Cur_Date;
+    _settl := ISettlements(_settlements);
+  }
+
+  cmDone:
+  {
+    DoneMarker(_mKatStroy, 'SettlementsReport_mKatStroy');
+    SaveMyDSK(_dDate, '_dDate_SettlementsReport');
+  }
+
+end; //handleevent
+
+end.
+
+#include UserReport.vih
+VipInterface UserReport_SettlementsReport Implements IUserReport licensed(free);
+Interface UserReport_SettlementsReport;
+procedure Run;
+{
+  runinterfacenomodal(AGAT::SettlementsReport);
+}
+
+function GetReportName: String;
+{
+  result := 'ГОЗ Взаиморасчеты с поставщиками';
+}
+
+function GetGroupName (Level : Word) : String;
+{
+  #__UNUSED__(Level)
+  result := '';
+}
+
+function GetPriority : Integer;
+{
+  result := 3;
+}
+
+function VisibleInModule(Ind : Byte) : String;
+{
+  result := '';
+  case Ind of
+    1 : result := 'BUY';
+    2 : result := 'B_FINANS';
+    3 : result := 'B_BALANS';
+  end;
+}
+end.
