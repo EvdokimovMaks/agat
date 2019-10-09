@@ -1,3 +1,4 @@
+#include AtlProtocol.vih
 #include PD_ChangeStatusTxo.vih
 #include Marker.vih
 #include Query.vih
@@ -23,6 +24,7 @@ table struct TmpBD
 var
   _chStatusTxo: PD_ChangeStatusTxo;
   _cKatStroy: comp;
+  _protocol: IAtlProtocol(AtlProtocol) new;
   _m: IMarker(Marker) new;
 
 #include GetKau.var
@@ -36,6 +38,7 @@ from
  ,KatNotes
  ,MagOper
  ,HozOper
+ ,Oborot OborotRuch
 where ((
       _cKatStroy          == KatStroy.Nrec
   and TmpBD.cNote         == KatNotes.Nrec
@@ -43,6 +46,10 @@ where ((
   and TmpBD.Nrec          == MagOper.cSoprDoc
   and PLANSSCH_NREC_TEHN  == MagOper.cPlansSch
   and MagOper.cHozOper    == HozOper.Nrec
+  and if(TmpBD.VidDoc = 101, 41, 43) == OborotRuch.TiDk
+  and TmpBD.Nrec          == OborotRuch.cSoprDoc
+  and PLANSSCH_NREC_TEHN  == OborotRuch.cPlansSch
+  and (OborotRuch.RuchAuto <> cgOborotAuto)
 ))
 ;
 
@@ -57,6 +64,7 @@ browse br1 (,,sci14Esc);
     TmpBD.Name 'Наименование': [30], protect;
     TmpBD.sZakaz 'Заказы': [20], protect;
     HozOper.Name1 'ТХО': [30], protect;
+    if(getfirst OborotRuch = tsOk, 'Р', '') 'Ручные проводки': [5], protect, noautosize;
 end;
 
 screen sc1(,,sci1Esc);
@@ -140,16 +148,32 @@ handleevent
 
   cmOk:
   {
+    startnewvisual(vtIndicatorVisual, vfTimer + vfBreak, 'Формирование ТХО', _m.count);
+    _protocol.Clear;
+    var skipped: longint = 0;
     SubBounds(tbRMTmpBD1);
     AddBounds(tbRMTmpBD2);
-    startnewvisual(vtIndicatorVisual, vfTimer + vfBreak, 'Формирование ТХО', _m.count);
     _loop _m
     {
+      if getfirst OborotRuch = tsOk
+      {
+        if skipped = 0
+          _protocol.LogMessage(APE_MESSAGE, 'Пропущены документы, по которым найдены ручные/исправленные проводки');
+        _protocol.LogLine(APE_MESSAGE, ShowKau(cgKau_BaseDoc, TmpBD.Nrec));
+        skipped++;
+        continue; //пропускаем документы с ручными проводками
+      }
       _chStatusTxo.process(40, TmpBD.Nrec, 0, TmpBD.cNote);
       if not nextvisual break;
     }
     SubBounds(tbRMTmpBD2);
     AddBounds(tbRMTmpBD1);
+    if skipped > 0
+    {
+      _protocol.LogCommit;
+      _protocol.Visible := true;
+      _protocol.Refresh;
+    }
     stopvisual('', 0);
     RereadRecord(tnTmpBD);
   }
