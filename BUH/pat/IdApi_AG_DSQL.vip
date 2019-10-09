@@ -16,6 +16,7 @@ var
   _params: AG_IPatParams(AG_PatParams) new;
   _paramGen: AG_DSQLPatParamGen new;
   _memo: AG_IPatMemo(AG_PatMemo);
+  _macro: AG_IPatMemo(AG_PatMemo) new;
   _patFlt: AG_IPatFlt;
   _patFltToQuery: AG_IPatFltConvToQuery;
 
@@ -80,10 +81,14 @@ function findMemo: boolean;
 
 //#region TODO: Вместо всего этого ужаса сделать нормальный лексер и парсер
 
+procedure sqlStrFromMemo(var sqlStr: longint; m: AG_IPatMemo); forward;
+
 procedure mySqlAddStr(var sqlStr: longint; s: string);
 {
   sqlAddStr(sqlStr, s);
+  #ifdef __DEBUG__
   LogStrToFile('log.txt', s);
+  #end
 }
 
 procedure sqlAddStrParam(sParamName: string; var sqlStr: longint);
@@ -170,12 +175,33 @@ function parseQuotes(s: string; var sqlStr: longint; var i: byte; quote: char): 
   result := true;
 }
 
+function parseComment(s: string; var sqlStr: longint; var i: byte): boolean; //комментарий
+{
+  result := s[i] = '/' and s[i+1] = '/';
+  if result
+    i := length(s) + 1;
+}
+
+function parseMacro(s: string; var sqlStr: longint; var i: byte): boolean; //макрос
+{
+  result := false;
+  var j: byte = i;
+  if not parseChar(s, j, '%') exit;
+  var macroStart: byte = j;
+  if not parseIdentifier(s, j) exit;
+  var sMacro: string = SubStr(s, macroStart, j - macroStart);
+  if _macro.findByAbbr(sMacro)
+    sqlStrFromMemo(sqlStr, _macro);
+  i := j;
+  result := true;
+}
+
 function parseSqlText(s: string; var sqlStr: longint; var i: byte): boolean; //other text
 {
   result := false;
   var j: byte = i;
   var l: byte = length(s);
-  while j <= l and s[j] != '''' and s[j] != '"' and s[j] != '$' and s[j] != '@'
+  while j <= l and s[j] != '''' and s[j] != '"' and s[j] != '$' and s[j] != '@' and SubStr(s, j, 2) != '//' and s[j] != '%'
   {
     j++;
     result := true;
@@ -236,27 +262,32 @@ function parseParam(s: string; var sqlStr: longint; var i: byte): boolean; //#pa
   result := true;
 }
 
-function parseSqlStr(s: string; var sqlStr: longint; var i: byte): boolean; //#param|@filter(fld)|'quotedString'|"quotedString"|otherText
+function parseSqlStr(s: string; var sqlStr: longint; var i: byte): boolean; //$param|@filter(fld)|'quotedString'|"quotedString"|otherText
 {
-  result := parseParam(s, sqlStr, i);
-  if not result
-    result := parsePatFilter(s, sqlStr, i);
+  if i > length(s) { result := false; exit; }
+  result := parseComment(s, sqlStr, i);
   if not result
     result := parseQuotes(s, sqlStr, i, '''');
   if not result
     result := parseQuotes(s, sqlStr, i, '"');
   if not result
+    result := parseMacro(s, sqlStr, i);
+  if not result
+    result := parseParam(s, sqlStr, i);
+  if not result
+    result := parsePatFilter(s, sqlStr, i);
+  if not result
     result := parseSqlText(s, sqlStr, i);
-  if result
+  if result and i <= length(s)
     result := parseSqlStr(s, sqlStr, i);
 }
 
 //#endregion TODO: Вместо всего этого ужаса сделать нормальный лексер и парсер
 
-procedure sqlStrFromMemo(var sqlStr: longint);
+procedure sqlStrFromMemo(var sqlStr: longint; m: AG_IPatMemo);
 {
   var f: longint = CreateFileHandle(CreateTmpFileName);
-  if _memo.openMemoFld(f)
+  if m.openMemoFld(f)
   {
     while not File_Eof(f) do
     {
@@ -285,7 +316,7 @@ procedure MakeCalculation (hTxo : longint; buf : TTxoApiInfoDoc);
   if findMemo
   {
     var sqlStr: longint = 0;
-    sqlStrFromMemo(sqlStr);
+    sqlStrFromMemo(sqlStr, _memo);
     var q: IQuery = queryManager.createQuery(sqlStr);
     q.setParam('cSoprHoz' , buf.cSoprHoz);
     q.setParam('TiDkGal'  , buf.TiDkGal);
