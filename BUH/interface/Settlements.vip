@@ -38,6 +38,7 @@ from
  ,TmpSettl TmpSettlKS
  ,TmpSettl TmpSettlBD
  ,TmpSettl TmpSettlBDPrev
+ ,TmpSettl TmpSettlBDOther
  ,TmpSettl TmpSettlBDShip
 where ((
       _cKatStroy == TmpSettlKS.cKatStroy
@@ -49,6 +50,10 @@ where ((
   and _cBaseDoc         == TmpSettlBDPrev.cBaseDoc
   and TmpSettlBD.dOper >>= TmpSettlBDPrev.dOper
   and (TmpSettlBD.Nrec  != TmpSettlBDPrev.Nrec)
+
+  and _cKatStroy        == TmpSettlBDOther.cKatStroy
+  and _cBaseDoc         == TmpSettlBDOther.cBaseDoc
+  and (TmpSettlBD.Nrec  != TmpSettlBDOther.Nrec)
 
   and _cKatStroy        == TmpSettlBDShip.cKatStroy
   and _cBaseDoc         == TmpSettlBDShip.cBaseDoc
@@ -104,26 +109,26 @@ function MarkerToSqlTmpTable(m: TPtr; sTable: string; sField: string): boolean;
 }
 
 //Проходит в цикле по записям TmpSettl, сторнирующих платежи, ограниченных текущим заказом и ДО
-//Закрывает их на сумму предыдущих обычных платежей
+//Закрывает их на сумму предыдущих и последующих обычных платежей
 procedure CompensateTmpSettlStorno;
 {
   //Идем в цикле по записям TmpSettl, ограниченных текущим заказом и ДО, с суммой платежа < 0
   PushConditionForLeave(tcTmpSettlBD_Storno, #TmpSettlBD);
   _loop TmpSettlBD
   {
-    //Закрываем сторнирующую сумму на суммы предыдущих обычных платежей
-    _loop TmpSettlBDPrev
+    //Закрываем сторнирующую сумму на суммы предыдущих и последующих обычных платежей
+    _loop TmpSettlBDOther
     {
-      if abs(TmpSettlBD.Payment) > TmpSettlBDPrev.Payment
+      if abs(TmpSettlBD.Payment) > TmpSettlBDOther.Payment
       {
-        TmpSettlBD.Payment += TmpSettlBDPrev.Payment;
-        TmpSettlBDPrev.Payment := 0;
-        update current TmpSettlBDPrev;
+        TmpSettlBD.Payment += TmpSettlBDOther.Payment;
+        TmpSettlBDOther.Payment := 0;
+        update current TmpSettlBDOther;
       }
       else
       {
-        TmpSettlBDPrev.Payment += TmpSettlBD.Payment;
-        update current TmpSettlBDPrev;
+        TmpSettlBDOther.Payment += TmpSettlBD.Payment;
+        update current TmpSettlBDOther;
         TmpSettlBD.Payment := 0;
         break;
       }
@@ -217,7 +222,7 @@ from (
   left join SoprHoz sh on sh.Nrec = o.cSoprHoz
   left join StepDoc sd on sd.Nrec = sh.cStepDoc
   left join BaseDoc bd2 on bd2.Nrec = sd.cBaseDoc
-  join BaseDoc bd on bd.Nrec = coalesce(bd1.Nrec, bd2.Nrec)
+  left join BaseDoc bd on bd.Nrec = coalesce(bd1.Nrec, bd2.Nrec)
   where
       o.SchetO = '860'
   and o.DatOb between 1 and :dEnd
@@ -225,13 +230,16 @@ from (
 
   union all
 
-  select bd.Nrec, o.Nrec, o.DatOb, 0, o.SumOb, o.KauKs[4], #comp(0)
+  select bd.Nrec, o.Nrec, o.DatOb,
+         case when o.TiDkGal = 2 then -o.SumOb else 0 end, //возврат платежа от поставщика
+         case when o.TiDkGal = 2 then 0 else o.SumOb end,
+         o.KauKs[4], #comp(0)
   from Oborot o
   left join BaseDoc bd1 on bd1.Nrec = o.KauKs[3]
   left join SoprHoz sh on sh.Nrec = o.cSoprHoz
   left join StepDoc sd on sd.Nrec = sh.cStepDoc
   left join BaseDoc bd2 on bd2.Nrec = sd.cBaseDoc
-  join BaseDoc bd on bd.Nrec = coalesce(bd1.Nrec, bd2.Nrec)
+  left join BaseDoc bd on bd.Nrec = coalesce(bd1.Nrec, bd2.Nrec)
   where
       o.SchetK = '860'
   and o.DatOb between 1 and :dEnd
@@ -243,9 +251,9 @@ from (
     bd.Nrec, o.Nrec, o.DatOb, o.SumOb, 0, o.KauOs[3],
     case when o.SchetK = '851' and o.TblKs[4] = 40 then o.KauKs[4] else #comp(0) end
   from Oborot o
-  join SoprHoz sh on sh.Nrec = o.cSoprHoz
-  join StepDoc sd on sd.Nrec = sh.cStepDoc
-  join BaseDoc bd on bd.Nrec = sd.cBaseDoc
+  left join SoprHoz sh on sh.Nrec = o.cSoprHoz
+  left join StepDoc sd on sd.Nrec = sh.cStepDoc
+  left join BaseDoc bd on bd.Nrec = sd.cBaseDoc
   where
       o.SchetO = '876'
   and o.SubOsSch in ('19', '23', '2301')
@@ -254,11 +262,14 @@ from (
 
   union all
 
-  select bd.Nrec, o.Nrec, o.DatOb, 0, o.SumOb, o.KauKs[3], #comp(0)
+  select bd.Nrec, o.Nrec, o.DatOb,
+         case when o.TiDkGal = 2 then -o.SumOb else 0 end, //возврат платежа от поставщика
+         case when o.TiDkGal = 2 then 0 else o.SumOb end,
+         o.KauKs[3], #comp(0)
   from Oborot o
-  join SoprHoz sh on sh.Nrec = o.cSoprHoz
-  join StepDoc sd on sd.Nrec = sh.cStepDoc
-  join BaseDoc bd on bd.Nrec = sd.cBaseDoc
+  left join SoprHoz sh on sh.Nrec = o.cSoprHoz
+  left join StepDoc sd on sd.Nrec = sh.cStepDoc
+  left join BaseDoc bd on bd.Nrec = sd.cBaseDoc
   where
       o.SchetK = '876'
   and o.SubSchK in ('19', '23', '2301')
