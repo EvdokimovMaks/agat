@@ -1,0 +1,175 @@
+#include BuhRep.vih
+#include BuhDlgN.vih
+#include PickBuh.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface GozBuhRep '' escClose;
+show at (,,85,33);
+
+var
+  _rep      : BuhRep new;
+  _dlg      : BuhDlgNew new;
+  _pickBuh  : PickBuh;
+  _params   : TVipReportParams;
+  _wReport  : word;
+  _cBuhRep  : comp;
+  _sKau1    : string;
+  _sKau2    : string;
+  _sKau3    : string;
+  _sKau4    : string;
+  _sKau5    : string;
+  _sKau6    : string;
+
+create view
+as select
+  BuhRep.Nrec
+from
+  BuhRep
+where ((
+  _cBuhRep == BuhRep.Nrec
+));
+
+parameters _cBuhRep, _sKau1, _sKau2, _sKau3, _sKau4, _sKau5, _sKau6;
+
+embedded emMain interface _dlg;
+end;
+
+procedure SetKauParamFromMarker(kauIdx: byte; wKau: word; m: TPtr);
+{
+  var cRec: comp = 0;
+  if not GetMarker(m, 0, cRec) exit;
+  #declare SetKauParam(idx)
+    _params.mKauOs#idx := GetMarkerCount(m);
+    _params.cKauOs#idx := cRec;
+    _params.wKauOs#idx := wKau;
+  #end
+  case kauIdx of
+    1: { #SetKauParam(1) }
+    2: { #SetKauParam(2) }
+    3: { #SetKauParam(3) }
+    4: { #SetKauParam(4) }
+    5: { #SetKauParam(5) }
+    6: { #SetKauParam(6) }
+  end;
+}
+
+procedure MarkerToPickBuhAn(wKau: word; m: TPtr);
+{
+  var i: longint = 0;
+  var c: comp = 0;
+  _pickBuh.DeleteItem(wKau);
+  for(i := 0; GetMarker(m, i, c); i++)
+    _pickBuh.InsertAnRecord(
+      wKau,
+      c,
+      if(GetAnyKau(cgAkSimple, wKau, c), GivenAnName(cgAnCode), ''),
+      if(GetAnyKau(cgAkSimple, wKau, c), GivenAnName(cgAnName), ''),
+      i+1
+    );
+}
+
+sql query qProchieZakazy =
+  select ksEtc.Nrec
+  from KatStroy ksEtc
+  left join AttrVal avIGKEtc on avIGKEtc.wTable = 2101 and avIGKEtc.cRec = ksEtc.Nrec and avIGKEtc.cAttrNam = #comp(00010000000004CCh)
+  where coalesce(avIGKEtc.vComp,#comp(0)) = #comp(0)
+  union all
+  select #comp(0)
+;
+procedure prochieZakazyToMarker(m: longint);
+{
+  var q: IQuery = queryManager.createQuery(qProchieZakazy);
+  if q.execute.errorCode = tsOk
+    while q.fetch.errorCode = tsOk
+      InsertMarker(m, comp(q.row.valAt(1)));
+}
+
+procedure parseKauParam(sKau: string; kauIdx: byte);
+{
+  case UpCase(sKau) of
+    'ЗАКАЗЫ':
+    {
+      var m: TPtr = InitMarker('AG_GOZ_mKatStroy', 8, 10, 10, true);
+      MarkerToPickBuhAn(cgKau_ObjBuild, m);
+      SetKauParamFromMarker(kauIdx, cgKau_ObjBuild, m);
+      DoneMarker(m, '');
+    }
+    'ДРУГИЕЗАКАЗЫ':
+    {
+      var m: TPtr = InitMarker('AG_GOZ_mKatStroy', 8, 10, 10, true);
+      prochieZakazyToMarker(m);
+      MarkerToPickBuhAn(cgKau_ObjBuild, m);
+      SetKauParamFromMarker(kauIdx, cgKau_ObjBuild, m);
+      _params.BackMode |= word(2**(kauIdx-1));  //Обратный фильтр по аналитике
+      DoneMarker(m, '');
+    }
+    'ПРОЧИЕЗАКАЗЫ':
+    {
+      var m: TPtr = InitMarker('', 8, 10, 10, true);
+      prochieZakazyToMarker(m);
+      MarkerToPickBuhAn(cgKau_ObjBuild, m);
+      SetKauParamFromMarker(kauIdx, cgKau_ObjBuild, m);
+      DoneMarker(m, '');
+    }
+  end;
+}
+
+#declare NextVisualWithHdr(hdr)
+  if not NextVisual { StopVisual; exit; }
+  SetVisualHeader(#hdr);
+#end
+
+function prepareRep: boolean;
+{
+  StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak+vfThread, 'Подготовка', 9);
+
+  var cReport: comp = if(getfirst BuhRep = tsOk,
+                         BuhRep.Nrec,
+                         _rep.GetDefaultNastr(_wReport, PLANSSCH_NREC_2013));
+
+  _rep.LoadNastr(_wReport, cReport, _params);
+
+  _params.BegDate := date(1,1,2013);
+  if not ReadMyDsk(_params.EndDate, 'AG_GOZ_DEnd', false) _params.EndDate := Cur_Date;
+
+  #NextVisualWithHdr('Установка фильтра по КАУ 1')
+  parseKauParam(_sKau1, 1);
+
+  #NextVisualWithHdr('Установка фильтра по КАУ 2')
+  parseKauParam(_sKau2, 2);
+
+  #NextVisualWithHdr('Установка фильтра по КАУ 3')
+  parseKauParam(_sKau3, 3);
+
+  #NextVisualWithHdr('Установка фильтра по КАУ 4')
+  parseKauParam(_sKau4, 4);
+
+  #NextVisualWithHdr('Установка фильтра по КАУ 5')
+  parseKauParam(_sKau5, 5);
+
+  #NextVisualWithHdr('Установка фильтра по КАУ 6')
+  parseKauParam(_sKau6, 6);
+
+  #NextVisualWithHdr('Установка настроек')
+  cReport := _rep.GetDefaultNastr(_wReport, PLANSSCH_NREC_2013);
+  _rep.SaveNastr(_wReport, cReport, _params);
+
+  #NextVisualWithHdr('Инициализация')
+  result := _dlg.InitWithParam(_wReport, cReport, cgiNo);
+
+  StopVisual;
+}
+
+handleevent
+  cmInit:
+  {
+    _wReport := cgRepBuh_HierAn;
+  	if not prepareRep Abort;
+    if IsValidAll(tnBuhRep)
+      SetWindowTitle(wnMainWindow, 'Расшифровка ГОЗ: ' + BuhRep.Name);
+  }
+end;
+
+end.
