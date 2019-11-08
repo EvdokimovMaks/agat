@@ -15,6 +15,7 @@ const
   ForDistr_Mode_St: word = 0;
   ForDistr_Mode_Av: word = 1;
   ForDistr_Mode_Ok: word = 2;
+  ForDistr_Mode_Residual: word = 3;
   cTipOper_Fact   : comp = 000100000000186Fh;
 end;
 
@@ -45,6 +46,7 @@ where ((
 
   and PlPor.TiDk         == Oborot.TiDk
   and PlPor.Nrec         == Oborot.cSoprDoc
+  and PLANSSCH_NREC_TEHN == Oborot.cPlansSch
   and (Oborot.SchetO      = '35100'
   and  Oborot.SchetK      = '36200'
   and  Oborot.DatOb      <> 0
@@ -62,20 +64,29 @@ where ((
 bounds OborotB_Os =
       PlPor.TiDk         == OborotB.TiDk
   and PlPor.Nrec         == OborotB.cSoprDoc
-  and (OborotB.SchetO     = '851'
-  and  OborotB.SchetK     = '862'
-  and  OborotB.DatOb     <> 0
-  and  OborotB.KauOs[4]   = _cKatStroy
-  and  OborotB.KauKs[3]   = _cKatStroy)
+  and (
+        OborotB.DatOb <> 0 and
+        OborotB.SchetO = '851' and OborotB.KauOs[4] = _cKatStroy and
+        OborotB.SchetK = '862' and OborotB.KauKs[3] = _cKatStroy
+      )
+  and OborotB.cSoprHoz   == SoprHozB.Nrec
+
+bounds OborotB_OsProch =
+      PlPor.TiDk         == OborotB.TiDk
+  and PlPor.Nrec         == OborotB.cSoprDoc
+  and (
+        OborotB.DatOb    <> 0 and
+        OborotB.SchetK    = '30000' and OborotB.KauKs[3] = _cKatStroy
+      )
   and OborotB.cSoprHoz   == SoprHozB.Nrec
 
 bounds OborotB_Kr =
       PlPor.TiDk         == OborotB.TiDk
   and PlPor.Nrec         == OborotB.cSoprDoc
-  and (OborotB.SchetO     = ''
-  and  OborotB.SchetK     = '30000'
+  and (OborotB.SchetO     = '851'
+  and  (OborotB.SchetK = '866' or OborotB.SchetK = '867')
   and  OborotB.DatOb     <> 0
-  and  OborotB.KauKs[3]   = _cKatStroy)
+  and  OborotB.KauOs[4]   = _cKatStroy)
   and OborotB.cSoprHoz   == SoprHozB.Nrec
 ;
 
@@ -92,15 +103,65 @@ sql query qValueSt =
     KauOs[6] = :cTipOper
 ;
 
-sql query qValueAvOk =
+sql query qValueAv =
   select
     sum(SumOb): double
-  from Oborot
-  where
-    TiDk = :tidk and cSoprDoc = :cPlPor and
-    SchetO = '851' and SchetK = '862' and
-    KauKs[3] = :cKatStroy and KauOs[4] = :cKatStroy and
-    DatOb <> 0
+  from (
+    select SumOb
+    from Oborot
+    where
+      TiDk = :tidk and cSoprDoc = :cPlPor and DatOb <> 0 and
+      SchetO = '851' and KauOs[4] = :cKatStroy and
+      SchetK = '862' and SubSchK in ('01','02','03','09','12','14') and KauKs[3] = :cKatStroy
+  ) t
+;
+
+sql query qValueOk =
+  select
+    sum(SumOb): double
+  from (
+    select SumOb
+    from Oborot
+    where
+      TiDk = :tidk and cSoprDoc = :cPlPor and DatOb <> 0 and
+      SchetO = '851' and KauOs[4] = :cKatStroy and
+      SchetK = '862' and SubSchK not in ('01','02','03','09','12','14') and KauKs[3] = :cKatStroy
+    union all
+    select SumOb
+    from Oborot
+    join KatStroy on KatStroy.Nrec = :cKatStroy
+    where
+      TiDk = :tidk and cSoprDoc = :cPlPor and DatOb <> 0 and
+      SchetK = '30000' and KauKs[3] = :cKatStroy and
+      KatStroy.Name like '%/Прочие_доходы'
+  ) t
+;
+
+sql query qValueResidual =
+    select sum(SumOb)
+    from (
+      select SumOb as SumOb: double
+      from Oborot
+      where
+        TiDk = :tidk and cSoprDoc = :cPlPor and DatOb <> 0 and
+        SchetO = '851' and KauOs[4] = :cKatStroy and
+        SchetK = '862' and KauKs[3] = :cKatStroy
+      union all
+      select SumOb
+      from Oborot
+      join KatStroy on KatStroy.Nrec = :cKatStroy
+      where
+        TiDk = :tidk and cSoprDoc = :cPlPor and DatOb <> 0 and
+        SchetK = '30000' and KauKs[3] = :cKatStroy and
+        KatStroy.Name like '%/Прочие_доходы'
+      union all
+      select -SumOb
+      from Oborot
+      where
+        TiDk = :tidk and cSoprDoc = :cPlPor and DatOb <> 0 and
+        SchetO = '35100' and KauOs[6] = :cTipOper and
+        SchetK = '36200' and KauKs[3] = :cKatStroy and KauOs[3] = :cKatStroy
+    ) t
 ;
 
 function isEditable(row: PD_IRow; col: byte; context: PD_IContext): boolean;
@@ -126,11 +187,11 @@ function getValue(row: PD_IRow; col: byte; context: PD_IContext): variant;
 
   var cKs: comp = if(row.isKredit, p.cKatStroyKredit, p.cKatStroy);
 
-  result := double(_q.setParam('cKatStroy', cKs)
-                     .setParam('cPlPor', _cPlPor)
-                     .setParam('cAddSumTune', row.cAddSumTune)
-                     .setParam('tidk', wTiDk)
-                     .getResultValue);
+  _q.setParam('cKatStroy', cKs)
+    .setParam('cPlPor', _cPlPor)
+    .setParam('cAddSumTune', row.cAddSumTune)
+    .setParam('tidk', wTiDk);
+  result := double(_q.getResultValue);
 }
 
 function getSpCashKau(wKau: word; ind: byte): comp;
@@ -156,12 +217,26 @@ function getRS: comp;
 
 function getAvansOkRasch: comp;
 {
-  case OborotB.SubSchK of
-    '01', '02', '03', '09', '12', '14':
-      result := SPKAU_NREC_PRINADL_AVANS_AVANS;
-    else
-      result := SPKAU_NREC_PRINADL_AVANS_OKRASCH;
-  end;
+  result := if(
+    OborotB.SchetK = '862',
+    case (
+      OborotB.SubSchK;
+      '01': SPKAU_NREC_PRINADL_AVANS_AVANS,
+      '02': SPKAU_NREC_PRINADL_AVANS_AVANS,
+      '03': SPKAU_NREC_PRINADL_AVANS_AVANS,
+      '09': SPKAU_NREC_PRINADL_AVANS_AVANS,
+      '12': SPKAU_NREC_PRINADL_AVANS_AVANS,
+      '14': SPKAU_NREC_PRINADL_AVANS_AVANS;
+      SPKAU_NREC_PRINADL_AVANS_OKRASCH
+    ),
+    SPKAU_NREC_PRINADL_AVANS_OKRASCH
+  );
+}
+
+function isKatStroyProchieDohodi: boolean;
+{
+  var sKatStroy: string = if(GetAnyKau(cgAkSimple, cgKau_ObjBuild, _cKatStroy), GivenAnName(cgAnName), '');
+  result := sKatStroy like '%/Прочие_доходы';
 }
 
 function findSoprHozB(isKredit: boolean): boolean;
@@ -169,12 +244,22 @@ function findSoprHozB(isKredit: boolean): boolean;
   if isKredit
   {
     if BoundActive(tbOborotB_Os) SubBounds(tbOborotB_Os);
+    if BoundActive(tbOborotB_OsProch) SubBounds(tbOborotB_OsProch);
     if not BoundActive(tbOborotB_Kr) AddBounds(tbOborotB_Kr);
   }
   else
   {
     if BoundActive(tbOborotB_Kr) SubBounds(tbOborotB_Kr);
-    if not BoundActive(tbOborotB_Os) AddBounds(tbOborotB_Os);
+    if isKatStroyProchieDohodi
+    {
+      if not BoundActive(tbOborotB_Os) SubBounds(tbOborotB_Os);
+      if not BoundActive(tbOborotB_OsProch) AddBounds(tbOborotB_OsProch);
+    }
+    else
+    {
+      if BoundActive(tbOborotB_OsProch) SubBounds(tbOborotB_OsProch);
+      if not BoundActive(tbOborotB_Os) AddBounds(tbOborotB_Os);
+    }
   }
   if getfirst OborotB != tsOk
     result := false;
@@ -249,6 +334,7 @@ procedure setOborot(cPlPor: comp; cKatStroy: comp; cAddSumTune: comp; sum: doubl
 
 function setValue(row: PD_IRow; col: byte; value: variant; context: PD_IContext): boolean;
 {
+  #__UNUSED__(col)
 
   var p: PD_IParams = context.params;
 
@@ -269,24 +355,10 @@ function setValue(row: PD_IRow; col: byte; value: variant; context: PD_IContext)
 procedure initQuery;
 {
   case FormPl.ResWord[1] of
-    ForDistr_Mode_St:
-    {
-      _q := queryManager.createQuery(qValueSt).setParam('cTipOper', cTipOper_Fact);
-    }
-    ForDistr_Mode_Av:
-    {
-      var l: longint = 0;
-      sqlAddStr(l, qValueAvOk);
-      sqlAddStr(l, 'and SubSchK in (''01'',''02'',''03'',''09'',''12'',''14'')');
-      _q := queryManager.createQuery(l);
-    }
-    ForDistr_Mode_Ok:
-    {
-      var l: longint = 0;
-      sqlAddStr(l, qValueAvOk);
-      sqlAddStr(l, 'and SubSchK not in (''01'',''02'',''03'',''09'',''12'',''14'')');
-      _q := queryManager.createQuery(l);
-    }
+    ForDistr_Mode_St      : _q := queryManager.createQuery(qValueSt).setParam('cTipOper', cTipOper_Fact);
+    ForDistr_Mode_Av      : _q := queryManager.createQuery(qValueAv);
+    ForDistr_Mode_Ok      : _q := queryManager.createQuery(qValueOk);
+    ForDistr_Mode_Residual: _q := queryManager.createQuery(qValueResidual).setParam('cTipOper', cTipOper_Fact);
   end;
 }
 
