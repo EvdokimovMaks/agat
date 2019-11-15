@@ -1,0 +1,129 @@
+#include gzrBaseRepEditor.Vih
+#include gzrTablRepHead.Vih
+#include gzrTablRepStruct.Vih
+#include gzrModiRepStruct.Vih
+#include gzrSessRepStruct.vih
+#include gzrStorRepEditor.vih
+#include gzrIterRepStruct.vih
+
+#component "F_GOZReport"
+
+interface GozCopyPlanValues;
+
+const
+  lc_Path_Kontrakt = 'ДанныеРаздельногоУчета/Контракт';
+end;
+
+var
+  _cSrcRep         : comp;
+  _cRepSesId       : comp;
+  _cEtlRepSesId    : comp;
+  _dstIterKontrakt : longint;
+  _srcPathKontrakt : string;
+  _dstPathKontrakt : string;
+
+  _srcModiRepStruct: IgzrModiRepStruct;
+  _dstModiRepStruct: IgzrModiRepStruct;
+  _tablRepHead     : IgzrTablRepHead(gzrTablRepHead) new;
+  _sessRepStruct   : gzrSessRepStruct;
+  _tablRepStruct   : IgzrTablRepStruct(gzrTablRepStruct) new; //структура отчета
+  _storRepEditor   : gzrStorRepEditor;
+  _iterRepStruct   : gzrIterRepStruct;
+
+create view
+as select
+  _tablRepHead.Nrec
+from
+  _tablRepHead;
+
+parameters _dstModiRepStruct, _dstIterKontrakt;
+
+// Возвращает строковое представление итератора
+function getIter(ind: LongInt): string;
+{
+  result := _iterRepStruct.GetIter(ind);
+} // function GetIter
+
+//Возвращает нрек договора в структуре отчета modiRepStruct для контракта с индексом ind
+function getDogovorNrec(modiRepStruct: IgzrModiRepStruct; ind: longint): comp;
+{
+  result := modiRepStruct.GetCompValueByPath(lc_Path_Kontrakt + getIter(ind) + '/cDogovor');
+} //function getDogovorNrec
+
+//Возвращает индекс контракта в структуре отчета modiRepStruct с нреком договора cDogovor
+//Если контракт не найден - возвращает 0
+function getIndexByDogovorNrec(modiRepStruct: IgzrModiRepStruct; cDogovor: comp): longint;
+{
+  result := 0;
+  var cnt: longint = modiRepStruct.GetNodeCountByPath(lc_Path_Kontrakt);
+  var i: longint = 0;
+  for(i := 0; i < cnt; i++)
+    if cDogovor = modiRepStruct.GetCompValueByPath(lc_Path_Kontrakt + getIter(i) + '/cDogovor')
+    {
+      result := i;
+      break;
+    }
+} //function getIndexByDogovorNrec
+
+//Копирует значение атрибута с адресом srcPath из структуры отчета srcModiRepStruct
+//в атрибут с адресом dstPath в структуру отчета dstModiRepStruct
+function copyDblValue(srcModiRepStruct: IgzrModiRepStruct; srcPath: string; dstModiRepStruct: IgzrModiRepStruct; dstPath: string): boolean;
+{
+  result := dstModiRepStruct.SetDoubleValueByPath(dstPath, srcModiRepStruct.GetDoubleValueByPath(srcPath));
+} //function copyDblValue
+
+function copyKontraktValue(path: string): boolean;
+{
+  result := copyDblValue(_srcModiRepStruct, _srcPathKontrakt + path, _dstModiRepStruct, _dstPathKontrakt + path)
+} //function copyKontraktValue
+
+handleevent
+
+  cmInit:
+  {
+    if RunInterface(F_GOZReport::gzrEditRepCatalog, cgiPick, _cSrcRep) != cmDefault { abort; exit; }
+
+    _cRepSesId := _sessRepStruct.GetNewSessionID;
+    if _cRepSesId = 0
+    {
+      FpLog(#(__InterfaceName__)+' "_cRepSesId := _sessRepStruct.GetNewSessionID": '+_sessRepStruct.GetStLastError);
+      abort; exit;
+    }
+
+    _tablRepStruct.SetSessionID(_cRepSesId);
+
+    _cEtlRepSesId := _sessRepStruct.GetNewSessionID; //эталонная структура отчета
+    if _cEtlRepSesId = 0
+    {
+      FpLog(#(__InterfaceName__)+' "_cEtlRepSesId := _sessRepStruct.GetNewSessionID": '+_sessRepStruct.GetStLastError);
+      abort; exit;
+    }
+
+    _srcModiRepStruct := IgzrModiRepStruct(new(gzrModiRepStruct, InitBySession(_cRepSesId, _cEtlRepSesID)));
+
+    if not _storRepEditor.LoadData(_cSrcRep, _cRepSesID)
+    {
+      FpLog(#(__InterfaceName__)+' "_storRepEditor.LoadData": '+_storRepEditor.GetStLastError);
+      abort; exit;
+    }
+
+    var cDstDogovor: comp = getDogovorNrec(_dstModiRepStruct, _dstIterKontrakt);
+    var srcIterKontrakt: longint = getIndexByDogovorNrec(_srcModiRepStruct, cDstDogovor);
+    _srcPathKontrakt := lc_Path_Kontrakt + getIter(srcIterKontrakt);
+    _dstPathKontrakt := lc_Path_Kontrakt + getIter(_dstIterKontrakt);
+    copyKontraktValue('/ГруппаФинансированиеКонтракта/ДенежныеСредстваЗаказчика/ЦенаКонтракта');
+    copyKontraktValue('/ГруппаРаспределениеРесурсовКонтракта/ГруппаПроизводство/МатериальныеЗатраты/ЦелевойПоказатель');
+    copyKontraktValue('/ГруппаРаспределениеРесурсовКонтракта/ГруппаПроизводство/ЗатратыФОТ/ЦелевойПоказатель');
+    copyKontraktValue('/ГруппаРаспределениеРесурсовКонтракта/ГруппаПроизводство/ПрочиеПроизводственныеЗатраты/ЦелевойПоказатель');
+    copyKontraktValue('/ГруппаРаспределениеРесурсовКонтракта/ГруппаПроизводство/ОбщепроизводственныеЗатраты/ЦелевойПоказатель');
+    copyKontraktValue('/ГруппаРаспределениеРесурсовКонтракта/ГруппаПроизводство/ОбщехозяйственныеЗатраты/ЦелевойПоказатель');
+    copyKontraktValue('/ГруппаОтгрузкаПродукцииВыполнениеРабот/ЦелевойПоказатель');
+    copyKontraktValue('/ГруппаОтгрузкаПродукцииВыполнениеРабот/КоммерческиеРасходы/ЦелевойПоказатель');
+    copyKontraktValue('/ГруппаОтгрузкаПродукцииВыполнениеРабот/ПроцентыПоБанковскимКредитам/ЦелевойПоказатель');
+    copyKontraktValue('/ГруппаОтгрузкаПродукцииВыполнениеРабот/Прибыль/ЦелевойПоказатель');
+    copyKontraktValue('/СписаноСредств/ЦелевойПоказатель');
+  }
+
+end;
+
+end.
