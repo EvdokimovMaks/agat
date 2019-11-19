@@ -9,6 +9,7 @@ interface Settlements;
 table struct TmpSettl (
   Nrec      : comp,
   cOborot   : comp,
+  TiDkGal   : word,
   cBaseDoc  : comp,
   cKatStroy : comp,
   cPaymentKS: comp,
@@ -176,11 +177,19 @@ procedure CalcTmpSettlForKatStroy(ccKatStroy: comp);
         TmpSettlBDShip.ShipSetOff += dPaySetOff;
         update current TmpSettlBDShip;
         //Если дата отгрузки, на которую произошел зачет текущего платежа <= дате платежа,
-        //записываем зачтенную сумму в постоплату платежной записи, иначе - в зачет аванса
-        if TmpSettlBDShip.dOper <= TmpSettlBD.dOper
+        //или если зачет платежа происходит на ПКО
+        //или если платежом является авансовый отчет,
+        //то записываем зачтенную сумму в постоплату платежной записи, иначе - в зачет аванса
+        if (   TmpSettlBDShip.dOper  <= TmpSettlBD.dOper
+            or TmpSettlBDShip.TiDkGal = cgDoc_0007 //ПКО
+            or TmpSettlBD.TiDkGal     = cgDoc_0009) //АО
+        {
           TmpSettlBD.PostPay += dPaySetOff;
+        }
         else
+        {
           TmpSettlBD.AdvSetOff += dPaySetOff;
+        }
         //Уменьшаем сумму оставшегося для зачета платежа
         dSumPay -= dPaySetOff;
         //Если зачли всю сумму - прерываем цикл по отгрузкам
@@ -198,6 +207,7 @@ sql query qData =
 select
   t.cBasedoc
  ,t.cOborot
+ ,t.TiDkGal
  ,t.cKatStroy
  ,t.cPaymentKS
  ,t.dOper
@@ -221,6 +231,7 @@ from (
   select
     bd.Nrec    as cBaseDoc,
     o.Nrec     as cOborot,
+    o.TiDkGal  as TiDkGal,
     o.DatOb    as dOper,
     o.SumOb    as Payment,
     0          as Shipment: double,
@@ -239,7 +250,7 @@ from (
 
   union all
 
-  select bd.Nrec, o.Nrec, o.DatOb,
+  select bd.Nrec, o.Nrec, o.TiDkGal, o.DatOb,
          case when o.TiDkGal = 2 then -o.SumOb else 0 end, //возврат платежа от поставщика
          case when o.TiDkGal = 2 then 0 else o.SumOb end,
          o.KauKs[4], #comp(0)
@@ -257,31 +268,37 @@ from (
   union all
 
   select
-    bd.Nrec, o.Nrec, o.DatOb, o.SumOb, 0, o.KauOs[3],
+    bd.Nrec, o.Nrec, o.TiDkGal, o.DatOb, o.SumOb, 0, o.KauOs[3],
     case when o.SchetK = '851' and o.TblKs[4] = 40 then o.KauKs[4] else #comp(0) end
   from Oborot o
   left join SoprHoz sh on sh.Nrec = o.cSoprHoz
   left join StepDoc sd on sd.Nrec = sh.cStepDoc
-  left join BaseDoc bd on bd.Nrec = sd.cBaseDoc
+  left join BaseDoc bd1 on bd1.Nrec = sd.cBaseDoc
+  left join BaseDoc bd2 on bd2.Nrec = o.KauOs[5] and o.TblOs[5] = 6
+  left join BaseDoc bd on bd.Nrec = coalescen(bd2.Nrec, bd1.Nrec, #comp(0))
   where
       o.SchetO = '876'
   and o.SubOsSch in ('19', '23', '2301')
+  and o.SchetK <> '876'
   and o.DatOb between 1 and :dEnd
   and o.KauOs[3] in (select TmpKatStroy.Nrec from TmpKatStroy)
 
   union all
 
-  select bd.Nrec, o.Nrec, o.DatOb,
+  select bd.Nrec, o.Nrec, o.TiDkGal, o.DatOb,
          case when o.TiDkGal = 2 then -o.SumOb else 0 end, //возврат платежа от поставщика
          case when o.TiDkGal = 2 then 0 else o.SumOb end,
          o.KauKs[3], #comp(0)
   from Oborot o
   left join SoprHoz sh on sh.Nrec = o.cSoprHoz
   left join StepDoc sd on sd.Nrec = sh.cStepDoc
-  left join BaseDoc bd on bd.Nrec = sd.cBaseDoc
+  left join BaseDoc bd1 on bd1.Nrec = sd.cBaseDoc
+  left join BaseDoc bd2 on bd2.Nrec = o.KauKs[5] and o.TblKs[5] = 6
+  left join BaseDoc bd on bd.Nrec = coalescen(bd2.Nrec, bd1.Nrec, #comp(0))
   where
       o.SchetK = '876'
   and o.SubSchK in ('19', '23', '2301')
+  and o.SchetO <> '876'
   and o.DatOb between 1 and :dEnd
   and o.KauKs[3] in (select TmpKatStroy.Nrec from TmpKatStroy)
 ) t
@@ -358,6 +375,7 @@ constructor Create(mKatStroy: TPtr; dDate: date; aProtocol: IAtlProtocol = NullR
 
 property Nrec      : comp   absolute TmpSettl.Nrec     ;
 property cOborot   : comp   absolute TmpSettl.cOborot  ;
+property TiDkGal   : word   absolute TmpSettl.TiDkGal  ;
 property cBaseDoc  : comp   absolute TmpSettl.cBaseDoc ;
 property cKatStroy : comp   absolute TmpSettl.cKatStroy;
 property cPaymentKS: comp   absolute TmpSettl.cPaymentKS;
