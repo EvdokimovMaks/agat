@@ -15,6 +15,7 @@ table struct TmpSettl (
   cPaymentKS: comp,
   wGroup    : word,
   dOper     : date,
+  SchetO    : string[21],
   Shipment  : double,
   ShipSetOff: double,
   Payment   : double,
@@ -63,6 +64,7 @@ where ((
 ))
 condition TmpSettlBD_Storno = TmpSettlBD.Payment < 0
 condition TmpSettlBD_Payment = TmpSettlBD.Payment > 0
+condition TmpSettlBD_AktD91 = TmpSettlBD.Shipment > 0 and TmpSettlBD.SchetO = '891'
 ;
 
 //------------------------------------------------------------------------------
@@ -120,6 +122,7 @@ procedure CompensateTmpSettlStorno;
     //Закрываем сторнирующую сумму на суммы предыдущих и последующих обычных платежей
     _loop TmpSettlBDOther
     {
+      if TmpSettlBDOther.Payment = 0 continue;
       if abs(TmpSettlBD.Payment) > TmpSettlBDOther.Payment
       {
         TmpSettlBD.Payment += TmpSettlBDOther.Payment;
@@ -137,6 +140,37 @@ procedure CompensateTmpSettlStorno;
     update current TmpSettlBD;
   }
   PopConditionForLeave(tcTmpSettlBD_Storno, #TmpSettlBD);
+}
+
+//Проходит в цикле по записям TmpSettl, являющимися поставками по Д91.
+//Уменьшает суммы предыдущих и последующих платежей на сумму поставки.
+//Поставку удаляет.
+//Т.к. поставки по 91 счету и их оплаты не должны отражаться во взаиморасчетах
+procedure CompensateTmpSettlAktD91;
+{
+  PushConditionForLeave(tcTmpSettlBD_AktD91, #TmpSettlBD);
+  while getfirst TmpSettlBD = tsOk
+  {
+    _loop TmpSettlBDOther
+    {
+      if TmpSettlBDOther.Payment = 0 continue;
+      if TmpSettlBD.Shipment > TmpSettlBDOther.Payment
+      {
+        TmpSettlBD.Shipment -= TmpSettlBDOther.Payment;
+        TmpSettlBDOther.Payment := 0;
+        update current TmpSettlBDOther;
+      }
+      else
+      {
+        TmpSettlBDOther.Payment -= TmpSettlBD.Shipment;
+        update current TmpSettlBDOther;
+        TmpSettlBD.Shipment := 0;
+        break;
+      }
+    }
+    delete current TmpSettlBD;
+  }
+  PopConditionForLeave(tcTmpSettlBD_AktD91, #TmpSettlBD);
 }
 
 procedure CalcTmpSettlForKatStroy(ccKatStroy: comp);
@@ -157,6 +191,9 @@ procedure CalcTmpSettlForKatStroy(ccKatStroy: comp);
 
     //Избавляемся от сторнирующих платежей по ДО - закрываем их на предыдущие и последующие обычные платежи
     CompensateTmpSettlStorno;
+
+    //Избавляемся от поставок на Д91 счета и платежей по ним
+    CompensateTmpSettlAktD91;
 
     //Идем в цикле по платежным записям TmpSettl, ограниченных текущим заказом и ДО
     //Зачитываем сумму платежа по отгрузкам
@@ -208,6 +245,7 @@ select
   t.cBasedoc
  ,t.cOborot
  ,t.TiDkGal
+ ,o.SchetO
  ,t.cKatStroy
  ,t.cPaymentKS
  ,t.dOper
