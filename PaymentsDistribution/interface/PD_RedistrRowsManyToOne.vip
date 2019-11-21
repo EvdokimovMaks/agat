@@ -1,0 +1,296 @@
+#include PD_ObjectList.vih
+#include PD_IIterator.vih
+#include PD_Row.vih
+#include PD_Redistribute.vih
+#include RSHelper.vih
+#include PlPorSimple.vih
+#include ChkSoprHoz.vih
+#include ExtAttr.vih
+
+#component "PD_AGAT"
+
+interface PD_RedistrRowsManyToOne 'Перераспределение сумм между статьями заказа' escClose, doAccept;
+show(,,81,22);
+
+const
+  TIPDOC_BS: word = 15816; //Раздел бухсправок "ПЭО бюджеты по заказам (распределение платежей)"
+end;
+
+table struct TmpRows(
+  Nrec         : comp
+ ,Npp          : string[20]
+ ,cAddSumTune  : comp
+ ,cKatStroy    : comp
+ ,Name         : string
+ ,SumForDistr  : double
+ ,Sum          : double
+) with index (
+  i01 = Nrec (unique, surrogate)
+ ,i02 = npp
+ ,i03 = cKatStroy + cAddSumTune
+);
+
+var
+  _redistrRows: PD_ObjectList;
+  _date: date;
+  _cDstRow: comp;
+  _cPlPor: comp;
+  _isRedistrExists: boolean;
+  _rsHelper: RSHelper;
+  #include PlPorSimple.var
+  #include ExtAttr.var
+  #include ChkSoprHoz.var
+
+create view
+as select
+  if(isValid(tnTmpRowsDst), TmpRowsDst.name, '')(fieldname=DstRowFld)
+from
+  TmpRows
+ ,TmpRows TmpRowsBr (i02)
+ ,TmpRows TmpRowsPick
+ ,TmpRows TmpRowsDst
+ ,PlPor
+ ,SoprHoz
+ ,Oborot OborotRedistr
+ ,TmpRows TmpRowsDebet
+where ((
+  _cDstRow    == TmpRowsDst.Nrec
+  and '35100' == OborotRedistr.SchetO
+  and '35100' == OborotRedistr.SchetK
+  and _date   == OborotRedistr.DatOb
+  and (OborotRedistr.KauOs[3] = TmpRows.cKatStroy and
+       OborotRedistr.KauKs[3] = TmpRows.cKatStroy and
+       OborotRedistr.KauKs[4] = TmpRows.cAddSumTune)
+  and OborotRedistr.KauOs[3] == TmpRowsDebet.cKatStroy
+  and OborotRedistr.KauOs[4] == TmpRowsDebet.cAddSumTune
+  and PlPor.TiDk == SoprHoz.TipDoc
+  and PlPor.Nrec == SoprHoz.cSoprDoc
+))
+;
+
+parameters _redistrRows, _date;
+
+window wPickSt 'Выбор статьи для пререраспределения остатков' escClose doAccept;
+  show(,,60,18);
+  browse brPickSt (,,sci1Esc);
+    table TmpRowsPick;
+    fields
+      TmpRowsPick.Name 'Статья': [40], protect;
+      TmpRowsPick.SumForDistr 'Свободный остаток','ден.средств': [12, '\2p[|-]3666`666`666`666`666`666`666~88'], browseSum, protect;
+  end;
+end; //window wPickSt
+
+screen scTop (,,sci1Esc);
+  show(,,,3) fixed_y;
+  fields
+    DstRowFld: protect, pickButton;
+<<
+
+  `Статья для перераспределения остатков`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+end;
+
+browse brRows (,,sci1Esc);
+  show(,4,,19);
+  table TmpRowsBr;
+  fields
+    TmpRowsBr.Name 'Статья': [40], protect;
+    TmpRowsBr.SumForDistr 'Свободный остаток','ден.средств': [12, '\2p[|-]3666`666`666`666`666`666`666~88'], browseSum, protect;
+    TmpRowsBr.Sum 'Сумма для','перераспределения': [12, '\2p[|-]3666`666`666`666`666`666`666~88'], browseSum, noprotect;
+end;
+
+screen scBottom (,,sci1Esc);
+  show(,20,,) fixed_y;
+  buttons
+    cmDelRedistr;
+    cmRedistr;
+    cmCancel;
+<<
+                      <. Удалить распределение .> <. Распределить .> <. Отмена .>
+>>
+end;
+
+tableevent table TmpRowsBr;
+  cmUpdateRecord: update current TmpRowsBr;
+end;
+
+procedure setDstRow(cRow: comp);
+{
+  set _cDstRow := cRow;
+  if getfirst TmpRowsDst = tsOk {}
+  RescanPanel(tnTmpRowsDst);
+}
+
+handleevent
+  cmPick:
+  {
+    if RunWindowModal(wPickSt) = cmDefault
+    {
+      setDstRow(TmpRowsPick.Nrec);
+      PushPos(#TmpRows);
+      if getfirst TmpRows where ((TmpRowsPick.Nrec == TmpRows.Nrec)) = tsOk
+      {
+        set TmpRows.sum := 0;
+        update current TmpRows;
+      }
+      PopPos(#TmpRows);
+      RereadRecord(tnTmpRowsBr);
+    }
+  }
+  cmOk:
+  {
+    PutCommand(cmDefault);
+  }
+  cmDelRedistr:
+  {
+    if getfirst PlPor where ((_cPlPor == PlPor.Nrec)) = tsOk
+      piPlPor.PlPor_Delete(PlPor.Nrec, true, false);
+    PutCommand(cmDefault);
+  }
+  cmRedistr:
+  {
+    if _cDstRow = 0
+    {
+      Message('Укажите статью, на которую будут перераспределены остатки');
+      exit;
+    }
+
+    if getfirst PlPor where ((_cPlPor == PlPor.Nrec)) != tsOk
+    {
+      ClearBuffer(#PlPor);
+      PlPor.NoDok    := piPlPor.PlPor_GetNewNumber(cgDoc_0010, TIPDOC_BS, sGetTune('User.Descr'), Cur_Date);
+      PlPor.TiDkGal  := cgDoc_0010;
+      PlPor.TiDk     := TIPDOC_BS;
+      PlPor.Descr    := sGetTune('User.Descr');
+      PlPor.DesGr    := sGetTune('User.DesGr');
+      PlPor.FilialNo := lGetTune('Konsolid.FilialNo');
+      PlPor.DatOb    := _date;
+      PlPor.DatVip   := PlPor.DatOb;
+      PlPor.YearDoc  := Year(PlPor.DatOb);
+      PlPor.Direct   := 1;
+      PlPor.ModeDoc  := 2050;
+      insert current PlPor;
+      iChkSH.CheckDoc(piPlPor.GetDocBuff(PlPor.Buffer), cgSilentMakeSH);
+    }
+
+    if getfirst SoprHoz = tsOk {}
+
+    PlPor.SumPlat := 0;
+
+    var mKatStroy: TPtr = InitMarker('', 8, 10, 10, true);
+    InsertMarker(mKatStroy, TmpRowsDst.cKatStroy);
+
+    _loop TmpRows
+    {
+      delete all OborotRedistr;
+      if TmpRows.Sum != 0
+      {
+        ClearBuffer(tnOborotRedistr);
+        OborotRedistr.TiDk       := PlPor.TiDk;
+        OborotRedistr.TiDkGal    := PlPor.TiDkGal;
+        OborotRedistr.cSoprDoc   := PlPor.Nrec;
+        OborotRedistr.cSoprHoz   := SoprHoz.Nrec;
+        OborotRedistr.cPlansSch  := PLANSSCH_NREC_TEHN;
+        OborotRedistr.Descr      := PlPor.Descr;
+        OborotRedistr.DesGr      := PlPor.DesGr;
+        OborotRedistr.DatOb      := PlPor.DatVip;
+        OborotRedistr.DataOt     := PlPor.DatVip;
+        OborotRedistr.NoDok      := PlPor.NoDok;
+        OborotRedistr.VhProp     := '+';
+        OborotRedistr.SchetO     := '35100';
+        OborotRedistr.TblOs[1]   := KODGRKAU_IGK;
+        OborotRedistr.KauOs[1]   := piExtAttr.coGetAttrId(coKatStroy, TmpRowsDst.cKatStroy, ATTRNAM_NREC_KATSTROY_IGK);
+        OborotRedistr.TblOs[2]   := KODGRKAU_RS;
+        OborotRedistr.KauOs[2]   := _rsHelper.GetRSNrecByKatstroyNrec(TmpRowsDst.cKatStroy);
+        OborotRedistr.TblOs[3]   := cgKau_ObjBuild;
+        OborotRedistr.KauOs[3]   := TmpRowsDst.cKatStroy;
+        OborotRedistr.TblOs[4]   := cgKau_StZatr;
+        OborotRedistr.KauOs[4]   := TmpRowsDst.cAddSumTune;
+        OborotRedistr.TblOs[6]   := cgKau_TipOper;
+        OborotRedistr.KauOs[6]   := TYPOPER_FACT;
+        OborotRedistr.SchetK     := '35100';
+        OborotRedistr.TblKs[1]   := KODGRKAU_IGK;
+        OborotRedistr.KauKs[1]   := piExtAttr.coGetAttrId(coKatStroy, TmpRows.cKatStroy, ATTRNAM_NREC_KATSTROY_IGK);
+        OborotRedistr.TblKs[2]   := KODGRKAU_RS;
+        OborotRedistr.KauKs[2]   := _rsHelper.GetRSNrecByKatstroyNrec(TmpRows.cKatStroy);
+        OborotRedistr.TblKs[3]   := cgKau_ObjBuild;
+        OborotRedistr.KauKs[3]   := TmpRows.cKatStroy;
+        OborotRedistr.TblKs[4]   := cgKau_StZatr;
+        OborotRedistr.KauKs[4]   := TmpRows.cAddSumTune;
+        OborotRedistr.TblKs[6]   := cgKau_TipOper;
+        OborotRedistr.KauKs[6]   := TYPOPER_FACT;
+        OborotRedistr.SumOb      := TmpRows.Sum;
+        OborotRedistr.DBSchetO   := '5100';
+        OborotRedistr.KrSchetK   := '5100';
+        insert current OborotRedistr;
+
+        PlPor.SumPlat += OborotRedistr.SumOb;
+        InsertMarker(mKatStroy, TmpRows.cKatStroy);
+      }
+    }
+
+    PlPor.NamePl1 := 'Перераспределение сумм между статьями ' + if(GetMarkerCount(mKatStroy) > 1, 'заказов', 'заказа');
+    var i: longint = 0;
+    var c: comp = 0;
+    for(i := 0; GetMarker(mKatStroy, i, c); i++)
+    {
+      var s: string = if(GetAnyKau(cgAkSimple, cgKau_ObjBuild, c), GivenAnName(cgAnName), '');
+      PlPor.NamePl1 += ' ' + SubStr(s, 1, pos(' ', s + ' ') - 1);
+    }
+    update current PlPor;
+    iChkSH.CheckDoc(piPlPor.GetDocBuff(PlPor.Buffer), cgSilentMakeSH);
+    iChkSH.CheckDoc(piPlPor.GetDocBuff(PlPor.Buffer), cgMakeDoc);
+    PutCommand(cmDefault);
+  }
+  cmInit:
+  {
+    if _redistrRows = NullRef Abort;
+
+    _isRedistrExists := false;
+
+    //Заполняем TmpRows данными из _redistrRows
+    var i: PD_IIterator;
+    for(i := _redistrRows.iterator; i.hasNext; i.next)
+    {
+      var r: PD_IRedistrRow = PD_IRedistrRow(i.get);
+      ClearBuffer(#TmpRows);
+      TmpRows.npp := r.row.npp;
+      TmpRows.name := r.row.name;
+      TmpRows.cAddSumTune := r.row.cAddSumTune;
+      TmpRows.cKatStroy := r.cKatStroy;
+      TmpRows.SumForDistr := r.value;
+      TmpRows.sum := r.value;
+      insert current TmpRows;
+
+      //если есть хоть одна проводка по переброске сумм с текущей статьи, текущего заказа
+      //на текущую дату, считаем, что редактируем существующую разноску
+      if getfirst OborotRedistr = tsOk
+      {
+        _isRedistrExists := true;
+        if OborotRedistr.cSoprDoc != 0
+          _cPlPor := OborotRedistr.cSoprDoc;
+      }
+    }
+
+    if _isRedistrExists
+      _loop TmpRows
+      {
+        if _cDstRow = 0
+          if getfirst OborotRedistr = tsOk
+            if getfirst TmpRowsDebet = tsOk
+              setDstRow(TmpRowsDebet.Nrec);
+
+        TmpRows.sum := 0;
+        _loop OborotRedistr
+        {
+          TmpRows.sum += OborotRedistr.SumOb;
+          TmpRows.SumForDistr += OborotRedistr.SumOb;
+        }
+        update current TmpRows;
+      }
+
+    SetEnableCommand(cmDelRedistr, _isRedistrExists);
+  }
+end;
+
+end.

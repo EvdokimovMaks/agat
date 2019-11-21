@@ -137,4 +137,5 @@ const
 
   //Типы операций
   TYPOPER_REZERV                  : comp = 000100000000186Dh;
+  TYPOPER_FACT                    : comp = 000100000000186Fh;
 end;
