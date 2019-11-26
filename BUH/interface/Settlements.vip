@@ -11,6 +11,8 @@ table struct TmpSettl (
   cOborot   : comp,
   TiDkGal   : word,
   cBaseDoc  : comp,
+  NoDoc     : string[100],
+  DDoc      : date,
   cKatStroy : comp,
   cPaymentKS: comp,
   wGroup    : word,
@@ -25,6 +27,7 @@ table struct TmpSettl (
 ) with index (
   i01 = Nrec (unique, surrogate)
  ,i02 = cKatStroy + cBaseDoc + dOper + Nrec
+ ,i03 = NoDoc + DDoc
 );
 
 var
@@ -42,6 +45,7 @@ from
  ,TmpSettl TmpSettlBDPrev
  ,TmpSettl TmpSettlBDOther
  ,TmpSettl TmpSettlBDShip
+ ,TmpSettl TmpSettlDupl
 where ((
       _cKatStroy == TmpSettlKS.cKatStroy
 
@@ -61,6 +65,10 @@ where ((
   and _cBaseDoc         == TmpSettlBDShip.cBaseDoc
   and (TmpSettlBDShip.Shipment != 0
   and  TmpSettlBDShip.Shipment - TmpSettlBDShip.ShipSetOff > 0)
+
+  and TmpSettl.NoDoc    == TmpSettlDupl.NoDoc
+  and TmpSettl.DDoc     == TmpSettlDupl.DDoc
+  and (TmpSettl.Nrec    <> TmpSettlDupl.Nrec)
 ))
 condition TmpSettlBD_Storno = TmpSettlBD.Payment < 0
 condition TmpSettlBD_Payment = TmpSettlBD.Payment > 0
@@ -242,7 +250,9 @@ procedure CalcTmpSettlForKatStroy(ccKatStroy: comp);
 
 sql query qData =
 select
-  t.cBasedoc
+  t.cBaseDoc
+ ,coalesce(bd.NoDoc, '') as NoDoc: string[100]
+ ,coalesce(bd.DDoc, 0) as DDoc: date
  ,t.cOborot
  ,t.TiDkGal
  ,o.SchetO
@@ -340,9 +350,9 @@ from (
   and o.DatOb between 1 and :dEnd
   and o.KauKs[3] in (select TmpKatStroy.Nrec from TmpKatStroy)
 ) t
-join Oborot o
-  on o.Nrec = t.cOborot
-order by t.cBaseDoc, t.cKatStroy, t.dOper, t.Payment
+join Oborot o on o.Nrec = t.cOborot
+left join BaseDoc bd on bd.Nrec = t.cBaseDoc
+order by bd.NoDoc, bd.DDoc, t.cKatStroy, t.dOper, t.Payment
 ;
 
 function prepareData: boolean;
@@ -382,6 +392,13 @@ function prepareData: boolean;
       myLogErrLine('Settlements.prepareData -> sqlCopyInto error: ' + rslt);
       result := false;
       break;
+    }
+
+    //Есть случаи, когда заведены несколько ДО от одной даты с одним номером.
+    //К одному ДО заведены платежи, к другому акты. Объединяем их в TmpSettl.
+    _loop TmpSettl
+    {
+      update all TmpSettlDupl set TmpSettlDupl.cBaseDoc := TmpSettl.cBaseDoc;
     }
 
     //Для каждого заказа из маркера _mKatStroy рассчитаем в TmpSettl поля аванс,
