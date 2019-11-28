@@ -10,6 +10,7 @@ table struct TmpSettl (
   Nrec      : comp,
   cOborot   : comp,
   TiDkGal   : word,
+  cSoprDoc  : comp,
   cBaseDoc  : comp,
   NoDoc     : string[100],
   DDoc      : date,
@@ -28,13 +29,15 @@ table struct TmpSettl (
   i01 = Nrec (unique, surrogate)
  ,i02 = cKatStroy + cBaseDoc + dOper + Nrec
  ,i03 = NoDoc + DDoc
+ ,i04 = cKatStroy + cBaseDoc + cSoprDoc + SchetO
 );
 
 var
-  _mKatStroy: TPtr;
-  _cKatStroy: comp;
-  _dDate    : date;
-  _cBaseDoc : comp;
+  _mKatStroy  : TPtr;
+  _cKatStroy  : comp;
+  _dDate      : date;
+  _cBaseDoc   : comp;
+  _mTmpSettlBD: TPtr;
 create view
 as select
   TmpSettl.Nrec
@@ -42,6 +45,7 @@ from
   TmpSettl
  ,TmpSettl TmpSettlKS
  ,TmpSettl TmpSettlBD
+ ,TmpSettl TmpSettlBDNal
  ,TmpSettl TmpSettlBDPrev
  ,TmpSettl TmpSettlBDOther
  ,TmpSettl TmpSettlBDShip
@@ -51,6 +55,11 @@ where ((
 
   and _cKatStroy == TmpSettlBD.cKatStroy
   and _cBaseDoc  == TmpSettlBD.cBaseDoc
+
+  and _cKatStroy          == TmpSettlBDNal.cKatStroy
+  and _cBaseDoc           == TmpSettlBDNal.cBaseDoc
+  and TmpSettlBD.cSoprDoc == TmpSettlBDNal.cSoprDoc
+  and '819'               == TmpSettlBDNal.SchetO
 
   and _cKatStroy        == TmpSettlBDPrev.cKatStroy
   and _cBaseDoc         == TmpSettlBDPrev.cBaseDoc
@@ -73,6 +82,7 @@ where ((
 condition TmpSettlBD_Storno = TmpSettlBD.Payment < 0
 condition TmpSettlBD_Payment = TmpSettlBD.Payment > 0
 condition TmpSettlBD_AktD91 = TmpSettlBD.Shipment > 0 and TmpSettlBD.SchetO = '891'
+condition TmpSettlBD_Marker = FoundMarker(_mTmpSettlBD, TmpSettlBD.Nrec)
 ;
 
 //------------------------------------------------------------------------------
@@ -156,7 +166,21 @@ procedure CompensateTmpSettlStorno;
 //Т.к. поставки по 91 счету и их оплаты не должны отражаться во взаиморасчетах
 procedure CompensateTmpSettlAktD91;
 {
+  //Выбираем записи TmpSettl, являющиеся поставками по Д91 и налоги к ним
+  //Записываем нреки найденных TmpSettl в маркер
+  _mTmpSettlBD := InitMarker('', 8, 10, 10, true);
   PushConditionForLeave(tcTmpSettlBD_AktD91, #TmpSettlBD);
+  _loop TmpSettlBD
+  {
+    InsertMarker(_mTmpSettlBD, TmpSettlBD.Nrec);
+    _loop TmpSettlBDNal
+      InsertMarker(_mTmpSettlBD, TmpSettlBDNal.Nrec);
+  }
+  PopConditionForLeave(tcTmpSettlBD_AktD91, #TmpSettlBD);
+
+  //Уменьшаем суммы платежей на суммы актов и налогов.
+  //Удаляем суммы актов и налогов
+  PushConditionForLeave(tcTmpSettlBD_Marker, #TmpSettlBD);
   while getfirst TmpSettlBD = tsOk
   {
     _loop TmpSettlBDOther
@@ -178,7 +202,8 @@ procedure CompensateTmpSettlAktD91;
     }
     delete current TmpSettlBD;
   }
-  PopConditionForLeave(tcTmpSettlBD_AktD91, #TmpSettlBD);
+  PopConditionForLeave(tcTmpSettlBD_Marker, #TmpSettlBD);
+  DoneMarker(_mTmpSettlBD, '');
 }
 
 procedure CalcTmpSettlForKatStroy(ccKatStroy: comp);
@@ -255,6 +280,7 @@ select
  ,coalesce(bd.DDoc, 0) as DDoc: date
  ,t.cOborot
  ,t.TiDkGal
+ ,o.cSoprDoc
  ,o.SchetO
  ,t.cKatStroy
  ,t.cPaymentKS
