@@ -1,0 +1,115 @@
+#include IdentAPI.vih
+#include AG_PatFlt.vih
+#include AG_FarePatParam.vih
+#include AG_PatParam.vih
+#include Fare.vih
+
+#component "F_PAT"
+
+VipInterface IdApi_AG_Fare Implements ObjIdentApiPlugin Licensed(free);
+interface IdApi_AG_Fare;
+
+var
+  _params: AG_IPatParams(AG_PatParams) new;
+  _paramGen: AG_FarePatParamGen new;
+  _patFlt: AG_IPatFlt;
+  _mKatStroy: TPtr;
+  _vFare: Fare new;
+  _iFare: IFare;
+  _wGroup: word;
+
+create view
+as select _iFare.Nrec
+from _iFare
+;
+
+window wParams 'Параметры';
+  embedded scParams interface _paramGen;
+  end;
+end;
+
+//генерация строки параметров [Param1:"Value1"][Param2:"Value2"]
+function ParamGen : string;
+{
+  result := _paramGen.ParamGen;
+}
+
+//Инициализировать окно парметров ключа
+function InitPluginWnd( TiDkGal, SysOper : word; Key : string ) : boolean;
+{
+  result := _paramGen.Init(TiDkGal, SysOper, Key);
+}
+
+//разбор массива параметров [Param1:"Value1"][Param2:"Value2"]
+//(параметры уже предварительно разобраны калькулятором и переложены в массив )
+function ParamParser(hTxo: longint; TiDkGal, SysOper: word ): boolean;
+{
+  result := false;
+
+  var paramFactory: AG_IPatParamFactory;
+  if not GetVipRef(paramFactory, 'AGAT::AG_PatParamFactory') exit;
+
+  var paramParser: AG_IPatParamParser = AG_IPatParamParser(
+    new(AG_PatParamParser, Create(paramFactory))
+  );
+
+  var ctx: TAG_PatParamContext;
+  ctx.hTxo    := hTxo;
+  ctx.TiDkGal := TiDkGal;
+  ctx.SysOper := SysOper;
+
+  result := paramParser.parse(_params, ctx);
+}
+
+//инициализация расчета -  срабатывает один раз при первом обращении к плагину
+//во время разноске одного документа, закрытии одного счета, формирования одного FR отчета и т.п.
+procedure InitCalculation (hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  #__UNUSED__(hTxo, buf)
+  _mKatStroy := InitMarker('', 8, 10, 10, true);
+  _vFare.mKatStroy := _mKatStroy;
+  _iFare := IFare(_vFare);
+}
+
+//конкретный расчет конкретных параметров
+procedure MakeCalculation (hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  ClearMarker(_mKatStroy);
+  _patFlt := AG_IPatFlt(new(AG_PatFlt, Create(hTxo)));
+  if _params.getP('ЗАКАЗ') = NullRef exit;
+  if not _patFlt.findByName(_params.getP('ЗАКАЗ').Value) exit;
+  if _patFlt.items.first do
+  {
+    InsertMarker(_mKatStroy, comp(_patFlt.items.Value))
+  }
+  while _patFlt.items.next;
+
+  _vFare.mKatStroy := _mKatStroy;
+  _vFare.dDate := buf.dEndFp;
+  _vFare.refresh;
+
+  var rslt: double = 0;
+  _loop _iFare
+    rslt += _iFare.Sum;
+
+  TxoHeadSetResultDouble(hTxo, rslt);
+}
+
+//завершение расчета -  срабатывает один раз после завершения всех расчетов
+//при разноске одного документа, закрытии одного счета, формирования одного FR отчета и т.п.
+procedure DoneCalculation (hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  #__UNUSED__(hTxo, buf)
+  DoneMarker(_mKatStroy, '');
+}
+
+end.
+
+VipInterface IdApiReg_AG_Fare Implements ObjIdentApiPluginRegistrator Licensed(Free);
+
+interface IdApiReg_AG_Fare;
+procedure DoRegisterIdents;
+{
+  AddIdent('AG_БИЛЕТЫ', 'Суммы по затратам на покупку билетов, отнесенным на 20 счет, оплаченных по безналу', 'IdApi_AG_Fare', 'wParams');
+}
+end.

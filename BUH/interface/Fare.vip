@@ -1,0 +1,256 @@
+#include Fare.vih
+#include Query.vih
+#include AtlProtocol.vih
+
+#component "AGAT"
+
+interface Fare;
+
+table struct TmpData (
+  Nrec     : comp
+ ,cPerson  : comp
+ ,cKatStroy: comp
+ ,cBaseDoc : comp
+ ,SchetO   : string[21]
+ ,DatOb    : date
+ ,cOborot  : comp
+ ,Sum      : double
+) with index (
+  i01 = Nrec (unique, surrogate)
+ ,i02 = cPerson + cKatStroy + cBaseDoc + SchetO
+);
+
+var
+  _mKatStroy  : TPtr;
+  _dDate      : date;
+  _protocol   : IAtlProtocol(AtlProtocol) new;
+
+create view
+as select
+  TmpData.Nrec
+from
+  TmpData
+ ,TmpData TmpDataD20
+where ((
+      TmpData.cPerson   == TmpDataD20.cPerson
+  and TmpData.cKatStroy == TmpDataD20.cKatStroy
+  and TmpData.cBaseDoc  == TmpDataD20.cBaseDoc
+  and '820'             == TmpDataD20.SchetO
+))
+;
+
+//------------------------------------------------------------------------------
+//#region Protocol
+
+function isProtocol: boolean;
+{
+  result := _protocol != NullRef;
+}
+
+function myLogLine(aType: byte; aStr: string): longint;
+{
+  result := if(isProtocol, _protocol.LogLine(aType, aStr), 0);
+}
+
+function myLogErrLine(aStr: string): longint;
+{
+  result := myLogLine(APE_ERROR, aStr);
+}
+
+function myLogMsgLine(aStr: string): longint;
+{
+  result := myLogLine(APE_MESSAGE, aStr);
+}
+//#endregion Protocol
+//------------------------------------------------------------------------------
+
+
+//------------------------------------------------------------------------------
+//#region Queries
+
+sql query qTravel =
+  select
+    o.KauKs[1]                      as cPerson
+   ,o.KauOs[1]                      as cKatStroy
+   ,coalesce(sd.cBaseDoc, #comp(0)) as cBaseDoc
+   ,o.SchetO                        as SchetO
+   ,o.DatOb                         as DatOb
+   ,o.Nrec                          as cOborot
+   ,o.SumOb                         as Sum: double
+  from Oborot o
+  join SoprHoz sh on sh.Nrec = o.cSoprHoz
+  left join StepDoc sd on sd.Nrec = sh.cStepDoc
+  left join RashDoc
+    on o.TiDkGal = 9 and
+       RashDoc.TipDoc = 9 and
+       RashDoc.cSoprDoc = o.cSoprDoc and
+       RashDoc.cKredCard = sh.Nrec and
+       RashDoc.cNorm in (#comp(0001000000000095h), //Заказы без НДС / Проезд обратно с НДС
+                         #comp(0001000000000094h), //Заказы без НДС / Проезд туда с НДС
+                         #comp(4001BD2B40546D3Ch), //Заказы без НДС / яПроезд  обратно
+                         #comp(0001000000000027h), //Заказы без НДС / яПроезд обратно АВИА
+                         #comp(4001D330EC61EA99h), //Заказы без НДС / яПроезд туда
+                         #comp(0001000000000026h), //Заказы без НДС / яПроезд туда АВИА
+                         #comp(000100000000004Bh), //Заказы с НДС / Проезд НДС обратно без страховки
+                         #comp(000100000000004Ah), //Заказы с НДС / Проезд НДС туда без страховки
+                         #comp(0001000000000021h), //Заказы с НДС / Проезд обратно НДС АВИА
+                         #comp(0001000000000020h), //Заказы с НДС / Проезд туда НДС  АВИА
+                         #comp(4001FD30123FAAB9h), //Заказы с НДС / яПроезд обратно
+                         #comp(0001000000000029h), //Заказы с НДС / яПроезд обратно АВИА
+                         #comp(400163CF1453A2FEh), //Заказы с НДС / яПроезд туда
+                         #comp(0001000000000028h)) //Заказы с НДС / яПроезд туда АВИА
+  where
+      o.SchetO = '820' and o.SubOsSch = '12' and o.KauOs[1] in (select TmpKatStroy.Nrec from TmpKatStroy)
+  and ((o.KauOs[2] = #comp(0001000000000976h)) or (RashDoc.Nrec is not Null))
+  and o.SchetK = '871' and o.SubSchK = '01' and o.KauKs[2] = #comp(00010000000011B6h) //Кау2 2015 Кассы предприятия: Денежные документы
+  and o.DatOb between #date(1,1,2019) and :dEnd
+;
+
+sql query qPayment =
+  select
+    oD76K51.KauOs[4] as cPerson,
+    oD76K51.KauOs[3] as cKatStroy,
+    oD76K51.KauOs[5] as cBaseDoc,
+    oD76K51.SchetO   as SchetO,
+    oD76K51.DatOb    as DatOb,
+    oD76K51.Nrec     as cOborot,
+    oD76K51.SumOb    as Sum: double
+  from Oborot oD76K51
+  outer apply (
+    select sum(SumOb) as SumOb: double
+    from Oborot o
+    where
+        o.SchetO = '850' and o.SubOsSch = '03'
+    and o.SchetK = '876' and o.SubSchK in ('23', '2301') and o.KauKs[3] = oD76K51.KauOs[3] and o.KauKs[4] = oD76K51.KauOs[4] and o.KauKs[5] = oD76K51.KauOs[5]
+    and o.DatOb between 1 and #date(31,12,2018)
+  ) oD50K76
+  where
+      oD76K51.SchetO = '876' and oD76K51.SubOsSch in ('23', '2301') and (oD76K51.KauOs[3] in (select TmpKatStroy.Nrec from TmpKatStroy)) and oD76K51.KauOs[4] <> #comp(0)
+  and oD76K51.SchetK = '851'
+  and oD76K51.DatOb > 1
+  and coalesce(oD50K76.SumOb, 0) > 0
+;
+
+//#endregion Queries
+//------------------------------------------------------------------------------
+
+
+function MarkerToSqlTmpTable(m: TPtr; sTable: string; sField: string): boolean;
+{
+  result := false;
+  var q: IQuery = queryManager.createQuery('insert into ' + sTable + ' (' + sField + ') values (:cRec)');
+  var i: longint = 0;
+  var c: comp = 0;
+  for(i := 0; GetMarker(m, i, c); i++)
+  {
+    q.setParam('cRec', c).execute;
+    if q.errorCode != tsOk
+    {
+      myLogErrLine('Fare.MarkerToSqlTmpTable -> q.errorCode = ' + q.errorCode);
+      exit;
+    }
+  }
+  result := true;
+}
+
+function prepareData: boolean;
+{
+  result := true ;
+
+  //Создаем sql-таблицу TmpKatStroy с нреками заказов по которым будем считать взаиморасчеты
+  var rslt: integer = sqlCreateTmpTable('table TmpKatStroy (Nrec: comp) with index (i01 = Nrec);', ctmNormal);
+  if rslt != 0
+  {
+    myLogErrLine('Fare.prepareData -> sqlCreateTmpTable error: ' + rslt);
+    result := false;
+    exit;
+  }
+
+  do {
+
+    //Заполняем TmpKatStroy нреками заказов из маркера _mKatStroy;
+    if not MarkerToSqlTmpTable(_mKatStroy, 'TmpKatStroy', 'Nrec') break;
+
+    //Очищаем TmpData перед заполнением
+    MtClear(#TmpData, mfNormal);
+    //Готовим запрос для заполнения TmpData данными по проводкам из АО по билетам за период с начала 2019 года по дату отчета
+    var q: IQuery = queryManager.createQuery(qTravel).setParam('dEnd', _dDate);
+    var rs: IResultSet = q.getResultSet;
+    if q.errorCode != tsOk
+    {
+      myLogErrLine('Fare.prepareData -> q.execute (qTravel) error: ' + q.errorCode);
+      result := false;
+      break;
+    }
+    //Заполняем TmpData данными
+    if rs.count > 0
+    {
+      rslt := sqlCopyInto(rs, #TmpData, true);
+      if rslt != tsOk
+      {
+        myLogErrLine('Fare.prepareData -> sqlCopyInto TmpData error: ' + rslt);
+        result := false;
+        break;
+      }
+    }
+
+    //Готовим запрос для заполнения TmpData данными по платежам за билеты за период до 31.12.2018
+    q := queryManager.createQuery(qPayment).setParam('dEnd', _dDate);
+    if q.execute.errorCode != tsOk
+    {
+      myLogErrLine('Fare.prepareData -> q.execute (qPayment) error: ' + q.errorCode);
+      result := false;
+      break;
+    }
+    //Заполняем TmpData данными
+    //Исключаем платежи по ДО, которые уже есть в TmpData, чтобы исключить задваивание сумм,
+    //т.к. они уже были внесены на этапе заполнения по билетам из АО
+    while q.fetch.errorCode = tsOk
+    {
+      ClearBuffer(#TmpData);
+      TmpData.cKatStroy := q.row.val('cKatStroy');
+      TmpData.cPerson   := q.row.val('cPerson');
+      TmpData.cBaseDoc  := q.row.val('cBaseDoc');
+      if getfirst TmpDataD20 = tsOk
+        continue;
+      TmpData.DatOb     := q.row.val('DatOb');
+      TmpData.cOborot   := q.row.val('cOborot');
+      TmpData.Sum       := q.row.val('Sum');
+      insert current TmpData;
+    }
+
+  } while false;
+  sqlDropTmpTable('TmpKatStroy');
+}
+
+function refresh: boolean;
+{
+  result := prepareData;
+}
+
+constructor Create(mKatStroy: TPtr; dDate: date; aProtocol: IAtlProtocol = NullRef);
+{
+  if aProtocol != NullRef
+    _protocol := aProtocol;
+  _mKatStroy := mKatStroy;
+  _dDate := dDate;
+  result := _mKatStroy != 0;
+  if result result := prepareData;
+}
+
+
+property protocol: IAtlProtocol absolute _protocol;
+property mKatStroy: TPtr absolute _mKatStroy;
+property dDate: date absolute _dDate;
+
+property Nrec     : comp   absolute TmpData.Nrec;
+property cPerson  : comp   absolute TmpData.cPerson;
+property cBaseDoc : comp   absolute TmpData.cBaseDoc;
+property cKatStroy: comp   absolute TmpData.cKatStroy;
+property DatOb    : date   absolute TmpData.DatOb;
+property cOborot  : comp   absolute TmpData.cOborot;
+property Sum      : double absolute TmpData.Sum;
+
+index indByNrec auto;
+
+end.

@@ -1,0 +1,219 @@
+#include AtlProtocol.vih
+#include XLReport.vih
+#include GetKau.vih
+#include Fare.vih
+
+#component "AGAT"
+
+interface FareReport 'Суммы по затратам на покупку билетов, отнесенным на 20 счет, оплаченных по безналу' escClose, doAccept;
+show(,,50, 6);
+
+var
+  _vFare: Fare new;
+  _iFare: IFare;
+  _mKatStroy: TPtr;
+  _dDate: date;
+  pXL: XLSRepBuilder;
+  #include GetKau.var
+
+function getKatStroyFld: string;
+{
+  result := '';
+  if GetMarkerCount(_mKatStroy) > 0
+  {
+    var c: comp = 0;
+    var i: longint = 0;
+    for(i := 0; GetMarker(_mKatStroy, i, c); i++)
+      result += if(GetAnyKau(cgAkSimple, cgKau_ObjBuild, c),
+                   if(result = '', GetMarkerCount(_mKatStroy) + ': ', ',') +
+                   SubStr(GivenAnName(cgAnName), 1, Pos(' ', GivenAnName(cgAnName) + ' ') - 1),
+                   '');
+  }
+}
+
+procedure PickKatStroy;
+{
+  if iGetKau.GetCodeKau(cgiMulti, cgKau_ObjBuild, 0) > 0
+  {
+    DoneMarker(_mKatStroy, '');
+    _mKatStroy := InitMarker(iGetKau.GetMarkerName(cgKau_ObjBuild), 8, 10, 10, true);
+    RereadRecord;
+  }
+}
+
+create view
+as select
+  getKatStroyFld()(fieldname=KatStroyFld)
+from
+  _iFare
+ ,Oborot
+ ,KatDoc
+ ,SoprHoz
+ ,BaseDoc
+ ,Persons
+where ((
+      _iFare.cOborot  == Oborot.Nrec
+  and Oborot.TiDkGal  == KatDoc.TiDkGal
+  and Oborot.cSoprHoz == SoprHoz.Nrec
+  and _iFare.cBaseDoc == BaseDoc.Nrec
+  and _iFare.cPerson  == Persons.Nrec
+))
+;
+
+function getCurOborotDocName: string;
+{
+  if getfirst KatDoc != tsOk
+    result := 'Неизвестный тип документа ' + Oborot.TiDkGal;
+  else
+    result := if(KatDoc.SName != '', KatDoc.SName, KatDoc.Name);
+  result += ' №' + GetNumHozDoc(Oborot.TiDkGal, Oborot.cSoprDoc);
+  result += ' от ' + GetDateHozDoc(Oborot.TiDkGal, Oborot.cSoprDoc);
+}
+
+procedure printXlsReport(sXltFileName: string; isCreateXLT: boolean);
+{
+  var sXlsFileName: string = if(isCreateXLT,
+                                pXL.CreateXLT(sXltFileName, True),
+                                pXL.CreateReport(sXltFileName, True));
+  pXL.CreateVar(sXlsFileName);
+  pXL.SetStringVar('KatStroy', KatStroyFld);
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXlsFileName);
+  pXL.CreateTbl('Main');
+  pXL.CreateTblFld('Nrec');
+  pXL.CreateTblFld('cOborot');
+  pXL.CreateTblFld('Проводка');
+  pXL.CreateTblFld('TiDkGal');
+  pXL.CreateTblFld('Документ');
+  pXL.CreateTblFld('ДокНомер');
+  pXL.CreateTblFld('cBaseDoc');
+  pXL.CreateTblFld('ДО');
+  pXL.CreateTblFld('Сотрудник');
+  pXL.CreateTblFld('cKatStroy');
+  pXL.CreateTblFld('Заказ');
+  pXL.CreateTblFld('Дата');
+  pXL.CreateTblFld('Сумма');
+
+  if not isCreateXLT
+    _loop _iFare
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('Nrec'            , String(_iFare.Nrec, 0, 0));
+      pXL.SetTblStringFldValue('cOborot'         , String(_iFare.cOborot, 0, 0));
+      if getfirst Oborot = tsOk
+      {
+        pXL.SetTblStringFldValue('Проводка'      , Oborot.DbSchetO + if(Oborot.SubOsSch = '', '', '.' + Oborot.SubOsSch) + ' - ' +
+                                                   Oborot.KrSchetK + if(Oborot.SubSchK = '', '', '.' + Oborot.SubSchK));
+        pXL.SetTblStringFldValue('TiDkGal'       , Oborot.TiDkGal);
+        pXL.SetTblStringFldValue('Документ'      , getCurOborotDocName);
+        pXL.SetTblStringFldValue('ДокНомер'      , GetNumHozDoc(Oborot.TiDkGal, Oborot.cSoprDoc));
+      }
+      pXL.SetTblStringFldValue('cBaseDoc'        , String(_iFare.cBaseDoc, 0, 0));
+      pXL.SetTblStringFldValue('ДО'              , if(getfirst BaseDoc = tsOk, '№' + BaseDoc.NoDoc + ' от ' + BaseDoc.DDoc, ''));
+      pXL.SetTblStringFldValue('Сотрудник'       , if(getfirst Persons = tsOk, Persons.FIO, ''));
+      pXL.SetTblStringFldValue('cKatStroy'       , String(_iFare.cKatStroy, 0, 0));
+      pXL.SetTblStringFldValue('Заказ'           , ShowKau(cgKau_ObjBuild, _iFare.cKatStroy));
+      pXL.SetTblDateFldValue  ('Дата'            , _iFare.DatOb);
+      pXL.SetTblNumberFldValue('Сумма'           , _iFare.Sum);
+      pXL.InsTblRow;
+    }
+
+  pXL.PublishTbl('Main');
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+screen scParams (,,sci1Esc);
+  fields
+    _dDate: NoProtect;
+    KatStroyFld: Protect, PickButton;
+  buttons
+    cmOk, default;
+    cmCancel;
+<<
+
+`Дата`  .@@@@@@@@@@
+`Заказы`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                     <. Продолжить .> <. Отмена .>
+>>
+end;
+
+
+handleevent
+
+  cmPick:
+  {
+    case CurField of
+      #KatStroyFld: PickKatStroy;
+    end;
+  }
+
+  cmDefault:
+  {
+    var p: IAtlProtocol = _vFare.Protocol;
+    p.Clear;
+    var logRecordId: longint = p.LogStartVisual('Выборка данных', 0);
+    _vFare.mKatStroy := _mKatStroy;
+    _vFare.dDate     := _dDate;
+    if _vFare.refresh
+      printXlsReport(TranslatePath('%StartPath%Xls\FareReport.xlt'), false);
+    p.LogStopVisual;
+    if p.GetRecordStatus(logRecordId) < APE_MESSAGE
+      p.Visible := true;
+  }
+
+  cmOk: PutCommand(cmDefault);
+
+  cmInit:
+  {
+    _mKatStroy := InitMarker('FareReport_mKatStroy', 8, 10, 10, true);
+    if not ReadMyDSK(_dDate, '_dDate_vFareReport', true) _dDate := Cur_Date;
+    _iFare := IFare(_vFare);
+  }
+
+  cmDone:
+  {
+    DoneMarker(_mKatStroy, 'FareReport_mKatStroy');
+    SaveMyDSK(_dDate, '_dDate_vFareReport');
+  }
+
+end; //handleevent
+
+end.
+
+#include UserReport.vih
+VipInterface UserReport_FareReport Implements IUserReport licensed(free);
+Interface UserReport_FareReport;
+procedure Run;
+{
+  runinterfacenomodal(AGAT::FareReport);
+}
+
+function GetReportName: String;
+{
+  result := 'ГОЗ Суммы по затратам на покупку билетов, отнесенным на 20 счет, оплаченных по безналу';
+}
+
+function GetGroupName (Level : Word) : String;
+{
+  #__UNUSED__(Level)
+  result := '';
+}
+
+function GetPriority : Integer;
+{
+  result := 3;
+}
+
+function VisibleInModule(Ind : Byte) : String;
+{
+  result := '';
+  case Ind of
+    1 : result := 'BUY';
+    2 : result := 'B_FINANS';
+    3 : result := 'B_BALANS';
+  end;
+}
+end.
