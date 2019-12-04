@@ -1,0 +1,141 @@
+#include AtlProtocol.vih
+#include GetSNote.vih
+#include BaseDocHelper.vih
+#include SetBaseDocStatusBatch.vih
+#component "AGAT"
+
+interface SetBaseDocStatusBatch;
+
+var
+  _mBaseDoc: TPtr;
+  _cBaseDoc: comp;
+  _cNewKatNotes: comp;
+  _log: IAtlProtocol;
+  _sComment: string;
+  _bShowUI: boolean;
+  _baseDocHelper: BaseDocHelper;
+
+create view
+as select
+  NewKatNotes.Nrec
+from
+  KatNotes NewKatNotes
+ ,BaseDoc
+where ((
+      _cNewKatNotes == NewKatNotes.Nrec
+  and _cBaseDoc == BaseDoc.Nrec
+));
+
+parameters _mBaseDoc, _cNewKatNotes, _sComment, _log, _bShowUI;
+
+function sBaseDoc: string;
+{
+  result := 'ДО №' + BaseDoc.NoDoc + ' от ' + BaseDoc.DDoc;
+}
+
+function bParamsValid: boolean;
+{
+  if _log = NullRef
+    _log := IAtlProtocol(new(AtlProtocol));
+  result := GetMarkerCount(_mBaseDoc) > 0;
+  if not result
+    _log.logLine(APE_WARNING, 'Пустой список ДО для установки статуса');
+  result &= getfirst NewKatNotes = tsOk;
+  if not result
+    _log.logLine(APE_ERROR, 'Не найден устанавливаемый статус Nrec=' + string(_cNewKatNotes,0,0));
+}
+
+procedure mySetNewStatus;
+{
+  var i: longint;
+  for(i := 0; GetMarker(_mBaseDoc, i, _cBaseDoc); i++)
+    if getfirst BaseDoc = tsOk
+    {
+      if _basedocHelper.SetStatusValidate(type$basedoc(BaseDoc.Buffer), _cNewKatNotes, _log)
+        if _basedocHelper.SetStatus(BaseDoc.Nrec, _cNewKatNotes, true, _sComment)
+          _log.logLine(APE_MESSAGE, sBaseDoc + ': статус установлен');
+    }
+    else
+      _log.logLine(APE_WARNING, 'Не найден ДО Nrec=' + string(_cBaseDoc, 0, 0));
+}
+
+procedure SetNewStatus(mBaseDoc: TPtr; cNewKatNotes: comp; sComment: string; protocol: IAtlProtocol = NullRef);
+{
+  _mBaseDoc := mBaseDoc;
+  _cNewKatNotes := cNewKatNotes;
+  _sComment := sComment;
+  _log := protocol;
+  if not bParamsValid
+    exit;
+  mySetNewStatus;
+}
+
+window wPickNewStatus 'Пакетная установка статуса в ДО' escClose, doAccept;
+  show(,,50,6);
+
+  screen scStatus (,,sci1Esc);
+    fields
+      NewKatNotes.Name: protect, pickbutton;
+      _sComment: noprotect;
+    buttons
+      cmOk, default;
+      cmCancel;
+<<
+
+  `Статус для установки`.@@@@@@@@@@@@@@@@@@@@@@@@
+  `Комментарий`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                     <. Установить .> <. Отмена .>
+>>
+  end;
+
+  handleevent
+    cmInit:
+    {
+      if _cNewKatNotes = 0
+        ReadMyDSK(_cNewKatNotes, '_cNewKatNotes_SetBaseDocStatusBatch', false);
+      if _sComment = ''
+        ReadMyDSK(_sComment, '_sComment_SetBaseDocStatusBatch', false);
+    }
+    cmDone:
+    {
+      SaveMyDSK(_cNewKatNotes, '_cNewKatNotes_SetBaseDocStatusBatch');
+      SaveMyDSK(_sComment, '_sComment_SetBaseDocStatusBatch');
+    }
+    cmPick:
+    {
+      if runinterface(L_DOGOVOR::GETSOMKATNOTES, word(40), word(0), word(0), false, _cNewKatNotes, IGetSomKatNotes(NullRef)) = cmDefault
+      {
+        set _cNewKatNotes := _cNewKatNotes;
+        RereadRecord;
+      }
+    }
+    cmOk:
+    {
+      PutCommand(cmDefault);
+    }
+  end;
+
+end; //window wPickNewStatus
+
+function PickNewStatus(var cNewKatNotes: comp; var sComment: string): boolean;
+{
+  result := RunWindowModal(wPickNewStatus) = cmDefault;
+  if result
+  {
+    cNewKatNotes := _cNewKatNotes;
+    sComment := _sComment;
+  }
+}
+
+handleevent
+  cmInit:
+  {
+    if not bParamsValid { Abort; Exit; }
+    if _bShowUI
+      if RunWindowModal(wPickNewStatus) != cmDefault { Abort; Exit; }
+    mySetNewStatus;
+  }
+end;
+
+end.
