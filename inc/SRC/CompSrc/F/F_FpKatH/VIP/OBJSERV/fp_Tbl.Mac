@@ -1,0 +1,229 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 5.80 - модуль "Управление бюджетом"
+// Макросы
+//------------------------------------------------------------------------------
+
+#ifndef _Fp_Tbl_Mac_
+#define _Fp_Tbl_Mac_
+
+#undef mTbl_FunAllModify
+#undef mTbl_GetBuff
+#undef mTbl_FunBufGet
+#undef mTbl_FunGet
+#undef mTbl_FunAllGet
+
+#undef mTbl_FunBufSet
+#undef mTbl_FunSet
+#undef mTbl_FunAllSet
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
+#declare mTbl_FunAllModify(_Tbl,_BufType)
+//------------------------------------------------------------------------------
+Function InsP(var _Buff : #_BufType) : integer;
+{
+  /*
+  ничего сташного, так м/б если просто обнулили NRec
+  и хотят создать новую запись
+  if (_Buff.x$position <> NULL)
+    FpLog('TInsP : _Buff.x$position <> NULL #_Tbl');
+  */
+
+  // Несовместимые позиции таблиц (FpBudVar после агрегации)
+  // почему так и не понял??!!
+  _try 
+    #_Tbl.BufferP:=#_BufType(_Buff);
+  _except
+    on ExIncompatiblePositionField : {
+      FpLog('TInsP : (#_Tbl_) ExIncompatiblePositionField');
+    }
+    else {
+      FpLog('TInsP : (#_Tbl_) '+ExploreException);
+    }
+
+  // на слуачай, если передали буфер <> NULL
+  var Buff : type$#_Tbl_;
+  Buff := #_Tbl.Buffer;
+  ClearBuffer(##_Tbl);
+  #_Tbl.Buffer := Buff;
+
+  InsP := integer(insert current #_Tbl);
+  if (InsP <> tsOk)
+  { FpLog('TInsP : (#_Tbl_) insert current #_Tbl '+string(InsP)); }
+  _Buff := #_Tbl.BufferP;
+}
+
+//------------------------------------------------------------------------------
+Function UpdP(var _Buff : #_BufType) : integer;
+{
+  UpdP := -1;
+  if (_Buff.x$position = NULL)
+  {
+    FpLog('TUpdP : (#_Tbl_) _Buff.x$position = NULL #_Tbl');
+    Exit;
+  }
+
+  _try
+    #_Tbl.BufferP:=#_BufType(_Buff);
+  _except
+    on ExIncompatiblePositionField : {
+      FpLog('TUpdP : (#_Tbl_) ExIncompatiblePositionField');
+      Exit;
+    }
+    else  {
+      FpLog('TUpdP : (#_Tbl_) '+ExploreException);
+    }
+
+  UpdP := integer(update current #_Tbl);
+  if (UpdP <> tsOk)
+  { FpLog('TUpdP : (#_Tbl_) update current #_Tbl '+string(UpdP)); }
+  _Buff := #_Tbl.BufferP;
+}
+
+//------------------------------------------------------------------------------
+Function DelP(_Buff : #_BufType) : integer;
+{
+  DelP := -1;
+
+  if (_Buff.x$position = NULL)
+  {
+    FpLog('TDelP : (#_Tbl_) _Buff.x$position = NULL #_Tbl');
+    Exit;
+  }
+
+  _try
+    #_Tbl.BufferP:=#_BufType(_Buff);
+  _except
+    on ExIncompatiblePositionField : {
+      FpLog('TDelP : (#_Tbl_) ExIncompatiblePositionField');
+      Exit;
+    }
+    else  {
+      FpLog('TDelP : (#_Tbl_) '+ExploreException);
+    }
+
+  DelP := integer(delete current #_Tbl);
+  if (DelP <> tsOk)
+  { FpLog('TDelP : (#_Tbl_) delete current #_Tbl '+string(DelP)); }
+}
+
+//------------------------------------------------------------------------------
+Function MyInsUpd(var _Buff : #_BufType) : integer;
+{
+  if (_Buff.x$position = NULL)
+  {
+    _Buff.NRec:=0;
+    MyInsUpd := InsP(_Buff);
+  }
+  else
+  {
+    MyInsUpd := UpdP(_Buff);
+  }
+}
+#end // mTbl_FunAllModify
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
+#declare mTbl_GetBuff(_BufType)
+Function GetBuff(_cRec : comp; var _Buff : #_BufType) : boolean;
+{
+  GetBuff := False;
+  _Buff.x$position := NULL;
+  if (_cRec = 0)  { Exit; }
+  // NRec=1, используется для "временного"
+  // хранения "настроек распределения агрегатов"
+  // по "виртуальной" типовой форме с NRec = 1, или UserId
+  // В принципе - это ОООчень плохое решение, например его последствия проявились в 
+  // ПИР 102.44070 "неверно формируется бюджет из платежного календаря  (Nrec=1)",
+  // там не брались аттрибуты копии, а именно не определялась ссылка на бюджет,
+  // и вследствии этого все поплыло....
+  cQuickTbl := _cRec;
+  if GetFirst FastFirstRow QuickTbl <> tsOk
+  {
+    /*
+    15/02/2005 сделал "Многопользовательский режим работы с настройкой распределения агрегатов"
+    if (_cRec = 1) or (_cRec = UserId) 
+    { _Buff.NRec := _cRec; }
+    */
+    Exit; 
+  }
+  _Buff := QuickTbl.BufferP;
+  GetBuff := True;
+}
+#end // mTbl_GetBuff
+
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
+#declare mTbl_FunBufGet(_Fun,_Fld,_Type,_BufType)
+Function Buf#_Fun(_Buff : #_BufType) : #_Type;
+{ Buf#_Fun := _Buff.#_Fld;
+}
+#end // mTbl_FunBufGet
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
+#declare mTbl_FunGet(_Fun,_Def,_Type,_BufType)
+Function #_Fun(_cRec : comp) : #_Type;
+{ #_Fun := #_Def;
+  var Buff : #_BufType; if (not GetBuff(_cRec, Buff) )  { Exit; }
+  #_Fun := #_Type(Buf#_Fun(Buff));
+}
+#end // mTbl_FunGet
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
+#declare mTbl_FunAllGet(_Fun,_Def,_Fld,_Type,_BufType)
+Function Buf#_Fun(_Buff : #_BufType) : #_Type;
+{ Buf#_Fun := _Buff.#_Fld;
+}
+Function #_Fun(_cRec : comp) : #_Type;
+{ #_Fun := #_Def;
+  var Buff : #_BufType;  if (not GetBuff(_cRec, Buff) )  { Exit; }
+  #_Fun := Buf#_Fun(Buff);
+}
+#end // mTbl_FunAllGet
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
+#declare mTbl_FunBufSet(_Fun,_Fld,_Type,_BufType)
+Function Buf#_Fun(var _Buff : #_BufType; _Value : #_Type) : boolean;
+{ _Buff.#_Fld := _Value;
+  Buf#_Fun := (MyInsUpd(_Buff) = tsOk);
+}
+#end // mTbl_FunBufSet
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
+#declare mTbl_FunSet(_Fun,_Type,_BufType)
+Function #_Fun(var _cRec : comp; _Value : #_Type) : boolean;
+{ var Buff : #_BufType;  GetBuff(_cRec, Buff);
+  #_Fun := Buf#_Fun(Buff, _Value);
+  _cRec := Buff.NRec;
+}
+#end // mTbl_FunSet
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
+#declare mTbl_FunAllSet(_Fun,_Fld,_Type,_BufType)
+Function Buf#_Fun(var _Buff : #_BufType; _Value : #_Type) : boolean;
+{ _Buff.#_Fld := _Value;
+  Buf#_Fun := (MyInsUpd(_Buff) = tsOk);
+}
+Function #_Fun(var _cRec : comp; _Value : #_Type) : boolean;
+{ var Buff : #_BufType;  GetBuff(_cRec, Buff);
+  #_Fun := Buf#_Fun(Buff, _Value);
+  _cRec := Buff.NRec;
+}
+#end // mTbl_FunAllSet
+
+#end  // _Fp_Tbl_Mac_

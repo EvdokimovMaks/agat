@@ -10,17 +10,24 @@
 .Form LstGrSFO
 .Hide
 .Fields
+   ShDopSize1 : String ShDopSize2 : String
+   ShDopAttr1 : String ShDopAttr2 : String ShDopAttr3 : String
    fKod : String  fName : String  fEd : String
    fRost : String fOd1 : String   fOd2 : String
    fOb : String   fGUb : String   fPerch : String
    fICZ : String  fPog : String   fOb2 : String
+   fClimZn : String fCatEmp : String fProtCl : String fGender : String
    fUv : String   fSizes : String
    fClean : Word  fByPers : Word  fGrNRec : Comp
+   fSeason : String
 .endFields
+   ^ ^ ^ ^ ^
 .{
    ^ ^ ^
    ^ ^ ^ ^ ^ ^ ^ ^ ^
+   ^ ^ ^ ^
    ^ ^ ^ ^ ^
+   ^
 .}
 .endform
 
@@ -45,36 +52,43 @@
 .NameInList '▐╝╚╜═О ╗╜Д╝Ю╛═Ф╗О ╞╝ ёЮЦ╞╞═╛ А╞╔Ф╗═╚Л╜╝╘ (Д╝Ю╛╔╜╜╝╘) ╝╓╔╕╓К'
 .Fields
    CommonFormHeader
+   if (Lic_ItemExists('Custom'), 'дддддб', '')
+   if (ShDopSize1 <> '', 'дддддб', '')
+   if (ShDopSize2 <> '', 'дддддб', '')
+   if (ShDopAttr1 <> '', 'дддддб', '')
+   if (ShDopAttr2 <> '', 'дддддб', '')
+   if (ShDopAttr3 <> '', 'дддддб', '')
+   if (Lic_ItemExists('Custom'), ' ▐╝ё.Ё', '')
+   if (ShDopSize1 <> '', Pad(ShDopSize1, 5) + 'Ё', '')
+   if (ShDopSize2 <> '', Pad(ShDopSize2, 5) + 'Ё', '')
+   if (ShDopAttr1 <> '', Pad(ShDopAttr1, 5) + 'Ё', '')
+   if (ShDopAttr2 <> '', Pad(ShDopAttr2, 5) + 'Ё', '')
+   if (ShDopAttr3 <> '', Pad(ShDopAttr3, 5) + 'Ё', '')
+   if (Lic_ItemExists('Custom'), 'ддддда', '')
+   if (ShDopSize1 <> '', 'ддддда', '')
+   if (ShDopSize2 <> '', 'ддддда', '')
+   if (ShDopAttr1 <> '', 'ддддда', '')
+   if (ShDopAttr2 <> '', 'ддддда', '')
+   if (ShDopAttr3 <> '', 'ддддда', '')
 .endFields
-Ъ░  ^
+Ъ≤  ^
 
                                        ┐ЮЦ╞╞К А╞╔Ф╗═╚Л╜╝╘ (Д╝Ю╛╔╜╜╝╘) ╝╓╔╕╓К
-.{?INTERNAL; (not Lic_ItemExists('Custom'))
- здддддддддддддддбддддддддддддддддддддддддддддддддддддддддбддддддддддддбддддбддддбддддбддддбддддбддддбддддбдддддбдддд©
- Ё      ┼╝╓      Ё              █═╗╛╔╜╝╒═╜╗╔              Ё┘╓╗╜╗Ф═ ╗╖╛.Ё░╝АБЁ ▌╓1Ё ▌╓2Ё ▌║1Ё ▌║2Ё┐.Ц║Ё▐╔ЮГЁ▒┬┤▌└Ё ⌠╒ Ё
- юдддддддддддддддаддддддддддддддддддддддддддддддддддддддддаддддддддддддаддддаддддаддддаддддаддддаддддаддддадддддадддды
-.}
-.{?INTERNAL; (Lic_ItemExists('Custom'))
- здддддддддддддддбддддддддддддддддддддддддддддддддддддддддбддддддддддддбддддбддддбддддбддддбддддбддддбддддбдддддбддддбдддд©
- Ё      ┼╝╓      Ё              █═╗╛╔╜╝╒═╜╗╔              Ё┘╓╗╜╗Ф═ ╗╖╛.Ё░╝АБЁ ▌╓1Ё ▌╓2Ё ▌║1Ё ▌║2Ё┐.Ц║Ё▐╔ЮГЁ▒┬┤▌└Ё ▐╝ёЁ ⌠╒ Ё
- юдддддддддддддддаддддддддддддддддддддддддддддддддддддддддаддддддддддддаддддаддддаддддаддддаддддаддддаддддадддддаддддадддды
-.}
+ здддддддддддддддбддддддддддддддддддддддддддддддддддддддддбддддддддддддбддддбддддбддддбддддбддддбдддддб^^^^^^дддбддддбддддддддддд©
+ Ё      ┼╝╓      Ё              █═╗╛╔╜╝╒═╜╗╔              Ё┘╓.╗╖╛╔Ю╔╜╗ОЁ░╝АБЁ ▌╓.Ё ▌║.Ё┐.Ц║Ё▐╔ЮГЁ▒┬┤▌└Ё^^^^^^▓╗╞Ё ⌠╒ Ё┌К╓═Г═ А/╞╝Ё
+ юдддддддддддддддаддддддддддддддддддддддддддддддддддддддддаддддддддддддаддддаддддаддддаддддаддддаддддда^^^^^^дддаддддаддддддддддды
 .{
-.{?INTERNAL; (not Lic_ItemExists('Custom'))
 .Fields
    fKod  fName  fEd
-   fRost fOd1 fOd2 fOb fOb2 fGUb fPerch fICZ
-   fUv
+   fRost fOd1 fOb fGUb fPerch fICZ
+   if (Lic_ItemExists('Custom'), Pad('  ' + fPog, 6), '')
+   if (ShDopSize1 <> '', Pad('  ' + fOd2, 6), '')
+   if (ShDopSize2 <> '', Pad('  ' + fOb2, 6), '')
+   if (ShDopAttr1 <> '', Pad('  ' + fClimZn, 6), '')
+   if (ShDopAttr2 <> '', Pad('  ' + fCatEmp, 6), '')
+   if (ShDopAttr3 <> '', Pad('  ' + fProtCl, 6), '')
+   fGender fUv fSeason
 .endFields
-  @@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@  &&   &&   &&   &&   &&   &&   &&   &&     @
-.}
-.{?INTERNAL; (Lic_ItemExists('Custom'))
-.Fields
-   fKod  fName  fEd
-   fRost fOd1 fOd2 fOb fOb2 fGUb fPerch fICZ fPog
-   fUv
-.endFields
-  @@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@  &&   &&   &&   &&   &&   &&   &&   &&    &&    @
-.}
-.}Ъ░
+  @@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@  &&   &&   &&   &&   &&   &&   ^^^^^^&&   @   @~@@@@@@@@@
+.}Ъ≤
 .endform

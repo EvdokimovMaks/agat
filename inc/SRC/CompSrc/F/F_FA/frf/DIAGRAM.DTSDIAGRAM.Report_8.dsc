@@ -1,0 +1,5 @@
+DIAGRAM
+DTSDIAGRAM
+Круговая диаграмма
+
+DIAGRAM.DTSDIAGRAM.Report_8.frf

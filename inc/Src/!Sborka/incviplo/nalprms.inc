@@ -3,10 +3,9 @@
 type
   String255        = String[255];
   String2        = String[2];
-  String150        = String[150];
   String220        = String[220];
-  String80        = String[80];
   String250        = String[250];
+  String80        = String[80];
   pNALRP_V = ^tNALRP_V;
   tNALRP_V = record   { - NALRP_V }
     PXLREPSETUP    : TReferenceBuf;   { pxlrepsetup                           }
@@ -51,13 +50,13 @@ type
     WLIST          : Word;            { код списка (таблицы)                  }
     PICK_CREC      : Comp;            { номер элемента в выбираемой таблице   }
     KATPODR_NREC   : Comp;            { Номер записи                          }
-    KATPODR_NAME   : String150;       { наименование подразделения            }
+    KATPODR_NAME   : String;          { наименование подразделения            }
     KATMC_NREC     : Comp;            { Номер записи                          }
     KATMC_NAME     : String;          { наименование товара                   }
     GROUPMC_NREC   : Comp;            { Номер записи                          }
     GROUPMC_NAME   : String220;       { Наименование группы                   }
     KATMOL_NREC    : Comp;            { Номер записи                          }
-    KATMOL_NAME    : String80;        { ФИО                                   }
+    KATMOL_NAME    : String;          { ФИО                                   }
     EXCLASSSEG_NREC: Comp;            { NREC                                  }
     EXCLASSSEG_CLASSCODE: Word;       { Код классификации                     }
     EXCLASSSEG_NAME: String250;       { Имя уровня                            }

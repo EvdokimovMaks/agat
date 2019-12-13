@@ -19,6 +19,7 @@
 Организация
 ОКПО
 TitleDocNrec : comp
+sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа
@@ -32,7 +33,7 @@ FIO_5
 FIO_6
 TabN
 подразделение
-должность
+должность : WideString
 razr
 
 !.{RD09_Raise  CheckEnter
@@ -58,6 +59,7 @@ Appendix5
 Организация                   ^
 ОКПО                          ^
 TitleDocNrec : comp           ^
+sBarCode                      ^
 PersNrec : comp               ^
 AppointNrec : comp            ^
 номер_документа               ^
@@ -70,7 +72,7 @@ FIO_VP                        ^
 FIO_5                         ^
 FIO_6                         ^
 TabN                          ^
-подразделение                 ^
+подразделение : WideString    ^
 должность                     ^
 razr                          ^
 

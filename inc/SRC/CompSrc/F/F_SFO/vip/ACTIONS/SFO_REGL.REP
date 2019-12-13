@@ -1,0 +1,213 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Спецодежда
+// Функция печати Акта регламентного списания СФО
+//------------------------------------------------------------------------------
+
+procedure ReloadSpec;
+{
+  Delete All S_ActSpec;
+
+  _LOOP PersSFO
+  {
+    ClearBuffer(#S_ActSpec);
+    S_ActSpec.SfoRec     := PersSFO.nRec;
+    S_ActSpec.MBPName    := KatMBP.Name;
+    S_ActSpec.MBPNNumber := KatMBP.NNumber;
+    S_ActSpec.EdName     := KatEd.Name;
+    S_ActSpec.EdKod      := sGetAttr(coKatEd, KatEd.nRec, 'Код');
+    S_ActSpec.Kol        := PersSFO.docKol;
+    S_ActSpec.Price      := SFOPrice;
+    S_ActSpec.Summa      := if (not isValid(#MBPOut), PersSFO.docKol * SFOPrice, if (wGetTune('Fin.MBP.OstStoim') = 0, MBPOut.Summa, MBPOut.Summa - MBPOut.SummaIsn));
+    S_ActSpec.Srok       := PersSFO.Srok;
+    S_ActSpec.ExplDate   := PersSFO.ExplDate;
+    S_ActSpec.endDate    := PersSFO.endDate;
+    S_ActSpec.SpisReason := MBPSpis.Name;
+    S_ActSpec.CardNom    := PersCard.CardNom;
+    S_ActSpec.CardNRec   := PersCard.NRec;
+    S_ActSpec.FIO        := Persons.FIO;
+    S_ActSpec.TabN       := STabN;
+    S_ActSpec.MOLName    := pKatMOL.Name;
+    S_ActSpec.PodrName   := pKatPodr.Name;
+    Insert Current S_ActSpec;
+  }
+}
+
+procedure PrintSpec;
+{
+  if (GetFirst S_ActSpec <> tsOk)
+    Exit;
+
+  var tNRec : comp;
+  tNRec := S_ActSpec.CardNRec;
+
+  _LOOP S_ActSpec
+  {
+    frmSFORegl.PutEventById(feDoLoop, fcSpcSFORegl);
+
+    if (tNRec <> S_ActSpec.CardNRec)
+    {
+      frmSFORegl.PutEventById(feTrue, fcActSpLevItog);
+      frmSFORegl.SkipFormat(1);
+
+      frmSFORegl.PutEventById(feDoLoop, fcSpcSFORegl);
+      tNRec := S_ActSpec.CardNRec;
+    }
+
+    frmSFORegl.PutEventById(feFalse, fcActSpLevItog);
+    frmSFORegl.Write(S_ActSpec.MBPName);
+    frmSFORegl.Write(S_ActSpec.MBPNNumber);
+    frmSFORegl.Write(S_ActSpec.EdName);
+    frmSFORegl.Write(S_ActSpec.Kol);
+    frmSFORegl.Write(S_ActSpec.Price);
+    frmSFORegl.Write(getSrokStr(S_ActSpec.ExplDate, S_ActSpec.Srok));
+    frmSFORegl.Write(S_ActSpec.endDate);
+    frmSFORegl.Write(S_ActSpec.CardNom);
+    frmSFORegl.Write(S_ActSpec.FIO);
+    frmSFORegl.Write(S_ActSpec.TabN);
+    frmSFORegl.Write(S_ActSpec.MOLName);
+    frmSFORegl.Write(S_ActSpec.PodrName);
+    frmSFORegl.Write(S_ActSpec.SfoRec);
+  }
+
+  frmSFORegl.PutEventById(feDoLoop, fcSpcSFORegl);
+  frmSFORegl.PutEventById(feTrue, fcActSpLevItog);
+  frmSFORegl.SkipFormat(1);
+//  frmSFORegl.PutEvent(feBreak);
+}
+
+procedure PrintReglList;
+{
+  if (wGetTune('Country') = 3) // Казахстан
+    frmSFORegl.SetGroup('Акт регламентного списания (Казахстан)');
+  else
+    frmSFORegl.SetGroup('Акт регламентного списания');
+
+  PushPos(#PersSFO);
+  ReloadSpec;
+  PopPos(#PersSFO);
+
+  frmSFORegl.Write(ReqSFO.ReqNom);
+  frmSFORegl.Write(ReqSFO.frmDate);
+  frmSFORegl.Write(brPodr);
+  frmSFORegl.Write(brMOL);
+  frmSFORegl.Write(ReqSFO.nRec);
+  #WriteCommission_FeeSigners(iFeeSigners,frmSFORegl,SFO_Regl);
+  PrintSpec;
+  Delete All S_ActSpec;
+
+  if (not frmSFORegl.Error)
+    frmSFORegl.ShowFile('');
+  else
+    frmSFORegl.AbortForm;
+}
+
+//-----------------------------------------------------------------------------
+
+function GetSrokFactStr : string;
+var Srok : longint;
+{
+  GetSrokFactStr := '';
+
+  if (Longint(S_ActSpec.endDate) = 0) OR (ReqSFO.frmDate < S_ActSpec.endDate)
+    Srok := DiffMonths(ReqSFO.frmDate, S_ActSpec.ExplDate);
+  else
+    Srok := DiffMonths(S_ActSpec.endDate, S_ActSpec.ExplDate);
+
+  if (Srok > 0)
+    GetSrokFactStr := String(Srok);
+}
+
+//-----------------------------------------------------------------------------
+var UtvLico_Name, UtvLico_Post : string;
+
+DataStream dtsReglSpis
+(
+  [CFH]          CommonFormHeader;
+  [OrgName]      iOrgInfo.GetMyOrgNameT(ReqSFO.frmDate);
+  [ReqNom]       ReqSFO.ReqNom;
+  [ReqDate]      if (Longint(ReqSFO.frmDate) > 0, DateToStr(ReqSFO.frmDate, 'DD/MM/YYYY'), '');
+  [ReqDateStr]   if (Longint(ReqSFO.frmDate) > 0, DateToStr(ReqSFO.frmDate, 'DD mon YYYY г.'), '');
+  [fPodr]        brPodr;
+  [fMOL]         brMOL;
+  [sPodr]        if ((Word(ReqSFO.Kol) and 1) = 0, '', if (isValid(#KatPodr), KatPodr.Name, ''));
+  [sMol]         if ((Word(ReqSFO.Kol) and 2) = 0, '', if (isValid(#KatMol), KatMol.Name, ''));
+  [sMolPost]     if ((Word(ReqSFO.Kol) and 2) = 0, '', if (isValid(#KatMol), oSDfuns.Get_MOL_Post(KatMol.nRec), ''));
+  [BarCode]      GenerateBarCode(cgDoc_0741, ReqSFO.nRec);
+  [BossComName]  BossFR.BossFIO;
+  [BossComDlg]   BossFR.BossPosition;
+  [UtvLicoName]  UtvLico_Name;
+  [UtvLicoPost]  UtvLico_Post;
+
+  Table ComisFR
+  (
+    [ComName]    ComisFR.MemberFIO;
+    [ComDlg]     ComisFR.MemberPosition;
+  );
+
+  Table S_ActSpec
+  (
+    [MBPName]    S_ActSpec.MBPName;
+    [MBPNNumber] S_ActSpec.MBPNNumber;
+    [EdName]     S_ActSpec.EdName;
+    [EdKod]      S_ActSpec.EdKod;
+    [Kol]        S_ActSpec.Kol;
+    [Price]      S_ActSpec.Price;
+    [Summa]      S_ActSpec.Summa;
+    [Srok]       getSrokStr(S_ActSpec.ExplDate, S_ActSpec.Srok);
+    [SrokF]      GetSrokFactStr;
+    [SrokEnd]    if (Longint(S_ActSpec.endDate) > 0, DateToStr(S_ActSpec.endDate, 'DD/MM/YYYY'), '');
+    [SpisReason] S_ActSpec.SpisReason;
+    [CardNom]    S_ActSpec.CardNom;
+    [TabN]       S_ActSpec.TabN;
+    [FIO]        S_ActSpec.FIO;
+    [FIO_Short]  GetShortName(S_ActSpec.FIO);
+    [MolName]    S_ActSpec.MOLName;
+    [PodrName]   S_ActSpec.PodrName;
+  );
+)
+end;
+
+procedure PrintReglList_FR;
+var i : longint;
+{
+  // Комиссия
+  Delete All BossFR;
+  Delete All ComisFR;
+  #WriteFRFeeSignersChairMan(iFeeSigners,BossFR);
+  #WriteFRFeeSignersOS(iFeeSigners,ComisFR);
+
+  for (i := RecordsInTable(#ComisFR); i < 3; i++)
+  {
+    ClearBuffer(#ComisFR);
+    insert current ComisFR;
+  }
+
+  // Утверждающее лицо
+  UtvLico_Name := UtvLico_Post := '';
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(2, 'UtvLico'))
+    {
+      UtvLico_Name := iFeeSigners.GetSignerFIO(1);
+      UtvLico_Post := iFeeSigners.GetSignerPosition(1);
+    }
+
+    iFeeSigners.ClearRestriction;
+  }
+
+  // Спецификации
+  PushPos(#PersSFO);
+  ReloadSpec;
+  PopPos(#PersSFO);
+
+  if (wGetTune('Country') <> ccRus) or (not GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0))
+    RunFReportByGroup(dtsReglSpis, 'ReglSpis');
+  else
+    RunFReportByGroup(dtsReglSpis, 'ReglSpis,ReglSpisVSMN');
+
+  Delete All BossFR;
+  Delete All ComisFR;
+  Delete All S_ActSpec;
+}

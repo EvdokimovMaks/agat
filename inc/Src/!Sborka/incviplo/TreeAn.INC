@@ -1,15 +1,15 @@
 {
  ษอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออป
  บ               ‘ซฎข เ์ : GALDICT " ซ ชโจช  ERP 9.1"                   บ
- บ     โ  แฎงค ญจ๏ 28/03/18                                             บ
+ บ     โ  แฎงค ญจ๏ 01/02/19                                             บ
  ศอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผ
 }
 
 {$ifdef __MTtabledef__}
-{อออออออออออออ ’ กซจๆ  : HIERANALITREPORT_TREEAN "HIERANALITREPORT=>TREEAN" ออออออออออออออ}
+{อออออออออออออ ’ กซจๆ  : F_BUHREP::TREEAN "TREEAN" ออออออออออออออ}
 type
-  pHIERANALITREPORT_TREEAN = ^tHIERANALITREPORT_TREEAN;
-  tHIERANALITREPORT_TREEAN = record   { - HIERANALITREPORT=>TREEAN }
+  pTREEAN = ^tTREEAN;
+  tTREEAN = record   { - TREEAN }
     NREC           : Comp;            { NREC                                  }
     CODE           : Word;            { CODE                                  }
     SUM            : array [1..4] of Double;{ SUM                             }
@@ -46,5 +46,5 @@ const
   tiTREEAN01             = 0;  { NREC(Sur Un M)                          }
 
 const
-  mtHIERANALITREPORT_TREEAN = 'HIERANALITREPORT=>TREEAN';
+  mtTREEAN = 'F_BUHREP::TREEAN';
 {$endif __MTtabledef__}

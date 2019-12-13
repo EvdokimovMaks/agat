@@ -19,6 +19,7 @@
 Организация
 ОКПО
 TitleDocNrec : comp
+sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа
@@ -28,7 +29,7 @@ FIO
 FIO_VP
 TabN
 должность
-подразделение
+подразделение : WideString
 
 NameAcademy
 DateBeg
@@ -48,6 +49,7 @@ prim
 Организация                   ^
 ОКПО                          ^
 TitleDocNrec : comp           ^
+sBarCode		      ^
 PersNrec : comp               ^
 AppointNrec : comp            ^
 номер_документа               ^
@@ -57,7 +59,7 @@ FIO                           ^
 FIO_VP                        ^
 TabN                          ^
 должность                     ^
-подразделение                 ^
+подразделение : WideString    ^
 NameAcademy                   ^
 DateBeg                       ^
 DateEnd                       ^

@@ -11,9 +11,11 @@ const
   cg_ExpSfCreateSign   = 2;   // создать файл с ЭЦП
   cg_ExpSfGroupPriceMC = 4;   // группировать по матценности и цене
   cg_ExpSfHideKolPrice = 8;   // Не выводить количество и цену ОКЕИ у услуги
+  cg_ExpSfNotNullSum   = 16;  // не выводить позиции с нулевой стоимостью
 
   cg_ExpSfSingEDO      = 1024; // экспорт СФ для ЭЦП
   cg_ExpSfNalStRasch   = 2048; // налоговая ставка СФ расчетная
   cg_ExpSfNalStProc    = 4096; // налоговая ставка СФ процентная
   cg_ExpSfVarNameMCUsl = 8192; // выводить вариант наименования МЦ/услуги
+  cg_ExpUpdWithoutSF   = 16384; // выгрузка УПД без СФ
 end;

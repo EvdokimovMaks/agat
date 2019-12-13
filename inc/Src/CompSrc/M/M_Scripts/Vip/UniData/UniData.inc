@@ -151,6 +151,8 @@ const
   dtStZatr       = 130;
   dtGroupMc      = 131;
   dtKitKau       = 132;
+  dtSchFact      = 133;//ERP-182
+
 
   dtNothing    = 0ffffh;
   dtFree       = 0fffeh;

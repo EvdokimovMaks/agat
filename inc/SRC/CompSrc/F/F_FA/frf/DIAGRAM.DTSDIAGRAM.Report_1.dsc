@@ -1,0 +1,5 @@
+DIAGRAM
+DTSDIAGRAM
+Гистограмма обычная
+
+DIAGRAM.DTSDIAGRAM.Report_1.frf

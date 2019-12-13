@@ -17,6 +17,7 @@
 .Hide
 .Fields
 
+sBarCode		 
 KatOrg_Name
 KatOrg_OKPO
 INN
@@ -32,7 +33,7 @@ FIO
 FIO_VP
 AppPostCat_Name
 KlKatego_NaiKat
-AppKatPodr_Name
+AppKatPodr_Name: WideString
 AppointDate
 DateEnd
 KlSovm_NSovm
@@ -89,8 +90,13 @@ ContractNmb
 ContractDate
 FIO2
 
+DangerCode
+DangerName
+DangerPeriod
+
 .endFields
 
+sBarCode		 ^
 KatOrg_Name              ^
 KatOrg_OKPO              ^
 INN                      ^
@@ -106,7 +112,7 @@ FIO                      ^
 FIO_VP                   ^
 AppPostCat_Name          ^
 KlKatego_NaiKat          ^
-AppKatPodr_Name          ^
+AppKatPodr_Name: WideString ^
 AppointDate              ^
 DateEnd                  ^
 KlSovm_NSovm             ^
@@ -165,5 +171,11 @@ FIO1                     ^
 ContractNmb              ^
 ContractDate             ^
 FIO2                     ^
+
+.{ Danger_1_136_Cycle1 CheckEnter
+DangerCode               ^
+DangerName               ^
+DangerPeriod             ^
+.}
 
 .endform

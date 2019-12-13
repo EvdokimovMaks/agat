@@ -68,9 +68,9 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Анкеты на магнитных носителях'
 .begin
-  PachCnt :=0
-  DocCnt  :=0
-  my_pred := Upcase( Trim( Replace( Наименование, '"', '''' ) ) )
+  PachCnt :=0;
+  DocCnt  :=0;
+  my_pred := Upcase( Trim( Replace( Наименование, '"', '''' ) ) );
 end.
 .{ AllPachLoop CheckEnter
 .fields
@@ -83,8 +83,8 @@ end.
 "ПАЧК",^,"^",1
 "ТИПД","АНКТ",^
 .begin
-  PachCnt := PachCnt + 1
-  DocCnt  :=0
+  PachCnt := PachCnt + 1;
+  DocCnt  :=0;
 end.
 .{ NexpPersLoop CheckEnter
 .fields
@@ -125,9 +125,9 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Анкеты на магнитных носителях'
 .begin
-  PachCnt :=0
-  DocCnt  :=0
-  my_pred := Upcase( Trim( Replace( Наименование, '"', '''' ) ) )
+  PachCnt :=0;
+  DocCnt  :=0;
+  my_pred := Upcase( Trim( Replace( Наименование, '"', '''' ) ) );
 end.
 .{ AllPachLoop CheckEnter
 .fields
@@ -140,8 +140,8 @@ end.
 "ПАЧК",^,"^",1
 "ТИПД","АНКТ",^
 .begin
-  PachCnt := PachCnt + 1
-  DocCnt  :=0
+  PachCnt := PachCnt + 1;
+  DocCnt  :=0;
 end.
 .{ NexpPersLoop CheckEnter
 .fields
@@ -183,9 +183,9 @@ ___КОНЕЦ ^ ПАЧКИ
 .endvar
 .group 'Заявление об обмене на бумажных бланках'
 .begin
-  PachCnt :=0
-  DocCnt  :=0
-  my_pred := Upcase( Trim( Replace( Наименование, '"', '''' ) ) )
+  PachCnt :=0;
+  DocCnt  :=0;
+  my_pred := Upcase( Trim( Replace( Наименование, '"', '''' ) ) );
 end.
 .{ AllPachLoop CheckEnter
 .fields
@@ -198,8 +198,8 @@ end.
 "ПАЧК",^,"^",1
 "ТИПД","ОБМН",^
 .begin
-  PachCnt := PachCnt + 1
-  DocCnt  :=0
+  PachCnt := PachCnt + 1;
+  DocCnt  :=0;
 end.
 .{ NexpPersLoop CheckEnter
 .fields

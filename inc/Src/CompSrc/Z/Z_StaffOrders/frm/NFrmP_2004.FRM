@@ -17,13 +17,14 @@
 .Fields
 Организация  ОКПО
 TitleDocNrec : comp
+sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа  дата_составления
 
 FIO
 TabN
-подразделение
+подразделение : WideString
 должность
 motive
 FortuneType
@@ -38,7 +39,7 @@ prim
 ФиоРук
 
 .EndFields
-^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^
 ^ ^ ^ ^
 sum_str                   ^

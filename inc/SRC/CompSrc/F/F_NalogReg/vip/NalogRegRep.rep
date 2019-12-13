@@ -1,0 +1,293 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 5.85 - ФРО
+// Функции печати "Акта Инвентаризации Расходов Будущих Периодов ИНВ-11"
+//------------------------------------------------------------------------------
+
+Form frmRashFuture('RashFuture.OUT', 'RashFuture') With NoVisual;
+
+//========================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===========================
+//******************************************************************************
+//------------------------------------------------------------------------------
+// Функция определения дня месяца и года
+Function GetCurDayOfMonth(pDate : date) : date;
+{
+  GetCurDayOfMonth := Date(Day(pDate), Month(pDate), Year(pDate));
+}
+
+//------------------------------------------------------------------------------
+// Функция определения последнего числа месяца
+Function GetLasDayOfMonth(pDate : date) : date;
+{
+  GetLasDayOfMonth := Date(Last_Day(pDate), Month(pDate), Year(pDate));
+}
+// Функция определения первого числа месяца
+Function GetFirstDayOfMonth(pDate : date) : date;
+{
+  GetFirstDayOfMonth := Date(1, Month(pDate), Year(pDate));
+}
+
+//------------------------------------------------------------------------------
+Function CheckDateWithPar : boolean;
+var dPer1, dPer2 : date;
+{
+  dPer1 := dPer2 := ZeroDate;
+  case InclPar of
+    0: Result := (NalRegSp.DatOb >= dDate);
+    1:
+    {
+      if Month(dDate) <= 3
+      {
+        dPer1 := date(1, 1, Year(dDate));
+        dPer2 := date(31, 3, Year(dDate));
+      }
+      else
+        if Month(dDate) <= 6
+        {
+          dPer1 := date(1, 4, Year(dDate));
+          dPer2 := date(30, 6, Year(dDate));
+        }
+        else
+          if Month(dDate) <= 9
+          {
+            dPer1 := date(1, 7, Year(dDate));
+            dPer2 := date(30, 9, Year(dDate));
+          }
+          else
+            if Month(dDate) <= 12
+            {
+              dPer1 := date(1, 10, Year(dDate));
+              dPer2 := date(31, 12, Year(dDate));
+            }
+
+      Result := (dPer1 <= NalRegSp.DatOb and NalRegSp.DatOb <= dPer2)
+                or (NalRegSp.DatOb >= dDate);
+    }
+    2:
+    {
+      if Month(dDate) <= 6
+      {
+        dPer1 := date(1, 1, Year(dDate));
+        dPer2 := date(30, 6, Year(dDate));
+      }
+      else
+      {
+        dPer1 := date(1, 6, Year(dDate));
+        dPer2 := date(31, 12, Year(dDate));
+      }
+
+      Result := (dPer1 <= NalRegSp.DatOb and NalRegSp.DatOb <= dPer2)
+                or (NalRegSp.DatOb >= dDate);
+    }
+    3: Result := (Year(NalRegSp.DatOb) = Year(dDate))
+                  or (NalRegSp.DatOb >= dDate);
+  end;
+}
+
+//============================= ОСНОВНЫЕ ФУНКЦИИ ===============================
+//******************************************************************************
+//------------------------------------------------------------------------------
+#declare SelectCode2
+  if (NalRegDc.DatDoc <= dDate) // Проверяем дату формирования документа с датой составления отчета
+  {
+    var bOk : boolean;
+    var Summ1, Summ2, Summ3, Summ4 : double;
+
+    bOk   := False;
+    Summ1 := 0;
+    Summ2 := 0;
+    Summ3 := 0;
+    Summ4 := 0;
+
+    _loop NalRegSp // Проверяем проведена ли ТХО по каждой записи
+    {
+      if (HozOpName = '')
+      {
+        bOk := True;
+        Break;
+      }
+    }
+
+    AddBounds(tbSumInDate);
+
+    _Loop NalRegSp // Суммируем расчетную сумму в диапазоне дат от текущей даты формирования акта до конца месяца
+    {
+      Summ1 := Summ1 + NalRegSp.SumPr;
+    }
+
+    SubBounds(tbSumInDate);
+    AddBounds(tbSumOfDate);
+
+    _Loop NalRegSp // Суммируем списанную сумму только до даты формирования акта и только где проведена ТХО
+    {
+      if (HozOpName <> '')
+        Summ2 := Summ2 + NalRegSp.SumPr;
+    }
+
+    SubBounds(tbSumOfDate);
+
+    // считаем выплаты за месяц
+    dDate1 := GetFirstDayOfMonth(dDate);  // считаем сначала месяца
+    AddBounds(tbSumInDate);
+
+    _Loop NalRegSp // Суммируем расчетную сумму в диапазоне дат от текущей даты формирования акта до конца месяца
+      Summ3 := Summ3 + NalRegSp.SumPr;
+
+    SubBounds(tbSumInDate);
+
+    dDate1 := GetCurDayOfMonth(dDate); // возвращаем
+    // end считаем выплаты за месяц
+
+    // считаем выплаты от даты возникновения задолженности, если меньше года, или с начала года
+    // если год возникновения меньше текущего - считаем сначала года
+    if Year(NalRegDc.DopDat2) < Year(dDate1)
+      dDate1 := Date(1, 1, Year(dDate1))
+    else
+      dDate1 := NalRegDc.DopDat2;
+
+    AddBounds(tbSumInDate);
+
+    _Loop NalRegSp // Суммируем расчетную сумму в диапазоне дат от текущей даты формирования акта до конца месяца
+      Summ4 := Summ4 + NalRegSp.SumPr;
+
+    SubBounds(tbSumInDate);
+    dDate1 := GetCurDayOfMonth(dDate); // возвращаем
+    // end считаем выплаты за год
+
+    if (bOk) // Если ТХО не проведена хотя бы по одной записи, то выводим в отчет
+    {
+      frmRashFuture.PutEventById(feDoLoop, fcRashFuture_Body);
+      frmRashFuture.Write(KatKlass.NRec);   // KatKlass.NRec (Вид расхода)
+      frmRashFuture.Write(KatKlass.Name);   // Наименование Вида расхода
+      frmRashFuture.Write(KatKlass.wType);  // Код Вида расхода
+
+      frmRashFuture.Write(NalRegDc.NRec);   // NalRegDc.NRec (Налоговые регистры-документы)
+      frmRashFuture.Write(NalRegDc.SumPr);  // Первоначальная сумма расходов (Принято к учету)
+      frmRashFuture.Write(NalRegDc.DatDoc); // Дата возникновения расходов (Дата формирования)
+      frmRashFuture.Write(Srok);            // Срок погашения расходов по месяцам
+
+      frmRashFuture.Write(NalRegSp.NRec);   // NalRegSp.NRec (Спецификация налогового регистра)
+      frmRashFuture.Write(Summ1);           // Расчетная сумма к списанию
+      frmRashFuture.Write(Summ2);           // Списано (Погашено) расходов до начала инвентаризации
+
+      frmRashFuture.Write(NalRegDc.NoDoc);  // Номер расхода
+
+      frmRashFuture.Write(Months_Between(NalRegDc.DopDat2,dDate)); // месяцев со дня начала расходов
+      frmRashFuture.Write(Summ3);  // Расчетная сумма к списанию за месяц
+      frmRashFuture.Write(Summ4);  // Расчетная сумма к списанию от даты задолженности или с начала года
+
+      Written := True;
+    }
+    else // Если ТХО проведена по всем записям, то проверяем последнюю дату списания, и выводим в отчет
+    {
+      if (GetLast NalRegSp <> tsOk) {}; // Находим последнюю запись в таблице
+
+      if (CheckDateWithPar) // Если последняя дата списания больше или ровна дате составления акта, то выводим
+      {
+        frmRashFuture.PutEventById(feDoLoop, fcRashFuture_Body);
+        frmRashFuture.Write(KatKlass.NRec);   // KatKlass.NRec (Вид расхода)
+        frmRashFuture.Write(KatKlass.Name);   // Наименование Вида расхода
+        frmRashFuture.Write(KatKlass.wType);  // Код Вида расхода
+
+        frmRashFuture.Write(NalRegDc.NRec);   // NalRegDc.NRec (Налоговые регистры-документы)
+        frmRashFuture.Write(NalRegDc.SumPr);  // Первоначальная сумма расходов (Принято к учету)
+        frmRashFuture.Write(NalRegDc.DatDoc); // Дата возникновения расходов (Дата формирования)
+        frmRashFuture.Write(Srok);            // Срок погашения расходов по месяцам
+
+        frmRashFuture.Write(NalRegSp.NRec);   // NalRegSp.NRec (Спецификация налогового регистра)
+        frmRashFuture.Write(Summ1);           // Расчетная сумма к списанию
+        frmRashFuture.Write(Summ2);           // Списано (Погашено) расходов до начала инвентаризации
+
+        frmRashFuture.Write(NalRegDc.NoDoc);  // Номер расхода
+
+        frmRashFuture.Write(Months_Between(NalRegDc.DopDat2,dDate)); // месяцев со дня начала расходов
+        frmRashFuture.Write(Summ3);  // Расчетная сумма к списанию за месяц
+        frmRashFuture.Write(Summ4);  // Расчетная сумма к списанию от даты задолженности или с начала года
+
+        Written := True;
+      }
+    }
+  }
+#end
+// Печать отчета
+Procedure PrintRashFuture;
+{
+  // Печать заголовка
+  dDate1 := GetCurDayOfMonth(dDate);
+  dDate2 := GetLasDayOfMonth(dDate);
+
+  if (wGetTune('Country') = ccBel)
+    frmRashFuture.SetGroup('Акты инвентаризации'#1 + 'Акт инвентаризации <<РБ>>');
+  else
+    frmRashFuture.SetGroup('Акты инвентаризации'#1 + 'Акт инвентаризации');
+  
+  frmRashFuture.Write(sNumber);      // Номер документа
+  frmRashFuture.Write(KatOrg.Name);  // Наименование налогоплательщика
+  frmRashFuture.Write(KatOrg.OKPO);  // Код по ОКПО налогоплательщика
+  frmRashFuture.Write(dDate);        // Дата формирования акта инвентаризации
+  frmRashFuture.Write(SimVal);       // Единица измерения
+
+  #WriteCommission(iCommission,frmRashFuture,RashFuture); // вывод комиссии
+
+  // Печать тела
+  var Stopped, Written : boolean;
+
+  Stopped := False;
+  Written := False;
+
+  StartNewVisual(vtRotateVisual, vfTimer+vfBreak+vfConfirm, 'Формирование акта ...'#13, 1);
+
+  PushPos(#NalRegDc);
+
+   if pMarker.Count > 0
+  {
+    SubBounds(tbrmNalRegDc1);
+    AddBounds(tbrmNalRegDc2);
+    _loop pMarker
+    {
+       #SelectCode2
+
+      if (not NextVisual)
+      {
+        Stopped := True;
+        Break;
+      }
+    }
+    SubBounds(tbrmNalRegDc2);
+    AddBounds(tbrmNalRegDc1);
+  }
+  else
+    _Loop NalRegDc
+    {
+      #SelectCode2
+
+      if (not NextVisual)
+      {
+        Stopped := True;
+        Break;
+      }
+    }
+
+  frmRashFuture.PutEvent(feBreak);
+
+  PopPos(#NalRegDc);
+
+  StopVisual('', 0);
+
+  if (Stopped)
+    Message('Процесс прерван пользователем', Warning);
+
+  if (not Written)
+  {
+    frmRashFuture.AbortForm;
+    Message('Нет записей удовлетворяющих заданной дате', Warning);
+  }
+  else
+  {
+    if (not Stopped or (not frmRashFuture.Error))
+      frmRashFuture.ShowFile('Акт инвентаризации расходов будущих периодов');
+    else
+      frmRashFuture.AbortForm;
+  }
+}
+//******************************************************************************

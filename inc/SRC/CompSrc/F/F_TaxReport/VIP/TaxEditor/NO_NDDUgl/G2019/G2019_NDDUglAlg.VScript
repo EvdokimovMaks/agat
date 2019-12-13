@@ -1,0 +1,2186 @@
+//------------------------------------------------------------------------------------------------------------
+//                                                                                    (c) корпорация Галактика
+// Галактика 9.1 - модуль "Электронная отчетность"
+// Алгоритмы расчета : "Декларация на дополнительный доход от добычи углеводородного сырья
+//------------------------------------------------------------------------------------------------------------
+
+//============================================================================================================
+//#region СЕРВИСНЫЕ МЕТОДЫ
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrVal(fld : string) : string;
+@begin
+  Result := XMLMAP.GetAttrValueByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetDblVal(fld : string) : double;
+@begin
+  Result := Double(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetIntVal(fld : string) : integer;
+@begin
+  Result := Integer(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetFldVis(fld : string) : boolean;
+@begin
+  Result := XMLMAP.GetAttrVisByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script SetFldVal(fld:string; val:variant);
+@begin
+  XMLMAP.SetVariantAttrValueByName_Formula(fld, val, 2);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script SetFldVis(fld : string;vis : boolean);
+@begin
+  XMLMAP.SetAttrVisByName(fld, vis);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script DblToStr(fld : double;digits : longint) : string;
+@begin
+  if (Pos('.', String(fld, 20, digits)) > 0)
+    Result := Rtrim(Rtrim(Trim(String(fld, 20, digits)), '0'), '.');
+  else
+    Result := Trim(String(fld, 20, digits));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetCountFld(fld : string) : longint;
+@begin
+  Result := XMLMap.GetNodeCountByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetIter(iter : longint) : string;
+@begin
+  Result := '';
+
+  if (iter > 0)
+    Result := '[' + String(iter) + ']';
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrNull(fld : string) : boolean;
+@begin
+  Result := XMLMAP.GetIsNullAttrValueByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrValFormat(fld : string) : string;
+@begin
+  var bufRes: string;
+
+  bufRes := Trim(String(XMLMAP.GetAttrValueByName(fld)));
+
+  if (bufRes = '')
+  then Result := '0'
+  else if (Double(bufRes) < 0)
+       then Result := '('+bufRes+')'
+       else Result := bufRes;
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script MessageErrorStop_ALG(mesMesAdrXML, mesPole, mesMes : string; mesCountIter : integer = 0) : boolean;
+@begin
+  MesError.InsertMesError(mesMesAdrXML, Comp(0), '', mesPole, mesMes, mesCountIter);
+  Result := True;
+@end.
+//#endregion СЕРВИСНЫЕ МЕТОДЫ
+//************************************************************************************************************
+
+//============================================================================================================
+//#region On_Visable ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ УСТАНОВКЕ ВИДИМОСТИ ПОЛЕЙ
+//------------------------------------------------------------------------------------------------------------
+@Script On_Visable : boolean;
+  //==========================================================================================================
+  //#region СЕРВИС On_Visable
+  //----------------------------------------------------------------------------------------------------------
+  #declare IfVis(adrIfVis)
+    SetFldVis(#adrIfVis, not GetStrNull(#adrIfVis));
+  #end
+
+  #declare IfVisNode(adrIfVis, adrNode)
+    If GetStrNull(#adrIfVis){ SetFldVis(#adrIfVis, false); }Else{ SetFldVis(#adrIfVis, True); SetFldVis(#adrNode, True); }
+  #end
+
+  #declare SetVisT(adrIfVis)
+    SetFldVis(#adrIfVis, True);
+  #end
+
+  #declare SetVisF(adrIfVis)
+    SetFldVis(#adrIfVis, False);
+  #end
+
+  //----------------------------------------------------------------------------------------------------------
+  // Проверка на соответствие значения поля ФормРеорг условиям
+  function _FormReorg : boolean;
+  {
+    var val : Integer;
+    val := GetIntVal('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг');
+
+    Result := False;
+    Result := ((val = 1) or (val = 2) or (val = 3) or (val = 5) or (val = 6));
+  }
+  //#endregion СЕРВИС On_Visable
+  //**********************************************************************************************************
+@begin
+  var tBool, tBool_2, tBool_3 : boolean;
+  var bufAdr, bufAdr_2, bufAdr_3 : string;
+  var i, j, k, count, count_2, count_3 : longint;
+  var bufInt : integer;
+
+  //==========================================================================================================
+  //#region ИСПРАВЛЕНИЕ ВИДИМОСТИ ПОЛЕЙ
+  //----------------------------------------------------------------------------------------------------------
+  #SetVisT('Файл'                                         )
+  #SetVisF('Файл/xmlns:xsi'                               )
+  #SetVisF('Файл/xsi:noNamespaceSchemaLocation'           )
+  #SetVisT('Файл/ИдФайл'                                  )
+  #SetVisT('Файл/ВерсПрог'                                )
+  #SetVisT('Файл/ВерсФорм'                                )
+  #SetVisT('Файл/Документ'                                )
+  #SetVisT('Файл/Документ/КНД'                            )
+  #SetVisT('Файл/Документ/ДатаДок'                        )
+  #SetVisT('Файл/Документ/Период'                         )
+  #SetVisT('Файл/Документ/ОтчетГод'                       )
+  #SetVisT('Файл/Документ/КодНО'                          )
+  #SetVisT('Файл/Документ/НомКорр'                        )
+  #SetVisT('Файл/Документ/ПоМесту'                        )
+  #SetVisT('Файл/Документ/СвНП'                           )
+  #SetVisT('Файл/Документ/СвНП/Тлф'                       )
+  #SetVisT('Файл/Документ/СвНП/НПЮЛ'                      )
+  #SetVisT('Файл/Документ/СвНП/НПЮЛ/НаимОрг'              )
+  #SetVisT('Файл/Документ/СвНП/НПЮЛ/ИННЮЛ'                )
+  #SetVisT('Файл/Документ/СвНП/НПЮЛ/КПП'                  )
+  #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ'            )
+  #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг'  )
+  #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ'      )
+  #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'        )
+  #SetVisT('Файл/Документ/Подписант'                      )
+  #SetVisT('Файл/Документ/Подписант/ПрПодп'               )
+  #SetVisT('Файл/Документ/Подписант/ФИО'                  )
+  #SetVisT('Файл/Документ/Подписант/ФИО/Фамилия'          )
+  #SetVisT('Файл/Документ/Подписант/ФИО/Имя'              )
+  #SetVisT('Файл/Документ/Подписант/ФИО/Отчество'         )
+  #SetVisT('Файл/Документ/Подписант/СвПред'               )
+  #SetVisT('Файл/Документ/Подписант/СвПред/НаимДок'       )
+  #SetVisT('Файл/Документ/Подписант/СвПред/НаимОрг'       )
+  #SetVisT('Файл/Документ/НДДУгл'                         )
+
+  count  := GetCountFld('Файл/Документ/НДДУгл/СумНалПУ');
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДДУгл/СумНалПУ' + getIter(i);
+    #SetVisT(bufAdr         )
+    #SetVisT(bufAdr + '/КБК')
+
+    count_2 := GetCountFld(bufAdr + '/СумНалПУ_МО');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/СумНалПУ_МО' + getIter(j);
+      #SetVisT(bufAdr_2           )
+      #SetVisT(bufAdr_2 + '/ОКТМО')
+      #SetVisT(bufAdr_2 + '/НалПУ')
+      #SetVisF(bufAdr_2 + '/НалПУДопл') //никогда не выгружаются
+      #SetVisF(bufAdr_2 + '/НалПУУмен') //никогда не выгружаются
+    }
+  }
+
+  count  := GetCountFld('Файл/Документ/НДДУгл/РасчНал');
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДДУгл/РасчНал' + getIter(i);
+    #SetVisT(bufAdr                )
+    #SetVisT(bufAdr + '/СерЛицНедр')
+    #SetVisT(bufAdr + '/НомЛицНедр')
+    #SetVisT(bufAdr + '/ВидЛицНедр')
+    #SetVisT(bufAdr + '/НаимУчНедр')
+    #SetVisT(bufAdr + '/КоэфКг'    )
+    #SetVisT(bufAdr + '/СумУбУмНал')
+    #SetVisT(bufAdr + '/НалБаза'   )
+    #SetVisT(bufAdr + '/НалСтав'   )
+    #SetVisT(bufAdr + '/СумИсчНал' )
+    #SetVisT(bufAdr + '/МинНал'    )
+    #SetVisT(bufAdr + '/СумНачПлат')
+
+    count_2 := GetCountFld(bufAdr + '/КодОсн');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/КодОсн' + getIter(j);
+      #SetVisT(bufAdr_2)
+      #SetVisT(bufAdr_2 + '/Значение')
+    }
+
+    #SetVisT(bufAdr + '/РасчВыр'                         )
+    #SetVisT(bufAdr + '/РасчВыр/РасчВырВсего'            )
+    #SetVisT(bufAdr + '/РасчВыр/РасчВыр1Мес'             )
+    #SetVisT(bufAdr + '/РасчВыр/РасчВыр2Мес'             )
+    #SetVisT(bufAdr + '/РасчВыр/РасчВыр3Мес'             )
+    #SetVisT(bufAdr + '/РасчВыр/РасчВырПред'             )
+    #SetVisT(bufAdr + '/РасчВыр/ДохАрендТек'             )
+    #SetVisT(bufAdr + '/РасчВыр/ДохАрендПред'            )
+    #SetVisT(bufAdr + '/ФактРасх'                        )
+    #SetVisT(bufAdr + '/ФактРасх/ФактРасхВсего'          )
+    #SetVisT(bufAdr + '/ФактРасх/ФактРасх1Мес'           )
+    #SetVisT(bufAdr + '/ФактРасх/ФактРасх2Мес'           )
+    #SetVisT(bufAdr + '/ФактРасх/ФактРасх3Мес'           )
+    #SetVisT(bufAdr + '/ФактРасх/ФактРасхПред'           )
+    #SetVisT(bufAdr + '/РасчРасх'                        )
+    #SetVisT(bufAdr + '/РасчРасх/РасчРасхВсего'          )
+    #SetVisT(bufAdr + '/РасчРасх/РасчРасх1Мес'           )
+    #SetVisT(bufAdr + '/РасчРасх/РасчРасх2Мес'           )
+    #SetVisT(bufAdr + '/РасчРасх/РасчРасх3Мес'           )
+    #SetVisT(bufAdr + '/РасчРасх/РасчРасхПред'           )
+    #SetVisT(bufAdr + '/ВосстФактРасх'                   )
+    #SetVisT(bufAdr + '/ВосстФактРасх/ВосстФактРасхВсего')
+    #SetVisT(bufAdr + '/ВосстФактРасх/ВосстФактРасхОтч'  )
+    #SetVisT(bufAdr + '/ВосстФактРасх/ВосстФактРасхПред' )
+    #SetVisT(bufAdr + '/ВосстФактРасх/ДохПредПер'        )
+    #SetVisT(bufAdr + '/ВосстФактРасх/РасхПредПер'       )
+    #SetVisT(bufAdr + '/ВосстФактРасх/КорУвСумДох'       )
+    #SetVisT(bufAdr + '/ИтогоДопДох'                     )
+    #SetVisT(bufAdr + '/ИтогоДопДох/Значение'            )
+    #SetVisT(bufAdr + '/ИтогоУб'                         )
+    #SetVisT(bufAdr + '/ИтогоУб/Значение'                )
+    #SetVisT(bufAdr + '/СумНалДоп'                       )
+    #SetVisT(bufAdr + '/СумНалДоп/Значение'              )
+    #SetVisT(bufAdr + '/СумНалУм'                        )
+    #SetVisT(bufAdr + '/СумНалУм/Значение'               )
+
+    count_2 := GetCountFld(bufAdr + '/ОКТМО');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/ОКТМО' + getIter(j);
+      #SetVisT(bufAdr_2)
+      #SetVisT(bufAdr_2 + '/Значение')
+    }
+
+    count_2 := GetCountFld(bufAdr + '/РасчВырДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчВырДоб' + getIter(j);
+      #SetVisT(bufAdr_2                  )
+      #SetVisT(bufAdr_2 + '/ОтчетМес'    )
+      #SetVisT(bufAdr_2 + '/РасчВыр'     )
+      #SetVisT(bufAdr_2 + '/СрУрЦен'     )
+      #SetVisT(bufAdr_2 + '/КолДобМесНеф')
+      #SetVisT(bufAdr_2 + '/СрЗначКурс'  )
+      #SetVisT(bufAdr_2 + '/КоэфПер'     )
+      #SetVisT(bufAdr_2 + '/КодИстЦен'   )
+      #SetVisT(bufAdr_2 + '/ЦенГазМес'   )
+      #SetVisT(bufAdr_2 + '/КолДобМесГаз')
+      #SetVisT(bufAdr_2 + '/КоэфПопутГаз')
+      #SetVisT(bufAdr_2 + '/ЦенПопутГаз' )
+      #SetVisT(bufAdr_2 + '/КолПопутГаз' )
+    }
+
+    count_2 := GetCountFld(bufAdr + '/ФактРасхДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/ФактРасхДоб' + getIter(j);
+      #SetVisT(bufAdr_2                                       )
+      #SetVisT(bufAdr_2 + '/ОтчетМес'                         )
+      #SetVisT(bufAdr_2 + '/ФактРасхМес'                      )
+      #SetVisT(bufAdr_2 + '/РасхАмортИмущ'                    )
+      #SetVisT(bufAdr_2 + '/ЗатрОбАмортИмущ'                  )
+      #SetVisT(bufAdr_2 + '/ФактРасхПроизв'                   )
+      #SetVisT(bufAdr_2 + '/ФактРасхПроизв/ФактРасхПроизвВс'  )
+      #SetVisT(bufAdr_2 + '/ФактРасхПроизв/МатРасх'           )
+      #SetVisT(bufAdr_2 + '/ФактРасхПроизв/РасхОплТруд'       )
+      #SetVisT(bufAdr_2 + '/ФактРасхПроизв/РасхОснСред'       )
+      #SetVisT(bufAdr_2 + '/ФактРасхПроизв/РасхОсвРес'        )
+      #SetVisT(bufAdr_2 + '/ФактРасхПроизв/РасхИсслРазр'      )
+      #SetVisT(bufAdr_2 + '/ФактРасхПроизв/РасхСтрах'         )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47'                   )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/Расх7.5.333.47Вс'  )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/СумНалСбор'        )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхСертДекл'      )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхСтанд'         )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/СумКомСбор'        )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/СумВыплПодъем'     )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхОбеспБезоп'    )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхОбеспУсл'      )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхНабРаб'        )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхАрендПлат'     )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/КонцПлат'          )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхСодТранс'      )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхКоманд'        )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхДост'          )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхКонсульт'      )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхУпрОрг'        )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхСторОрг'       )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхОбуч'          )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхКанц'          )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхСвязь'         )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхПравЭВМ'       )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхИзучРын'       )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхСодПос'        )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхОсвПроизв'     )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхВнедрТехн'     )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/ПериодПлатПрав'    )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/ПлатРегНедв'       )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхДог'           )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/ВзнСоцСтрах'       )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/Брак'              )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхОбщПит'        )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхВыплПос'       )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/ПлатДобрСтрах'     )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхПрав'          )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхХран'          )
+      #SetVisT(bufAdr_2 + '/Расх7.5.333.47/РасхГео'           )
+      #SetVisT(bufAdr_2 + '/Расх10.5.333.47'                  )
+      #SetVisT(bufAdr_2 + '/Расх10.5.333.47/Расх10.5.333.47Вс')
+      #SetVisT(bufAdr_2 + '/Расх10.5.333.47/РасхЛикв'         )
+      #SetVisT(bufAdr_2 + '/Расх10.5.333.47/РасхКонс'         )
+      #SetVisT(bufAdr_2 + '/Расх10.5.333.47/РасхТара'         )
+      #SetVisT(bufAdr_2 + '/Расх10.5.333.47/РасхМобПодг'      )
+      #SetVisT(bufAdr_2 + '/Расх10.5.333.47/ПотерЧС'          )
+    }
+
+    count_2 := GetCountFld(bufAdr + '/РасчРасхДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчРасхДоб' + getIter(j);
+      #SetVisT(bufAdr_2                   )
+      #SetVisT(bufAdr_2 + '/ОтчетМес'     )
+      #SetVisT(bufAdr_2 + '/РасчРасхМес'  )
+      #SetVisT(bufAdr_2 + '/РасчПошлМес'  )
+      #SetVisT(bufAdr_2 + '/СтавПошлМес'  )
+      #SetVisT(bufAdr_2 + '/СрЗначКурс'   )
+      #SetVisT(bufAdr_2 + '/КолНефМес'    )
+      #SetVisT(bufAdr_2 + '/КолГазКондМес')
+      #SetVisT(bufAdr_2 + '/РасчРасхТранс')
+      #SetVisT(bufAdr_2 + '/ИндТарТранс'  )
+      #SetVisT(bufAdr_2 + '/КолДобНеф'    )
+    }
+
+    #SetVisT(bufAdr + '/РасхПодлВосст'          )
+    #SetVisT(bufAdr + '/РасхПодлВосст/ВосстСум' )
+
+    count_2 := GetCountFld(bufAdr + '/РасхПодлВосст/ВосстСумРасх');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасхПодлВосст/ВосстСумРасх' + getIter(j);
+      #SetVisT(bufAdr_2                  )
+      #SetVisT(bufAdr_2 + '/КодОснов'    )
+      #SetVisT(bufAdr_2 + '/ОКОФ'        )
+      #SetVisT(bufAdr_2 + '/ПрНом'       )
+      #SetVisT(bufAdr_2 + '/Номер'       )
+      #SetVisT(bufAdr_2 + '/СумФактРасх' )
+      #SetVisT(bufAdr_2 + '/КоэфУб'      )
+      #SetVisT(bufAdr_2 + '/НалПерРасх'  )
+      #SetVisT(bufAdr_2 + '/ВосстСумКоэф')
+    }
+
+    #SetVisT(bufAdr + '/РасчСумУб'              )
+    #SetVisT(bufAdr + '/РасчСумУб/ОстНепУбВс'   )
+    #SetVisT(bufAdr + '/РасчСумУб/СумУбНалБазВс')
+    #SetVisT(bufAdr + '/РасчСумУб/ОстНепУбКон'  )
+
+    count_2 := GetCountFld(bufAdr + '/РасчСумУб/ОстУбНалПер');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(j);
+      #SetVisT(bufAdr_2           )
+      #SetVisT(bufAdr_2 + '/Год'  )
+      #SetVisT(bufAdr_2 + '/ОстУб')
+    }
+
+    #SetVisT(bufAdr + '/РасчСумУб/ДопДохНалПер'         )
+    #SetVisT(bufAdr + '/РасчСумУб/ДопДохНалПер/Значение')
+    #SetVisT(bufAdr + '/РасчСумУб/УбНалПер'             )
+    #SetVisT(bufAdr + '/РасчСумУб/УбНалПер/Значение'    )
+
+    count_2 := GetCountFld(bufAdr + '/РасчСумУб/СумУбНалБаз');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчСумУб/СумУбНалБаз' + getIter(j);
+      #SetVisT(bufAdr_2           )
+      #SetVisT(bufAdr_2 + '/Год'  )
+      #SetVisT(bufAdr_2 + '/СумУб')
+    }
+
+    count_2 := GetCountFld(bufAdr + '/РасчСумИстУб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчСумИстУб' + getIter(j);
+      #SetVisT(bufAdr_2                    )
+      #SetVisT(bufAdr_2 + '/ГодРетр'       )
+      #SetVisT(bufAdr_2 + '/СумУбНачРетрВс')
+      #SetVisT(bufAdr_2 + '/РасчВырРетр'   )
+      #SetVisT(bufAdr_2 + '/ФактРасхРетр'  )
+      #SetVisT(bufAdr_2 + '/РасчРасхРетр'  )
+      #SetVisT(bufAdr_2 + '/ВосстРасхРетр' )
+      #SetVisT(bufAdr_2 + '/СумУбРетрВс'   )
+      #SetVisT(bufAdr_2 + '/СумУбКонРетр'  )
+
+      count_3 := GetCountFld(bufAdr_2 + '/СумУбНачРетр');
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2 + '/СумУбНачРетр' + getIter(k);
+        #SetVisT(bufAdr_3           )
+        #SetVisT(bufAdr_3 + '/Год'  )
+        #SetVisT(bufAdr_3 + '/СумУб')
+      }
+
+      #SetVisT(bufAdr_2 + '/ДопДохРетрПер'         )
+      #SetVisT(bufAdr_2 + '/ДопДохРетрПер/Значение')
+      #SetVisT(bufAdr_2 + '/УбРетрПер'             )
+      #SetVisT(bufAdr_2 + '/УбРетрПер/Значение'    )
+
+      count_3 := GetCountFld(bufAdr_2 + '/СумУбРетр');
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2 + '/СумУбРетр' + getIter(k);
+        #SetVisT(bufAdr_3           )
+        #SetVisT(bufAdr_3 + '/Год'  )
+        #SetVisT(bufAdr_3 + '/СумУб')
+      }
+    }
+
+    #SetVisT(bufAdr + '/РасчМинНал'              )
+    #SetVisT(bufAdr + '/РасчМинНал/РасчВырДоб'   )
+    #SetVisT(bufAdr + '/РасчМинНал/РасчРасхДоб'  )
+    #SetVisT(bufAdr + '/РасчМинНал/ФактРасхДоб'  )
+    #SetVisT(bufAdr + '/РасчМинНал/ПредРасхДоб'  )
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазВс' )
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазЯнв')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазФев')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазМар')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазАпр')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазМай')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазИюн')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазИюл')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазАвг')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазСен')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазОкт')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазНоя')
+    #SetVisT(bufAdr + '/РасчМинНал/ДобНефтГазДек')
+    #SetVisT(bufAdr + '/РасчМинНал/ЗначУдРасх'   )
+    #SetVisT(bufAdr + '/РасчМинНал/МинНалБаз'    )
+    #SetVisT(bufAdr + '/РасчМинНал/Став'         )
+    #SetVisT(bufAdr + '/РасчМинНал/МинНал'       )
+  }
+  //#endregion ИСПРАВЛЕНИЕ ВИДИМОСТИ ПОЛЕЙ
+  //**********************************************************************************************************
+
+  //==========================================================================================================
+  //#region ТИТУЛЬНЫЙ ЛИСТ
+  //----------------------------------------------------------------------------------------------------------
+  #IfVis('Файл/Документ/СвНП/Тлф');
+
+  if not GetStrNull('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг')
+  {
+    #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ');
+
+    if _FormReorg
+    {
+      #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ');
+      #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'  );
+    }
+    else
+    {
+      #IfVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ');
+      #IfVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'  );
+    }
+  }
+  else #SetVisF('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ');
+
+  bufInt := GetIntVal('Файл/Документ/Подписант/ПрПодп');
+
+  if     (bufInt = 2)
+     or ((bufInt = 1) and GetFldVis('Файл/Документ/СвНП/НПЮЛ'))
+     or (    not GetStrNull('Файл/Документ/Подписант/ФИО/Фамилия')
+         and not GetStrNull('Файл/Документ/Подписант/ФИО/Имя'    ))
+  {
+    #SetVisT('Файл/Документ/Подписант/ФИО');
+    #IfVis  ('Файл/Документ/Подписант/ФИО/Отчество');
+  }
+  else #SetVisF('Файл/Документ/Подписант/ФИО');
+
+  if (bufInt = 2)
+  {
+    #SetVisT('Файл/Документ/Подписант/СвПред'        );
+    #IfVis  ('Файл/Документ/Подписант/СвПред/НаимОрг');
+  }
+  else #SetVisF('Файл/Документ/Подписант/СвПред');
+  //#endregion ТИТУЛЬНЫЙ ЛИСТ
+  //**********************************************************************************************************
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 1
+  //----------------------------------------------------------------------------------------------------------
+  tBool := False;
+  count  := GetCountFld('Файл/Документ/НДДУгл/СумНалПУ');
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДДУгл/СумНалПУ' + getIter(i);
+
+    if GetStrNull(bufAdr + '/КБК'){ #SetVisF(bufAdr) }
+
+    tBool_2 := False;
+    count_2 := GetCountFld(bufAdr + '/СумНалПУ_МО');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/СумНалПУ_МО' + getIter(j);
+
+      if   GetStrNull(bufAdr_2 + '/ОКТМО')
+        Or GetStrNull(bufAdr_2 + '/НалПУ')
+      { #SetVisF(bufAdr_2) }
+      Else
+      { tBool_2 := True;   }
+    }
+    if (Not tBool_2){ #SetVisT(bufAdr + '/СумНалПУ_МО') }
+    if (Not tBool_2){ #SetVisF(bufAdr) }
+
+    If GetFldVis(bufAdr){ tBool := True; }
+  }
+  if (not tBool){ #SetVisT('Файл/Документ/НДДУгл/СумНалПУ'); }
+  //----------------------------------------------------------------------------------------------------------
+  //#endregion РАЗДЕЛ 1
+  //**********************************************************************************************************
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 2
+  //----------------------------------------------------------------------------------------------------------
+  tBool := False;
+  count  := GetCountFld('Файл/Документ/НДДУгл/РасчНал');
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДДУгл/РасчНал' + getIter(i);
+
+    if GetStrNull(bufAdr + '/СерЛицНедр'){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr + '/НомЛицНедр'){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr + '/ВидЛицНедр'){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr + '/НаимУчНедр'){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr + '/КоэфКг'    ){ #SetVisF(bufAdr) }
+
+    #IfVis(bufAdr + '/СумУбУмНал')
+
+    if GetStrNull(bufAdr + '/НалБаза'   ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr + '/НалСтав'   ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr + '/СумИсчНал' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr + '/МинНал'    ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr + '/СумНачПлат'){ #SetVisF(bufAdr) }
+
+    tBool_2 := False;
+    count_2 := GetCountFld(bufAdr + '/КодОсн');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/КодОсн' + getIter(j);
+
+      if GetStrNull(bufAdr_2 + '/Значение')
+      { #SetVisF(bufAdr_2) }
+      Else
+      { tBool_2 := True;   }
+    }
+    if (Not tBool_2){ #SetVisT(bufAdr + '/КодОсн') }
+    if (Not tBool_2){ #SetVisF(bufAdr)             }
+
+    bufAdr_2 := bufAdr + '/РасчВыр';
+    if GetStrNull(bufAdr_2 + '/РасчВырВсего'){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/РасчВыр1Мес' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/РасчВыр2Мес' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/РасчВыр3Мес' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/РасчВырПред' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/ДохАрендТек' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/ДохАрендПред'){ #SetVisF(bufAdr) }
+
+    bufAdr_2 := bufAdr + '/ФактРасх';
+    if GetStrNull(bufAdr_2 + '/ФактРасхВсего'){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/ФактРасх1Мес' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/ФактРасх2Мес' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/ФактРасх3Мес' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/ФактРасхПред' ){ #SetVisF(bufAdr) }
+
+    bufAdr_2 := bufAdr + '/РасчРасх';
+    if GetStrNull(bufAdr_2 + '/РасчРасхВсего'){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/РасчРасх1Мес' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/РасчРасх2Мес' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/РасчРасх3Мес' ){ #SetVisF(bufAdr) }
+    if GetStrNull(bufAdr_2 + '/РасчРасхПред' ){ #SetVisF(bufAdr) }
+
+    bufAdr_2 := bufAdr + '/ВосстФактРасх';
+    #SetVisF(bufAdr_2)
+    #IfVisNode(bufAdr_2 + '/ВосстФактРасхВсего', bufAdr_2)
+    #IfVisNode(bufAdr_2 + '/ВосстФактРасхОтч',   bufAdr_2)
+    #IfVisNode(bufAdr_2 + '/ВосстФактРасхПред',  bufAdr_2)
+    #IfVisNode(bufAdr_2 + '/ДохПредПер',         bufAdr_2)
+    #IfVisNode(bufAdr_2 + '/РасхПредПер',        bufAdr_2)
+    #IfVisNode(bufAdr_2 + '/КорУвСумДох',        bufAdr_2)
+
+    if    GetStrNull(bufAdr + '/ИтогоДопДох/Значение'){ #SetVisF(bufAdr + '/ИтогоДопДох') }
+    if 0 = GetDblVal(bufAdr + '/ИтогоДопДох/Значение'){ #SetVisF(bufAdr + '/ИтогоДопДох') }
+    if    GetStrNull(bufAdr + '/ИтогоУб/Значение')    { #SetVisF(bufAdr + '/ИтогоУб')     }
+    if 0 = GetDblVal(bufAdr + '/ИтогоУб/Значение')    { #SetVisF(bufAdr + '/ИтогоУб')     }
+    if    (Not GetFldVis(bufAdr + '/ИтогоДопДох'))
+      And (Not GetFldVis(bufAdr + '/ИтогоУб'    ))
+    { #SetVisF(bufAdr) #SetVisT(bufAdr + '/ИтогоДопДох') }
+
+    if    GetStrNull(bufAdr + '/СумНалДоп/Значение'){ #SetVisF(bufAdr + '/СумНалДоп') }
+    if 0 = GetDblVal(bufAdr + '/СумНалДоп/Значение'){ #SetVisF(bufAdr + '/СумНалДоп') }
+    if    GetStrNull(bufAdr + '/СумНалУм/Значение') { #SetVisF(bufAdr + '/СумНалУм')  }
+    if 0 = GetDblVal(bufAdr + '/СумНалУм/Значение') { #SetVisF(bufAdr + '/СумНалУм')  }
+    if    (Not GetFldVis(bufAdr + '/СумНалДоп'))
+      And (Not GetFldVis(bufAdr + '/СумНалУм' ))
+    { #SetVisF(bufAdr) #SetVisT(bufAdr + '/СумНалДоп') }
+
+    tBool_2 := False;
+    count_2 := GetCountFld(bufAdr + '/ОКТМО');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/ОКТМО' + getIter(j);
+
+      if GetStrNull(bufAdr_2 + '/Значение')
+      { #SetVisF(bufAdr_2) }
+      Else
+      { tBool_2 := True;   }
+    }
+    if (Not tBool_2){ #SetVisT(bufAdr + '/ОКТМО') }
+    if (Not tBool_2){ #SetVisF(bufAdr)            }
+
+    //==========================================================================================================
+    //#region Приложение 1 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    count_2 := GetCountFld(bufAdr + '/РасчВырДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчВырДоб' + getIter(j);
+
+      if    GetStrNull(bufAdr_2 + '/ОтчетМес'    )
+         Or GetStrNull(bufAdr_2 + '/РасчВыр'     )
+         Or GetStrNull(bufAdr_2 + '/СрУрЦен'     )
+         Or GetStrNull(bufAdr_2 + '/КолДобМесНеф')
+         Or GetStrNull(bufAdr_2 + '/СрЗначКурс'  )
+         Or GetStrNull(bufAdr_2 + '/КоэфПер'     )
+         Or GetStrNull(bufAdr_2 + '/КодИстЦен'   )
+         Or GetStrNull(bufAdr_2 + '/ЦенГазМес'   )
+         Or GetStrNull(bufAdr_2 + '/КолДобМесГаз')
+         Or GetStrNull(bufAdr_2 + '/КоэфПопутГаз')
+         Or GetStrNull(bufAdr_2 + '/ЦенПопутГаз' )
+         Or GetStrNull(bufAdr_2 + '/КолПопутГаз' )
+      { #SetVisF(bufAdr_2) }
+    }
+    //#endregion Приложение 1 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 2 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    count_2 := GetCountFld(bufAdr + '/ФактРасхДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/ФактРасхДоб' + getIter(j);
+
+      if    GetStrNull(bufAdr_2 + '/ОтчетМес'                         )
+         Or GetStrNull(bufAdr_2 + '/ФактРасхМес'                      )
+         Or GetStrNull(bufAdr_2 + '/РасхАмортИмущ'                    )
+         Or GetStrNull(bufAdr_2 + '/ЗатрОбАмортИмущ'                  )
+         Or GetStrNull(bufAdr_2 + '/ФактРасхПроизв/ФактРасхПроизвВс'  )
+      { #SetVisF(bufAdr_2) }
+
+      #IfVis(bufAdr_2 + '/ФактРасхПроизв/ФактРасхПроизвВс'  )
+      #IfVis(bufAdr_2 + '/ФактРасхПроизв/МатРасх'           )
+      #IfVis(bufAdr_2 + '/ФактРасхПроизв/РасхОплТруд'       )
+      #IfVis(bufAdr_2 + '/ФактРасхПроизв/РасхОснСред'       )
+      #IfVis(bufAdr_2 + '/ФактРасхПроизв/РасхОсвРес'        )
+      #IfVis(bufAdr_2 + '/ФактРасхПроизв/РасхИсслРазр'      )
+      #IfVis(bufAdr_2 + '/ФактРасхПроизв/РасхСтрах'         )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47'                   )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/Расх7.5.333.47Вс'  )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/СумНалСбор'        )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхСертДекл'      )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхСтанд'         )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/СумКомСбор'        )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/СумВыплПодъем'     )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхОбеспБезоп'    )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхОбеспУсл'      )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхНабРаб'        )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхАрендПлат'     )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/КонцПлат'          )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхСодТранс'      )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхКоманд'        )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхДост'          )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхКонсульт'      )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхУпрОрг'        )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхСторОрг'       )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхОбуч'          )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхКанц'          )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхСвязь'         )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхПравЭВМ'       )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхИзучРын'       )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхСодПос'        )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхОсвПроизв'     )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхВнедрТехн'     )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/ПериодПлатПрав'    )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/ПлатРегНедв'       )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхДог'           )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/ВзнСоцСтрах'       )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/Брак'              )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхОбщПит'        )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхВыплПос'       )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/ПлатДобрСтрах'     )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхПрав'          )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхХран'          )
+      #IfVis(bufAdr_2 + '/Расх7.5.333.47/РасхГео'           )
+      #IfVis(bufAdr_2 + '/Расх10.5.333.47'                  )
+      #IfVis(bufAdr_2 + '/Расх10.5.333.47/Расх10.5.333.47Вс')
+      #IfVis(bufAdr_2 + '/Расх10.5.333.47/РасхЛикв'         )
+      #IfVis(bufAdr_2 + '/Расх10.5.333.47/РасхКонс'         )
+      #IfVis(bufAdr_2 + '/Расх10.5.333.47/РасхТара'         )
+      #IfVis(bufAdr_2 + '/Расх10.5.333.47/РасхМобПодг'      )
+      #IfVis(bufAdr_2 + '/Расх10.5.333.47/ПотерЧС'          )
+
+    }
+    //#endregion Приложение 2 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 3 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+     count_2 := GetCountFld(bufAdr + '/РасчРасхДоб');
+     for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчРасхДоб' + getIter(j);
+
+      if    GetStrNull(bufAdr_2 + '/ОтчетМес'     )
+         Or GetStrNull(bufAdr_2 + '/РасчРасхМес'  )
+         Or GetStrNull(bufAdr_2 + '/РасчПошлМес'  )
+         Or GetStrNull(bufAdr_2 + '/СтавПошлМес'  )
+         Or GetStrNull(bufAdr_2 + '/СрЗначКурс'   )
+         Or GetStrNull(bufAdr_2 + '/КолНефМес'    )
+         Or GetStrNull(bufAdr_2 + '/КолГазКондМес')
+         Or GetStrNull(bufAdr_2 + '/РасчРасхТранс')
+         Or GetStrNull(bufAdr_2 + '/ИндТарТранс'  )
+         Or GetStrNull(bufAdr_2 + '/КолДобНеф'    )
+      { #SetVisF(bufAdr_2) }
+    }
+    //#endregion Приложение 3 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 4 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    tBool_2 := False;
+    count_2 := GetCountFld(bufAdr + '/РасхПодлВосст/ВосстСумРасх');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасхПодлВосст/ВосстСумРасх' + getIter(j);
+
+      if    GetStrNull(bufAdr_2 + '/КодОснов'    )
+         Or GetStrNull(bufAdr_2 + '/ОКОФ'        )
+         Or GetStrNull(bufAdr_2 + '/ПрНом'       )
+         Or GetStrNull(bufAdr_2 + '/Номер'       )
+         Or GetStrNull(bufAdr_2 + '/СумФактРасх' )
+         Or GetStrNull(bufAdr_2 + '/КоэфУб'      )
+         Or GetStrNull(bufAdr_2 + '/НалПерРасх'  )
+         Or GetStrNull(bufAdr_2 + '/ВосстСумКоэф')
+      { #SetVisF(bufAdr_2) }
+      Else
+      { tBool_2 := True;   }
+    }
+    if (Not tBool_2){ #SetVisF(bufAdr + '/РасхПодлВосст') }
+    //#endregion Приложение 4 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 5 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    #IfVis(bufAdr + '/РасчСумУб/ОстНепУбВс'   )
+    #IfVis(bufAdr + '/РасчСумУб/СумУбНалБазВс')
+
+    if GetStrNull(bufAdr + '/РасчСумУб/ОстНепУбКон')
+    { #SetVisF(bufAdr + '/РасчСумУб') }
+
+    tBool_2 := False;
+    count_2 := GetCountFld(bufAdr + '/РасчСумУб/ОстУбНалПер');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(j);
+
+      if   GetStrNull(bufAdr_2 + '/Год'  )
+        Or GetStrNull(bufAdr_2 + '/ОстУб')
+      { #SetVisF(bufAdr_2) }
+      Else
+      { tBool_2 := True;   }
+    }
+
+    if    GetStrNull(bufAdr + '/РасчСумУб/ДопДохНалПер/Значение'){ #SetVisF(bufAdr + '/РасчСумУб/ДопДохНалПер') }
+    if 0 = GetDblVal(bufAdr + '/РасчСумУб/ДопДохНалПер/Значение'){ #SetVisF(bufAdr + '/РасчСумУб/ДопДохНалПер') }
+    if    GetStrNull(bufAdr + '/РасчСумУб/УбНалПер/Значение')    { #SetVisF(bufAdr + '/РасчСумУб/УбНалПер')     }
+    if 0 = GetDblVal(bufAdr + '/РасчСумУб/УбНалПер/Значение')    { #SetVisF(bufAdr + '/РасчСумУб/УбНалПер')     }
+    if    (Not GetFldVis(bufAdr + '/РасчСумУб/ДопДохНалПер'))
+      And (Not GetFldVis(bufAdr + '/РасчСумУб/УбНалПер'    ))
+    { #SetVisF(bufAdr + '/РасчСумУб') #SetVisT(bufAdr + '/РасчСумУб/ДопДохНалПер') }
+
+    tBool_2 := False;
+    count_2 := GetCountFld(bufAdr + '/РасчСумУб/СумУбНалБаз');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчСумУб/СумУбНалБаз' + getIter(j);
+
+      if   GetStrNull(bufAdr_2 + '/Год'  )
+        Or GetStrNull(bufAdr_2 + '/СумУб')
+      { #SetVisF(bufAdr_2) }
+      Else
+      { tBool_2 := True;   }
+    }
+    //#endregion Приложение 5 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 6 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    count_2 := GetCountFld(bufAdr + '/РасчСумИстУб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчСумИстУб' + getIter(j);
+
+      if   GetStrNull(bufAdr_2 + '/ГодРетр'       )
+        Or GetStrNull(bufAdr_2 + '/СумУбНачРетрВс')
+        Or GetStrNull(bufAdr_2 + '/РасчВырРетр'   )
+        Or GetStrNull(bufAdr_2 + '/ФактРасхРетр'  )
+        Or GetStrNull(bufAdr_2 + '/РасчРасхРетр'  )
+      { #SetVisF(bufAdr_2) }
+
+      if GetStrNull(bufAdr_2 + '/ВосстРасхРетр' ) { #SetVisF(bufAdr_2 + '/ВосстРасхРетр') }
+      if GetStrNull(bufAdr_2 + '/СумУбРетрВс'   ) { #SetVisF(bufAdr_2 + '/СумУбРетрВс'  ) }
+
+      if GetStrNull(bufAdr_2 + '/СумУбКонРетр'  )
+      { #SetVisF(bufAdr_2) }
+
+      tBool_3 := false;
+      count_3 := GetCountFld(bufAdr_2 + '/СумУбНачРетр');
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2 + '/СумУбНачРетр' + getIter(k);
+
+        if   GetStrNull(bufAdr_3 + '/Год'  )
+          Or GetStrNull(bufAdr_3 + '/СумУб')
+        { #SetVisF(bufAdr_3) }
+        Else
+        { tBool_3 := True;   }
+      }
+
+      if    GetStrNull(bufAdr_2 + '/ДопДохРетрПер/Значение'){ #SetVisF(bufAdr_2 + '/ДопДохРетрПер') }
+      if 0 = GetDblVal(bufAdr_2 + '/ДопДохРетрПер/Значение'){ #SetVisF(bufAdr_2 + '/ДопДохРетрПер') }
+      if    GetStrNull(bufAdr_2 + '/УбРетрПер/Значение')    { #SetVisF(bufAdr_2 + '/УбРетрПер')     }
+      if 0 = GetDblVal(bufAdr_2 + '/УбРетрПер/Значение')    { #SetVisF(bufAdr_2 + '/УбРетрПер')     }
+      if    (Not GetFldVis(bufAdr_2 + '/ДопДохРетрПер'))
+        And (Not GetFldVis(bufAdr_2 + '/УбРетрПер'    ))
+      { #SetVisF(bufAdr_2) #SetVisT(bufAdr_2 + '/ДопДохРетрПер') }
+
+      tBool_3 := false;
+      count_3 := GetCountFld(bufAdr_2 + '/СумУбРетр');
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2 + '/СумУбРетр' + getIter(k);
+
+        if   GetStrNull(bufAdr_3 + '/Год'  )
+          Or GetStrNull(bufAdr_3 + '/СумУб')
+        { #SetVisF(bufAdr_3) }
+        Else
+        { tBool_3 := True;   }
+      }
+    }
+    //#endregion Приложение 6 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 7 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    if   GetStrNull(bufAdr + '/РасчМинНал/РасчВырДоб'   )
+      Or GetStrNull(bufAdr + '/РасчМинНал/РасчРасхДоб'  )
+      Or GetStrNull(bufAdr + '/РасчМинНал/ФактРасхДоб'  )
+      Or GetStrNull(bufAdr + '/РасчМинНал/ПредРасхДоб'  )
+      Or GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазВс' )
+    { #SetVisF(bufAdr + '/РасчМинНал') }
+
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазЯнв')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазФев')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазМар')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазАпр')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазМай')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазИюн')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазИюл')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазАвг')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазСен')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазОкт')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазНоя')
+    #IfVis(bufAdr + '/РасчМинНал/ДобНефтГазДек')
+
+    if    GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазЯнв')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазФев')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазМар')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазАпр')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазМай')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазИюн')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазИюл')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазАвг')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазСен')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазОкт')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазНоя')
+      And GetStrNull(bufAdr + '/РасчМинНал/ДобНефтГазДек')
+    { #SetVisF(bufAdr + '/РасчМинНал') }
+
+    if   GetStrNull(bufAdr + '/РасчМинНал/ЗначУдРасх')
+      Or GetStrNull(bufAdr + '/РасчМинНал/МинНалБаз' )
+      Or GetStrNull(bufAdr + '/РасчМинНал/Став'      )
+      Or GetStrNull(bufAdr + '/РасчМинНал/МинНал'    )
+    { #SetVisF(bufAdr + '/РасчМинНал') }
+
+    //#endregion Приложение 7 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    If GetFldVis(bufAdr){ tBool := True; }
+  }
+  if (not tBool)
+  {
+    #SetVisT('Файл/Документ/НДДУгл/РасчНал');
+  }
+  //#endregion РАЗДЕЛ 2
+  //**********************************************************************************************************
+@end.
+//#endregion On_Visable ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ УСТАНОВКЕ ВИДИМОСТИ ПОЛЕЙ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region On_Check ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ ПОЛЕЙ
+//------------------------------------------------------------------------------------------------------------
+@Script On_Check : boolean;
+  //==========================================================================================================
+  //#region СЕРВИС On_Check
+  //----------------------------------------------------------------------------------------------------------
+  #include AllTaxObj.Vih
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidSerL(strIn: string; var strGetMes: string) : boolean;
+  begin
+    strGetMes := 'Формат поля: 3 символа';
+    Result    := (Length(strIn) = 3);
+  end;
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidNomL(strIn: string; var strGetMes: string) : boolean;
+  begin
+    strGetMes := 'Формат поля: 5 символа';
+    Result    := (Length(strIn) = 5);
+  end;
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidVidL(strIn: string; var strGetMes: string) : boolean;
+  begin
+    strGetMes := 'Формат поля: 2 символа';
+    Result    := (Length(strIn) = 2);
+  end;
+
+  //----------------------------------------------------------------------------------------------------------
+  #declare _MesNoKor(_AdrXML, _Pole, _CutIterMode=0)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      #_Pole,
+      'Поле не соответствует регулярному выражению. ' + getMes,
+      #_CutIterMode
+    );
+  #end
+
+  //----------------------------------------------------------------------------------------------------------
+  #declare _IsValidNoKor_Decimal(_StrMes,_adrXML, _Cel, _Drob, _Pole, _CutIterMode=0, _flMin=false)
+    if not IsValidDecimal(GetStrVal(#_adrXML), #_Cel, #_Drob, getMes, #_flMin)
+      MessageErrorStop_ALG
+      (
+        #_adrXML,
+        #_Pole,
+        'Поле не соответствует формату. Формат поля ' + #_StrMes + ' ' + getMes,
+        #_CutIterMode
+      );
+  #end
+
+  //----------------------------------------------------------------------------------------------------------
+  #declare _InsMes(_AdrXML, _Pole, _StrMes, _CutIterMode=0)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      #_Pole,
+      #_StrMes,
+      #_CutIterMode
+    );
+  #end
+  //#endregion СЕРВИС On_Check
+  //**********************************************************************************************************
+@begin
+  var getMes: string;
+  var bufAdr, bufAdr_2, bufAdr_3 : string;
+  var i, j, k, count, count_2, count_3 : longint;
+  var aField : String;
+  var sField : String;
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 1
+
+  count  := GetCountFld('Файл/Документ/НДДУгл/СумНалПУ');
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДДУгл/СумНалПУ' + getIter(i);
+    if Not GetFldVis(bufAdr)
+    { Continue; }
+
+    aField := bufAdr + '/КБК'; sField := GetStrVal(aField);
+    if not IsValidKBK(sField, getMes) #_MesNoKor(aField, 'Стр. 010');
+
+    count_2 := GetCountFld(bufAdr + '/СумНалПУ_МО');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/СумНалПУ_МО' + getIter(j);
+      if Not GetFldVis(bufAdr_2)
+      { Continue; }
+
+      aField := bufAdr_2 + '/ОКТМО'; sField := GetStrVal(aField);
+      if not IsValidOKTMO(sField, getMes) #_MesNoKor(aField, 'Стр. 020', If(i=0, -1, 1));
+
+      aField := bufAdr_2 + '/НалПУДопл'; sField := GetStrVal(aField);
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 030', If(i=0, -1, 1));
+
+      aField := bufAdr_2 + '/НалПУУмен'; sField := GetStrVal(aField);
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 040', If(i=0, -1, 1));
+    }
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  //#endregion РАЗДЕЛ 1
+  //**********************************************************************************************************
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 2
+  //----------------------------------------------------------------------------------------------------------
+  count  := GetCountFld('Файл/Документ/НДДУгл/РасчНал');
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДДУгл/РасчНал' + getIter(i);
+
+    if Not GetFldVis(bufAdr)
+    { Continue; }
+
+    aField := bufAdr + '/СерЛицНедр'; sField := GetStrVal(aField); if not IsValidSerL(sField, getMes) #_MesNoKor(aField, 'Стр. 010')
+    aField := bufAdr + '/НомЛицНедр'; sField := GetStrVal(aField); if not IsValidNomL(sField, getMes) #_MesNoKor(aField, 'Стр. 010')
+    aField := bufAdr + '/ВидЛицНедр'; sField := GetStrVal(aField); if not IsValidVidL(sField, getMes) #_MesNoKor(aField, 'Стр. 010')
+
+    aField := bufAdr + '/НаимУчНедр'; sField := GetStrVal(aField);
+    if (sField = '') #_InsMes(aField , 'Стр. 020', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+
+    aField := bufAdr + '/КоэфКг'    ; sField := GetStrVal(aField);
+    #_IsValidNoKor_Decimal('XXX.XX', aField,  3, 2, 'Стр. 040')
+
+    aField := bufAdr + '/СумУбУмНал'; sField := GetStrVal(aField);
+    if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 100')
+
+    aField := bufAdr + '/НалБаза'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 110')
+    aField := bufAdr + '/НалСтав'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XX',              aField,  2, 0, 'Стр. 120')
+    aField := bufAdr + '/СумИсчНал' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 130')
+    aField := bufAdr + '/МинНал'    ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 135')
+    aField := bufAdr + '/СумНачПлат'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 140')
+
+    count_2 := GetCountFld(bufAdr + '/КодОсн');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/КодОсн' + getIter(j);
+
+      if Not GetFldVis(bufAdr_2)
+      { Continue; }
+
+      aField := bufAdr_2 + '/Значение'; sField := GetStrVal(aField);
+      if (sField = '') #_InsMes(aField , 'Стр. 030', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', If(i=0, -1, 1))
+    }
+
+    aField := bufAdr + '/РасчВыр/РасчВырВсего'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 050')
+    aField := bufAdr + '/РасчВыр/РасчВыр1Мес'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 051')
+    aField := bufAdr + '/РасчВыр/РасчВыр2Мес'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 052')
+    aField := bufAdr + '/РасчВыр/РасчВыр3Мес'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 053')
+    aField := bufAdr + '/РасчВыр/РасчВырПред'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 054')
+    aField := bufAdr + '/РасчВыр/ДохАрендТек'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 055')
+    aField := bufAdr + '/РасчВыр/ДохАрендПред'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 056')
+
+    aField := bufAdr + '/ФактРасх/ФактРасхВсего'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 060')
+    aField := bufAdr + '/ФактРасх/ФактРасх1Мес' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 061')
+    aField := bufAdr + '/ФактРасх/ФактРасх2Мес' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 062')
+    aField := bufAdr + '/ФактРасх/ФактРасх3Мес' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 063')
+    aField := bufAdr + '/ФактРасх/ФактРасхПред' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 064')
+
+    aField := bufAdr + '/РасчРасх/РасчРасхВсего'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 070')
+    aField := bufAdr + '/РасчРасх/РасчРасх1Мес' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 071')
+    aField := bufAdr + '/РасчРасх/РасчРасх2Мес' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 072')
+    aField := bufAdr + '/РасчРасх/РасчРасх3Мес' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 073')
+    aField := bufAdr + '/РасчРасх/РасчРасхПред' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 074')
+
+    aField := bufAdr + '/ВосстФактРасх/ВосстФактРасхВсего'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 080')
+    aField := bufAdr + '/ВосстФактРасх/ВосстФактРасхОтч'  ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 081')
+    aField := bufAdr + '/ВосстФактРасх/ВосстФактРасхПред' ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 082')
+    aField := bufAdr + '/ВосстФактРасх/ДохПредПер'        ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 083')
+    aField := bufAdr + '/ВосстФактРасх/РасхПредПер'       ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 084')
+    aField := bufAdr + '/ВосстФактРасх/КорУвСумДох'       ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 085')
+
+    aField := bufAdr + '/ИтогоДопДох/Значение'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 090')
+    aField := bufAdr + '/ИтогоУб/Значение'    ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 095')
+    aField := bufAdr + '/СумНалДоп/Значение'  ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 150')
+    aField := bufAdr + '/СумНалУм/Значение'   ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 160')
+
+    count_2 := GetCountFld(bufAdr + '/ОКТМО');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/ОКТМО' + getIter(j);
+
+      if Not GetFldVis(bufAdr_2)
+      { Continue; }
+
+      aField := bufAdr_2 + '/Значение'; sField := GetStrVal(aField);
+      if not IsValidOKTMO(sField, getMes) #_MesNoKor(aField, 'Стр. 170', If(i=0, -1, 1));
+    }
+
+    //==========================================================================================================
+    //#region Приложение 1 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    count_2 := GetCountFld(bufAdr + '/РасчВырДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчВырДоб' + getIter(j);
+
+      if Not GetFldVis(bufAdr_2)
+      { Continue; }
+
+      aField := bufAdr_2 + '/ОтчетМес'    ; sField := GetStrVal(aField);
+      if (sField = '') #_InsMes(aField , 'Стр. 007', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', If(i=0, -1, 1))
+
+      aField := bufAdr_2 + '/РасчВыр'     ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 010')
+      aField := bufAdr_2 + '/СрУрЦен'     ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXX.XXXX',       aField,  7, 4, 'Стр. 020')
+      aField := bufAdr_2 + '/КолДобМесНеф'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 030')
+      aField := bufAdr_2 + '/СрЗначКурс'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXX.XXXX',       aField,  7, 4, 'Стр. 040')
+      aField := bufAdr_2 + '/КоэфПер'     ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXX.XX',            aField,  4, 2, 'Стр. 050')
+
+      aField := bufAdr_2 + '/КодИстЦен'   ; sField := GetStrVal(aField);
+      if (sField = '') #_InsMes(aField , 'Стр. 055', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', If(i=0, -1, 1))
+
+      aField := bufAdr_2 + '/ЦенГазМес'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXX.XXXX',     aField,  9, 4, 'Стр. 060')
+      aField := bufAdr_2 + '/КолДобМесГаз'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 070')
+      aField := bufAdr_2 + '/КоэфПопутГаз'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXX.XX',             aField,  3, 2, 'Стр. 080')
+      aField := bufAdr_2 + '/ЦенПопутГаз' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXX.XXXX',     aField,  9, 4, 'Стр. 090')
+      aField := bufAdr_2 + '/КолПопутГаз' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 100')
+    }
+    //#endregion Приложение 1 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 2 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    count_2 := GetCountFld(bufAdr + '/ФактРасхДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/ФактРасхДоб' + getIter(j);
+
+      if Not GetFldVis(bufAdr_2)
+      { Continue; }
+
+      aField := bufAdr_2 + '/ОтчетМес'    ; sField := GetStrVal(aField);
+      if (sField = '') #_InsMes(aField , 'Стр. 00007', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', If(i=0, -1, 1))
+
+      aField := bufAdr_2 +  '/ФактРасхМес'                   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 10000')
+      aField := bufAdr_2 +  '/РасхАмортИмущ'                 ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 20000')
+      aField := bufAdr_2 +  '/ЗатрОбАмортИмущ'               ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 21000')
+
+      aField := bufAdr_2 + '/ФактРасхПроизв/ФактРасхПроизвВс'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30000')
+
+      aField := bufAdr_2 + '/ФактРасхПроизв/МатРасх'         ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30100')
+      aField := bufAdr_2 + '/ФактРасхПроизв/РасхОплТруд'     ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30200')
+      aField := bufAdr_2 + '/ФактРасхПроизв/РасхОснСред'     ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30300')
+      aField := bufAdr_2 + '/ФактРасхПроизв/РасхОсвРес'      ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30400')
+      aField := bufAdr_2 + '/ФактРасхПроизв/РасхИсслРазр'    ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30500')
+      aField := bufAdr_2 + '/ФактРасхПроизв/РасхСтрах'       ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30600')
+
+      aField := bufAdr_2 + '/Расх7.5.333.47/Расх7.5.333.47Вс'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30700')
+      aField := bufAdr_2 + '/Расх7.5.333.47/СумНалСбор'      ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30701')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхСертДекл'    ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30702')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхСтанд'       ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30703')
+      aField := bufAdr_2 + '/Расх7.5.333.47/СумКомСбор'      ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30704')
+      aField := bufAdr_2 + '/Расх7.5.333.47/СумВыплПодъем'   ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30705')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхОбеспБезоп'  ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30706')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхОбеспУсл'    ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30707')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхНабРаб'      ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30708')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхАрендПлат'   ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30709')
+      aField := bufAdr_2 + '/Расх7.5.333.47/КонцПлат'        ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30710')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхСодТранс'    ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30711')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхКоманд'      ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30712')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхДост'        ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30713')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхКонсульт'    ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30714')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхУпрОрг'      ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30715')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхСторОрг'     ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30716')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхОбуч'        ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30717')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхКанц'        ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30718')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхСвязь'       ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30719')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхПравЭВМ'     ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30720')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхИзучРын'     ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30721')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхСодПос'      ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30722')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхОсвПроизв'   ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30723')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхВнедрТехн'   ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30724')
+      aField := bufAdr_2 + '/Расх7.5.333.47/ПериодПлатПрав'  ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30725')
+      aField := bufAdr_2 + '/Расх7.5.333.47/ПлатРегНедв'     ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30726')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхДог'         ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30727')
+      aField := bufAdr_2 + '/Расх7.5.333.47/ВзнСоцСтрах'     ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30728')
+      aField := bufAdr_2 + '/Расх7.5.333.47/Брак'            ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30729')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхОбщПит'      ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30730')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхВыплПос'     ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30731')
+      aField := bufAdr_2 + '/Расх7.5.333.47/ПлатДобрСтрах'   ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30732')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхПрав'        ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30733')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхХран'        ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30800')
+      aField := bufAdr_2 + '/Расх7.5.333.47/РасхГео'         ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 30900')
+
+      aField := bufAdr_2 + '/Расх10.5.333.47/Расх10.5.333.47Вс'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 31000')
+      aField := bufAdr_2 + '/Расх10.5.333.47/РасхЛикв'         ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 31010')
+      aField := bufAdr_2 + '/Расх10.5.333.47/РасхКонс'         ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 31020')
+      aField := bufAdr_2 + '/Расх10.5.333.47/РасхТара'         ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 31030')
+      aField := bufAdr_2 + '/Расх10.5.333.47/РасхМобПодг'      ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 31040')
+      aField := bufAdr_2 + '/Расх10.5.333.47/ПотерЧС'          ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 31050')
+    }
+    //#endregion Приложение 2 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 3 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    count_2 := GetCountFld(bufAdr + '/РасчРасхДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчРасхДоб' + getIter(j);
+
+      if Not GetFldVis(bufAdr_2)
+      { Continue; }
+
+       aField := bufAdr_2 + '/ОтчетМес'     ; sField := GetStrVal(aField); if (sField = '') #_InsMes(aField , 'Стр. 007', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', If(i=0, -1, 1))
+
+      aField := bufAdr_2 + '/РасчРасхМес'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 010')
+      aField := bufAdr_2 + '/РасчПошлМес'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 020')
+      aField := bufAdr_2 + '/СтавПошлМес'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 030')
+      aField := bufAdr_2 + '/СрЗначКурс'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXX.XXXX',       aField,  7, 4, 'Стр. 040')
+      aField := bufAdr_2 + '/КолНефМес'    ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 050')
+      aField := bufAdr_2 + '/КолГазКондМес'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 060')
+      aField := bufAdr_2 + '/РасчРасхТранс'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 070')
+      aField := bufAdr_2 + '/ИндТарТранс'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 080')
+      aField := bufAdr_2 + '/КолДобНеф'    ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 090')
+    }
+    //#endregion Приложение 3 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 4 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    if GetFldVis(bufAdr + '/РасхПодлВосст')
+    {
+      aField := bufAdr + '/РасхПодлВосст/ВосстСум'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 020')
+    }
+
+    count_2 := GetCountFld(bufAdr + '/РасхПодлВосст/ВосстСумРасх');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасхПодлВосст/ВосстСумРасх' + getIter(j);
+
+      if Not GetFldVis(bufAdr_2)
+      { Continue; }
+
+      aField := bufAdr_2 + '/КодОснов'    ; sField := GetStrVal(aField); if (sField = '') #_InsMes(aField , 'Стр. 010', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+      aField := bufAdr_2 + '/ОКОФ'        ; sField := GetStrVal(aField); if (sField = '') #_InsMes(aField , 'Стр. 011', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+      aField := bufAdr_2 + '/ПрНом'       ; sField := GetStrVal(aField); if (sField = '') #_InsMes(aField , 'Стр. 012', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+      aField := bufAdr_2 + '/Номер'       ; sField := GetStrVal(aField); if (sField = '') #_InsMes(aField , 'Стр. 013', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+
+      aField := bufAdr_2 + '/СумФактРасх' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 014')
+      aField := bufAdr_2 + '/КоэфУб'      ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXX.XXX',          aField,  5, 3, 'Стр. 015')
+      aField := bufAdr_2 + '/НалПерРасх'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXX',               aField,  4, 0, 'Стр. 016')
+      aField := bufAdr_2 + '/ВосстСумКоэф'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 017')
+    }
+    //#endregion Приложение 4 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 5 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    if GetFldVis(bufAdr + '/РасчСумУб')
+    {
+      aField := bufAdr + '/РасчСумУб/ОстНепУбВс'   ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 100')
+      aField := bufAdr + '/РасчСумУб/СумУбНалБазВс'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 300')
+      aField := bufAdr + '/РасчСумУб/ОстНепУбКон'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 400')
+
+      count_2 := GetCountFld(bufAdr + '/РасчСумУб/ОстУбНалПер');
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(j);
+
+        if Not GetFldVis(bufAdr_2)
+        { Continue; }
+
+        aField := bufAdr_2 + '/Год'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXX',            aField,  4, 0, 'Стр. '+(101+j), If(i=0, -1, 1))
+        aField := bufAdr_2 + '/ОстУб'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. '+(101+j), If(i=0, -1, 1))
+      }
+
+      aField := bufAdr + '/РасчСумУб/ДопДохНалПер/Значение'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 200')
+      aField := bufAdr + '/РасчСумУб/УбНалПер/Значение'    ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 250')
+
+      count_2 := GetCountFld(bufAdr + '/РасчСумУб/СумУбНалБаз');
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr + '/РасчСумУб/СумУбНалБаз' + getIter(j);
+
+        if Not GetFldVis(bufAdr_2)
+        { Continue; }
+
+        aField := bufAdr_2 + '/Год'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXX',            aField,  4, 0, 'Стр. '+(301+j), If(i=0, -1, 1))
+        aField := bufAdr_2 + '/СумУб'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. '+(301+j), If(i=0, -1, 1))
+      }
+    }
+    //#endregion Приложение 5 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 6 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    count_2 := GetCountFld(bufAdr + '/РасчСумИстУб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчСумИстУб' + getIter(j);
+
+      if Not GetFldVis(bufAdr_2)
+      { Continue; }
+
+      aField := bufAdr_2 + '/ГодРетр'       ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXX',            aField,  4, 0, 'Стр. 007')
+      aField := bufAdr_2 + '/СумУбНачРетрВс'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 100')
+      aField := bufAdr_2 + '/РасчВырРетр'   ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 200')
+      aField := bufAdr_2 + '/ФактРасхРетр'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 300')
+      aField := bufAdr_2 + '/РасчРасхРетр'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 400')
+      aField := bufAdr_2 + '/ВосстРасхРетр' ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 500')
+      aField := bufAdr_2 + '/СумУбРетрВс'   ; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 700')
+      aField := bufAdr_2 + '/СумУбКонРетр'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 800')
+
+      count_3 := GetCountFld(bufAdr_2 + '/СумУбНачРетр');
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2 + '/СумУбНачРетр' + getIter(k);
+
+        if Not GetFldVis(bufAdr_3)
+        { Continue; }
+
+        aField := bufAdr_3 + '/Год'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXX',            aField,  4, 0, 'Стр. '+(101+k), If(i=0, If(j=0, -1, 1), If(j=0, 1, 2)))
+        aField := bufAdr_3 + '/СумУб'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. '+(101+k), If(i=0, If(j=0, -1, 1), If(j=0, 1, 2)))
+      }
+
+      aField := bufAdr_2 + '/ДопДохРетрПер/Значение'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 600')
+      aField := bufAdr_2 + '/УбРетрПер/Значение'    ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. 650')
+
+      count_3 := GetCountFld(bufAdr_2 + '/СумУбРетр');
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2 + '/СумУбРетр' + getIter(k);
+
+        if Not GetFldVis(bufAdr_3)
+        { Continue; }
+
+        aField := bufAdr_3 + '/Год'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXX',            aField,  4, 0, 'Стр. '+(701+k), If(i=0, If(j=0, -1, 1), If(j=0, 1, 2)))
+        aField := bufAdr_3 + '/СумУб'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', aField, 15, 0, 'Стр. '+(701+k), If(i=0, If(j=0, -1, 1), If(j=0, 1, 2)))
+      }
+    }
+    //#endregion Приложение 6 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 7 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    if GetFldVis(bufAdr + '/РасчМинНал')
+    {
+      aField := bufAdr + '/РасчМинНал/РасчВырДоб'  ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 100')
+      aField := bufAdr + '/РасчМинНал/РасчРасхДоб' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 200')
+      aField := bufAdr + '/РасчМинНал/ФактРасхДоб' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 300')
+      aField := bufAdr + '/РасчМинНал/ПредРасхДоб' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 400')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазВс'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 500')
+
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазЯнв'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 501')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазФев'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 502')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазМар'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 503')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазАпр'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 504')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазМай'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 505')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазИюн'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 506')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазИюл'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 507')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазАвг'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 508')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазСен'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 509')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазОкт'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 510')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазНоя'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 511')
+      aField := bufAdr + '/РасчМинНал/ДобНефтГазДек'; sField := GetStrVal(aField); if (sField <> '') #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 512')
+
+      aField := bufAdr + '/РасчМинНал/ЗначУдРасх'; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXX.XXX', aField, 14, 3, 'Стр. 600')
+      aField := bufAdr + '/РасчМинНал/МинНалБаз' ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 700')
+      aField := bufAdr + '/РасчМинНал/Став'      ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XX',                 aField,  2, 0, 'Стр. 800')
+      aField := bufAdr + '/РасчМинНал/МинНал'    ; sField := GetStrVal(aField); #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX',    aField, 15, 0, 'Стр. 900')
+    }
+    //#endregion Приложение 7 РАЗДЕЛ 2
+    //**********************************************************************************************************
+  }
+  //#endregion РАЗДЕЛ 2
+  //**********************************************************************************************************
+@end.
+//#endregion On_Check ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ ПОЛЕЙ
+//************************************************************************************************************
+
+
+//#region On_Recalc ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ РАСЧЁТЕ ПОЛЕЙ
+//------------------------------------------------------------------------------------------------------------
+@Script On_Recalc : boolean;
+  //==========================================================================================================
+  //#region СЕРВИС On_Recalc
+  //----------------------------------------------------------------------------------------------------------
+  procedure _Log(_strAdr, _strMes, _strVal : string; _iMode : integer = 1);
+  {
+    MesError.InsertRasch('', _strAdr, _strMes, _strVal, _iMode);
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  function GV(_strAdr : string) : string;
+  {
+    Result := GetStrValFormat(_strAdr);
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  #declare SV(_adr, _val)
+    SetFldVal(#_adr, #_val);
+    #_val := GetDblVal(#_adr);
+  #end
+
+  //#endregion СЕРВИС On_Recalc
+  //**********************************************************************************************************
+@begin
+  var bufAdr, bufAdr_2, bufAdr_3, bufAdr_4 : string;
+  var i, j, k, m, count, count_2, count_3, count_4 : longint;
+
+  //Документ
+  if ((GetStrVal('Файл/Документ/ДатаДок') = '') or (GetStrVal('Файл/Документ/ДатаДок') = 'ДД.ММ.ГГГГ'))
+    SetFldVal('Файл/Документ/ДатаДок', DateToStr(Cur_Date, 'DD.MM.YYYY'));
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 2
+  //----------------------------------------------------------------------------------------------------------
+  count  := GetCountFld('Файл/Документ/НДДУгл/РасчНал');
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДДУгл/РасчНал' + getIter(i);
+
+    //==========================================================================================================
+    //#region РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    var r2a050, r2a051, r2a052, r2a053, r2a054, r2a055, r2a056 : String;
+    var r2v050, r2v051, r2v052, r2v053, r2v054, r2v055, r2v056 : Double;
+
+    r2a050 := bufAdr + '/РасчВыр/РасчВырВсего'; r2v051 := 0;
+    r2a051 := bufAdr + '/РасчВыр/РасчВыр1Мес' ; r2v051 := GetDblVal(r2a051);
+    r2a052 := bufAdr + '/РасчВыр/РасчВыр2Мес' ; r2v052 := GetDblVal(r2a052);
+    r2a053 := bufAdr + '/РасчВыр/РасчВыр3Мес' ; r2v053 := GetDblVal(r2a053);
+    r2a054 := bufAdr + '/РасчВыр/РасчВырПред' ; r2v054 := GetDblVal(r2a054);
+    r2a055 := bufAdr + '/РасчВыр/ДохАрендТек' ; r2v055 := GetDblVal(r2a055);
+    r2a056 := bufAdr + '/РасчВыр/ДохАрендПред'; r2v056 := GetDblVal(r2a056);
+
+    r2v050 := r2v051 + r2v052 + r2v053 + r2v054 + r2v055 + r2v056;
+    #SV(r2a050, r2v050)
+    _Log(r2a050, 'Стр. 050 = (Стр. 051 + Стр. 052 + Стр. 053 + Стр. 054 + Стр. 055 + Стр. 056)',
+         GV(r2a050)+' = '+GV(r2a051)+' + '+GV(r2a052)+' + '+GV(r2a053)+' + '+GV(r2a054)+' + '+GV(r2a055)+' + '+GV(r2a056));
+
+    //----------------------------------------------------------------------------------------------------------
+
+    var r2a060, r2a061, r2a062, r2a063, r2a064 : String;
+    var r2v060, r2v061, r2v062, r2v063, r2v064 : Double;
+
+    r2a060 := bufAdr + '/ФактРасх/ФактРасхВсего'; r2v061 := 0;
+    r2a061 := bufAdr + '/ФактРасх/ФактРасх1Мес' ; r2v061 := GetDblVal(r2a061);
+    r2a062 := bufAdr + '/ФактРасх/ФактРасх2Мес' ; r2v062 := GetDblVal(r2a062);
+    r2a063 := bufAdr + '/ФактРасх/ФактРасх3Мес' ; r2v063 := GetDblVal(r2a063);
+    r2a064 := bufAdr + '/ФактРасх/ФактРасхПред' ; r2v064 := GetDblVal(r2a064);
+
+    r2v060 := r2v061 + r2v062 + r2v063 + r2v064;
+    #SV(r2a060, r2v060)
+    _Log(r2a060, 'Стр. 050 = (Стр. 061 + Стр. 062 + Стр. 063 + Стр. 064)',
+         GV(r2a060)+' = '+GV(r2a061)+' + '+GV(r2a062)+' + '+GV(r2a063)+' + '+GV(r2a064));
+
+    //----------------------------------------------------------------------------------------------------------
+
+    var r2a070, r2a071, r2a072, r2a073, r2a074 : String;
+    var r2v070, r2v071, r2v072, r2v073, r2v074 : Double;
+
+    r2a070 := bufAdr + '/РасчРасх/РасчРасхВсего'; r2v071 := 0;
+    r2a071 := bufAdr + '/РасчРасх/РасчРасх1Мес' ; r2v071 := GetDblVal(r2a071);
+    r2a072 := bufAdr + '/РасчРасх/РасчРасх2Мес' ; r2v072 := GetDblVal(r2a072);
+    r2a073 := bufAdr + '/РасчРасх/РасчРасх3Мес' ; r2v073 := GetDblVal(r2a073);
+    r2a074 := bufAdr + '/РасчРасх/РасчРасхПред' ; r2v074 := GetDblVal(r2a074);
+
+    r2v070 := r2v071 + r2v072 + r2v073 + r2v074;
+    #SV(r2a070, r2v070)
+    _Log(r2a070, 'Стр. 050 = (Стр. 071 + Стр. 072 + Стр. 073 + Стр. 074)',
+         GV(r2a070)+' = '+GV(r2a071)+' + '+GV(r2a072)+' + '+GV(r2a073)+' + '+GV(r2a074));
+
+    //----------------------------------------------------------------------------------------------------------
+
+    var r2a080, r2a081, r2a082 : String;
+    var r2v080, r2v081, r2v082 : Double;
+
+    r2a080 := bufAdr + '/ВосстФактРасх/ВосстФактРасхВсего'; r2v081 := 0;
+    r2a081 := bufAdr + '/ВосстФактРасх/ВосстФактРасхОтч'  ; r2v081 := GetDblVal(r2a081);
+    r2a082 := bufAdr + '/ВосстФактРасх/ВосстФактРасхПред' ; r2v082 := GetDblVal(r2a082);
+
+    r2v080 := r2v081 + r2v082;
+    #SV(r2a080, r2v080)
+    _Log(r2a080, 'Стр. 050 = (Стр. 081 + Стр. 082)',
+         GV(r2a080)+' = '+GV(r2a081)+' + '+GV(r2a082));
+
+    //----------------------------------------------------------------------------------------------------------
+
+    var r2a083, r2a084 : String;
+    var r2v083, r2v084 : Double;
+
+    var r2a090, r2a095 : String;
+    var r2v090, r2v095 : Double;
+
+    r2a083 := bufAdr + '/ВосстФактРасх/ДохПредПер' ; r2v083 := GetDblVal(r2a083);
+    r2a084 := bufAdr + '/ВосстФактРасх/РасхПредПер'; r2v084 := GetDblVal(r2a084);
+
+    r2a090 := bufAdr + '/ИтогоДопДох/Значение'              ; r2v090 := 0;
+    r2a095 := bufAdr + '/ИтогоУб/Значение'                  ; r2v095 := 0;
+
+    r2v090 := r2v050 - r2v060 - r2v070 + r2v080 + r2v083 - r2v084;
+    If(r2v090 < 0)
+    {
+      r2v095 := Abs(r2v090);
+      r2v090 := 0;
+
+      #SV(r2a090, r2v090)
+      #SV(r2a095, r2v095)
+      _Log(r2a090, 'Стр. 090 = 0', GV(r2a090));
+      _Log(r2a095, 'Стр. 095 = (Стр. 050 - Стр. 060 - Стр. 070 + Стр. 080 + Стр. 083 - Стр. 084)*(-1)',
+           GV(r2a095)+' = ('+GV(r2a050)+' - '+GV(r2a060)+' - '+GV(r2a070)+' + '+GV(r2a080)+' + '+GV(r2a083)+' - '+GV(r2a084)+')*(-1)');
+    }
+    Else
+    {
+      #SV(r2a090, r2v090)
+      #SV(r2a095, r2v095)
+      _Log(r2a090, 'Стр. 090 = (Стр. 050 - Стр. 060 - Стр. 070 + Стр. 080 + Стр. 083 - Стр. 084)*(-1)',
+           GV(r2a090)+' = ('+GV(r2a050)+' - '+GV(r2a060)+' - '+GV(r2a070)+' + '+GV(r2a080)+' + '+GV(r2a083)+' - '+GV(r2a084)+')*(-1)');
+      _Log(r2a095, 'Стр. 095 = 0', GV(r2a095));
+    }
+
+    //----------------------------------------------------------------------------------------------------------
+
+    var r2a100, r2a110, r2a120, r2a130 : String;
+    var r2v100, r2v110, r2v120, r2v130 : Double;
+
+    r2a100 := bufAdr + '/СумУбУмНал'; r2v100 := 0;
+    r2a110 := bufAdr + '/НалБаза'   ; r2v110 := 0;
+    r2a120 := bufAdr + '/НалСтав'   ; r2v120 := GetDblVal(r2a120);
+    r2a130 := bufAdr + '/СумИсчНал' ; r2v130 := 0;
+
+    r2v110 := r2v090 - r2v100;
+    If(r2v110 < 0)
+    {
+      r2v110 := 0;
+      #SV(r2a110, r2v110)
+      _Log(r2a110, 'Стр. 110 = 0, т.к. (Стр. 090 - Стр. 100) < 0', GV(r2a110));
+    }
+    Else
+    {
+      #SV(r2a110, r2v110)
+      _Log(r2a110, 'Стр. 110 = (Стр. 090 - Стр. 100)',
+           GV(r2a110)+' = ('+GV(r2a090)+' - '+GV(r2a100)+')');
+
+    }
+
+    r2v130 := (r2v110*r2v120)/100;
+    #SV(r2a130, r2v130)
+    _Log(r2a130, 'Стр. 130 = (Стр. 110 * Стр. 120) / 100, т.к. Стр. 120 - ставка налога в процентах',
+         GV(r2a130)+' = ('+GV(r2a110)+' * '+GV(r2a120)+') / 100');
+
+    //#endregion РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 1 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    var r2p1a010, r2p1a020, r2p1a030, r2p1a040, r2p1a050, r2p1a060, r2p1a070, r2p1a080, r2p1a090, r2p1a100 : String;
+    var r2p1v010, r2p1v020, r2p1v030, r2p1v040, r2p1v050, r2p1v060, r2p1v070, r2p1v080, r2p1v090, r2p1v100 : Double;
+
+    count_2 := GetCountFld(bufAdr + '/РасчВырДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчВырДоб' + getIter(j);
+
+      r2p1a010 := bufAdr_2 + '/РасчВыр'     ; r2p1v010 := 0;
+      r2p1a020 := bufAdr_2 + '/СрУрЦен'     ; r2p1v020 := GetDblVal(r2p1a020);
+      r2p1a030 := bufAdr_2 + '/КолДобМесНеф'; r2p1v030 := GetDblVal(r2p1a030);
+      r2p1a040 := bufAdr_2 + '/СрЗначКурс'  ; r2p1v040 := GetDblVal(r2p1a040);
+      r2p1a050 := bufAdr_2 + '/КоэфПер'     ; r2p1v050 := GetDblVal(r2p1a050);
+      r2p1a060 := bufAdr_2 + '/ЦенГазМес'   ; r2p1v060 := GetDblVal(r2p1a060);
+      r2p1a070 := bufAdr_2 + '/КолДобМесГаз'; r2p1v070 := GetDblVal(r2p1a070);
+      r2p1a080 := bufAdr_2 + '/КоэфПопутГаз'; r2p1v080 := GetDblVal(r2p1a080);
+      r2p1a090 := bufAdr_2 + '/ЦенПопутГаз' ; r2p1v090 := GetDblVal(r2p1a090);
+      r2p1a100 := bufAdr_2 + '/КолПопутГаз' ; r2p1v100 := GetDblVal(r2p1a100);
+
+      r2p1v010 := r2p1v020 * r2p1v030 * r2p1v040 * r2p1v050 + r2p1v060 * r2p1v070 + r2p1v080 * r2p1v090 * r2p1v100;
+
+      #SV(r2p1a010, r2p1v010)
+      _Log(r2p1a010, 'Стр. 010 = (Стр. 020 x Стр. 030 x Стр. 040 x Стр. 050 + Стр. 060 x Стр. 070 + Стр. 080 x Стр. 090 x Стр. 100)',
+           GV(r2p1a010)+' = '+GV(r2p1a020)+' * '+GV(r2p1a030)+' * '+GV(r2p1a040)+' * '+GV(r2p1a050)
+           +' + '+GV(r2p1a060)+' * '+GV(r2p1a070)+' + '+GV(r2p1a080)+' * '+GV(r2p1a090)+' * '+GV(r2p1a100)+')');
+    }
+    //#endregion Приложение 1 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 2 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    var r2p2a10000, r2p2a20000, r2p2a30000   : String;
+    var r2p2v10000, r2p2v20000, r2p2v30000   : Double;
+    var r2p2a30100, r2p2a30200, r2p2a30300, r2p2a30400, r2p2a30500, r2p2a30600, r2p2a30700 : String;
+    var r2p2v30100, r2p2v30200, r2p2v30300, r2p2v30400, r2p2v30500, r2p2v30600, r2p2v30700 : Double;
+    var r2p2a30800, r2p2a30900, r2p2a31000  : String;
+    var r2p2v30800, r2p2v30900, r2p2v31000  : Double;
+    var r2p2a30701, r2p2a30702, r2p2a30703, r2p2a30704, r2p2a30705, r2p2a30706, r2p2a30707, r2p2a30708, r2p2a30709, r2p2a30710 : String;
+    var r2p2v30701, r2p2v30702, r2p2v30703, r2p2v30704, r2p2v30705, r2p2v30706, r2p2v30707, r2p2v30708, r2p2v30709, r2p2v30710 : Double;
+    var r2p2a30711, r2p2a30712, r2p2a30713, r2p2a30714, r2p2a30715, r2p2a30716, r2p2a30717, r2p2a30718, r2p2a30719, r2p2a30720 : String;
+    var r2p2v30711, r2p2v30712, r2p2v30713, r2p2v30714, r2p2v30715, r2p2v30716, r2p2v30717, r2p2v30718, r2p2v30719, r2p2v30720 : Double;
+    var r2p2a30721, r2p2a30722, r2p2a30723, r2p2a30724, r2p2a30725, r2p2a30726, r2p2a30727, r2p2a30728, r2p2a30729, r2p2a30730 : String;
+    var r2p2v30721, r2p2v30722, r2p2v30723, r2p2v30724, r2p2v30725, r2p2v30726, r2p2v30727, r2p2v30728, r2p2v30729, r2p2v30730 : Double;
+    var r2p2a30731, r2p2a30732, r2p2a30733 : String;
+    var r2p2v30731, r2p2v30732, r2p2v30733 : Double;
+
+    count_2 := GetCountFld(bufAdr + '/ФактРасхДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/ФактРасхДоб' + getIter(j);
+
+      r2p2a10000 := bufAdr_2 + '/ФактРасхМес'                      ; r2p2v10000 := 0;
+      r2p2a20000 := bufAdr_2 + '/РасхАмортИмущ'                    ; r2p2v20000 := GetDblVal(r2p2a20000);
+      r2p2a30000 := bufAdr_2 + '/ФактРасхПроизв/ФактРасхПроизвВс'  ; r2p2v30000 := 0;
+      r2p2a30100 := bufAdr_2 + '/ФактРасхПроизв/МатРасх'           ; r2p2v30100 := GetDblVal(r2p2a30100);
+      r2p2a30200 := bufAdr_2 + '/ФактРасхПроизв/РасхОплТруд'       ; r2p2v30200 := GetDblVal(r2p2a30200);
+      r2p2a30300 := bufAdr_2 + '/ФактРасхПроизв/РасхОснСред'       ; r2p2v30300 := GetDblVal(r2p2a30300);
+      r2p2a30400 := bufAdr_2 + '/ФактРасхПроизв/РасхОсвРес'        ; r2p2v30400 := GetDblVal(r2p2a30400);
+      r2p2a30500 := bufAdr_2 + '/ФактРасхПроизв/РасхИсслРазр'      ; r2p2v30500 := GetDblVal(r2p2a30500);
+      r2p2a30600 := bufAdr_2 + '/ФактРасхПроизв/РасхСтрах'         ; r2p2v30600 := GetDblVal(r2p2a30600);
+      r2p2a30700 := bufAdr_2 + '/Расх7.5.333.47/Расх7.5.333.47Вс'  ; r2p2v30700 := 0;
+      r2p2a30701 := bufAdr_2 + '/Расх7.5.333.47/СумНалСбор'        ; r2p2v30701 := GetDblVal(r2p2a30701);
+      r2p2a30702 := bufAdr_2 + '/Расх7.5.333.47/РасхСертДекл'      ; r2p2v30702 := GetDblVal(r2p2a30702);
+      r2p2a30703 := bufAdr_2 + '/Расх7.5.333.47/РасхСтанд'         ; r2p2v30703 := GetDblVal(r2p2a30703);
+      r2p2a30704 := bufAdr_2 + '/Расх7.5.333.47/СумКомСбор'        ; r2p2v30704 := GetDblVal(r2p2a30704);
+      r2p2a30705 := bufAdr_2 + '/Расх7.5.333.47/СумВыплПодъем'     ; r2p2v30705 := GetDblVal(r2p2a30705);
+      r2p2a30706 := bufAdr_2 + '/Расх7.5.333.47/РасхОбеспБезоп'    ; r2p2v30706 := GetDblVal(r2p2a30706);
+      r2p2a30707 := bufAdr_2 + '/Расх7.5.333.47/РасхОбеспУсл'      ; r2p2v30707 := GetDblVal(r2p2a30707);
+      r2p2a30708 := bufAdr_2 + '/Расх7.5.333.47/РасхНабРаб'        ; r2p2v30708 := GetDblVal(r2p2a30708);
+      r2p2a30709 := bufAdr_2 + '/Расх7.5.333.47/РасхАрендПлат'     ; r2p2v30709 := GetDblVal(r2p2a30709);
+      r2p2a30710 := bufAdr_2 + '/Расх7.5.333.47/КонцПлат'          ; r2p2v30710 := GetDblVal(r2p2a30710);
+      r2p2a30711 := bufAdr_2 + '/Расх7.5.333.47/РасхСодТранс'      ; r2p2v30711 := GetDblVal(r2p2a30711);
+      r2p2a30712 := bufAdr_2 + '/Расх7.5.333.47/РасхКоманд'        ; r2p2v30712 := GetDblVal(r2p2a30712);
+      r2p2a30713 := bufAdr_2 + '/Расх7.5.333.47/РасхДост'          ; r2p2v30713 := GetDblVal(r2p2a30713);
+      r2p2a30714 := bufAdr_2 + '/Расх7.5.333.47/РасхКонсульт'      ; r2p2v30714 := GetDblVal(r2p2a30714);
+      r2p2a30715 := bufAdr_2 + '/Расх7.5.333.47/РасхУпрОрг'        ; r2p2v30715 := GetDblVal(r2p2a30715);
+      r2p2a30716 := bufAdr_2 + '/Расх7.5.333.47/РасхСторОрг'       ; r2p2v30716 := GetDblVal(r2p2a30716);
+      r2p2a30717 := bufAdr_2 + '/Расх7.5.333.47/РасхОбуч'          ; r2p2v30717 := GetDblVal(r2p2a30717);
+      r2p2a30718 := bufAdr_2 + '/Расх7.5.333.47/РасхКанц'          ; r2p2v30718 := GetDblVal(r2p2a30718);
+      r2p2a30719 := bufAdr_2 + '/Расх7.5.333.47/РасхСвязь'         ; r2p2v30719 := GetDblVal(r2p2a30719);
+      r2p2a30720 := bufAdr_2 + '/Расх7.5.333.47/РасхПравЭВМ'       ; r2p2v30720 := GetDblVal(r2p2a30720);
+      r2p2a30721 := bufAdr_2 + '/Расх7.5.333.47/РасхИзучРын'       ; r2p2v30721 := GetDblVal(r2p2a30721);
+      r2p2a30722 := bufAdr_2 + '/Расх7.5.333.47/РасхСодПос'        ; r2p2v30722 := GetDblVal(r2p2a30722);
+      r2p2a30723 := bufAdr_2 + '/Расх7.5.333.47/РасхОсвПроизв'     ; r2p2v30723 := GetDblVal(r2p2a30723);
+      r2p2a30724 := bufAdr_2 + '/Расх7.5.333.47/РасхВнедрТехн'     ; r2p2v30724 := GetDblVal(r2p2a30724);
+      r2p2a30725 := bufAdr_2 + '/Расх7.5.333.47/ПериодПлатПрав'    ; r2p2v30725 := GetDblVal(r2p2a30725);
+      r2p2a30726 := bufAdr_2 + '/Расх7.5.333.47/ПлатРегНедв'       ; r2p2v30726 := GetDblVal(r2p2a30726);
+      r2p2a30727 := bufAdr_2 + '/Расх7.5.333.47/РасхДог'           ; r2p2v30727 := GetDblVal(r2p2a30727);
+      r2p2a30728 := bufAdr_2 + '/Расх7.5.333.47/ВзнСоцСтрах'       ; r2p2v30728 := GetDblVal(r2p2a30728);
+      r2p2a30729 := bufAdr_2 + '/Расх7.5.333.47/Брак'              ; r2p2v30729 := GetDblVal(r2p2a30729);
+      r2p2a30730 := bufAdr_2 + '/Расх7.5.333.47/РасхОбщПит'        ; r2p2v30730 := GetDblVal(r2p2a30730);
+      r2p2a30731 := bufAdr_2 + '/Расх7.5.333.47/РасхВыплПос'       ; r2p2v30731 := GetDblVal(r2p2a30731);
+      r2p2a30732 := bufAdr_2 + '/Расх7.5.333.47/ПлатДобрСтрах'     ; r2p2v30732 := GetDblVal(r2p2a30732);
+      r2p2a30733 := bufAdr_2 + '/Расх7.5.333.47/РасхПрав'          ; r2p2v30733 := GetDblVal(r2p2a30733);
+      r2p2a30800 := bufAdr_2 + '/Расх7.5.333.47/РасхХран'          ; r2p2v30800 := GetDblVal(r2p2a30800);
+      r2p2a30900 := bufAdr_2 + '/Расх7.5.333.47/РасхГео'           ; r2p2v30900 := GetDblVal(r2p2a30900);
+      r2p2a31000 := bufAdr_2 + '/Расх10.5.333.47/Расх10.5.333.47Вс'; r2p2v31000 := GetDblVal(r2p2a31000);
+
+      r2p2v30700 := r2p2v30701+r2p2v30702+r2p2v30703+r2p2v30704+r2p2v30705+r2p2v30706+r2p2v30707+r2p2v30708+r2p2v30709+r2p2v30710;
+      r2p2v30700 += r2p2v30711+r2p2v30712+r2p2v30713+r2p2v30714+r2p2v30715+r2p2v30716+r2p2v30717+r2p2v30718+r2p2v30719+r2p2v30720;
+      r2p2v30700 += r2p2v30721+r2p2v30722+r2p2v30723+r2p2v30724+r2p2v30725+r2p2v30726+r2p2v30727+r2p2v30728+r2p2v30729+r2p2v30730;
+      r2p2v30700 += r2p2v30731+r2p2v30732+r2p2v30733;
+
+      #SV(r2p2a30700, r2p2v30700)
+      _Log(r2p2a30700, 'Стр. 30700 = (Стр. 30701 + Стр. 30702 + ... + Стр. 30732 + Стр. 30733)',
+           GV(r2p2a30700)+' = ('+GV(r2p2a30701)+' + '+GV(r2p2a30702)+' + ... + '+GV(r2p2a30732)+' + '+GV(r2p2a30733)+')');
+
+      //----------------------------------------------------------------------------------------------------------
+
+      r2p2v30000 := r2p2v30100 + r2p2v30200 + r2p2v30300 + r2p2v30400 + r2p2v30500 + r2p2v30600 + r2p2v30700;
+      r2p2v30000 += r2p2v30800 + r2p2v30900 + r2p2v31000;
+
+      #SV(r2p2a30000, r2p2v30000)
+      _Log(r2p2a30000, 'Стр. 30000 = (Стр. 30100 + Стр. 30200 + ...  + Стр. 30700 + Стр. 30800 + Стр. 30900 + Стр. 31000)',
+           GV(r2p2a30000)+' = ('+GV(r2p2a30100)+' + '+GV(r2p2a30200)+' + '+GV(r2p2a30300)+' + '+GV(r2p2a30400)+' + '
+                                  +GV(r2p2a30500)+' + '+GV(r2p2a30600)+' + '+GV(r2p2a30700)+' + '+GV(r2p2a30800)+' + '+GV(r2p2a30900)+' + '+GV(r2p2a31000)+')');
+
+      //----------------------------------------------------------------------------------------------------------
+
+      r2p2v10000 := r2p2v20000 + r2p2v30000;
+      #SV(r2p2a10000, r2p2v10000)
+      _Log(r2p2a10000, 'Стр. 10000 = (Стр. 20000 + Стр. 30000)',
+           GV(r2p2a10000)+' = ('+GV(r2p2a20000)+' + '+GV(r2p2a30000)+')');
+    }
+    //#endregion Приложение 2 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 3 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    var r2p3a010, r2p3a020, r2p3a030, r2p3a040, r2p3a050, r2p3a060, r2p3a070, r2p3a080, r2p3a090 : String;
+    var r2p3v010, r2p3v020, r2p3v030, r2p3v040, r2p3v050, r2p3v060, r2p3v070, r2p3v080, r2p3v090 : Double;
+
+    count_2 := GetCountFld(bufAdr + '/РасчРасхДоб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчРасхДоб' + getIter(j);
+
+      r2p3a010 := bufAdr_2 + '/РасчРасхМес'  ; r2p3v010 := 0;
+      r2p3a020 := bufAdr_2 + '/РасчПошлМес'  ; r2p3v020 := 0;
+      r2p3a030 := bufAdr_2 + '/СтавПошлМес'  ; r2p3v030 := GetDblVal(r2p3a030);
+      r2p3a040 := bufAdr_2 + '/СрЗначКурс'   ; r2p3v040 := GetDblVal(r2p3a040);
+      r2p3a050 := bufAdr_2 + '/КолНефМес'    ; r2p3v050 := GetDblVal(r2p3a050);
+      r2p3a060 := bufAdr_2 + '/КолГазКондМес'; r2p3v060 := GetDblVal(r2p3a060);
+      r2p3a070 := bufAdr_2 + '/РасчРасхТранс'; r2p3v070 := 0;
+      r2p3a080 := bufAdr_2 + '/ИндТарТранс'  ; r2p3v080 := GetDblVal(r2p3a080);
+      r2p3a090 := bufAdr_2 + '/КолДобНеф'    ; r2p3v090 := 0;
+
+      r2p3v090 := r2p3v050 + r2p3v060;
+      #SV(r2p3a090, r2p3v090)
+      _Log(r2p3a090, 'Стр. 090 = (Стр. 050 + Стр. 060)',
+           GV(r2p3a090)+' = ('+GV(r2p3a050)+' + '+GV(r2p3a060)+')');
+
+      r2p3v070 := r2p3v080 * r2p3v090;
+      #SV(r2p3a070, r2p3v070)
+      _Log(r2p3a070, 'Стр. 070 = ((Стр. 080 x Стр. 090))',
+           GV(r2p3a070)+' = ('+GV(r2p3a080)+' * '+GV(r2p3a090)+')');
+
+      r2p3v020 := (r2p3v030 * r2p3v040*(r2p3v050 + r2p3v060));
+      #SV(r2p3a020, r2p3v020)
+      _Log(r2p3a020, 'Стр. 020 = (Стр. 030 x Стр. 040 x (Стр. 050 + Стр. 060))',
+           GV(r2p3a020)+' = ('+GV(r2p3a030)+' * '+GV(r2p3a040)+' * '+'('+GV(r2p3a050)+' + '+GV(r2p3a060)+'))');
+
+      r2p3v010 := r2p3v020 + r2p3v070;
+      #SV(r2p3a010, r2p3v010)
+      _Log(r2p3a010, 'Стр. 010 = (Стр. 020 + Стр. 070)',
+           GV(r2p3a010)+' = ('+GV(r2p3a020)+' + '+GV(r2p3a070)+')');
+    }
+    //#endregion Приложение 3 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 4 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    var r2p4a017, r2p4a020 : String;
+    var r2p4v017, r2p4v020 : Double;
+    var r2p4aStr : String;
+
+    r2p4a020 := bufAdr + '/РасхПодлВосст/ВосстСум';
+    r2p4v020 := 0;
+    r2p4aStr := 0;
+
+    count_2 := GetCountFld(bufAdr + '/РасхПодлВосст/ВосстСумРасх');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасхПодлВосст/ВосстСумРасх' + getIter(j);
+
+      r2p4a017 := bufAdr_2 + '/ВосстСумКоэф'; r2p4v017 := GetDblVal(r2p4a017);
+      r2p4v020 := r2p4v020 + r2p4v017;
+
+      If(r2p4aStr <> '')
+      { r2p4aStr += ' + '; }
+      r2p4aStr += GV(r2p4a017);
+    }
+
+    #SV(r2p4a020, r2p4v020)
+    _Log(r2p4a020, 'Стр. 020 = (Сумма Строк 017)',
+         GV(r2p4a020)+' = ('+r2p4aStr+')');
+    //#endregion Приложение 4 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 5 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+
+    //#endregion Приложение 5 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    var r2p5a100, r2p5a200, r2p5a250 : String;
+    var r2p5v100, r2p5v200, r2p5v250 : Double;
+    var r2p5a101, r2p5a102, r2p5a103, r2p5a104, r2p5a105, r2p5a106, r2p5a107, r2p5a108, r2p5a109, r2p5a110 : String;
+    var r2p5v101, r2p5v102, r2p5v103, r2p5v104, r2p5v105, r2p5v106, r2p5v107, r2p5v108, r2p5v109, r2p5v110 : Double;
+
+    r2p5a100 := bufAdr + '/РасчСумУб/ОстНепУбВс'           ; r2p5v100 := 0;
+    r2p5a200 := bufAdr + '/РасчСумУб/ДопДохНалПер/Значение'; r2p5v200 := 0;
+    r2p5a250 := bufAdr + '/РасчСумУб/УбНалПер/Значение'    ; r2p5v250 := 0;
+    r2p5a101 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(0)+'/ОстУб';  r2p5v101 := GetDblVal(r2p5a101);
+    r2p5a102 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(1)+'/ОстУб';  r2p5v102 := GetDblVal(r2p5a102);
+    r2p5a103 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(2)+'/ОстУб';  r2p5v103 := GetDblVal(r2p5a103);
+    r2p5a104 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(3)+'/ОстУб';  r2p5v104 := GetDblVal(r2p5a104);
+    r2p5a105 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(4)+'/ОстУб';  r2p5v105 := GetDblVal(r2p5a105);
+    r2p5a106 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(5)+'/ОстУб';  r2p5v106 := GetDblVal(r2p5a106);
+    r2p5a107 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(6)+'/ОстУб';  r2p5v107 := GetDblVal(r2p5a107);
+    r2p5a108 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(7)+'/ОстУб';  r2p5v108 := GetDblVal(r2p5a108);
+    r2p5a109 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(8)+'/ОстУб';  r2p5v109 := GetDblVal(r2p5a109);
+    r2p5a110 := bufAdr + '/РасчСумУб/ОстУбНалПер' + getIter(9)+'/ОстУб';  r2p5v110 := GetDblVal(r2p5a110);
+
+    r2p5v100 := r2p5v101+r2p5v102+r2p5v103+r2p5v104+r2p5v105+r2p5v106+r2p5v107+r2p5v108+r2p5v109+r2p5v110;
+
+    #SV(r2p5a100, r2p5v100)
+    _Log(r2p5a100, 'Стр. 100 = (Стр. 101 + Стр. 102 + Стр. 103 + Стр. 104 + Стр. 105 + Стр. 106 + Стр. 107 + Стр. 108 + Стр. 109 + Стр. 110)',
+         GV(r2p5a100)+' = ('+GV(r2p5a101)+' + '+GV(r2p5a102)+' + '+GV(r2p5a103)+' + '+GV(r2p5a104)+' + '+GV(r2p5a105)+' + '+
+         GV(r2p5a106)+' + '+GV(r2p5a107)+' + '+GV(r2p5a108)+' + '+GV(r2p5a109)+' + '+GV(r2p5a110)+')');
+
+    //----------------------------------------------------------------------------------------------------------
+
+    r2p5v200 := GetDblVal(r2a090);
+    #SV(r2p5a200, r2p5v200)
+    _Log(r2p5a200, 'Стр. 200 = (Стр. 090 Раздела 2)',
+         GV(r2p5a200)+' = '+GV(r2a090));
+
+    r2p5v250 := GetDblVal(r2a095);
+    #SV(r2p5a250, r2p5v250)
+    _Log(r2p5a250, 'Стр. 250 = (Стр. 095 Раздела 2)',
+         GV(r2p5a250)+' = '+GV(r2a095));
+
+    //==========================================================================================================
+    //#region Приложение 6 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    var r2p6a100, r2p6a200, r2p6a300, r2p6a400, r2p6a500, r2p6a600, r2p6a650, r2p6a700 : String;
+    var r2p6v100, r2p6v200, r2p6v300, r2p6v400, r2p6v500, r2p6v600, r2p6v650, r2p6v700 : Double;
+    var r2p6a101, r2p6a102, r2p6a103, r2p6a104, r2p6a105, r2p6a106, r2p6a107, r2p6a108, r2p6a109 : String;
+    var r2p6v101, r2p6v102, r2p6v103, r2p6v104, r2p6v105, r2p6v106, r2p6v107, r2p6v108, r2p6v109 : Double;
+    var r2p6a701, r2p6a702, r2p6a703, r2p6a704, r2p6a705, r2p6a706, r2p6a707, r2p6a708, r2p6a709 : String;
+    var r2p6v701, r2p6v702, r2p6v703, r2p6v704, r2p6v705, r2p6v706, r2p6v707, r2p6v708, r2p6v709 : Double;
+
+    count_2 := GetCountFld(bufAdr + '/РасчСумИстУб');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/РасчСумИстУб' + getIter(j);
+
+      r2p6a100 := bufAdr_2 + '/СумУбНачРетрВс'        ; r2p6v100 := 0;
+      r2p6a200 := bufAdr_2 + '/РасчВырРетр'           ; r2p6v200 := GetDblVal(r2p6a200);
+      r2p6a300 := bufAdr_2 + '/ФактРасхРетр'          ; r2p6v300 := GetDblVal(r2p6a300);
+      r2p6a400 := bufAdr_2 + '/РасчРасхРетр'          ; r2p6v400 := GetDblVal(r2p6a400);
+      r2p6a500 := bufAdr_2 + '/ВосстРасхРетр'         ; r2p6v500 := GetDblVal(r2p6a500);
+      r2p6a600 := bufAdr_2 + '/ДопДохРетрПер/Значение'; r2p6v600 := 0;
+      r2p6a650 := bufAdr_2 + '/УбРетрПер/Значение'    ; r2p6v650 := 0;
+      r2p6a700 := bufAdr_2 + '/СумУбРетрВс'           ; r2p6v700 := 0;
+
+      r2p6v600 := r2p6v200 - r2p6v300 - r2p6v400 + r2p6v500;
+      If(r2p6v600 < 0)
+      {
+        r2p6v650 := abs(r2p6v600)
+        r2p6v600 := 0;
+
+        #SV(r2p6a600, r2p6v600)
+        #SV(r2p6a650, r2p6v650)
+        _Log(r2p6a600, 'Стр. 600 = 0', GV(r2p6a600));
+        _Log(r2p6a650, 'Стр. 650 = (Стр. 200 - Стр. 300 - Стр. 400 + Стр. 500)*(-1)',
+             GV(r2p6a650)+' = ('+GV(r2p6a200)+' - '+GV(r2p6a300)+' - '+GV(r2p6a400)+' + '+GV(r2p6a500)+')*(-1)');
+      }
+      Else
+      {
+        #SV(r2p6a600, r2p6v600)
+        #SV(r2p6a650, r2p6v650)
+
+        _Log(r2p6a600, 'Стр. 600 = (Стр. 200 - Стр. 300 - Стр. 400 + Стр. 500)*(-1)',
+             GV(r2p6a600)+' = ('+GV(r2p6a200)+' - '+GV(r2p6a300)+' - '+GV(r2p6a400)+' + '+GV(r2p6a500)+')*(-1)');
+        _Log(r2p6a650, 'Стр. 650 = 0', GV(r2p6a650));
+      }
+
+      //----------------------------------------------------------------------------------------------------------
+
+      r2p6a101 := bufAdr_2 + '/СумУбНачРетр' + getIter(0)+'/СумУб'; r2p6v101 := GetDblVal(r2p6a101);
+      r2p6a102 := bufAdr_2 + '/СумУбНачРетр' + getIter(1)+'/СумУб'; r2p6v102 := GetDblVal(r2p6a102);
+      r2p6a103 := bufAdr_2 + '/СумУбНачРетр' + getIter(2)+'/СумУб'; r2p6v103 := GetDblVal(r2p6a103);
+      r2p6a104 := bufAdr_2 + '/СумУбНачРетр' + getIter(3)+'/СумУб'; r2p6v104 := GetDblVal(r2p6a104);
+      r2p6a105 := bufAdr_2 + '/СумУбНачРетр' + getIter(4)+'/СумУб'; r2p6v105 := GetDblVal(r2p6a105);
+      r2p6a106 := bufAdr_2 + '/СумУбНачРетр' + getIter(5)+'/СумУб'; r2p6v106 := GetDblVal(r2p6a106);
+      r2p6a107 := bufAdr_2 + '/СумУбНачРетр' + getIter(6)+'/СумУб'; r2p6v107 := GetDblVal(r2p6a107);
+      r2p6a108 := bufAdr_2 + '/СумУбНачРетр' + getIter(7)+'/СумУб'; r2p6v108 := GetDblVal(r2p6a108);
+      r2p6a109 := bufAdr_2 + '/СумУбНачРетр' + getIter(8)+'/СумУб'; r2p6v109 := GetDblVal(r2p6a109);
+
+      r2p6v100 := r2p6v101+r2p6v102+r2p6v103+r2p6v104+r2p6v105+r2p6v106+r2p6v107+r2p6v108+r2p6v109;
+
+      #SV(r2p6a100, r2p6v100)
+      _Log(r2p6a100, 'Стр. 100 = (Стр. 101 + Стр. 102 + Стр. 103 + Стр. 104 + Стр. 105 + Стр. 106 + Стр. 107 + Стр. 108 + Стр. 109)',
+           GV(r2p6a100)+' = ('+GV(r2p6a101)+' + '+GV(r2p6a102)+' + '+GV(r2p6a103)+' + '+GV(r2p6a104)+' + '+GV(r2p6a105)+' + '+GV(r2p6a106)+' + '+GV(r2p6a107)+' + '+GV(r2p6a108)+' + '+GV(r2p6a109)+')');
+
+      //----------------------------------------------------------------------------------------------------------
+
+      r2p6a701 := bufAdr_2 + '/СумУбРетр' + getIter(0)+'/СумУб'; r2p6v701 := GetDblVal(r2p6a701);
+      r2p6a702 := bufAdr_2 + '/СумУбРетр' + getIter(1)+'/СумУб'; r2p6v702 := GetDblVal(r2p6a702);
+      r2p6a703 := bufAdr_2 + '/СумУбРетр' + getIter(2)+'/СумУб'; r2p6v703 := GetDblVal(r2p6a703);
+      r2p6a704 := bufAdr_2 + '/СумУбРетр' + getIter(3)+'/СумУб'; r2p6v704 := GetDblVal(r2p6a704);
+      r2p6a705 := bufAdr_2 + '/СумУбРетр' + getIter(4)+'/СумУб'; r2p6v705 := GetDblVal(r2p6a705);
+      r2p6a706 := bufAdr_2 + '/СумУбРетр' + getIter(5)+'/СумУб'; r2p6v706 := GetDblVal(r2p6a706);
+      r2p6a707 := bufAdr_2 + '/СумУбРетр' + getIter(6)+'/СумУб'; r2p6v707 := GetDblVal(r2p6a707);
+      r2p6a708 := bufAdr_2 + '/СумУбРетр' + getIter(7)+'/СумУб'; r2p6v708 := GetDblVal(r2p6a708);
+      r2p6a709 := bufAdr_2 + '/СумУбРетр' + getIter(8)+'/СумУб'; r2p6v709 := GetDblVal(r2p6a709);
+
+      r2p6v700 := r2p6v701+r2p6v702+r2p6v703+r2p6v704+r2p6v705+r2p6v706+r2p6v707+r2p6v708+r2p6v709;
+
+      #SV(r2p6a700, r2p6v700)
+      _Log(r2p6a700, 'Стр. 700 = (Стр. 701 + Стр. 702 + Стр. 703 + Стр. 704 + Стр. 705 + Стр. 706 + Стр. 707 + Стр. 708 + Стр. 709)',
+           GV(r2p6a700)+' = ('+GV(r2p6a701)+' + '+GV(r2p6a702)+' + '+GV(r2p6a703)+' + '+GV(r2p6a704)+' + '+GV(r2p6a705)+' + '+GV(r2p6a706)+' + '+GV(r2p6a707)+' + '+GV(r2p6a708)+' + '+GV(r2p6a709)+')');
+    }
+    //#endregion Приложение 6 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region Приложение 7 РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    var r2p7a100, r2p7a200, r2p7a300, r2p7a400, r2p7a500, r2p7a600, r2p7a700, r2p7a800, r2p7a900 : String;
+    var r2p7v100, r2p7v200, r2p7v300, r2p7v400, r2p7v500, r2p7v600, r2p7v700, r2p7v800, r2p7v900 : Double;
+    var r2p7a501, r2p7a502, r2p7a503, r2p7a504, r2p7a505, r2p7a506, r2p7a507, r2p7a508, r2p7a509, r2p7a510, r2p7a511, r2p7a512 : String;
+    var r2p7v501, r2p7v502, r2p7v503, r2p7v504, r2p7v505, r2p7v506, r2p7v507, r2p7v508, r2p7v509, r2p7v510, r2p7v511, r2p7v512 : Double;
+
+    r2p7a100 := bufAdr + '/РасчМинНал/РасчВырДоб'  ; r2p7v100 := GetDblVal(r2p7a100);
+    r2p7a200 := bufAdr + '/РасчМинНал/РасчРасхДоб' ; r2p7v200 := GetDblVal(r2p7a200);
+    r2p7a300 := bufAdr + '/РасчМинНал/ФактРасхДоб' ; r2p7v300 := GetDblVal(r2p7a300);
+    r2p7a400 := bufAdr + '/РасчМинНал/ПредРасхДоб' ; r2p7v400 := 0;
+    r2p7a500 := bufAdr + '/РасчМинНал/ДобНефтГазВс'; r2p7v500 := 0;
+    r2p7a600 := bufAdr + '/РасчМинНал/ЗначУдРасх'  ; r2p7v600 := GetDblVal(r2p7a600);
+    r2p7a700 := bufAdr + '/РасчМинНал/МинНалБаз'   ; r2p7v700 := 0;
+    r2p7a800 := bufAdr + '/РасчМинНал/Став'        ; r2p7v800 := GetDblVal(r2p7a800);
+    r2p7a900 := bufAdr + '/РасчМинНал/МинНал'      ; r2p7v900 := 0;
+
+    r2p7a501 := bufAdr + '/РасчМинНал/ДобНефтГазЯнв'; r2p7v501 := GetDblVal(r2p7a501);
+    r2p7a502 := bufAdr + '/РасчМинНал/ДобНефтГазФев'; r2p7v502 := GetDblVal(r2p7a502);
+    r2p7a503 := bufAdr + '/РасчМинНал/ДобНефтГазМар'; r2p7v503 := GetDblVal(r2p7a503);
+    r2p7a504 := bufAdr + '/РасчМинНал/ДобНефтГазАпр'; r2p7v504 := GetDblVal(r2p7a504);
+    r2p7a505 := bufAdr + '/РасчМинНал/ДобНефтГазМай'; r2p7v505 := GetDblVal(r2p7a505);
+    r2p7a506 := bufAdr + '/РасчМинНал/ДобНефтГазИюн'; r2p7v506 := GetDblVal(r2p7a506);
+    r2p7a507 := bufAdr + '/РасчМинНал/ДобНефтГазИюл'; r2p7v507 := GetDblVal(r2p7a507);
+    r2p7a508 := bufAdr + '/РасчМинНал/ДобНефтГазАвг'; r2p7v508 := GetDblVal(r2p7a508);
+    r2p7a509 := bufAdr + '/РасчМинНал/ДобНефтГазСен'; r2p7v509 := GetDblVal(r2p7a509);
+    r2p7a510 := bufAdr + '/РасчМинНал/ДобНефтГазОкт'; r2p7v510 := GetDblVal(r2p7a510);
+    r2p7a511 := bufAdr + '/РасчМинНал/ДобНефтГазНоя'; r2p7v511 := GetDblVal(r2p7a511);
+    r2p7a512 := bufAdr + '/РасчМинНал/ДобНефтГазДек'; r2p7v512 := GetDblVal(r2p7a512);
+
+    r2p7v500 := r2p7v501+r2p7v502+r2p7v503+r2p7v504+r2p7v505+r2p7v506+r2p7v507+r2p7v508+r2p7v509+r2p7v510+r2p7v511+r2p7v512;
+
+    #SV(r2p7a500, r2p7v500)
+    _Log(r2p7a500, 'Стр. 500 = (Стр. 501 + Стр. 502 + Стр. 503 + Стр. 504 + Стр. 505 + Стр. 506 + Стр. 507 + Стр. 508 + Стр. 509 + Стр. 510 + Стр. 511 + Стр. 512)',
+         GV(r2p7a500)+' = ('+GV(r2p7a501)+' + '+GV(r2p7a502)+' + '+GV(r2p7a503)+' + '+GV(r2p7a504)+' + '+GV(r2p7a505)+' + '+GV(r2p7a506)+' + '
+                            +GV(r2p7a507)+' + '+GV(r2p7a508)+' + '+GV(r2p7a509)+' + '+GV(r2p7a510)+' + '+GV(r2p7a511)+' + '+GV(r2p7a512)+')');
+
+    //----------------------------------------------------------------------------------------------------------
+
+    r2p7v100 := r2v050;
+    #SV(r2p7a100, r2p7v100)
+    _Log(r2p7a100, 'Стр. 100 = (Стр. 050 Раздела 2)',
+         GV(r2p7a100)+' = '+GV(r2a050));
+
+    r2p7v200 := r2v070;
+    #SV(r2p7a200, r2p7v200)
+    _Log(r2p7a200, 'Стр. 200 = (Стр. 070 Раздела 2)',
+         GV(r2p7a200)+' = '+GV(r2a070));
+
+    //----------------------------------------------------------------------------------------------------------
+
+    r2p7v400 := r2p7v500 * r2p7v600;
+    #SV(r2p7a400, r2p7v400)
+    _Log(r2p7a400, 'Стр. 400 = (Стр. 500 x Стр. 600)',
+         GV(r2p7a400)+' = ('+GV(r2p7a500)+' * '+GV(r2p7a600)+')');
+
+    r2p7v700 := r2p7v100 - r2p7v200 - r2p7v300 - r2p7v400;
+    If(r2p7v700 < 0)
+    {
+      r2p7v700 := 0;
+
+      #SV(r2p7a700, r2p7v700)
+      _Log(r2p7a700, 'Стр. 700 = 0, т.к. (Стр. 100 - Стр. 200 - Стр. 300 - Стр. 400) < 0', GV(r2p7a700));
+    }
+    Else
+    {
+      #SV(r2p7a700, r2p7v700)
+      _Log(r2p7a700, 'Стр. 700 = (Стр. 100 - Стр. 200 - Стр. 300 - Стр. 400)',
+           GV(r2p7a700)+' = ('+GV(r2p7a100)+' - '+GV(r2p7a200)+' - '+GV(r2p7a300)+' - '+GV(r2p7a400)+')');
+    }
+
+    r2p7v900 := r2p7v700*r2p7v800/100;
+    #SV(r2p7a900, r2p7v900)
+    _Log(r2p7a900, 'Стр. 900 = (Стр. 700 * Стр. 800) / 100, т.к. Стр. 800 - ставка налога в процентах',
+         GV(r2p7a900)+' = ('+GV(r2p7a700)+' * '+GV(r2p7a800)+') / 100');
+
+    //#endregion Приложение 7 РАЗДЕЛ 2
+    //**********************************************************************************************************
+
+    //==========================================================================================================
+    //#region  РАЗДЕЛ 2
+    //----------------------------------------------------------------------------------------------------------
+    var r2a135, r2a140 : String;
+    var r2v135, r2v140 : Double;
+
+    var r2a150, r2a160 : String;
+    var r2v150, r2v160 : Double;
+
+    r2a135 := bufAdr + '/МинНал'    ; r2v135 := GetDblVal(r2a135);
+    r2a140 := bufAdr + '/СумНачПлат'; r2v140 := GetDblVal(r2a140);
+
+    r2a150 := bufAdr + '/СумНалДоп/Значение'; r2v150 := 0;
+    r2a160 := bufAdr + '/СумНалУм/Значение' ; r2v160 := 0;
+
+    If(GetStrVal(r2p7a900) <> '')
+    {
+      #SV(r2a135, r2p7v900);
+      _Log(r2a135, 'Стр. 135 = Стр. 900 Приложения 7, если Стр. 900 Приложения 7 заполнена', GV(r2a135)+' = '+GV(r2p7a900));
+    }
+
+    //----------------------------------------------------------------------------------------------------------
+
+    r2v150 := r2v130 - r2v140;
+    If(r2v130 < r2v135)
+    {
+      r2v150 := r2v135 - r2v140;
+    }
+
+    If(r2v150 < 0)
+    {
+      r2v160 := Abs(r2v150);
+      r2v150 := 0;
+
+      #SV(r2a150, r2v150)
+      #SV(r2a160, r2v160)
+
+      _Log(r2a150, 'Стр. 150 = 0', GV(r2a150));
+      If(r2v130 < r2v135)
+      {
+        _Log(r2a160, 'Стр. 160 = (Стр. 140 - Стр. 135), т.к. (Стр. 130 < Стр. 135)',
+             GV(r2a160)+' = ('+GV(r2a140)+' - '+GV(r2a135)+')');
+      }
+      Else
+      {
+        _Log(r2a160, 'Стр. 160 = (Стр. 140 - Стр. 130)',
+             GV(r2a160)+' = ('+GV(r2a140)+' - '+GV(r2a130)+')');
+      }
+    }
+    Else
+    {
+      #SV(r2a150, r2v150)
+      #SV(r2a160, r2v160)
+
+      If(r2v130 < r2v135)
+      {
+        _Log(r2a150, 'Стр. 150 = (Стр. 135 - Стр. 140), т.к. (Стр. 130 < Стр. 135)',
+             GV(r2a150)+' = ('+GV(r2a135)+' - '+GV(r2a140)+')');
+      }
+      Else
+      {
+        _Log(r2a150, 'Стр. 150 = (Стр. 130 - Стр. 140)',
+             GV(r2a150)+' = ('+GV(r2a130)+' - '+GV(r2a140)+')');
+      }
+      _Log(r2a160, 'Стр. 160 = 0', GV(r2a160));
+    }
+    //#endregion РАЗДЕЛ 2
+    //**********************************************************************************************************
+  }
+  //#endregion РАЗДЕЛ 2
+  //**********************************************************************************************************
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 1
+  //----------------------------------------------------------------------------------------------------------
+  var r1a020 : String;
+  var r1v020 : String;
+  var r1a030, r1a035, r1a040 : String;
+  var r1v030, r1v035, r1v040 : Double;
+  var r2a150, r2a160 : String;
+  var r2v150, r2v160 : Double;
+
+  count  := GetCountFld('Файл/Документ/НДДУгл/СумНалПУ');
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДДУгл/СумНалПУ' + getIter(i);
+
+    count_2 := GetCountFld(bufAdr + '/СумНалПУ_МО');
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr + '/СумНалПУ_МО' + getIter(j);
+
+      r1a020 := bufAdr_2 + '/ОКТМО'    ; r1v020 := GetStrVal(r1a020);
+      r1a030 := bufAdr_2 + '/НалПУДопл'; r1v030 := 0;
+      r1a040 := bufAdr_2 + '/НалПУУмен'; r1v040 := 0;
+      r1a035 := bufAdr_2 + '/НалПУ'    ; r1v035 := 0;
+
+      If(Not GetStrNull(r1a020))
+      {
+        count_3  := GetCountFld('Файл/Документ/НДДУгл/РасчНал');
+        for (k := 0; k < count_3; k++)
+        {
+          bufAdr_3 := 'Файл/Документ/НДДУгл/РасчНал' + getIter(k);
+
+          r2a150 := bufAdr_3 + '/СумНалДоп/Значение'; r2v150 := GetDblVal(r2a150);
+          r2a160 := bufAdr_3 + '/СумНалУм/Значение' ; r2v160 := GetDblVal(r2a160);
+
+          count_4 := GetCountFld(bufAdr_3 + '/ОКТМО');
+          for (m := 0; m < count_4; m++)
+          {
+            bufAdr_4 := bufAdr_3 + '/ОКТМО' + getIter(m) + '/Значение';
+            If(Trim(r1v020) = Trim(GetStrVal(bufAdr_4)))
+            {
+              r1v030 += r2v150;
+              r1v040 += r2v160;
+              Break;
+            }
+          }
+        }
+      }
+
+      #SV(r1a030, r1v030)
+      _Log(r1a030, 'Стр. 030 = Стр. 150 Раздела 2 по одному ОКТМО', GV(r1a030));
+
+      #SV(r1a040, r1v040)
+      _Log(r1a040, 'Стр. 040 = Стр. 160 Раздела 2 по одному ОКТМО', GV(r1a040));
+
+      If(r1v030 <> 0)
+      {
+        r1v035 := r1v030;
+      }
+      Else
+      {
+        r1v035 := (-1)*r1v040;
+      }
+      #SV(r1a035, r1v035)
+    }
+  }
+  //#endregion РАЗДЕЛ 1
+  //**********************************************************************************************************
+@end.
+//#endregion On_Recalc ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ РАСЧЁТЕ ПОЛЕЙ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region On_ExportXML ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ЭКСПОРТЕ В XML
+//------------------------------------------------------------------------------------------------------------
+@Script On_ExportXML : boolean;
+@begin
+  SetFldVal('Файл/ИдФайл', Replace(_IdFail_, '.xml', ''));
+
+  if (not XMLMap.ExpToXml(_XmlFileName_)) {
+    Message('On_ExportXML: '+ XMLMap.GetStLastError, cancelButton+Warning);
+    Exit;
+  }
+
+  message('Выгружен в файл ' + _XmlFileName_);
+@end.
+//#endregion On_ExportXML ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ЭКСПОРТЕ В XML
+//************************************************************************************************************

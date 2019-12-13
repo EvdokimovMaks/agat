@@ -1,0 +1,420 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 9.10 - модуль "Управление бюджетом"
+// Визуальный интерфейс : "Пересчет бюджетов"
+//------------------------------------------------------------------------------
+
+Const
+  Tbl_ListBudget  = 'TBud';
+  Tbl_ListTForm   = 'TTF';
+
+  TblVar__ListBudget_fOrder      = 'LBOrd';
+  TblVar__ListBudget_cBudget     = 'LBBud';
+  TblVar__ListBudget_cBudVar     = 'LBBV';
+  TblVar__ListBudget_wBitReg     = 'LBReg';
+  TblVar__ListBudget_cCO         = 'LBCO';
+  TblVar__ListBudget_cPeriod     = 'LBPrd';
+  TblVar__ListBudget_cBudVariant = 'LBVar';
+  TblVar__ListBudget_sBudStage   = 'LBStg';
+
+  TblVar__ListTForm_fOrder       = 'LTOrd';
+  TblVar__ListTForm_cListBudget  = 'LTFLB';
+  TblVar__ListTForm_cTForm       = 'LTFTF';
+end;
+
+//------------------------------------------------------------------------------
+#include FpKodRegParam.Inc // Константы идентификаторов параметров типа "Регистр учета"
+#include FpListParam.Inc   // Константы идентификаторов параметров типа "Список бюджетов"
+#include FpTFormParam.Inc  // Константы идентификаторов параметров типа "Типовые формы"
+#include FpITune.Mac       // Макросы для чтения настроек интерфейсов
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+Var
+  OldNRecMID : TPtr;
+  NewNRecMID : TPtr;
+
+//------------------------------------------------------------------------------
+// GetTBL
+//------------------------------------------------------------------------------
+function MyGetTblListBudget(_cTune : comp) : boolean;
+{
+  MyGetTblListBudget := False;
+
+  delete all ListBudget where ((fListBudgetID == ListBudget.ID));
+  if (not pObjITune.GetTblBoxRec(_cTune, Tbl_ListBudget) )
+  { Exit; }
+  while GetFirst FastFirstRow BoxRec = tsOk
+  {
+    do
+    {
+      if (BoxRec.cRec = 0)  { Break; }
+      var cSavedRec : comp;  cSavedRec := BoxRec.cRec;
+
+      ClearBuffer(#ListBudget);
+      ListBudget.ID   := GetListBudgetID;
+
+      #GetTblFld(LongInt,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_fOrder, ListBudget.fOrder)
+      #GetTblFld(Word,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_wBitReg,ListBudget.wBitReg)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cCO,ListBudget.cCO)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cPeriod,ListBudget.cPeriod)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudVariant,ListBudget.cBudVariant)
+      #GetTblFld(string,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_sBudStage,ListBudget.sBudStage)
+
+      // определение бюджета
+      if (ListBudget.cCO = 0) and (ListBudget.cPeriod = 0)
+      { // возможно это первый запуск после использования старого
+        #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudget,ListBudget.cBudget)
+        if (ListBudget.cBudget <> 0 )
+        {
+          ListBudget.cCO     := pExtFpBudget.GetCO    (ListBudget.cBudget);
+          ListBudget.cPeriod := pExtFpBudget.GetPeriod(ListBudget.cBudget);
+        }
+      }
+      else if (ListBudget.cCO <> 0) and (ListBudget.cPeriod <> 0)
+      { // определим бюджет
+        ListBudget.cBudget := pExtFpBudget.FindBudget(ListBudget.cCO, ListBudget.cPeriod, cgiNoMessage);
+      }
+
+      // определение копии
+      if (ListBudget.cBudget <> 0)
+      {
+        if (ListBudget.cBudVariant = 0)
+        { // возможно это первый запуск после использования старого
+          #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudVar,ListBudget.cBudVar)
+          if (ListBudget.cBudVar <> 0 )
+          {
+            ListBudget.cBudVariant := pExtFpBudVar.GetVariant(ListBudget.cBudVar);
+            ListBudget.sBudStage   := pExtFpBudVar.GetStage  (ListBudget.cBudVar);
+          }
+        }
+        else if (ListBudget.cBudVariant <> 0)
+        { // определим копию
+          ListBudget.cBudVar := pExtFpBudVar.FindBudVar(ListBudget.cBudget, ListBudget.cBudVariant, ListBudget.sBudStage, cgiNoMessage);
+        }
+      }
+
+      // наименование бюджета
+      if (ListBudget.cBudget <> 0)
+      {
+        ListBudget.Name := pExtFpBudget.GetName(word(4), ListBudget.cBudget);
+      }
+
+      // сохраняем старое значение NRec
+      InsertMarker(OldNRecMID, cSavedRec);
+
+      var tsRes : word;  tsRes := insert current ListBudget;
+      if (tsRes <> tsOk)
+      { FpLog('MyGetTblListBudget : (insert current ListBudget <> tsOk)'+string(tsRes)); }
+
+      // сохраняем новое значение NRec
+      InsertMarker(NewNRecMID, ListBudget.NRec);
+
+    }
+    while False;
+
+    var cBoxRec : comp;  cBoxRec := BoxRec.cRec;
+    delete all BoxRec where ((cBoxRec == BoxRec.cRec));
+  }
+
+  MyGetTblListBudget := True;
+}
+//------------------------------------------------------------------------------
+function MyGetTblListTForm(_cTune : comp) : boolean;
+{
+  MyGetTblListTForm := False;
+
+  delete all ListTForm where ((fListTFormID == ListTForm.ID));
+  if (not pObjITune.GetTblBoxRec(_cTune, Tbl_ListTForm) )
+  { Exit;
+  }
+  while GetFirst FastFirstRow BoxRec = tsOk
+  {
+    do
+    {
+      if (BoxRec.cRec = 0)  { Break; }
+      var cSavedRec : comp;  cSavedRec := BoxRec.cRec;
+      ClearBuffer(#ListTForm);
+      // так будут дублироваться ListTForm.NRec
+      //ListTForm.NRec := BoxRec.cRec;
+      ListTForm.ID   := GetListTFormID;
+
+      #GetTblFld(LongInt,Tbl_ListTForm,cSavedRec,TblVar__ListTForm_fOrder, ListTForm.fOrder)
+      #GetTblFld(Comp,Tbl_ListTForm,cSavedRec,TblVar__ListTForm_cListBudget,ListTForm.cListBudget)
+      #GetTblFld(Comp,Tbl_ListTForm,cSavedRec,TblVar__ListTForm_cTForm,ListTForm.cTForm)
+
+      // заменяем на новое значение NRec
+      var IndNo : LongInt;  IndNo := 0;
+      if (not SearchMarker(OldNRecMID, ListTForm.cListBudget, IndNo) )
+      { FpLog('#(_CurInt).MyGetTblListTForm : (not SearchMarker)'+string(ListTForm.cListBudget)); Break; }
+      if (IndNo < 0)
+      { FpLog('#(_CurInt).MyGetTblListTForm : (IndNo < 0)'+string(IndNo)); Break; }
+      if (not GetMarker(NewNRecMID, IndNo, ListTForm.cListBudget) )
+      { FpLog('#(_CurInt).MyGetTblListTForm : (not GetMarker)'+string(ListTForm.cListBudget)); Break; }
+
+      var tsRes : word;  tsRes := insert current ListTForm;
+      if (tsRes <> tsOk)
+      { FpLog('MyGetTblListTForm : (insert current ListTForm <> tsOk)'+string(tsRes)); }
+    }
+    while False;
+
+    var cBoxRec : comp;  cBoxRec := BoxRec.cRec;
+    delete all BoxRec where ((cBoxRec == BoxRec.cRec));
+  }
+
+  MyGetTblListTForm := True;
+}
+
+//------------------------------------------------------------------------------
+// SetTBL
+//------------------------------------------------------------------------------
+function MySetTBLListBudget(_cTune : comp) : boolean;
+{
+  MySetTBLListBudget := False;
+  PushPos(#ListBudget);
+  pObjITune.DelTbl(_cTune, Tbl_ListBudget);
+  _Loop ListBudget where ((fListBudgetID == ListBudget.ID))
+  {
+    var cSavedRec : comp;  cSavedRec := ListBudget.NRec;
+    #SetTblFld(LongInt,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_fOrder, ListBudget.fOrder)
+    #SetTblFld(Word,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_wBitReg,ListBudget.wBitReg)
+    #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cCO,ListBudget.cCO)
+    #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cPeriod,ListBudget.cPeriod)
+    #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudVariant,ListBudget.cBudVariant)
+    #SetTblFld(String,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_sBudStage,ListBudget.sBudStage)
+  }
+  PopPos(#ListBudget);
+  MySetTBLListBudget := True;
+}
+//------------------------------------------------------------------------------
+function MySetTBLListTForm(_cTune : comp) : boolean;
+{
+  MySetTBLListTForm := False;
+  PushPos(#ListTForm);
+  pObjITune.DelTbl(_cTune, Tbl_ListTForm);
+  _Loop ListTForm where ((fListTFormID == ListTForm.ID))
+  {
+    if (ListTForm.cTForm = 0)
+    { Continue; }
+    var cSavedRec : comp;  cSavedRec := ListTForm.NRec;
+    #SetTblFld(LongInt,Tbl_ListTForm,cSavedRec,TblVar__ListTForm_fOrder, ListTForm.fOrder)
+    #SetTblFld(Comp,Tbl_ListTForm,cSavedRec,TblVar__ListTForm_cListBudget,ListTForm.cListBudget)
+    #SetTblFld(Comp,Tbl_ListTForm,cSavedRec,TblVar__ListTForm_cTForm,ListTForm.cTForm)
+  }
+  PopPos(#ListTForm);
+  MySetTBLListTForm := True;
+}
+
+
+//------------------------------------------------------------------------------
+function MyRead_ITune(_Entity : word; _cTune : comp) : boolean;
+{
+  MyRead_ITune := False;
+
+  // признак "загружены настройки из пакета заданий"
+  if ( not isLoadBatchITune )
+  {
+    if _cTune = 0
+    {
+      if pObjFpProfileManager.UpdateZerroIDToOneID
+        Set CurProfileID := 1;
+      _Entity := #(_CurInt)Entity;
+    }
+  }
+
+  pObjITune.InitEnt(_Entity, _cTune);
+
+  // открытие маркеров для хранения
+  // соответствия новых-старых NRec-ов ListBudget
+  OldNRecMID := InitMarker('', 8, 200, 100, False);
+  NewNRecMID := InitMarker('', 8, 200, 100, False);
+  MyGetTblListBudget(_cTune);
+  MyGetTblListTForm(_cTune);
+  // закрытие маркеров для хранения
+  // соответствия новых-старых NRec-ов ListBudget
+  DoneMarker(OldNRecMID, '');
+  DoneMarker(NewNRecMID, '');
+
+  pObjITune.DoneEnt(_Entity, _cTune);
+
+  pObjFpBudTF.ReCalcOrder;
+  pObjFpBudTF.MyReReadRecord;
+  ShowMyHeader;
+  MyRead_ITune := True;
+}
+//------------------------------------------------------------------------------
+function Read_ITune(_cTune : comp) : boolean;
+{
+  isLoadBatchITune := True;
+  Read_ITune := MyRead_ITune(#(_CurInt)Entity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+function MySave_ITune(_Entity : word; _cTune : comp) : boolean;
+{
+  MySave_ITune := False;
+
+  // были загружены настройки из пакета заданий
+  if ( not isLoadBatchITune )
+  {
+  }
+  pObjITune.InitEnt(_Entity, _cTune);
+  MySetTblListBudget(_cTune);
+  MySetTblListTForm(_cTune);
+  pObjITune.DoneEnt(_Entity, _cTune);
+  MySave_ITune := False;
+}
+
+//------------------------------------------------------------------------------
+function Save_ITune(_cTune : comp) : boolean;
+{ isLoadBatchITune := True;
+  Save_ITune := MySave_ITune(#(_CurInt)Entity, _cTune)
+}
+
+//------------------------------------------------------------------------------
+function MyDel_ITune(_Entity : word; _cTune : comp) : boolean;
+{ MyDel_ITune := pObjITune.DelEnt(_Entity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+function Del_ITune(_cTune : comp) : boolean;
+{ Del_ITune := MyDel_ITune(#(_CurInt)Entity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+// Загрузка списка бюджетов для менеджера
+//------------------------------------------------------------------------------
+function MyGetTblList(_cTune : comp): boolean;
+{
+  MyGetTblList := False;
+  var _Nrec     : comp    =  0;
+  var _cRecCO   : comp    =  0;
+  var _cRecPer  : comp    =  0;
+  var _cRecVar  : comp    =  0;
+  var _sStage   : string  = '';
+  var _cBudget  : comp    =  0;
+  var _cBudVar  : comp    =  0;
+  var _wBitReg  : word    =  0;
+  var _fOrder   : LongInt =  0;
+  if (not pObjITune.GetTblBoxRec(_cTune, Tbl_tblList) )
+  { Exit; }
+
+  delete all ListBudget where ((fListBudgetID == ListBudget.ID));
+
+  while GetFirst FastFirstRow BoxRec = tsOk
+  {
+    do
+    {
+      if (BoxRec.cRec = 0)  { Break; }
+      var cSavedRec : comp; cSavedRec := BoxRec.cRec;
+
+      #GetTblFld(Comp,Tbl_tblList,cSavedRec,TblVar__tblList_NRec, _NRec)
+      #GetTblFld(Comp,Tbl_tblList,cSavedRec,TblVar__tblList_cRecCO, _cRecCO)
+      #GetTblFld(Comp,Tbl_tblList,cSavedRec,TblVar__tblList_cRecPer, _cRecPer)
+      #GetTblFld(Comp,Tbl_tblList,cSavedRec,TblVar__tblList_cRecVar, _cRecVar)
+      #GetTblFld(String,Tbl_tblList,cSavedRec,TblVar__tblList_sStage, _sStage)
+      #GetTblFld(Word,Tbl_tblList,cSavedRec,TblVar__tblList_wBitReg, _wBitReg)
+      #GetTblFld(LongInt,Tbl_tblList,cSavedRec,TblVar__tblList_fOrder,_fOrder)
+    }
+    while False;
+
+
+    _cBudget := pExtFpBudget.FindBudget(_cRecCO,_cRecPer, cgiNoMessage);
+    if _cBudget = 0
+    {
+      //Exit;
+    }
+    _cBudVar := pExtFpBudVar.FindBudVar(_cBudget, _cRecVar, _sStage, cgiNoMessage);
+    if ( _cBudVar = 0 )
+    {
+      //_cBudVar := pExtFpBudget.FindAnyAvBudVar(_cBudget, True);
+    }
+
+    var _wCurBitReg : word; _wCurBitReg := 0;
+    if ( _wBitReg = 0 )
+      _wCurBitReg := SetBit(_wCurBitReg,1,True)
+    else if ( _wBitReg = 1 )
+      _wCurBitReg := SetBit(_wCurBitReg,2,True)
+    else if ( _wBitReg = 2 )
+      _wCurBitReg := SetBit(_wCurBitReg,4,True)
+    else
+       _wCurBitReg := 0;
+
+    ClearBuffer(#ListBudget);
+    ListBudget.ID      := GetListBudgetID;
+    ListBudget.cBudget := _cBudget;
+    ListBudget.Name    := pExtFpBudget.GetName(word(0 or 4), _cBudget);
+    ListBudget.cBudget := _cBudget;
+    ListBudget.cBudVar := _cBudVar;
+    ListBudget.cCO     := _cRecCO;
+    ListBudget.cPeriod := _cRecPer;
+    ListBudget.cBudVariant := _cRecVar;
+    ListBudget.sBudStage   := _sStage;
+    ListBudget.wBitReg     := _wCurBitReg;
+    ListBudget.fOrder      := _fOrder;
+    Insert Current ListBudget;
+
+    var cBoxRec : comp; cBoxRec := BoxRec.cRec;
+    delete all BoxRec where ((cBoxRec == BoxRec.cRec));
+  } //while GetFirst FastFirstRow BoxRec
+
+  pObjFpBudTF.MyReReadRecord;
+
+  MyGetTblList := True;
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера списка бюджетов
+//------------------------------------------------------------------------------
+function Read_ITuneNMainBudSrc(_cTune : comp; _wEntity : word) : boolean;
+{
+  Read_ITuneNMainBudSrc := False;
+  pObjITune.InitEnt(_wEntity, _cTune);
+  MyGetTblList(_cTune);
+  pObjITune.DoneEnt(_wEntity, _cTune);
+  Read_ITuneNMainBudSrc := True;
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера списка типовых форм  (вызывать только после Read_ITuneNMainBudSrc)
+//------------------------------------------------------------------------------
+function Read_ITuneNTForm(_cTune : comp; _wEntity : word) : boolean;
+{
+  Read_ITuneNTForm := False;
+  pObjITune.InitEnt(_wEntity, _cTune);
+  delete all ListTForm where ((fListTFormID == ListTForm.ID));
+
+  if (not pObjITune.GetTblBoxRec(_cTune, Tbl_tblTForm) )
+  {Exit;}
+  var _fOrder   : LongInt;
+  _fOrder := 0;
+  while GetFirst FastFirstRow BoxRec = tsOk
+  {
+    do
+    {
+      if (BoxRec.cRec = 0)  { Break; }
+      var cSavedRec : comp;  cSavedRec := BoxRec.cRec;
+      var cTFormRec : comp;  cTFormRec := 0;
+      #GetTblFld(Comp,Tbl_tblTForm,cSavedRec,TblVar__tblTForm_cRec,cTFormRec)
+      #GetTblFld(LongInt,Tbl_tblTForm,cSavedRec,TblVar__tblTForm_fOrder,_fOrder)
+      _Loop ListBudget where ((fListBudgetID == ListBudget.ID))
+      {
+        ClearBuffer(#ListTForm);
+        ListTForm.ID := GetListTFormID;
+        ListTForm.cListBudget := ListBudget.NRec;
+        ListTForm.cTForm := cTFormRec;
+        ListTForm.fOrder := _fOrder;
+        var tsRes : word;  tsRes := insert current ListTForm;
+        if (tsRes <> tsOk)
+        { FpLog('Read_ITuneNTForm : (insert current ListTForm <> tsOk)'+string(tsRes)); }
+      }
+    }
+    while False;
+
+    var cBoxRec : comp; cBoxRec := BoxRec.cRec;
+    delete all BoxRec where ((cBoxRec == BoxRec.cRec));
+  } //while GetFirst FastFirstRow BoxRec
+  pObjFpBudTF.MyReReadRecord;
+  pObjITune.DoneEnt(_wEntity, _cTune);
+  Read_ITuneNTForm := True;
+}

@@ -12,6 +12,7 @@
 .Fields
 Организация  ОКПО
 TitleDocNrec : comp
+sBarCode
 номер_документа  дата_составления
 ContDocNrec : comp
 PersNrec : comp
@@ -20,7 +21,7 @@ FIO
 FIO_VP
 TabN
 TabNSovm
-подразделение
+подразделение : WideString
 должность
 tarif
 
@@ -30,7 +31,7 @@ topKoef
 дата_по
 contract_date
 contract_nmb
-depart2
+depart2 : WideString
 post2
 contract_begin
 contract_end
@@ -39,7 +40,7 @@ contract_end
 
 .EndFields
 
-^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^
 .{ myPsnCycle5a_s_2004 CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^ ^ ^

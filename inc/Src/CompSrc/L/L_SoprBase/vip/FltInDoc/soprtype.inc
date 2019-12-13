@@ -1,3 +1,9 @@
+//------------------------------------------------------------------------------
+//                                                      (c) Корпорация Галактика
+// Галактика ERP 8.10 - Логистика
+// Структура для хранения значений фильтров сопроводительных документов
+//------------------------------------------------------------------------------
+
 #ifndef _SoprType_vpp_
 #define _SoprType_vpp_
 
@@ -21,6 +27,7 @@ type
     bDate    : date;
     eDate    : date;
     WD       : word;
+    NoDOpr   : word;
     w1       : word;
     cGruzTo  : comp;
     cPayment : comp;
@@ -33,5 +40,9 @@ type
     cMolFrom : comp;
     cPodrTo  : comp;
     cMolTo   : comp;
+    DopFilter: longint;
+    sExClass : array [1..6] of String;
+    wExClass : array [1..6] of word;
+    cExClass : array [1..6] of comp;
   end;
 #endif

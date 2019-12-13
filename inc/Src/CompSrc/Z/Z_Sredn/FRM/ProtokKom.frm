@@ -14,34 +14,62 @@
 .set name= 'Protokol'
 .hide
 .fields
-NomProtok
-DayForm
-MonthForm
-YearForm
-Organizacia
-PredsedKom
-ChlenKom1
-ChlenKom2
-ChlenKom3
-! 1-ый человек
-NONLIST1
-fio1
-datn1
-datk1
-sReasonName_1
-Summa1
-! 2-ой человек
-NONLIST2
-fio2
-datn2
-datk2
-sReasonName_2
-Summa2
+  NomProtok
+  DayForm
+  MonthForm
+  YearForm
+  Organizacia
+  PredsedKom
+  ChlenKom1
+  ChlenKom2
+  ChlenKom3
+  sDocumentBase
+!
+  NONLIST1
+  fio1
+  datn1
+  datk1
+  sReasonName_1
+!
+  NONLIST2
+  fio2
+  datn2_1
+  datk2_1
+  ProcentPos_1
+  datn2_2
+  datk2_2
+  ProcentPos_2
+!
 .endfields
-.{
-^^^^^^^^^
-^^^^^^
-^^^^^^
+!
+   NomProtok ^
+   DayForm ^
+   MonthForm ^
+   YearForm ^
+   Organizacia ^
+   PredsedKom ^
+   ChlenKom1 ^
+   ChlenKom2 ^
+   ChlenKom3 ^
+   sDocumentBase ^
+!
+.{ Protocol_BLisNet CheckEnter
+   NONLIST1 ^
+   fio1 ^
+   datn1 ^
+   datk1 ^
+   sReasonName_1 ^
 .}
-.endform          
+!
+.{ Protocol_Resolution CheckEnter
+   NONLIST2 ^
+   fio2 ^
+   datn2_1 ^
+   datk2_1 ^
+   ProcentPos_1 ^
+   datn2_2 ^
+   datk2_2 ^
+   ProcentPos_2 ^
+.}
+.endform
  

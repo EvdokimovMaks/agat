@@ -1,0 +1,327 @@
+//********************************************************************************
+//                                                        (c) корпорация Галактика
+// Галактика 7.12 - логистика
+// процедуры отчета "Исполняемые ДО по периодам"
+// расчет сумм из Basedoc, Stepdoc, KatSopr, SpSopr, BaseFin
+//
+//********************************************************************************
+
+Function dDatedog: Date; // Дата договора
+{
+  dDatedog := Stepdoc.dStart;
+}
+
+//******************************************************************************
+
+Function DEnddog: Date; // конец действия договора
+{
+  DEnddog := if( Longint(Stepdoc.dEnd) <> 0
+               , Stepdoc.dEnd
+               , Add_Day(Basedoc.dDoc, Basedoc.KolDn));
+}
+
+//******************************************************************************
+
+Function dotg: Date;  // Дата отгрузки
+{
+  dotg := if( Longint(Stepdoc.dotgr) <> 0
+            , Stepdoc.dotgr
+            , if(Longint(Stepdoc.dZabor) <> 0, Stepdoc.dZabor, DEnddog));
+}
+
+//******************************************************************************
+
+Function dopl: Date;   // Дата оплаты
+{
+  dopl := if( Longint(Stepdoc.doplMax) <> 0
+            , Stepdoc.doplMax
+            , DEnddog);
+}
+
+//******************************************************************************
+
+Function PrOtgr: boolean; // Отгрузка просрочена - TRUE
+{
+  PrOtgr := (dotg < OtDate);
+}
+
+//******************************************************************************
+
+Function PrOpl: boolean;  // Оплата просрочена - TRUE
+{
+  PrOpl := (dopl < OtDate);
+}
+
+//******************************************************************************
+
+Function RubValK: double;
+{
+  if ( (Basedoc.TipMoney = 2) AND (Basedoc.dopProc > -99.999) AND (BaseFin.cVal = 0) )
+    RubValK := 100.0 / (100.0 + Basedoc.dopProc);
+  else
+    RubValK := 1.0;
+}
+
+//******************************************************************************
+
+Function RubValIsCurse: boolean;
+{
+  RubValIsCurse := (   Basedoc.TipMoney = 2 AND Basedoc.ValCurse > 0.0000001 );
+}
+
+//******************************************************************************
+
+Function Valutadog: comp;
+{
+  Valutadog := if ((RubValRub = 1 AND Basedoc.TipMoney = 2) OR (RubValRub = 2 AND RubValIsCurse )
+                   , Comp(0)
+                   , Stepdoc.cVal );
+}
+
+//******************************************************************************
+
+Function dog2Ot(Var Summ: double): double;
+ // из валюты договора в валюту отчета по дате отчета
+{
+  dog2Ot := oValFunc.GetAnyCurrency(Valutadog, Summ, OtDate, cValOt);
+}
+
+//******************************************************************************
+
+Function VNak: boolean; // Возвратная накладная - TRUE
+{
+  VNak := (KatSopr.VidSopr = 106 OR KatSopr.VidSopr = 206);
+}
+
+//******************************************************************************
+
+Function KonsVozvrP: boolean;  // возвратная по отпуску на консигнацию
+{
+  KonsVozvrP := (KatSopr.VidSopr = 102);
+}
+
+//******************************************************************************
+
+Function KonsVozvrZ: boolean;  // возвратная по приему на консигнацию
+{
+  KonsVozvrZ := (KatSopr.VidSopr = 203);
+}
+
+//******************************************************************************
+
+//       VidSopr = 101 (Товарная накладная на прием товара)
+//                 102 (Товарная накладная на прием возвращ. товара
+//                         от консигнаторов)
+//                 103 (Товарная накладная на прием товара на консигнацию)
+//                 106 (Накладная на возврат товаров по рекламации в продаже)
+//                 201 (Товарная накладная на отпуск товара)
+//                 202 (Товарная накладная на отпуск товара на консигнацию)
+//                 203 (Товарная накладная на возврат товара консигнанту)
+//                 204 (Товарная накладная на отпуск товара ч/з торг. зал)
+//                 205 (ТТН)
+//                 206 (Накладная на возврат товаров по рекламации при закупке)
+//
+//                 111 (акт на прием услуги)
+//                 211 (акт на оказание услуги)
+
+Function NVNak: boolean; // Возвратная накладная - TRUE
+{
+  NVNak := NOT (Vnak OR KonsVozvrP OR KonsVozvrZ);
+}
+
+//******************************************************************************
+
+Function DProd: boolean; // Договор продажи - TRUE
+{
+  DProd := (Basedoc.Direct = 1);
+}
+
+//******************************************************************************
+
+Function DZak: boolean; // Договор Закупки - TRUE
+{
+  DZak := (Basedoc.Direct = 2);
+}
+
+//******************************************************************************
+
+Function PNak: boolean; // Приходная накладная - TRUE
+{
+  PNak := (KatSopr.TipSopr = 1);
+}
+
+//******************************************************************************
+
+Function RNak: boolean; // Расходная накладная - TRUE
+{
+  RNak := (KatSopr.TipSopr = 2);
+}
+
+//******************************************************************************
+
+Procedure Calc_ToVar; // сумма накладной в валюте договора
+Var
+ e00    : double;
+ dNakl  : Date;
+{
+  dNakl := if ( NaklDat, KatSopr.dSopr, KatSopr.dopr);
+  e00 := if ( Valutadog = 0
+            , KatSopr.Summa
+            , if ( KatSopr.cValut = Valutadog
+                 , KatSopr.SumVal
+                 , if ( KatSopr.cValut = 0
+                      , oValFunc.GetAnyCurrency( KatSopr.cValut
+                                               , KatSopr.Summa
+                                               , dNakl
+                                               , Valutadog
+                                               )
+                      , oValFunc.GetAnyCurrency( KatSopr.cValut
+                                               , KatSopr.SumVal
+                                               , dNakl
+                                               , Valutadog
+                                               )
+                      )
+                 )
+            );
+
+//e11. Отгружено  товара   = сумма расходной накладной в продажах для дог.продажи
+//e13. Принято товара      = сумма приходной накладной в закупках для дог.закупки
+//e19. Оплачено нам товаром = сумма приходной накладной для дог.продажи
+//e1b. Оплачено нами товаром = сумма расходной накладной для дог.закупки
+
+  e11 := if((NVNak) AND RNak AND DProd, e00, 0.0);
+  e13 := if((NVNak) AND PNak AND DZak , e00, 0.0);
+  e19 := if((NVNak) AND PNak AND DProd, e00, 0.0);
+  e1b := if((NVNak) AND RNak AND DZak , e00, 0.0);
+
+  if ( (UchVozvr OR (Not UchVozvr2)) AND (Not (KonsVozvrP OR KonsVozvrZ)) )
+    {
+      e12 := 0.0;
+      e14 := 0.0;
+      e1a := 0.0;
+      e1c := 0.0;
+    }
+  else
+    {
+//e12. Возвращено товара   = сумма возвратной накл. в продажах для дог.продажи
+//     (отгруженного)
+//e14. Возвращено товара   = сумма возвратной накл. в закупках для дог.закупки
+//       (принятого)
+//e1a. Возврат e19.        = сумма возвратной накл. в закупках для дог.продажи
+//e1c. Возврат e1b.        = сумма возвратной накл. в продажах для дог.закупки
+      e12 := if((KonsVozvrP OR KatSopr.VidSopr = 106) AND DProd, e00, 0.0);
+      e14 := if((KonsVozvrZ OR KatSopr.VidSopr = 206) AND DZak , e00, 0.0);
+      e1a := if((KonsVozvrZ OR KatSopr.VidSopr = 206) AND DProd, e00, 0.0);
+      e1c := if((KonsVozvrP OR KatSopr.VidSopr = 106) AND DZak , e00, 0.0);
+    }
+}
+
+//******************************************************************************
+
+// Функции по возвратным накладным
+// Возврат из SpSopr, привязаного к KatSopr через склад в валюте договора
+Procedure Calc_Vozvrat;
+Var
+ e02    : double;
+ dNakl  : Date;
+{
+  if ( NaklDat )
+    dNakl := SpSopr.dSopr;
+  else
+    dNakl := SpSopr.doprTTN;
+
+  e02 := if ( Valutadog = 0
+            , SpSopr.Price * SpSopr.KolOpl
+            , if ( SpSopr.cVal = Valutadog
+                 , SpSopr.VPrice * SpSopr.KolOpl
+                 , if ( SpSopr.cVal = 0
+                      , oValFunc.GetAnyCurrency( SpSopr.cVal
+                                               , SpSopr.Price * SpSopr.KolOpl
+                                               , dNakl
+                                               , Valutadog
+                                               )
+                      , oValFunc.GetAnyCurrency( SpSopr.cVal
+                                               , SpSopr.VPrice * SpSopr.KolOpl
+                                               , dNakl
+                                               , Valutadog
+                                               )
+                      )
+                 )
+            );
+
+  if ( NOT UchVozvr )
+    e02 := 0;
+
+//e12. Возвращено товара   = сумма возвратной накл. в продажах для дог.продажи
+//     (отгруженного)
+//e14. Возвращено товара   = сумма возвратной накл. в закупках для дог.закупки
+//       (принятого)
+//e1a. Возврат e19.        = сумма возвратной накл. в закупках для дог.продажи
+//e1c. Возврат e1b.        = сумма возвратной накл. в продажах для дог.закупки
+
+  e12 := if( SpSopr.VidSopr = 106 AND DProd, e02, 0.0);
+  e14 := if( SpSopr.VidSopr = 206 AND DZak , e02, 0.0);
+  e1a := if( SpSopr.VidSopr = 206 AND DProd, e02, 0.0);
+  e1c := if( SpSopr.VidSopr = 106 AND DZak , e02, 0.0);
+}
+
+// Функции по платежным документам
+
+//******************************************************************************
+
+Function PFin: boolean; // Приход денег - TRUE
+{
+  PFin := (BaseFin.Direct = 1);
+}
+
+
+//******************************************************************************
+
+Function RFin: boolean; // Расход денег - TRUE
+{
+  RFin := (BaseFin.Direct = 2);
+}
+
+//******************************************************************************
+
+Procedure Calc_Fin; // сумма платежного документа в валюте договора
+Var
+  e01: double;
+{
+// из валюты платежа в валюту договора по дате документа
+  if ( BaseFin.PrShtraf = 1 )
+    e01 := 0.0
+  else
+    {
+      e01 := if ( (BaseFin.cVal = 0) OR (Valutadog = 0), BaseFin.Summa, BaseFin.SumVal);
+
+      if ( (Valutadog <> 0) AND (Valutadog <> BaseFin.cVal) )
+        {
+          if ( (Basedoc.TipMoney = 2) AND (Stepdoc.cVal <> 0) )
+            {
+              if ( RubValIsCurse AND (dopl >= BaseFin.ddoc) )
+                 e01 := BaseFin.Summa / Basedoc.ValCurse;
+              else
+                e01 := oValFunc.GetAnyCurrency(BaseFin.cVal, e01, BaseFin.ddoc, Valutadog);
+
+              e01 := e01 * RubValK;
+            }
+          else
+            e01 := oValFunc.GetAnyCurrency(BaseFin.cVal, e01, BaseFin.ddoc, Valutadog);
+        }
+    }
+
+//e15. Оплачено нам денег  = сумма платежного документа от контрагента
+//                           для договора продажи
+//e16. Возвращено денег    = сумма платежного документа от нас
+// контрагенту(по продаже)   для договора продажи
+//e17. Оплачено нами денег = сумма платежного документа от нас
+//                           для договора закупки
+//e18. Возвращено денег    = сумма платежного документа от контрагента
+// нам (по закупке)          для договора закупки
+
+  e15 := if(PFin AND DProd, e01, 0.0);
+  e16 := if(RFin AND DProd, e01, 0.0);
+  e17 := if(RFin AND DZak , e01, 0.0);
+  e18 := if(PFin AND DZak , e01, 0.0);
+}

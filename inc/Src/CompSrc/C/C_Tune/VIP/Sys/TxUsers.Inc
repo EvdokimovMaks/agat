@@ -1,6 +1,4 @@
-#ifdef ComponentVersion
 #component "C_Tune"
-#end
 
 // общая таблица для четырех интерфейсов
 

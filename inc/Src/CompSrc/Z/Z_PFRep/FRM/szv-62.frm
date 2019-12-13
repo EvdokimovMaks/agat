@@ -203,13 +203,13 @@ end.
   RDataDog  : string
 .endvar
 .begin
-  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) )
-  my_pred  := Replace( Upcase( Trim( Pred ) ), '"', '&quot;' )
-  my_pred2 := Replace( Upcase( Trim( PredShort ) ), '"', '&quot;' )
-  pach_nmb:= PachNumBegin
+  my_inn  := Upcase( Trim( Replace( inn, '"', '''' ) ) );
+  my_pred  := Replace( Upcase( Trim( Pred ) ), '"', '&quot;' );
+  my_pred2 := Replace( Upcase( Trim( PredShort ) ), '"', '&quot;' );
+  pach_nmb:= PachNumBegin;
   CodeDopTarr := '€‚ˆ€';
-  TypeChars := 'ˆ‘•„'
-  nomer   := 0
+  TypeChars := 'ˆ‘•„';
+  nomer   := 0;
   MyPersonCounter := 0;
   PersonCounterOut:= 0;
  end.
@@ -261,13 +261,13 @@ end.
  }
   if Okrug = 2
   {
-    rrr   := '666666666666667.88'
-    rrr_2 := '-666666666666667.88'
+    rrr   := '666666666666667.88';
+    rrr_2 := '-666666666666667.88';
   }
   else if Okrug = 0
   {
-    rrr   :='666666666666667'
-    rrr_2 :='-666666666666667'
+    rrr   :='666666666666667';
+    rrr_2 :='-666666666666667';
   }
   EndPach := false;
   nomer := nomer+1;

@@ -1,0 +1,255 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 8.10 - Спецодежда
+// Печать реестра требований на выдачу СФО
+//------------------------------------------------------------------------------
+
+var Npp : longint;
+var sfoExist : boolean;
+
+Create View repList
+Var
+  pSpRec : comp;
+
+As Select
+  KatMBP.Name,
+  KatMBP.NNumber,
+  KatEd.Name,
+  PersSFO.explDate,
+  PersSFO.docKol,
+  PersSFO.Srok
+
+From
+  PersSFO,
+  PersSpec,
+  KatMBP,
+  MBPIn,
+  KatEd
+
+Where
+((
+    PersSFO.cCurMBPIn == MBPIn.nRec
+and MBPIn.cMBP        == KatMBP.nRec
+and KatMBP.cEd        == KatEd.nRec
+))
+
+Bounds ByMainSFO as
+  pSpRec == PersSFO.cSpReqSFO and
+  ((PersSFO.cPersSFO = 0) and
+   (PersSFO.cExtOper = 0)) and
+  PersSFO.cPersSpec == PersSpec.nRec
+
+Bounds ByFurnSFO as
+  pSpRec == PersSFO.cSpReqSFO and
+  ((PersSFO.cPersSFO = 0) and
+   (PersSFO.cExtOper <> 0))
+;  
+
+function GetSrokInReqDoc : word;
+{
+  GetSrokInReqDoc := repList.PersSFO.Srok;
+
+  if (repList.PersSFO.cExtOper <> 0)
+    Exit;
+
+  if (repList.GetFirst PersSpec <> tsOk)
+    Exit;
+
+  if (not iDblGiven.IsDblGivenByNorm(repList.PersSFO.cPersSpec, repList.PersSFO.explDate))
+    Exit;
+
+  if (repList.PersSFO.DopAttr > 0) // вручную скорректирован срок носки предметов
+    GetSrokInReqDoc := repList.PersSFO.DopAttr;
+  else
+    GetSrokInReqDoc := Word(my_Round(repList.PersSFO.docKol * repList.PersSpec.Srok / repList.PersSpec.Kol, 1, 0));
+}
+
+procedure PrintSFOInfo(tSpRec : comp; wType : word);
+{
+  repList.pSpRec := tSpRec;
+
+  if (wType = 0)
+    repList.PushBounds(repList.tbByMainSFO);
+  else
+    repList.PushBounds(repList.tbByFurnSFO);
+
+  repList._LOOP PersSFO
+  {
+    Npp++;
+    sfoExist := true;
+    frmReqList.PutEventById(feDoLoop, fcListBySFO);
+    frmReqList.Write(Npp);
+    frmReqList.Write(PersCard.CardNom);
+    frmReqList.Write(STabN);
+    frmReqList.Write(Persons.FIO);
+    frmReqList.Write(repList.KatMBP.Name);
+    frmReqList.Write(repList.KatMBP.NNumber);
+    frmReqList.Write(repList.KatEd.Name);
+    frmReqList.Write(piExtAttr.sGetAttr(coKatEd, repList.KatEd.nRec, 'Код'));
+    frmReqList.Write(repList.PersSFO.explDate);
+    frmReqList.Write(repList.PersSFO.docKol);
+    frmReqList.Write(GetSrokStr(Cur_Date, GetSrokInReqDoc));
+    frmReqList.Write(repList.MBPIn.Price);
+    frmReqList.Write(repList.MBPIn.Summa);
+    frmReqList.Write(repList.MBPIn.SummaIsnP + repList.MBPIn.SummaIsnN);
+    frmReqList.Write(repList.PersSFO.nRec);
+  }
+
+  if (wType = 0)
+    repList.PopBounds(repList.tbByMainSFO);
+  else
+    repList.PopBounds(repList.tbByFurnSFO);
+}
+
+procedure PrintReqList;
+{
+  if (not isValid(#ReqList))
+    Exit;
+
+  StartNewVisual(vtIndicatorVisual, vfTimer, 'Идет формирование отчета...', 1);
+
+  frmReqList.Write(iOrgInfo.GetMyOrgNameT(ReqList.frmDate));
+  frmReqList.Write(iOrgInfo.MyOrgOKPO);
+  frmReqList.Write(ReqList.reqNom);
+  frmReqList.Write(ReqList.frmDate);
+  frmReqList.Write(if (isValid(#KatPodr), KatPodr.Name, ''));
+  frmReqList.Write(if (isValid(#KatMol), KatMol.Name, ''));
+  frmReqList.Write(if (isValid(#KatMol), GetShortName(KatMol.Name), ''));
+  frmReqList.Write(if (isValid(#KatPodrF), KatPodrF.Name, ''));
+  frmReqList.Write(if (isValid(#KatMolF), KatMolF.Name, ''));
+  frmReqList.Write(if (isValid(#KatMolF), GetShortName(KatMolF.Name), ''));
+  frmReqList.Write(ReqList.nRec);
+
+  frmReqList.Write(iAppFuncs.GetAppPost(iAppFuncs.GetAppNrec_OnDate(KatMol.cPersons, ReqList.frmDate)));
+  frmReqList.Write(GetShortName(KATPODR.FIO));
+
+  PushPos(#ReqSFO);
+  PushPos(#SpReqSFO);
+
+  Npp := 0;
+  sfoExist := false;
+
+  _LOOP ReqSFO
+  {
+    _LOOP SpReqSFO
+    {
+      PrintSFOInfo(SpReqSFO.nRec, 0);
+
+      _LOOP KatKod
+        PrintSFOInfo(KatKod.nRec, 1);
+    }
+  }
+
+  if (not sfoExist)
+  {
+    frmReqList.PutEventById(feDoLoop, fcListBySFO);
+    frmReqList.SkipFormat(15);
+  }
+
+  PopPos(#ReqSFO);
+  PopPos(#SpReqSFO);
+
+  frmReqList.PutEvent(feBreak);
+
+  StopVisual('', 0);
+
+  if (frmReqList.Error)
+    frmReqList.AbortForm;
+  else
+    frmReqList.ShowFile('Реестр требований (reqlist.out)');
+}
+
+//------------------------------------------------------------------------------
+
+var frmSum, spcSum : tSumma;
+
+procedure CalcReqSpecSums(tSpRec : comp; wType : word);
+{
+  repList.pSpRec := tSpRec;
+
+  if (wType = 0)
+    repList.PushBounds(repList.tbByMainSFO);
+  else
+    repList.PushBounds(repList.tbByFurnSFO);
+
+  repList._LOOP PersSFO
+  {
+    case (repList.PersSFO.SpecFlag) of
+    //------------------------
+      0: frmSum := frmSum + repList.MBPIn.Summa;
+    //------------------------
+      1: spcSum := spcSum + repList.MBPIn.Summa;
+    //------------------------
+    end;
+  }
+
+  if (wType = 0)
+    repList.PopBounds(repList.tbByMainSFO);
+  else
+    repList.PopBounds(repList.tbByFurnSFO);
+}
+
+procedure CalcReqListSums;
+{
+  frmSum := 0;
+  spcSum := 0;
+
+  _LOOP ReqSFO
+  {
+    _LOOP SpReqSFO
+    {
+      CalcReqSpecSums(SpReqSFO.nRec, 0);
+
+      // Учет фурнитуры в модуле "Вещевое имущество"
+      if (Lic_ItemExists('Custom'))
+        _LOOP KatKod
+          CalcReqSpecSums(KatKod.nRec, 1);
+    }
+  }
+}
+
+DataStream dtsReqListReestr
+(
+  [CFH]             CommonFormHeader;
+  [MyOrgName]       iOrgInfo.GetMyOrgNameT(From_Days(0));
+  [NDE_ShName]      sGetTune('NDE.ShortRub');
+  [IsExistArchive]  (oArchiveFuncs.IsExistArchive and oArchiveFuncs.GetExistTiDkGal(cgDoc_0730));
+
+  Table ReqList
+  (
+    [DocDate]  if (Longint(ReqList.frmDate) > 0, DateToStr(ReqList.frmDate, 'DD/MM/YYYY'), '');
+    [DocNom]   ReqList.ReqNom;
+    [BarCode]  GetDocBarCode(cgDoc_0747, ReqList.nRec);
+    [DesGr]    ReqList.DesGr;
+    [Descr]    ReqList.Descr;
+    [frPodr]   KatPodrF.Name;
+    [frMol]    KatMolF.Name;
+    [toPodr]   KatPodr.Name;
+    [toMol]    KatMol.Name;
+    [frmSum]   frmSum;
+    [spcSum]   spcSum;
+  );
+)
+
+HandleEvent Table ReqList
+//--------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    CalcReqListSums;
+  }
+//--------------------------
+End; // HandleEvent Table ReqList
+
+HandleEvent // HandleEvent DataStream dtsReqListReestr
+//---------
+  cmPreProcess:
+    StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, 'Идет формирование реестра документов...', 0);
+//---------
+  cmPostProcess:
+    StopVisual('', 0);
+//---------
+end; // HandleEvent DataStream dtsReqListReestr
+end; // DataStream dtsReqListReestr

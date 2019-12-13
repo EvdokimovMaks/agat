@@ -90,6 +90,7 @@
   Sum1UdUpl:double
   SumVzUpl:double
   DateChangePer
+  sReason
   //------------------------------------------------------------------------------
   //====== áâ ¦¨ ======
    ¨¬_áâ ¦ 
@@ -190,7 +191,7 @@
   ³  ‘¢¥¤¥­¨ï ® áã¬¬ å ­ ç¨á«¥­¨©, ¡®«ì­¨ç­ëå, ã¤¥à¦ ­¨© ¨ ¢§­®á®¢                             ³
   ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
 .{ CheckEnter PU3_2014_NACH
-   Mes ^  MesText ^  PrizPrint ^  PrizPrintSymb ^  PrizSum1 ^   ProcUd1 ^  ProcNach281 ^  ProcNach61 ^ Sum11 ^   Sum12 ^  SumUd1 ^   Sum28Vz ^  Sum6Vz ^  Sum1UdUpl ^  SumVzUpl ^  DateChangePer ^
+   Mes ^  MesText ^  PrizPrint ^  PrizPrintSymb ^  PrizSum1 ^   ProcUd1 ^  ProcNach281 ^  ProcNach61 ^ Sum11 ^   Sum12 ^  SumUd1 ^   Sum28Vz ^  Sum6Vz ^  Sum1UdUpl ^  SumVzUpl ^  DateChangePer ^ sReason ^
 .}
   ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
   ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
@@ -382,8 +383,9 @@
   Sum1UdUpl
   SumVzUpl
   DateChangePer
+  sReason
 .endfields
-   Mes ^  MesText ^  PrizPrint ^  PrizPrintSymb ^  PrizSum1 ^   ProcUd1 ^  ProcNach281 ^  ProcNach61 ^ Sum11 ^   Sum12 ^  SumUd1 ^   Sum28Vz ^  Sum6Vz ^  Sum1UdUpl ^  SumVzUpl ^   DateChangePer ^
+   Mes ^  MesText ^  PrizPrint ^  PrizPrintSymb ^  PrizSum1 ^   ProcUd1 ^  ProcNach281 ^  ProcNach61 ^ Sum11 ^   Sum12 ^  SumUd1 ^   Sum28Vz ^  Sum6Vz ^  Sum1UdUpl ^  SumVzUpl ^   DateChangePer ^ sReason ^
 .}
   ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
   ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
@@ -541,7 +543,7 @@ if(CharF<>2, DoubleToStr(Pach_BolnItog,'[|-]3666666666666'),string(0))
 if(CharF<>2, if(God>2012, DoubleToStr(Pach_UdItog+Pach_28VzItog+Pach_6VzItog,'[|-]3666666666666'), string(0)),string(0))          // ‘ã¬¬  ã¤¥à¦ ­¨ï (1%) + ¯¥­á¨®­­ëå ¢§­®á®¢ (28%) + áâà å®¢ëå ¢§­®á®¢ (6%) ¯® ¯ çª¥
 if(CharF<>2, if(God>2012, DoubleToStr(Pach_UdUplItog+Pach_28VzUplItog+Pach_6VzUplItog,'[|-]3666666666666'), string(0)),string(0)) // ‘ã¬¬  ã¯« ç¥­­®£® ã¤¥à¦ ­¨ï (1%) + ã¯« ç¥­­ëå ¢§­®á®¢ 34%(28+6) ¯® ¯ çª¥
 .endfields
-‡ƒ‹‚=1.6=
+‡ƒ‹‚=1.7=
 <€—Š=^=^=^=^= = =1=
 ’ˆ„=“-3=^=^=^=^=^=>
 .}
@@ -596,10 +598,11 @@ if ( TrueType = '','>','')
   WriteInFormPr(ProcNach281, PrizSum1)
   WriteInFormPr(ProcNach61,  PrizSum1)
   if (DateChangePer <> '', DateChangePer, ' ')
+  sReason
   PriznForLastChar
 .endfields
 .{?internal;(PrizPrint=true)and(CharF<>2)
-—‘‹=^=^=^=^=^=^=^=^=^=^=^=^=^
+—‘‹=^=^=^=^=^=^=^=^=^=^=^=^=^=^
 .}
 .}
 .{ CheckEnter PU3_2014_Stages
@@ -625,7 +628,7 @@ end.
 .fields
 pach_nmb
 .endfields
-___Š…– ^ €—Šˆ
+___END ^ €—Šˆ
 .begin
   pach_nmb:= pach_nmb + 1;
   nomer:= 0;

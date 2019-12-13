@@ -10,6 +10,7 @@
   .form NFormRD42Form
 .Hide
 .Fields
+sBarCode
 Организация
 ОКПО
 Номер_Приказа
@@ -17,7 +18,7 @@
 FIO
 TabN
 должность
-подразделение
+подразделение : WideString
 
 Отпуск
 Дата_с_1
@@ -47,7 +48,7 @@ NeedNote
 ContDocNrec
 PersNrec
 .EndFields
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^
 .{ NformRD42Cycle  CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^ ^

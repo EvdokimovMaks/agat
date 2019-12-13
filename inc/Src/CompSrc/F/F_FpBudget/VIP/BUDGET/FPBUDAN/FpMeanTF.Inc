@@ -9,7 +9,7 @@
 
 #ifdef ComponentVersionInDict
 #include iFpMeanTF.Vih
-#endif //ComponentVersionInDict
+#endif
 #GalPublic type TFpMeanTF   = record as Table FpMeanTF;
 #GalPublic type TPFpMeanTF  = record as Table FpMeanTF with x$position;
 

@@ -1,0 +1,195 @@
+//******************************************************************************
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Логистика
+// Интерфейс на дооценочный складской ордер
+//******************************************************************************
+
+#ifdef USE_ORDERS_INHERIT
+
+#define Prih_ord_VIP
+#include prih_ord.vih
+#include dooc_ord.vih
+#include r_real.tbl
+#include docs2obj.vih
+#define _RETTARA_
+#include RasxPrix.vih
+#include soprdoc.vih
+#include soprdocb.vih
+#include Actualit.vih  // Объектный интерфейс Поддержки актуальности сальдо
+#include EditDoc.vih   // Объектный интерфейс - стрелочник вызовов интерфейсов редактирования
+#include linkgrpl.vih  // Объектный интерфейс - стрелочник вызовов
+#include kontrbal.vih
+
+//******************************************************************************
+
+Interface DoocOrd 'Приходные дооценочные ордера' (, hcSklOrderSpisok, ) Cyan, EscClose;
+  Show at (,,,31);
+
+Create View
+condition cDooc = ((SklORder.TipOrd >= 4) and (SklOrder.TipOrd <= 7))
+;
+
+procedure ResetMainFilters;
+begin
+  if (ConditionActive(tccDooc)) PopCondition(tccDooc);
+end;
+
+procedure SetMainFilters;
+begin
+  if (not ConditionActive(tccDooc)) PushCondition(tccDooc);
+end;
+
+function  GetOrderName : string;
+begin
+  Result := 'Приходный дооценочный ордер';
+end;
+
+#include wdoocord.vpp  // Обработка окна спецификации ордера по дооценке
+
+#doc
+Редактирование приходного дооценочного ордера
+#end
+Window EditOrders 'Редактирование приходного дооценочного ордера' EscClose;
+  Show at (,,,31);
+
+Panel pSklOrder
+  Table SklOrder;
+HandleEvent
+cmSetDefault :
+  {
+    if F_SklOrder_SetDefault(word(0), 1, true) // для приходных
+      PutCommand(cmEditOrders);
+  }
+end; // handleevent
+end; // Panel SklOrder
+
+
+HandleEvent
+cmAttrib:
+  if Curtable = #SpOrder
+    RunWindow(wDoocOrd);
+
+cmOpenSearch :
+  {
+    if isProtected(#SklOrder) or isProtected(#SpOrder)
+      { stop;
+        ProcessCommand(cmProtectedInput);
+        Exit;
+      }
+    case (curfield) of
+      #SpOrder.rSrPrice,
+      #SpOrder.SrPrice:
+        {
+          stop;
+          RunWindow(wDoocOrd);
+          SelectFieldinFormat(scDoocOrd, #SpOrder.SrPrice);
+          break;
+        }
+
+      #SumPrice:
+        { var myOldSrPrice, myOldRSrPrice : double;
+          var getSum: double;
+          getSum := SpOrder.SrPrice * SpOrder.Kol;
+          myOldSrPrice := SpOrder.SrPrice;
+
+          getSum := SpOrder.rSrPrice * SpOrder.Kol;
+          myOldRSrPrice := SpOrder.rSrPrice;
+
+          if (RunDialog('GetSumTov', getSum) <> cmCancel)
+            {
+              set SpOrder.SrPrice := FRoundRubOrd(SpOrder.vidOrder, getSum) / SpOrder.Kol;
+              set SpOrder.rSrPrice := getSum / SpOrder.Kol;
+
+              if (SpOrder.VidOrder = 0)
+                {
+                  var presision: double;
+                  presision:= GetPresision_forKol;
+                  set SumOrd := SumOrd - double(MyoldSrPrice) + SpOrder.srPrice;
+                  set NewSrPrice:= (SpOrder.SrPrice/if(abs(KolMC) < presision, 1, kolMC)) + OldSrPrice;
+                  set NewVprice:= oValFunc.GetAnyCurrency(comp(0), NewSrPrice, sub_day(SpOrder.dOrd,1), SpOrder.cVal);
+                  set SpOrder.VPrice:= (NewVPrice   - OldVPrice) * if(abs(KolMC) < presision, 1, kolMC);
+                  set SpOrder.RVPrice:= SpOrder.VPrice;
+                }
+              F_SpOrder_CheckField;
+            }
+        };
+
+      else PutCommand(cmPick);
+    end;
+  }
+end;
+
+END; // window EditOrders
+
+
+HandleEvent // Interface
+
+cmInit :
+
+{
+  if (inherited :: HandleEvent(cmInit) = heAbort)
+    Abort;
+  SetColumnTitle(brSpOrder, #SpOrder.RSrPrice, 'Сумма дооценки');
+  ClearFieldState(#SumPrice, sfVisible);
+  ClearFieldState(#SpOrder.kol, sfVisible);
+  ClearFieldState(#KatEd.Name, sfVisible);
+}
+
+cmDefault :
+{
+  if (not IsValid(#SklOrder) and IsNew)
+  {
+    abort;
+    if F_SklOrder_SetDefault(word(0), 1, true) PutCommand(cmEditOrders);
+  }
+  else inherited :: HandleEvent(cmDefault);
+}
+
+end; //Hanldeevent Interface
+end.
+
+//******************************************************************************
+
+#doc
+Локальное меню шапки окна редактирования интерфейса <link Interface L_Sklad::DoocOrd>L_Sklad::DoocOrd - Приходные дооценочные ордера</link>
+#end
+SklOrder_HotKeys_Dooc Menu
+{
+-'Печать документа',cmPrintDoc,'Печать ордера',hcctxSoprPrintDoc,'Ctrl+P',kbCtrlP,sci1Esc;
+//-'Печать документа. Форма M4',cmPlansNo,'Печать ордера - форма М4',hcctxSoprPrintDoc,'Alt+P',kbAltP,sci1Esc;
+-'Печать реестра ордеров',cmAccording,'Печать реестра ордеров из текущих ограничений',hcctxListSklOrder,'Alt+S',kbAltS,sci1Esc;
+----------;
+-'Сопроводительный документ',cmSeeDopInfo,'Просмотр сопроводительного документа по ордеру',hcSkladM10ViewNaklByOrder,'',,sci1Esc;
+----------;
+-'Хозоперации по документу', cmValue17,'Просмотр хозопераций по ордеру',hcNoContext,'',,sci1Esc;
+-'Бухгалтерские проводки',cmView,'Просмотр бухгалтерских проводок по ордеру',hcSkladM10ViewProvSklOrder,'',,sci1Esc;
+----------;
+-'Группы платежных средств', cmValue1,'Привязка группы платежных средств к ордеру',hcGkatalM1Attr,'',,sci1Esc;
+----------;
+-'Фильтр по датам',cmFilterSave,'Установка фильтров по датам в ордерах',hcctxSoprFilterSave,'Alt+B',kbAltB,sci1Esc;
+-'Внешняя классификация',cmPickClass,'Установка внешней классификации к ордеру',hcGkatalM1ExtClass,'Alt+C',kbAltC,sci1Esc;
+-'Внешние атрибуты',cmPickAttr,'Установка внешних атрибутов к ордеру',hcGkatalM1Attr,'Alt+A',kbAltA,sci1Esc;
+----------;
+-'Расчет сумм для налогового учета',cmValue2,'Расчет сумм для налогового учета',hcNoContext,'',,sci1Esc;
+----------;
+-'Объект строительства для всего документа',cmValue6,'Выбор объекта строительства для всех позиций спецификации документа',hcUKSPrivDocKObjStr,'',,sci1Esc;
+-'Статья затрат для всего документа',cmVal7,'Выбор статьи затрат для всех позиций спецификации документа',hci_naklFLOKStatZatr,'',,sci1Esc;
+-'Разноска Объектов строительства по спецификации',cmVal8,'Выбор Объектов строительства для нескольких позиций спецификации',,'',,sci1Esc;
+-----------;
+-'Отобразить спецификацию в виде сметы', cmValue60, 'Отобразить спецификацию в виде сметы', hcuks_Otobraz_Sp_VidSmet,'', , sci1Esc;
+}
+
+#doc
+Локальное меню спецификации окна редактирования интерфейса <link Interface L_Sklad::DoocOrd>L_Sklad::DoocOrd - Приходные дооценочные ордера</link>
+#end
+SpOrder_HotKeys_Dooc Menu
+{
+-'Расширенная информация',cmAttrib,'Открыть окно расширенной информации',hcSklRasInf,'Ctrl+Enter',kbCtrlEnter,sci1Esc;
+-'Наличие МЦ на складах',cmNal,'Наличии МЦ на складах',hcctxSoprNalMC,'Alt+F',kbAltF,sci1Esc;
+-'Наличие МЦ в разрезе ордера',cmShowAll,'Наличие МЦ в разрезе ордера',hcAllASaldDat,'Ctrl+''+''',kbCtrlGrayPlus,sci1Esc;
+-'Выбор партии из текущих остатков',cmSaveDoc,'Выбор партии из текущих остатков',hciGTekOst,'Ctrl+F2',kbCtrlF2,sci1Esc;
+----------;
+-'Удаление всех позиций с нулевым количеством',cmValue10,'Удаление в дооценочных ордерах не производится',hcSkladWDelPozOrd,'',,sci1Esc;
+}
+
+#end // USE_ORDERS_INHERIT

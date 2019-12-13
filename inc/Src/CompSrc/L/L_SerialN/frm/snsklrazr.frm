@@ -20,12 +20,17 @@
  PartyName : string
  SerialN   : string
  LastRec   : boolean
+ innum     : string
+ zavnom    : string
+ nameos    : string
+ Status    : string
 .EndFields
 ^
 .{
 ^ ^ ^ ^
 ^ ^ ^ ^
 ^
+^ ^ ^ ^
 .}
 .EndForm
 

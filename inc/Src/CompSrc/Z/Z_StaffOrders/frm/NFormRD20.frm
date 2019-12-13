@@ -19,6 +19,7 @@
 Организация
 ОКПО
 TitleDocNrec : comp
+sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа
@@ -28,7 +29,7 @@ FIO
 FIO_VP
 TabN
 подразделение
-должность
+должность : WideString
 
 NameRaise
 SumPRaise
@@ -50,6 +51,7 @@ Prim
 Организация                   ^
 ОКПО                          ^
 TitleDocNrec : comp           ^
+sBarCode		      ^	
 PersNrec : comp               ^
 AppointNrec : comp            ^
 номер_документа               ^
@@ -58,7 +60,7 @@ AppointNrec : comp            ^
 FIO                           ^
 FIO_VP                        ^
 TabN                          ^
-подразделение                 ^
+подразделение : WideString    ^
 должность                     ^
 
 NameRaise                     ^

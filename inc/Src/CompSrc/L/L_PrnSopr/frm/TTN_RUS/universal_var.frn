@@ -10,9 +10,106 @@
   Cena_Pr0   : string;
   Wform  : word;
   bRunSign: boolean;
+  //------------------------------
   sFIO1, sPost1, sFIO2, sPost2, sFIO3, sPost3,
   sFIO4, sPost4, sFIO5, sPost5, sFIO6, sPost6 : string;
+  //------------------------------
+  NumPage :word; //
+  CountRow, CountRowSpec :longint; //всего строк, строк в спецификации
+  RowOnPage_Current : longint; // текущее кол-во строк по спецфикации
+  RowOnPage         : longint; // максимальное кол-во сток на странице
+  RowOnPage_First   : longint; // максимальное кол-во сток на 1 странице
+  RowOnPage_Next    : longint; // максимальное кол-во сток на 2 и далее страниц
+  RowOnPodpis       : word;    // кол-во строк для подписей
+  NextPage          : boolean; // признак перехода на следующую строку
+  //------------------------------
+  NeedPrintSpec     : boolean;
+  VhodNal           : word ; //1 - входит в цену
+  wStr              : string;// временная
+  //--- ERP-233
+  wGroup : word  ; // номер группировки
+  g_ArtClassCode :word ;// номер классификации для 2 и 3.
 .endvar
+.Create view vKatSoprMemTTN
+as select KatSoprMemTTN.*
+From KatSoprMemTTN
+;
+.Create view vSpSoprMemTTN
+as select SpSoprMemTTNGR.*
+From SpSoprMemTTNGR , KatMc
+where ((
+  SpSoprMemTTNGR.cMcUsl == KatMc.Nrec
+));
+.Function GetCountRow(_CountRow:longint; _s:string; _Len:word) :longint;
+begin
+  Result:=0;
+  while GroupWrap(_s, Result+1, _len)<>''
+  { Result++;
+    if Result>20 break;
+  }
+  if Result<_CountRow Result:=_CountRow;
+  end.
+.Function GetCountPage :longint;
+begin
+  //33 - 1 страница
+  //60 - 2 страница
+  //44 - чтобы подписи поместились
+  //  if (Nom - 36 > 0 , DoubleToStr(Trunc((Nom - 36)/56) + 2, '666'),'1')
+  /*
+  Result:=2;
+  CountRow:=CountRow-33;// 1 страница все равно подписи будут на второй
+  Result:=Result + (CountRow div 60);
+  if (CountRow mod 60) >30 Result++;
+  */
+  if RowOnPage_Current+RowOnPodpis>RowOnPage NumPage++;
+  Result := NumPage;
+
+ end.
+.Procedure CountRowPodpis;
+begin
+  CountRowSpec:=0;
+  // if (НомерДовер <>'' or LongInt(ДатаДовер) <> LongInt(0), 'По доверенности № ' + НомерДовер + DateToStr(ДатаДовер, 'от DD mon YYYYг.'), '')
+  if oPrnSoprFun.Check_IP(накладная_нрек, 1)
+  {  CountRowSpec := GetCountRow(0, if(sFIO1 <> '', sFIO1, Директор),40);         //Руководитель для ИП
+     if CountRowSpec=1
+       CountRowSpec := GetCountRow(0, oPrnSoprFun.Write_IP(накладная_нрек, 1),40);  //Атрибут "Реквизиты ИП"
+  }
+  else
+  {
+    CountRowSpec := GetCountRow(0,if(sFIO1 <> '', sFIO1, Директор),40);
+    if CountRowSpec=1
+      CountRowSpec := GetCountRow(0,oPrnSoprFun.GetGlBuhName(накладная_нрек, if(sFIO2 <> '', sFIO2, Главный_бухгалтер)),40 );
+  }
+  if CountRowSpec>1
+    RowOnPodpis:= RowOnPodpis + CountRowSpec-1;
+
+  CountRowSpec := GetCountRow(0,oPrnSoprFun.GetOsnovPerUPD(накладная_нрек),60);
+  if CountRowSpec>1
+    RowOnPodpis:= RowOnPodpis + CountRowSpec-1;
+
+  //Груз передал / услуги, результаты работ, права сдал
+  CountRowSpec := GetCountRow(0, if(sPost4 <> '', sPost4, отпуск_разрешил_должность),40);
+  CountRowSpec := GetCountRow(CountRowSpec, if(sFIO4  <> '', sFIO4 , отпуск_разрешил),40);
+
+  //Груз получил / услуги, результаты работ, права принял
+  CountRowSpec := GetCountRow(CountRowSpec,if(sPost6<>'',sPost6, if (НомерДовер  <> '', ДовЛицоДолжность, '')),40);
+  CountRowSpec := GetCountRow(CountRowSpec,if(sPost6<>'',sFio6 , if (НомерДовер  <> '', ДовЛицо, '')),40);
+  if CountRowSpec>1
+    RowOnPodpis:= RowOnPodpis + CountRowSpec-1;
+  CountRowSpec:=0;
+  CountRowSpec := GetCountRow(CountRowSpec,
+        if (СчФакт_НРек <> 0, oPrnSoprFun.GetOrgFullName(oPrnSoprFun.GetSchFactOrgNRec(СчФакт_НРек, 0), 8, 0, Дата), (oPrnSoprFun.GetOrgFullName(накладная_нрек, 0, 1) + oPrnSoprFun.GetOrgFullName(накладная_нрек, 0, 2)))
+      + if (СчФакт_НРек <> 0, ', ИНН/КПП: ' + oPrnSoprFun.GetSchFactOrgUNN(СчФакт_НРек, 0), (', ИНН/КПП: ' + ПоставщикУНН + ' / ' + ПоставщикКПП))
+      , 60);
+  CountRowSpec := GetCountRow(CountRowSpec,
+        if (СчФакт_НРек <> 0, oPrnSoprFun.GetOrgFullName(oPrnSoprFun.GetSchFactOrgNRec(СчФакт_НРек, 1), 8, 0, Дата), (oPrnSoprFun.GetOrgFullName(накладная_нрек, 3, 1) + oPrnSoprFun.GetOrgFullName(накладная_нрек, 3, 2)))
+      + if (СчФакт_НРек <> 0, ', ИНН/КПП: ' + oPrnSoprFun.GetSchFactOrgUNN(СчФакт_НРек, 3), (', ИНН/КПП: ' + ПолучательУНН + ' / ' + ГрузополучательКПП))
+      , 60);
+  if CountRowSpec>1
+    RowOnPodpis:= RowOnPodpis + CountRowSpec-1;
+
+
+ end.
 .begin
 
   // инициализация переменных

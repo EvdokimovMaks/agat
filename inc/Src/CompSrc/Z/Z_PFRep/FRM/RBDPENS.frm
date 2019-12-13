@@ -83,7 +83,7 @@ Pu1LikePu2 : word
 .fields
 НомТекПачки
 .endfields
-___КОНЕЦ ^ ПАЧКИ
+___END ^ ПАЧКИ
 .end
 .{ RBDOPPU CheckEnter
 .fields
@@ -112,7 +112,7 @@ if(Trim(Наименование)<>'',UpCase(Trim(Наименование)),' ')
 _PachNum
 ЧислоДок
 .endfields
-ЗГЛВ=1.5=
+ЗГЛВ=1.7=
 <ПАЧК=^=^=^=^= = =1=
 ТИПД=ПУ-1=^= = = = =>
 .{ RBNexpPersLoop CheckEnter
@@ -167,7 +167,7 @@ end.
 .fields
 _PachNum
 .endfields
-___КОНЕЦ ^ ПАЧКИ
+___END ^ ПАЧКИ
 .begin _PachNum := _PachNum + 1; end.
 .end
 .{ RBDOPPU CheckEnter
@@ -176,8 +176,9 @@ ___КОНЕЦ ^ ПАЧКИ
 .endform
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 .linkform 'PU2_LMAGNIT1' prototype is 'RBDPENS'
+.hide
 .group 'RB_PRUV'
-.nameinlist 'Форма ПУ-2(файл для магнитных носителей)'
+.nameinlist 'Форма ПУ-2 (файл для магнитных носителей)'
 .var
  Initial1, Initial2 : string[1];
  TrueType: string[1]
@@ -194,7 +195,7 @@ if(Trim(Наименование)<>'',UpCase(Trim(Наименование)),' ')
 НомерПачки
 ЧислоДок
 .endfields
-ЗГЛВ=1.5=
+ЗГЛВ=1.7=
 <ПАЧК=^=^=^=^= = =1=
 ТИПД=ПУ-2=^= = = = =>
 .fields
@@ -254,7 +255,94 @@ end.
 .fields
 НомерПачки
 .endfields
-___КОНЕЦ ^ ПАЧКИ
+___END ^ ПАЧКИ
+.end
+.{ RBDOPPU CheckEnter
+.}
+.}
+.endform
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+.linkform 'PU2_LMAGNIT1_2018' prototype is 'RBDPENS'
+.group 'RB_PRUV'
+.nameinlist 'Форма ПУ-2 (электронный формат) 01.01.2018'
+.var
+ Initial1, Initial2 : string[1];
+ TrueType: string[1]
+ Coun    : word;
+ CloseChar  : string;
+ _kv : string;
+.endvar
+.begin CloseChar := '>'; Coun := 0 end.
+.{ RBAllPachLoop CheckEnter
+.fields
+if(Trim(INN)<>'',Trim(INN),' ')
+if(Trim(РегНомер)<>'',Trim(РегНомер),' ')
+if(Trim(Наименование)<>'',UpCase(Trim(Наименование)),' ')
+НомерПачки
+ЧислоДок
+.endfields
+ЗГЛВ=1.7=
+<ПАЧК=^=^=^=^= = =1=
+ТИПД=ПУ-2=^= = = = =>
+.fields
+TrueType
+if(Trim(РегНомер)<>'',Trim(РегНомер),' ')
+КоличестоЗаписейПУ2
+if((Trim(ИсполнительТелефон)<>''),Trim(ИсполнительТелефон),' ')
+ДатаЗаполнения
+if(Trim(TrueType)<>'Р',Trim(_kv),' ')
+год
+.endfields
+.begin
+ case TypesPu2 of
+ 0: TrueType:= 'Р'
+ 1,4: TrueType:= 'И'
+ 2: TrueType:= 'К'
+ 3: TrueType:= 'О'
+ end;
+ case word(Квартал) of
+ 0: _kv:= '1'
+ 1: _kv:= '2'
+ 2: _kv:= '3'
+ 3: _kv:= '4'
+ 4: _kv:= '12'
+ 5: _kv:= '34'
+ 6: _kv:= '1234'
+ 7: _kv:= '23'
+ 8: _kv:= '123'
+ 9: _kv:= '234'
+ end;
+end.
+<ПУ-2=^=^= = =^=^=^=^=^=
+.{ RBNexpPersLoop CheckEnter
+.begin
+Coun := Coun + 1;
+end.
+.fields
+if(Trim(Фамилия)<>'',UpCase(Trim(Фамилия)),' ')
+if(Trim(Initial1)<>'',UpCase(Trim(Initial1)),' ')
+if(Trim(Initial2)<>'',UpCase(Trim(Initial2)),' ')
+
+if(Trim(СтрахНомер)<>'',UpCase(Trim(СтрахНомер)),' ')
+if((TypesPu2<>3)and((trim(ВидДоговора)<>'03')and(Day(ДатаПоступления) <> 0)),string(ДатаПоступления),' ')
+if((TypesPu2<>0)and(TypesPu2<>3)and(Day(ДатаУвольнения) <> 0)and(trim(ВидДоговора)<>'03'),string(ДатаУвольнения),' ')
+if((TypesPu2<>3)and(trim(РаботаПоСовмест)<>'')and(ДатаПоступления >= date(01,01,2018)),РаботаПоСовмест,' ')
+if((TypesPu2<>3)and(TypesPu2<>0),if(Trim(ПричинаУвольнения)<>'',Trim(ПричинаУвольнения),' '),' ')
+if(Coun <КоличестоЗаписейПУ2 , '', CloseChar)
+.endfields
+.begin
+  if Coun > КоличестоЗаписейПУ2
+    Coun:= 1;
+  Initial1 := UpCase(Trim(Имя));
+  Initial2 := UpCase(Trim(Отчество));
+end.
+ДВИЖ=^=^=^=^=^= =^=^=^=^
+.}
+.if RBDEndPach
+.fields
+НомерПачки
+.endfields
+___END ^ ПАЧКИ
 .end
 .{ RBDOPPU CheckEnter
 .}

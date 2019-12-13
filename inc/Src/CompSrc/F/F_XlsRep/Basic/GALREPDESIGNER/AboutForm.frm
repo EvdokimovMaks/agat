@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} AboutForm 
    Caption         =   "О версии"
-   ClientHeight    =   1872
-   ClientLeft      =   36
-   ClientTop       =   324
-   ClientWidth     =   8064
+   ClientHeight    =   1860
+   ClientLeft      =   30
+   ClientTop       =   330
+   ClientWidth     =   11985
    OleObjectBlob   =   "AboutForm.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -27,5 +27,3 @@ Private Sub UserForm_Activate()
     On Error GoTo 0
 End Sub
 
-Private Sub UserForm_Click()
-End Sub

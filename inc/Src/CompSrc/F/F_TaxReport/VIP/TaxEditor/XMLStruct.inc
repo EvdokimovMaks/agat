@@ -20,7 +20,7 @@ const
   lc_NullValue : string = '';
 
   // пустая дата
-  lc_dEmpty : date = Date(0, 0, 0);
+  lc_dEmpty : date = To_Date(0, 0, 0);
 
   // типы значений
   lc_ValueTypeString = 0;  // строка

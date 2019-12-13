@@ -11,6 +11,7 @@
 .Hide
 .Fields
 NRecTitleDoc : comp
+sBarCode
 
 
 Org
@@ -31,7 +32,7 @@ rukDoljnost
 rukFio
 .EndFields
 
-^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^
 .{ NformRD72aCycle CheckEnter
 
 ^ ^ ^ ^ ^ ^ ^

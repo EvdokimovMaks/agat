@@ -1,0 +1,2732 @@
+//------------------------------------------------------------------------------------------------------------
+//                                                                                    (c) корпорация Галактика
+// Галактика 9.1 - модуль "Электронная отчетность"
+// Интерфейс редактирования : "Ответ на требование о представления пояснений по НДС"
+//------------------------------------------------------------------------------------------------------------
+
+//============================================================================================================
+//#region СЕРВИСНЫЕ МЕТОДЫ
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrVal(fld:string):string;
+@begin
+  Result := XMLMap.GetAttrValueByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetDblVal(fld:string):double;
+@begin
+  Result := Double(XMLMap.GetAttrValueByName(fld));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetFldVis(fld:string):boolean;
+@begin
+  Result := XMLMap.GetAttrVisByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script SetFldVal(fld:string;val:string);
+@begin
+  XMLMap.SetAttrValueByName(fld,val,2);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script SetFldVis(fld:string;vis:boolean);
+@begin
+  XMLMap.SetAttrVisByName(fld,vis);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetCountFld(fld:string):longint;
+@begin
+  Result := XMLMap.GetNodeCountByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetIter(iter:longint):string;
+@begin
+  Result := '';
+  if (iter > 0)
+    Result := '[' + String(iter) + ']';
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script MessageErrorStop_ALG(mesMesAdrXML, mesStr, mesPole, mesMes: string; mesCountIter: integer = 0): boolean;
+@begin
+  MesError.InsertMesError(mesMesAdrXML, Comp(0), mesStr, mesPole, mesMes, mesCountIter);
+  Result := True;
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrNull(fld:string):boolean;
+@begin
+  Result := XMLMap.GetIsNullAttrValueByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+// Получить значение по умолчанию для поля "Налоговый период"
+@Script myGetDefPeriodCodeValue : string;
+  //----------------------------------------------------------------------------------------------------------
+  const
+    // типы налоговых периодов
+    lc_RepTPer_Not    = 0;  // не определен
+    lc_RepTPer_Month  = 3;  // месяц
+    lc_RepTPer_Quater = 4;  // квартал
+  end; // const
+  //----------------------------------------------------------------------------------------------------------
+  // Получить тип периода отчета
+  function myGetRepTPer : word;
+  {
+    Result := lc_RepTPer_Not;
+    var wMonthLength : word;  wMonthLength := Months_Between(TaxDat.dBeg, TaxDat.dEnd);
+    if (wMonthLength = 2)
+    or (wMonthLength = 3)
+    { // если период - Квартал
+      Result := lc_RepTPer_Quater;
+    }
+    else
+    if (wMonthLength = 0)
+    or (wMonthLength = 1)
+    { // если период - Месяц
+      Result := lc_RepTPer_Month;
+    }
+  } // function myGetRepTPer
+  //----------------------------------------------------------------------------------------------------------
+@begin
+  Result := '';
+  case myGetRepTPer() of
+    lc_RepTPer_Quater :
+    { // если период - Квартал
+      case Month(TaxDat.dEnd) of
+         1 , 2 , 3  : Result := '21';
+         4 , 5 , 6  : Result := '22';
+         7 , 8 , 9  : Result := '23';
+         10, 11, 12 : Result := '24';
+      end; // case
+    }
+    lc_RepTPer_Month :
+    { // если период - Месяц
+      case Month(TaxDat.dEnd) of
+         1 : Result := '01';
+         2 : Result := '02';
+         3 : Result := '03';
+         4 : Result := '04';
+         5 : Result := '05';
+         6 : Result := '06';
+         7 : Result := '07';
+         8 : Result := '08';
+         9 : Result := '09';
+        10 : Result := '10';
+        11 : Result := '11';
+        12 : Result := '12';
+      end; // case
+    }
+  end; // case
+@end. // myGetDefPeriodCodeValue
+//#endregion СЕРВИСНЫЕ МЕТОДЫ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ УСТАНОВКЕ ВИДИМОСТИ ПОЛЕЙ
+//============================================================================================================
+//#region СЕРВИСНЫЕ МЕТОДЫ
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать видимость заданного поля в зависимости от наличия данных
+@Script ReCalcVisFldByDataExist(
+  _cParent : comp;  // ссылка на родителя
+  _sFld  : string   // наименование поля
+);
+@begin
+  var isVis : boolean;  isVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(_cParent, _sFld) );
+  XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld, isVis);
+@end. // ReCalcVisFldByDataExist
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить видимость полей для вершин типа "Код вида операции"
+@Script RXXReCalcVisNodeCodeVidOp(
+  _cParent : comp  // ссылка на родителя
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    var i : LongInt;
+    var NodeCount : LongInt;  NodeCount := XMLMap.GetNodeCountByNameOnLevel(_cParent, 'КодВидОпер');
+    for (i := 0; i < NodeCount; i++)
+    {
+      var sNode : string ;  sNode := 'КодВидОпер'+GetIter(i);
+      var isVis : boolean;  isVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(_cParent, sNode+'/Значение') );
+
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, sNode            , isVis);
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, sNode+'/Значение', isVis);
+    } // for
+  }
+  while False;
+  Result := True;
+@end. // RXXReCalcVisNodeCodeVidOp
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить видимость полей для вершин типа "Дата принятия на учет"
+@Script RXXReCalcVisNodeDataUchTov(
+  _cParent : comp  // ссылка на родителя
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    var i : LongInt;
+    var NodeCount : LongInt;  NodeCount := XMLMap.GetNodeCountByNameOnLevel(_cParent, 'ДатаУчТов');
+    for (i := 0; i < NodeCount; i++)
+    {
+      var sNode : string ;  sNode := 'ДатаУчТов'+GetIter(i);
+      var isVis : boolean;  isVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(_cParent, sNode+'/Значение') );
+
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, sNode            , isVis);
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, sNode+'/Значение', isVis);
+    } // for
+  }
+  while False;
+  Result := True;
+@end. // RXXReCalcVisNodeDataUchTov
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить видимость полей для вершин типа "Сведения о документе, подтверждающем уплату/оплату налога"
+@Script RXXReCalcVisNodeDocOplata(
+  _cParent : comp;  // ссылка на родителя
+  _sDoc  : string;  // наименование вершины "Документ"
+  _sNum  : string;  // наименование вершины "Номер документа"
+  _sDat  : string   // наименование вершины "Дата  документа"
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    var i : LongInt;
+    var NodeCount : LongInt;  NodeCount := XMLMap.GetNodeCountByNameOnLevel(_cParent, _sDoc);
+    for (i := 0; i < NodeCount; i++)
+    {
+      var sNode : string ;  sNode := _sDoc+GetIter(i);
+      var isVis : boolean;  isVis :=
+         (not XMLMap.GetIsNullAttrValueByPathOnLevel(_cParent, sNode+'/'+_sNum) )
+      or (not XMLMap.GetIsNullAttrValueByPathOnLevel(_cParent, sNode+'/'+_sDat) );
+
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, sNode          , isVis);
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, sNode+'/'+_sNum, isVis);
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, sNode+'/'+_sDat, isVis);
+    } // for
+  }
+  while False;
+  Result := True;
+@end. // RXXReCalcVisNodeDocOplata
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов Пересчитать признак "выгружаемый" для вершин типа "Сведения о контрагенте"
+@Script RXXReCalcVisNodeContr(
+  _cParent    : comp  ;      // ссылка на родителя
+  _sFld       : string       // наименование поля
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    var sINNUL : string;  sINNUL := XMLMap.GetAttrValueByPathOnLevel(_cParent, _sFld+'/СведЮЛ/ИННЮЛ');
+    var sINNIP : string;  sINNIP := XMLMap.GetAttrValueByPathOnLevel(_cParent, _sFld+'/СведИП/ИННФЛ');
+
+    if  (sINNUL = '')
+    and (sINNIP = '')
+    { // если ничего не задано
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld                , False);
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld+'/СведЮЛ'      , False);
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld+'/СведЮЛ/ИННЮЛ', False);
+
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld+'/СведИП'      , False);
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld+'/СведИП/ИННФЛ', False);
+    } // если ничего не задано
+    else
+    { // если это общий случай
+      var isULVis : boolean;  isULVis := (sINNUL != '');
+      var isIPVis : boolean;  isIPVis := (sINNIP != '');
+
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld                , (isULVis or isIPVis) );
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld+'/СведЮЛ'      , isULVis);
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld+'/СведЮЛ/ИННЮЛ', isULVis);
+
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld+'/СведИП'      , isIPVis);
+      XMLMap.SetAttrVisByPathOnLevel(_cParent, _sFld+'/СведИП/ИННФЛ', isIPVis);
+    } // если это общий случай
+  }
+  while False;
+  Result := True;
+@end. // RXXReCalcVisNodeContr
+//#endregion СЕРВИСНЫЕ МЕТОДЫ
+//************************************************************************************************************
+
+//============================================================================================================
+//#region ВИДИМОСТЬ ПОЛЕЙ ОСНОВНЫХ РАЗДЕЛОВ
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для основных разделов
+@Script ReCalcVisFldRBR : boolean;
+@begin
+  Result := False;
+  Result := True;
+@end.
+//#endregion ВИДИМОСТЬ ПОЛЕЙ ОСНОВНЫХ РАЗДЕЛОВ
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 8
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для строки "РАЗДЕЛА 8"
+@Script ReCalcVisFldR08Str(
+  _cStrNode : comp   // ссылка на вершину строки
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    ReCalcVisFldByDataExist(_cStrNode, 'НомСчФПрод'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрСчФ'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомКСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаКСчФПрод');
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрКСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрКСчФ');
+    ReCalcVisFldByDataExist(_cStrNode, 'НомТД'       );
+    ReCalcVisFldByDataExist(_cStrNode, 'ОКВ'         );
+
+    ReCalcVisFldByDataExist(_cStrNode, 'СтоимПокупВ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'СумНДСВыч'   );
+
+    // Код вида операции
+    RXXReCalcVisNodeCodeVidOp(_cStrNode);
+
+    // Дата принятия на учет товаров (работ, услуг), имущественных прав
+    RXXReCalcVisNodeDataUchTov(_cStrNode);
+
+    // Сведения о продавце
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПрод');
+
+    // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПос');
+
+    // Сведения о документе, подтверждающем уплату налога
+    RXXReCalcVisNodeDocOplata(_cStrNode, 'ДокПдтвУпл', 'НомДокПдтвУпл', 'ДатаДокПдтвУпл');
+  }
+  while False;
+  Result := True;
+@end. // ReCalcVisFldR08Str
+
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для всего "РАЗДЕЛА 08"
+@Script ReCalcVisFldR08 : boolean;
+@begin
+  Result := False;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Установка видимости полей: "Раздел 8"...', 0);
+  do
+  {
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+    var isRazdelVis : boolean;  isRazdelVis := False;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд8/КнПокСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR08Str(cStrNode);
+
+      //------------------------------------------------------------------------------------------------------
+      // установим видимость строки
+      var isStrVis : boolean;  isStrVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(cStrNode, 'НомерПор') );
+      XMLMap.SetAttrVisByName(sAddr+GetIter(StrNpp), isStrVis);
+
+      if (not isRazdelVis)
+        isRazdelVis := isStrVis;
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд8/КнПокСтрПоясн';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR08Str(cStrNode);
+    } // побежали по строкам
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // установим видимость раздела в целом
+    XMLMap.SetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд8', isRazdelVis);
+
+  }
+  while False;
+  StopVisual('', 0);
+  Result := True;
+@end. // ReCalcVisFldR08
+//#endregion РАЗДЕЛ 8
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 8 ПРИЛОЖЕНИЕ 1
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для строки "РАЗДЕЛ 8 ПРИЛОЖЕНИЕ 1"
+@Script ReCalcVisFldR8DStr(
+  _cStrNode : comp   // ссылка на вершину строки
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    ReCalcVisFldByDataExist(_cStrNode, 'НомСчФПрод'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрСчФ'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомКСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаКСчФПрод');
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрКСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрКСчФ');
+    ReCalcVisFldByDataExist(_cStrNode, 'НомТД'       );
+    ReCalcVisFldByDataExist(_cStrNode, 'ОКВ'         );
+
+    ReCalcVisFldByDataExist(_cStrNode, 'СтоимПокупВ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'СумНДСВыч'   );
+
+    // Код вида операции
+    RXXReCalcVisNodeCodeVidOp(_cStrNode);
+
+    // Дата принятия на учет товаров (работ, услуг), имущественных прав
+    RXXReCalcVisNodeDataUchTov(_cStrNode);
+
+    // Сведения о продавце
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПрод');
+
+    // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПос');
+
+    // Сведения о документе, подтверждающем уплату налога
+    RXXReCalcVisNodeDocOplata(_cStrNode, 'ДокПдтвУпл', 'НомДокПдтвУпл', 'ДатаДокПдтвУпл');
+  }
+  while False;
+  Result := True;
+@end. // ReCalcVisFldR8DStr
+
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для всего "РАЗДЕЛ 8 ПРИЛОЖЕНИЕ 1"
+@Script ReCalcVisFldR8D : boolean;
+@begin
+  Result := False;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Установка видимости полей: "Раздел 8 Приложение 1"...', 0);
+  do
+  {
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+    var isRazdelVis : boolean;  isRazdelVis := False;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд8.1/КнПокДЛСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR8DStr(cStrNode);
+
+      //------------------------------------------------------------------------------------------------------
+      // установим видимость строки
+      var isStrVis : boolean;  isStrVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(cStrNode, 'НомерПор') );
+      XMLMap.SetAttrVisByName(sAddr+GetIter(StrNpp), isStrVis);
+
+      if (not isRazdelVis)
+        isRazdelVis := isStrVis;
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд8.1/КнПокДЛСтрПоясн';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR8DStr(cStrNode);
+    } // побежали по строкам
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // установим видимость раздела в целом
+    XMLMap.SetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд8.1', isRazdelVis);
+
+  }
+  while False;
+  StopVisual('', 0);
+  Result := True;
+@end. // ReCalcVisFldR8D
+//#endregion РАЗДЕЛ 8 ПРИЛОЖЕНИЕ 1
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 9
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для строки "РАЗДЕЛА 9"
+@Script ReCalcVisFldR09Str(
+  _cStrNode : comp   // ссылка на вершину строки
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    ReCalcVisFldByDataExist(_cStrNode, 'НомСчФПрод'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрСчФ'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомКСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаКСчФПрод');
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрКСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрКСчФ');
+    ReCalcVisFldByDataExist(_cStrNode, 'ОКВ'         );
+
+    ReCalcVisFldByDataExist(_cStrNode, 'СтоимПродСФВ');
+
+    // Код вида операции
+    RXXReCalcVisNodeCodeVidOp(_cStrNode);
+
+    // Сведения о покупателе
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПокуп');
+
+    // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПос');
+
+    // Сведения о документе, подтверждающем уплату налога
+    RXXReCalcVisNodeDocOplata(_cStrNode, 'ДокПдтвОпл', 'НомДокПдтвОпл', 'ДатаДокПдтвОпл');
+  }
+  while False;
+  Result := True;
+@end. // ReCalcVisFldR09Str
+
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для всего "РАЗДЕЛА 09"
+@Script ReCalcVisFldR09 : boolean;
+@begin
+  Result := False;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Установка видимости полей: "Раздел 9"...', 0);
+  do
+  {
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+    var isRazdelVis : boolean;  isRazdelVis := False;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд9/КнПродСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR09Str(cStrNode);
+
+      //------------------------------------------------------------------------------------------------------
+      // установим видимость строки
+      var isStrVis : boolean;  isStrVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(cStrNode, 'НомерПор') );
+      XMLMap.SetAttrVisByName(sAddr+GetIter(StrNpp), isStrVis);
+
+      if (not isRazdelVis)
+        isRazdelVis := isStrVis;
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд9/КнПродСтрПоясн';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR09Str(cStrNode);
+    } // побежали по строкам
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // установим видимость раздела в целом
+    XMLMap.SetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд9', isRazdelVis);
+
+  }
+  while False;
+  StopVisual('', 0);
+  Result := True;
+@end. // ReCalcVisFldR09
+//#endregion РАЗДЕЛ 9
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 9 ПРИЛОЖЕНИЕ 1
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для строки "ПРИЛОЖЕНИЯ 1 К РАЗДЕЛУ 9"
+@Script ReCalcVisFldR9DStr(
+  _cStrNode : comp   // ссылка на вершину строки
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    ReCalcVisFldByDataExist(_cStrNode, 'НомСчФПрод'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрСчФ'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомКСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаКСчФПрод');
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрКСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрКСчФ');
+    ReCalcVisFldByDataExist(_cStrNode, 'ОКВ'         );
+
+    ReCalcVisFldByDataExist(_cStrNode, 'СтоимПродСФВ' );
+
+    // Код вида операции
+    RXXReCalcVisNodeCodeVidOp(_cStrNode);
+
+    // Сведения о покупателе
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПокуп');
+
+    // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПос');
+
+    // Сведения о документе, подтверждающем уплату налога
+    RXXReCalcVisNodeDocOplata(_cStrNode, 'ДокПдтвОпл', 'НомДокПдтвОпл', 'ДатаДокПдтвОпл');
+  }
+  while False;
+  Result := True;
+@end. // ReCalcVisFldR9DStr
+
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для всего "ПРИЛОЖЕНИЯ 1 К РАЗДЕЛУ 9"
+@Script ReCalcVisFldR9D : boolean;
+@begin
+  Result := False;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Установка видимости полей: "Раздел 9 Приложение 1"...', 0);
+  do
+  {
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+    var isRazdelVis : boolean;  isRazdelVis := False;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд9.1/КнПродДЛСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR9DStr(cStrNode);
+
+      //------------------------------------------------------------------------------------------------------
+      // установим видимость строки
+      var isStrVis : boolean;  isStrVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(cStrNode, 'НомерПор') );
+      XMLMap.SetAttrVisByName(sAddr+GetIter(StrNpp), isStrVis);
+
+      if (not isRazdelVis)
+        isRazdelVis := isStrVis;
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд9.1/КнПродДЛСтрПоясн';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR9DStr(cStrNode);
+    } // побежали по строкам
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // установим видимость раздела в целом
+    XMLMap.SetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд9.1', isRazdelVis);
+
+  }
+  while False;
+  StopVisual('', 0);
+  Result := True;
+@end. // ReCalcVisFldR9D
+//#endregion РАЗДЕЛ 9 ПРИЛОЖЕНИЕ 1
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 10
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для строки "РАЗДЕЛА 10"
+@Script ReCalcVisFldR10Str(
+  _cStrNode : comp   // ссылка на вершину строки
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    ReCalcVisFldByDataExist(_cStrNode, 'НомСчФПрод'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрСчФ'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомКСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаКСчФПрод');
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрКСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрКСчФ');
+
+    // Код вида операции
+    RXXReCalcVisNodeCodeVidOp(_cStrNode);
+
+    // Сведения о покупателе
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПокуп');
+
+    var MedNpp   : LongInt;
+    var MedCount : LongInt;  MedCount := XMLMap.GetNodeCountByNameOnLevel(_cStrNode, 'СвПосрДеят');
+    for (MedNpp:= 0; MedNpp < MedCount; MedNpp++)
+    { // побежали по сведениям о посреднической деятельности
+      var cMedNode : comp;  cMedNode := XMLMap.GetPositionByPathOnLevel(_cStrNode, 'СвПосрДеят'+GetIter(MedNpp), True);
+
+      ReCalcVisFldByDataExist(cMedNode, 'НомСчФОтПрод' );
+      ReCalcVisFldByDataExist(cMedNode, 'ДатаСчФОтПрод');
+
+      ReCalcVisFldByDataExist(cMedNode, 'ОКВ'          );
+      ReCalcVisFldByDataExist(cMedNode, 'СтоимТовСчФВс');
+
+      // Сведения о продавце
+      RXXReCalcVisNodeContr  (cMedNode, 'СвПрод');
+
+      var isSubRazVis : boolean;  isSubRazVis := False;
+      if (not isSubRazVis)
+      {
+        if (not XMLMap.GetIsNullAttrValueByPathOnLevel(cMedNode, 'НомСчФОтПрод' ) )
+        or (not XMLMap.GetIsNullAttrValueByPathOnLevel(cMedNode, 'ДатаСчФОтПрод') )
+          isSubRazVis := True;
+      }
+      XMLMap.SetAttrVisByPathOnLevel(_cStrNode, 'СвПосрДеят'+GetIter(MedNpp), isSubRazVis);
+
+    } // побежали по сведениям о посреднической деятельности
+
+  }
+  while False;
+  Result := True;
+@end. // ReCalcVisFldR10Str
+
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для всего "РАЗДЕЛА 10"
+@Script ReCalcVisFldR10 : boolean;
+@begin
+  Result := False;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Установка видимости полей: "Раздел 10"...', 0);
+  do
+  {
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+    var isRazdelVis : boolean;  isRazdelVis := False;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд10/ЖУчВыстСчФСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR10Str(cStrNode);
+
+      //------------------------------------------------------------------------------------------------------
+      // установим видимость строки
+      var isStrVis : boolean;  isStrVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(cStrNode, 'НомерПор') );
+      XMLMap.SetAttrVisByName(sAddr+GetIter(StrNpp), isStrVis);
+
+      if (not isRazdelVis)
+        isRazdelVis := isStrVis;
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд10/ЖУчВыстСчФСтрПоясн';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR10Str(cStrNode);
+    } // побежали по строкам
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // установим видимость раздела в целом
+    XMLMap.SetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд10', isRazdelVis);
+
+  }
+  while False;
+  StopVisual('', 0);
+  Result := True;
+@end. // ReCalcVisFldR10
+//#endregion РАЗДЕЛ 10
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 11
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для строки "РАЗДЕЛА 11"
+@Script ReCalcVisFldR11Str(
+  _cStrNode : comp   // ссылка на вершину строки
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    ReCalcVisFldByDataExist(_cStrNode, 'НомСчФПрод'   );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаСчФПрод'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрСчФ'   );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрСчФ'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомКСчФПрод'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаКСчФПрод' );
+    ReCalcVisFldByDataExist(_cStrNode, 'НомИспрКСчФ'  );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаИспрКСчФ' );
+
+    ReCalcVisFldByDataExist(_cStrNode, 'КодВидСд'     );
+    ReCalcVisFldByDataExist(_cStrNode, 'ОКВ'          );
+    ReCalcVisFldByDataExist(_cStrNode, 'СтоимТовСчФВс');
+
+    // Код вида операции
+    RXXReCalcVisNodeCodeVidOp(_cStrNode);
+
+    // Сведения о продавце
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПрод');
+
+    // Сведения о субкомиссинере (субагенте)
+    RXXReCalcVisNodeContr(_cStrNode, 'СвКомис');
+  }
+  while False;
+  Result := True;
+@end. // ReCalcVisFldR11Str
+
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для всего "РАЗДЕЛА 11"
+@Script ReCalcVisFldR11 : boolean;
+@begin
+  Result := False;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Установка видимости полей: "Раздел 11"...', 0);
+  do
+  {
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+    var isRazdelVis : boolean;  isRazdelVis := False;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд11/ЖУчПолучСчФСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR11Str(cStrNode);
+
+      //------------------------------------------------------------------------------------------------------
+      // установим видимость строки
+      var isStrVis : boolean;  isStrVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(cStrNode, 'НомерПор') );
+      XMLMap.SetAttrVisByName(sAddr+GetIter(StrNpp), isStrVis);
+
+      if (not isRazdelVis)
+        isRazdelVis := isStrVis;
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд11/ЖУчПолучСчФСтрПоясн';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR11Str(cStrNode);
+    } // побежали по строкам
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // установим видимость раздела в целом
+    XMLMap.SetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд11', isRazdelVis);
+
+  }
+  while False;
+  StopVisual('', 0);
+  Result := True;
+@end. // ReCalcVisFldR11
+//#endregion РАЗДЕЛ 11
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 12
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для строки "РАЗДЕЛА 11"
+@Script ReCalcVisFldR12Str(
+  _cStrNode : comp   // ссылка на вершину строки
+) : boolean;
+@begin
+  Result := False;
+  do
+  {
+    ReCalcVisFldByDataExist(_cStrNode, 'НомСчФ' );
+    ReCalcVisFldByDataExist(_cStrNode, 'ДатаСчФ');
+    ReCalcVisFldByDataExist(_cStrNode, 'ОКВ'    );
+
+    ReCalcVisFldByDataExist(_cStrNode, 'СтоимТовБНалВс');
+    ReCalcVisFldByDataExist(_cStrNode, 'СтоимТовСНалВс');
+
+    // Сведения о покупателе
+    RXXReCalcVisNodeContr(_cStrNode, 'СвПокуп');
+  }
+  while False;
+  Result := True;
+@end. // ReCalcVisFldR12Str
+
+//------------------------------------------------------------------------------------------------------------
+// Пересчитать признак полей "выгружаемый" для всего "РАЗДЕЛА 12"
+@Script ReCalcVisFldR12 : boolean;
+@begin
+  Result := False;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Установка видимости полей: "Раздел 12"...', 0);
+  do
+  {
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+    var isRazdelVis : boolean;  isRazdelVis := False;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд12/ВыстСчФ_173.5';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR12Str(cStrNode);
+
+      //------------------------------------------------------------------------------------------------------
+      // установим видимость строки
+      var isStrVis : boolean;
+      isStrVis := (not XMLMap.GetIsNullAttrValueByPathOnLevel(cStrNode, 'НомСчФ' ) )
+               or (not XMLMap.GetIsNullAttrValueByPathOnLevel(cStrNode, 'ДатаСчФ') );
+      XMLMap.SetAttrVisByName(sAddr+GetIter(StrNpp), isStrVis);
+
+      if (not isRazdelVis)
+        isRazdelVis := isStrVis;
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд12/ВыстСчФ_173.5Поясн';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var cStrNode : comp;  cStrNode := XMLMap.GetPositionByName(sAddr+GetIter(StrNpp), True);
+      ReCalcVisFldR12Str(cStrNode);
+    } // побежали по строкам
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // установим видимость раздела в целом
+    XMLMap.SetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд12', isRazdelVis);
+
+  }
+  while False;
+  StopVisual('', 0);
+  Result := True;
+@end. // ReCalcVisFldR12
+//#endregion РАЗДЕЛ 12
+//************************************************************************************************************
+
+//------------------------------------------------------------------------------------------------------------
+// Установить видимость полей всей декларации
+@Script On_Visable : boolean;
+@begin
+  Result := False;
+  ReCalcVisFldRBR;
+  ReCalcVisFldR08;
+  ReCalcVisFldR8D;
+  ReCalcVisFldR09;
+  ReCalcVisFldR9D;
+  ReCalcVisFldR10;
+  ReCalcVisFldR11;
+  ReCalcVisFldR12;
+  Result := True;
+@end.
+//#endregion ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ УСТАНОВКЕ ВИДИМОСТИ ПОЛЕЙ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ
+//============================================================================================================
+//#region СЕРВИСНЫЕ МЕТОДЫ
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить "Порядковый номер"
+@Script RXXCheckNodeNpp(
+  _cParent    : comp  ;  // ссылка на родителя
+  _sPath      : string;  // путь на запись
+  _sPage      : string   // наименование раздела
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    if (XMLMap.GetPositionByPathOnLevel(_cParent, _sPath) = 0)
+    { Break; }
+    if (not XMLMap.GetAttrVisByPathOnLevel(_cParent, _sPath) )
+    { Break; }
+    var sNpp : string;  sNpp := XMLMap.GetAttrValueByPathOnLevel(_cParent, _sPath);
+    var wNpp : word  ;  wNpp := word(sNpp);
+    if (sNpp = '')
+    { // если не задано поле "Порядковый номер"
+      MessageErrorStop_ALG(
+        XMLMap.GetFullNodeName(_cParent)+'/'+_sPath
+      , _sPage
+      , 'Порядковый номер'
+      , 'Не задано поле "Порядковый номер"'
+      );
+      isAllOk := False;
+      Break;
+    } // если не задано поле "Порядковый номер"
+    if (wNpp = 0)
+    { // если не корректное значение поля
+      MessageErrorStop_ALG(
+        XMLMap.GetFullNodeName(_cParent)+'/'+_sPath
+      , _sPage
+      , 'Порядковый номер'
+      , 'Поле "Порядковый номер", может принимать значения от 1 и более'
+      );
+      isAllOk := False;
+    } // если не корректное значение поля
+  }
+  while False;
+  Result := isAllOk;
+@end. // RXXCheckNodeNpp
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить "Код вида операции"
+@Script RXXCheckNodeCodeVidOp(
+    _cParent    : comp  ;  // ссылка на родителя
+    _sPath      : string;  // путь на запись
+    _sPage      : string;  // наименование раздела
+var _sCodeVidOp : string;  // строковое значение
+var _wCodeVidOp : word     // числовое значение
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    if (not XMLMap.GetAttrVisByPathOnLevel(_cParent, _sPath) )
+    { Break; }
+    _sCodeVidOp := XMLMap.GetAttrValueByPathOnLevel(_cParent, _sPath);
+    _wCodeVidOp := word(_sCodeVidOp);
+    if (_sCodeVidOp = '')
+    { // если не задано поле "Код вида операции"
+      MessageErrorStop_ALG(
+        XMLMap.GetFullNodeName(_cParent)+'/'+_sPath
+      , _sPage
+      , 'Код вида операции'
+      , 'Не задано поле "Код вида операции"'
+      );
+      isAllOk := False;
+    } // если не задано поле "Код вида операции"
+    if (Length(_sCodeVidOp) != 2)
+    { // если не корректная длина поля
+      MessageErrorStop_ALG(
+        XMLMap.GetFullNodeName(_cParent)+'/'+_sPath
+      , _sPage
+      , 'Код вида операции'
+      , 'Длина поля "Код вида операции" должна быть равна 2-м'
+      );
+      isAllOk := False;
+    } // если не корректная длина поля
+  }
+  while False;
+  Result := isAllOk;
+@end. // RXXCheckNodeCodeVidOp
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить "Сведения о контрагенте"
+@Script RXXCheckNodeContr(
+  _cParent    : comp  ;  // ссылка на родителя
+  _sPath      : string;  // путь на запись
+  _sPage      : string   // наименование раздела
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    if (not XMLMap.GetAttrVisByPathOnLevel(_cParent, _sPath) )
+    { Break; }
+
+    var isULVis : boolean;  isULVis := XMLMap.GetAttrVisByPathOnLevel(_cParent, _sPath+'/СведЮЛ');
+    var isIPVis : boolean;  isIPVis := XMLMap.GetAttrVisByPathOnLevel(_cParent, _sPath+'/СведИП');
+    if (isULVis and isIPVis)
+    {
+      MessageErrorStop_ALG(
+        XMLMap.GetFullNodeName(_cParent)+'/'+_sPath
+      , _sPage
+      , 'Сведения об организации'
+      , 'Одновременно указаны сведения о юридическом лице и индивидуальном предпринимателе'
+      );
+      isAllOk := False;
+      Break;
+    }
+    //--------------------------------------------------------------------------------------------------------
+    #undef   mCheckContrINN
+    #declare mCheckContrINN(_Type,_sAddAddr,_Len,_sFld)
+    if (is#(_Type)Vis)
+    {
+      var sINN : string;  sINN := XMLMap.GetAttrValueByPathOnLevel(_cParent, _sPath+#(_sAddAddr) );
+
+      if (Length(sINN) != #(_Len) )
+      {
+        MessageErrorStop_ALG(
+          XMLMap.GetFullNodeName(_cParent)+'/'+_sPath+#(_sAddAddr)
+        , _sPage
+        , #(_sFld)
+        , 'Длина ИНН должна быть=#(_Len)'
+        );
+      }
+
+      var sMes : string;  sMes := '';
+      if (not CheckError.CheckOrgINN(sINN, 0, sMes) )
+      {
+        MessageErrorStop_ALG(
+          XMLMap.GetFullNodeName(_cParent)+'/'+_sPath+#(_sAddAddr)
+        , _sPage
+        , #(_sFld)
+        , sMes
+        );
+      }
+    }
+    #end   //mCheckContrINN
+    //--------------------------------------------------------------------------------------------------------
+    #mCheckContrINN(UL,'/СведЮЛ/ИННЮЛ',10,'ИНН организации')
+    #mCheckContrINN(IP,'/СведИП/ИННФЛ',12,'ИНН физического лица')
+    //--------------------------------------------------------------------------------------------------------
+  }
+  while False;
+  Result := isAllOk;
+@end. // RXXCheckNodeContr
+//#endregion СЕРВИСНЫЕ МЕТОДЫ
+//************************************************************************************************************
+
+//============================================================================================================
+//#region СЕРВИСНЫЕ МЕТОДЫ ПРОВЕРКИ УНИКАЛЬНОСТИ ПОЯСНЕНИЯ
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить уникальность поля "пояснения" по заданным путям
+@Script RXXCheckUniqDescriptionByPath(
+  _sTrebValueAddr : string;      // адрес поля "требования"
+  _sPoysValueAddr : string;      // адрес поля "пояснения"
+  _sFieldNote     : string = ''  // описание поля
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    var sTrebValue : string;  sTrebValue := XMLMap.GetAttrValueByName(_sTrebValueAddr);
+    var sPoysValue : string;  sPoysValue := XMLMap.GetAttrValueByName(_sPoysValueAddr);
+    if  (sTrebValue = '')
+    and (sPoysValue = '')
+    { Break; }
+    if  (sPoysValue = '')
+    { Break; }
+
+    if (sTrebValue = sPoysValue)
+    { // если значения одинаковые
+      MessageErrorStop_ALG(
+        _sPoysValueAddr
+      , ''
+      , _sFieldNote
+      , 'В "Пояснении" заполняются только значения, которые не соответствуют ранее представленным'
+      );
+      isAllOk := False;
+      Break;
+    } // если значения одинаковые
+  }
+  while False;
+  Result := isAllOk;
+@end. // RXXCheckUniqDescriptionByPath
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить уникальность поля "пояснения"
+@Script RXXCheckUniqDescriptionFld(
+  _sStrAddr   : string;   // адрес строки
+  _StrInd     : LongInt;  // индекс строки
+  _sField     : string    // наименование поля
+) : boolean;
+@begin
+  var sTrebValueAddr : string;  sTrebValueAddr := _sStrAddr+GetIter(_StrInd)+'/'+_sField;
+  var sPoysValueAddr : string;  sPoysValueAddr := _sStrAddr+'Поясн'+GetIter(_StrInd)+'/'+_sField;
+
+  Result := RXXCheckUniqDescriptionByPath(sTrebValueAddr, sPoysValueAddr);
+@end. // RXXCheckUniqDescriptionFld
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить уникальность поля "пояснения" для "Код вида операции"
+@Script RXXCheckUniqDescriptionCodeVidOp(
+  _sStrAddr   : string;   // адрес строки
+  _StrInd     : LongInt   // индекс строки
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    var sTrebAddr : string;  sTrebAddr := _sStrAddr        +GetIter(_StrInd)+'/'+'КодВидОпер';
+    var sPoysAddr : string;  sPoysAddr := _sStrAddr+'Поясн'+GetIter(_StrInd)+'/'+'КодВидОпер';
+
+    var i : LongInt;
+    var NodeCount : LongInt;  NodeCount := XMLMap.GetNodeCountByName(sTrebAddr);
+    for (i := 0; i < NodeCount; i++)
+    {
+      var sTrebValueAddr : string;  sTrebValueAddr := sTrebAddr+GetIter(i)+'/Значение';
+      var sPoysValueAddr : string;  sPoysValueAddr := sPoysAddr+GetIter(i)+'/Значение';
+
+      if (not RXXCheckUniqDescriptionByPath(sTrebValueAddr, sPoysValueAddr, 'Код вида операции') )
+      { isAllOk := False; }
+    } // for
+  }
+  while False;
+  Result := isAllOk;
+@end. // RXXCheckUniqDescriptionCodeVidOp
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить уникальность поля "пояснения" для "Дата принятия на учет"
+@Script RXXCheckUniqDescriptionDataUchTov(
+  _sStrAddr   : string;   // адрес строки
+  _StrInd     : LongInt   // индекс строки
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    var sTrebAddr : string;  sTrebAddr := _sStrAddr        +GetIter(_StrInd)+'/'+'ДатаУчТов';
+    var sPoysAddr : string;  sPoysAddr := _sStrAddr+'Поясн'+GetIter(_StrInd)+'/'+'ДатаУчТов';
+
+    var i : LongInt;
+    var NodeCount : LongInt;  NodeCount := XMLMap.GetNodeCountByName(sTrebAddr);
+    for (i := 0; i < NodeCount; i++)
+    {
+      var sTrebValueAddr : string;  sTrebValueAddr := sTrebAddr+GetIter(i)+'/Значение';
+      var sPoysValueAddr : string;  sPoysValueAddr := sPoysAddr+GetIter(i)+'/Значение';
+
+      if (not RXXCheckUniqDescriptionByPath(sTrebValueAddr, sPoysValueAddr, 'Дата принятия на учет') )
+      { isAllOk := False; }
+    } // for
+  }
+  while False;
+  Result := isAllOk;
+@end. // RXXCheckUniqDescriptionDataUchTov
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить уникальность поля "пояснения" для "Сведения о контрагенте"
+@Script RXXCheckUniqDescriptionNodeContr(
+  _sStrAddr   : string;   // адрес строки
+  _StrInd     : LongInt;  // индекс строки
+  _sField     : string    // наименование поля
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    var sTrebAddr : string;  sTrebAddr := _sStrAddr        +GetIter(_StrInd)+'/'+_sField;
+    var sPoysAddr : string;  sPoysAddr := _sStrAddr+'Поясн'+GetIter(_StrInd)+'/'+_sField;
+
+    if (not RXXCheckUniqDescriptionByPath(sTrebAddr+'/СведЮЛ/ИННЮЛ', sPoysAddr+'/СведЮЛ/ИННЮЛ') )
+    { isAllOk := False; }
+    if (not RXXCheckUniqDescriptionByPath(sTrebAddr+'/СведИП/ИННФЛ', sPoysAddr+'/СведИП/ИННФЛ') )
+    { isAllOk := False; }
+  }
+  while False;
+  Result := isAllOk;
+@end. // RXXCheckUniqDescriptionNodeContr
+
+//------------------------------------------------------------------------------------------------------------
+// Для доп разделов проверить уникальность поля "пояснения" для "Сведения о документе, подтверждающем уплату/оплату налога"
+@Script RXXCheckUniqDescriptionDocOplata(
+  _sStrAddr   : string;   // адрес строки
+  _StrInd     : LongInt;  // индекс строки
+  _sDoc       : string;  // наименование вершины "Документ"
+  _sNum       : string;  // наименование вершины "Номер документа"
+  _sDat       : string   // наименование вершины "Дата  документа"
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    var sTrebAddr : string;  sTrebAddr := _sStrAddr        +GetIter(_StrInd)+'/'+_sDoc;
+    var sPoysAddr : string;  sPoysAddr := _sStrAddr+'Поясн'+GetIter(_StrInd)+'/'+_sDoc;
+
+    var i : LongInt;
+    var NodeCount : LongInt;  NodeCount := XMLMap.GetNodeCountByName(sTrebAddr);
+    for (i := 0; i < NodeCount; i++)
+    {
+      var sTrebValueAddr : string;  sTrebValueAddr := sTrebAddr+GetIter(i);
+      var sPoysValueAddr : string;  sPoysValueAddr := sPoysAddr+GetIter(i);
+
+      var sTrebValue : string;  sTrebValue := '';
+      var sPoysValue : string;  sPoysValue := '';
+      sTrebValue += XMLMap.GetAttrValueByName(sTrebValueAddr+'/'+_sNum);
+      sPoysValue += XMLMap.GetAttrValueByName(sPoysValueAddr+'/'+_sNum);
+
+      sTrebValue += XMLMap.GetAttrValueByName(sTrebValueAddr+'/'+_sDat);
+      sPoysValue += XMLMap.GetAttrValueByName(sPoysValueAddr+'/'+_sDat);
+
+      if  (sTrebValue = '')
+      and (sPoysValue = '')
+      { Continue; }
+      if  (sPoysValue = '')
+      { Continue; }
+
+      if (sTrebValue = sPoysValue)
+      { // если значения одинаковые
+        MessageErrorStop_ALG(
+          sPoysValueAddr
+        , ''
+        , ''
+        , 'В "Пояснении" заполняются только значения, которые не соответствуют ранее представленным'
+        );
+        isAllOk := False;
+      } // если значения одинаковые
+    } // for
+  }
+  while False;
+  Result := isAllOk;
+@end. // RXXCheckUniqDescriptionDocOplata
+//#endregion СЕРВИСНЫЕ МЕТОДЫ ПРОВЕРКИ УНИКАЛЬНОСТИ ПОЯСНЕНИЯ
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 8
+//------------------------------------------------------------------------------------------------------------
+// Проверить уникальность "пояснений" для "РАЗДЕЛА 8"
+@Script CheckUniqDescriptionR08 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка уникальности пояснений: "Раздел 8"...', 0);
+  do
+  {
+    var sAddr    : string;   sAddr    := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд8/КнПокСтр';
+    var StrNpp   : LongInt;  StrNpp   :=  0;
+    var StrCount : LongInt;  StrCount :=  XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (XMLMap.GetStringAttrValueByName(sStrAddr+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомСчФПрод'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрСчФ'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомКСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаКСчФПрод');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрКСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрКСчФ');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомТД'       );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ОКВ'         );
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СтоимПокупВ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СумНДСВыч'   );
+
+      // Код вида операции
+      RXXCheckUniqDescriptionCodeVidOp(sAddr, StrNpp);
+
+      // Дата принятия на учет товаров (работ, услуг), имущественных прав
+      RXXCheckUniqDescriptionDataUchTov(sAddr, StrNpp);
+
+      // Сведения о продавце
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПрод');
+
+      // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПос');
+
+      // Сведения о документе, подтверждающем уплату налога
+      RXXCheckUniqDescriptionDocOplata(sAddr, StrNpp, 'ДокПдтвУпл', 'НомДокПдтвУпл', 'ДатаДокПдтвУпл');
+
+    } // побежали по строкам
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckDescriptionR08
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для строки "РАЗДЕЛА 8"
+@Script CheckFldR08Str(
+  _cStrNode : comp;    // ссылка на вершину строки
+  _sPageID  : string   // идентификатор страницы
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Порядковый номер"
+    if (not RXXCheckNodeNpp(_cStrNode, 'НомерПор', _sPageID) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Код вида операции"
+    var sCodeVidOp : string;  sCodeVidOp := '';
+    var wCodeVidOp : word  ;  wCodeVidOp := 0;
+    if (not RXXCheckNodeCodeVidOp(_cStrNode, 'КодВидОпер/Значение', _sPageID, sCodeVidOp, wCodeVidOp) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // проверка ИНН
+    if (wCodeVidOp != 19) and (wCodeVidOp != 20)
+    {
+      // Сведения о продавце
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПрод', _sPageID) )
+      { isAllOk := False; }
+      // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПос', _sPageID) )
+      { isAllOk := False; }
+    }
+  }
+  while False;
+  Result := isAllOk;
+@end. // CheckFldR08Str
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для всего "РАЗДЕЛА 08"
+@Script CheckFldR08 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка полей: "Раздел 8"...', 0);
+  do
+  {
+    if (not XMLMap.GetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд8') )
+    { Break; }
+
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд8/КнПокСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (not XMLMap.GetAttrVisByName(sStrAddr) )
+      { Continue; }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR08_0', StrNpp+1);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR08Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    StrCount := XMLMap.GetNodeCountByName(sAddr+'Поясн');
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      if (XMLMap.GetStringAttrValueByName(sAddr+GetIter(StrNpp)+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR08_0', StrNpp+1);
+      var sStrAddr : string;  sStrAddr := sAddr+'Поясн'+GetIter(StrNpp);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR08Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+
+    // проверим уникальность "пояснений"
+    if (not CheckUniqDescriptionR08)
+    { isAllOk := False; }
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckFldR08
+//#endregion РАЗДЕЛ 8
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 8 ПРИЛОЖЕНИЕ 1
+//------------------------------------------------------------------------------------------------------------
+// Проверить уникальность "пояснений" для "РАЗДЕЛ 8 ПРИЛОЖЕНИЕ 1"
+@Script CheckUniqDescriptionR8D : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка уникальности пояснений: "Раздел 8 Приложение 1"...', 0);
+  do
+  {
+    var sAddr    : string;   sAddr    := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд8.1/КнПокДЛСтр';
+    var StrNpp   : LongInt;  StrNpp   :=  0;
+    var StrCount : LongInt;  StrCount :=  XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (XMLMap.GetStringAttrValueByName(sStrAddr+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомСчФПрод'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрСчФ'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомКСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаКСчФПрод');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрКСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрКСчФ');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомТД'       );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ОКВ'         );
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СтоимПокупВ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СумНДСВыч'   );
+
+      // Код вида операции
+      RXXCheckUniqDescriptionCodeVidOp(sAddr, StrNpp);
+
+      // Дата принятия на учет товаров (работ, услуг), имущественных прав
+      RXXCheckUniqDescriptionDataUchTov(sAddr, StrNpp);
+
+      // Сведения о продавце
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПрод');
+
+      // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПос');
+
+      // Сведения о документе, подтверждающем уплату налога
+      RXXCheckUniqDescriptionDocOplata(sAddr, StrNpp, 'ДокПдтвУпл', 'НомДокПдтвУпл', 'ДатаДокПдтвУпл');
+
+    } // побежали по строкам
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckDescriptionR8D
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для строки "РАЗДЕЛ 8 ПРИЛОЖЕНИЕ 1"
+@Script CheckFldR8DStr(
+  _cStrNode : comp;    // ссылка на вершину строки
+  _sPageID  : string   // идентификатор страницы
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Порядковый номер"
+    if (not RXXCheckNodeNpp(_cStrNode, 'НомерПор', _sPageID) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Код вида операции"
+    var sCodeVidOp : string;  sCodeVidOp := '';
+    var wCodeVidOp : word  ;  wCodeVidOp := 0;
+    if (not RXXCheckNodeCodeVidOp(_cStrNode, 'КодВидОпер/Значение', _sPageID, sCodeVidOp, wCodeVidOp) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // проверка ИНН
+    if (wCodeVidOp != 19) and (wCodeVidOp != 20)
+    {
+      // Сведения о продавце
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПрод', _sPageID) )
+      { isAllOk := False; }
+      // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПос', _sPageID) )
+      { isAllOk := False; }
+    }
+  }
+  while False;
+  Result := isAllOk;
+@end. // CheckFldR8DStr
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для всего "РАЗДЕЛ 8 ПРИЛОЖЕНИЕ 1"
+@Script CheckFldR8D : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка полей: "Раздел 8 Приложение 1"...', 0);
+  do
+  {
+    if (not XMLMap.GetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд8.1') )
+    { Break; }
+
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд8.1/КнПокДЛСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (not XMLMap.GetAttrVisByName(sStrAddr) )
+      { Continue; }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR8D_0', StrNpp+1);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR8DStr(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    StrCount := XMLMap.GetNodeCountByName(sAddr+'Поясн');
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      if (XMLMap.GetStringAttrValueByName(sAddr+GetIter(StrNpp)+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR8D_0', StrNpp+1);
+      var sStrAddr : string;  sStrAddr := sAddr+'Поясн'+GetIter(StrNpp);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR8DStr(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+
+    // проверим уникальность "пояснений"
+    if (not CheckUniqDescriptionR8D)
+    { isAllOk := False; }
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckFldR8D
+//#endregion РАЗДЕЛ 8 ПРИЛОЖЕНИЕ 1
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 9
+//------------------------------------------------------------------------------------------------------------
+// Проверить уникальность "пояснений" для "РАЗДЕЛ 9"
+@Script CheckUniqDescriptionR09 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка уникальности пояснений: "Раздел 9"...', 0);
+  do
+  {
+    var sAddr    : string;   sAddr    := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд9/КнПродСтр';
+    var StrNpp   : LongInt;  StrNpp   :=  0;
+    var StrCount : LongInt;  StrCount :=  XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (XMLMap.GetStringAttrValueByName(sStrAddr+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомСчФПрод'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрСчФ'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомКСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаКСчФПрод');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрКСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрКСчФ');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ОКВ'         );
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СтоимПродСФВ');
+
+      // Код вида операции
+      RXXCheckUniqDescriptionCodeVidOp(sAddr, StrNpp);
+
+      // Сведения о покупателе
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПокуп');
+
+      // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПос');
+
+      // Сведения о документе, подтверждающем уплату налога
+      RXXCheckUniqDescriptionDocOplata(sAddr, StrNpp, 'ДокПдтвОпл', 'НомДокПдтвОпл', 'ДатаДокПдтвОпл');
+
+    } // побежали по строкам
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckDescriptionR09
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для строки "РАЗДЕЛА 9"
+@Script CheckFldR09Str(
+  _cStrNode : comp;    // ссылка на вершину строки
+  _sPageID  : string   // идентификатор страницы
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Порядковый номер"
+    if (not RXXCheckNodeNpp(_cStrNode, 'НомерПор', _sPageID) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Код вида операции"
+    var sCodeVidOp : string;  sCodeVidOp := '';
+    var wCodeVidOp : word  ;  wCodeVidOp := 0;
+    if (not RXXCheckNodeCodeVidOp(_cStrNode, 'КодВидОпер/Значение', _sPageID, sCodeVidOp, wCodeVidOp) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // проверка ИНН
+    if (wCodeVidOp != 19) and (wCodeVidOp != 20)
+    {
+      // Сведения о покупателе
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПокуп', _sPageID) )
+      { isAllOk := False; }
+      // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПос', _sPageID) )
+      { isAllOk := False; }
+    }
+  }
+  while False;
+  Result := isAllOk;
+@end. // CheckFldR09Str
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для всего "РАЗДЕЛА 09"
+@Script CheckFldR09 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка полей: "Раздел 9"...', 0);
+  do
+  {
+    if (not XMLMap.GetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд9') )
+    { Break; }
+
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд9/КнПродСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (not XMLMap.GetAttrVisByName(sStrAddr) )
+      { Continue; }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR09_0', StrNpp+1);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR09Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    StrCount := XMLMap.GetNodeCountByName(sAddr+'Поясн');
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      if (XMLMap.GetStringAttrValueByName(sAddr+GetIter(StrNpp)+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR09_0', StrNpp+1);
+      var sStrAddr : string;  sStrAddr := sAddr+'Поясн'+GetIter(StrNpp);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR09Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+
+    // проверим уникальность "пояснений"
+    if (not CheckUniqDescriptionR09)
+    { isAllOk := False; }
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckFldR09
+//#endregion РАЗДЕЛ 9
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 9 ПРИЛОЖЕНИЕ 1
+//------------------------------------------------------------------------------------------------------------
+// Проверить уникальность "пояснений" для "РАЗДЕЛ 9 ПРИЛОЖЕНИЕ 1"
+@Script CheckUniqDescriptionR9D : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка уникальности пояснений: "Раздел 9 Приложение 1"...', 0);
+  do
+  {
+    var sAddr    : string;   sAddr    := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд9.1/КнПродДЛСтр';
+    var StrNpp   : LongInt;  StrNpp   :=  0;
+    var StrCount : LongInt;  StrCount :=  XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (XMLMap.GetStringAttrValueByName(sStrAddr+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомСчФПрод'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрСчФ'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомКСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаКСчФПрод');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрКСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрКСчФ');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ОКВ'         );
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СтоимПродСФВ');
+
+      // Код вида операции
+      RXXCheckUniqDescriptionCodeVidOp(sAddr, StrNpp);
+
+      // Сведения о покупателе
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПокуп');
+
+      // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПос');
+
+      // Сведения о документе, подтверждающем уплату налога
+      RXXCheckUniqDescriptionDocOplata(sAddr, StrNpp, 'ДокПдтвОпл', 'НомДокПдтвОпл', 'ДатаДокПдтвОпл');
+
+    } // побежали по строкам
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckDescriptionR9D
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для строки для строки "ПРИЛОЖЕНИЯ 1 К РАЗДЕЛУ 9"
+@Script CheckFldR9DStr(
+  _cStrNode : comp;    // ссылка на вершину строки
+  _sPageID  : string   // идентификатор страницы
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Порядковый номер"
+    if (not RXXCheckNodeNpp(_cStrNode, 'НомерПор', _sPageID) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Код вида операции"
+    var sCodeVidOp : string;  sCodeVidOp := '';
+    var wCodeVidOp : word  ;  wCodeVidOp := 0;
+    if (not RXXCheckNodeCodeVidOp(_cStrNode, 'КодВидОпер/Значение', _sPageID, sCodeVidOp, wCodeVidOp) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // проверка ИНН
+    if (wCodeVidOp != 19) and (wCodeVidOp != 20)
+    {
+      // Сведения о покупателе
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПокуп', _sPageID) )
+      { isAllOk := False; }
+      // Сведения о посреднике (комиссионере, агенте, экспедиторе, застройщике)
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПос', _sPageID) )
+      { isAllOk := False; }
+    }
+  }
+  while False;
+  Result := isAllOk;
+@end. // CheckFldR9DStr
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для всего "ПРИЛОЖЕНИЯ 1 К РАЗДЕЛУ 9"
+@Script CheckFldR9D : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка полей: "Раздел 9 Приложение 1"...', 0);
+  do
+  {
+    if (not XMLMap.GetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд9.1') )
+    { Break; }
+
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд9.1/КнПродДЛСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (not XMLMap.GetAttrVisByName(sStrAddr) )
+      { Continue; }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR9D_0', StrNpp+1);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR9DStr(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    StrCount := XMLMap.GetNodeCountByName(sAddr+'Поясн');
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      if (XMLMap.GetStringAttrValueByName(sAddr+GetIter(StrNpp)+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR9D_0', StrNpp+1);
+      var sStrAddr : string;  sStrAddr := sAddr+'Поясн'+GetIter(StrNpp);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR9DStr(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+
+    // проверим уникальность "пояснений"
+    if (not CheckUniqDescriptionR9D)
+    { isAllOk := False; }
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckFldR9D
+//#endregion РАЗДЕЛ 9 ПРИЛОЖЕНИЕ 1
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 10
+//------------------------------------------------------------------------------------------------------------
+// Проверить уникальность "пояснений" для "РАЗДЕЛ 10"
+@Script CheckUniqDescriptionR10 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка уникальности пояснений: "Раздел 10"...', 0);
+  do
+  {
+    var sAddr    : string;   sAddr    := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд10/ЖУчВыстСчФСтр';
+    var StrNpp   : LongInt;  StrNpp   :=  0;
+    var StrCount : LongInt;  StrCount :=  XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (XMLMap.GetStringAttrValueByName(sStrAddr+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомСчФПрод'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрСчФ'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомКСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаКСчФПрод');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрКСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрКСчФ');
+
+      // Код вида операции
+      RXXCheckUniqDescriptionCodeVidOp(sAddr, StrNpp);
+
+      // Сведения о покупателе
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПокуп');
+
+      var MedNpp   : LongInt;
+      var MedCount : LongInt;  MedCount := XMLMap.GetNodeCountByName(sAddr+GetIter(StrNpp)+'/СвПосрДеят');
+      for (MedNpp:= 0; MedNpp < MedCount; MedNpp++)
+      { // побежали по сведениям о посреднической деятельности
+        RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СвПосрДеят'+GetIter(MedNpp)+'/'+'НомСчФОтПрод' );
+        RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СвПосрДеят'+GetIter(MedNpp)+'/'+'ДатаСчФОтПрод');
+
+        RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СвПосрДеят'+GetIter(MedNpp)+'/'+'ОКВ'          );
+        RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СвПосрДеят'+GetIter(MedNpp)+'/'+'СтоимТовСчФВс');
+
+        // Сведения о продавце
+        RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПосрДеят'+GetIter(MedNpp)+'/'+'СвПрод');
+
+      } // побежали по сведениям о посреднической деятельности
+
+    } // побежали по строкам
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckDescriptionR10
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для строки "РАЗДЕЛА 10"
+@Script CheckFldR10Str(
+  _cStrNode : comp;    // ссылка на вершину строки
+  _sPageID  : string   // идентификатор страницы
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Порядковый номер"
+    RXXCheckNodeNpp(_cStrNode, 'НомерПор', _sPageID)
+
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Код вида операции"
+    var sCodeVidOp : string;  sCodeVidOp := '';
+    var wCodeVidOp : word  ;  wCodeVidOp := 0;
+    if (not RXXCheckNodeCodeVidOp(_cStrNode, 'КодВидОпер/Значение', _sPageID, sCodeVidOp, wCodeVidOp) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // проверка ИНН
+    if (wCodeVidOp != 19) and (wCodeVidOp != 20)
+    {
+      // Сведения о покупателе
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПокуп', _sPageID) )
+      { isAllOk := False; }
+    }
+
+    var MedNpp   : LongInt;
+    var MedCount : LongInt;  MedCount := XMLMap.GetNodeCountByNameOnLevel(_cStrNode, 'СвПосрДеят');
+    for (MedNpp:= 0; MedNpp < MedCount; MedNpp++)
+    { // побежали по сведениям о посреднической деятельности
+      var cMedNode : comp;  cMedNode := XMLMap.GetPositionByPathOnLevel(_cStrNode, 'СвПосрДеят'+GetIter(MedNpp), True);
+
+      //------------------------------------------------------------------------------------------------------
+      // проверка ИНН
+      if (wCodeVidOp != 19) and (wCodeVidOp != 20)
+      {
+        // Сведения о продавце
+        if (not RXXCheckNodeContr(cMedNode, 'СвПрод', ''/*sPageID*/) )
+        { isAllOk := False; }
+      }
+    } // побежали по сведениям о посреднической деятельности
+
+  }
+  while False;
+  Result := isAllOk;
+@end. // CheckFldR10Str
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для всего "РАЗДЕЛА 10"
+@Script CheckFldR10 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка полей: "Раздел 10"...', 0);
+  do
+  {
+    if (not XMLMap.GetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд10') )
+    { Break; }
+
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд10/ЖУчВыстСчФСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (not XMLMap.GetAttrVisByName(sStrAddr) )
+      { Continue; }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR10_0', StrNpp+1);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR10Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    StrCount := XMLMap.GetNodeCountByName(sAddr+'Поясн');
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      if (XMLMap.GetStringAttrValueByName(sAddr+GetIter(StrNpp)+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR10_0', StrNpp+1);
+      var sStrAddr : string;  sStrAddr := sAddr+'Поясн'+GetIter(StrNpp);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR10Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+
+    // проверим уникальность "пояснений"
+    if (not CheckUniqDescriptionR10)
+    { isAllOk := False; }
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckFldR10
+//#endregion РАЗДЕЛ 10
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 11
+//------------------------------------------------------------------------------------------------------------
+// Проверить уникальность "пояснений" для "РАЗДЕЛ 11"
+@Script CheckUniqDescriptionR11 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка уникальности пояснений: "Раздел 11"...', 0);
+  do
+  {
+    var sAddr    : string;   sAddr    := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд11/ЖУчПолучСчФСтр';
+    var StrNpp   : LongInt;  StrNpp   :=  0;
+    var StrCount : LongInt;  StrCount :=  XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (XMLMap.GetStringAttrValueByName(sStrAddr+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомСчФПрод'   );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаСчФПрод'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрСчФ'   );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрСчФ'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомКСчФПрод'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаКСчФПрод' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомИспрКСчФ'  );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаИспрКСчФ' );
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'КодВидСд'     );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ОКВ'          );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СтоимТовСчФВс');
+
+      // Код вида операции
+      RXXCheckUniqDescriptionCodeVidOp(sAddr, StrNpp);
+
+      // Сведения о продавце
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПрод');
+
+      // Сведения о субкомиссинере (субагенте)
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвКомис');
+
+    } // побежали по строкам
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckDescriptionR11
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для строки "РАЗДЕЛА 11"
+@Script CheckFldR11Str(
+  _cStrNode : comp;    // ссылка на вершину строки
+  _sPageID  : string   // идентификатор страницы
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Порядковый номер"
+    if (not RXXCheckNodeNpp(_cStrNode, 'НомерПор', _sPageID) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // поле "Код вида операции"
+    var sCodeVidOp : string;  sCodeVidOp := '';
+    var wCodeVidOp : word  ;  wCodeVidOp := 0;
+    if (not RXXCheckNodeCodeVidOp(_cStrNode, 'КодВидОпер/Значение', _sPageID, sCodeVidOp, wCodeVidOp) )
+    { isAllOk := False; }
+
+    //--------------------------------------------------------------------------------------------------------
+    // проверка ИНН
+    if (wCodeVidOp != 19) and (wCodeVidOp != 20)
+    {
+      // Сведения о покупателе
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПокуп', _sPageID) )
+      { isAllOk := False; }
+    }
+
+    //--------------------------------------------------------------------------------------------------------
+    // проверка ИНН
+    if (wCodeVidOp != 19) and (wCodeVidOp != 20)
+    {
+      // Сведения о продавце
+      if (not RXXCheckNodeContr(_cStrNode, 'СвПрод', _sPageID) )
+      { isAllOk := False; }
+      // Сведения о субкомиссинере (субагенте)
+      if (not RXXCheckNodeContr(_cStrNode, 'СвКомис', '') )
+      { isAllOk := False; }
+    }
+
+  }
+  while False;
+  Result := isAllOk;
+@end. // CheckFldR11Str
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для всего "РАЗДЕЛА 11"
+@Script CheckFldR11 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка полей: "Раздел 11"...', 0);
+  do
+  {
+    if (not XMLMap.GetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд11') )
+    { Break; }
+
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд11/ЖУчПолучСчФСтр';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (not XMLMap.GetAttrVisByName(sStrAddr) )
+      { Continue; }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR11_0', StrNpp+1);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR11Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    StrCount := XMLMap.GetNodeCountByName(sAddr+'Поясн');
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      if (XMLMap.GetStringAttrValueByName(sAddr+GetIter(StrNpp)+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR11_0', StrNpp+1);
+      var sStrAddr : string;  sStrAddr := sAddr+'Поясн'+GetIter(StrNpp);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR11Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+
+    // проверим уникальность "пояснений"
+    if (not CheckUniqDescriptionR11)
+    { isAllOk := False; }
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckFldR11
+//#endregion РАЗДЕЛ 11
+//************************************************************************************************************
+
+//============================================================================================================
+//#region РАЗДЕЛ 12
+//------------------------------------------------------------------------------------------------------------
+// Проверить уникальность "пояснений" для "РАЗДЕЛ 12"
+@Script CheckUniqDescriptionR12 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка уникальности пояснений: "Раздел 12"...', 0);
+  do
+  {
+    var sAddr    : string;   sAddr    := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд12/ВыстСчФ_173.5';
+    var StrNpp   : LongInt;  StrNpp   :=  0;
+    var StrCount : LongInt;  StrCount :=  XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (XMLMap.GetStringAttrValueByName(sStrAddr+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'НомСчФ' );
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ДатаСчФ');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'ОКВ'    );
+
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СтоимТовБНалВс');
+      RXXCheckUniqDescriptionFld(sAddr, StrNpp, 'СтоимТовСНалВс');
+
+      // Сведения о покупателе
+      RXXCheckUniqDescriptionNodeContr(sAddr, StrNpp, 'СвПокуп');
+
+    } // побежали по строкам
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckDescriptionR12
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для строки "РАЗДЕЛА 12"
+@Script CheckFldR12Str(
+  _cStrNode : comp;    // ссылка на вершину строки
+  _sPageID  : string   // идентификатор страницы
+) : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    //--------------------------------------------------------------------------------------------------------
+    // Сведения о покупателе
+    if (not RXXCheckNodeContr(_cStrNode, 'СвПокуп', _sPageID) )
+    { isAllOk := False; }
+
+  }
+  while False;
+  Result := isAllOk;
+@end. // CheckFldR12Str
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить поля для всего "РАЗДЕЛА 12"
+@Script CheckFldR12 : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+  , 'Проверка полей: "Раздел 12"...', 0);
+  do
+  {
+    if (not XMLMap.GetAttrVisByName('ФайлТреб/Документ/ПрилТребНДС/СведРазд12') )
+    { Break; }
+
+    var sAddr       : string;   sAddr       := '';
+    var StrNpp      : LongInt;  StrNpp      :=  0;
+    var StrCount    : LongInt;  StrCount    :=  0;
+
+    //--------------------------------------------------------------------------------------------------------
+    // ТРЕБОВАНИЕ
+    sAddr := 'ФайлТреб/Документ/ПрилТребНДС/СведРазд12/ВыстСчФ_173.5';
+    StrCount := XMLMap.GetNodeCountByName(sAddr);
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      var sStrAddr : string;  sStrAddr := sAddr+GetIter(StrNpp);
+      if (not XMLMap.GetAttrVisByName(sStrAddr) )
+      { Continue; }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR12_0', StrNpp+1);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR12Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+    // ТРЕБОВАНИЕ
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // ПОЯСНЕНИЕ
+    StrCount := XMLMap.GetNodeCountByName(sAddr+'Поясн');
+    for (StrNpp := 0; StrNpp < StrCount; StrNpp++)
+    { // побежали по строкам
+      if (not NextVisual)
+      { Break; }
+
+      if (XMLMap.GetStringAttrValueByName(sAddr+GetIter(StrNpp)+'/wDescription') != '1')
+      { // если данные соответствуют ранее предоставленным
+        Continue;
+      }
+
+      var sPageID  : string;  sPageID  := pFH.Func('myGetPageIDR12_0', StrNpp+1);
+      var sStrAddr : string;  sStrAddr := sAddr+'Поясн'+GetIter(StrNpp);
+      var cStrNode : comp  ;  cStrNode := XMLMap.GetPositionByName(sStrAddr, True);
+
+      if (not CheckFldR12Str(cStrNode, sPageID) )
+      { isAllOk := False; }
+
+    } // побежали по строкам
+
+    // проверим уникальность "пояснений"
+    if (not CheckUniqDescriptionR12)
+    { isAllOk := False; }
+    // ПОЯСНЕНИЕ
+    //--------------------------------------------------------------------------------------------------------
+  }
+  while False;
+  StopVisual('', 0);
+  Result := isAllOk;
+@end. // CheckFldR12
+//#endregion РАЗДЕЛ 12
+//************************************************************************************************************
+
+//------------------------------------------------------------------------------------------------------------
+// Проверить всю декларацию
+@Script On_Check : boolean;
+  //==========================================================================================================
+  //#region СЕРВИС
+  //----------------------------------------------------------------------------------------------------------
+  //#include AllTaxObj.Vih
+
+  //----------------------------------------------------------------------------------------------------------
+  // Проверить корректность поля "налоговый период"
+  function IsValidPeriod(strIn: string; var strGetMes: string) : boolean;
+  {
+    strGetMes := 'Возможные значения: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 21, 22, 23, 24, 51, 54, 55, 56, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82';
+    Result :=
+    (
+         (strIn = '01') or (strIn = '02') or (strIn = '03') or (strIn = '04') or (strIn = '05') or (strIn = '06') or (strIn = '07') or (strIn = '08')
+      or (strIn = '09') or (strIn = '10') or (strIn = '11') or (strIn = '12') or (strIn = '21') or (strIn = '22') or (strIn = '23') or (strIn = '24')
+      or (strIn = '51') or (strIn = '54') or (strIn = '55') or (strIn = '56') or (strIn = '71') or (strIn = '72') or (strIn = '73') or (strIn = '74')
+      or (strIn = '75') or (strIn = '76') or (strIn = '77') or (strIn = '78') or (strIn = '79') or (strIn = '80') or (strIn = '81') or (strIn = '82')
+    );
+  } // function IsValidPeriod
+
+  //----------------------------------------------------------------------------------------------------------
+  #declare _NoKor(_AdrXML, _Pole)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      NameStr,
+      #_Pole,
+      getMes
+    );
+  #end
+  //#endregion СЕРВИС
+  //**********************************************************************************************************
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  //----------------------------------------------------------------------------------------------------------
+  //#region ТИТУЛЬНЫЙ ЛИСТ
+  {
+    var NameStr : string;  NameStr := '';
+    var getMes  : string;  getMes  := '';
+
+    //--------------------------------------------------------------------------------------------------------
+    // налоговый период
+    NameStr := pFH.Func('myGetPageIDTitle');
+    if (GetStrVal('ФайлТреб/Документ/Период') <> myGetDefPeriodCodeValue)
+    { // если "налоговый период" НЕ равен расчетному
+      MessageErrorStop_ALG
+      (
+        'ФайлТреб/Документ/Период',
+        NameStr,
+        'Налоговый период',
+        'При текущих границах периода расчета декларации поле должно иметь значение "'+String(myGetDefPeriodCodeValue)+'"'
+      );
+    } // если налоговый период НЕ равен расчетному
+
+    if (not IsValidPeriod(GetStrVal('ФайлТреб/Документ/Период'), getMes) )
+    { // если "налоговый период" не корректный
+      #_NoKor('ФайлТреб/Документ/Период', 'Налоговый период');
+    }
+  }
+  //#endregion ТИТУЛЬНЫЙ ЛИСТ
+  //----------------------------------------------------------------------------------------------------------
+
+  //----------------------------------------------------------------------------------------------------------
+  //#region ДОП РАЗДЕЛЫ
+  if (not CheckFldR08)  { isAllOk := False; }
+  if (not CheckFldR8D)  { isAllOk := False; }
+  if (not CheckFldR09)  { isAllOk := False; }
+  if (not CheckFldR9D)  { isAllOk := False; }
+  if (not CheckFldR10)  { isAllOk := False; }
+  if (not CheckFldR11)  { isAllOk := False; }
+  if (not CheckFldR12)  { isAllOk := False; }
+  //#endregion ДОП РАЗДЕЛЫ
+  //----------------------------------------------------------------------------------------------------------
+
+  Result := isAllOk;
+@end. // Script On_Check
+//#endregion ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ РАСЧЕТЕ
+//------------------------------------------------------------------------------------------------------------
+@Script On_Recalc : boolean;
+@begin
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  //----------------------------------------------------------------------------------------------------------
+  //#region ТИТУЛЬНЫЙ ЛИСТ
+  //--------------------------------------------------------------------------------------------------------
+  { // Дата документа
+    var sAddr : string;  sAddr := 'Файл/Документ/ДатаДок';
+    if (GetStrNull(sAddr) )
+      SetFldVal(sAddr, DateToStr(Cur_Date, XMLMap.GetAttrVFormatByName(sAddr)) );
+  }
+  //--------------------------------------------------------------------------------------------------------
+  { // Налоговый период
+    var sAddr : string;  sAddr := 'ФайлТреб/Документ/Период';
+    if (GetStrVal(sAddr) <> myGetDefPeriodCodeValue)
+      SetFldVal(sAddr, myGetDefPeriodCodeValue);
+  }
+  //#endregion ТИТУЛЬНЫЙ ЛИСТ
+  //----------------------------------------------------------------------------------------------------------
+
+  Result := isAllOk;
+@end. // @Script On_Recalc
+//#endregion ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ РАСЧЕТЕ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ЭКСПОРТЕ В XML
+//------------------------------------------------------------------------------------------------------------
+@Script On_ExportXML : boolean;
+@begin
+  Result := False;
+
+  if (not On_Recalc)
+  {
+    MesError.ReReadTable;
+    Message('Обнаружены замечания, подробнее в "Сообщения"...');
+  }
+
+  // сформируем ответ на требование
+  pFH.Func('myCreateResponse');
+
+  SetFldVal('Файл/ИдФайл', Replace(_IdFail_, '.xml', ''));
+
+  if (not XMLMap.ExpToXmlByName('Файл', _XmlFileName_)) {
+    Message('On_ExportXML: '+ XMLMap.GetStLastError, cancelButton+Warning);
+    Exit;
+  }
+
+  Message(FormatStr_1('Выгружен в файл: "%S"', _XmlFileName_) );
+
+  Result := True;
+@end.
+//#endregion ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ЭКСПОРТЕ В XML
+//************************************************************************************************************

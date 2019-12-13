@@ -1,0 +1,1047 @@
+//------------------------------------------------------------------------------------------------------------
+//                                                                                    (c) корпорация Галактика
+// Галактика 9.1 - модуль "Электронная отчетность"
+// Алгоритмы расчета : "Бухгалтерская (финансовая) отчетность. Приложение"
+//------------------------------------------------------------------------------------------------------------
+
+
+@Script GetStrVal(fld:string):string;
+@begin
+  Result := Trim(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+@Script GetIntVal(fld:string):double;
+@begin
+  Result := Double(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+@Script GetDblVal(fld:string):double;
+@begin
+  Result := Round(Double(XMLMAP.GetAttrValueByName(fld)), 2);
+@end.
+
+@Script GetStrValFormat(fld:string):string;
+@begin
+  var bufRes: string;
+
+  bufRes := Trim(String(XMLMAP.GetAttrValueByName(fld)));
+
+  if (bufRes = '')
+  then Result := '0'
+  else if (Double(bufRes) < 0)
+       then Result := '('+bufRes+')'
+       else Result := bufRes;
+@end.
+
+@Script SetFldVal(fld:string; val:string);
+@begin
+  XMLMAP.SetVariantAttrValueByName_Formula(fld,val,2);
+@end.
+
+@Script SetIntVal(fld:string; val:double);
+@begin
+  XMLMAP.SetVariantAttrValueByName_Formula(fld, DoubleToStr(Round(val), '[|-]3666666666666666666666'), 2);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+
+@Script MessageErrorStop_ALG(mesMesAdrXML, mesStr, mesPole, mesMes: string; mesCountIter: integer = 0): boolean;
+@begin
+  MesError.InsertMesError(mesMesAdrXML, Comp(0), mesStr, mesPole, mesMes, mesCountIter);
+  Result := True;
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetIter(iter:longint):string;
+@begin
+  Result := '';
+
+  if (iter > 0)
+    Result := '[' + String(iter) + ']';
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+
+@Script GetPatVal(expr:string) : string;
+#include AllTaxObj.Vih
+@begin
+  Result := String(ПАТ(expr));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+
+@Script DTS_I(zName: string): string;
+@begin
+ Result := DoubleToStr(Round(Double(zName)), '[|-]366666666666666666666');
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+
+@Script On_Recalc : boolean;
+  #undef  _Log
+  #define _Log(_strAdr, _strMes, _strVal) MesError.InsertRasch(NameStr, #_strAdr, #_strMes, #_strVal);
+
+  #undef _GV
+  #define _GV(_strAdr) GetStrValFormat(#_strAdr)
+
+  procedure AddEnd(XMLAdr : string; var _buf_ : double; var _val_ : string);
+  {
+    _buf_ := _buf_ + GetIntVal(XMLAdr);
+    _val_ := _val_ + #_GV(XMLAdr) +' + ';
+  }
+
+  procedure SaveEnd(inpMes, NameStr, XMLAdr, _buf_, _val_ : string);
+  {
+    SetIntVal(XMLAdr, _buf_);
+    #_Log(XMLAdr, inpMes, #_GV(XMLAdr) +' = ('+ SubStr(_val_, 1, Length(_val_) - 3) +')')
+  }
+
+  procedure Add(XMLAdrT, XMLAdrP, _Adr : string; var _buf1_, _buf2_ : double; var _val1_, _val2_ : string);
+  {
+    AddEnd(XMLAdrT + _Adr, _buf1_, _val1_);
+    AddEnd(XMLAdrP + _Adr, _buf2_, _val2_);
+  }
+
+  procedure Save(CodeT, CodeP, Grafa, NameStr, XMLAdr, _buf1_, _buf2_, _Adr, _val1_, _val2_ : string);
+  {
+    SaveEnd('Стр. '+ CodeT +', гр. '+ Grafa +' = сумме строк "В том числе" по графе '+ Grafa +' за текущий период'   , NameStr, XMLAdr + '/Текущ' + _Adr, _buf1_, _val1_);
+    SaveEnd('Стр. '+ CodeP +', гр. '+ Grafa +' = сумме строк "В том числе" по графе '+ Grafa +' за предыдущий период', NameStr, XMLAdr + '/Пред'  + _Adr, _buf2_, _val2_);
+  }
+
+  #undef  defAdd
+  #define defAdd(buf1, buf2, val1, val2, Adr) Add(XMLAdrT, XMLAdrP, #Adr, #buf1, #buf2, #val1, #val2);
+
+  #undef  defSave
+  #define defSave(buf1, buf2, val1, val2, Adr, Grafa) Save(String(CodTek), String(CodPr), #Grafa, NameStr, XMLAdr, #buf1, #buf2, #Adr, #val1, #val2);
+
+  #undef   SetSum
+  #declare SetSum(Adr, Adr1, Adr2, Adr3, postf, Grafa)
+    SetIntVal(#Adr+#Adr1+'/Текущ'+#postf, GetIntVal(#Adr+#Adr2+'/Текущ'+#postf)+GetIntVal(#Adr+#Adr3+'/Текущ'+#postf));
+    SetIntVal(#Adr+#Adr1+'/Пред'+#postf, GetIntVal(#Adr+#Adr2+'/Пред'+#postf)+GetIntVal(#Adr+#Adr3+'/Пред'+#postf));
+
+    MesError.InsertRasch(NameStr, #Adr + #Adr1 +'/Текущ'+ #postf
+                                , 'Стр. '+ CodeT_1 +', гр. '+ #Grafa +' = сумме строк '+ CodeT_2 +' и '+ CodeT_3 +' по графе '+ #Grafa +' за текущий период'
+                                , GetStrValFormat(#Adr + #Adr1 +'/Текущ'+ #postf) +' = '+ GetStrValFormat(#Adr + #Adr2 +'/Текущ'+ #postf) +' + '+ GetStrValFormat(#Adr + #Adr3 +'/Текущ'+ #postf));
+
+    MesError.InsertRasch(NameStr, #Adr + #Adr1 +'/Пред'  + #postf
+                                , 'Стр. '+ CodeP_1 +', гр. '+ #Grafa +' = сумме строк '+ CodeP_2 +' и '+ CodeP_3 +' по графе '+ #Grafa +' за предыдущий период'
+                                , GetStrValFormat(#Adr + #Adr1 +'/Пред'+ #postf) +' = '+ GetStrValFormat(#Adr + #Adr2 +'/Пред'+ #postf) +' + '+ GetStrValFormat(#Adr + #Adr3 +'/Пред'+ #postf));
+  #end;
+
+  #undef  GetCode
+  #define GetCode   CodTek := GetIntVal(XMLAdr + '/Текущ/Код');   CodPr  := GetIntVal(XMLAdr + '/Пред/Код' );
+
+  #undef  SetPeriod
+  #define SetPeriod   SetFldVal(XMLAdr + '/Текущ/Период', PeriodTek );   SetFldVal(XMLAdr + '/Пред/Период' , PeriodPred);
+
+  #undef   ClearBuf
+  #declare ClearBuf
+    rTek01 := rTek02 := rTek03 := rTek04 := rTek05 := rTek06 := rTek07 := rTek08 := rTek09 := rTek10 := rTek11 :=
+     rPr01 :=  rPr02 :=  rPr03 :=  rPr04 :=  rPr05 :=  rPr06 :=  rPr07 :=  rPr08 :=  rPr09 :=  rPr10 :=  rPr11 := 0;
+
+    vTek01 := vTek02 := vTek03 := vTek04 := vTek05 := vTek06 := vTek07 := vTek08 := vTek09 := vTek10 := vTek11 :=
+     vPr01 :=  vPr02 :=  vPr03 :=  vPr04 :=  vPr05 :=  vPr06 :=  vPr07 :=  vPr08 :=  vPr09 :=  vPr10 :=  vPr11 := '';
+  #end;
+
+  #undef   PERIODfor4
+  #declare PERIODfor4(_Adr)
+    SetFldVal(#_Adr + '/Период/Текущ/Месяц', PeriodMonth );
+    SetFldVal(#_Adr + '/Период/Текущ/Год'  , PeriodTek   );
+    SetFldVal(#_Adr + '/Период/Пред'       , PeriodPred  );
+    SetFldVal(#_Adr + '/Период/ПредшПред'  , PeriodPrPred);
+  #end
+
+@begin
+  //------------------------------------------------------------------------------------------------------------
+  // #region VAR
+  //------------------------------------------------------------------------------------------------------------
+  var rTek01, rPr01
+    , rTek02, rPr02
+    , rTek03, rPr03
+    , rTek04, rPr04
+    , rTek05, rPr05
+    , rTek06, rPr06
+    , rTek07, rPr07
+    , rTek08, rPr08
+    , rTek09, rPr09
+    , rTek10, rPr10
+    , rTek11, rPr11 : double = 0;
+  var vTek01, vPr01
+    , vTek02, vPr02
+    , vTek03, vPr03
+    , vTek04, vPr04
+    , vTek05, vPr05
+    , vTek06, vPr06
+    , vTek07, vPr07
+    , vTek08, vPr08
+    , vTek09, vPr09
+    , vTek10, vPr10
+    , vTek11, vPr11
+
+    , CodeT_1, CodeT_2, CodeT_3
+    , CodeP_1, CodeP_2, CodeP_3 : string = '';
+  var CountNodes
+    , i
+    , CodTek
+    , CodPr : integer = 0;
+  var XMLAdr, _XMLAdr, XMLAdrT, XMLAdrP, NameStr: string = '';
+
+  var PeriodTek    : string = ''; PeriodTek    := String(LongInt(DoubleToStr(Double(GetPatVal('Year(&КонРасч)')), '[|-]366666666666666666666')));
+  var PeriodPred   : string = ''; PeriodPred   := String(LongInt(PeriodTek) - 1);
+  var PeriodPrPred : string = ''; PeriodPrPred := String(LongInt(PeriodTek) - 2);
+  var PeriodMonth  : string = ''; PeriodMonth  := DateToStr(StrToDate(GetPatVal('&КонРасч'),'DD.MM.YYYY'), 'month');
+  //------------------------------------------------------------------------------------------------------------
+  // #endregion VAR
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP01', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 1 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+  XMLAdr := 'Файл/Документ/Раздел_1/ПодРаздел_1/НеМатАктивы';
+
+  #GetCode   #SetPeriod   #ClearBuf
+
+  CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+  for (i := 0; i < CountNodes; i++)
+  {
+    _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+    XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+    XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+    #defAdd(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Первонач'             );
+    #defAdd(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/НакАмартИУб'          );
+    #defAdd(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Поступило'             );
+    #defAdd(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Выбыло/Первонач'       );
+    #defAdd(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/НакАмартИУб'    );
+    #defAdd(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/НачАмарт'              );
+    #defAdd(rTek07, rPr07, vTek07, vPr07, '/ИзмЗаПер/Убыток'                );
+    #defAdd(rTek08, rPr08, vTek08, vPr08, '/ИзмЗаПер/Переоценка/Первонач'   );
+    #defAdd(rTek09, rPr09, vTek09, vPr09, '/ИзмЗаПер/Переоценка/НакАмартИУб');
+    #defAdd(rTek10, rPr10, vTek10, vPr10, '/НаКонПер/Первонач'              );
+    #defAdd(rTek11, rPr11, vTek11, vPr11, '/НаКонПер/НакАмартИУб'           );
+  }
+
+  #GetCode  #defSave(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Первонач'             , '03');
+            #defSave(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/НакАмартИУб'          , '04');
+            #defSave(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Поступило'             , '05');
+            #defSave(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Выбыло/Первонач'       , '06');
+            #defSave(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/НакАмартИУб'    , '07');
+            #defSave(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/НачАмарт'              , '08');
+            #defSave(rTek07, rPr07, vTek07, vPr07, '/ИзмЗаПер/Убыток'                , '09');
+            #defSave(rTek08, rPr08, vTek08, vPr08, '/ИзмЗаПер/Переоценка/Первонач'   , '10');
+            #defSave(rTek09, rPr09, vTek09, vPr09, '/ИзмЗаПер/Переоценка/НакАмартИУб', '11');
+            #defSave(rTek10, rPr10, vTek10, vPr10, '/НаКонПер/Первонач'              , '12');
+            #defSave(rTek11, rPr11, vTek11, vPr11, '/НаКонПер/НакАмартИУб'           , '13');
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 1 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+
+
+  #undef RPfor3
+  #declare RPfor3(_Adr)
+    XMLAdr := #_Adr;
+
+    CodTek := GetIntVal(XMLAdr + '/Код');
+
+    CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+    rTek01 := rTek02 := rTek03 :=
+     rPr01 :=  rPr02 :=  rPr03 := 0;
+
+    vTek01 := vTek02 := vTek03 :=
+     vPr01 :=  vPr02 :=  vPr03 := '';
+
+    for (i := 0; i < CountNodes; i++)
+    {
+      _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+      SetIntVal(_XMLAdr + '/Код', ++CodTek);
+
+      AddEnd(_XMLAdr + '/НаТекущ'         , rTek01, vTek01);
+      AddEnd(_XMLAdr + '/На31ДекПред'     , rTek02, vTek02);
+      AddEnd(_XMLAdr + '/На31ДекПредшПред', rTek03, vTek03);
+    }
+
+    CodTek := GetIntVal(XMLAdr + '/Код');
+
+    SaveEnd('Стр. '+ CodTek +', гр. 2 = сумме строк "В том числе" по графе 2', NameStr, XMLAdr + '/НаТекущ'         , rTek01, vTek01);
+    SaveEnd('Стр. '+ CodTek +', гр. 3 = сумме строк "В том числе" по графе 3', NameStr, XMLAdr + '/На31ДекПред'     , rTek02, vTek02);
+    SaveEnd('Стр. '+ CodTek +', гр. 4 = сумме строк "В том числе" по графе 4', NameStr, XMLAdr + '/На31ДекПредшПред', rTek03, vTek03);
+  #end
+
+
+                                      /* РАЗДЕЛ 1 ПОДРАЗДЕЛ 2 */ #PERIODfor4('Файл/Документ/Раздел_1/ПодРаздел_2') #RPfor3('Файл/Документ/Раздел_1/ПодРаздел_2/Всего')
+  NameStr := pFH.Func('myGetP02', 1); /* РАЗДЕЛ 1 ПОДРАЗДЕЛ 3 */ #PERIODfor4('Файл/Документ/Раздел_1/ПодРаздел_3') #RPfor3('Файл/Документ/Раздел_1/ПодРаздел_3/Всего')
+
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 1 ПОДРАЗДЕЛ 4
+  //------------------------------------------------------------------------------------------------------------
+  XMLAdr := 'Файл/Документ/Раздел_1/ПодРаздел_4/НИОКР';
+
+  #GetCode   #SetPeriod   #ClearBuf
+
+  CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+  for (i := 0; i < CountNodes; i++)
+  {
+    _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+    XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+    XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+    #defAdd(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Первонач'            );
+    #defAdd(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/ЧастьСписСтоим'      );
+    #defAdd(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Поступило'            );
+    #defAdd(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Выбыло/Первонач'      );
+    #defAdd(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/ЧастьСписСтоим');
+    #defAdd(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/ЧастьСписСтоим'       );
+    #defAdd(rTek07, rPr07, vTek07, vPr07, '/НаКонПер/Первонач'             );
+    #defAdd(rTek08, rPr08, vTek08, vPr08, '/НаКонПер/ЧастьСписСтоим'       );
+  }
+
+  #GetCode  #defSave(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Первонач'            , '03');
+            #defSave(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/ЧастьСписСтоим'      , '04');
+            #defSave(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Поступило'            , '05');
+            #defSave(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Выбыло/Первонач'      , '06');
+            #defSave(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/ЧастьСписСтоим', '07');
+            #defSave(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/ЧастьСписСтоим'       , '08');
+            #defSave(rTek07, rPr07, vTek07, vPr07, '/НаКонПер/Первонач'             , '09');
+            #defSave(rTek08, rPr08, vTek08, vPr08, '/НаКонПер/ЧастьСписСтоим'       , '10');
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 1 ПОДРАЗДЕЛ 4
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP03', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 1 ПОДРАЗДЕЛ 5
+  //------------------------------------------------------------------------------------------------------------
+  #undef R1P5
+  #declare R1P5(_Adr)
+    XMLAdr := #_Adr;
+
+    #(GetCode)   #(SetPeriod)
+
+    CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+    rTek01 := rTek02 := rTek03 := rTek04 := rTek05 :=
+     rPr01 :=  rPr02 :=  rPr03 :=  rPr04 :=  rPr05 := 0;
+
+    vTek01 := vTek02 := vTek03 := vTek04 := vTek05 :=
+     vPr01 :=  vPr02 :=  vPr03 :=  vPr04 :=  vPr05 := '';
+
+    for (i := 0; i < CountNodes; i++)
+    {
+      _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+      XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+      XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+      #(defAdd)(rTek01, rPr01, vTek01, vPr01, '/НаНачГода'         );
+      #(defAdd)(rTek02, rPr02, vTek02, vPr02, '/ИзмЗаПер/ЗатрЗаПер');
+      #(defAdd)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/СписЗатр' );
+      #(defAdd)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/ПринКУч'  );
+      #(defAdd)(rTek05, rPr05, vTek05, vPr05, '/НаКонПер'          );
+    }
+
+    #(GetCode)  #(defSave)(rTek01, rPr01, vTek01, vPr01, '/НаНачГода'         , '3');
+                #(defSave)(rTek02, rPr02, vTek02, vPr02, '/ИзмЗаПер/ЗатрЗаПер', '4');
+                #(defSave)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/СписЗатр' , '5');
+                #(defSave)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/ПринКУч'  , '6');
+                #(defSave)(rTek05, rPr05, vTek05, vPr05, '/НаКонПер'          , '7');
+  #end
+
+  /* СТРОКА 5160 */ #R1P5('Файл/Документ/Раздел_1/ПодРаздел_5/ЗатрПоНезИслИРазр')
+  /* СТРОКА 5180 */ #R1P5('Файл/Документ/Раздел_1/ПодРаздел_5/НезОпПоПрНемАкт'  )
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 1 ПОДРАЗДЕЛ 5
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP04', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 2 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+  #undef R2P1
+  #declare R2P1(_Adr)
+    XMLAdr := #_Adr;
+
+    #(GetCode)   #(SetPeriod)
+
+    CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+    rTek01 := rTek02 := rTek03 := rTek04 := rTek05 := rTek06 := rTek07 := rTek08 := rTek09 := rTek10 :=
+     rPr01 :=  rPr02 :=  rPr03 :=  rPr04 :=  rPr05 :=  rPr06 :=  rPr07 :=  rPr08 :=  rPr09 :=  rPr10 := 0;
+
+    vTek01 := vTek02 := vTek03 := vTek04 := vTek05 := vTek06 := vTek07 := vTek08 := vTek09 := vTek10 :=
+     vPr01 :=  vPr02 :=  vPr03 :=  vPr04 :=  vPr05 :=  vPr06 :=  vPr07 :=  vPr08 :=  vPr09 :=  vPr10 := '';
+
+    for (i := 0; i < CountNodes; i++)
+    {
+      _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+      XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+      XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+      #(defAdd)(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Первонач'             );
+      #(defAdd)(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/НакАмартИУб'          );
+      #(defAdd)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Поступило'             );
+      #(defAdd)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Выбыло/Первонач'       );
+      #(defAdd)(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/НакАмартИУб'    );
+      #(defAdd)(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/НачАмарт'              );
+      #(defAdd)(rTek07, rPr07, vTek07, vPr07, '/ИзмЗаПер/Переоценка/Первонач'   );
+      #(defAdd)(rTek08, rPr08, vTek08, vPr08, '/ИзмЗаПер/Переоценка/НакАмартИУб');
+      #(defAdd)(rTek09, rPr09, vTek09, vPr09, '/НаКонПер/Первонач'              );
+      #(defAdd)(rTek10, rPr10, vTek10, vPr10, '/НаКонПер/НакАмартИУб'           );
+    }
+
+    #(GetCode)  #(defSave)(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Первонач'             , '03');
+                #(defSave)(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/НакАмартИУб'          , '04');
+                #(defSave)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Поступило'             , '05');
+                #(defSave)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Выбыло/Первонач'       , '06');
+                #(defSave)(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/НакАмартИУб'    , '07');
+                #(defSave)(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/НачАмарт'              , '08');
+                #(defSave)(rTek07, rPr07, vTek07, vPr07, '/ИзмЗаПер/Переоценка/Первонач'   , '09');
+                #(defSave)(rTek08, rPr08, vTek08, vPr08, '/ИзмЗаПер/Переоценка/НакАмартИУб', '10');
+                #(defSave)(rTek09, rPr09, vTek09, vPr09, '/НаКонПер/Первонач'              , '11');
+                #(defSave)(rTek10, rPr10, vTek10, vPr10, '/НаКонПер/НакАмартИУб'           , '12');
+  #end
+
+  /* СТРОКА 5200 */ #R2P1('Файл/Документ/Раздел_2/ПодРаздел_1/ОснСр'     );
+  /* СТРОКА 5220 */ #R2P1('Файл/Документ/Раздел_2/ПодРаздел_1/УчтВСостВл');
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 2 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP05', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 2 ПОДРАЗДЕЛ 2
+  //------------------------------------------------------------------------------------------------------------
+  XMLAdr := 'Файл/Документ/Раздел_2/ПодРаздел_2/НезСтр';
+
+  #GetCode   #SetPeriod   #ClearBuf
+
+  CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+  for (i := 0; i < CountNodes; i++)
+  {
+    _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+    XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+    XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+    #defAdd(rTek01, rPr01, vTek01, vPr01, '/НаНачГода'         );
+    #defAdd(rTek02, rPr02, vTek02, vPr02, '/ИзмЗаПер/ЗатрЗаПер');
+    #defAdd(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Списано'  );
+    #defAdd(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/ПринКУч'  );
+    #defAdd(rTek05, rPr05, vTek05, vPr05, '/НаКонПер'          );
+  }
+
+  #GetCode  #defSave(rTek01, rPr01, vTek01, vPr01, '/НаНачГода'         , '3');
+            #defSave(rTek02, rPr02, vTek02, vPr02, '/ИзмЗаПер/ЗатрЗаПер', '4');
+            #defSave(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Списано'  , '5');
+            #defSave(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/ПринКУч'  , '6');
+            #defSave(rTek05, rPr05, vTek05, vPr05, '/НаКонПер'          , '7');
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 2 ПОДРАЗДЕЛ 2
+  //------------------------------------------------------------------------------------------------------------
+
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 2 ПОДРАЗДЕЛ 3
+  //------------------------------------------------------------------------------------------------------------
+  SetFldVal('Файл/Документ/Раздел_2/ПодРаздел_3/Период/Текущ', PeriodTek );
+  SetFldVal('Файл/Документ/Раздел_2/ПодРаздел_3/Период/Пред' , PeriodPred);
+
+  #undef R2P3
+  #declare R2P3(_Adr)
+    XMLAdr := #_Adr;
+
+    CodTek := GetIntVal(XMLAdr + '/Код');
+
+    CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+    rTek01 := rTek02 :=
+     rPr01 :=  rPr02 := 0;
+
+    vTek01 := vTek02 :=
+     vPr01 :=  vPr02 := '';
+
+    for (i := 0; i < CountNodes; i++)
+    {
+      _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+      SetIntVal(_XMLAdr + '/Код', ++CodTek);
+
+      AddEnd(_XMLAdr + '/ЗаТекущ', rTek01, vTek01);
+      AddEnd(_XMLAdr + '/ЗаПред' , rTek02, vTek02);
+    }
+
+    CodTek := GetIntVal(XMLAdr + '/Код');
+
+    SaveEnd('Стр. '+ CodTek +', гр. 3 = сумме строк "В том числе" по графе 2', NameStr, XMLAdr + '/ЗаТекущ', rTek01, vTek01);
+    SaveEnd('Стр. '+ CodTek +', гр. 4 = сумме строк "В том числе" по графе 3', NameStr, XMLAdr + '/ЗаПред' , rTek02, vTek02);
+  #end
+
+  #R2P3('Файл/Документ/Раздел_2/ПодРаздел_3/УвСтОбОС');
+  #R2P3('Файл/Документ/Раздел_2/ПодРаздел_3/УмСтОбОС');
+
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 2 ПОДРАЗДЕЛ 3
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP06');
+
+  /* РАЗДЕЛ 2 ПОДРАЗДЕЛ 4 */ #PERIODfor4('Файл/Документ/Раздел_2/ПодРаздел_4')
+
+
+  NameStr := pFH.Func('myGetP07', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 3 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+  #undef R3P1
+  #declare R3P1(_Adr)
+    XMLAdr := #_Adr;
+
+    #(GetCode)   #(SetPeriod)
+
+    CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+    rTek01 := rTek02 := rTek03 := rTek04 := rTek05 := rTek06 := rTek07 := rTek08 := rTek09 :=
+     rPr01 :=  rPr02 :=  rPr03 :=  rPr04 :=  rPr05 :=  rPr06 :=  rPr07 :=  rPr08 :=  rPr09 := 0;
+
+    vTek01 := vTek02 := vTek03 := vTek04 := vTek05 := vTek06 := vTek07 := vTek08 := vTek09 :=
+     vPr01 :=  vPr02 :=  vPr03 :=  vPr04 :=  vPr05 :=  vPr06 :=  vPr07 :=  vPr08 :=  vPr09 := '';
+
+    for (i := 0; i < CountNodes; i++)
+    {
+      _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+      XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+      XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+      #(defAdd)(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Первонач'      );
+      #(defAdd)(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/НакКорр'       );
+      #(defAdd)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Поступило'      );
+      #(defAdd)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/ВыбПог/Первонач');
+      #(defAdd)(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/ВыбПог/НакКорр' );
+      #(defAdd)(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/НачПроц'        );
+      #(defAdd)(rTek07, rPr07, vTek07, vPr07, '/ИзмЗаПер/ТекРынСт'       );
+      #(defAdd)(rTek08, rPr08, vTek08, vPr08, '/НаКонПер/Первонач'       );
+      #(defAdd)(rTek09, rPr09, vTek09, vPr09, '/НаКонПер/НакКорр'        );
+    }
+
+    #(GetCode)  #(defSave)(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Первонач'      , '03');
+                #(defSave)(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/НакКорр'       , '04');
+                #(defSave)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Поступило'      , '05');
+                #(defSave)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/ВыбПог/Первонач', '06');
+                #(defSave)(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/ВыбПог/НакКорр' , '07');
+                #(defSave)(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/НачПроц'        , '08');
+                #(defSave)(rTek07, rPr07, vTek07, vPr07, '/ИзмЗаПер/ТекРынСт'       , '09');
+                #(defSave)(rTek08, rPr08, vTek08, vPr08, '/НаКонПер/Первонач'       , '10');
+                #(defSave)(rTek09, rPr09, vTek09, vPr09, '/НаКонПер/НакКорр'        , '11');
+  #end
+
+  /* СТРОКА 5301 */ #R3P1('Файл/Документ/Раздел_3/ПодРаздел_1/Долгоср' )
+  /* СТРОКА 5311 */ #R3P1('Файл/Документ/Раздел_3/ПодРаздел_1/Краткоср')
+
+  // 5300 -> 5310
+  SetFldVal('Файл/Документ/Раздел_3/ПодРаздел_1/ФинВл/Текущ/Период', PeriodTek );
+  SetFldVal('Файл/Документ/Раздел_3/ПодРаздел_1/ФинВл/Пред/Период' , PeriodPred);
+
+  CodeT_1 := '5300';   CodeT_2 := '5301';   CodeT_3 := '5305';
+  CodeP_1 := '5310';   CodeP_2 := '5311';   CodeP_3 := '5315';
+
+  #SetSum('Файл/Документ/Раздел_3/ПодРаздел_1', '/ФинВл', '/Долгоср', '/Краткоср', '/НаНачГода/Первонач'      , '03')
+  #SetSum('Файл/Документ/Раздел_3/ПодРаздел_1', '/ФинВл', '/Долгоср', '/Краткоср', '/НаНачГода/НакКорр'       , '04')
+  #SetSum('Файл/Документ/Раздел_3/ПодРаздел_1', '/ФинВл', '/Долгоср', '/Краткоср', '/ИзмЗаПер/Поступило'      , '05')
+  #SetSum('Файл/Документ/Раздел_3/ПодРаздел_1', '/ФинВл', '/Долгоср', '/Краткоср', '/ИзмЗаПер/ВыбПог/Первонач', '06')
+  #SetSum('Файл/Документ/Раздел_3/ПодРаздел_1', '/ФинВл', '/Долгоср', '/Краткоср', '/ИзмЗаПер/ВыбПог/НакКорр' , '07')
+  #SetSum('Файл/Документ/Раздел_3/ПодРаздел_1', '/ФинВл', '/Долгоср', '/Краткоср', '/ИзмЗаПер/НачПроц'        , '08')
+  #SetSum('Файл/Документ/Раздел_3/ПодРаздел_1', '/ФинВл', '/Долгоср', '/Краткоср', '/ИзмЗаПер/ТекРынСт'       , '09')
+  #SetSum('Файл/Документ/Раздел_3/ПодРаздел_1', '/ФинВл', '/Долгоср', '/Краткоср', '/НаКонПер/Первонач'       , '10')
+  #SetSum('Файл/Документ/Раздел_3/ПодРаздел_1', '/ФинВл', '/Долгоср', '/Краткоср', '/НаКонПер/НакКорр'        , '11')
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 3 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP08', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 3 ПОДРАЗДЕЛ 2
+  //------------------------------------------------------------------------------------------------------------
+  #PERIODfor4('Файл/Документ/Раздел_3/ПодРаздел_2')
+
+  /* СТРОКА 5320 */ #RPfor3('Файл/Документ/Раздел_3/ПодРаздел_2/ФинВлВЗал'    )
+  /* СТРОКА 5325 */ #RPfor3('Файл/Документ/Раздел_3/ПодРаздел_2/ФинВлПерТрЛиц')
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 3 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 4 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+  XMLAdr := 'Файл/Документ/Раздел_4/ПодРаздел_1/Запасы';
+
+  #GetCode   #SetPeriod   #ClearBuf
+
+  CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+  for (i := 0; i < CountNodes; i++)
+  {
+    _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+    XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+    XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+    #defAdd(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Себест'      );
+    #defAdd(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/ВелРез'      );
+    #defAdd(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/ПостИЗатр'    );
+    #defAdd(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/ВыбПог/Себест');
+    #defAdd(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/ВыбПог/Резерв');
+    #defAdd(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/УбОтСниж'     );
+    #defAdd(rTek07, rPr07, vTek07, vPr07, '/НаКонПер/Себест'       );
+    #defAdd(rTek08, rPr08, vTek08, vPr08, '/НаКонПер/Резерв'       );
+  }
+
+  #GetCode  #defSave(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Себест'      , '03');
+            #defSave(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/ВелРез'      , '04');
+            #defSave(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/ПостИЗатр'    , '05');
+            #defSave(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/ВыбПог/Себест', '06');
+            #defSave(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/ВыбПог/Резерв', '07');
+            #defSave(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/УбОтСниж'     , '08');
+            #defSave(rTek07, rPr07, vTek07, vPr07, '/НаКонПер/Себест'       , '10');
+            #defSave(rTek08, rPr08, vTek08, vPr08, '/НаКонПер/Резерв'       , '11');
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 4 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP09', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 4 ПОДРАЗДЕЛ 2
+  //------------------------------------------------------------------------------------------------------------
+  #PERIODfor4('Файл/Документ/Раздел_4/ПодРаздел_2')
+
+  /* СТРОКА 5440 */ #RPfor3('Файл/Документ/Раздел_4/ПодРаздел_2/ЗапНеОпл')
+  /* СТРОКА 5445 */ #RPfor3('Файл/Документ/Раздел_4/ПодРаздел_2/ЗапВЗал' )
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 4 ПОДРАЗДЕЛ 2
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP10', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 5 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+  #undef R5P1
+  #declare R5P1(_Adr)
+    XMLAdr := #_Adr;
+
+    #(GetCode)   #(SetPeriod)
+
+    CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+    rTek01 := rTek02 := rTek03 := rTek04 := rTek05 := rTek06 := rTek07 := rTek08 := rTek09 := rTek10 :=
+     rPr01 :=  rPr02 :=  rPr03 :=  rPr04 :=  rPr05 :=  rPr06 :=  rPr07 :=  rPr08 :=  rPr09 :=  rPr10 := 0;
+
+    vTek01 := vTek02 := vTek03 := vTek04 := vTek05 := vTek06 := vTek07 := vTek08 := vTek09 := vTek10 :=
+     vPr01 :=  vPr02 :=  vPr03 :=  vPr04 :=  vPr05 :=  vPr06 :=  vPr07 :=  vPr08 :=  vPr09 :=  vPr10 := '';
+
+    for (i := 0; i < CountNodes; i++)
+    {
+      _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+      XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+      XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+      #(defAdd)(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Учт'             );
+      #(defAdd)(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/ВелРез'          );
+      #(defAdd)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Пост/ВРезХозОп'   );
+      #(defAdd)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Пост/ПричНач'     );
+      #(defAdd)(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/Погаш'     );
+      #(defAdd)(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/Выбыло/СпНаФинРез');
+      #(defAdd)(rTek07, rPr07, vTek07, vPr07, '/ИзмЗаПер/Выбыло/ВостРез'   );
+      #(defAdd)(rTek08, rPr08, vTek08, vPr08, '/ИзмЗаПер/Перев'            );
+      #(defAdd)(rTek09, rPr09, vTek09, vPr09, '/НаКонПер/Учт'              );
+      #(defAdd)(rTek10, rPr10, vTek10, vPr10, '/НаКонПер/ВелРез'           );
+    }
+
+    #(GetCode)  #(defSave)(rTek01, rPr01, vTek01, vPr01, '/НаНачГода/Учт'             , '03');
+                #(defSave)(rTek02, rPr02, vTek02, vPr02, '/НаНачГода/ВелРез'          , '04');
+                #(defSave)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Пост/ВРезХозОп'   , '05');
+                #(defSave)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Пост/ПричНач'     , '06');
+                #(defSave)(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/Погаш'     , '07');
+                #(defSave)(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/Выбыло/СпНаФинРез', '08');
+                #(defSave)(rTek07, rPr07, vTek07, vPr07, '/ИзмЗаПер/Выбыло/ВостРез'   , '09');
+                #(defSave)(rTek08, rPr08, vTek08, vPr08, '/ИзмЗаПер/Перев'            , '10');
+                #(defSave)(rTek09, rPr09, vTek09, vPr09, '/НаКонПер/Учт'              , '11');
+                #(defSave)(rTek10, rPr10, vTek10, vPr10, '/НаКонПер/ВелРез'           , '12');
+  #end
+
+  /* СТРОКА 5301 */ #R5P1('Файл/Документ/Раздел_5/ПодРаздел_1/ДолгДебЗад' )
+  /* СТРОКА 5311 */ #R5P1('Файл/Документ/Раздел_5/ПодРаздел_1/КраткДебЗад')
+
+  // 5500 -> 5520
+  SetFldVal('Файл/Документ/Раздел_5/ПодРаздел_1/Итого/Текущ/Период', PeriodTek );
+  SetFldVal('Файл/Документ/Раздел_5/ПодРаздел_1/Итого/Пред/Период' , PeriodPred);
+
+  CodeT_1 := '5500';   CodeT_2 := '5501';   CodeT_3 := '5510';
+  CodeP_1 := '5520';   CodeP_2 := '5521';   CodeP_3 := '5530';
+
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_1', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/НаНачГода/Учт'             , '03')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_1', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/НаНачГода/ВелРез'          , '04')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_1', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ИзмЗаПер/Пост/ВРезХозОп'   , '05')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_1', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ИзмЗаПер/Пост/ПричНач'     , '06')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_1', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ИзмЗаПер/Выбыло/Погаш'     , '07')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_1', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ИзмЗаПер/Выбыло/СпНаФинРез', '08')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_1', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ИзмЗаПер/Выбыло/ВостРез'   , '09')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_1', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/НаКонПер/Учт'              , '11')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_1', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/НаКонПер/ВелРез'           , '12')
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 5 ПОДРАЗДЕЛ 1
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP11', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 5 ПОДРАЗДЕЛ 2
+  //------------------------------------------------------------------------------------------------------------
+  #PERIODfor4('Файл/Документ/Раздел_5/ПодРаздел_2')
+
+  XMLAdr := 'Файл/Документ/Раздел_5/ПодРаздел_2/Всего';
+
+  CodTek := GetIntVal(XMLAdr + '/Код');
+
+  CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+  #ClearBuf
+
+  for (i := 0; i < CountNodes; i++)
+  {
+    _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+    SetIntVal(_XMLAdr + '/Код', ++CodTek);
+
+    AddEnd(_XMLAdr + '/НаТекущ/Учт'           , rTek01, vTek01);
+    AddEnd(_XMLAdr + '/НаТекущ/БалСт'         , rTek02, vTek02);
+    AddEnd(_XMLAdr + '/На31ДекПред/Учт'       , rTek03, vTek03);
+    AddEnd(_XMLAdr + '/На31ДекПред/БалСт'     , rTek04, vTek04);
+    AddEnd(_XMLAdr + '/На31ДекПредшПред/Учт'  , rTek05, vTek05);
+    AddEnd(_XMLAdr + '/На31ДекПредшПред/БалСт', rTek06, vTek06);
+  }
+
+  CodTek := GetIntVal(XMLAdr + '/Код');
+
+  SaveEnd('Стр. '+ CodTek +', гр. 2 = сумме строк "В том числе" по графе 2', NameStr, XMLAdr + '/НаТекущ/Учт'           , rTek01, vTek01);
+  SaveEnd('Стр. '+ CodTek +', гр. 3 = сумме строк "В том числе" по графе 3', NameStr, XMLAdr + '/НаТекущ/БалСт'         , rTek02, vTek02);
+  SaveEnd('Стр. '+ CodTek +', гр. 4 = сумме строк "В том числе" по графе 4', NameStr, XMLAdr + '/На31ДекПред/Учт'       , rTek03, vTek03);
+  SaveEnd('Стр. '+ CodTek +', гр. 5 = сумме строк "В том числе" по графе 5', NameStr, XMLAdr + '/На31ДекПред/БалСт'     , rTek04, vTek04);
+  SaveEnd('Стр. '+ CodTek +', гр. 6 = сумме строк "В том числе" по графе 6', NameStr, XMLAdr + '/На31ДекПредшПред/Учт'  , rTek05, vTek05);
+  SaveEnd('Стр. '+ CodTek +', гр. 7 = сумме строк "В том числе" по графе 7', NameStr, XMLAdr + '/На31ДекПредшПред/БалСт', rTek06, vTek06);
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 5 ПОДРАЗДЕЛ 2
+  //------------------------------------------------------------------------------------------------------------
+
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 5 ПОДРАЗДЕЛ 3
+  //------------------------------------------------------------------------------------------------------------
+  #undef R5P3
+  #declare R5P3(_Adr)
+    XMLAdr := #_Adr;
+
+    #(GetCode)   #(SetPeriod)
+
+    CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+    rTek01 := rTek02 := rTek03 := rTek04 := rTek05 := rTek06 := rTek07 :=
+     rPr01 :=  rPr02 :=  rPr03 :=  rPr04 :=  rPr05 :=  rPr06 :=  rPr07 := 0;
+
+    vTek01 := vTek02 := vTek03 := vTek04 := vTek05 := vTek06 := vTek07 :=
+     vPr01 :=  vPr02 :=  vPr03 :=  vPr04 :=  vPr05 :=  vPr06 :=  vPr07 := '';
+
+    for (i := 0; i < CountNodes; i++)
+    {
+      _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+      XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+      XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+      #(defAdd)(rTek01, rPr01, vTek01, vPr01, '/ОстНаНачГода'              );
+      #(defAdd)(rTek02, rPr02, vTek02, vPr02, '/ИзмЗаПер/Пост/ВРезХозОп'   );
+      #(defAdd)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Пост/ПричНач'     );
+      #(defAdd)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Выбыло/Погаш'     );
+      #(defAdd)(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/СпНаФинРез');
+      #(defAdd)(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/Перев'            );
+      #(defAdd)(rTek07, rPr07, vTek07, vPr07, '/НаКонПер'                  );
+    }
+
+    #(GetCode)  #(defSave)(rTek01, rPr01, vTek01, vPr01, '/ОстНаНачГода'              , '3');
+                #(defSave)(rTek02, rPr02, vTek02, vPr02, '/ИзмЗаПер/Пост/ВРезХозОп'   , '4');
+                #(defSave)(rTek03, rPr03, vTek03, vPr03, '/ИзмЗаПер/Пост/ПричНач'     , '5');
+                #(defSave)(rTek04, rPr04, vTek04, vPr04, '/ИзмЗаПер/Выбыло/Погаш'     , '6');
+                #(defSave)(rTek05, rPr05, vTek05, vPr05, '/ИзмЗаПер/Выбыло/СпНаФинРез', '7');
+                #(defSave)(rTek06, rPr06, vTek06, vPr06, '/ИзмЗаПер/Перев'            , '8');
+                #(defSave)(rTek07, rPr07, vTek07, vPr07, '/НаКонПер'                  , '9');
+  #end
+
+  /* СТРОКА 5551 */ #R5P3('Файл/Документ/Раздел_5/ПодРаздел_3/ДолгДебЗад' )
+  /* СТРОКА 5560 */ #R5P3('Файл/Документ/Раздел_5/ПодРаздел_3/КраткДебЗад')
+
+  // 5550 -> 5570
+  SetFldVal('Файл/Документ/Раздел_5/ПодРаздел_3/Итого/Текущ/Период', PeriodTek );
+  SetFldVal('Файл/Документ/Раздел_5/ПодРаздел_3/Итого/Пред/Период' , PeriodPred);
+
+  CodeT_1 := '5550';   CodeT_2 := '5551';   CodeT_3 := '5560';
+  CodeP_1 := '5570';   CodeP_2 := '5571';   CodeP_3 := '5580';
+
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_3', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ОстНаНачГода'              , '3')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_3', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ИзмЗаПер/Пост/ВРезХозОп'   , '4')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_3', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ИзмЗаПер/Пост/ПричНач'     , '5')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_3', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ИзмЗаПер/Выбыло/Погаш'     , '6')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_3', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/ИзмЗаПер/Выбыло/СпНаФинРез', '7')
+  #SetSum('Файл/Документ/Раздел_5/ПодРаздел_3', '/Итого', '/ДолгДебЗад', '/КраткДебЗад', '/НаКонПер'                  , '9')
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 5 ПОДРАЗДЕЛ 3
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP12', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 5 ПОДРАЗДЕЛ 4
+  //------------------------------------------------------------------------------------------------------------
+  #PERIODfor4('Файл/Документ/Раздел_5/ПодРаздел_4')
+
+  /* СТРОКА 5590 */ #RPfor3('Файл/Документ/Раздел_5/ПодРаздел_4/Всего')
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 5 ПОДРАЗДЕЛ 4
+  //------------------------------------------------------------------------------------------------------------
+
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 6
+  //------------------------------------------------------------------------------------------------------------
+  // 5600
+  SetFldVal('Файл/Документ/Раздел_6/Период/Текущ', PeriodTek );
+  SetFldVal('Файл/Документ/Раздел_6/Период/Пред' , PeriodPred);
+
+  SetIntVal('Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаТекущ',   GetIntVal('Файл/Документ/Раздел_6/МатЗатр/ЗаТекущ'    )
+                                                        + GetIntVal('Файл/Документ/Раздел_6/РасхНаОпТр/ЗаТекущ' )
+                                                        + GetIntVal('Файл/Документ/Раздел_6/ОтчНаСоцНуж/ЗаТекущ')
+                                                        + GetIntVal('Файл/Документ/Раздел_6/Аморт/ЗаТекущ'      )
+                                                        + GetIntVal('Файл/Документ/Раздел_6/ПрочЗатр/ЗаТекущ'   ));
+
+  SetIntVal('Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаПред' ,   GetIntVal('Файл/Документ/Раздел_6/МатЗатр/ЗаПред'     )
+                                                        + GetIntVal('Файл/Документ/Раздел_6/РасхНаОпТр/ЗаПред'  )
+                                                        + GetIntVal('Файл/Документ/Раздел_6/ОтчНаСоцНуж/ЗаПред' )
+                                                        + GetIntVal('Файл/Документ/Раздел_6/Аморт/ЗаПред'       )
+                                                        + GetIntVal('Файл/Документ/Раздел_6/ПрочЗатр/ЗаПред'    ));
+
+
+  SetIntVal('Файл/Документ/Раздел_6/ИтогоРасх/ЗаТекущ' ,   GetIntVal('Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаТекущ'    )
+                                                         + GetIntVal('Файл/Документ/Раздел_6/ФактСеб/ЗаТекущ'      )
+                                                         - GetIntVal('Файл/Документ/Раздел_6/ИзменОст/Прир/ЗаТекущ')
+                                                         + GetIntVal('Файл/Документ/Раздел_6/ИзменОст/Умен/ЗаТекущ'));
+
+  SetIntVal('Файл/Документ/Раздел_6/ИтогоРасх/ЗаПред'  ,   GetIntVal('Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаПред'     )
+                                                         + GetIntVal('Файл/Документ/Раздел_6/ФактСеб/ЗаПред'       )
+                                                         - GetIntVal('Файл/Документ/Раздел_6/ИзменОст/Прир/ЗаПред' )
+                                                         + GetIntVal('Файл/Документ/Раздел_6/ИзменОст/Умен/ЗаПред' ));
+
+
+  MesError.InsertRasch(NameStr, 'Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаТекущ'
+                              , 'Стр. '+ GetStrVal('Файл/Документ/Раздел_6/ИтогоПоЭл/Код'  ) +', гр. 2 = сумме строк '
+                                       + GetStrVal('Файл/Документ/Раздел_6/МатЗатр/Код'    ) +', '
+                                       + GetStrVal('Файл/Документ/Раздел_6/РасхНаОпТр/Код' ) +', '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ОтчНаСоцНуж/Код') +', '
+                                       + GetStrVal('Файл/Документ/Раздел_6/Аморт/Код'      ) +' и '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ПрочЗатр/Код'   ) +' по графе 2 за текущий период'
+                              ,   GetStrValFormat('Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаТекущ'  ) +' = '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/МатЗатр/ЗаТекущ'    ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/РасхНаОпТр/ЗаТекущ' ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ОтчНаСоцНуж/ЗаТекущ') +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/Аморт/ЗаТекущ'      ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ПрочЗатр/ЗаТекущ'   ));
+
+  MesError.InsertRasch(NameStr, 'Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаПред'
+                              , 'Стр. '+ GetStrVal('Файл/Документ/Раздел_6/ИтогоПоЭл/Код'  ) +', гр. 3 = сумме строк '
+                                       + GetStrVal('Файл/Документ/Раздел_6/МатЗатр/Код'    ) +', '
+                                       + GetStrVal('Файл/Документ/Раздел_6/РасхНаОпТр/Код' ) +', '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ОтчНаСоцНуж/Код') +', '
+                                       + GetStrVal('Файл/Документ/Раздел_6/Аморт/Код'      ) +' и '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ПрочЗатр/Код'   ) +' по графе 3 за текущий период'
+                              ,   GetStrValFormat('Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаПред'  ) +' = '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/МатЗатр/ЗаПред'    ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/РасхНаОпТр/ЗаПред' ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ОтчНаСоцНуж/ЗаПред') +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/Аморт/ЗаПред'      ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ПрочЗатр/ЗаПред'   ));
+
+  MesError.InsertRasch(NameStr, 'Файл/Документ/Раздел_6/ИтогоРасх/ЗаТекущ'
+                              , 'Стр. '+ GetStrVal('Файл/Документ/Раздел_6/ИтогоРасх/Код'    ) +', гр. 2 = '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ИтогоПоЭл/Код'    ) +' + '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ФактСеб/Код'      ) +' - '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ИзменОст/Прир/Код') +' + '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ИзменОст/Умен/Код') +' по графе 2 за текущий период'
+                              ,   GetStrValFormat('Файл/Документ/Раздел_6/ИтогоРасх/ЗаТекущ'    ) +' = '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаТекущ'    ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ФактСеб/ЗаТекущ'      ) +' - '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ИзменОст/Прир/ЗаТекущ') +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ИзменОст/Умен/ЗаТекущ'));
+
+  MesError.InsertRasch(NameStr, 'Файл/Документ/Раздел_6/ИтогоРасх/ЗаПред'
+                              , 'Стр. '+ GetStrVal('Файл/Документ/Раздел_6/ИтогоРасх/Код'    ) +', гр. 3 = '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ИтогоПоЭл/Код'    ) +' + '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ФактСеб/Код'      ) +' - '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ИзменОст/Прир/Код') +' + '
+                                       + GetStrVal('Файл/Документ/Раздел_6/ИзменОст/Умен/Код') +' по графе 3 за текущий период'
+                              ,   GetStrValFormat('Файл/Документ/Раздел_6/ИтогоРасх/ЗаПред'    ) +' = '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ИтогоПоЭл/ЗаПред'    ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ФактСеб/ЗаПред'      ) +' - '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ИзменОст/Прир/ЗаПред') +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_6/ИзменОст/Умен/ЗаПред'));
+  //____________________________________________________________________________________________________________
+  //#endregion 6
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP13', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 7
+  //------------------------------------------------------------------------------------------------------------
+  XMLAdr := 'Файл/Документ/Раздел_7/ОценОб';
+
+  CodTek := GetIntVal(XMLAdr + '/Код');
+
+  CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+  #ClearBuf
+
+  for (i := 0; i < CountNodes; i++)
+  {
+    _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+    SetIntVal(_XMLAdr + '/Код', ++CodTek);
+
+    AddEnd(_XMLAdr + '/ОстНаНач', rTek01, vTek01);
+    AddEnd(_XMLAdr + '/Призн'   , rTek02, vTek02);
+    AddEnd(_XMLAdr + '/Погаш'   , rTek03, vTek03);
+    AddEnd(_XMLAdr + '/Спис'    , rTek04, vTek04);
+    AddEnd(_XMLAdr + '/ОстНаКон', rTek05, vTek05);
+  }
+
+  CodTek := GetIntVal(XMLAdr + '/Код');
+
+  SaveEnd('Стр. '+ CodTek +', гр. 2 = сумме строк "В том числе" по графе 2', NameStr, XMLAdr + '/ОстНаНач', rTek01, vTek01);
+  SaveEnd('Стр. '+ CodTek +', гр. 3 = сумме строк "В том числе" по графе 3', NameStr, XMLAdr + '/Призн'   , rTek02, vTek02);
+  SaveEnd('Стр. '+ CodTek +', гр. 4 = сумме строк "В том числе" по графе 4', NameStr, XMLAdr + '/Погаш'   , rTek03, vTek03);
+  SaveEnd('Стр. '+ CodTek +', гр. 5 = сумме строк "В том числе" по графе 5', NameStr, XMLAdr + '/Спис'    , rTek04, vTek04);
+  SaveEnd('Стр. '+ CodTek +', гр. 6 = сумме строк "В том числе" по графе 6', NameStr, XMLAdr + '/ОстНаКон', rTek05, vTek05);
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 7
+  //------------------------------------------------------------------------------------------------------------
+
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 8
+  //------------------------------------------------------------------------------------------------------------
+  #PERIODfor4('Файл/Документ/Раздел_8')
+
+  /* СТРОКА 5800 */ #RPfor3('Файл/Документ/Раздел_8/Получ')
+  /* СТРОКА 5810 */ #RPfor3('Файл/Документ/Раздел_8/Выдан')
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 8
+  //------------------------------------------------------------------------------------------------------------
+
+
+  NameStr := pFH.Func('myGetP14', 1);
+
+  //------------------------------------------------------------------------------------------------------------
+  //#region РАЗДЕЛ 9
+  //------------------------------------------------------------------------------------------------------------
+  SetFldVal('Файл/Документ/Раздел_9/Период/Текущ', PeriodTek );
+  SetFldVal('Файл/Документ/Раздел_9/Период/Пред' , PeriodPred);
+
+  // 5900 = 5901 + 5905
+  SetIntVal('Файл/Документ/Раздел_9/ПолучБюдСр/ЗаТекущ', GetIntVal('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаТекРасх/ЗаТекущ') + GetIntVal('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаВлВВнеобАкт/ЗаТекущ'));
+  SetIntVal('Файл/Документ/Раздел_9/ПолучБюдСр/ЗаПред' , GetIntVal('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаТекРасх/ЗаПред' ) + GetIntVal('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаВлВВнеобАкт/ЗаПред' ));
+
+  MesError.InsertRasch(NameStr, 'Файл/Документ/Раздел_9/ПолучБюдСр/ЗаТекущ'
+                              , 'Стр. '+ GetStrVal('Файл/Документ/Раздел_9/ПолучБюдСр/Код'                        ) +', гр. 2 = сумме строк '
+                                       + GetStrVal('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаТекРасх/Код'    ) +' и '
+                                       + GetStrVal('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаВлВВнеобАкт/Код') +' по графе 2 за текущий период'
+                              ,   GetStrValFormat('Файл/Документ/Раздел_9/ПолучБюдСр/ЗаТекущ'                        ) +' = '
+                                + GetStrValFormat('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаТекРасх/ЗаТекущ'    ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаВлВВнеобАкт/ЗаТекущ'));
+
+  MesError.InsertRasch(NameStr, 'Файл/Документ/Раздел_9/ПолучБюдСр/ЗаПред'
+                              , 'Стр. '+ GetStrVal('Файл/Документ/Раздел_9/ПолучБюдСр/Код'                        ) +', гр. 3 = сумме строк '
+                                       + GetStrVal('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаТекРасх/Код'    ) +' и '
+                                       + GetStrVal('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаВлВВнеобАкт/Код') +' по графе 3 за текущий период'
+                              ,   GetStrValFormat('Файл/Документ/Раздел_9/ПолучБюдСр/ЗаПред'                        ) +' = '
+                                + GetStrValFormat('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаТекРасх/ЗаПред'    ) +' + '
+                                + GetStrValFormat('Файл/Документ/Раздел_9/ПолучБюдСр/ВТомЧисле/НаВлВВнеобАкт/ЗаПред'));
+
+  // 5910 и 5920
+  XMLAdr := 'Файл/Документ/Раздел_9/БюджКред';
+
+  #GetCode   #SetPeriod   #ClearBuf
+
+  CountNodes := XMLMap.GetNodeCountByName(XMLAdr + '/ВТомЧисле');
+
+  for (i := 0; i < CountNodes; i++)
+  {
+    _XMLAdr := XMLAdr + '/ВТомЧисле' + getIter(i);
+
+    XMLAdrT := _XMLAdr + '/Текущ';  SetIntVal(XMLAdrT + '/Код', ++CodTek);  SetFldVal(XMLAdrT + '/Период', PeriodTek );
+    XMLAdrP := _XMLAdr + '/Пред' ;  SetIntVal(XMLAdrP + '/Код', ++CodPr );  SetFldVal(XMLAdrP + '/Период', PeriodPred);
+
+    #defAdd(rTek01, rPr01, vTek01, vPr01, '/ЗаТекущ/НаНачГода');
+    #defAdd(rTek02, rPr02, vTek02, vPr02, '/ЗаТекущ/ПолЗаГод' );
+    #defAdd(rTek03, rPr03, vTek03, vPr03, '/ЗаПред/ВозврЗаГод');
+    #defAdd(rTek04, rPr04, vTek04, vPr04, '/ЗаПред/НаКонГода' );
+  }
+
+  #GetCode  #defSave(rTek01, rPr01, vTek01, vPr01, '/ЗаТекущ/НаНачГода', '3');
+            #defSave(rTek02, rPr02, vTek02, vPr02, '/ЗаТекущ/ПолЗаГод' , '4');
+            #defSave(rTek03, rPr03, vTek03, vPr03, '/ЗаПред/ВозврЗаГод', '5');
+            #defSave(rTek04, rPr04, vTek04, vPr04, '/ЗаПред/НаКонГода' , '6');
+  //____________________________________________________________________________________________________________
+  //#endregion РАЗДЕЛ 8
+  //------------------------------------------------------------------------------------------------------------
+@end.
+
+@Script On_ExportXML : boolean;
+@begin
+  var tmpFileXML:string;
+
+  tmpFileXML := GetFileName('*.xml', 'Файл XML');
+  if (tmpFileXML='') Exit;
+
+  if (not XMLMap.ExpToXml(tmpFileXML)) {
+    Message('On_ExportXML: '+ XMLMap.GetStLastError, cancelButton+Warning);
+    Exit;
+  }
+
+  message('Выгружен в файл ' + tmpFileXML);
+@end.

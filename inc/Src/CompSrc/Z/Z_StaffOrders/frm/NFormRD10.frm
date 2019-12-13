@@ -21,6 +21,7 @@
 ОКПО
 
 TitleDoc_Nrec
+sBarCode
 ContDoc_Nrec
 Person_Nrec
 Appointments_Nrec
@@ -31,7 +32,7 @@ Appointments_Nrec
 фио
 таб_номер
 должность
-подразделение
+подразделение : WideString
 
 Raise_Nrec
 Raise_RaiseType
@@ -67,6 +68,7 @@ Raise_Appoint
 ОКПО                    ^
 
 TitleDoc_Nrec           ^
+sBarCode		^
 ContDoc_Nrec            ^
 Person_Nrec             ^
 Appointments_Nrec       ^
@@ -77,7 +79,7 @@ Appointments_Nrec       ^
 фио                     ^
 таб_номер               ^
 должность               ^
-подразделение           ^
+подразделение : WideString ^
 
 .{NformRD10Cycle  CheckEnter
 Raise_Nrec              ^

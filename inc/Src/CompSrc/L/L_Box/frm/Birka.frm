@@ -15,12 +15,19 @@
 .set name = 'BirkaP'
 .hide
 .fields
-  KOD : string
-  Article : string
+  MYORG : string        //Собст. организация
+  PodrName : string     //Склад
+  KOD : string          //Код ячейки
+  NameBOX: string       //Наименование ячейки
+  SHK_BOX : string      //Штрих-код ячейки
+  BarKod : string       //МЦ Баркод
+  BarKod2 : string      //МЦ Баркод2
+  Article : string      //Наименование МЦ
+  Ed_izm  : string      //Ед.измерения
   Count : double
 .endfields
 .{
-^^^
+^^^^^^^^^^
 .}
 .endform
 
@@ -30,12 +37,27 @@
 .set name = 'BirkaR'
 .hide
 .fields
-  KOD : string
-  Article : string
-  KOD2 : string
-  Article2 : string
+  MYORG : string       //Собст. организация
+  PodrName : string    //Склад
+  KOD : string         //Код ячейки
+  NameBOX: string      //Наименование ячейки
+  SHK_BOX : string     //Штрих-код ячейки
+  BarKod : string      //МЦ Баркод
+  BarKod2 : string     //МЦ Баркод2
+  Article : string     //Наименование МЦ
+  Ed_izm  : string     //Ед.измерения
+
+  MYORG2: string       //Собст. организация
+  PodrName2: string    //Склад
+  KOD2: string         //Код ячейки
+  NameBOX2:string      //Наименование ячейки
+  SHK_BOX2: string     //Штрих-код ячейки
+  BarKod_2: string      //МЦ Баркод
+  BarKod2_2: string     //МЦ Баркод2
+  Article2: string     //Наименование МЦ
+  Ed_izm2 : string     //Ед.измерения
 .endfields
 .{
-^^^^
+^^^^^^^^^ ^^^^^^^^^
 .}
 .endform

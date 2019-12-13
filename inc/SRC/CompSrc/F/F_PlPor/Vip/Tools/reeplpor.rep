@@ -1,0 +1,110 @@
+// -----------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 5.73 - Бухгалтерский контур
+// Процедура печати формы реестра переданных на инкассо платежных документов
+// -----------------------------------------------------------------------------
+
+var cntDoc: longInt;
+var tcPost, tcPostBank: comp;
+var isPost: boolean;
+
+procedure CountLines;
+{
+  cntDoc := 0;
+  SummaAll := 0;
+  isPost := false;
+
+  if (GetFirst ReePlDoc = tsOk)
+    do
+    {
+      cntDoc := cntDoc + 1;
+
+      if (not isValid(#PlPor))
+        Continue;
+
+      if (not isPost)
+        if ((PlPor.cPol <> 0) and (PlPor.cBankPol <> 0))
+          {
+            tcPost := PlPor.cPol;     // получатель
+            tcPostBank := PlPor.cBankPol;  // банк получателя
+            isPost := true;
+          }
+
+      GetSummaAll(SummaAll);  // подсчет итоговой суммы в НДЕ
+    }
+    while (GetNext ReePlDoc = tsOk);
+}
+
+procedure PrintReeIncasso;
+{
+  case ParamFr of
+
+    cgTxt:
+      frmPrReePlI.SetGroup('Реестр переданных на инкассо платежных документов ЦБРФ');
+
+    cgRtf:
+      frmPrReePlI.SetGroup('Реестр переданных на инкассо платежных документов ЦБРФ - РТФ');
+  end;
+
+  frmPrReePlI.Write(ReePlPor.NoDok);
+  frmPrReePlI.Write(ReePlPor.DatVip, 'DD mon YYYY г.');
+
+  CountLines;  // в цикле по документам определяем получателя и итоговую сумму в НДЕ
+
+  // определяем позицию в KatOrg и KatBank
+  if (not isPost)  // isPost заполняется выше, в CountLines
+    GetMyOrg;  // если нет ни одного заполненного получателя в списке документов, печатаем собственную организацию
+  else
+    {
+      PlPor.cPol := tcPost;
+      PlPor.cBankPol := tcPostBank;
+
+      GetPol;  // позиционируемся на получателе и его банке
+    }
+
+  if (KatBank.sNameOrg <> '')  // заполнено наименование организации в банке
+    frmPrReePlI.Write(iKatOrg.GetKatOrgName(KatBank.NRec, koOnBank));
+  else
+    frmPrReePlI.Write(oHistory.sGetField(coKatOrg, KatOrg.NRec, 'REP.KATORGNAME', PlPor.DatVip));
+
+  frmPrReePlI.Write(KatBank.Name);
+  frmPrReePlI.Write(cntDoc);
+  frmPrReePlI.Write(iFinDelimiter.GetSumToStr(False, SummaAll, 0));
+
+  frmPrReePlI.Write(DoubleToString(0, SummaAll));
+
+  if (GetFirst ReePlDoc = tsOk)
+    do
+      {
+        if (not isValid(#PlPor))
+          {
+            Message('Не найден платежный документ № ' + ReePlDoc.NoDok +
+                    ' от ' + DateToStr(ReePlDoc.DatVip,'DD/MM/YY г.') +
+                    ' включенный в реестр.',OkButton);
+            Continue;
+          }
+
+        frmPrReePlI.Write(PlPor.VidOper);
+        frmPrReePlI.Write(PlPor.NoDok);
+        frmPrReePlI.Write(DateToStr(PlPor.DatVip, 'DD/MM/YYYY'));
+        frmPrReePlI.Write(iFinDelimiter.GetSumToStr(False, PlPor.SumPlat, 0));
+
+        GetPlat;
+
+        frmPrReePlI.Write(KatBank.MFO1);
+        frmPrReePlI.Write(KatBank.Schet1);
+      }
+    while (GetNext ReePlDoc = tsOk)
+
+  frmPrReePlI.putEvent(feBreak);
+
+  if (not frmPrReePlI.Error)
+    {
+      if ((ParamPrn and 1) = 0)
+        frmPrReePlI.PrintFile;
+      else
+        frmPrReePlI.ShowFile('Pеестр переданных на инкассо платежных документов');
+    }
+  else
+    frmPrReePlI.AbortForm;
+}

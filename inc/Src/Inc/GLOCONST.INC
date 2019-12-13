@@ -93,6 +93,7 @@
   cgSetFATuneDefault  =  3;       // брать настройки для FA
   cgSetUksTuneDefault =  4;       // брать настройки для капстроя (#ifdef __UKS__)
   cgSetTxPTuneDefault =  5;       // брать настройки для электронной отчетности
+  cgSetGOZTuneDefault =  6;       // брать настройки для "отчетности ГОЗ"
 
 //-----------------------------------------------
 // печать иерархических отчетов
@@ -142,6 +143,9 @@
   cgAttrType_Memo     =  4;   // 4 -  MEMO
   cgAttrType_Comp     =  5;   // 5 -  Comp
   cgAttrType_Switch   =  6;   // 6 -  Переключатель, доступен только для конфигуратора
+  cgAttrType_Bool     =  7;   // 7 -  BOOLEAN
+  cgAttrType_DateTime =  8;   // 8 -  DATETIME
+  cgAttrType_LongInt  =  9;   // 9 -  LongInt
 //-----------------------------------------------
 // Для получения параметров связи с DDE сервером
   DDE_ServerName   = 0;

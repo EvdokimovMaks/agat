@@ -9,7 +9,7 @@
 
 const
   // пустая дата
-  lc_dEmpty : date = Date(0, 0, 0);
+  lc_dEmpty : date = To_Date(0,0,0);
 
   lc_OSDocInfo_KlsTiDK  : word = (              1516);  // KlassOS.TiDK для DocInfo
   lc_OSDocInfo_DocType  : word = (cgOs_15_OS mod 100);  // "Тип документа"  для DocInfo

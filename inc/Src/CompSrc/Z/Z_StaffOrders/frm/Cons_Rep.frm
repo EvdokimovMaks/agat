@@ -11,18 +11,28 @@
 .hide
 .fields
  NRecTitleDoc : comp
+ sBarCode
  Name_Company
  Date_order
  Number_order
  NeedMainNote : word
  MainNote
+ NeedMainHeader : word
+ MainHeader1
+ MainHeader2
+ MainHeader3
 .endfields
  NRecTitleDoc ^
+ sBarCode ^
  Name_Company: ^
  Date_order: ^
  Number_order: ^
  NeedMainNote : @
  MainNote ^
+ NeedMainHeader : @
+ MainHeader1 ^
+ MainHeader2 ^
+ MainHeader3 ^
 !По распорядительному действию
 .{ Consolidated_Report1 CheckEnter
 .fields
@@ -43,8 +53,11 @@ TopNote: ^
  NrecPerson : comp
  PersTabN
  NrecAppoint: comp
- Field1 Field2 Field3 Field4 Field5 Field6 Field7 Field8 Field9 Field10 Reason
- Field1PP Razriad Special KPS
+ Field1: WideString Field2: WideString Field3: WideString Field4: WideString Field5:  WideString
+ Field6: WideString Field7: WideString Field8: WideString Field9: WideString Field10: WideString
+ Reason
+ Field1PP: WideString
+ Razriad Special KPS
  Appendix1 Appendix2 Appendix3 Appendix4 Appendix5
 .endfields
 Fields: ^ ^ ^  ^ ^ ^ ^ ^ ^ ^ ^ ^ ^

@@ -1,0 +1,181 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 9.10 - Спецоснастка
+// Печать отчета о наличии драгметаллов в формате FastReport
+//------------------------------------------------------------------------------
+
+var iExcelFormat : ExcelFormat;
+var bOneTime : boolean;
+
+//-------------------------
+
+procedure InitFilters;
+{
+  fltNum := 0;
+  delete all Filters;
+
+  InitFltByType(Word(23), fltNom, nmNom);
+  InitFltByType(Word(11), fltPod, nmPod);
+  InitFltByType(Word(8),  fltMol, nmMol);
+  InitFltByType(Word(6),  fltOrg, nmOrg);
+  InitFltByType(Word(2),  fltGrp, nmGrp);
+  InitFltByType(Word(45), fltCrd, nmCrd);
+  InitFltByType(Word(112),fltDrag,nmDrag);
+  InitFltByType(Word(56), fltMet, nmMet);
+  InitFltClassFR(fltClass, nmClass);
+}
+
+//-------------------------
+
+DataStream dtsRNalDrg
+(
+  [CommonFormHeader] CommonFormHeader;
+  [TypeRep]          short;
+  [RepDate]          dFor;
+  [Place]            GetExplStr;
+  [GroupingName]     if (isValid(#Grouping), Grouping.Name, '');
+
+  Table Filters
+  (
+    [FiltName] Filters.FiltName;
+  );
+
+  Table tblOperList
+  (
+    [isLeaf]   tblOperList.isLeaf;
+    [OpName]   tblOperList.OpName;
+    [OpDate]   tblOperList.OpDate;
+    [ExpDate]  tblOperList.ExpDate;
+    [Price]    tblOperList.Price;
+    [Kol]      tblOperList.Kol;
+    [EdName]   tblOperList.EdName;
+    [Stoim]    tblOperList.Stoim;
+    [Perc]     tblOperList.Perc;
+    [SumIzn]   tblOperList.SumIzn;
+    [DopInfo]  tblOperList.DopInfo;
+  );
+
+  DataSet DragList
+  (
+    [DragName] if(pDragFR <> 0, S_KatDragBuf.Name, '');
+    [DragKod]  if(pDragFR <> 0, S_KatDragBuf.Kod, '');
+    [DragEd]   if(pDragFR <> 0, S_KatDragBuf.Ed, '');
+    [DragKol]  iExcelFormat.DoubleToStrFormatNotNul(tblNalByOper.DragKol, SumFormat);
+  );
+
+  DataSet Signers
+  (
+    [NRec]  iFeeSigners.GetSignerNRec;
+    [FIO]   iFeeSigners.GetSignerFIO(1);
+    [TabN]  iFeeSigners.GetSignerTabN;
+    [Post]  iFeeSigners.GetSignerPosition(1);
+    [Role]  iFeeSigners.GetSignerRole;
+  );
+)
+
+HandleEvent DataSet Signers
+//-------------------------
+  cmPreProcess:
+  {
+    lSign := 0;
+
+    if (not iFeeSigners.FindFeeSignersByNRec(cSigners))
+      AbortProcess;
+  }
+//-------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    lSign++;
+
+    if (lSign = 1)
+    {
+      if (iFeeSigners.GetSignerFirst)
+        ContinueDataSet;
+    }
+    else
+    {
+      if (iFeeSigners.GetSignerNext)
+        ContinueDataSet;
+    }
+  }
+//-------------------------
+End; // HandleEvent DataSet Signers
+
+HandleEvent DataSet DragList
+//-------------------------
+  cmPreProcess:
+  {
+    bOneTime := (DrgNLev <= GrpNLev) or (GetFirst S_KatDragBuf <> tsOk);
+    pDragFR := if (bOneTime, -1, 0);
+  }
+//-------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    if (bOneTime)
+    {
+      if (pDragFR = -1)
+      {
+        set pDragFR := 0;
+        ContinueDataset;
+      }
+    }
+    else
+    {
+      if (pDragFR = 0)
+      {
+        if (GetFirst S_KatDragBuf = tsOk)
+        {
+          set pDragFR := S_KatDragBuf.nRec;
+          ContinueDataset;
+        }
+      }
+      else
+      {
+        if (GetNext S_KatDragBuf = tsOk)
+        {
+          set pDragFR := S_KatDragBuf.nRec;
+          ContinueDataset;
+        }
+      }
+    }
+  }
+//-------------------------
+End; // HandleEvent DataSet DragList
+
+HandleEvent Table tblOperList
+//-------------------------
+  cmOnProcess:
+    if (not NextVisual)
+      BreakProcess;
+//-------------------------
+End; // HandleEvent Table tblOperList
+
+HandleEvent Table Filters
+//-----------------------
+  cmPreProcess:
+    InitFilters;
+//-----------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+  }
+//-------------------------
+End; // HandleEvent DataSet Filters
+
+HandleEvent // HandleEvent DataStream dtsRNalDrg
+//---------
+  cmPreProcess:
+    StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, 'Идет формирование ведомости наличия...', 0);
+//---------
+  cmPostProcess:
+    StopVisual('', 0);
+//---------
+end; // HandleEvent DataStream dtsRNalDrg
+end; // DataStream dtsRNalDrg

@@ -12,7 +12,7 @@
 const
   // типы записей регистрации (аналог sfconst.Inc)
   cwTypeBK_Sell_Reg_NalAgent       : Word = 7418;  // Регистрация СФ налогового агента
-
+  cwTypeBK_Sell_Reg_YchOtgr        : Word = 7456;  // Регистрация СФ (учет по отгрузке)
   // типы счет фактур (аналог sfconst.Inc)
   cwTypeSF_Sell_Otgr               : Word = 7200;  // Счет-фактура, отгрузка (Россия / Беларусь)
   cwTypeSF_Sell_Avans              : Word = 7218;  // Счет-фактура, оплата, предоплата

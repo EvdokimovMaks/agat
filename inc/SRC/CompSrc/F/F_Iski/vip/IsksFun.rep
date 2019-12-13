@@ -1,0 +1,1371 @@
+/*
+ ╔═══════════════════════════════════════════════════════════════════════════╗
+ ║                     (c) 1994,97 корпорация ГАЛАКТИКА                      ║
+ ║ Проект        : ГАЛАКТИКА                                                 ║
+ ║ Система       : Исковые заявления и решения суда                          ║
+ ║ Версия        : 5.85+                                                     ║
+ ║ Назначение    : Функции для печати расчета по иску                        ║
+ ║ Ответственный : Дудкин И.В.                                               ║
+ ║ Параметры     : нет                                                       ║
+ ╚═══════════════════════════════════════════════════════════════════════════╝
+*/
+
+//-------------------------------------------------------------------------
+// Переменные для подсчета итогов по отчету
+
+var TotKol  , TotPeny
+  , TotProsr, TotProsrIncNDS           // Просроченная ЗАДОЛЖЕННОСТЬ (а не оплата)
+  , TotOtgr , TotOtgrIncNDS
+  , TotOpl  , TotOplIncNDS   : double;
+
+//-------------------------------------------------------------------------
+// Переменные для подсчета итогов по строке спецификации иска
+var SpOplIncNDS
+  , SpProsrIncNDS
+  , SpPeny       : double;
+
+//-------------------------------------------------------------------------
+var prnLocked : boolean;
+var prnMode   : word;
+var format    : byte;      // формат отчета: 0 - бизнес-текст, 1 - FastReport
+var NRec
+  , NRec3     : comp;
+
+Function isRepDetailed : boolean; { Result := (prnMode AND 1) > 0; }
+Function isShowDOInfo  : boolean; { Result := (prnMode AND 2) > 0; }
+
+//-------------------------------------------------------------------------
+// Функции поддержки расчета пеней и печати отчета
+
+Function SubNDS(pSum : double) : double; // Должна использоваться в контексте строки спецификации иска
+{
+  // Коэффициент НДС получаем из сумм отгрузки агрегированных по SpIsk = накладной
+  // По-хорошему нужно анализировать каждую отдельную МЦ - IskOtgr, оплаты по ней,
+  // и использовать коэффициент в случае частичной оплаты
+  Result := pSum * (SpIsk.Sum / SpIsk.SumNDS); // В скобках бывший koefNDS
+}
+
+//-------------------------------------------------------------------------
+
+// количество дней просрочки
+Function GetProsrDays(dRegl : date; dPlat : date) : longint;
+{
+  Result := 0;
+
+  if NOT isUseFixKolDn
+    {
+      Result := CalcDaysBetweenDates(dRegl, dPlat, FALSE);
+      Exit;
+    }
+
+  // Использовать фиксированное количество дней для полного месяца просрочки
+  var DateChanged : boolean;
+  var fixDays     : word;
+  var nDays       : longint;
+
+  if NOT ReadMyDsk(fixDays, 'IskiFixDays', DateChanged)
+    fixDays := 30;
+
+  nDays := Months_Between(dRegl, dPlat);
+
+  // Дата начала и окончания внутри одного месяца, может, первое и последнее число
+  if (nDays = 0)
+    nDays := if((Day(dRegl) = 1) AND (Day(dPlat) = Last_Day(dPlat)), 1, 0);
+  else
+    {
+      // Дата начала и окончания в разных месяцах, рассматриваем первое и последнее число
+      nDays--;
+
+      if (Day(dRegl) = 1)
+        nDays++;
+
+      if (Day(dPlat) = Last_Day(dPlat))
+        nDays++;
+    }
+
+  if (nDays <= 0)
+    nDays := CalcDaysBetweenDates(dRegl, dPlat, FALSE);
+  else
+    {             // Если установлен флажок и имеются полные месяцы просрочки
+      nDays *= fixDays;
+
+      if (Day(dRegl) > 1)
+        nDays += CalcDaysBetweenDates(dRegl, date(Last_Day(dRegl), Month(dRegl), Year(dRegl)), FALSE);
+
+      if (Day(dPlat) < Last_Day(dPlat))
+        nDays += CalcDaysBetweenDates(date(1, Month(dPlat), Year(dPlat)), dPlat, FALSE);
+    }
+
+  Result := nDays;
+}
+
+// пеню на долг sDolg, с процентом Proc, за дней просрочки dProsr
+Function GetPenyOnDolg(sDolg : double; Proc : double; dProsr : longint) : double;
+{
+  Result := (sDolg / 100) * Proc * if(dProsr <= 0, 0, dProsr);
+}
+
+//-------------------------------------------------------------------------
+
+Procedure SelectForm;
+{
+  if isIskByOtgr
+    if (SpIsk.ProcRefin <> 0)
+      if isRepDetailed
+        frmDolgOnMC.SetGroup('Расчет с уровнем детализации до спецификации по ставке рефинансирования');
+      else
+        frmDolgOnMC.SetGroup('Расчет с уровнем детализации до счета-фактуры по ставке рефинансирования');
+    else
+      if isRepDetailed
+        frmDolgOnMC.SetGroup('Расчет с уровнем детализации до спецификации');
+      else
+        frmDolgOnMC.SetGroup('Расчет с уровнем детализации до счета-фактуры');
+  else
+    if (SpIsk.ProcRefin <> 0)
+      frmDolgOnMC.SetGroup('Расчет за несвоевременное погашение авансов по ставке рефинансирования');
+    else
+      frmDolgOnMC.SetGroup('Расчет за несвоевременное погашение авансов');
+}
+
+//------------------------------------------------------------------------------
+
+Procedure SelectForm_FR;
+{
+  if isIskByOtgr
+    if (SpIsk.ProcRefin <> 0)
+      if isRepDetailed
+        RunFReportByGroup(SomeDocFR, 'Raschet_Specif_Refin');    // DolgOnMC_05
+      else
+        RunFReportByGroup(SomeDocFR, 'Raschet_SchetFact_Refin'); // DolgOnMC_04
+    else
+      if isRepDetailed
+        RunFReportByGroup(SomeDocFR, 'Raschet_Specif');    // DolgOnMC_03
+      else
+        RunFReportByGroup(SomeDocFR, 'Raschet_SchetFact'); // DolgOnMC_02
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintHeader;
+{
+  if prnLocked
+    Exit;
+
+  frmDolgOnMC.Write(Iski.nRec);
+  frmDolgOnMC.Write(if(MainDogovor.TipMoney <> 3, oValFunc.ValNatSimv, if(MainDogovor.cVal = 0, oValFunc.ValNatSimv, oValFunc.GetValSimv(MainDogovor.cVal))));
+
+  if (GetFirst KatNazna where (( MainDogovor.cProg == KatNazna.nRec )) = tsOk)
+    frmDolgOnMC.Write(KatNazna.Name)
+  else
+    frmDolgOnMC.Write('отпущенные матценности и оказанные услуги');
+
+  frmDolgOnMC.Write(KatOrg.Name);
+  frmDolgOnMC.Write(MainDogovor.NoDoc);
+  frmDolgOnMC.Write(MainDogovor.dDoc);
+  frmDolgOnMC.Write(Iski.dCalc);
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintHeader_FR;
+{
+  if prnLocked
+    exit;
+
+  cIsk  := Iski.nRec;
+  wTiDk := Iski.TiDk;
+
+  ValSimv := if(MainDogovor.TipMoney <> 3, oValFunc.ValNatSimv, if (MainDogovor.cVal = 0, oValFunc.ValNatSimv, oValFunc.GetValSimv(MainDogovor.cVal)));
+
+  if (GetFirst KatNazna where (( MainDogovor.cProg == KatNazna.nRec )) = tsOk)
+    Nazna := KatNazna.Name;
+  else
+    Nazna := 'отпущенные матценности и оказанные услуги';
+
+  NameOrg     := KatOrg.Name;
+  NameDogovor := MainDogovor.NoDoc;
+  DateDogovor := DateToStr(MainDogovor.dDoc, 'DD/MM/YYYY');
+  CalcDate    := DateToStr(Iski.dCalc      , 'DD/MM/YYYY');
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintFooter;
+{
+  if prnLocked
+    Exit;
+
+  frmDolgOnMC.PutEvent(feBreak);
+  frmDolgOnMC.Write(TotKol);
+  frmDolgOnMC.Write(TotOtgrIncNDS);
+  frmDolgOnMC.Write(TotOtgr);
+  frmDolgOnMC.Write(TotOplIncNDS);
+  frmDolgOnMC.Write(TotProsrIncNDS);
+  frmDolgOnMC.Write(TotProsr);
+  frmDolgOnMC.Write(TotPeny);
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintFooter_FR;
+{
+  if prnLocked
+    exit;
+
+  TotalSumNDS   := TotOtgrIncNDS;
+  TotalSum      := TotOtgr;
+  TotalSumOpl   := TotOplIncNDS;
+  TotalProsrNDS := TotProsrIncNDS;
+  TotalProsr    := TotProsr;
+  TotalSumPeny  := TotPeny;
+}
+
+//------------------------------------------------------------------------------
+
+Procedure SkipFields(NToSkip : word);
+{
+  if prnLocked
+    Exit;
+
+  frmDolgOnMC.SkipFormat(NToSkip);
+}
+
+//------------------------------------------------------------------------------
+// процедура добавления новой записи в таблицу FastReport для последующей печати
+Procedure AddNRec_FR;
+{
+  if prnLocked
+    exit;
+
+  NRec++;
+
+  ClearBuffer(#OsnDolgFR);
+
+  OsnDolgFR.nRec := NRec;
+}
+
+//------------------------------------------------------------------------------
+// процедура вставки текущей записи в таблицу FastReport для последующей печати
+Procedure AddInsert_FR;
+{
+  if prnLocked
+    exit;
+
+  Insert Current OsnDolgFR;
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintSpRowInfo;
+{
+  if prnLocked
+    Exit;
+
+  // Печать информации по накладной
+  var SchFactStr  : string; SchFactStr  := SpIsk.NoSchFact;
+  var SchFactDate : date;   SchFactDate := StrToDate(SubStr(SchFactStr, 11, 10), 'DD/MM/YYYY');
+
+  if (Pos('от', SchFactStr) = 0)
+    {
+      if (SchFactDate <> ZeroDate)
+        SchFactStr := Trim(SubStr(SchFactStr, 1, 10)) + ' от '+ SubStr(SchFactStr, 11, 10);
+    }
+  else
+    if (Pos('от', SchFactStr) > 8)
+      SchFactStr := Trim(SubStr(SchFactStr, 1, Pos('от', SchFactStr) - 1));
+
+  frmDolgOnMC.Write(SpIsk.dSopr); // Дата накладной
+  frmDolgOnMC.Write(SpIsk.Name);
+  frmDolgOnMC.Write(SpIsk.nSopr);
+  frmDolgOnMC.Write(SpIsk.NoDoc);
+  frmDolgOnMC.Write(SchFactStr);
+  frmDolgOnMC.Write(SpIsk.dDoc);  // Дата ДО
+
+  if ((SpIsk.Name = '') AND (SpIsk.nSopr = '') AND (SpIsk.NoDoc = '') AND (SpIsk.dDoc = ZeroDate))
+    frmDolgOnMC.Write('');
+  else
+    if isIskByOpl
+      frmDolgOnMC.Write(if(SchFactStr='', '', 'СФ №' + SchFactStr) + ' (' + SpIsk.Name + ' №' + SpIsk.nSopr + ')');
+    else
+      if isShowDOInfo
+        frmDolgOnMC.Write(if(SchFactStr='', '', 'СФ №' + SchFactStr) + ' (' + SpIsk.Name + ' №'+ SpIsk.nSopr + ', ДО №' + SpIsk.NoDoc + ' от ' + string(SpIsk.dDoc) + ')');
+      else
+        frmDolgOnMC.Write(if(SchFactStr='', '', 'СФ №' + SchFactStr));
+
+  frmDolgOnMC.Write(double(0));
+  frmDolgOnMC.Write(double(0));
+  frmDolgOnMC.Write(SpIsk.SumNDS);
+  frmDolgOnMC.Write(SpIsk.Sum);
+
+// TotKol := TotKol + tKol; // Количество известно только здесь
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintSpRowInfo_FR;
+{
+  if prnLocked
+    exit;
+
+  // Печать информации по накладной
+  var SchFactStr  : string; SchFactStr  := SpIsk.NoSchFact;
+  var SchFactDate : date;   SchFactDate := StrToDate(SubStr(SchFactStr, 11, 10), 'DD/MM/YYYY');
+
+  if (Pos('от', SchFactStr) = 0)
+    {
+      if (SchFactDate <> ZeroDate)
+        SchFactStr := Trim(SubStr(SchFactStr, 1, 10)) + ' от ' + SubStr(SchFactStr, 11, 10);
+    }
+  else
+    if (Pos('от', SchFactStr) > 8)
+      SchFactStr := Trim(SubStr(SchFactStr, 1, Pos('от', SchFactStr) - 1));
+
+  NRec++;
+
+  ClearBuffer(#OsnDolgFR);
+
+  OsnDolgFR.nRec := NRec;
+  OsnDolgFR.DateOtgr := DateToStr(SpIsk.dSopr, 'DD/MM/YYYY'); // Дата накладной
+  OsnDolgFR.NameDoc  := SpIsk.Name;
+
+  if ((SpIsk.Name = '') AND (SpIsk.nSopr = '') AND (SpIsk.NoDoc = '') AND (SpIsk.dDoc = ZeroDate))
+    OsnDolgFR.DocKolVal := '';
+  else
+    if isIskByOpl
+      OsnDolgFR.DocKolVal := if(SchFactStr = '', '', 'СФ №' + SchFactStr) + ' (' + SpIsk.Name+ ' №' + SpIsk.nSopr + ')';
+    else
+      if isShowDOInfo
+        OsnDolgFR.DocKolVal := if(SchFactStr = '', '', 'СФ №' + SchFactStr) + ' (' + SpIsk.Name + ' №'  + SpIsk.nSopr + ', ДО №' + SpIsk.NoDoc + ' от '+ string(SpIsk.dDoc) + ')';
+      else
+        OsnDolgFR.DocKolVal := if(SchFactStr = '', '', 'СФ №' + SchFactStr);
+
+  OsnDolgFR.Kol    := double(0);
+  OsnDolgFR.Price  := double(0);
+  OsnDolgFR.SumNDS := SpIsk.SumNDS;
+  OsnDolgFR.Sum    := SpIsk.Sum;
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintPogashInfo(pPogashSum : double);
+{
+  if prnLocked
+    Exit;
+
+  frmDolgOnMC.Write(IskOpl.dPlat);
+  frmDolgOnMC.Write(pPogashSum);
+  frmDolgOnMC.Write(IskOpl.NPlat);
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintPogashInfo_FR(pPogashSum: double);
+{
+  if prnLocked
+    exit;
+
+  OsnDolgFR.DateOpl  := DateToStr(IskOpl.dPlat, 'DD/MM/YYYY');
+  OsnDolgFR.SumOpl   := pPogashSum;
+  OsnDolgFR.NoDocOpl := IskOpl.NPlat;
+}
+
+//------------------------------------------------------------------------------
+
+Function CalcDayPerc(pRefin : double) : double;
+{
+  if (SpIsk.ProcRefin = 0)
+    Result := SpIsk.Proc;
+  else
+    Result := Round(SpIsk.Proc + SpIsk.ProcRefin * pRefin / wGetTune('Oper.Dogovor.IskiDaysInYear'), 5);
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintProsrInfo(pDolgIncNDS : double; pProsrDn1, pProsrDn2 : longint; pPeny1, pPeny2, pPenyNeust, pRefin : double);
+{
+  if prnLocked
+    Exit;
+
+  // Собственно информация о просрочке
+  frmDolgOnMC.Write(pDolgIncNDS);
+  frmDolgOnMC.Write(SubNDS(pDolgIncNDS));
+
+  // Годовая ставка ЦБ РФ
+  if (SpIsk.ProcRefin = 0)
+    {
+      frmDolgOnMC.SkipFormat(1);
+
+      frmDolgOnMC.Write(SpIsk.Proc);
+      frmDolgOnMC.Write(pProsrDn1 + pProsrDn2);
+      frmDolgOnMC.Write(pPeny1 + pPeny2 + pPenyNeust);
+
+      if NOT PosOnShtraf
+        frmDolgOnMC.PutEventById(feFalse, fcPenySpec);
+      else
+        if byRefin // не по ставке рефинансирования
+          frmDolgOnMC.PutEventById(feFalse, fcPenySpec)
+        else
+          {
+            frmDolgOnMC.PutEventById(feTrue, fcPenySpec);
+
+            if (ProcNeust > 0 )
+              {
+                frmDolgOnMC.Write('Неустойка');
+                frmDolgOnMC.Write(ProcNeust);
+                frmDolgOnMC.SkipFormat(1);
+                frmDolgOnMC.Write(pPenyNeust);
+              }
+
+            frmDolgOnMC.Write('Пеня 1');
+            frmDolgOnMC.Write(SpIsk.Proc);
+            frmDolgOnMC.Write(if(wKolDn > 0, wKolDn, pProsrDn1));
+            frmDolgOnMC.Write(pPeny1);
+
+            if (wKolDn > 0 )
+              {
+                frmDolgOnMC.Write('Пеня 2');
+                frmDolgOnMC.Write(ProcPenyK);
+                frmDolgOnMC.Write(pProsrDn2);
+                frmDolgOnMC.Write(pPeny2);
+              }
+
+            frmDolgOnMC.PutEvent(feBreak);
+          }
+    }
+  else
+    {
+      frmDolgOnMC.Write(string(SpIsk.ProcRefin * pRefin + SpIsk.Proc * wGetTune('Oper.Dogovor.IskiDaysInYear')) + '%');
+      frmDolgOnMC.Write(CalcDayPerc(pRefin)); // Round(SpIsk.Proc + SpIsk.ProcRefin * pRefin / wGetTune('Oper.Dogovor.IskiDaysInYear'), 5);
+      frmDolgOnMC.Write(pProsrDn1);
+      frmDolgOnMC.Write(pPeny1 + pPeny2 + pPenyNeust);
+
+      frmDolgOnMC.PutEventById(feTrue, fcPenySpec);
+
+      frmDolgOnMC.Write('Рефинансирование');
+      frmDolgOnMC.Write(Round(SpIsk.ProcRefin * pRefin / wGetTune('Oper.Dogovor.IskiDaysInYear'), 5));
+      frmDolgOnMC.SkipFormat(1);
+      frmDolgOnMC.Write(pPeny1);
+
+      if ( SpIsk.Proc > 0)
+      {
+        frmDolgOnMC.Write('Пеня');
+        frmDolgOnMC.Write(SpIsk.Proc);
+        frmDolgOnMC.SkipFormat(1);
+        frmDolgOnMC.Write(pPeny2);
+      }
+        
+      if (ProcNeust > 0)
+      {
+        frmDolgOnMC.Write('Неустойка');
+        frmDolgOnMC.Write(ProcNeust);
+        frmDolgOnMC.SkipFormat(1);
+        frmDolgOnMC.Write(pPenyNeust);
+      }
+
+      frmDolgOnMC.PutEvent(feBreak);
+    }
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintProsrInfo_FR(pDolgIncNDS: double; pProsrDn1, pProsrDn2: longint; pPeny1, pPeny2, pPenyNeust, pRefin: double);
+{
+  if prnLocked
+    exit;
+
+  // Собственно информация о просрочке
+  OsnDolgFR.SumProsrNDS := pDolgIncNDS;          // сумма просроченной задолженности
+  OsnDolgFR.SumProsr    := SubNDS(pDolgIncNDS);  // сумма просроченной задолженности без НДС
+
+  // Годовая ставка ЦБ РФ
+  if (SpIsk.ProcRefin = 0)
+    {
+      OsnDolgFR.ProcRefinDay := SpIsk.Proc;
+      OsnDolgFR.AllProsrDn   := pProsrDn1 + pProsrDn2;
+      OsnDolgFR.SumAllPeny   := pPeny1 + pPeny2 + pPenyNeust;
+
+      Insert Current OsnDolgFR;
+
+      if PosOnShtraf
+        if NOT byRefin // не по ставке рефинансирования
+          {
+            if (ProcNeust > 0)
+              {
+                ClearBuffer(#PenjaFR);
+                PenjaFR.nRec2    := NRec;
+                PenjaFR.nRec3    := ++NRec3;
+                PenjaFR.PenyName := 'Неустойка';
+                PenjaFR.Proc     := ProcNeust;
+                PenjaFR.SumPeny  := pPenyNeust;
+                Insert Current PenjaFR;
+              }
+
+            NRec3++;
+
+            ClearBuffer(#PenjaFR);
+            PenjaFR.nRec2    := NRec;
+            PenjaFR.nRec3    := NRec3;
+            PenjaFR.PenyName := 'Пеня 1';
+            PenjaFR.Proc     := SpIsk.Proc;
+            PenjaFR.KolProsr := if(wKolDn > 0, wKolDn, pProsrDn1);
+            PenjaFR.SumPeny  := pPeny1;
+            Insert Current PenjaFR;
+
+            if (wKolDn > 0)
+              {
+                ClearBuffer(#PenjaFR);
+                PenjaFR.nRec2    := NRec;
+                PenjaFR.nRec3    := ++NRec3;
+                PenjaFR.PenyName := 'Пеня 2';
+                PenjaFR.Proc     := ProcPenyK;
+                PenjaFR.KolProsr := pProsrDn2;
+                PenjaFR.SumPeny  := pPeny2;
+                Insert Current PenjaFR;
+              }
+          }
+    }
+  else
+    {
+      OsnDolgFR.ProcRefin    := string(SpIsk.ProcRefin * pRefin + SpIsk.Proc * wGetTune('Oper.Dogovor.IskiDaysInYear')) + '%';
+      OsnDolgFR.ProcRefinDay := CalcDayPerc(pRefin);
+      OsnDolgFR.AllProsrDn   := pProsrDn1;
+      OsnDolgFR.SumAllPeny   := pPeny1 + pPeny2 + pPenyNeust;
+
+      Insert Current OsnDolgFR;
+
+      ClearBuffer(#PenjaFR);
+      PenjaFR.nRec2    := NRec;
+      PenjaFR.nRec3    := ++NRec3;
+      PenjaFR.PenyName := 'Рефинансирование';
+      PenjaFR.Proc     := Round(SpIsk.ProcRefin * pRefin / wGetTune('Oper.Dogovor.IskiDaysInYear'), 5);
+      PenjaFR.SumPeny  := pPeny1;
+      Insert Current PenjaFR;
+
+      if ( SpIsk.Proc > 0)
+        {
+          ClearBuffer(#PenjaFR);
+          PenjaFR.nRec2    := NRec;
+          PenjaFR.nRec3    := ++NRec3;
+          PenjaFR.PenyName := 'Пеня';
+          PenjaFR.Proc     := SpIsk.Proc;
+          PenjaFR.SumPeny  := pPeny2;
+          Insert Current PenjaFR;
+        }
+        
+      if (ProcNeust > 0)
+        {
+          ClearBuffer(#PenjaFR);
+          PenjaFR.nRec2    := NRec;
+          PenjaFR.nRec3    := ++NRec3;
+          PenjaFR.PenyName := 'Неустойка';
+          PenjaFR.Proc     := ProcNeust;
+          PenjaFR.SumPeny  := pPenyNeust;
+          Insert Current PenjaFR;
+        }
+    }
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintRefinInfo(dBeg : date; SkipOtgr : boolean);
+{
+  if prnLocked
+    Exit;
+
+  if SkipOtgr
+    SkipFields(12);
+
+  frmDolgOnMC.Write(dBeg);
+
+  SkipFields(2);
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintRefinInfo_FR(dBeg : date; SkipOtgr : boolean);
+{
+  if prnLocked
+    exit;
+
+  if SkipOtgr
+  {
+    NRec++;
+
+    ClearBuffer(#OsnDolgFR);
+
+    OsnDolgFR.nRec := NRec;
+  }
+
+  OsnDolgFR.DateOpl := DateToStr(dBeg, 'DD/MM/YYYY');
+}
+
+//-------------------------------------------------------------------------
+
+Function DistrByRefin(dStart, dStop : date; pSum : double; NeedSkip, WasPlat : boolean; pPogashSum : double) : double;
+{
+  var ProsrDn1
+    , ProsrDn2  : longint;
+  var Peny1
+    , Peny2
+    , PenyNeust : double;
+
+  Result    := 0;
+  ProsrDn1  := 0;
+  ProsrDn2  := 0;
+  Peny1     := 0;
+  Peny2     := 0;
+  PenyNeust := 0;
+
+  // штраф за просрочку оплаты, Беларусь. Не разбиваем на периоды изменения ставок рефинансирования
+  if ( isIskByOtgr and (wGetTune('Country') = ccBel) and (SpIsk.ProcRefin > 0) )
+    pSum := IskOpl.Summa;
+
+  if NOT NeedSkip
+    dStop := Sub_Day(dStop, 1);
+
+  if PosOnShtraf
+    PenyNeust := ProcNeust/100 * if(isNachOnNDS, pSum, SubNDS(pSum)); // неустойка
+
+  //------------------------------------------------------------------------------
+  // Не по ставке рефинансирования
+  if (SpIsk.ProcRefin = 0)
+    {
+      ProsrDn1 := GetProsrDays(dStart,  dStop);
+
+      if PosOnShtraf AND (wKolDn > 0) // 2 пени за 2 периода
+        {
+          var DatRasch: date; DatRasch := Add_Day(dStart, wKolDn);
+
+          if (dStop < DatRasch)
+            Peny1 := GetPenyOnDolg(if(isNachOnNDS, pSum, SubNDS(pSum)), SpIsk.Proc, ProsrDn1)
+          else
+            {
+              ProsrDn1 := GetProsrDays(dStart  , Sub_Day(DatRasch, 1));
+              ProsrDn2 := GetProsrDays(DatRasch, dStop);
+              Peny1    := GetPenyOnDolg(if(isNachOnNDS, pSum, SubNDS(pSum)), SpIsk.Proc, ProsrDn1);
+              Peny2    := GetPenyOnDolg(if(isNachOnNDS, pSum, SubNDS(pSum)), ProcPenyK , ProsrDn2);
+            }
+        }
+      else
+        Peny1 := GetPenyOnDolg(if(isNachOnNDS, pSum, SubNDS(pSum)), SpIsk.Proc, ProsrDn1);
+
+      // Если были платежи - вывод отдельной строкой - пропускаем 12 полей отгрузки и 3 платежа
+      // иначе пропускаем только 3 поля платежа
+      if (format = 0) // бизнес-текст
+        {
+          if NeedSkip
+            SkipFields(if(WasPlat, 15, 3));
+          else
+            PrintPogashInfo(pPogashSum);
+
+          PrintProsrInfo(pSum, ProsrDn1, ProsrDn2, Peny1, Peny2, PenyNeust, SpIsk.ProcRefin);
+        }
+      else // FastReport
+        {
+          if NeedSkip
+            {
+              if WasPlat
+                AddNRec_FR;
+            }
+          else
+            PrintPogashInfo_FR(pPogashSum);
+
+          PrintProsrInfo_FR(pSum, ProsrDn1, ProsrDn2, Peny1, Peny2, PenyNeust, SpIsk.ProcRefin);
+        }
+
+      Result := Peny1 + Peny2 + PenyNeust;
+      Exit;
+    }
+
+  // По ставке рефинансирования с учетом истории ее изменений (в РБ история изменений ставки не нужна)
+  var Shkala    : word    = GetShkala; // 0 - ставка рублевая, 1 - валютная
+  var fstPass   : boolean = TRUE;
+  var PrevRefin : double  = 0;
+  var dBeg      : date    = dStart;
+
+  if (GetFirst Refin where (( Shkala  == Refin.KolMin
+                          AND dStart >>= Refin.DatRec )) = tsOk)
+    PrevRefin := Refin.Proc;
+
+  // штраф за просрочку оплаты, Беларусь. Не разбиваем на периоды изменения ставок рефинансирования
+  if not ( isIskByOtgr and (wGetTune('Country') = ccBel) )
+    _LOOP backward Refin where (( Shkala  == Refin.KolMin
+                              AND dStart <<  Refin.DatRec
+                              AND dStop  >>= Refin.DatRec ))
+    {
+      ProsrDn1 := GetProsrDays(dBeg, Sub_Day(Refin.DatRec, 1));
+      Peny1    := GetPenyOnDolg(if(isNachOnNDS, pSum, SubNDS(pSum)), CalcDayPerc(PrevRefin), ProsrDn1);
+
+      // Вывод строки в расчет
+      if (format = 0) // бизнес-текст
+        {
+          if NOT fstPass
+            PrintRefinInfo(Refin.DatRec, TRUE);
+          else
+            if NeedSkip
+              PrintRefinInfo(Refin.DatRec, WasPlat);
+            else
+              PrintRefinInfo(Refin.DatRec, FALSE);
+
+          PrintProsrInfo(pSum, ProsrDn1, 0, Peny1, 0, PenyNeust, PrevRefin);
+        }
+      else // FastReport
+        {
+          if NOT fstPass
+            PrintRefinInfo_FR(Refin.DatRec, TRUE);
+          else
+            if NeedSkip
+              PrintRefinInfo_FR(Refin.DatRec, WasPlat);
+            else
+              PrintRefinInfo_FR(Refin.DatRec, FALSE);
+
+          PrintProsrInfo_FR(pSum, ProsrDn1, 0, Peny1, 0, PenyNeust, PrevRefin);
+        }
+
+      Result    += Peny1;
+      PrevRefin := Refin.Proc;
+      dBeg      := Refin.DatRec;
+      fstPass   := FALSE;
+    }
+
+  ProsrDn1 := GetProsrDays(dBeg, dStop);
+  Peny1    := GetPenyOnDolg(if (isNachOnNDS, pSum, SubNDS(pSum)), CalcDayPerc(PrevRefin), ProsrDn1);
+
+  if (format = 0) // бизнес-текст
+    {
+      if NOT fstPass
+        if NeedSkip
+          SkipFields(15);
+        else
+          {
+            SkipFields(12);
+            PrintPogashInfo(pPogashSum);
+          }
+      else
+        if NeedSkip
+          SkipFields(if(WasPlat, 15, 3));
+        else
+          PrintPogashInfo(pPogashSum);
+
+      PrintProsrInfo(pSum, ProsrDn1, 0, Peny1, 0, PenyNeust, PrevRefin);
+    }
+  else // FastReport
+    {
+      if NOT fstPass
+        {
+          AddNRec_FR;
+
+          if NOT NeedSkip
+            PrintPogashInfo_FR(pPogashSum);
+        }
+      else
+        if NeedSkip
+          {
+            if (WasPlat)
+              AddNRec_FR;
+          }
+        else
+          PrintPogashInfo_FR(pPogashSum);
+
+      PrintProsrInfo_FR(pSum, ProsrDn1, 0, Peny1, 0, PenyNeust, PrevRefin);
+    }
+
+  Result += Peny1 + PenyNeust;
+}
+
+//-------------------------------------------------------------------------
+
+Procedure PrintSpecRows; // Вывод строк спецификации накладной
+{
+  if prnLocked OR (NOT isRepDetailed)
+    Exit;
+
+  _LOOP IskOtgr
+    {
+      SkipFields(6);
+
+      frmDolgOnMC.Write('  '+ MCName);
+      frmDolgOnMC.Write(IskOtgr.Kol);
+      frmDolgOnMC.Write(IskOtgr.Price);
+      frmDolgOnMC.Write(IskOtgr.Kol * IskOtgr.Price);
+      frmDolgOnMC.Write(IskOtgr.Kol * IskOtgr.PriceNotNDS);
+
+      SkipFields(10);
+    }
+}
+
+//-------------------------------------------------------------------------
+
+Procedure PrintSpecRows_FR; // Вывод строк спецификации накладной в FastReport
+{
+  if prnLocked OR (NOT isRepDetailed)
+    exit;
+
+  _LOOP IskOtgr
+    {
+      NRec++;
+
+      ClearBuffer(#OsnDolgFR);
+
+      OsnDolgFR.nRec      := NRec;
+      OsnDolgFR.DocKolVal := '  ' + MCName;
+      OsnDolgFR.Kol       := IskOtgr.Kol;
+      OsnDolgFR.Price     := IskOtgr.Price;
+      OsnDolgFR.SumNDS    := IskOtgr.Kol * IskOtgr.Price;
+      OsnDolgFR.Sum       := IskOtgr.Kol * IskOtgr.PriceNotNDS;
+
+      Insert Current OsnDolgFR;
+    }
+}
+
+//-------------------------------------------------------------------------
+// Одна ли регламентная дата на всю сумму строки спецификации
+var isSingleRegl : boolean;
+var ReglCnt      : word;
+
+Procedure CheckSingleRegl; // Нужна не только для печати, но и для расчета
+{
+  ReglCnt := 0;
+
+  _LOOP IskPlan
+    {
+      ReglCnt++;
+
+      if (ReglCnt > 1)
+        Break;
+    }
+
+  isSingleRegl := FALSE;
+
+  if (ReglCnt > 1)
+    Exit;
+
+  // То есть если суммы не равны -> возвращаем FALSE - сумма будет состоять из двух
+  // частей с разными регламентными датами, которые нужно выводить отдельными строками
+  // Обратного знака быть в принципе не может
+  // Может иметь значение соотношение регламентной даты и даты расчета, но таких
+  // вариантов вроде быть не должно
+  if (ReglCnt = 1)
+    if (IskPlan.Summa < SpIsk.SumNDS)
+      Exit;
+
+  isSingleRegl := TRUE;
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintSpReglDate;
+{
+  if prnLocked
+    Exit;
+
+  if (ReglCnt = 0)
+    frmDolgOnMC.Write(SpIsk.dRegl);
+  else
+    if isSingleRegl
+      frmDolgOnMC.Write(IskPlan.dRegl);
+    else
+      SkipFields(1);
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintSpReglDate_FR;
+{
+  if prnLocked
+    exit;
+
+  if (ReglCnt = 0)
+    OsnDolgFR.ReglDate := DateToStr(SpIsk.dRegl, 'DD/MM/YYYY');
+  else
+    if isSingleRegl
+      OsnDolgFR.ReglDate := DateToStr(IskPlan.dRegl, 'DD/MM/YYYY');
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintPlan;
+{
+  if prnLocked
+    Exit;
+
+  if isSingleRegl
+    Exit;
+
+  SkipFields(6);
+  frmDolgOnMC.Write('     '+ IskPlan.NoDoc);
+  frmDolgOnMC.SkipFormat(2);
+  frmDolgOnMC.Write(IskPlan.Summa);
+  frmDolgOnMC.Write(SubNDS(IskPlan.Summa));
+  frmDolgOnMC.Write(IskPlan.dRegl);
+}
+
+//------------------------------------------------------------------------------
+
+Procedure PrintPlan_FR;
+{
+  if prnLocked
+    exit;
+
+  if isSingleRegl
+    exit;
+
+  NRec++;
+
+  ClearBuffer(#OsnDolgFR);
+
+  OsnDolgFR.nRec      := NRec;
+  OsnDolgFR.DocKolVal := '     ' + IskPlan.NoDoc;
+  OsnDolgFR.SumNDS    := IskPlan.Summa;
+  OsnDolgFR.Sum       := SubNDS(IskPlan.Summa);
+  OsnDolgFR.ReglDate  := DateToStr(IskPlan.dRegl, 'DD/MM/YYYY');
+
+  Insert Current OsnDolgFR;
+}
+
+//------------------------------------------------------------------------------
+
+Function GetFirstRegl(var pDate : date; var pSum : double) : boolean;
+{
+  Result := TRUE;
+
+  if (ReglCnt = 0)
+    {
+      pDate := Add_Day(SpIsk.dRegl, 1);
+      pSum  := SpIsk.SumNDS;
+      Exit;
+    }
+
+  if (GetFirst IskPlan = tsOk)
+    {
+      pDate := IskPlan.dRegl;
+      pSum  := IskPlan.Summa;
+      Exit;
+    }
+
+  Result := FALSE;
+}
+
+Function GetNextRegl(var pDate : date; var pSum : double) : boolean;
+{
+  Result := FALSE;
+
+  if isSingleRegl
+    Exit;
+
+  if (GetNext IskPlan = tsOk)
+    {
+      pDate  := Add_Day(IskPlan.dRegl, 1);
+      pSum   := IskPlan.Summa;
+      Result := TRUE;
+    }
+}
+
+//-------------------------------------------------------------------------
+var isSingleOpl : boolean;
+var PlatCnt     : integer;
+
+Procedure CheckSingleOpl; // Количество платежей по строке спецификации
+{
+  isSingleOpl := FALSE;
+
+  if prnLocked
+    Exit;
+
+  PlatCnt := 0;
+
+  _LOOP IskOpl
+    {
+      PlatCnt++;
+
+      if (PlatCnt > 1)
+        Break;
+    }
+
+  if (PlatCnt > 1)
+    Exit;
+
+  if (PlatCnt = 1)
+    if (IskOpl.Summa <> SpIsk.SumNDS) // Было <
+      Exit;
+
+  isSingleOpl := TRUE;
+}
+
+//-------------------------------------------------------------------------
+// Умещается ли расчет по строке специфкации в одну строку в печатной форме
+
+Function isSingleRow : boolean;
+{
+  Result := (isSingleOpl AND isSingleRegl);
+}
+
+//-------------------------------------------------------------------------
+
+Procedure ClearRowAgregs;
+{
+  SpProsrIncNDS := 0;
+  SpOplIncNDS   := 0;
+  SpPeny        := 0;
+}
+
+// Подбить итоги по строке спецификации иска
+Procedure CountRowAgregs(pIskOpl : double; pProsrIncNDS : double; pPeny : double);
+{
+  SpProsrIncNDS += pProsrIncNDS;
+  SpOplIncNDS   += pIskOpl;
+  SpPeny        += pPeny;
+}
+
+//-------------------------------------------------------------------------
+// Во временных таблицах хранятся только исходные данные для расчета пеней
+// Когда требуется значение пени (для печати либо расчета суммы по строке иска)
+// значение пени всякий раз вычисляется из имеющихся данных
+
+Procedure CalcAndPrintSpIsk(IsFR: boolean); // Печать строки спецификации иска (= накладной)
+{
+  // В любом случае вывести информацию об отгрузке
+  if IsFR
+    PrintSpRowInfo_FR
+  else
+    PrintSpRowInfo;
+  // Проверить, достаточно ли одной строки для вывода расчета
+  CheckSingleOpl;
+  // Проверяем, одна ли регламентная дата на всю строку спецификации
+  CheckSingleRegl;
+  // Регламентная дата погашения из SpIsk, либо по графику погашения
+  if IsFR
+    PrintSpReglDate_FR
+  else
+    PrintSpReglDate;
+
+  // Если регламентных дат несколько, после информации о строке спецификации ничего не выводить
+  if NOT isSingleRegl
+    if IsFR
+      AddInsert_FR
+    else
+      SkipFields(9);
+
+  // Если расчет по строке спецификации НЕ помещается в одну строку -
+  // вывести строки спецификации ЗДЕСЬ, а не в конце расчета по строке
+  if (isRepDetailed AND (NOT isSingleRow))
+    {
+      // Даже если регламентная дата одна и потому выведена раньше и далее повторяться
+      // не будет, но погашений несколько, и потому все вместе в одну строку не помещается,
+      // то в этом случае погашения будут выводиться после строк спецификации
+      if isSingleRegl
+        if IsFR
+          AddInsert_FR
+        else
+          SkipFields(9);
+
+      if IsFR
+        PrintSpecRows_FR
+      else
+        PrintSpecRows;
+    }
+
+  ClearRowAgregs;
+
+  var dBeg       : date;
+  var DolgIncNDS
+    , PlanSum
+    , RasprSum
+    , PogashSum
+    , Peny       : double;
+  var isValidOpl
+    , WasPlat    : boolean;
+
+  RasprSum   := 0;
+  DolgIncNDS := 0;
+
+  GetFirstRegl(dBeg, PlanSum);
+
+  isValidOpl := (GetFirst IskOpl = tsOk);
+
+  do
+    {
+      // Вывести информацию по пункту графика погашения
+      if IsFR
+        PrintPlan_FR
+      else
+        PrintPlan;
+
+      RasprSum += PlanSum; // Подсчет распределенной по ПКП суммы накладной
+      WasPlat  := FALSE;
+
+      // Сбросить положительное сальдо предыдущего шага (сумма долга + регл. дата)
+      if (DolgIncNDS >= 0)
+        {
+          DolgIncNDS := PlanSum;
+
+          if NOT isValidOpl
+            isValidOpl := (GetNext IskOpl = tsOk);
+        }
+      else // Зачесть отрицательное сальдо предыдущего шага в погашение данного
+        {
+          PogashSum := if(PlanSum < Abs(DolgIncNDS), PlanSum, Abs(DolgIncNDS));
+          Peny      := 0;
+
+          // Погашение просрочено и не исключать полностью погашенную задолженность
+          if ((dBeg < IskOpl.dPlat) AND (NOT isExclPogash))
+            {
+              // печать пени
+              Peny := DistrByRefin(dBeg, IskOpl.dPlat, PlanSum, FALSE, FALSE, PogashSum);
+              // штраф за просрочку оплаты, Беларусь. Не разбиваем на периоды изменения ставок рефинансирования
+              if not ( isIskByOtgr and (wGetTune('Country') = ccBel) and (SpIsk.ProcRefin > 0) )
+                dBeg := IskOpl.dPlat; // если платеж просрочен, то дальше просрочку считаем от него
+            }
+          else
+            {
+              if IsFR
+              {
+                PrintPogashInfo_FR(PogashSum);
+                AddInsert_FR;
+              }
+              else
+              {
+                PrintPogashInfo(PogashSum);
+                SkipFields(6);
+              }
+            }
+
+          // Зачесть пеню - переплата уже зачтена, недоплата зачтется позже
+          CountRowAgregs(0, 0, Peny);
+
+          DolgIncNDS += PlanSum;
+          WasPlat    := TRUE;
+        }
+
+      // Крутим платежи по строке спецификации иска в сортировке по IskOpl.dPlat и рассчитываем пени
+      if (DolgIncNDS > 0)
+        while isValidOpl do
+          {
+            if (WasPlat or (isSingleRegl and isRepDetailed and not isSingleRow))
+              if IsFR
+                AddNRec_FR
+              else
+                SkipFields(12); // Пропускаем 12 полей отгрузки
+
+            PogashSum := if(IskOpl.Summa < DolgIncNDS, IskOpl.Summa, DolgIncNDS);
+            Peny      := 0;
+
+            // Погашение просрочено и не исключать полностью погашенную задолженность
+            if ((dBeg < IskOpl.dPlat) AND (NOT isExclPogash))
+              {
+                Peny := DistrByRefin(dBeg, IskOpl.dPlat, DolgIncNDS, FALSE, FALSE, PogashSum);
+                // штраф за просрочку оплаты, Беларусь. Не разбиваем на периоды изменения ставок рефинансирования
+                if not ( isIskByOtgr and (wGetTune('Country') = ccBel) and (SpIsk.ProcRefin > 0) )
+                  dBeg := IskOpl.dPlat; // если платеж просрочен, то дальше просрочку считаем от него
+              }
+            else
+              {
+                if IsFR
+                {
+                  PrintPogashInfo_FR(PogashSum);
+                  AddInsert_FR;
+                }
+                else
+                {
+                  PrintPogashInfo(PogashSum);
+                  SkipFields(6);
+                }
+              }
+
+            CountRowAgregs(IskOpl.Summa, 0, Peny);
+            DolgIncNDS -= IskOpl.Summa; // вычисляем остаток долга
+
+            // Можно выставлять TRUE только если по платежу что-то реально выводится
+            WasPlat := TRUE;
+
+            if (DolgIncNDS <= 0) // Если по данному шагу все оплачено - перейти к следующему
+              {
+                isValidOpl := FALSE;
+                Break;
+              }
+            else
+              isValidOpl := (GetNext IskOpl = tsOk);
+          }
+
+      // штраф за просрочку оплаты, Беларусь. Не разбиваем на периоды изменения ставок рефинансирования
+      if ( isIskByOtgr and (wGetTune('Country') = ccBel) and (SpIsk.ProcRefin > 0) )
+      {
+        if NOT wasPlat
+          if IsFR
+            AddInsert_FR
+          else
+            SkipFields(9);  // 3 платежа и 6 пени
+      }
+      else
+      // Не все погасили и дата расчета иска больше либо равна дате окончания
+      // Последнего диапазона расчета пени - начисляем пеню на остаток долга
+        if ((DolgIncNDS >= 0.001) AND (dBeg <= Iski.dCalc))
+        {
+          Peny := DistrByRefin(dBeg, Iski.dCalc, DolgIncNDS, TRUE, WasPlat, 0);
+          CountRowAgregs(0, DolgIncNDS, Peny);
+        }
+      else
+        if NOT wasPlat
+          if IsFR
+            AddInsert_FR
+          else
+            SkipFields(9);  // 3 платежа и 6 пени
+    }
+  while GetNextRegl(dBeg, PlanSum)
+
+  if prnLocked // Остальное касается только печати
+    Exit;
+
+  WasPlat := FALSE;
+
+  // штраф за просрочку оплаты, Беларусь. Не разбиваем на периоды изменения ставок рефинансирования
+  if not ( isIskByOtgr and (wGetTune('Country') = ccBel) and (SpIsk.ProcRefin > 0) )
+    if (DolgIncNDS < 0) // Если осталась избыточная оплата
+      if IsValid(#IskOpl) // Обработка накладной с отрицательным кол-вом/суммой
+      {                       // Корректно, только если оплат нет вообще
+        if NOT wasPlat
+          if IsFR
+            AddNRec_FR
+          else
+            SkipFields(12);
+
+        wasPlat := FALSE;
+
+        if IsFR
+        {
+          PrintPogashInfo_FR(Abs(DolgIncNDS));
+          AddInsert_FR;
+        }
+        else
+        {
+          PrintPogashInfo(Abs(DolgIncNDS));
+          SkipFields(6);
+        }
+      }
+
+  while (GetNext IskOpl = tsOk) // Если не все оплаты отображены
+    {
+      if NOT wasPlat
+        if IsFR
+          AddNRec_FR
+        else
+          SkipFields(12);
+
+      wasPlat := FALSE;
+
+      if IsFR
+      {
+        PrintPogashInfo_FR(IskOpl.Summa);
+        AddInsert_FR;
+        CountRowAgregs(IskOpl.Summa, 0, 0);
+      }
+      else
+      {
+        PrintPogashInfo(IskOpl.Summa);
+        CountRowAgregs(IskOpl.Summa, 0, 0);
+        SkipFields(6);
+      }
+    }
+
+  if wasPlat
+    if IsFR
+      AddInsert_FR
+    else
+      SkipFields(9);
+
+  // Распечатать строки спецификации после вывода строки расчета
+  if isRepDetailed
+    if isSingleRow
+      if IsFR
+        PrintSpecRows_FR
+      else
+        PrintSpecRows;
+}
+
+//-------------------------------------------------------------------------
+
+Procedure ClearRepAgregs;
+{
+  TotKol         := 0;
+  TotOpl         := 0;
+  TotOplIncNDS   := 0;
+  TotOtgr        := 0;
+  TotOtgrIncNDS  := 0;
+  TotProsr       := 0;
+  TotProsrIncNDS := 0;
+  TotPeny        := 0;
+}
+
+Procedure CountRepAgregs(pSpOplIncNDS, pSpOpl, pSpProsrIncNDS, pSpProsr, pSpPeny : double);
+{
+  TotOtgr        += SpIsk.Sum;
+  TotOtgrIncNDS  += SpIsk.SumNDS;
+  TotOpl         += pSpOpl;
+  TotOplIncNDS   += pSpOplIncNDS;
+  TotProsr       += pSpProsr;
+  TotProsrIncNDS += pSpProsrIncNDS;
+  TotPeny        += pSpPeny;
+}
+
+//-------------------------------------------------------------------------
+
+Public Procedure PrintCalculation(pIsk : comp; pMode : word; wFormat : byte);
+{
+  if NOT PosOnIsk(pIsk)
+    Exit;
+
+  prnMode   := pMode; // Флаги формирования печатной формы
+  prnLocked := FALSE;
+  format    := wFormat;
+
+  PushBounds(tbbySpIsk);
+
+  if (format = 0) // бизнес-текст
+    {
+      SelectForm;
+      ClearRepAgregs;
+      PrintHeader;
+
+      _LOOP SpIsk
+        {
+          CalcAndPrintSpIsk(false);
+
+          SkipFields(21); // Пропуск пустой строки между отгрузками
+
+          CountRepAgregs(SpOplIncNDS, SubNDS(SpOplIncNDS), SpProsrIncNDS, SubNDS(SpProsrIncNDS), SpPeny);
+        }
+
+      PrintFooter;
+      frmDolgOnMC.ShowFile('Расчет основного долга и пени');
+    }
+  else  // FastReport
+    {
+      NRec := 0;
+      NRec3 := 0;
+
+      ClearRepAgregs;
+      PrintHeader_FR;
+
+      _LOOP SpIsk
+        {
+          CalcAndPrintSpIsk(true);
+
+          CountRepAgregs(SpOplIncNDS, SubNDS(SpOplIncNDS), SpProsrIncNDS, SubNDS(SpProsrIncNDS), SpPeny);
+        }
+
+      PrintFooter_FR;
+
+      // запуск FastReport
+      SelectForm_FR;
+
+      ResetBounds(#OsnDolgFR);
+      ResetBounds(#PenjaFR);
+
+      Delete All OsnDolgFR;
+      Delete All PenjaFR;
+
+      SetBounds(#OsnDolgFR);
+      SetBounds(#PenjaFR);
+    }
+  PopBounds(tbbySpIsk);
+}

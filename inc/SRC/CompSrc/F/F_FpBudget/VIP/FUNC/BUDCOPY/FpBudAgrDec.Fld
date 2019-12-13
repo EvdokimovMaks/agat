@@ -1,0 +1,516 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 9.10 - модуль "Управление бюджетом"
+// Визуальный интерфейс : "Агрегация и декомпозиция бюджетов"
+//------------------------------------------------------------------------------
+
+Const
+  Var_cIndToApply     = 'cInd';
+  Var_cTFormToApply   = 'cTF ';
+  Var_wPRelMode       = 'PRlM';
+  Var_wHierModel      = 'HMod';
+
+  Var_AgrBitReg       = 'AReg';
+  Var_AgrBitDel       = 'ADel';
+  Var_wFixMode        = 'FixM';
+  Var_wTFormMode      = 'TFM' ;
+  Var_wFormulaFixMode = 'TFFM';
+
+  Var_AgrcBudget      = 'cAB' ;
+  Var_AgrcBudVar      = 'cABV';
+
+  Var_AgrCO           = 'cCCO';
+  Var_AgrPeriod       = 'cCPr';
+  Var_AgrVariant      = 'CBVt';
+  Var_AgrBudStage     = 'CuSt';
+
+  Tbl_ListBudget  = 'TBud';
+
+  TblVar__ListBudget_fOrder      = 'LBOrd';
+  TblVar__ListBudget_cBudget     = 'LBB';
+  TblVar__ListBudget_cBudVar     = 'LBBV';
+  TblVar__ListBudget_wBitReg     = 'LBRg';
+  TblVar__ListBudget_cCO         = 'LBCO';
+  TblVar__ListBudget_cPeriod     = 'LBPrd';
+  TblVar__ListBudget_cBudVariant = 'LBVar';
+  TblVar__ListBudget_sBudStage   = 'LBStg';
+
+end;
+
+//------------------------------------------------------------------------------
+#include FpKodRegParam.Inc // Константы идентификаторов параметров типа "Регистр учета"
+#include FpReplaceParam.Inc // Константы идентификаторов параметров типа "Режим замены"
+#include FpListParam.Inc   // Константы идентификаторов параметров типа "Список бюджетов"
+#include FpITune.Mac       // Макросы для чтения настроек интерфейсов
+//------------------------------------------------------------------------------
+#include FpBudOldDec.Fld   // Загрузка "старых" настроек
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// GetTBL
+//------------------------------------------------------------------------------
+function MyGetTblListBudget(_cTune : comp) : boolean;
+{
+  MyGetTblListBudget := False;
+
+  delete all ListBudget where ((fListBudgetID == ListBudget.ID));
+  if (not pObjITune.GetTblBoxRec(_cTune, Tbl_ListBudget) )
+  {Exit;}
+
+  while GetFirst FastFirstRow BoxRec = tsOk
+  {
+    do
+    {
+      if (BoxRec.cRec = 0)  { Break; }
+      var cSavedRec : comp;  cSavedRec := BoxRec.cRec;
+      ClearBuffer(#ListBudget);
+      ListBudget.ID   := GetListBudgetID;
+
+      #GetTblFld(LongInt,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_fOrder, ListBudget.fOrder)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cCO,ListBudget.cCO)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cPeriod,ListBudget.cPeriod)
+      #GetTblFld(Word,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_wBitReg,ListBudget.wBitReg)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudVariant,ListBudget.cBudVariant)
+      #GetTblFld(string,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_sBudStage,ListBudget.sBudStage)
+
+      // для того чтобы определить что это уже новые настройки
+      var cTmpBudget : comp;  cTmpBudget := 0;
+      var cTmpBudVar : comp;  cTmpBudVar := 0;
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudget,cTmpBudget)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudVar,cTmpBudVar)
+      var isCurNewParam : boolean;  isCurNewParam := (cTmpBudget = 0) and (cTmpBudVar = 0);
+
+      // определение бюджета
+      if (not isCurNewParam)
+      { // возможно это первый запуск после использования старого
+        ListBudget.cBudget := cTmpBudget;
+        if (ListBudget.cBudget <> 0 )
+        {
+          ListBudget.cCO     := pExtFpBudget.GetCO    (ListBudget.cBudget);
+          ListBudget.cPeriod := pExtFpBudget.GetPeriod(ListBudget.cBudget);
+        }
+      }
+      else if (ListBudget.cCO <> 0) and (ListBudget.cPeriod <> 0)
+      { // определим бюджет
+        ListBudget.cBudget := pExtFpBudget.FindBudget(ListBudget.cCO, ListBudget.cPeriod, cgiNoMessage);
+      }
+
+      // определение копии
+      if (ListBudget.cBudget <> 0)
+      {
+        if (not isCurNewParam)
+        { // возможно это первый запуск после использования старого
+          ListBudget.cBudVar := cTmpBudVar;
+          if (ListBudget.cBudVar <> 0 )
+          {
+            ListBudget.cBudVariant := pExtFpBudVar.GetVariant(ListBudget.cBudVar);
+            ListBudget.sBudStage   := pExtFpBudVar.GetStage  (ListBudget.cBudVar);
+          }
+        }
+        else if (ListBudget.cBudVariant <> 0)
+        { // определим копию
+          ListBudget.cBudVar := pExtFpBudVar.FindBudVar(ListBudget.cBudget, ListBudget.cBudVariant, ListBudget.sBudStage, cgiNoMessage);
+        }
+      }
+
+      // наименование бюджета
+      ListBudget.Name := pExtFpBudget.GetName(word(4), ListBudget.cBudget);
+
+      // вставка в список бюджетов
+      var tsRes : word;  tsRes := insert current ListBudget;
+      if (tsRes <> tsOk)
+      { FpLog('MyGetTblListBudget : (insert current ListBudget <> tsOk)'+string(tsRes)); }
+    }
+    while False;
+
+    var cBoxRec : comp;  cBoxRec := BoxRec.cRec;
+    delete all BoxRec where ((cBoxRec == BoxRec.cRec));
+  }
+  pEditListBudget.ReCalcOrder;
+  if GetFirst KatH <> tsOk
+  { Exit; }
+  fSynchPosition(KatH.NRec);
+
+  MyGetTblListBudget := True;
+}
+//------------------------------------------------------------------------------
+// SetTBL
+//------------------------------------------------------------------------------
+function MySetTBLListBudget(_cTune : comp) : boolean;
+{
+  MySetTBLListBudget := False;
+  PushPos(#ListBudget);
+  pObjITune.DelTbl(_cTune, Tbl_ListBudget);
+  _Loop ListBudget where ((fListBudgetID == ListBudget.ID))
+  {
+      var cSavedRec : comp;  cSavedRec := ListBudget.NRec;
+      #SetTblFld(LongInt,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_fOrder, ListBudget.fOrder)
+      #SetTblFld(Word,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_wBitReg,ListBudget.wBitReg)
+      #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cCO,ListBudget.cCO)
+      #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cPeriod,ListBudget.cPeriod)
+      #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudVariant,ListBudget.cBudVariant)
+      #SetTblFld(String,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_sBudStage,ListBudget.sBudStage)
+      // для того чтобы определить что это уже новые настройки, в бюджет запишем 0
+      #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudget,0)
+      #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudVar,0)
+  }
+  PopPos(#ListBudget);
+  MySetTBLListBudget := True;
+}
+
+//------------------------------------------------------------------------------
+function MyRead_ITune(_Entity : word; _cTune : comp) : boolean;
+{
+  MyRead_ITune := False;
+  // признак "загружены настройки из пакета заданий"
+  if ( not isLoadBatchITune )
+  {
+    if _cTune = 0
+    {
+      if pObjFpProfileManager.UpdateZerroIDToOneID
+        Set CurProfileID := 1;
+      _Entity := CurIntEntity;
+    }
+  }
+
+  pObjITune.InitEnt(_Entity, _cTune);
+  do
+  {
+    Set AgrCO       := 0;
+    Set AgrPeriod   := 0;
+    Set AgrVariant  := 0;
+    Set AgrBudStage := '';
+
+    // загрузка полей интерфейса
+    #GetFld(Comp,   Var_cIndToApply     , cIndToApply    )
+    #GetFld(Comp,   Var_cTFormToApply   , cTFormToApply  )
+    #GetFld(Word,   Var_wPRelMode       , wPRelMode      )
+    #GetFld(Word,   Var_wHierModel      , wHierModel     )
+
+    #GetFld(Word,   Var_AgrBitDel       , AgrBitDel      )
+    #GetFld(Word,   Var_AgrBitReg       , AgrBitReg      )
+    #GetFld(Word,   Var_wFixMode        , wFixMode       )
+
+    if (cTFormToApply <> 0)
+    {
+    #GetFld(Word,   Var_wTFormMode      , wTFormMode     )
+    #GetFld(Word,   Var_wFormulaFixMode , wFormulaFixMode)
+    }
+
+    #GetFld(Comp,   Var_AgrCO           , AgrCO          )
+    #GetFld(Comp,   Var_AgrPeriod       , AgrPeriod      )
+    #GetFld(Comp,   Var_AgrVariant      , AgrVariant     )
+    #GetFld(String, Var_AgrBudStage     , AgrBudStage    )
+
+    // определение бюджета
+    if (AgrCO = 0) and (AgrPeriod = 0)
+    { // если не получилось по "новому", берем по "старому"
+      #GetFld(Comp,   Var_AgrcBudget    , AgrcBudget     )
+      if (AgrcBudget <> 0 )
+      {
+        AgrCO     := pExtFpBudget.GetCO    (AgrcBudget);
+        AgrPeriod := pExtFpBudget.GetPeriod(AgrcBudget);
+      }
+    }
+    else if (AgrCO <> 0) and (AgrPeriod <> 0)
+    { // определим бюджет
+      AgrcBudget := pExtFpBudget.FindBudget(AgrCO, AgrPeriod, cgiNoMessage);
+    }
+
+    if (not pExtFpBudget.IsCurTPer(AgrcBudget) )
+    { AgrcBudget := 0; }
+
+    // определение копии
+    if (AgrcBudget <> 0)
+    {
+      if (AgrVariant = 0)
+      { // возможно это первый запуск после использования старого
+        #GetFld(Comp,   Var_AgrcBudVar    , AgrcBudVar     )
+        if (AgrcBudVar <> 0 )
+        {
+          AgrVariant  := pExtFpBudVar.GetVariant(AgrcBudVar);
+          AgrBudStage := pExtFpBudVar.GetStage  (AgrcBudVar);
+        }
+      }
+      else if (AgrVariant <> 0)
+      { // определим копию
+        AgrcBudVar := pExtFpBudVar.FindBudVar(AgrcBudget, AgrVariant, AgrBudStage, cgiNoMessage);
+      }
+    }
+
+    Set AgrCO       := AgrCO;
+    Set AgrPeriod   := AgrPeriod;
+    Set AgrVariant  := AgrVariant;
+    Set AgrBudStage := AgrBudStage;
+    Set wHierModel  := wHierModel ;
+
+    Set cIndToApply   := cIndToApply  ;
+    Set cTFormToApply := cTFormToApply;
+
+    Set AgrBitReg     := AgrBitReg    ;
+    Set AgrBitDel     := AgrBitDel    ;
+
+    // загрузка временных таблиц интерфейса
+    if  (not MyGetTblListBudget(_cTune) )
+    and (AgrCO = 0) and (AgrPeriod = 0)
+    { // возможно это первый запуск после использования старого
+      MyGetOldTblListBudget(_cTune);
+    }
+
+  }
+  while False;
+  pObjITune.DoneEnt(_Entity, _cTune);
+
+  ReReadRecord(#EmptyTable);
+  CheckFieldsState;
+  ShowMyHeader;
+  MyRead_ITune := True;
+}
+
+//------------------------------------------------------------------------------
+function Read_ITune(_cTune : comp) : boolean;
+{
+  isLoadBatchITune := True;
+  Read_ITune := MyRead_ITune(CurIntEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+function MySave_ITune(_Entity : word; _cTune : comp) : boolean;
+{
+  MySave_ITune := False;
+
+  // были загружены настройки из пакета заданий
+  if ( not isLoadBatchITune )
+  {
+  }
+
+  pObjITune.InitEnt(_Entity, _cTune);
+
+  // сохранение временных таблиц интерфейса
+  MySetTBLListBudget(_cTune);
+
+  // сохранение полей интерфейса
+
+  #SetFld(Comp,   Var_cIndToApply     , cIndToApply    )
+  #SetFld(Comp,   Var_cTFormToApply   , cTFormToApply  )
+
+  #SetFld(Word,   Var_AgrBitReg       , AgrBitReg      )
+  #SetFld(Word,   Var_AgrBitDel       , AgrBitDel      )
+
+  #SetFld(Word,   Var_wFixMode        , wFixMode       )
+  #SetFld(Word,   Var_wTFormMode      , wTFormMode     )
+  #SetFld(Word,   Var_wFormulaFixMode , wFormulaFixMode)
+
+  #SetFld(Comp,   Var_AgrCO           , AgrCO          )
+  #SetFld(Comp,   Var_AgrPeriod       , AgrPeriod      )
+  #SetFld(Comp,   Var_AgrVariant      , AgrVariant     )
+  #SetFld(String, Var_AgrBudStage     , AgrBudStage    )
+
+  #SetFld(Word,   Var_wPRelMode       , wPRelMode      )
+  #SetFld(Word,   Var_wHierModel      , wHierModel     )
+
+  pObjITune.DoneEnt(_Entity, _cTune);
+
+  MySave_ITune := True;
+}
+
+//------------------------------------------------------------------------------
+function Save_ITune(_cTune : comp) : boolean;
+{
+  isLoadBatchITune := True;
+  Save_ITune := MySave_ITune(CurIntEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+function MyDel_ITune(_Entity : word; _cTune : comp) : boolean;
+{ MyDel_ITune := pObjITune.DelEnt(_Entity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+function Del_ITune(_cTune : comp) : boolean;
+{ Del_ITune := MyDel_ITune(CurIntEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+// Загрузка списка бюджетов для менеджера
+//------------------------------------------------------------------------------
+function MyGetTblList(_cTune : comp): boolean;
+{
+  MyGetTblList := False;
+  var _Nrec     : comp    =  0;
+  var _cRecCO   : comp    =  0;
+  var _cRecPer  : comp    =  0;
+  var _cRecVar  : comp    =  0;
+  var _sStage   : string  = '';
+  var _cBudget  : comp    =  0;
+  var _cBudVar  : comp    =  0;
+  var _fOrder   : LongInt =  0;
+  var _wBitReg  : word    =  0;
+  if (not pObjITune.GetTblBoxRec(_cTune, Tbl_tblList) )
+  {Exit;}
+
+  Delete All KatH;
+
+  while GetFirst FastFirstRow BoxRec = tsOk
+  {
+    do
+    {
+      if (BoxRec.cRec = 0)  { Break; }
+      var cSavedRec : comp; cSavedRec := BoxRec.cRec;
+
+      #GetTblFld(Comp,Tbl_tblList,cSavedRec,TblVar__tblList_NRec, _NRec)
+      #GetTblFld(Comp,Tbl_tblList,cSavedRec,TblVar__tblList_cRecCO, _cRecCO)
+      #GetTblFld(Comp,Tbl_tblList,cSavedRec,TblVar__tblList_cRecPer, _cRecPer)
+      #GetTblFld(Word,Tbl_tblList,cSavedRec,TblVar__tblList_wBitReg, _wBitReg)
+      #GetTblFld(Comp,Tbl_tblList,cSavedRec,TblVar__tblList_cRecVar, _cRecVar)
+      #GetTblFld(String,Tbl_tblList,cSavedRec,TblVar__tblList_sStage, _sStage)
+      #GetTblFld(LongInt,Tbl_tblList,cSavedRec,TblVar__tblList_fOrder,_fOrder)
+    }
+    while False;
+
+
+    _cBudget := pExtFpBudget.FindBudget(_cRecCO,_cRecPer, cgiNoMessage);
+    if _cBudget = 0
+    {
+      //Exit;
+    }
+    _cBudVar := pExtFpBudVar.FindBudVar(_cBudget, _cRecVar, _sStage, cgiNoMessage);
+    if ( _cBudVar = 0 )
+    {
+      //_cBudVar := pExtFpBudget.FindAnyAvBudVar(_cBudget, True);
+    }
+
+    ClearBuffer(#KatH);
+    KatH.ID      := GetListBudgetID;
+    KatH.cBudget := _cBudget;
+    KatH.Name    := pExtFpBudget.GetName(word(0 or 4), _cBudget);
+    KatH.cBudget := _cBudget;
+    KatH.cBudVar := _cBudVar;
+    KatH.cCO     := _cRecCO ;
+    KatH.cPeriod := _cRecPer;
+    KatH.wBitReg := _wBitReg;
+    KatH.cBudVariant := _cRecVar;
+    KatH.sBudStage   := _sStage;
+    KatH.fOrder      := _fOrder;
+    Insert Current KatH;
+
+    var cBoxRec : comp; cBoxRec := BoxRec.cRec;
+    delete all BoxRec where ((cBoxRec == BoxRec.cRec));
+  } //while GetFirst FastFirstRow BoxRec
+
+
+  if GetFirst KatH = tsOk
+    fSynchPosition(KatH.NRec);
+
+  MyGetTblList := True;
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера ЦО
+//------------------------------------------------------------------------------
+function Read_ITune1CO(_cTune : comp; _wEntity : word) : boolean;
+{
+  Read_ITune1CO := False;
+
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Comp,   Var_AgrCO         , AgrCO          )
+  Set AgrCO := AgrCO;
+  pObjITune.DoneEnt(_wEntity, _cTune);
+
+  Read_ITune1CO := True;
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера периода
+//------------------------------------------------------------------------------
+function Read_ITune1Per(_cTune : comp; _wEntity : word) : boolean;
+{
+  Read_ITune1Per := False;
+
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Comp,   Var_AgrPeriod     , AgrPeriod      )
+  Set AgrPeriod := AgrPeriod;
+  pObjITune.DoneEnt(_wEntity, _cTune);
+
+  Read_ITune1Per := True;
+}
+
+//------------------------------------------------------------------------------
+//  Загрузка из менеджера реквизитов копии
+//------------------------------------------------------------------------------
+function Read_ITune1Stage(_cTune : comp; _wEntity : word) : boolean;
+{
+  Read_ITune1Stage := False;
+
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Comp,   Var_AgrVariant    , AgrVariant     )
+  #GetFld(String, Var_AgrBudStage   , AgrBudStage    )
+  Set AgrVariant := AgrVariant;
+  Set AgrBudStage := AgrBudStage;
+  pObjITune.DoneEnt(_wEntity, _cTune);
+
+  Read_ITune1Stage := True;
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера кода регистра
+//------------------------------------------------------------------------------
+function Read_ITune1KodReg(_cTune : comp; _wEntity : word) : boolean;
+{
+  Read_ITune1KodReg := False;
+
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Word,   VAR_wKodReg1     , AgrBitReg      )
+  Set AgrBitReg := AgrBitReg;
+  pObjITune.DoneEnt(_wEntity, _cTune);
+
+  Read_ITune1KodReg := True;
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера режима замены
+//------------------------------------------------------------------------------
+function Read_ITune1ReplaceMode(_cTune : comp; _wEntity : word) : boolean;
+{
+  Read_ITune1ReplaceMode := False;
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Word,   VAR_wReplaceMode1 , AgrBitDel     )
+  Set AgrBitDel := AgrBitDel;
+  pObjITune.DoneEnt(_wEntity, _cTune);
+  Read_ITune1ReplaceMode := True;
+}
+//------------------------------------------------------------------------------
+// Загрузка из менеджера бюджетов источников
+//------------------------------------------------------------------------------
+function Read_ITuneNBudSrc(_cTune : comp; _wEntity : word) : boolean;
+{
+  Read_ITuneNBudSrc := False;
+
+  pObjITune.InitEnt(_wEntity, _cTune);
+  MyGetTblList(_cTune);
+  pObjITune.DoneEnt(_wEntity, _cTune);
+
+  Read_ITuneNBudSrc := True;
+}
+
+//------------------------------------------------------------------------------
+// Обновить бюджеты и копии после загрузки данных из менеджера параметров
+//------------------------------------------------------------------------------
+function Read_BudUpdate : boolean;
+{
+  Read_BudUpdate := False;
+  Set AgrcBudget := pExtFpBudget.FindBudget(AgrCO, AgrPeriod, cgiNoMessage);
+  if AgrcBudget = 0
+  {
+    AgrcBudVar := 0;
+    Exit;
+  }
+  Set AgrcBudVar := pExtFpBudVar.FindBudVar(AgrcBudget, AgrVariant, AgrBudStage, cgiNoMessage);
+  if ( AgrcBudVar = 0 )
+  {
+    Exit;
+    // ищем первую доступную.. пока ни будем искать
+    //_cBudVar := pExtFpBudget.FindAnyAvBudVar(_cBudget, True);
+  }
+  Read_BudUpdate := True;
+}

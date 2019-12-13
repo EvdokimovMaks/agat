@@ -18,6 +18,7 @@
 .Fields
 Организация  ОКПО
 TitleDocNrec : comp
+sBarCode
 номер_документа  дата_составления
 
 ContDocNrec : comp
@@ -28,7 +29,7 @@ AppointNrec : comp
 FIO
 FIO_VP
 TabN
-подразделение
+подразделение : WideString
 должность
 
 FIO2
@@ -40,7 +41,7 @@ Found
 
 .EndFields
 
-^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^
 .{ NformRD02aCycle CheckEnter
 ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^

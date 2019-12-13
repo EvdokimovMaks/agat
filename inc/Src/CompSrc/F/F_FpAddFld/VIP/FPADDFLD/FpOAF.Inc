@@ -7,9 +7,7 @@
 #ifndef __FpAddFld_Inc__
 #define __FpAddFld_Inc__
 
-#ifdef  ComponentVersion
 #Component "F_FpAddFld"
-#endif//ComponentVersion
 
 Type rcFpEntity = record
   w: Word;

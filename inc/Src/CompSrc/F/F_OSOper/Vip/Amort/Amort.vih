@@ -10,9 +10,7 @@
 #ifndef __AMORT_VIH__
 #define __AMORT_VIH__
 
-#ifdef ComponentVersion
 #Component "F_OSOPER"
-#end
 #doc
 Расчет амортизации ОС или НМА
 #end
@@ -21,7 +19,7 @@
 // Параметры рассчета Амортизации
 type TCalcAmortParm = record
   // Расчет
-  isReCalcOldAmort   : boolean;    // 1 спересчитывать старые значения
+  isReCalcOldAmort   : boolean;    // 1 пересчитывать старые значения
   isMakeOborot       : boolean;    // 2 формирование проводок при расчете амортизации при переходе на след. период
   isLgota            : boolean;    // 4 учитывать амортизационную льготу
   isCalcOsRazn       : boolean;    // 8 рассчитывать разницу данных
@@ -45,6 +43,7 @@ type TCalcAmortParm = record
 
   wModeMakeOborot    : word;       // Режим формирования проводок
 end;
+
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -77,6 +76,11 @@ ObjInterface ObjAmort;
   procedure ShowErrReport;
 //------------------------------------------------------------------------------
 #doc
+  Получить последнее значение ошибки
+#end
+  Function GetLastError :string;
+//------------------------------------------------------------------------------
+#doc
   Выдача предупреждений, в случае нахождения карточек не в текущем периоде или
   карточек с дескриптором другого пользователя...
 #end
@@ -97,7 +101,7 @@ Procedure CheckKatOsPeriod(_bUsePick      : boolean; //True - расчёт идёт по Pic
 #end
   procedure FillSpOsMcWithAmort(In_cKatOs   : comp;    //ссылка на ИК
                                 In_cNastrOs : comp;    //ссылка на метод учёта
-                                In_SIznM    : double;  //начисленный износ, подлежащий распределению
+                                In_SIznM    : tSumma;  //начисленный износ, подлежащий распределению
                                 In_DatOb    : date;    //дата начисления амортизации
                                 In_wMode    : word     //настройка на вид распределения
                                );
@@ -131,7 +135,7 @@ Procedure CheckKatOsPeriod(_bUsePick      : boolean; //True - расчёт идёт по Pic
   // doSumAmort - амортизация за период (месяц, квартал... согласно метода учета)
   // doAmortAlg - рассчитанное по алгоритму значение без поправок
   Function CalcAmortAbstract( cRecKatOS, cRecNastrOS, cRecAlgCalc: comp;  dOperAmort: date;
-                              var doSumAmort, doAmortAlg :double
+                              var doSumAmort, doAmortAlg :tSumma
                             ): word;
 //------------------------------------------------------------------------------
 #doc
@@ -159,7 +163,7 @@ Procedure CheckKatOsPeriod(_bUsePick      : boolean; //True - расчёт идёт по Pic
 #doc
   Значение величины изменения срока использования ОС/НМА на дату
 #end
-  Function GetValue_SrokUsedOS(_cKatOS, _cNastrOS, _cOsAlg: comp; dOper: date) : double;
+  Function GetValue_SrokUsedOS(_cKatOS, _cNastrOS, _cOsAlg: comp; dOper: date) : tSumma;
 //------------------------------------------------------------------------------
 #doc
   Наименование ошибки при расчете амортизации
@@ -184,7 +188,7 @@ Procedure CheckKatOsPeriod(_bUsePick      : boolean; //True - расчёт идёт по Pic
                                 dOperAmort: date;
                                 wParamCalc: word;
                                 var doSumAmort
-                                  , doAmortAlg :double
+                                  , doAmortAlg :tSumma
                               ): word;
 //------------------------------------------------------------------------------
 #doc
@@ -218,14 +222,21 @@ Procedure CheckKatOsPeriod(_bUsePick      : boolean; //True - расчёт идёт по Pic
   Function CalcAmort (_dtAmort: date): boolean;
 
 // Расчет по Alt+S для одной кариочкм
-Procedure RasAmorForInform (_TiDk: word; _cKatOs: comp; _cNastrOs: comp);
+Procedure RasAmorForInform (_TiDk: word; _cKatOs: comp; _cNastrOs: comp; _isMsg : boolean; var _ValueAmort : tSumma; var _ValueAmortPer : tSumma);
 
-end;
+end;  // ObjAmort
+
+
+//------------------------------------------------------------------------------
+// Свойтво для точки расширения  epDeleteOborotForPickedOS
+ObjInterface IAmortExt;
+  property isRunDeleteOborot : boolean read write;   // Надо ли выпонять стандартную процедуру удаления проводок по выбранным ОС.
+end;                                                 // Если isRunDeleteOborot = false, то стандартная процедура удаления не выполняется.
 
 
 //------------------------------------------------------------------------------
 #doc
-Точка расширения epDeleteOborotForPickedOS. Вызывается для удаления проводок по части картотеки при отмене амортизации.
+Точка расширения epDeleteOborotForPickedOS. Вызывается для удаления проводок по части картотеки при отмене амортизации или расчете по части картотеки.
 </brief>
   Вызывается из интерфейса расчета-отмены амортизации Amort.
   Вызывается при отмене амортизации, если для удаления проводок задан парметр проводки по операции амортизация - "удалять с аналитикой по ОС/НМА в проводке".                  `
@@ -234,8 +245,9 @@ end;
  <p> _wTip     - 15-ОС, 16-НМА. <br>
  <p> _cSoprHoz - ссылка на SoprHoz. <br>
  Карточки по которым производится отмена амортизации занесены в таблицу Pick с wlist = 120 (cgPick_KatOs120);
+ pAmortExt - ссылка на объектный интерфейс IAmortExt.
 #end
-ExtensionPoint epDeleteOborotForPickedOS(_wTip: word; _cSoprHoz: comp);
+ExtensionPoint epDeleteOborotForPickedOS(_wTip: word; _cSoprHoz: comp; pAmortExt : IAmortExt);
 
 
 //------------------------------------------------------------------------------
@@ -269,7 +281,7 @@ ExtensionPoint epUndoCalcRaznPick (_dDate: date; _wList: word; _KolOs : LongInt)
 
 
 //------------------------------------------------------------------------------
-VipInterface Amort Implements ObjAmort
+VipInterface Amort Implements ObjAmort, IAmortExt
   Parameters
   (
     TipDock : word; // тип документа

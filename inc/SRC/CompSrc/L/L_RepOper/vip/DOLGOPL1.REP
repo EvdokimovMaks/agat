@@ -1,0 +1,875 @@
+//***************
+//*****************************************************************
+//                                                        (c) корпорация Галактика
+// Галактика 7.12 - логистика
+// Отчет "Ведомость отгрузки и закупки в натуральных показателях"
+//
+//********************************************************************************
+
+Function Unq(s : string; c : comp) : string;
+{
+  if ( Length(s) >= 10 )
+    Unq := SubStr(s, 1, 10)  + SubStr(String(c, 18, 0), 8, 10);
+  else
+    Unq := Padch(s, ' ', 10) + SubStr(String(c, 18, 0), 8, 10);
+}
+
+Function FilterSpSopr : boolean;
+{
+  FilterSpSopr := true;
+
+  if ( Abs(SpSopr.Price) < 0.00000000000001 )
+    Exit;
+
+//  if ( (ByOpr=1) or
+//       (NaklAkt=2),  'выписанным',
+//    if (ByOpr=2,     'списанным со склада',
+//                     'всем (по дате выписки)')),
+  case ByOpr of
+    1 : if ( SpSopr.doprTTN <> ZeroDate ) Exit;
+    2 : if ( SpSopr.doprTTN  = ZeroDate ) Exit;
+  end; // case
+
+//  if (AllMcUsl=1,      'матценности:',
+//    if (AllMcUsl=2,    'группе МЦ:',
+//    if (AllMcUsl=3,    'нескольким МЦ.',
+//    if (AllMcUsl=4,    'всем матценностям.',
+//    if (AllMcUsl=5,    'услуге:',
+//    if (AllMcUsl=6,    'группе услуг:',
+//    if (AllMcUsl=7,    'нескольким услугам.',
+//    if (AllMcUsl=8,    'всем услугам.',
+//                       'всем МЦ и услугам.'))) ))) )),
+
+  if ( (AllMcUsl >= 1) and (AllMcUsl <= 3) )
+    {
+      if ( SpSopr.prMC <> 1 )
+        Exit;
+    }
+  else if ( (AllMcUsl >= 4) and (AllMcUsl <= 6) )
+    {
+      if ( SpSopr.prMC = 1 )
+        Exit;
+    }
+
+//  if (NaklAkt=1,     'накладным,',
+//    if (NaklAkt=2,   'актам,',
+//                     'накладным и актам,')),
+
+  case AllMcUsl of
+
+    1,4 :
+      {
+        if ( notPick )
+          if ( GetFirst Pick where ((  BwList        == Pick.wList
+                                   and SpSopr.cMcUsl == Pick.cRec
+                                   )) <> tsOk ) Exit;
+      }
+
+    2   :
+      {
+        if ( (pkGroupMCUsl <> '') or (cpcGrMc = 0) )
+          {
+            if ( GetMCUsl(SpSopr.cMCUsl, SpSopr.prMC) )
+              {
+                if ( (cpcGrMc=0) and (KatMc.cGroupMC <> 0) )
+                  Exit;
+
+                if ( SubStr(KatMc.kGroupMC, 1, Length(pkGroupMCUsl)) <> pkGroupMCUsl )
+                  Exit;
+              }
+            else
+              Exit;
+          }
+      }
+
+    5   :
+      {
+        if ( (pkGroupMCUsl <> '') or (cpcGrUsl = 0) )
+          {
+            if ( GetMCUsl(SpSopr.cMCUsl, SpSopr.prMC) )
+              {
+                if ( (cpcGrUsl = 0) and (KatUsl.cGroupUsl <> 0) )
+                  Exit;
+
+                if ( SubStr(KatUsl.kGroupUsl,1,Length(pkGroupMcUsl))<>pkGroupMcUsl)
+                  Exit;
+              }
+            else
+              Exit;
+          }
+      }
+
+  end; // case
+
+//  if (AllParty=1,     'партии:',
+//     if (AllParty=2,  'группе партий:',
+//     if (AllParty=3,  'нескольким партиям.',
+//                      'всем партиям.'))),
+  case AllParty of
+
+   2 :
+     {
+        if ( SpSopr.cParty = 0 )
+          Exit;
+
+        if ( SpSopr.cParty <> KatParty.nRec )
+          if ( GetFirst KatParty where (( SpSopr.cParty == KatParty.nRec )) <> tsOk )
+            Exit;
+
+        if( cpcGrParty <> KatParty.cGroupParty )
+          Exit;
+     }
+
+   1 :
+     {
+       if ( SpSopr.cParty = 0 )
+         Exit;
+
+       if ( GetFirst Pick3 where ((  BwList3       == Pick3.wList
+                                 and SpSopr.cParty == Pick3.cRec
+                                 )) <> tsOk )
+         Exit;
+     }
+
+  end; //case
+
+  if (   (AllDescr = 1)
+     and (cpcDescr <> KatSopr.Descr)
+     or  (AllDescr = 2)
+     and (pos(upcase(KatSopr.DesGr) + ', ', cpcGrDescr) = 0)
+     and (pos(', ' + Upcase(KatSopr.DesGr), cpcGrDescr) = 0)
+     and (cpcGrDescr <> KatSopr.DesGr)
+     )
+    Exit;
+
+  FilterSpSopr := false;
+}
+
+Procedure DoSpSopr;
+Var
+  dsta
+        : boolean;
+
+  tKol
+, Zn
+        : double;
+
+  ctmp
+        : comp;
+
+  str1
+, str2
+, str3
+, str4
+, str5
+        : string;
+{
+  if ( FilterSpSopr )
+    Exit;
+
+//if ((SpSopr.prMC=1) or (SpSopr.VidSopr<>101))
+  tKol:=SpSopr.KolOpl;
+//else tKol:=1.0;
+// Shaf
+
+  if ( pDirect = 2 ) // закупка
+    Zn := -1.0;
+  else
+    Zn := 1.0;
+
+  Zn := Zn * if(SpSopr.VidSopr div 100 = 1, -1.0, 1.0);
+
+  ClearBuffer(#TmpGrN);
+
+  if ( if(ByOpr=2,SpSopr.doprTTN,SpSopr.dSopr) < d2 )
+    TmpGrN.Sums[1]  := Zn * tKol;
+  else
+    TmpGrN.Sums[2]  := Zn * tKol;
+
+  cSpb := SpSopr.nRec;
+
+  _Loop SpSopHoz
+    if ( IsValid(tnSoprHoz) )
+      {
+        if ( SoprHoz.DatOb > d3 )
+          continue;
+        else //if ( (SoprHoz.DatOb<d2) and (Avans) )
+          if (  ((SoprHoz.DatOb<d2) and (Avans))
+             or (   (if(ByOpr=2,SpSopr.doprTTN,SpSopr.dSopr) < d2)
+                and (SoprHoz.DatOb<d2)
+                and (not Avans)
+                )
+             )
+// уменьшаем входящую задолженность
+            {
+//            if ((SpSopr.prMC=1) or (SpSopr.VidSopr<>101))
+                TmpGrN.Sums[1] := TmpGrN.Sums[1] - Zn * SpSopHoz.kolvo;
+//            else
+//              TmpGrN.Sums[1]  := TmpGrN.Sums[1] - Zn * SpSopHoz.Summa/SpSopr.Price;
+            }
+          else
+// увеличиваем оплаченность
+            {
+//            if ((SpSopr.prMC=1) or (SpSopr.VidSopr<>101))
+
+              TmpGrN.Sums[3] := TmpGrN.Sums[3] + Zn * SpSopHoz.kolvo;
+//            else
+//              TmpGrN.Sums[3]   := TmpGrN.Sums[3]  + Zn * SpSopHoz.Summa/SpSopr.Price;
+
+              case SoprHoz.TiDkGal of
+
+                2     :
+                  {
+                    TmpGrN.ls[1] := 2;        // if (word(AllHozdoc) =  2,    'Входящие платежные документы',
+//                  if ((SpSopr.prMC=1) or (SpSopr.VidSopr<>101))
+                    TmpGrN.Sums[11]   := TmpGrN.Sums[11] + Zn * SpSopHoz.kolvo;
+//                  else
+//                    TmpGrN.Sums[11]   := TmpGrN.Sums[11]  + Zn * SpSopHoz.Summa/SpSopr.Price;
+                  }
+
+                70,71 :
+                  {
+                    if ( SoprHoz.StatHoz = 0 )
+                      { // Контроль старых/новых актов взаимозачета
+                        TmpGrN.ls[2] := 70;       // if (word(AllHozdoc) =  70,71,   'Акт взаимозачетов',
+//                      if ((SpSopr.prMC=1) or (SpSopr.VidSopr<>101))
+                        TmpGrN.Sums[12] := TmpGrN.Sums[12] + Zn * SpSopHoz.kolvo;
+//                      else TmpGrN.Sums[12]   := TmpGrN.Sums[12]  + Zn * SpSopHoz.Summa/SpSopr.Price;
+                      }
+                  }
+
+              82      :
+                {
+                  TmpGrN.ls[3] := 82;       // if (word(AllHozdoc) =  82,   'Гашение собств. векселей',
+
+//                if ((SpSopr.prMC=1) or (SpSopr.VidSopr<>101))
+                  TmpGrN.Sums[13] := TmpGrN.Sums[13] + Zn * SpSopHoz.kolvo;
+//                else
+//                  TmpGrN.Sums[13]   := TmpGrN.Sums[13]  + Zn * SpSopHoz.Summa/SpSopr.Price;
+                }
+
+              84      :
+                {
+                  TmpGrN.ls[4] := 84;       // if (word(AllHozdoc) =  84,   'Получение сторон. векселей',
+
+//                if ((SpSopr.prMC=1) or (SpSopr.VidSopr<>101))
+                  TmpGrN.Sums[14] := TmpGrN.Sums[14] + Zn * SpSopHoz.kolvo;
+//                else
+//                  TmpGrN.Sums[14]   := TmpGrN.Sums[14]  + Zn * SpSopHoz.Summa/SpSopr.Price;
+                }
+
+              end;
+            }
+      }
+    else
+      {
+// уменьшаем входящую задолженность
+//         if ((SpSopr.prMC=1) or (SpSopr.VidSopr<>101))
+           TmpGrN.Sums[1]  := TmpGrN.Sums[1] - Zn * SpSopHoz.kolvo
+//         else
+//           TmpGrN.Sums[1]  := TmpGrN.Sums[1] - Zn * SpSopHoz.Summa/SpSopr.Price;
+      }
+
+  if (   Abs(TmpGrN.Sums[1]) < 0.00001
+     and Abs(TmpGrN.Sums[2]) < 0.00001
+     and Abs(TmpGrN.Sums[3]) < 0.00001
+     )
+    Exit;
+
+  TmpGrN.cRec2 := SpSopr.nRec;
+
+  if ( Getorg )
+   {
+     TmpGrN.Ss[1] := Unq(orgName, ovGet.vGetKObuf.nRec);
+   }
+  else
+    TmpGrN.Ss[1] := ''#255#255#255;
+
+//------------------------------------------------------------
+
+  if ( AllKontr >= 4 ) // для договоров
+    {
+      if ( GetDG )
+        TmpGrN.Ss[3] := Unq(dogNumDescr, vdog.dog.nRec);
+      else
+        TmpGrN.Ss[3] := ''#255#255#255;
+    }
+  else
+    TmpGrN.Ss[3] := ''#255#255#255;
+
+  if ( AllKontr >= 5 ) //для групп договоров
+    {
+      if ( GetGrDG )
+        {
+          TmpGrN.Ss[2] := Unq(GrdogName, ovGet.vGetGSbuf.nRec);
+          TmpGrN.cRec1 := ovGet.vGetGSbuf.nRec;
+        }
+      else
+       TmpGrN.Ss[2] := ''#255#255#255;
+   }
+  else
+    TmpGrN.Ss[2] := ''#255#255#255;
+
+//------------------------------------------------------------
+  if ( Getdo )
+    TmpGrN.Ss[5] := Unq(doNumDescr, ovGet.vGetBDbuf.nRec);
+  else
+    TmpGrN.Ss[5] := ''#255#255#255;
+
+  if ( AllKontr < 4 )
+    {
+      if ( GetGrdo )
+        {
+          TmpGrN.Ss[4] := Unq(GrdoName, ovGet.vGetGSbuf.nRec);
+          TmpGrN.cRec1 := ovGet.vGetGSbuf.nRec;
+        }
+      else
+        TmpGrN.Ss[4] := ''#255#255#255;
+    }
+  else
+    TmpGrN.Ss[4] := ''#255#255#255;
+
+  ClearBuffer(#TmpGrN2);
+
+  TmpGrN2.kTbl   := 168;
+  TmpGrN2.wList  := 168;
+  TmpGrN2.ds[10] := ZeroDate;
+  TmpGrN2.cRec   := SpSopr.nRec;      // потому что в TmpGrN нет NRec
+
+  TmpGrN2.s      := TmpGrN.ss[1]      // контрагент
+                  + TmpGrN.ss[2]
+                  + TmpGrN.ss[3]      // договора
+                  + TmpGrN.ss[4]
+                  + TmpGrN.ss[5];     // ДО
+
+  str1 := TmpGrN.ss[1];
+  str2 := TmpGrN.ss[2];
+  str3 := TmpGrN.ss[3];
+  str4 := TmpGrN.ss[4];
+  str5 := TmpGrN.ss[5];
+
+  Insert Current TmpGrN2;
+
+  TmpGrN.kTbl  := 167;
+  TmpGrN.wList := 167;
+  TmpGrN.cRec  := TmpGrN2.cRec;
+
+  Insert Current TmpGrN;
+
+  if ( not vGetKs(SpSopr.cSopr) )
+    Exit;
+
+  ctmp := vKs.Ks.cStepdoc;
+
+  if ( ctmp = 0 )
+    Exit;
+
+  _loop RzDoc where (( ctmp == RzDoc.cStepDoc ))
+    {
+      _loop RzSpDoc
+        if ( RecordExists TmpGrN3 where ((  word(168)    == TmpGrN3.kTbl
+                                        and RzSpDoc.nRec == TmpGrN3.cRec
+                                        )) <> tsOk )
+          {
+
+
+            ClearBuffer(#TmpGrN2);
+
+            TmpGrN2.kTbl   := 168;
+            TmpGrN2.wList  := 168;
+            TmpGrN2.ds[10] := 1;
+            TmpGrN2.cRec   := RzSpDoc.nRec;     // потому что в TmpGrN нет NRec
+
+            TmpGrN2.s      := str1              // контрагент
+                            + str2
+                            + str3              // договора
+                            + str4
+                            + str5 ;            // ДО
+
+            Insert Current TmpGrN2;
+
+            ClearBuffer(#TmpGrN);
+
+            TmpGrN.ss[1] := str1;
+            TmpGrN.ss[2] := str2;
+            TmpGrN.ss[3] := str3;
+            TmpGrN.ss[4] := str4;
+            TmpGrN.ss[5] := str5;
+
+            if ( if(ByOpr=2,RzDoc.dOpr,RzDoc2.dDoc) < d2 )
+              TmpGrN.Sums[1]  := - RzSpDoc.Kol;
+            else
+              TmpGrN.Sums[2]  := - RzSpDoc.Kol;
+
+            TmpGrN.kTbl  := 167;
+            TmpGrN.wList := 167;
+            TmpGrN.cRec2 := RzSpDoc.nRec;
+            TmpGrN.cRec3 := cSpb;
+            TmpGrN.cRec  := TmpGrN2.cRec;
+
+            Insert Current TmpGrN;
+          }
+    }
+}
+
+Procedure doAllKatSopr;
+Var
+  dsta : boolean;
+{
+  _Loop KatSopr
+    {
+      if not notbr
+        Break;
+
+      if ( pDirect = 1 )                       // продажа
+        {
+          case KatSopr.VidSopr of
+
+            201,106 : {if ( NaklAkt = 2 ) continue;}
+            211     : {if ( NaklAkt = 1 ) continue;}
+            else       continue;
+
+          end; //case
+        }
+      else
+        {
+          if ( pDirect = 2 )                   // закупка
+            {
+              case KatSopr.VidSopr of
+
+                101,206, 108 : {if ( NaklAkt = 2) continue;}
+                111          : {if ( NaklAkt = 1) continue;}
+                else      continue;
+
+              end; //case
+            }
+          else
+            continue;
+        }
+
+      if (kolNotesPicked <> 0)
+        if oDocKNFuns.IsWorkFastClose(KatSopr.VidSopr)
+          if (RecordExists Pick where ((  word(998)     == Pick.wList
+                                      AND KatSopr.cNote == Pick.cRec )) <> tsOk)
+            continue;
+
+
+      _Loop SpSopr
+        if not notbr
+          Break
+        else
+          DoSpSopr;
+    }
+}
+
+Procedure DoVidSopr;
+Var
+  dsta : boolean;
+{
+  _Loop SpSopr
+    {
+      if not notbr
+        Break;
+
+      if (kolNotesPicked <> 0)
+        if oDocKNFuns.IsWorkFastClose(SpSopr.VidSopr)
+          if IsValid(#KatSopr)
+            if (RecordExists Pick where ((  word(998)     == Pick.wList
+                                        AND KatSopr.cNote == Pick.cRec )) <> tsOk)
+              continue;
+
+      DoSpSopr;
+    }
+}
+
+Procedure DoAllVidSopr;
+{
+  if ( pDirect = 1 )            // продажа
+    {
+      if ( NaklAkt <> 2 )
+        {
+          Set tVidSopr := 201;
+          DoVidSopr;
+
+          // возвратные накладные
+          Set tVidSopr := 106;
+          DoVidSopr;
+        }
+
+      if ( NaklAkt <> 1 )
+        {
+          Set tVidSopr := 211;
+          DoVidSopr;
+        }
+    }
+  else
+    if ( pDirect = 2 )           // закупка
+      {
+        if ( NaklAkt <> 2 )
+          {
+            Set tVidSopr := 101;
+            DoVidSopr;
+
+            // возвратные накладные
+            Set tVidSopr := 206;
+            DoVidSopr;
+
+            Set tVidSopr := 108;
+            DoVidSopr;
+          }
+
+        if ( NaklAkt <> 1 )
+          {
+            Set tVidSopr := 111;
+            DoVidSopr;
+          }
+      }
+}
+
+Procedure CreateReport;
+Var
+  dsta
+           : boolean;
+
+  cRec
+           : comp;
+{
+  Modifier Delete safe TmpGrN;
+  Modifier Delete safe TmpGrN2;
+
+//===============================================================================
+
+  case AllKontr of
+
+    3 :
+      {
+        case AllOtvPodr of
+
+          2 :
+            {
+              if ( RunInterface('GetCO', cgiPick, comp(0), comp(0), cRec) = cmCancel )
+                Exit;
+              else
+                InitPick11(cRec);
+            }
+        end;
+      }
+
+  end; //case
+
+  StartNewVisual(vtRotateVisual, vfTimer, 'Подготовка к формированию отчета', 0);
+
+  case AllMcUsl of
+
+    2 :
+      {
+        GetGrMcUsl(1);
+      }
+
+    5 :
+      {
+        GetGrMcUsl(2);
+      }
+  end; //case
+
+  notPick := true;
+
+  if  (AllKontr = 5)
+    {
+      PushBounds(tbPick2SpGrSchDG);
+      PushBounds(tbSpGrSchdogovor);
+
+      if ( ByOpr = 2 )
+        PushBounds(tbdogovorKatSoprOpr);
+      else
+        PushBounds(tbdogovorKatSoprdoc);
+
+      PushBounds(tbKatSoprSpSopr);
+
+      GetForm;
+
+      _Loop Pick2
+        if not notbr
+          Break
+        else
+          _Loop SpGrSch1
+            if not notbr
+              Break
+            else
+              _Loop Dogovor
+                if not notbr
+                  Break
+                else
+                  doAllKatSopr;
+
+      PopBounds(tbKatSoprSpSopr);
+
+      if ( ByOpr = 2 )
+        PopBounds(tbdogovorKatSoprOpr);
+      else
+        PopBounds(tbdogovorKatSoprdoc);
+
+      PopBounds(tbSpGrSchdogovor);
+      PopBounds(tbPick2SpGrSchDG);
+    }
+  else if (AllKontr = 4)
+    {
+      PushBounds(tbPick2dogovor);
+
+      if ( ByOpr = 2 )
+        PushBounds(tbdogovorKatSoprOpr);
+      else
+        PushBounds(tbdogovorKatSoprdoc);
+
+      PushBounds(tbKatSoprSpSopr);
+
+      GetForm;
+
+      _Loop Pick2
+        if not notbr
+          Break
+        else
+          _Loop Dogovor
+            if not notbr
+              Break
+            else
+              doAllKatSopr;
+
+      PopBounds(tbKatSoprSpSopr);
+
+      if ( ByOpr = 2 )
+        PopBounds(tbdogovorKatSoprOpr);
+      else
+        PopBounds(tbdogovorKatSoprdoc);
+
+      PopBounds(tbPick2dogovor);
+    }
+  else if (AllKontr = 3)
+    {
+      PushBounds(tbPick2SpGrSch);
+      PushBounds(tbSpGrSchBasedoc);
+      PushBounds(tbBasedocStepdoc);
+
+      if ( ByOpr = 2 )
+        PushBounds(tbStepdocKatSoprOpr);
+      else
+        PushBounds(tbStepdocKatSoprdoc);
+
+      PushBounds(tbKatSoprSpSopr);
+
+      GetForm;
+
+      _Loop Pick2
+        if not notbr
+          Break
+        else
+          _Loop SpGrSch
+            if not notbr
+              Break
+            else
+              _Loop Basedoc
+              {
+                case AllOtvPodr of
+
+                  1 :
+                    {
+                      if ( Basedoc.cOtvPodr <> cpcOtvPodr )
+                        continue;
+                    }
+
+                  2 :
+                    {
+                      if ( GetFirst Pick4 where ((  Basedoc.cOtvPodr == Pick4.cRec
+                                                and word(11)         == Pick4.wList
+                                                )) <> tsOk )
+                        continue;
+                    }
+
+                end;
+
+                _Loop Stepdoc
+                  if not notbr
+                    Break
+                  else
+                    doAllKatSopr;
+              }
+
+      PopBounds(tbKatSoprSpSopr);
+
+      if ( ByOpr = 2 )
+        PopBounds(tbStepdocKatSoprOpr);
+      else
+        PopBounds(tbStepdocKatSoprdoc);
+
+      PopBounds(tbBasedocStepdoc);
+      PopBounds(tbSpGrSchBasedoc);
+      PopBounds(tbPick2SpGrSch);
+    }
+  else if (AllKontr = 1)
+    {
+      PushBounds(tbPick2Katorg);
+
+      if ( ByOpr = 2 )
+        PushBounds(tbKatorgKatSoprOpr);
+      else
+        PushBounds(tbKatorgKatSoprdoc);
+
+      PushBounds(tbKatSoprSpSopr);
+
+      GetForm;
+
+      _Loop Pick2
+        if not notbr
+          Break
+        else
+          doAllKatSopr;
+
+      PopBounds(tbKatSoprSpSopr);
+
+      if ( ByOpr = 2 )
+        PopBounds(tbKatorgKatSoprOpr);
+      else
+        PopBounds(tbKatorgKatSoprdoc);
+
+      PopBounds(tbPick2Katorg);
+   }
+  else if ( (AllKontr = 2) and (cpcGrKontr <> 0) )
+//    if (AllKontr=2, 'группе контрагентов:',
+    {
+      PushBounds(tbcpcGrKontr);
+//    PushBounds(tbVidorgKontrVid);
+      PushBounds(tbKontrVidKatorg);
+
+      if ( ByOpr = 2 )
+        PushBounds(tbKatorgKatSoprOpr);
+      else
+        PushBounds(tbkatorgKatSoprdoc);
+
+      PushBounds(tbKatSoprSpSopr);
+
+      GetForm;
+
+      _Loop KatOrgDescr
+        if not notbr
+          Break
+        else
+          doAllKatSopr;
+
+      PopBounds(tbKatSoprSpSopr);
+
+      if ( ByOpr = 2 )
+        PopBounds(tbkatorgKatSoprOpr);
+      else
+        PopBounds(tbKatorgKatSoprdoc);
+
+      PopBounds(tbKontrVidKatorg);
+      PopBounds(tbcpcGrKontr);
+    }
+  else if (  (AllMcUsl = 1)
+          or (AllMcUsl = 4)
+          )
+//  if (AllMcUsl=1,      'матценности:',
+//    if (AllMcUsl=3,    'нескольким МЦ.',
+//    if (AllMcUsl=5,    'услуге:',
+//    if (AllMcUsl=7,    'нескольким услугам.',
+// по выбранной(-ым) МЦ или услугам
+    {
+      if ( ByOpr = 2 )
+        PushBounds(tbPickSpSoprByOpr);
+      else
+        PushBounds(tbPickSpSoprBydoc);
+
+      GetForm;
+      notPick := false;
+
+      _Loop Pick
+        if not notbr
+          Break
+        else
+          DoAllVidSopr;
+
+      if ( ByOpr = 2 )
+        PopBounds(tbPickSpSoprByOpr);
+      else
+        PopBounds(tbPickSpSoprBydoc);
+    }
+  else if ( (AllMcUsl = 2) and (cpcGrMC <> 0) )
+//                         if (AllMcUsl=2,    'группе МЦ:',
+    {
+      if ( GetGrMcUsl(1) )
+        {
+          PushBounds(tbKatMcBykGroup);
+
+          if ( ByOpr = 2 )
+            PushBounds(tbKatMcSpSoprByOpr);
+          else
+            PushBounds(tbKatMcSpSoprBydoc);
+
+          GetForm;
+
+          _Loop KatMc
+            if not notbr
+              Break
+            else
+              DoAllVidSopr;
+
+          if ( ByOpr = 2 )
+            PopBounds(tbKatMcSpSoprByOpr);
+          else
+            PopBounds(tbKatMcSpSoprBydoc);
+
+          PopBounds(tbKatMcBykGroup);
+       }
+    }
+  else if ( (AllMcUsl = 5) and (cpcGrUsl <> 0) )
+//                     if (AllMcUsl=6,    'группе услуг:',
+    {
+      if ( GetGrMcUsl(2) )
+        {
+          PushBounds(tbKatUslBykGroup);
+
+          if ( ByOpr = 2 )
+            PushBounds(tbKatUslSpSoprByOpr);
+          else
+            PushBounds(tbKatUslSpSoprBydoc);
+
+          GetForm;
+
+          _Loop KatUsl
+            if not notbr
+              Break
+            else
+              DoAllVidSopr;
+
+          if ( ByOpr = 2 )
+            PopBounds(tbKatUslSpSoprByOpr);
+          else
+            PopBounds(tbKatUslSpSoprBydoc);
+
+          PopBounds(tbKatUslBykGroup);
+        }
+    }
+  else
+    {
+      if ( ByOpr = 2 )
+        PushBounds(tbSpSoprByOpr);
+      else
+        PushBounds(tbSpSoprBydoc);
+
+      GetForm;
+      DoAllVidSopr;
+
+      if ( ByOpr = 2 )
+        PopBounds(tbSpSoprByOpr);
+      else
+        PopBounds(tbSpSoprBydoc);
+    }
+
+  StopVisual;
+
+  StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, 'Идет формирование отчета', 1);
+
+  PrintReport;
+
+  StopVisual;
+}

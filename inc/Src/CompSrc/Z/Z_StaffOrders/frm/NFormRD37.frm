@@ -19,6 +19,7 @@
 Организация
 ОКПО
 TitleDocNrec : comp
+sBarCode
 PersNrec : comp
 AppointNrec : comp
 ContDocNrec : comp
@@ -29,7 +30,7 @@ FIO
 FIO_VP
 TabN
 должность
-подразделение
+подразделение : WideString
 
 BreakDocNmb
 BreakDocDate
@@ -52,6 +53,7 @@ prim
 Организация                   ^
 ОКПО                          ^
 TitleDocNrec : comp           ^
+sBarCode		      ^
 PersNrec : comp               ^
 AppointNrec : comp            ^
 ContDocNrec : comp            ^
@@ -62,7 +64,7 @@ FIO                           ^
 FIO_VP                        ^
 TabN                          ^
 должность                     ^
-подразделение                 ^
+подразделение : WideString    ^
 
 BreakDocNmb                   ^
 BreakDocDate                  ^

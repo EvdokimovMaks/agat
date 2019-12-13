@@ -125,3 +125,4 @@ ttRunManual = 4;// ручной запуск
 
 
 ttTypeLinkGrDescr = 10;
+ttTypeLinkGroupGrDescr = 11;

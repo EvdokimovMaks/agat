@@ -12,6 +12,7 @@
 .Fields
 Организация  ОКПО
 TitleDocNrec : comp
+sBarCode
 номер_документа  дата_составления
 
 ContDocNrec : comp
@@ -35,7 +36,7 @@ TabN
 
 .EndFields
 
-^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^
 .{ NformRD90aCycle CheckEnter
 ^ ^ ^ ^ ^ ^
 ^ ^ ^ ^ ^ ^

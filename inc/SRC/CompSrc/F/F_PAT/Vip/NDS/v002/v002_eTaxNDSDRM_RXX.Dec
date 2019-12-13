@@ -1,0 +1,777 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 9.10 - модуль "Бухгалтерская отчетность"
+// Базовый интерфейс редактирования : "Дополнительный раздел НДС"
+//------------------------------------------------------------------------------
+
+#ifndef __v002_eTaxNDSDRM_RXX_Dec__
+#define __v002_eTaxNDSDRM_RXX_Dec__
+
+//==============================================================================
+//#region ОКНО РЕДАКТИРОВАНИЯ
+//------------------------------------------------------------------------------
+#undef   mscTitle
+#declare mscTitle
+Screen scTitle (,, sci1Esc);
+  Show at (,,,4) Fixed_Y;
+  Table TablData;
+Fields
+  Indeks    ('Индекс                                              ',,         ) : Protect, {Font = {BackColor = if(Indeks  ='', ColorNeed, 0)}};
+  VersProg  ('Версия программы, с помощью которой сформирован файл',,         ) : Protect, {Font = {BackColor = if(VersProg='', ColorNeed, 0)}};
+  VersForm  ('Версия формата                                      ',,         ) : Protect, {Font = {BackColor = if(VersForm='', ColorNeed, 0)}};
+  IdFile    ('Идентификатор файла                                 ',,         ) : Protect;
+  PriznSved ('Признак актуальности ранее представленных сведений  ',, sci13Esc) : [List 0 '0 | сведения неактуальны', 1 '1 | сведения актуальны'], Protect;
+<<
+`Индекс`.@@@@@@@@@@ `Версия программы`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@`Версия формата`.@@@@@@@@
+`Идентификатор файла`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+`Признак актуальности ранее представленных сведений`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+end; // Screen
+#end   //mscTitle
+//#endregion ОКНО РЕДАКТИРОВАНИЯ
+//******************************************************************************
+
+
+//==============================================================================
+//#region КОД ВИДА ОПЕРАЦИИ
+//------------------------------------------------------------------------------
+// Создать поля "Код вида операции" из Книги в таблицу
+#undef   mCreateDataCodeVidOp
+#declare mCreateDataCodeVidOp(_Code)
+  do
+  {
+    var i : LongInt;
+    var arr : TListValue;  arr := myGetListValueFromDelimitedString(_Buff.#(_Code), lc_DocListSeparator);
+    for (i:=1; i<Count(arr); i++)
+    {
+      if (i <= lc_StructCount_CodeVidOp)
+      {
+        TablData.#(_Code)[i] := arr[i];
+      }
+      else
+      {
+        FpLog(
+          FormatStr_2(GetIName+'.OnEvent_ReportRecData: не учтенный "КодВидОпер"="%S" (i=%D)'
+                    , arr[i], i)
+        );
+      }
+    } // for
+  }
+  while False;
+#end   //mCreateDataCodeVidOp
+//------------------------------------------------------------------------------
+// Сохранить поля "Код вида операции" из таблицы в XML
+#undef   mSaveDataCodeVidOp
+#declare mSaveDataCodeVidOp(_Node,_Code)
+  do
+  {
+    var i : LongInt;
+    for (i:=1; i<=lc_StructCount_CodeVidOp; i++)
+    {
+      if (Trim(TablData.#(_Code)[i]) = '')
+      { Continue; }
+      pXML.CreateText(xmlDoc, #(_Node), 'КодВидОпер', TablData.#(_Code)[i] );  // Код вида операции
+    } // for
+  }
+  while False;
+#end   //mSaveDataCodeVidOp
+//------------------------------------------------------------------------------
+// Загрузить поле "Код вида операции" из XML в таблицу
+#undef   mLoadDataCodeVidOp
+#declare mLoadDataCodeVidOp(_arrNode,_NodeNpp,_Code)
+{
+
+  var value : string;  value := pXML.GetTextValue(#(_arrNode)[#(_NodeNpp)].Node);
+  if (Trim(value) = '')
+  { Continue; }
+
+  CurCodeVidOpNpp++;
+  if (CurCodeVidOpNpp > lc_StructCount_CodeVidOp)
+  {
+    FpLog(
+      FormatStr_2(GetIName+'.LoadData: не учтенный "КодВидОпер"="%S" (i=%D)'
+                , value, CurCodeVidOpNpp)
+    );
+    Continue;
+  }
+
+  TablData.#(_Code)[CurCodeVidOpNpp] := value;
+}
+#end   //mLoadDataCodeVidOp
+
+//------------------------------------------------------------------------------
+// Возвращает список кодов вида операции в виде строки
+#undef   mGetCodeVidOp
+#declare mGetCodeVidOp(_Code)
+function GetCodeVidOp : string;
+{
+  result := '';
+
+  var i : LongInt;
+  var sKod : string;
+  sKod := '';
+
+  for (i:=1; i<=lc_StructCount_CodeVidOp; i++)
+  {
+    if (Trim(TablData.#(_Code)[i]) = '')
+      Continue;
+
+    sKod := sKod + if (sKod = '', '', lc_DocListSeparator) + TablData.#(_Code)[i];
+  } // for
+
+  result := sKod;
+}
+#end   //mGetCodeVidOp
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Загружает список кодов вида операции из строки
+#undef   mSetCodeVidOp
+#declare mSetCodeVidOp(_Code)
+procedure SetCodeVidOp(_sKod : string);
+{
+  var i : LongInt;
+  var arr : TListValue;
+  arr := myGetListValueFromDelimitedString(_sKod, lc_DocListSeparator);
+
+  for (i:=1; i<Count(arr); i++)
+  {
+    if (i > lc_StructCount_CodeVidOp)
+      Break;
+
+    TablData.#(_Code)[i] := arr[i];
+  } // for
+}
+#end   //mSetCodeVidOp
+//#endregion КОД ВИДА ОПЕРАЦИИ
+//******************************************************************************
+
+
+//==============================================================================
+//#region РЕКВИЗИТЫ ОРГАНИЗАЦИИ
+//------------------------------------------------------------------------------
+// Получить поле: ИНН
+#undef   mBuffINN
+#declare mBuffINN(_Fld)
+  if(Trim(_Buff.#(_Fld))='-', '', _Buff.#(_Fld))
+#end   //mBuffINN
+//------------------------------------------------------------------------------
+// Получить поле: КПП
+#undef   mBuffKPP
+#declare mBuffKPP(_Fld)
+  if(Trim(_Buff.#(_Fld))='-', '', _Buff.#(_Fld))
+#end   //mBuffKPP
+//#endregion РЕКВИЗИТЫ ОРГАНИЗАЦИИ
+//******************************************************************************
+
+
+//==============================================================================
+//#region СВЕДЕНИЯ О ДОКУМЕНТЕ, ПОДТВЕРЖДАЮЩЕМ УПЛАТУ/ОПЛАТУ НАЛОГА
+//------------------------------------------------------------------------------
+// Создать поля "Сведения о документе, подтверждающем уплату/оплату налога" из Книги в таблицу
+#undef   mCreateDataDocOpl
+#declare mCreateDataDocOpl
+{
+  var sDocAttr : string;  sDocAttr := pBkScanner.GetFirstDocOplAttr;
+  do
+  {
+    sDocAttr := myGetCorrectStrDocList(sDocAttr);
+    if (Trim(sDocAttr) = '')
+    { Break; }
+
+    var i : LongInt;
+    var arr : TDRMDocList;  arr := myGetArrDocList(sDocAttr);
+    for (i:=1; i<Count(arr); i++)
+    {
+      ClearBuffer(#TablDocOpl);
+      TablDocOpl.cMain := TablData.NRec;
+      TablDocOpl.sNum  := arr[i].sNum;  // Номер документа, подтверждающего уплату налога
+      TablDocOpl.dDat  := arr[i].dDat;  // Дата документа, подтверждающего уплату налога
+      insert current TablDocOpl;
+    } // for
+
+    sDocAttr := pBkScanner.GetNextDocOplAttr;
+  }
+  while True;
+}
+#end   //mCreateDataDocOpl
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Сохранить поля "Сведения о документе, подтверждающем уплату/оплату налога" из таблицы в XML
+#undef   mSaveDataDocOpl
+#declare mSaveDataDocOpl(_Node,_Doc,_Num,_Dat)
+{
+  _Loop TablDocOpl
+  {
+    if  (TablDocOpl.sNum = '')
+    and (TablDocOpl.dDat = lc_dEmpty )
+    { Continue; }
+
+    var xmlNodePDoc : TPtr;  xmlNodePDoc := pXML.CreateNode(xmlDoc, #(_Node), #(_Doc));
+    XMLDOMElement_SetAttribute(xmlNodePDoc, #(_Num),             TablDocOpl.sNum );
+    XMLDOMElement_SetAttribute(xmlNodePDoc, #(_Dat), myDateToStr(TablDocOpl.dDat));
+    XMLDOMNode_Release(xmlNodePDoc);
+  } //_Loop TablDocOpl
+}
+#end   //mSaveDataDocOpl
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Загрузить поля "Сведения о документе, подтверждающем уплату/оплату налога" из XML в таблицу
+#undef   mLoadDataDocOpl
+#declare mLoadDataDocOpl(_Num,_Dat)
+{
+  do
+  {
+    ClearBuffer(#TablDocOpl);
+    TablDocOpl.cMain := TablData.NRec;
+
+    arrAttr := pXML.GetAttrValueList(arrNodeBSub[nodeBSubNpp].Node);
+    for (attrNpp:=1; attrNpp<Count(arrAttr); attrNpp++)
+    {
+      case arrAttr[attrNpp].Name of
+        #(_Num) : TablDocOpl.sNum :=             arrAttr[attrNpp].Value ;
+        #(_Dat) : TablDocOpl.dDat := myStrToDate(arrAttr[attrNpp].Value);
+      end; // case
+    } // for
+
+    insert current TablDocOpl;
+  }
+  while False;
+}
+#end   //mLoadDataDocOpl
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Запустить редактирование: "Сведения о документе, подтверждающем уплату/оплату налога"
+#undef   mmyRunEditListDocOpl
+#declare mmyRunEditListDocOpl
+function myRunEditListDocOpl : boolean;
+{
+  Result := False;
+  RunWindowModal(wiListDocOpl);
+  ReScanPanel(#TablData);
+  Result := True;
+} // function myRunEditListDocOpl
+#end   //mmyRunEditListDocOpl
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Экспорт в Excel "Документа оплаты"
+#undef   mXLSExpDocOpl
+#declare mXLSExpDocOpl
+{
+  var DocNpp : word;  DocNpp := 0;
+  _Loop TablDocOpl
+  {
+    if  (TablDocOpl.sNum = '')
+    and (TablDocOpl.dDat = lc_dEmpty )
+    { Continue; }
+
+    DocNpp++;
+    var sDat : string;  sDat := '';
+    if (TablDocOpl.dDat != lc_dEmpty)
+      sDat := DateToStr(TablDocOpl.dDat, lc_DocListDateFormat);
+    var sDocAttr : string;  sDocAttr := TablDocOpl.sNum + ' ' + sDat;
+    if (DocNpp > 1)         sDocAttr := lc_DocListSeparator + sDocAttr;
+
+    xlAddCellStringValue(
+      sDocAttr
+    , curRow
+    , lc_Col_DocOplList);
+
+  } //_Loop TablDocOpl
+}
+#end   //mXLSExpDocOpl
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Импорт из в Excel "Документа оплаты"
+#undef   mXLSImpDocOpl
+#declare mXLSImpDocOpl
+{
+  // сформируем список строк с реквизитами документов
+  var arrDocList : array[0..0] of string;  SetLimit(arrDocList, 0);
+  var Ind : LongInt;  Ind := 0;
+  do
+  {
+    Ind++;
+    var lBeg : LongInt;  lBeg := (255*(Ind-1)+1);
+    var sTmp : string ;  sTmp := xlGetCellSubStringValue(
+      curRow
+    , lc_Col_DocOplList
+    , lBeg
+    , 255);
+    if (sTmp = '')
+    { Break; }
+
+    sTmp  := Replace(sTmp , ',', lc_DocListSeparator); // разделитель списка документов
+    arrDocList[Ind] := sTmp;
+  }
+  While True;
+
+  // сформируем список реквизитов документов
+  var sDocAttr : string;  sDocAttr := '';
+  for (Ind:=1; Ind<Count(arrDocList); Ind++)
+  { // побежали по списку строк с реквизитами документов
+    var sTmp : string;  sTmp := arrDocList[Ind];
+
+    var i : word;
+    for (i:=1; i<=Length(sTmp); i++)
+    {
+      var ch : string;  ch := sTmp[ byte(i) ];
+      if  (ch != lc_DocListSeparator)
+      { // если еще НЕ сформирована строка атрибутов документа
+        sDocAttr := sDocAttr + ch;
+      }
+      else
+      { // если сформирована строка атрибутов документа
+        var rcDocAttr : TDRMDocAttr;  rcDocAttr := myGetDocAttrFromStrDocAttr(sDocAttr);
+        ClearBuffer(#TablDocOpl);
+        TablDocOpl.cMain := TablData.NRec;
+        TablDocOpl.sNum  := rcDocAttr.sNum;
+        TablDocOpl.dDat  := rcDocAttr.dDat;
+        insert current TablDocOpl;
+
+        sDocAttr := '';
+      } // если сформирована строка атрибутов документа
+    } // for
+
+  } // побежали по списку строк с реквизитами документов
+  if (sDocAttr  != '')
+  { // если есть последний документ без разделителя в конце
+    var rcDocAttr : TDRMDocAttr;  rcDocAttr := myGetDocAttrFromStrDocAttr(sDocAttr);
+    ClearBuffer(#TablDocOpl);
+    TablDocOpl.cMain := TablData.NRec;
+    TablDocOpl.sNum  := rcDocAttr.sNum;
+    TablDocOpl.dDat  := rcDocAttr.dDat;
+    insert current TablDocOpl;
+  } // если есть последний документ без разделителя в конце
+
+}
+#end   //mXLSImpDocOpl
+//------------------------------------------------------------------------------
+//#endregion НОМЕР СВЕДЕНИЯ О ДОКУМЕНТЕ, ПОДТВЕРЖДАЮЩЕМ УПЛАТУ/ОПЛАТУ НАЛОГА
+//******************************************************************************
+
+
+//==============================================================================
+//#region РЕГИСТРАЦИОННЫЙ НОМЕР ТАМОЖЕННОЙ ДЕКЛАРАЦИИ
+//------------------------------------------------------------------------------
+// Создать поля "Регистрационный номер таможенной декларации" из Книги в таблицу
+#undef   mCreateDataDocGTD
+#declare mCreateDataDocGTD
+{
+  var sGTDAttr : string;  sGTDAttr := pBkScanner.GetFirstDocGTDAttr;
+  do
+  {
+    sGTDAttr := myGetCorrectStrNumList(sGTDAttr);
+    if (Trim(sGTDAttr) = '')
+    { Break; }
+
+    var i : LongInt;
+    var arr : TDRMNumList;  arr := myGetArrNumList(sGTDAttr);
+    for (i:=1; i<Count(arr); i++)
+    {
+      myInsTablDocGTD(TablData.NRec, arr[i].sNum);
+    } // for
+
+    sGTDAttr := pBkScanner.GetNextDocGTDAttr;
+  }
+  while True;
+}
+#end   //mCreateDataDocGTD
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Сохранить поля "Регистрационный номер таможенной декларации" из таблицы в XML
+#undef   mSaveDataDocGTD
+#declare mSaveDataDocGTD(_Node,_Attr)
+{
+  _Loop TablDocGTD
+  {
+    var sNumGTD : string;  sNumGTD := TablDocGTD.sNum;
+    if (sNumGTD = '')
+    { Continue; }
+
+    pXML.CreateText(xmlDoc, #(_Node), #(_Attr), sNumGTD);
+  } //_Loop TablDocGTD
+}
+#end   //mSaveDataDocGTD
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Загрузить поле "Регистрационный номер таможенной декларации" из XML в таблицу
+#undef   mLoadDataDocGTD
+#declare mLoadDataDocGTD(_arrNode,_NodeNpp)
+{
+  do
+  {
+    var sNumGTD : string;  sNumGTD := pXML.GetTextValue(#(_arrNode)[#(_NodeNpp)].Node);
+    if (Trim(sNumGTD) = '')
+    { Break; }
+
+    ClearBuffer(#TablDocGTD);
+    TablDocGTD.cMain := TablData.NRec;
+    TablDocGTD.sNum  := sNumGTD;
+    insert current TablDocGTD;
+  }
+  while False;
+}
+#end   //mLoadDataDocGTD
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Запустить редактирование: "Регистрационный номер таможенной декларации"
+#undef   mmyRunEditListDocGTD
+#declare mmyRunEditListDocGTD
+function myRunEditListDocGTD : boolean;
+{
+  Result := False;
+  RunWindowModal(wiListDocGTD);
+  ReScanPanel(#TablData);
+  Result := True;
+} // function myRunEditListDocGTD
+#end   //mmyRunEditListDocGTD
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Экспорт в Excel "Регистрационный номер таможенной декларации"
+#undef   mXLSExpDocGTD
+#declare mXLSExpDocGTD
+{
+  var DocNpp : word;  DocNpp := 0;
+  _Loop TablDocGTD
+  {
+    if  (TablDocGTD.sNum = '')
+    { Continue; }
+
+    DocNpp++;
+    var sGTDAttr : string;  sGTDAttr := TablDocGTD.sNum;
+    if (DocNpp > 1)         sGTDAttr := lc_DocListSeparator + sGTDAttr;
+
+    xlAddCellStringValue(
+      sGTDAttr
+    , curRow
+    , lc_Col_GTDNumList);
+
+  } //_Loop TablDocGTD
+}
+#end   //mXLSExpDocGTD
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Импорт из в Excel "Регистрационный номер таможенной декларации"
+#undef   mXLSImpDocGTD
+#declare mXLSImpDocGTD
+{
+  // сформируем список строк с реквизитами документов
+  var arrGTDList : array[0..0] of string;  SetLimit(arrGTDList, 0);
+  var Ind : LongInt;  Ind := 0;
+  do
+  {
+    Ind++;
+    var lBeg : LongInt;  lBeg := (255*(Ind-1)+1);
+    var sTmp : string ;  sTmp := xlGetCellSubStringValue(
+      curRow
+    , lc_Col_GTDNumList
+    , lBeg
+    , 255);
+    if (sTmp = '')
+    { Break; }
+
+    sTmp  := Replace(sTmp , ',', lc_DocListSeparator); // разделитель списка документов
+    arrGTDList[Ind] := sTmp;
+  }
+  while True;
+
+  // сформируем список реквизитов документов
+  var sGTDAttr : string;  sGTDAttr := '';
+  for (Ind:=1; Ind<Count(arrGTDList); Ind++)
+  { // побежали по списку строк с реквизитами документов
+    var sTmp : string;  sTmp := arrGTDList[Ind];
+
+    var i : word;
+    for (i:=1; i<=Length(sTmp); i++)
+    {
+      var ch : string;  ch := sTmp[ byte(i) ];
+      if  (ch != lc_DocListSeparator)
+      { // если еще НЕ сформирована строка атрибутов документа
+        sGTDAttr := sGTDAttr + ch;
+      }
+      else
+      { // если сформирована строка атрибутов документа
+        myInsTablDocGTD(TablData.NRec, sGTDAttr);
+
+        sGTDAttr := '';
+      } // если сформирована строка атрибутов документа
+    } // for
+
+  } // побежали по списку строк с реквизитами документов
+  if (sGTDAttr  != '')
+  { // если есть последний документ без разделителя в конце
+    myInsTablDocGTD(TablData.NRec, sGTDAttr);
+  } // если есть последний документ без разделителя в конце
+
+}
+#end   //mXLSImpDocGTD
+//------------------------------------------------------------------------------
+//#endregion РЕГИСТРАЦИОННЫЙ НОМЕР ТАМОЖЕННОЙ ДЕКЛАРАЦИИ
+//******************************************************************************
+
+
+//==============================================================================
+//#region СЕРВИС
+//------------------------------------------------------------------------------
+// Проверить контрольную сумму ИНН
+#undef   mCheckINNCS
+#declare mCheckINNCS(_INN, _Node)
+  if (not pDRM.CheckINNCS(#(_INN)) )
+  {
+    sLastError := pDRM.GetStLastError;
+    var sXPath : string;  sXPath := FormatStr_1(lc_XPathPrefixStr+'[%D]/'+#(_Node), i);
+    if (not pDRM.GetIsINNForIP(#(_INN)) )
+      sXPath := sXPath + '/СведЮЛ/ИННЮЛ';
+    else
+      sXPath := sXPath + '/СведИП/ИННФЛ';
+    pDRM.AddCheckErrNote(wRazdelID, sXPath, sLastError);
+    isAllOk := False;
+  }
+#end   //mCheckINNCS
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Проверить заполненность сведений о к/а по "Код вида операции"
+#undef   mCheckSvedKontrAg
+#declare mCheckSvedKontrAg(_INN, _Node)
+{
+  if (Trim(#(_INN)) = '')
+  {
+    var wCodeVidOp : word;  wCodeVidOp := word(TablData.KodOp[1]);
+    if ((wCodeVidOp >= 1) and (wCodeVidOp <=  5))
+    or ((wCodeVidOp >= 7) and (wCodeVidOp <= 13))
+    {
+      sLastError := 'Элемент "Сведения о продавце" обязателен если "Код вида операции" '
+                 + 'принимает хотя бы одно из значений диапазона: 01-05 | 07-13';
+      var sXPath : string;  sXPath := FormatStr_1(lc_XPathPrefixStr+'[%D]/'+#(_Node), i);
+      pDRM.AddCheckErrNote(wRazdelID, sXPath, sLastError);
+    }
+  }
+}
+#end   //mCheckSvedKontrAg
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Запустить интерфейс просмотра заданной СФ
+#undef   mRunViewSchFact
+#declare mRunViewSchFact(_Dir, _Num, _Dat, _INN, _KPP)
+  #TablData.#(_Num) ,
+  #TablData.#(_Dat) :
+  {
+    myRunViewSchFact(
+      #(_Dir)
+    , TablData.#(_Num)
+    , TablData.#(_Dat)
+    , TablData.#(_INN)
+    , TablData.#(_KPP)
+    );
+  }
+#end   //mRunViewSchFact
+//------------------------------------------------------------------------------
+// Запустить интерфейс просмотра исправления СФ
+#undef   mRunViewRevSchF
+#declare mRunViewRevSchF(_Dir, _Num, _Dat, _BaseNum, _INN, _KPP)
+  #TablData.#(_Num) ,
+  #TablData.#(_Dat) :
+  {
+    myRunViewSchFact(
+      #(_Dir)
+    , myMakeNomRevSF(TablData.#(_BaseNum), TablData.#(_Num))
+    , TablData.#(_Dat)
+    , TablData.#(_INN)
+    , TablData.#(_KPP)
+    );
+  }
+#end   //mRunViewRevSchF
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Позиционироваться по XPath на строку раздела
+#undef   mmyXPath_SetPosRazdel
+#declare mmyXPath_SetPosRazdel
+function myXPath_SetPosRazdel(
+  _XPath : string   // XPath
+) : boolean;
+{
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    var iNpp : LongInt;  iNpp := LongInt(myXPath_GetFieldIterator(_XPath, lc_XPathPrefixStr) );
+    if (iNpp = 0)
+    { Break; }
+    var i : LongInt;  i := 0;
+    _Loop TablData
+    {
+      i++;
+      if (i = iNpp)
+      { Break; }
+    } // _Loop TablData
+    if (i = 0)
+    {
+      sLastError := FormatStr_2('Не удалось найти %D-ю строку раздела по пути "%S"...', iNpp, _XPath);
+      FpLog(GetIName+'.myXPath_SetPosRazdel: '+sLastError);
+      isAllOk := False;
+      Break;
+    }
+  }
+  while False;
+  ReReadRecord(tnTablData);
+  Result := isAllOk;
+}
+#end   //mmyXPath_SetPosRazdel
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Передача переменных в функцию xlSetCellXXXValue
+#undef   mXLSVar
+#declare mXLSVar(_Fld)
+curRow, lc_Col_#(_Fld), curRow, lc_Col_#(_Fld)
+#end   //mXLSVar
+//------------------------------------------------------------------------------
+//#endregion СЕРВИС
+//******************************************************************************
+
+
+//==============================================================================
+//#region TABLEEVENT
+//------------------------------------------------------------------------------
+// TableEvent Table TablData
+#undef   mTableEventTablData
+#declare mTableEventTablData
+TableEvent Table TablData;
+cmSetDefault :
+{
+}
+
+cmInsertRecord :
+{
+  insert current TablData;
+  RunReCalc;
+}
+cmUpdateRecord :
+{
+  update current TablData;
+  RunReCalc;
+}
+cmDeleteRecord :
+{
+  var isNotMarker : boolean;  isNotMarker := (GetMarkerCount(Markers) = 0);
+  if (not isNotMarker)
+  {
+    if Message('Удалить помеченные записи?', YesNo+mfSwapButtons) <> cmYes
+    { Abort; Exit; }
+  }
+  else
+  {
+    if Message('Удалить текущую запись?', YesNo+mfSwapButtons) <> cmYes
+    { Abort; Exit; }
+    InsertMarker(Markers, TablData.NRec);
+  }
+  var i : LongInt;
+  var cRec : comp;
+  for (i:=0; i<GetMarkerCount(Markers); i++ )
+  {
+    if (not GetMarker(Markers, i, cRec) )
+    { Continue; }
+    if (GetFirst FastFirstRow TablData where ((cRec == TablData.NRec)) <> tsOk)
+    { Continue; }
+
+    delete current TablData;
+  } // for
+  RunReCalc;
+  ClearMarker(Markers);
+  ShowIHead;
+  ReReadRecord(#TablData);
+}
+End; // TableEvent Table TablData
+#end   //mTableEventTablData
+//------------------------------------------------------------------------------
+
+
+//------------------------------------------------------------------------------
+// Обработка событий пометки
+#undef   mMarkerEventTablData
+#declare mMarkerEventTablData
+cmMarkUnMark :
+{
+  if (CurTable <> tnTablData)
+  { Exit; }
+  if (not isValid(tnTablData) )
+  { Exit; }
+  InvertMarker(Markers, TablData.NRec);
+  RedrawCurrentAndGo(GetCurrentFormat, True);
+  ShowIHead;
+}
+cmUnSelectAll :
+{
+  if (CurTable <> tnTablData)
+  { Exit; }
+  if (not isValid(tnTablData) )
+  { Exit; }
+  ClearMarker(Markers);
+  ReScanPanel(tnTablData);
+  ShowIHead;
+}
+cmInvertAll :
+{
+  if (CurTable <> tnTablData)
+  { Exit; }
+  if (not isValid(tnTablData) )
+  { Exit; }
+  StartNewVisual(vtNumericVisual, vfTimer + vfBreak + vfConfirm, 'Обработано записей: ', 1);
+  PushPos(tnTablData);
+  _Loop TablData
+  {
+    InvertMarker(Markers, TablData.NRec);
+    if (Not NextVisual) Break;
+  }
+  PopPos(tnTablData);
+  StopVisual('', 0);
+  ReScanPanel(tnTablData);
+  ShowIHead;
+}
+cmSelectAll :
+{
+  if (CurTable <> tnTablData)
+  { Exit; }
+  if (not isValid(tnTablData) )
+  { Exit; }
+  ClearMarker(Markers);
+  PutCommand(cmInvertAll);
+}
+cmShowAll : // Пометить уровень  <Ctrl><+>
+{
+  if (CurTable <> tnTablData)
+  { Exit; }
+  if (not isValid(tnTablData) )
+  { Exit; }
+  PutCommand(cmSelectAll);
+  Exit;
+}
+cmHideAll : // Снять пометку с уровня  <Ctrl><->
+{
+  if (CurTable <> tnTablData)
+  { Exit; }
+  if (not isValid(tnTablData) )
+  { Exit; }
+  PutCommand(cmUnSelectAll);
+  Exit;
+}
+#end   //mMarkerEventTablData
+//------------------------------------------------------------------------------
+//#endregion TABLEEVENT
+//******************************************************************************
+
+#endif//__v002_eTaxNDSDRM_RXX_Dec__

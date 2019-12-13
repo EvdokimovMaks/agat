@@ -14,8 +14,8 @@ set tmp=%TmpDir%tmp.prj
 set res=%TmpDir%tmp.res
 set lot=%TmpDir%tmp.lot
 
-echo #addcomponent name="%Name%", resource="%Resource%", priority=%Priority%, system="%System%", version="%Build%", group="%Group%"; > %tmp%
-%CompilerPath% %tmp% /c:"%ConfigDir%vip.cfg" /r:"%res%"
+rem echo #addcomponent name="%Name%", resource="%Resource%", priority=%Priority%, system="%System%", version="%Build%", group="%Group%"; > %tmp%
+rem %CompilerPath% %tmp% /c:"%ConfigDir%vip.cfg" /r:"%res%"
 
 echo update components where (('%Name%' == name)) set version:='%Build%', resource:='%Resource%'; > %lot%
 %CompilerPath% %lot% /c:"%ConfigDir%vip.cfg" /r:"%res%"

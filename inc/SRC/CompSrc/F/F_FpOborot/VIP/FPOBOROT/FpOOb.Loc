@@ -1,0 +1,191 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 9.10 - модуль "Управление бюджетом"
+// Базовый объект : "Финансовые операции"
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Снять блокировку данных бюджета
+Function UnLockValuesData(
+  _SessionID : LongInt;
+  _wMessage  : word
+) : boolean;
+{
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  if (_SessionID = 0)
+  { // если сессии не было, сразу выходим
+    _SessionID := 0;
+    UnLockValuesData := True;
+    Exit;
+  }
+
+  do
+  {
+    if (not pLockValues.Session_TryUnLock(_SessionID) )
+    {
+      sLastError := pLockValues.GetStLastError;
+      FpLog('UnLockValuesData: (not Session_IsMayUse) '+sLastError); 
+      isAllOk := False; 
+    }
+    if (not pLockValues.Session_End(_SessionID) )
+    {
+      sLastError := pLockValues.GetStLastError;
+      FpLog('UnLockValuesData: (not Session_End) '+sLastError); 
+      isAllOk := False; 
+    }
+  }
+  while False;
+
+  if (not isAllOk)
+  {
+    if (isMessageMode(_wMessage) )
+      RunShowError;
+  }
+
+  Result := isAllOk;
+}
+
+//------------------------------------------------------------------------------
+// Установить блокировку данных бюджета
+Function LockValuesData(
+var _SessionID : LongInt;
+    _wSynch    : word;             // режим синхронизации
+    _OldBuff   : type$p_FpOborot;
+    _NewBuff   : type$p_FpOborot;
+    _wMessage  : word
+) : boolean;
+{
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  if (RecordsInTable(#LocalBoxSynchBudVar) = 0)
+  { // если нечего синхронизировать, сразу выходим
+    _SessionID := 0;
+    LockValuesData := True;
+    Exit;
+  }
+
+  //----------------------------------------------------------------------------
+  // Блокировка данных бюджета
+  if (isAllOk)
+  { // если удалось заблокировать финоперации
+
+    StartNewVisual(vtRotateVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom
+    , 'Блокировка данных бюджета...', 1);
+    do
+    {
+      _SessionID := pLockValues.Session_Begin;
+      if (_SessionID = 0)
+      {
+        sLastError := pLockValues.GetStLastError;
+        FpLog('ObjFpOborot_LockValuesData: (_SessionID = 0) '+sLastError); 
+        isAllOk := False; 
+        Break; 
+      }
+
+      if (IsBit(_wSynch, lc_SynchBud_ModeDel) )
+      { // если надо передавать "старое" значение ФО
+
+        _Loop LocalBoxSynchBudVar where ((word(lc_SynchBud_ModeDel) == LocalBoxSynchBudVar.wAddDel))
+        {
+          if (not NextVisual)  
+          {
+            sLastError := 'Блокировка данных бюджета прервана пользователем...';
+            FpLog('ObjFpOborot_LockValuesData: '+sLastError);
+            isAllOk := False;
+            Break;
+          }
+
+          var LockParam  : TFpLockLaluesParam;
+          ClearAdvRecord(LockParam);
+          LockParam.wSegBit  := word(fpcgBudVarLock or fpcgKodRegLock or fpcgStBudLock or fpcgPeriodLock);
+          LockParam.cBudVar  := LocalBoxSynchBudVar.cBudVar;
+          LockParam.wKodReg  := LocalBoxSynchBudVar.wKodReg;
+          LockParam.cStBud   := _OldBuff.cStBud;
+          LockParam.cPeriod  := _OldBuff.cPeriod;
+          pLockValues.Session_AddLeafALock(_SessionID, LockParam);
+
+          if (LocalBoxSynchBudVar.cKAURel <> 0)
+          { // если указано соответствие аналитик
+            var RelBuff : type$p_FpOborot;
+            if (pObjFpRelObKAU.MakeRelBuff(LocalBoxSynchBudVar.cKAURel, _OldBuff, RelBuff) )
+            { // если сформирован буфер ФО по соответствию
+              LockParam.cStBud   := RelBuff.cStBud;
+              pLockValues.Session_AddLeafALock(_SessionID, LockParam);
+            } // если сформирован буфер ФО по соответствию
+          } // если указано соответствие аналитик
+
+        } // _Loop LocalBoxSynchBudVar
+
+      } // если надо передавать "старое" значение ФО
+
+      if (not isAllOk)
+      { Break; }
+
+      if (IsBit(_wSynch, lc_SynchBud_ModeAdd) )
+      { // если надо передавать "новое" значение ФО
+
+        _Loop LocalBoxSynchBudVar where ((word(lc_SynchBud_ModeAdd) == LocalBoxSynchBudVar.wAddDel))
+        {
+          if (not NextVisual)  
+          {
+            sLastError := 'Блокировка данных бюджета прервана пользователем...';
+            FpLog('ObjFpOborot_LockValuesData: '+sLastError);
+            isAllOk := False;
+            Break;
+          }
+
+          var LockParam  : TFpLockLaluesParam;
+          ClearAdvRecord(LockParam);
+          LockParam.wSegBit  := word(fpcgBudVarLock or fpcgKodRegLock or fpcgStBudLock or fpcgPeriodLock);
+          LockParam.cBudVar  := LocalBoxSynchBudVar.cBudVar;
+          LockParam.wKodReg  := LocalBoxSynchBudVar.wKodReg;
+          LockParam.cStBud   := _NewBuff.cStBud;
+          LockParam.cPeriod  := _NewBuff.cPeriod;
+          pLockValues.Session_AddLeafALock(_SessionID, LockParam);
+
+          if (LocalBoxSynchBudVar.cKAURel <> 0)
+          { // если указано соответствие аналитик
+            var RelBuff : type$p_FpOborot;
+            if (pObjFpRelObKAU.MakeRelBuff(LocalBoxSynchBudVar.cKAURel, _NewBuff, RelBuff) )
+            { // если сформирован буфер ФО по соответствию
+              LockParam.cStBud   := RelBuff.cStBud;
+              pLockValues.Session_AddLeafALock(_SessionID, LockParam);
+            } // если сформирован буфер ФО по соответствию
+          } // если указано соответствие аналитик
+
+        } // _Loop LocalBoxSynchBudVar
+
+      } // если надо передавать "новое" значение ФО
+
+      var TimeOut100 : comp;  TimeOut100 := 60000; // 600-т сек.
+      if (not pLockValues.Session_GuidedTryLock(_SessionID, TimeOut100, cgiNoMessage) )
+      {
+        sLastError := pLockValues.GetStLastError;
+        FpLog('ObjFpOborot_LockValuesData: (not Session_IsMayUse) '+sLastError);
+        isAllOk := False;
+        Break;
+      }
+
+    }
+    while False;
+    StopVisual('', 0);
+  } // если удалось заблокировать финоперации
+  // Блокировка данных бюджета
+  //----------------------------------------------------------------------------
+  
+  //----------------------------------------------------------------------------
+  if (not isAllOk)
+  {
+    if (isMessageMode(_wMessage) )
+      RunShowError;
+
+    UnLockValuesData(_SessionID, _wMessage);
+  }
+  //----------------------------------------------------------------------------
+
+  Result := isAllOk;
+}
+//******************************************************************************

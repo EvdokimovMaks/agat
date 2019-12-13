@@ -1,0 +1,104 @@
+///////////////////////////// ПЕЧАТЬ ////////////////////////////////
+//*******************************************************************
+form curform('aHistory.out','aHistory') with novisual;
+
+var gNppFrom: longint;
+Procedure Print_Line(_Level: word);
+{
+  curform.PuteventById(feDoLoop, fcHistory_Add);
+  curform.Write(DateToStr(TreeH.dChange, 'DD/MM/YYYY')); // время изменения
+  curform.Write(TimeToStr(TreeH.tChange, 'HH:MM:SS')); // 
+  curform.Write(TreeH.Code   ); // N посл-сти изменений
+  curform.Write(TreeH.Level  ); // N уровня
+  curform.Write(TreeH.Npp-gNppFrom); // N изменения
+  curform.Write(TreeH.wType  ); // тип изм-ния
+  var s: string;
+  s := pad('',_Level) + TreeH.sNote + pad('',5-_Level);
+  curform.Write(s); // изменение
+}
+
+function Print_ScanTree(_node : comp): boolean;
+var
+  tmpNode : comp;
+  wasError: boolean; // для остановки печати
+{
+  wasError := false;
+  tmpNode := curNode;
+
+  PushPos(#TreeH);
+  curNode := _node;
+  _loop TreeH
+  {
+    if not NextVisual
+     { wasError := true; break; }
+    // печать узла
+    Print_Line(TreeH.Level);
+    // печать нижних узлов
+    if RecordExists TreeHSub = tsOk
+      if not Print_ScanTree(comp(TreeH.NRec))
+       { wasError := true; break; }
+  }//loop
+  PopPos(#TreeH);
+  curNode := tmpNode;
+
+  Print_ScanTree := not wasError;
+}
+// печать с указанного узла
+procedure History_Print(_cNodeFrom: comp; _NppFrom: longint;
+                        _sTitleRep: string; _sTitleCol: string);
+{
+  // для печати номеров с 1
+  gNppFrom := _NppFrom;
+
+  curform.Write(_sTitleRep); // sTitleRep заголовок отчета
+  curform.Write(_sTitleCol); // sTitleCol заголовок колонки
+
+  // Запуск сканирования дерева и вывод данных в форму
+  StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak+vfConfirm,
+                 'Печать отчета... ',
+                 RecordsInTable(#TreeH));
+  Print_ScanTree(_cNodeFrom);
+  StopVisual('',0);
+
+  // показ формы
+  curform.PutEvent(feBreak);
+  if (not curform.error)
+    curform.ShowFile(rSee.TitleRep);
+  else
+    curform.AbortForm;
+}
+
+//подготовка к печати отчета по истории
+// isFullHistory - печать полного дерева (TRUE) или по группе (FALSE)
+Procedure HistoryPrintPrepare(isFullHistory: boolean);
+{
+  if (isFullHistory)// если печатать все
+    {
+      History_Print(rSee.cUpperNode, rSee.FirstNpp, rSee.TitleRep, rSee.TitleCol);
+      Exit;
+    }
+
+  if ( RecordExists TreeHSub = tsOk ) // есть потомки
+    {
+      History_Print(TreeH.nRec, TreeH.Npp, TreeH.sNote, rSee.TitleCol);
+      Exit;
+    }
+    else if ( GetFirst TreeHPre where (( curNode == TreeHPre.nRec )) = tsOk ) // есть предок
+    {
+      History_Print(TreeHPre.nRec, TreeHPre.Npp, TreeHPre.sNote, rSee.TitleCol);
+      Exit;
+    }
+
+  // печать верхнего уровня если нет потомков
+  gNppFrom := TreeH.Npp - 1;
+  curform.Write(rSee.TitleRep); // заголовок отчета
+  curform.Write(rSee.TitleCol); // заголовок колонки
+  Print_Line(TreeH.Level);
+  // показ формы
+  curform.PutEvent(feBreak);
+  if (not curform.error)
+    curform.ShowFile(rSee.TitleRep);
+  else
+    curform.AbortForm;
+}
+//*******************************************************************

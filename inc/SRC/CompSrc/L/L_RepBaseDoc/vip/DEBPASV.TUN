@@ -1,0 +1,575 @@
+//******************************************************************************
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Оперативный контур
+// Отчет "Погашение задолженностей по продажам", 
+// процедуры интерфейса параметров запись и чтение DSK
+//******************************************************************************
+
+Procedure CheckParam;
+{
+   ErrParam := FALSE;
+
+   set FilterDoc := FilterDoc AND word(not 2);
+   set FilterDoc := FilterDoc AND word(not 8);
+   ClusterDisabledField( #FilterDoc, 10 );
+
+   if ( cValOt = 0 )
+    {
+      set FilterVal := FilterVal AND word(not 2);
+      ClusterDisabledField( #FilterVal, 2 );
+    }
+   else
+     {
+       set FilterVal := FilterVal AND word(not 1);
+       ClusterDisabledField( #FilterVal, 1 );
+     }
+
+   case CurField of
+   //-------------------------------------------------------------------------------------------------------
+     #d0:
+       if (IsModified)
+         ExPer := FALSE;
+   //-------------------------------------------------------------------------------------------------------
+     #d9:
+       {
+         if (d9 = Cur_Date)
+           set OtDatCurrent := 1
+         else
+           if (d9 = Add_Day(Cur_Date, 1))
+             set OtDatCurrent := 2
+           else
+             set OtDatCurrent := 0;
+
+         if (d9 <= d0)
+           {
+             Message('Дата начала должна быть меньше даты окончания!', Warning);
+             ErrParam := TRUE;
+             Set d0 := Sub_Day(d9, 1);
+             SelectField(#d0);
+           };
+       };
+   //-------------------------------------------------------------------------------------------------------
+     #d1:
+       {
+         if (d1 >= d0)
+           Message('Задолженность на начало будет нулевой!', Warning);
+
+         if (d1 <> bOtDateDO)
+           set Per1 := 0;
+
+         if (d1 > d2)
+          {
+            Message('Дата начала периода ДО должна быть меньше или равна дате окончания!', Warning);
+            ErrParam := TRUE;
+            Set d1 := d2;
+            SelectField(#d1);
+          };
+       };
+   //-------------------------------------------------------------------------------------------------------
+     #d2:
+       {
+         if (d2 = Sub_Day(d9, 1))
+           set OtDatIn := 1
+         else
+           if (d2 = d9)
+             set OtDatIn := 2
+           else
+             set OtDatIn := 0;
+
+         if (d1 > d2)
+          {
+            Message('Дата начала периода ДО должна быть меньше или равна дате окончания!', Warning);
+            ErrParam := TRUE;
+            Set d1 := d2;
+            SelectField(#d1);
+          };
+       };
+   //-------------------------------------------------------------------------------------------------------
+    #NaklDatTxt:
+      if (Not NaklDat)
+        set NaklOnlyWas := TRUE;
+   //-------------------------------------------------------------------------------------------------------
+    #NaklOnlyWasTxt:
+      if (Not NaklOnlyWas)
+        set NaklDat := TRUE;
+   //-------------------------------------------------------------------------------------------------------
+    #FilterDoc: 
+      {
+        Prod  := ((FilterDoc AND 1) = 1);
+        Zakup := ((FilterDoc AND 2) = 2);
+        KonsP := ((FilterDoc AND 4) = 4);
+        KonsZ := ((FilterDoc AND 8) = 8);
+      }
+   //-------------------------------------------------------------------------------------------------------
+   end; //case
+
+   RubD    := ((FilterVal AND 1) = 1);
+   ValD    := ((FilterVal AND 2) = 2);
+   RubValD := ((FilterVal AND 4) = 4);
+
+   Set d9 := OtDateZ;
+   Set d1 := bOtDateDO;
+   Set d2 := OtDateDO;
+
+   if (Days3 < 0)
+     {
+       Days3 := 0;
+       ErrParam := TRUE;
+     };
+
+   if (Days2 < 0)
+     {
+       Days2 := 0;
+       ErrParam := TRUE;
+     };
+
+   if (Days1 < 0)
+     { 
+       Days1 := 0;
+       ErrParam := TRUE;
+     };
+
+   if (Days3 = Days2)
+     Days3 := 0;
+
+   if (Days2 = Days1)
+     Days2 := 0;
+
+   if (Days3 = Days1)
+     Days3 := 0;
+
+   if (Days3 > Days2)
+     {
+       var d : longint;
+       d := Days2;
+       Days2 := Days3;
+       Days3 := d;
+     };
+
+   if (Days2 > Days1)
+     {
+       var d : longint;
+       d := Days1;
+       Days1 := Days2;
+       Days2 := d;
+     };
+
+   if (Days3>Days2)
+     {
+       var d: longint;
+       d := Days2;
+       Days2 := Days3;
+       Days3 := d;
+     };
+
+   if (ZadPer)
+     SetFormat(scOtParam1)
+   else
+     SetFormat(scOtParam);
+
+   ToggleFieldVisible(#RubValRubTxt  , RubValD);
+   ToggleFieldVisible(#KatOrgDescrTxt, AllKontr <> 1);
+
+   if (Not NaklDat)
+     Set NaklOnlyWas := TRUE;
+
+   fValut        := TRUE;
+   Set RubValRub := if (cValOt = 0, 1, 0);
+
+   RereadRecord;
+};
+
+//******************************************************************************
+
+Procedure SetNamePer;
+{
+  if ( Dog.KS >= 0.0 )
+    Set Dog.KN := if (Longint(Dog.kd) = 0, '', 'с ' + DateToStr(Dog.kd, 'DD/MM/YYYY'));
+
+  if ( Abs(Dog.KS) >= 2.0)
+    Set Dog.KBASEN := if(Dog.kCurseDate >= Date(1, 1, 3000), '', 'по ' + DateToStr(Dog.kCurseDate, 'DD/MM/YYYY'));
+};
+
+//******************************************************************************
+
+Procedure CheckPeriods;
+{
+  StartNewVisual(vtRotateVisual, vfTimer, 'Проверяем периоды...'#13, 1 );
+  NextVisual;
+  PushPos(#Dog);
+  ExPer := FALSE;
+  var bc: boolean;
+  bc := FALSE;
+
+  do
+    {
+      bc := FALSE;
+      KolPers := RecordsInTable(#Dog);
+      tmpd    := Sub_Day(d0, 1);
+
+      if ((Modifier GetLast Dog) = tsOk)
+        do
+          {
+            NextVisual;
+
+            if ((Dog.kd > tmpd) OR (tmpd = ZeroDate))
+              if ((Modifier Delete Current Dog) = tsOk)
+                {
+                  Bc := TRUE;
+                  Break;
+                };
+
+            if ( (Dog.NRec <> KolPers) OR (Dog.kCurseDate <> tmpd) OR (Dog.kd < ZeroDate ) )
+              {
+                Dog.NRec     := KolPers;
+
+                if (Dog.kCurseDate <> tmpd)
+                  {
+                    Dog.Ks := if (Dog.Ks > 0.0, 3.0, -3.0);
+                    Set Dog.kCurseDate := tmpd;
+                  };
+
+                if (Dog.kd < ZeroDate)
+                  {
+                    Dog.Ks     := Abs(Dog.Ks);
+                    Set Dog.kd := ZeroDate;
+                  };
+
+                SetNamePer;
+                NextVisual;
+                Modifier Update Current Dog;
+              };
+
+            KolPers      := KolPers-1;
+            tmpd := if (Dog.Kd = ZeroDate, ZeroDate, Sub_Day(Dog.Kd, 1));
+          }
+       While ((Modifier GetPrev Dog) = tsOk);
+    }
+  While bc;
+
+  if ( ( tmpd <> ZeroDate) OR (RecordsInTable(#Dog) = 0) )
+    {
+      KolPers := KolPers-1;
+      ClearBuffer(#Dog);
+      Dog.NRec := KolPers;
+      Dog.Ks := 3.0;
+      Dog.Kd := ZeroDate;
+      Dog.kCurseDate := tmpd;
+      SetNamePer;
+      NextVisual;
+      Modifier Insert Current Dog;
+      NextVisual;
+      KolPers := 0;
+
+      if ((Modifier GetFirst Dog) = tsOk)
+        do
+          {
+            KolPers      := KolPers+1;
+            Set Dog.NRec := KolPers;
+            NextVisual;
+            Modifier Update Current Dog;
+          }
+        While ((Modifier GetNext Dog) = tsOk);
+    };
+
+  KolPers := RecordsInTable(#Dog);
+
+  if (KolPers>= 2)
+    ExPer := TRUE;
+
+  if (PopPos(#Dog) <> tsOk)
+    Dog.Kd := ZeroDate;
+
+  NextVisual;
+  GetEqual(#Dog, 0);
+  RescanPanel(#Dog);
+  StopVisual('', 0);
+};
+
+//******************************************************************************
+
+Procedure Param2UserTune;
+{
+  StartNewVisual(vtRotateVisual, vfTimer, 'Записываем параметры...'#13, 1 );
+  CheckParam;
+  CheckPeriods;
+  NextVisual;
+
+  SaveMyDsk(cValOt, 'DebPascValOt');
+  NextVisual;
+  SaveMyDsk(d0, 'DebPasd0');
+  NextVisual;
+  SaveMyDsk(d9, 'DebPasd9');
+  NextVisual;
+  SaveMyDsk(d1, 'DebPasd1');
+  NextVisual;
+  SaveMyDsk(d2, 'DebPasd2');
+  NextVisual;
+
+  SaveMyDsk(OtDatCurrent, 'DebPasOtDatCurrent');
+  NextVisual;
+  SaveMyDsk(OtDatIn, 'DebPasOtDatIn');
+  NextVisual;
+
+  SaveMyDsk(Per1, 'DebPasPer1');
+  NextVisual;
+
+  SaveMyDsk(SostDO, 'DebPasSostDO');
+  NextVisual;
+
+  if (SostDo<1 OR SostDo > 3)
+    Set SostDo := 2;
+
+  SaveMyDsk(AllKontr, 'DebPasAllKontr');
+  NextVisual;
+
+  SaveMyDsk(cKatOrgDescr, 'DebPasGrKontr');
+  NextVisual;
+  SaveMyDsk(KatOrgDescr.Name, 'DebPasGrKontrName');
+  NextVisual;
+
+  SaveMyDsk(Prod, 'DebPasProd');
+  NextVisual;
+  SaveMyDsk(Zakup, 'DebPasZakup');
+  NextVisual;
+  SaveMyDsk(KonsP, 'DebPasKonsP');
+  NextVisual;
+  SaveMyDsk(KonsZ, 'DebPasKonsZ');
+  NextVisual;
+
+  SaveMyDsk(RubD, 'DebPasRubD');
+  NextVisual;
+  SaveMyDsk(RubValD, 'DebPasRubValD');
+  NextVisual;
+  SaveMyDsk(RubValRub, 'DebPasRubValRub');
+  NextVisual;
+  SaveMyDsk(ValD, 'DebPasValD');
+  NextVisual;
+
+  SaveMyDsk(FValut, 'DebPasFValut');
+  NextVisual;
+
+  SaveMyDsk(NaklOnlyWas, 'DebPasNaklOnlyWas');
+  NextVisual;
+  SaveMyDsk(NaklDat, 'DebPasNaklDat');
+  NextVisual;
+  SaveMyDsk(VozvrN , 'DebPasVozvrN');
+  NextVisual;
+
+  SaveMyDsk(ZadPer , 'DebPasZadPer');
+  NextVisual;
+  SaveMyDsk(DOwithSoprDoc, 'DebPasDOwithSoprDoc');
+  NextVisual;
+
+  NextVisual;
+  KolPers := 0;
+
+  _LOOP Dog
+    {
+      KolPers := KolPers + 1;
+      NextVisual;
+      SaveMyDsk(Dog.Kd, 'DebPasDpd1' + String(KolPers));
+      NextVisual;
+      SaveMyDsk(Dog.KS, 'DebPasDpEd' + String(KolPers));
+      NextVisual;
+
+      if (Dog.KS < 0.0)
+        {
+          SaveMyDsk(Dog.KN, 'DebPasDpN1' + String(KolPers));
+          NextVisual;
+        };
+
+      if (Abs(dog.KS)<2.0)
+        {
+         SaveMyDsk(Dog.KBASEN, 'DebPasDpN2' + String(KolPers));
+         NextVisual;
+        };
+
+      if (KolPers>= 99)
+        Break;
+    }
+
+  SaveMyDsk(KolPers, 'DebPasKolPers');
+
+  NextVisual;
+  SaveMyDsk(Days1, 'DebPasDays1');
+  NextVisual;
+  SaveMyDsk(Days2, 'DebPasDays2');
+  NextVisual;
+  SaveMyDsk(Days3, 'DebPasDays3');
+  NextVisual;
+  StopVisual('', 0);
+};
+
+//******************************************************************************
+
+Procedure UserTune2Param;
+{
+  StartNewVisual(vtRotateVisual, vfTimer, 'Считываем параметры...'#13, 1 );
+  ReadMyDsk(cValOt, 'DebPascValOt', Datechanged);
+  Set cValOt := cValOt;
+  NextVisual;
+  ReadMyDsk(d0, 'DebPasd0', Datechanged);
+  NextVisual;
+  ReadMyDsk(d9, 'DebPasd9', Datechanged);
+  NextVisual;
+
+  if (Longint(d9) = 0)
+    {
+      d9           := Add_Day(Cur_Date, 1);
+      d2           := Cur_Date;
+      OtDatCurrent := 2;
+      OtDatIn      := 1;
+      Prod         := TRUE;
+      RubD         := TRUE;
+      NaklOnlyWas  := (wGetTune('Rep.SoprKontr') = 1);
+      NaklDat      := (wGetTune('Rep.DateSopr') = 1);
+      VozvrN       := 1;
+      fValut       := TRUE;
+      Days1 := 45;
+      Days2 := 10;
+      Days3 :=  0;
+    }
+  else
+    {
+     ReadMyDsk(d2, 'DebPasd2', Datechanged);
+     NextVisual;
+     ReadMyDsk(OtDatCurrent, 'DebPasOtDatCurrent', Datechanged);
+     NextVisual;
+     ReadMyDsk(OtDatIn, 'DebPasOtDatIn', Datechanged);
+     NextVisual;
+     ReadMyDsk(Prod , 'DebPasProd' , Datechanged);
+     NextVisual;
+     ReadMyDsk(RubD     , 'DebPasRubD'     , Datechanged);
+     NextVisual;
+     ReadMyDsk(NaklOnlyWas, 'DebPasNaklOnlyWas', Datechanged);
+     NextVisual;
+     ReadMyDsk(NaklDat, 'DebPasNaklDat', Datechanged);
+     NextVisual;
+     ReadMyDsk(VozvrN, 'DebPasVozvrN', Datechanged);
+     NextVisual;
+     ReadMyDsk(Days1, 'DebPasDays1', Datechanged);
+     NextVisual;
+     ReadMyDsk(Days2, 'DebPasDays2', Datechanged);
+     NextVisual;
+     ReadMyDsk(Days3, 'DebPasDays3', Datechanged);
+     NextVisual;
+    };
+
+  ReadMyDsk(d1, 'DebPasd1', Datechanged);
+  NextVisual;
+  ReadMyDsk(Per1, 'DebPasPer1', Datechanged);
+  NextVisual;
+
+  ReadMyDsk(SostDO, 'DebPasSostDO', Datechanged);
+  NextVisual;
+
+  if (SostDo < 1 OR SostDo > 3)
+    Set SostDo := 2;
+
+  ReadMyDsk(AllKontr, 'DebPasAllKontr', Datechanged);
+  NextVisual;
+
+  ReadMyDsk(cKatOrgDescr, 'DebPasGrKontr', Datechanged);
+  NextVisual;
+
+  if (Not IsValid(#KatOrgDescr))
+    Set cKatOrgDescr := 0;
+
+  ReadMyDsk(Zakup, 'DebPasZakup', Datechanged);
+  NextVisual;
+  ReadMyDsk(KonsP, 'DebPasKonsP', Datechanged);
+  NextVisual;
+  ReadMyDsk(KonsZ, 'DebPasKonsZ', Datechanged);
+  NextVisual;
+
+  ReadMyDsk(RubValD  , 'DebPasRubValD'  , Datechanged);
+  NextVisual;
+  ReadMyDsk(ValD     , 'DebPasValD'     , Datechanged);
+  NextVisual;
+  ReadMyDsk(RubValRub, 'DebPasRubValRub', Datechanged);
+  NextVisual;
+
+
+  FilterDoc := 0;
+  FilterVal := 0;
+
+  if Prod
+    FilterDoc := FilterDoc + 1;
+
+  if Zakup
+    FilterDoc := FilterDoc + 2;
+
+  if KonsP
+    FilterDoc := FilterDoc + 4;
+
+  if KonsZ
+    FilterDoc := FilterDoc + 8;
+
+  if RubD
+    FilterVal := FilterVal + 1;
+
+  if ValD
+    FilterVal := FilterVal + 2;
+
+  if RubValD
+    FilterVal := FilterVal + 4;
+
+  ReadMyDsk(FValut, 'DebPasFValut', Datechanged);
+  NextVisual;
+
+  ReadMyDsk(ZadPer, 'DebPasZadPer', Datechanged);
+  NextVisual;
+
+  ExPer   := FALSE;
+  ReadMyDsk(KolPers, 'DebPasKolPers', Datechanged);
+  NextVisual;
+
+  if (KolPers > 0)
+    {
+      if (KolPers > 99)
+        KolPers := 99;
+
+      var i : word;
+
+      For (i := 1; i <= KolPers; i++)
+        {
+          ReadMyDsk(tmpd, 'DebPasDpd1' + String(i), Datechanged);
+          NextVisual;
+
+          if (tmpd > d0)
+            continue;
+
+          ClearBuffer(#Dog);
+          Dog.Kd := tmpd;
+          Dog.NRec := i;
+          ReadMyDsk(Dog.KS      , 'DebPasDpEd' + String(i), Datechanged);
+          NextVisual;
+
+          if (Dog.KS < 0.0)
+            {
+              ReadMyDsk(Dog.KN, 'DebPasDpN1' + String(i), Datechanged);
+              NextVisual;
+            };
+
+          if (Abs(Dog.KS) < 2.0)
+            {
+              ReadMyDsk(Dog.KBASEN, 'DebPasDpN2' + String(i), Datechanged);
+              NextVisual;
+            };
+
+          SetNamePer;
+          Modifier Insert Current Dog;
+          NextVisual;
+        };
+
+      CheckPeriods;
+      NextVisual;
+    };
+
+  if (not ReadMyDsk(DOwithSoprDoc, 'DebPasDOwithSoprDoc', Datechanged))
+    set DOwithSoprDoc := 0;
+
+  CheckParam;
+  StopVisual('', 0);
+};

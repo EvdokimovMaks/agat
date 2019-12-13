@@ -1,0 +1,566 @@
+//------------------------------------------------------------------------------
+//                                                      (c) Корпорация ГАЛАКТИКА
+//------------------------------------------------------------------------------
+// Галактика 8.1 - ФРО
+// Справка по дебиторской/кредиторской задолженности
+//------------------------------------------------------------------------------
+
+//#ifdef ComponentVersion
+//#Component "F_BuhRep"
+//#end
+
+#include BuhDlgN.vih
+#include BuhRep.vih            // Обьектный интерфейс "Управление формированием отчетов"
+#include PickBuh.vih           // Обьектный интерфес работы с таблицей PickBuh
+#include KatOrg.vih
+#include PSManager.vih
+#include xlReport.vih          // Формирование Excel-отчетов
+
+Interface UserRep01_SpravkaDebetKredit;
+
+Type TSaldoRec = record as table SaldMoun;
+
+Table Struct RepData
+(
+  Type   : byte,                     // 1 - Дебет, 2 - Кредит
+  Schet  : string[21],               // Счет
+  Sub    : string[21],               // Субсчет
+  wKau   : array[1..3] of word,
+  cKau   : array[1..3] of comp,
+  SumNDE : double
+)
+with index
+(
+  RepData01 = Type + Schet + Sub + cKau[1] + cKau[2] + cKau[3]
+);
+
+var
+  RepParams: TVipReportParams;
+  iBuhDlgNew: BuhDlgNew;
+  iKatOrg: KatOrg;
+  xlRep: XLSRepBuilder;       // объект формирования Excel-отчетов
+  MyPlansNo: comp;
+  cReport: comp;
+  sXLTFileName, sXLSFileName: string;
+  CurSchet, CurSchetName: string;
+  CurSubSchet, CurSubSchetName: string;
+  CurKau: array [1..3] of comp;
+  Npp: longint;
+  TotalSumma: double;
+  StartDate: date;
+  CurSaldoType: byte;
+  CurXlTbl: string;
+
+Const
+  // Для типов задолженности
+  Debet  = 1;
+  Kredit = 2;
+  
+  TblDebet = 'TblDebet_';
+  TblKredit = 'TblKredit_';
+
+  fldMain_RowType   = 'RowType';
+  fldMain_Npp       = 'Npp';
+  fldMain_Name      = 'Наменование';
+  fldMain_Address   = 'Адрес';
+  fldMain_Schet     = 'Счет';
+  fldMain_Dogovor   = 'Договор';
+  fldMain_Summa     = 'Сумма';
+  
+  // row types
+  rtSchet = 1;
+  rtSub = 2;
+  rtKau1 = 3;
+  rtKau2 = 4;
+  rtSchetItog = 11;
+  rtSubItog = 12;
+end;
+
+Create View
+from
+  BuhSchet
+ ,PickBuh
+ ,SaldMoun (ReadOnly)
+ ,SaldRab (ReadOnly)
+ ,RepData
+ ,RepData RepDataTmp
+
+bounds ByType = CurSaldoType == RepData.Type
+;
+
+parameters
+  RepParams;
+
+#include BuhRep.var
+#include PickBuh.var          // Переменная типа "Интерфеса работы с таблицей PickBuh"
+#include PSManager.var
+
+//------------------------------------------------------------------------------
+procedure RunWithTune;
+{
+  cReport := iBuhRep.GetDefaultNastr(cgRepBuh_UserRep01, myPlansNo);
+  if iBuhDlgNew.InitWithParam(cgRepBuh_UserRep01, cReport, cgiNo)
+    iBuhDlgNew.RunMainWindow;
+}
+
+//------------------------------------------------------------------------------
+function GetSchetName(Sch: tSchet3): string;
+{
+  Result := '<Счет не определен>';
+  if (GetFirst BuhSchet where ((Sch == BuhSchet.Schet and cgDefSub == BuhSchet.SubSch)) = tsOk)
+    Result := BuhSchet.Code + ' ' + BuhSchet.Name;
+}
+
+//------------------------------------------------------------------------------
+function GetSubSchetName(Sch: tSchet3; Sub: tSchet3): string;
+{
+  Result := '<субсчет не определен>';
+  if Sub = cgDefSub
+    Result := '<субсчет не определен>';
+  else
+    if (GetFirst BuhSchet where ((Sch == BuhSchet.Schet and Sub == BuhSchet.SubSch)) = tsOk)
+      Result := BuhSchet.LevelCode + ' ' + BuhSchet.Name;
+}
+
+//------------------------------------------------------------------------------
+procedure ClearAllData;
+{
+  ResetBounds(#RepData);
+  delete all RepData;
+}
+
+#declare NextVisualWithCheck
+  if (not NextVisual)
+  {
+    Breaked := True;
+    Break;
+  }
+#end
+
+procedure ExtractKau(SaldoRec: TSaldoRec);
+var
+  i: integer;
+{
+  for (i := cFirstKAU; i <= cLastKAU; i := i+1)
+  {
+    if SaldoRec.TblOs[i] = RepParams.wKauOs1  // в case можно использовать только константы :(
+    {
+      // аналитика <Вид расчета> - на второй уровень
+      RepData.wKau[2] := RepParams.wKauOs1;
+      RepData.cKau[2] := SaldoRec.KauOs[i];
+      continue;
+    }
+
+    case SaldoRec.TblOs[i] of
+      cgKau_KatOrg:
+      {
+        // сохраняем КАУ Организации на первый уровень
+        RepData.wKau[1] := cgKau_KatOrg;
+        RepData.cKau[1] := SaldoRec.KauOs[i];
+      }
+      
+      cgKau_Dogovor:
+      {
+        // КАУ Договора на 3-й уровень
+        RepData.wKau[3] := cgKau_Dogovor;
+        RepData.cKau[3] := SaldoRec.KauOs[i];
+      }
+      
+      cgKau_Persons:
+      {
+        // если ведется аналитика по сотрудникам, то остальные уровни не нужны
+        RepData.wKau[1] := cgKau_Persons;
+        RepData.cKau[1] := SaldoRec.KauOs[i];
+        RepData.wKau[2] := 0;
+        RepData.cKau[2] := 0;
+        RepData.wKau[3] := 0;
+        RepData.cKau[3] := 0;
+      }
+    end;
+  }
+}
+//------------------------------------------------------------------------------
+procedure ProcessSaldoRecord(SaldoRec: TSaldoRec);
+{
+  ClearBuffer(#RepData);
+  RepData.Type := SaldoRec.ViOb;
+  RepData.Schet := SaldoRec.SchetO;
+  RepData.Sub := SaldoRec.SubOsSch;
+  RepData.SumNDE := SaldoRec.SumS;
+  ExtractKau(SaldoRec);
+  insert current RepData;
+}
+
+//------------------------------------------------------------------------------
+function UnloadSaldo: boolean;
+var
+  Breaked: boolean;
+  PasParams: TPasReportParams;
+{
+  UnloadSaldo := false;
+  iBuhRep.VipParamsToPas(cgRepBuh_AnDebts, RepParams, PasParams);
+  // в паскале при отборе сальдо фильтр по кау жестко привязывается к уровням,
+  // а здесь можно задать произвольные аналитики.
+  // поэтому фильтр по кау будем проверять после выгрузки полного сальдо по счету
+  PasParams.RepTbl1 := 0;
+  PasParams.RepTbl2 := 0;
+  PasParams.RepTbl3 := 0;
+  PasParams.RepTbl4 := 0;
+  PasParams.RepTbl5 := 0;
+  PasParams.RepTbl6 := 0;
+
+  // будем расчитывать ИСХОДЯЩЕЕ сальдо на конец периода (т.е. входящее сальдо на следующий день)
+  PasParams.EndDate := Add_Day(PasParams.EndDate, 1);
+  PasParams.BegDate := PasParams.EndDate;  // расчитываем сальдо на конец
+  
+  StartNewVisual(vtNumericVisual, vfTimer + vfBreak + vfConfirm, 'Расчет сальдо', 0);
+
+  case GetVhodSaldo(PasParams) of
+    coSaldMoun:
+    {
+      if (RepParams.mSchetO = 0)
+        _Loop SaldMoun where ((     MyPlansNo == SaldMoun.cPlansSch
+                                and RepParams.EndDate == SaldMoun.DateSal   ))
+        {
+          #NextVisualWithCheck
+          ProcessSaldoRecord(TSaldoRec(SaldMoun.Buffer));
+        }
+
+      else
+        _Loop PickBuh where ((cgPick_Schet == PickBuh.KodTable))
+        {
+          SetVisualHeader('Обрабатывается счет: ' + #GetDbSch(PickBuh.Schet)
+                                                  + ''#13'Просмотрено записей:');
+          _Loop SaldMoun where ((     PickBuh.Schet == SaldMoun.SchetO
+                                  and RepParams.EndDate == SaldMoun.DateSal))
+          {
+            #NextVisualWithCheck
+            ProcessSaldoRecord(TSaldoRec(SaldMoun.Buffer));
+          }
+        }
+    }
+
+    coSaldRab:
+    {
+      // в SaldRab уже сложено сальдо по нужному фильтру
+      _Loop SaldRab
+      {
+        #NextVisualWithCheck
+        ProcessSaldoRecord(TSaldoRec(SaldRab.Buffer));
+      }
+    }
+    else
+      Message('Ошибка расчета сальдо');
+  end;
+
+  StopVisual('', 0);
+
+  if (Breaked)
+    Exit;
+    
+  UnloadSaldo := true;
+}
+
+procedure xlCreateTable(Prefix: string);
+{
+  xlRep.CreateTbl(Prefix);
+  xlRep.CreateTblFld(Prefix + fldMain_RowType);
+  xlRep.CreateTblFld(Prefix + fldMain_Npp);
+  xlRep.CreateTblFld(Prefix + fldMain_Name);
+  xlRep.CreateTblFld(Prefix + fldMain_Address);
+  xlRep.CreateTblFld(Prefix + fldMain_Schet);
+  xlRep.CreateTblFld(Prefix + fldMain_Dogovor);
+  xlRep.CreateTblFld(Prefix + fldMain_Summa);
+}
+
+procedure PrepareXltTemplate;
+{
+  sXLTFileName := TranslatePath('%ClientStartPath%') + 'XLS\F_BuhRep\UserRep_SpravkaDebet.xlt';
+  //sXLSFileName := xlRep.CreateXLT(sXLTFileName, True); // при первом создание шаблона
+  sXLSFileName := xlRep.CreateReport(sXLTFileName, True);
+
+  // инициализация переменных Excel-БД (DBVar Constructor)
+  xlRep.CreateVar(sXLSFileName);
+  xlRep.SetStringVar('Организация', ShowKau(cgKau_KatOrg, coGetTune('MyOrg')));
+  xlRep.SetStringVar('Номер', RepParams.Sodpr);
+  xlRep.SetDateVar('ДатаНачало', RepParams.BegDate);
+  xlRep.SetDateVar('ДатаКонец', RepParams.EndDate);
+  xlRep.SetDateVar('ДатаФормирования', Cur_Date);
+  xlRep.PublishVar;
+
+  xlRep.CreateTbls(sXLSFileName);
+}
+
+/*
+procedure ResetCurKau;
+{
+  CurKau[1] := -1;
+  CurKau[2] := -1;
+  CurKau[3] := -1;
+}
+*/
+procedure PrintCurSubSchetHeader(xlTbl: string);
+{
+  CurSubSchet := RepData.Sub;
+  CurSubSchetName := GetSubSchetName(RepData.Schet, RepData.Sub);
+  //ResetCurKau;
+  xlRep.ClearTblBuffer;
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_RowType, rtSub);
+  xlRep.SetTblStringFldValue(xlTbl + fldMain_Name, 'Субсчет ' + CurSubSchetName);
+  xlRep.InsTblRow;
+}
+
+procedure PrintCurSubSchetFooter(xlTbl: string; Summa: double);
+{
+  xlRep.ClearTblBuffer;
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_RowType, rtSubItog);
+  xlRep.SetTblStringFldValue(xlTbl + fldMain_Name, 'Итого по ' + #GetDbSch(CurSchet) + ' ' + CurSubSchet);
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_Summa, Summa);
+  xlRep.InsTblRow;
+}
+
+procedure PrintCurSchetHeader(xlTbl: string);
+{
+  CurSchet := RepData.Schet;
+  CurSchetName := GetSchetName(RepData.Schet);
+  //ResetCurKau;
+  xlRep.ClearTblBuffer;
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_RowType, rtSchet);
+  xlRep.SetTblStringFldValue(xlTbl + fldMain_Name, 'Счет ' + CurSchetName);
+  xlRep.InsTblRow;
+  //PrintCurSubSchetHeader;
+}
+
+procedure PrintCurSchetFooter(xlTbl: string;  Summa: double);
+{
+  xlRep.ClearTblBuffer;
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_RowType, rtSchetItog);
+  xlRep.SetTblStringFldValue(xlTbl + fldMain_Name, 'Итого по счету ' + CurSchetName);
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_Summa, Summa);
+  xlRep.InsTblRow;
+}
+
+procedure PrintKau1Header(xlTbl: string; Summa: double);
+{
+  Npp++;
+  xlRep.ClearTblBuffer;
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_Npp, Npp);
+  if RepData.cKau[1] <> 0
+  {
+    xlRep.SetTblStringFldValue(xlTbl + fldMain_Name, ShowKau(RepData.wKau[1], RepData.cKau[1]));
+    if RepData.wKau[1] = cgKau_KatOrg
+      xlRep.SetTblStringFldValue(xlTbl + fldMain_Address, iKatOrg.FullOrgAddr(RepData.cKau[1]));
+  }
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_RowType, rtKau1);
+  xlRep.SetTblStringFldValue(xlTbl + fldMain_Schet, #GetDbSch(RepData.Schet) + ' ' + RepData.Sub);
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_Summa, Summa);
+  xlRep.InsTblRow;
+}
+
+procedure PrintRowData(xlTbl: string; Summ: double);
+{
+  if RepData.wKau[2] <> 0
+  {
+    xlRep.ClearTblBuffer;
+    xlRep.SetTblNumberFldValue(xlTbl + fldMain_RowType, rtKau2);
+
+    if RepData.cKau[2] <> 0
+      xlRep.SetTblStringFldValue(xlTbl + fldMain_Name, ShowKau(RepData.wKau[2], RepData.cKau[2]));
+      
+    if RepData.cKau[3] <> 0
+      xlRep.SetTblStringFldValue(xlTbl + fldMain_Dogovor, ShowKau(RepData.wKau[3], RepData.cKau[3]));
+      
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_RowType, rtKau2);
+    xlRep.SetTblStringFldValue(xlTbl + fldMain_Schet, #GetDbSch(RepData.Schet) + ' ' + RepData.Sub);
+    xlRep.SetTblNumberFldValue(xlTbl + fldMain_Summa, Summ);
+    xlRep.InsTblRow;
+  }
+}
+
+function CountSumByKau1: double;
+{
+  Result := 0;
+  _loop RepDataTmp where (( CurSaldoType  == RepDataTmp.Type and
+                            RepData.Schet == RepDataTmp.Schet and
+                            RepData.Sub == RepDataTmp.Sub and
+                            RepData.cKau[1] == RepDataTmp.cKau[1] ))
+    Result := Result + RepDataTmp.SumNDE;
+}
+
+function CountSumByKau3: double;
+{
+  Result := 0;
+  _loop RepDataTmp where (( CurSaldoType  == RepDataTmp.Type and
+                            RepData.Schet == RepDataTmp.Schet and
+                            RepData.Sub == RepDataTmp.Sub and
+                            RepData.cKau[1] == RepDataTmp.cKau[1] and
+                            RepData.cKau[2] == RepDataTmp.cKau[2] and
+                            RepData.cKau[3] == RepDataTmp.cKau[3] ))
+    Result := Result + RepDataTmp.SumNDE;
+}
+
+
+procedure MakeRep(SaldoType: byte; xlTbl: String);
+var
+  TmpSum: double;
+{
+  Npp := 0;
+  TotalSumma := 0;
+  CurSaldoType := SaldoType;
+  xlCreateTable(xlTbl);
+
+  // основная выгрузка
+  _loop RepData
+  {
+    PrintCurSchetHeader(xlTbl);
+    GroupBy grSchet: RepData.Schet
+    {
+      PrintCurSubSchetHeader(xlTbl);
+      GroupBy grSubSchet: RepData.Sub
+      {
+        PrintKau1Header(xlTbl, CountSumByKau1);
+        GroupBy grKau1: RepData.cKau[1]
+        {
+          PrintRowData(xlTbl, CountSumByKau3);
+          GroupBy grKau2: RepData.cKau[2], RepData.cKau[3]
+            if not NextVisual
+              exit;
+        }
+      }
+      PrintCurSubSchetFooter(xlTbl, grSubSchet.grSum(RepData.SumNDE));
+    }
+    TmpSum := grSchet.grSum(RepData.SumNDE);
+    PrintCurSchetFooter(xlTbl, TmpSum);
+    TotalSumma := TotalSumma + TmpSum;
+  }
+
+  xlRep.ClearTblBuffer;
+  xlRep.SetTblNumberFldValue(xlTbl + fldMain_RowType, rtSchet);
+  xlRep.SetTblStringFldValue(xlTbl + fldMain_Name, 'ИТОГО');
+  xlRep.SetTblNumberFldValue(xlTbl +fldMain_Summa, TotalSumma);
+  xlRep.InsTblRow;
+  xlRep.PublishTbl(xlTbl);
+}
+
+//------------------------------------------------------------------------------
+procedure Run;
+{
+  ClearAllData;
+
+  if not UnloadSaldo
+    Exit;
+
+  if GetFirst RepData <> tsOk
+  {
+    Message('По указанным параметрам не найдены данные для формирования отчета.', Information);
+    Exit;
+  }
+  
+  PrepareXltTemplate;
+  PushBounds(tbByType);
+  StartNewVisual(vtIndicatorVisual, vfTimer, 'Формирование отчета...', RecordsInTable(#RepData)*2);
+  MakeRep(Debet, TblDebet);
+  MakeRep(Kredit, TblKredit);
+  StopVisual('', 0);
+
+  StartNewVisual(vtRotateVisual, vfTimer, 'Загрузка отчета в Excel...',0);
+  xlRep.LoadReport(sXLSFileName);
+  xlRep.DisConnectExcel;
+  StopVisual('', 0);
+}
+
+//------------------------------------------------------------------------------
+HandleEvent // interface
+  cmInit:
+  {
+    if (not iPSManager.GetTunePlansSch(MyPlansNo))
+    {
+      Message('Ошибка инициализации отчета!', Error);
+      Abort;
+      Exit;
+    }
+
+    if RepParams.cPlansSch = 0
+      RunWithTune;
+    else
+      Run;
+  }
+end; // HandleEvent interface
+
+end.
+
+
+
+
+
+
+
+
+
+
+
+
+
+//------------------------------------------------------------------------------
+// подключение в меню отчетов
+//------------------------------------------------------------------------------
+
+#include UserReport.vih
+
+VipInterface UserReport_PGK_01 Implements IUserReport;
+
+Interface UserReport_PGK_01;
+Create View;
+
+//------------------------------------------------------------------------------
+// Запуск отчета на выполнение при выборе его из списка отчетов
+procedure Run;
+var
+  RepParams: TVipReportParams;
+begin
+  RunInterface('UserRep01_SpravkaDebetKredit', RepParams);;
+end;
+
+//------------------------------------------------------------------------------
+// Наименование отчета в списке
+function GetReportName: String;
+begin
+  GetReportName := 'Справка по инвентаризации расчетов с дебиторами/кредиторами';
+end;
+
+//------------------------------------------------------------------------------
+// Наименования групп, в которые входит отчет
+// Группа n+1 делается подчиненной группе n
+// В данном случае будет иерархия:
+// [+] Группа 1
+//     [+] Группа 2
+//         Отчет 1
+function GetGroupName (Level : Word) : String;
+begin
+  GetGroupName := '';
+  /*case Level of
+    1 : GetGroupName := 'Группа 1';
+    2 : GetGroupName := 'Группа 2';
+  end;*/
+end;
+
+//------------------------------------------------------------------------------
+// Приоритет отчета - сортировка внутри группы выполняется сначала
+// по приоритету, а затем по наименованию
+function GetPriority : Integer;
+begin
+  GetPriority := 0;
+end;
+
+//------------------------------------------------------------------------------
+// ModuleID модулей, в которых будет виден отчет
+// '*' - отчет будет виден в любом модуле
+function VisibleInModule(Ind : Byte) : String;
+begin
+  VisibleInModule := '';
+  case Ind of
+    1 : VisibleInModule := 'B_Finans';
+  end;
+end;
+
+end. // interface

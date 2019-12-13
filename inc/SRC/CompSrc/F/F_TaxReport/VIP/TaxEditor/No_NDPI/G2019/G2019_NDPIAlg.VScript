@@ -1,0 +1,2262 @@
+//------------------------------------------------------------------------------------------------------------
+//                                                                                    (c) корпорация Галактика
+// Галактика 9.1 - модуль "Электронная отчетность"
+// Алгоритмы расчета : "Декларация по НДПИ"
+//------------------------------------------------------------------------------------------------------------
+
+
+//============================================================================================================
+//#region СЕРВИСНЫЕ МЕТОДЫ
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrVal(fld : string) : string;
+@begin
+  Result := XMLMAP.GetAttrValueByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetDblVal(fld : string) : double;
+@begin
+  Result := Double(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetIntVal(fld : string) : integer;
+@begin
+  Result := Integer(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetFldVis(fld : string) : boolean;
+@begin
+  Result := XMLMAP.GetAttrVisByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script SetFldVal(fld:string; val:variant);
+@begin
+  XMLMAP.SetVariantAttrValueByName_Formula(fld, val, 2);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script SetFldVis(fld : string;vis : boolean);
+@begin
+  XMLMAP.SetAttrVisByName(fld, vis);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script DblToStr(fld : double;digits : longint) : string;
+@begin
+  if (Pos('.', String(fld, 20, digits)) > 0)
+    Result := Rtrim(Rtrim(Trim(String(fld, 20, digits)), '0'), '.');
+  else
+    Result := Trim(String(fld, 20, digits));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetCountFld(fld : string) : longint;
+@begin
+  Result := XMLMap.GetNodeCountByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetIter(iter : longint) : string;
+@begin
+  Result := '';
+
+  if (iter > 0)
+    Result := '[' + String(iter) + ']';
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrNull(fld : string) : boolean;
+@begin
+  Result := XMLMAP.GetIsNullAttrValueByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrValFormat(fld : string) : string;
+@begin
+  var bufRes: string;
+
+  bufRes := Trim(String(XMLMAP.GetAttrValueByName(fld)));
+
+  if (bufRes = '')
+  then Result := '0'
+  else if (Double(bufRes) < 0)
+       then Result := '('+bufRes+')'
+       else Result := bufRes;
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script MessageErrorStop_ALG(mesMesAdrXML, mesPole, mesMes : string; mesCountIter : integer = 0) : boolean;
+@begin
+  MesError.InsertMesError(mesMesAdrXML, Comp(0), '', mesPole, mesMes, mesCountIter);
+  Result := True;
+@end.
+//#endregion СЕРВИСНЫЕ МЕТОДЫ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region On_Visable ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ УСТАНОВКЕ ВИДИМОСТИ ПОЛЕЙ
+//------------------------------------------------------------------------------------------------------------
+@Script On_Visable : boolean;
+  //==========================================================================================================
+  //#region СЕРВИС On_Visable
+  //----------------------------------------------------------------------------------------------------------
+  #declare IfVis(adrIfVis)
+    SetFldVis(#adrIfVis, not GetStrNull(#adrIfVis));
+  #end
+
+  #declare SetVisF(adrIfVis)
+    SetFldVis(#adrIfVis, False);
+  #end
+
+  #declare SetVisFCon(adrIfVis)
+  {
+    SetFldVis(#adrIfVis, False);
+    continue;
+  }
+  #end
+
+  #declare IfNullSetVisFCon(adrIfVis_1, adrIfVis_2)
+    if (GetStrNull(#adrIfVis_1))
+    {
+      SetFldVis(#adrIfVis_2, False);
+      continue;
+    }
+  #end
+
+
+  #declare SetVisT(adrIfVis)
+    SetFldVis(#adrIfVis, True);
+  #end
+
+  //----------------------------------------------------------------------------------------------------------
+  // Проверка на соответствие значения поля ФормРеорг условиям
+  function _FormReorg : boolean;
+  {
+    var val : Integer;
+    val := GetIntVal('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг');
+
+    Result := False;
+    Result := ((val = 1) or (val = 2) or (val = 3) or (val = 5) or (val = 6));
+  }
+  //#endregion СЕРВИС On_Visable
+  //**********************************************************************************************************
+@begin
+  var tBool, tBool_2, tBool_3 :boolean;
+  var bufAdr, bufAdr_2, bufAdr_3, bufAdr_4 : string;
+  var i, j, k, q, count, count_2, count_3, count_4 : longint;
+  var bufInt : integer;
+
+  //==========================================================================================================
+  //#region ИСПРАВЛЕНИЕ ВИДИМОСТИ ПОЛЕЙ ПОСЛЕ СТАРОГО ПАТЧА
+  //----------------------------------------------------------------------------------------------------------
+  if not GetFldVis('Файл/xsi:noNamespaceSchemaLocation')
+  {
+    #SetVisT('Файл'                                       );
+    #SetVisF('Файл/xmlns:xsi'                             );
+    #SetVisF('Файл/xsi:noNamespaceSchemaLocation'         );
+    #SetVisT('Файл/ИдФайл'                                );
+    #SetVisT('Файл/ВерсПрог'                              );
+    #SetVisT('Файл/ВерсФорм'                              );
+    #SetVisT('Файл/Документ'                              );
+    #SetVisT('Файл/Документ/КНД'                          );
+    #SetVisT('Файл/Документ/ДатаДок'                      );
+    #SetVisT('Файл/Документ/Период'                       );
+    #SetVisT('Файл/Документ/ОтчетГод'                     );
+    #SetVisT('Файл/Документ/КодНО'                        );
+    #SetVisT('Файл/Документ/НомКорр'                      );
+    #SetVisT('Файл/Документ/ПоМесту'                      );
+    #SetVisT('Файл/Документ/СвНП'                         );
+    #SetVisT('Файл/Документ/СвНП/ОКВЭД'                   );
+    #SetVisT('Файл/Документ/СвНП/НПЮЛ'                    );
+    #SetVisT('Файл/Документ/СвНП/НПЮЛ/НаимОрг'            );
+    #SetVisT('Файл/Документ/СвНП/НПЮЛ/ИННЮЛ'              );
+    #SetVisT('Файл/Документ/СвНП/НПЮЛ/КПП'                );
+    #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг');
+    #SetVisT('Файл/Документ/СвНП/НПФЛ'                    );
+    #SetVisT('Файл/Документ/СвНП/НПФЛ/ИННФЛ'              );
+    #SetVisT('Файл/Документ/СвНП/НПФЛ/ФИО'                );
+    #SetVisT('Файл/Документ/СвНП/НПФЛ/ФИО/Фамилия'        );
+    #SetVisT('Файл/Документ/СвНП/НПФЛ/ФИО/Имя'            );
+    #SetVisT('Файл/Документ/Подписант'                    );
+    #SetVisT('Файл/Документ/Подписант/ПрПодп'             );
+    #SetVisT('Файл/Документ/Подписант/ФИО/Фамилия'        );
+    #SetVisT('Файл/Документ/Подписант/ФИО/Имя'            );
+    #SetVisT('Файл/Документ/Подписант/СвПред/НаимДок'     );
+    #SetVisT('Файл/Документ/НДПИ'                         );
+    #SetVisT('Файл/Документ/НДПИ/СумНалПУ'                );
+
+    count := GetCountFld('Файл/Документ/НДПИ/СумНалПУ/СумПУ');
+    for (i := 0; i < count; i++)
+    {
+      bufAdr := 'Файл/Документ/НДПИ/СумНалПУ/СумПУ' + getIter(i);
+      #SetVisT(bufAdr           );
+      #SetVisT(bufAdr + '/КБК'  );
+      #SetVisT(bufAdr + '/ОКТМО');
+      #SetVisT(bufAdr + '/НалПУ');
+    }
+
+    count := GetCountFld('Файл/Документ/НДПИ/ИсчНалНефт');
+    for (i := 0; i < count; i++)
+    {
+      bufAdr := 'Файл/Документ/НДПИ/ИсчНалНефт' + getIter(i);
+      #SetVisT(bufAdr + '/КодДПИ');
+      #SetVisT(bufAdr + '/КБК'   );
+      #SetVisT(bufAdr + '/ОКЕИ'  );
+
+      count_2 := GetCountFld(bufAdr + '/ПокРасчНал');
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr + '/ПокРасчНал' + getIter(j);
+        #SetVisT(bufAdr_2                );
+        #SetVisT(bufAdr_2 + '/ОКТМО'     );
+        #SetVisT(bufAdr_2 + '/СерЛицНедр');
+        #SetVisT(bufAdr_2 + '/НомЛицНедр');
+        #SetVisT(bufAdr_2 + '/ВидЛицНедр');
+        #SetVisT(bufAdr_2 + '/ПоказДм'   );
+        #SetVisT(bufAdr_2 + '/Кндпи'     );
+        #SetVisT(bufAdr_2 + '/КоэфКц'    );
+        #SetVisT(bufAdr_2 + '/КоэфКв'    );
+        #SetVisT(bufAdr_2 + '/СтепеньСв' );
+        #SetVisT(bufAdr_2 + '/КоэфКз'    );
+        #SetVisT(bufAdr_2 + '/КоэфКдв'   );
+        #SetVisT(bufAdr_2 + '/КоэфКкан'  );
+        #SetVisT(bufAdr_2 + '/НалИсчисл' );
+        #SetVisT(bufAdr_2 + '/НалВыч'    );
+        #SetVisT(bufAdr_2 + '/НалУпл'    );
+
+        count_3 := GetCountFld(bufAdr_2 + '/ДобНефтУчНедр');
+        for (k := 0; k < count_3; k++)
+        {
+          bufAdr_3 := bufAdr_2 + '/ДобНефтУчНедр' + getIter(k);
+          #SetVisT(bufAdr_3 + '/КодОснов' );
+          #SetVisT(bufAdr_3 + '/КолНефтПН');
+        }
+
+        count_3 := GetCountFld(bufAdr_2 + '/ДобНефтЗалеж');
+        for (k := 0; k < count_3; k++)
+        {
+          bufAdr_3 := bufAdr_2 + '/ДобНефтЗалеж' + getIter(k);
+          #SetVisT(bufAdr_3 + '/НаимЗлж'     );
+          #SetVisT(bufAdr_3 + '/ГлубПласт'   );
+          #SetVisT(bufAdr_3 + '/ПлотнНефт'   );
+          #SetVisT(bufAdr_3 + '/ПоказатДм'   );
+          #SetVisT(bufAdr_3 + '/СтепеньСвз'  );
+          #SetVisT(bufAdr_3 + '/КоэфКд'      );
+          #SetVisT(bufAdr_3 + '/КолНалПер'   );
+          #SetVisT(bufAdr_3 + '/КоэфКдв'     );
+          #SetVisT(bufAdr_3 + '/КолНалПерСт0');
+          #SetVisT(bufAdr_3 + '/НалИсчислЗлж');
+
+          count_4 := GetCountFld(bufAdr_3 + '/КолНефтОсн');
+          for (q := 0; q < count_4; q++)
+          {
+            bufAdr_4 := bufAdr_3 + '/КолНефтОсн' + getIter(q);
+            #SetVisT(bufAdr_4               );
+            #SetVisT(bufAdr_4 + '/КодОснов' );
+            #SetVisT(bufAdr_4 + '/КолНефтПН');
+          }
+        }
+      }
+    }
+
+    count := GetCountFld('Файл/Документ/НДПИ/ИсчНалГаз');
+    for (i := 0; i < count; i++)
+    {
+      bufAdr := 'Файл/Документ/НДПИ/ИсчНалГаз' + getIter(i);
+      #SetVisT(bufAdr + '/КодДПИ'   );
+      #SetVisT(bufAdr + '/КБК'      );
+      #SetVisT(bufAdr + '/ОКЕИ'     );
+      #SetVisT(bufAdr + '/НалИсчисл');
+      #SetVisT(bufAdr + '/КоэфОв'   );
+      #SetVisT(bufAdr + '/КоэфКгпн' );
+
+      count_2 := GetCountFld(bufAdr + '/ПокРасчНал');
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr + '/ПокРасчНал' + getIter(j);
+        #SetVisT(bufAdr_2                );
+        #SetVisT(bufAdr_2 + '/ОКТМО'     );
+        #SetVisT(bufAdr_2 + '/СерЛицНедр');
+        #SetVisT(bufAdr_2 + '/НомЛицНедр');
+        #SetVisT(bufAdr_2 + '/ВидЛицНедр');
+        #SetVisT(bufAdr_2 + '/СтепеньСвг');
+        #SetVisT(bufAdr_2 + '/ЗначенЕут' );
+        #SetVisT(bufAdr_2 + '/КоэфДг'    );
+
+        count_3 := GetCountFld(bufAdr_2 + '/КолДПИЗал');
+        for (k := 0; k < count_3; k++)
+        {
+          bufAdr_3 := bufAdr_2 + '/КолДПИЗал' + getIter(k);
+          #SetVisT(bufAdr_3                  );
+          #SetVisT(bufAdr_3 + '/НаимЗлж'     );
+          #SetVisT(bufAdr_3 + '/ГлубПласт'   );
+          #SetVisT(bufAdr_3 + '/ПлотнУВСырья');
+          #SetVisT(bufAdr_3 + '/ЗначениеКвг' );
+          #SetVisT(bufAdr_3 + '/ЗначениеКр'  );
+          #SetVisT(bufAdr_3 + '/ЗначениеКгз' );
+          #SetVisT(bufAdr_3 + '/ЗначениеКас' );
+          #SetVisT(bufAdr_3 + '/ЗначениеКорз');
+          #SetVisT(bufAdr_3 + '/КоэфКс'      );
+          #SetVisT(bufAdr_3 + '/НалИсчислЗлж');
+
+          count_4 := GetCountFld(bufAdr_3 + '/КолДПИЗалОсн');
+          for (q := 0; q < count_4; q++)
+          {
+            bufAdr_4 := bufAdr_3 + '/КолДПИЗалОсн' + getIter(q);
+            #SetVisT(bufAdr_4              );
+            #SetVisT(bufAdr_4 + '/КодОснов');
+            #SetVisT(bufAdr_4 + '/КолДПИ'  );
+          }
+        }
+      }
+    }
+
+    count := GetCountFld('Файл/Документ/НДПИ/ИсчУплНалНов');
+    for (i := 0; i < count; i++)
+    {
+      bufAdr := 'Файл/Документ/НДПИ/ИсчУплНалНов' + getIter(i);
+      #SetVisT(''+ bufAdr + '/КодДПИ'      );
+      #SetVisT(''+ bufAdr + '/КБК'         );
+      #SetVisT(''+ bufAdr + '/ОКЕИ'        );
+      #SetVisT(''+ bufAdr + '/ОКТМО'       );
+      #SetVisT(''+ bufAdr + '/СерЛицНедр'  );
+      #SetVisT(''+ bufAdr + '/НомЛицНедр'  );
+      #SetVisT(''+ bufAdr + '/ВидЛицНедр'  );
+      #SetVisT(''+ bufAdr + '/НаимМест'    );
+      #SetVisT(''+ bufAdr + '/НачДобУВС'   );
+      #SetVisT(''+ bufAdr + '/СтоимЕдПИМин');
+      #SetVisT(''+ bufAdr + '/НалБаза'     );
+      #SetVisT(''+ bufAdr + '/НалИсчисл'   );
+
+      count_2 := GetCountFld(bufAdr + '/КолПИНалОсн');
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr + '/КолПИНалОсн' + getIter(j);
+        #SetVisT(bufAdr_2              );
+        #SetVisT(bufAdr_2 + '/КодОснов');
+        #SetVisT(bufAdr_2 + '/КолПИНал');
+      }
+    }
+
+    count := GetCountFld('Файл/Документ/НДПИ/ИсчУплНалИскл');
+    for (i := 0; i < count; i++)
+    {
+      bufAdr := 'Файл/Документ/НДПИ/ИсчУплНалИскл' + getIter(i);
+      #SetVisT(bufAdr + '/КодДПИ'              );
+      #SetVisT(bufAdr + '/КБК'                 );
+      #SetVisT(bufAdr + '/ОКЕИ'                );
+      #SetVisT(bufAdr + '/НалСтавка'           );
+      #SetVisT(bufAdr + '/РасчНалУпл'          );
+      #SetVisT(bufAdr + '/РасчНалУпл/СтоимЕдПИ');
+      #SetVisT(bufAdr + '/РасчНалУпл/НалБаза'  );
+      #SetVisT(bufAdr + '/РасчНалУпл/НалИсчисл');
+
+      count_2 := GetCountFld(bufAdr + '/КолПИУчНал');
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr + '/КолПИУчНал' + getIter(j);
+        #SetVisT(bufAdr_2                );
+        #SetVisT(bufAdr_2 + '/ОКТМО'     );
+        #SetVisT(bufAdr_2 + '/СерЛицНедр');
+        #SetVisT(bufAdr_2 + '/НомЛицНедр');
+        #SetVisT(bufAdr_2 + '/ВидЛицНедр');
+
+        count_3 := GetCountFld(bufAdr_2 + '/КолПИНалОсн');
+        for (k := 0; k < count_3; k++)
+        {
+          bufAdr_3 := bufAdr_2 + '/КолПИНалОсн' + getIter(k);
+          #SetVisT(bufAdr_3              );
+          #SetVisT(bufAdr_3 + '/КодОснов');
+          #SetVisT(bufAdr_3 + '/КолПИНал');
+        }
+      }
+    }
+
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ'               );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхДобПер'  );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ОстНПНачПер'   );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ОстНПКонПер'   );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхДПИПер'  );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ВнереалРасхДПИ');
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/КосвРасхДПИ'   );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/КосвРасхДр'    );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхПерОбщ'  );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/КосвИнРасхПер' );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/РасхОбщДобПер' );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд'               );
+    #SetVisT('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/ОКЕИ'          );
+
+    count := GetCountFld('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод');
+    for (i := 0; i < count; i++)
+    {
+      bufAdr := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод' + getIter(i);
+      #SetVisT(bufAdr                   );
+      #SetVisT(bufAdr + '/КодДПИ'       );
+      #SetVisT(bufAdr + '/КоличДПИ'     );
+      #SetVisT(bufAdr + '/ДоляДПИОбщКол');
+    }
+
+    count := GetCountFld('Файл/Документ/НДПИ/ИсчУплНалУг');
+    for (i := 0; i < count; i++)
+    {
+      bufAdr := 'Файл/Документ/НДПИ/ИсчУплНалУг' + getIter(i);
+      #SetVisT(bufAdr + '/КБК'                             );
+      #SetVisT(bufAdr + '/СерЛицНедр'                      );
+      #SetVisT(bufAdr + '/НомЛицНедр'                      );
+      #SetVisT(bufAdr + '/ВидЛицНедр'                      );
+      #SetVisT(bufAdr + '/ОКЕИ'                            );
+      #SetVisT(bufAdr + '/ОКТМО'                           );
+      #SetVisT(bufAdr + '/ДанДПИУг'                        );
+      #SetVisT(bufAdr + '/РасчНалУпл'                      );
+      #SetVisT(bufAdr + '/РасчНалУпл/ИсчислУчУг'           );
+      #SetVisT(bufAdr + '/РасчНалУпл/РасхОТПер/РасхОТПерВс');
+
+      count_2 := GetCountFld(bufAdr + '/ДанДПИУг/ДанДПИУгУч');
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr + '/ДанДПИУг/ДанДПИУгУч' + getIter(j);
+        #SetVisT(bufAdr_2              );
+        #SetVisT(bufAdr_2 + '/КодДПИ'  );
+        #SetVisT(bufAdr_2 + '/КодОснов');
+        #SetVisT(bufAdr_2 + '/КолДПИ'  );
+      }
+
+      count_2 := GetCountFld(bufAdr + '/РасчНалВыч/РасчНалВычПер');
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr + '/РасчНалВыч/РасчНалВычПер' + getIter(j);
+        #SetVisT(bufAdr_2                   );
+        #SetVisT(bufAdr_2 + '/НачПравНалВыч');
+        #SetVisT(bufAdr_2 + '/НалВычНач'    );
+        #SetVisT(bufAdr_2 + '/КонПравНалВыч');
+      }
+    }
+  }
+
+  #SetVisF('Файл/Документ/СвНП/НПФЛ');
+  //#endregion ИСПРАВЛЕНИЕ ВИДИМОСТИ ПОЛЕЙ ПОСЛЕ СТАРОГО ПАТЧА
+  //**********************************************************************************************************
+
+
+  //==========================================================================================================
+  //#region ТИТУЛЬНЫЙ ЛИСТ
+  //----------------------------------------------------------------------------------------------------------
+  #IfVis('Файл/Документ/СвНП/Тлф');
+
+  if not GetStrNull('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг')
+  {
+    #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ');
+
+    if _FormReorg
+    {
+      #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ');
+      #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'  );
+    }
+    else
+    {
+      #IfVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ');
+      #IfVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'  );
+    }
+  }
+  else #SetVisF('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ');
+
+  bufInt := GetIntVal('Файл/Документ/Подписант/ПрПодп');
+
+  if     (bufInt = 2)
+     or ((bufInt = 1) and GetFldVis('Файл/Документ/СвНП/НПЮЛ'))
+     or (    not GetStrNull('Файл/Документ/Подписант/ФИО/Фамилия')
+         and not GetStrNull('Файл/Документ/Подписант/ФИО/Имя'    ))
+  {
+    #SetVisT('Файл/Документ/Подписант/ФИО');
+    #IfVis  ('Файл/Документ/Подписант/ФИО/Отчество');
+  }
+  else #SetVisF('Файл/Документ/Подписант/ФИО');
+
+  if (bufInt = 2)
+  {
+    #SetVisT('Файл/Документ/Подписант/СвПред'        );
+    #IfVis  ('Файл/Документ/Подписант/СвПред/НаимОрг');
+  }
+  else #SetVisF('Файл/Документ/Подписант/СвПред');
+  //#endregion ТИТУЛЬНЫЙ ЛИСТ
+  //**********************************************************************************************************
+
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 1
+  //----------------------------------------------------------------------------------------------------------
+  tBool := False;
+  count := GetCountFld('Файл/Документ/НДПИ/СумНалПУ/СумПУ');
+
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДПИ/СумНалПУ/СумПУ'+getIter(i);
+
+    if    (not GetStrNull(bufAdr+'/КБК'  )
+       and not GetStrNull(bufAdr+'/ОКТМО')
+       and not GetStrNull(bufAdr+'/НалПУ'))
+    then { #SetVisT(bufAdr); tBool := True;}
+    else #SetVisF(bufAdr);
+  }
+
+  if (not tBool) #SetVisT('Файл/Документ/НДПИ/СумНалПУ/СумПУ');
+  //#endregion РАЗДЕЛ 1
+  //**********************************************************************************************************
+
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 2
+  //----------------------------------------------------------------------------------------------------------
+  count := GetCountFld('Файл/Документ/НДПИ/ИсчНалНефт');
+  for (i := 0; i < count; i++)
+  {
+    // ИсчНалНефт == 03.1 Раздел 2
+    bufAdr := 'Файл/Документ/НДПИ/ИсчНалНефт'+getIter(i);
+
+    #IfNullSetVisFCon(bufAdr+'/КодДПИ', bufAdr);
+    #IfNullSetVisFCon(bufAdr+'/КБК'   , bufAdr);
+    #IfNullSetVisFCon(bufAdr+'/ОКЕИ'  , bufAdr);
+
+    // ПокРасчНал
+    tBool := False;
+    count_2 := GetCountFld(bufAdr+'/ПокРасчНал');
+
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr+'/ПокРасчНал'+getIter(j);
+
+      #IfNullSetVisFCon(bufAdr_2+'/ОКТМО'     , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СерЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/НомЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/ВидЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/ПоказДм'   , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/Кндпи'     , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/КоэфКц'    , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/КоэфКв'    , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СтепеньСв' , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/КоэфКз'    , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/КоэфКдв'   , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/КоэфКкан'  , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/НалИсчисл' , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/НалВыч'    , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/НалУпл'    , bufAdr_2)
+
+      // ДобНефтУчНедр == 04.1.1 Раздел 2.1.1
+      count_3 := GetCountFld(bufAdr_2+'/ДобНефтУчНедр');
+
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2+'/ДобНефтУчНедр'+getIter(k);
+
+//Файл/Документ/НДПИ/ИсчНалНефт/ПокРасчНал/ДобНефтУчНедр[1]/КолНефтПН
+
+        if    (not GetStrNull(bufAdr_3+'/КодОснов' )
+           and not GetStrNull(bufAdr_3+'/КолНефтПН'))
+        then #SetVisT(bufAdr_3)
+        else #SetVisF(bufAdr_3);
+      }
+
+      // ДобНефтЗалеж == 05.1.1.1 Раздел 2.1.2
+      count_3 := GetCountFld(bufAdr_2+'/ДобНефтЗалеж');
+
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2+'/ДобНефтЗалеж'+getIter(k);
+
+        #IfNullSetVisFCon(bufAdr_3+'/НаимЗлж'     , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ГлубПласт'   , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ПлотнНефт'   , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ПоказатДм'   , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/СтепеньСвз'  , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/КоэфКд'      , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/КолНалПер'   , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/КоэфКдв'     , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/КолНалПерСт0', bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/НалИсчислЗлж', bufAdr_3)
+
+        tBool_2 := False;
+        count_4 := GetCountFld(bufAdr_3+'/КолНефтОсн');
+
+        for (q := 0; q < count_4; q++)
+        {
+          bufAdr_4 := bufAdr_3+'/КолНефтОсн'+getIter(q);
+
+          if    (not GetStrNull(bufAdr_4+'/КодОснов' )
+             and not GetStrNull(bufAdr_4+'/КолНефтПН'))
+          then { #SetVisT(bufAdr_4); tBool_2 := True; }
+          else #SetVisF(bufAdr_4);
+        }
+
+        if (not tBool_2) #SetVisFCon(bufAdr_3)
+
+        #IfVis(bufAdr_3+'/ЭфТолщПласт');
+        #IfVis(bufAdr_3+'/ПроницЗлж'  );
+
+        #SetVisT(bufAdr_3);
+      }
+
+      tBool := True;
+      #SetVisT(bufAdr_2);
+    }
+
+    if tBool
+    then #SetVisT(bufAdr)
+    else #SetVisF(bufAdr);
+  }
+  //#endregion РАЗДЕЛ 2
+  //**********************************************************************************************************
+
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 3
+  //----------------------------------------------------------------------------------------------------------
+  count := GetCountFld('Файл/Документ/НДПИ/ИсчНалГаз');
+
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДПИ/ИсчНалГаз'+getIter(i);
+
+    #IfNullSetVisFCon(bufAdr+'/КодДПИ'   , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/КБК'      , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/ОКЕИ'     , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/НалИсчисл', bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/КоэфОв'   , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/КоэфКгпн' , bufAdr)
+
+    tBool := False;
+    count_2 := GetCountFld(bufAdr+'/ПокРасчНал');
+
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr+'/ПокРасчНал'+getIter(j);
+
+      #IfNullSetVisFCon(bufAdr_2+'/ОКТМО'     , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СерЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/НомЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/ВидЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СтепеньСвг', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/ЗначенЕут' , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/КоэфДг'    , bufAdr_2)
+
+      tBool_2 := False;
+      count_3 := GetCountFld(bufAdr_2+'/КолДПИЗал');
+
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2+'/КолДПИЗал'+getIter(k);
+
+        #IfNullSetVisFCon(bufAdr_3+'/НаимЗлж'     , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ГлубПласт'   , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ПлотнУВСырья', bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ЗначениеКвг' , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ЗначениеКр'  , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ЗначениеКгз' , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ЗначениеКас' , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/ЗначениеКорз', bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/КоэфКс'      , bufAdr_3)
+        #IfNullSetVisFCon(bufAdr_3+'/НалИсчислЗлж', bufAdr_3)
+
+        tBool_3 := False;
+        count_4 := GetCountFld(bufAdr_3+'/КолДПИЗалОсн');
+
+        for (k := 0; k < count_4; k++)
+        {
+          bufAdr_4 := bufAdr_3+'/КолДПИЗалОсн'+getIter(k);
+
+          if    (not GetStrNull(bufAdr_4+'/КодОснов')
+             and not GetStrNull(bufAdr_4+'/КолДПИ'  ))
+          then { #SetVisT(bufAdr_4); tBool_3 := True; }
+          else #SetVisF(bufAdr_4);
+        }
+
+        if (not tBool_3) #SetVisFCon(bufAdr_3)
+
+        tBool_2 := True;
+        #SetVisT(bufAdr_3)
+      }
+
+      if (not tBool_2) #SetVisFCon(bufAdr_2)
+
+      #IfVis(bufAdr_2+'/КоэфКкм');
+
+      tBool := True;
+      #SetVisT(bufAdr_2)
+    }
+
+    if (not tBool) #SetVisFCon(bufAdr)
+
+    #IfVis(bufAdr+'/ПоказатТг');
+
+    #SetVisT(bufAdr);
+  }
+  //#endregion РАЗДЕЛ 3
+  //**********************************************************************************************************
+
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 4
+  //----------------------------------------------------------------------------------------------------------
+  count := GetCountFld('Файл/Документ/НДПИ/ИсчУплНалНов');
+
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДПИ/ИсчУплНалНов'+getIter(i);
+
+    #IfNullSetVisFCon(bufAdr+'/КодДПИ'      , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/КБК'         , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/ОКЕИ'        , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/ОКТМО'       , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/СерЛицНедр'  , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/НомЛицНедр'  , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/ВидЛицНедр'  , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/НаимМест'    , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/НачДобУВС'   , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/СтоимЕдПИМин', bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/НалБаза'     , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/НалИсчисл'   , bufAdr)
+
+    tBool := False;
+    count_2 := GetCountFld(bufAdr+'/КолПИНалОсн');
+
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr+'/КолПИНалОсн'+getIter(j);
+
+      if    (not GetStrNull(bufAdr_2+'/КодОснов')
+         and not GetStrNull(bufAdr_2+'/КолПИНал'))
+      then { #SetVisT(bufAdr_2); tBool := True; }
+      else #SetVisF(bufAdr_2);
+    }
+
+    if (not tBool) #SetVisFCon(bufAdr)
+
+    #IfVis(bufAdr+'/СтоимЕдПИ'      );
+    #IfVis(bufAdr+'/КолРеалДПИ'     );
+    #IfVis(bufAdr+'/ВырРеалДПИ'     );
+    #IfVis(bufAdr+'/ВырРеалДПИ105.3');
+    #IfVis(bufAdr+'/НалИсчисл105.3' );
+
+    #SetVisT(bufAdr);
+  }
+  //#endregion РАЗДЕЛ 4
+  //**********************************************************************************************************
+
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 5
+  //----------------------------------------------------------------------------------------------------------
+  count := GetCountFld('Файл/Документ/НДПИ/ИсчУплНалИскл');
+
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДПИ/ИсчУплНалИскл'+getIter(i);
+
+    #IfNullSetVisFCon(bufAdr+'/КодДПИ'   , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/КБК'      , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/ОКЕИ'     , bufAdr)
+    #IfNullSetVisFCon(bufAdr+'/НалСтавка', bufAdr)
+
+    tBool := False;
+    count_2 := GetCountFld(bufAdr+'/КолПИУчНал');
+
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr+'/КолПИУчНал'+getIter(j);
+
+      #IfNullSetVisFCon(bufAdr_2+'/ОКТМО'     , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СерЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/НомЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/ВидЛицНедр', bufAdr_2)
+
+      tBool_2 := False;
+      count_3 := GetCountFld(bufAdr_2+'/КолПИНалОсн');
+
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2+'/КолПИНалОсн'+getIter(k);
+        if    (not GetStrNull(bufAdr_3+'/КодОснов')
+           and not GetStrNull(bufAdr_3+'/КолПИНал'))
+        then { #SetVisT(bufAdr_3); tBool_2 := True; }
+        else #SetVisF(bufAdr_3);
+
+        #IfVis(bufAdr_3+'/КоэфКподз');
+        #IfVis(bufAdr_3+'/КоэфКтд'  );
+      }
+
+      if (not tBool_2) #SetVisFCon(bufAdr)
+
+      tBool := True;
+      #SetVisT(bufAdr_2);
+    }
+
+    if (not tBool) #SetVisFCon(bufAdr)
+
+    tBool := False;
+    bufAdr_2 := bufAdr+'/РасчНалУпл';
+
+    if    (not GetStrNull(bufAdr_2+'/СтоимЕдПИ')
+       and not GetStrNull(bufAdr_2+'/НалБаза'  )
+       and not GetStrNull(bufAdr_2+'/НалИсчисл'))
+    {
+      #IfVis(bufAdr_2+'/ДоляДрМетДПИ'   );
+      #IfVis(bufAdr_2+'/КолРеалДПИ'     );
+
+      SetFldVis(bufAdr_2+'/ВырРеалДПИ', GetFldVis(bufAdr_2+'/КолРеалДПИ'));
+
+      #IfVis(bufAdr_2+'/ВырРеалДПИ105.3');
+      #IfVis(bufAdr_2+'/РасхНПДост'     );
+      #IfVis(bufAdr_2+'/РасхНПАфнж'     );
+      #IfVis(bufAdr_2+'/НалИсчисл105.3' );
+
+      tBool := True;
+      #SetVisT(bufAdr_2);
+    }
+    else #SetVisF(bufAdr_2);
+
+    if (not tBool) #SetVisFCon(bufAdr);
+
+    #SetVisT(bufAdr);
+  }
+  //#endregion РАЗДЕЛ 5
+  //**********************************************************************************************************
+
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 6
+  //----------------------------------------------------------------------------------------------------------
+  {
+    bufAdr := 'Файл/Документ/НДПИ/СтоимЕдДПИ';
+
+    if                        (GetStrNull(bufAdr+'/СумРасхДПИОбщ/ПрРасхДобПер'  )) #SetVisF(bufAdr);
+    else if                   (GetStrNull(bufAdr+'/СумРасхДПИОбщ/ОстНПНачПер'   )) #SetVisF(bufAdr);
+      else if                 (GetStrNull(bufAdr+'/СумРасхДПИОбщ/ОстНПКонПер'   )) #SetVisF(bufAdr);
+        else if               (GetStrNull(bufAdr+'/СумРасхДПИОбщ/ПрРасхДПИПер'  )) #SetVisF(bufAdr);
+          else if             (GetStrNull(bufAdr+'/СумРасхДПИОбщ/ВнереалРасхДПИ')) #SetVisF(bufAdr);
+            else if           (GetStrNull(bufAdr+'/СумРасхДПИОбщ/КосвРасхДПИ'   )) #SetVisF(bufAdr);
+              else if         (GetStrNull(bufAdr+'/СумРасхДПИОбщ/КосвРасхДр'    )) #SetVisF(bufAdr);
+                else if       (GetStrNull(bufAdr+'/СумРасхДПИОбщ/ПрРасхПерОбщ'  )) #SetVisF(bufAdr);
+                  else if     (GetStrNull(bufAdr+'/СумРасхДПИОбщ/КосвИнРасхПер' )) #SetVisF(bufAdr);
+                    else if   (GetStrNull(bufAdr+'/СумРасхДПИОбщ/РасхОбщДобПер' )) #SetVisF(bufAdr);
+                      else if (GetStrNull(bufAdr+'/СумРасхДПИОтд/ОКЕИ'          )) #SetVisF(bufAdr);
+                        else {
+                          tBool := False;
+                          count := GetCountFld(bufAdr+'/СумРасхДПИОтд/СумРасхДПИКод');
+
+                          for (i := 0; i < count; i++)
+                          {
+                            bufAdr_2 := bufAdr+'/СумРасхДПИОтд/СумРасхДПИКод'+getIter(i);
+
+                            #IfNullSetVisFCon(bufAdr_2+'/КодДПИ'       , bufAdr_2)
+                            #IfNullSetVisFCon(bufAdr_2+'/КоличДПИ'     , bufAdr_2)
+                            #IfNullSetVisFCon(bufAdr_2+'/ДоляДПИОбщКол', bufAdr_2)
+
+                            #IfVis(bufAdr_2+'/СумРасхДобПИ');
+
+                            tBool := True;
+                            #SetVisT(bufAdr_2);
+                          }
+
+                          if (not tBool)
+                          then #SetVisF(bufAdr);
+                          else #SetVisT(bufAdr);
+                        }
+  }
+  //#endregion РАЗДЕЛ 6
+  //**********************************************************************************************************
+
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 7
+  //----------------------------------------------------------------------------------------------------------
+  count := GetCountFld('Файл/Документ/НДПИ/ИсчУплНалУг');
+
+  for (i := 0; i < count; i++)
+  {
+    bufAdr := 'Файл/Документ/НДПИ/ИсчУплНалУг'+getIter(i);
+
+    if                (GetStrNull(bufAdr+'/КБК'                  )) #SetVisFCon(bufAdr)
+    else if           (GetStrNull(bufAdr+'/СерЛицНедр'           )) #SetVisFCon(bufAdr)
+      else if         (GetStrNull(bufAdr+'/НомЛицНедр'           )) #SetVisFCon(bufAdr)
+        else if       (GetStrNull(bufAdr+'/ВидЛицНедр'           )) #SetVisFCon(bufAdr)
+          else if     (GetStrNull(bufAdr+'/ОКЕИ'                 )) #SetVisFCon(bufAdr)
+            else if   (GetStrNull(bufAdr+'/ОКТМО'                )) #SetVisFCon(bufAdr)
+              else if (GetStrNull(bufAdr+'/РасчНалУпл/ИсчислУчУг')) #SetVisFCon(bufAdr)
+                else
+    {
+      tBool := False;
+      count_2 := GetCountFld(bufAdr+'/ДанДПИУг/ДанДПИУгУч');
+
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr+'/ДанДПИУг/ДанДПИУгУч'+getIter(j);
+
+        if    (not GetStrNull(bufAdr_2+'/КодДПИ'  )
+           and not GetStrNull(bufAdr_2+'/КодОснов')
+           and not GetStrNull(bufAdr_2+'/КолДПИ'  ))
+        then { #SetVisT(bufAdr_2); tBool := True; }
+        else #SetVisF(bufAdr_2);
+      }
+
+      if (not tBool) #SetVisFCon(bufAdr)
+    }
+
+    {
+      #IfVis(bufAdr+'/РасчНалУпл/ОстНачПер'   );
+      #IfVis(bufAdr+'/РасчНалУпл/РасхОТВыч'   );
+      #IfVis(bufAdr+'/РасчНалУпл/КоэфКт'      );
+      #IfVis(bufAdr+'/РасчНалУпл/НалВычПред'  );
+      #IfVis(bufAdr+'/РасчНалУпл/ИсчислПерУпл');
+      #IfVis(bufAdr+'/РасчНалУпл/ОстКонПер'   );
+
+      if (not GetStrNull(bufAdr+'/РасчНалУпл/РасхОТПер/РасхОТПерВс'))
+      {
+        #IfVis(bufAdr+'/РасчНалУпл/РасхОТПер/МатРасх'   );
+        #IfVis(bufAdr+'/РасчНалУпл/РасхОТПер/РасхАмИмущ');
+        #IfVis(bufAdr+'/РасчНалУпл/РасхОТПер/РасхРекон' );
+
+        #SetVisT(bufAdr+'/РасчНалУпл/РасхОТПер/РасхОТПерВс');
+      }
+      else #SetVisF(bufAdr+'/РасчНалУпл/РасхОТПер/РасхОТПерВс')
+    }
+
+    {
+      tBool := False;
+      count_2 := GetCountFld(bufAdr+'/РасчНалВыч/РасчНалВычПер');
+
+      for (j := 0; j < count_2; j++)
+      {
+        bufAdr_2 := bufAdr+'/РасчНалВыч/РасчНалВычПер'+getIter(j);
+
+        if    (not GetStrNull(bufAdr_2+'/НачПравНалВыч')
+           and not GetStrNull(bufAdr_2+'/НалВычНач'    )
+           and not GetStrNull(bufAdr_2+'/КонПравНалВыч'))
+        then { #SetVisT(bufAdr_2); tBool := True; }
+        else { #SetVisF(bufAdr_2); continue; }
+
+        #IfVis(bufAdr_2+'/НалВычПред'  );
+        #IfVis(bufAdr_2+'/НалВычТек'   );
+        #IfVis(bufAdr_2+'/ОстНалВычКон');
+      }
+
+      if (not tBool)
+      then #SetVisF(bufAdr+'/РасчНалВыч')
+      else #SetVisT(bufAdr+'/РасчНалВыч')
+    }
+
+    #IfVis(bufAdr+'/Ктд');
+
+    #SetVisT(bufAdr);
+  }
+  //#endregion РАЗДЕЛ 7
+  //**********************************************************************************************************
+
+  //==========================================================================================================
+  //#region РАЗДЕЛ 8
+  //----------------------------------------------------------------------------------------------------------
+  count := GetCountFld('Файл/Документ/НДПИ/ИсчНалНефтНДД');
+  for (i := 0; i < count; i++)
+  {
+    // ИсчНалНефтНДД == 30.1 Раздел 8.1
+    bufAdr := 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+getIter(i);
+
+    #IfNullSetVisFCon(bufAdr+'/КодДПИ', bufAdr);
+    #IfNullSetVisFCon(bufAdr+'/КБК'   , bufAdr);
+    #IfNullSetVisFCon(bufAdr+'/ОКЕИ'  , bufAdr);
+
+    // РасчНалУч == 31.1.1 Раздел 8.1.1
+    tBool := False;
+    count_2 := GetCountFld(bufAdr+'/РасчНалУч');
+
+    for (j := 0; j < count_2; j++)
+    {
+      bufAdr_2 := bufAdr+'/РасчНалУч'+getIter(j);
+
+      #IfNullSetVisFCon(bufAdr_2+'/ОКТМО'     , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СерЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/НомЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/ВидЛицНедр', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СтепВыраб' , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/ГодНачДоб' , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/КоэфКндд'  , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СрУрЦен'   , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СрЗначКурс', bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/ПризнКг'   , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/КоэфКг'    , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СтавЭП'    , bufAdr_2)
+      #IfNullSetVisFCon(bufAdr_2+'/СумИсчНал' , bufAdr_2)
+
+      tBool_2 := False;
+      // КолНефтНалОсн == 32.1.1.1 Раздел 8.1.1.1
+      count_3 := GetCountFld(bufAdr_2+'/КолНефтНалОсн');
+
+      for (k := 0; k < count_3; k++)
+      {
+        bufAdr_3 := bufAdr_2+'/КолНефтНалОсн'+getIter(k);
+
+        if    (not GetStrNull(bufAdr_3+'/КодОснов' )
+           and not GetStrNull(bufAdr_3+'/КолНефтНал'))
+        then { #SetVisT(bufAdr_3) tBool_2 := true; }
+        else #SetVisF(bufAdr_3);
+      }
+      if tBool_2
+      {
+        tBool := true;
+        #SetVisT(bufAdr_2)
+      }
+      else
+        #SetVisF(bufAdr_2);
+
+    }
+    if tBool
+    then #SetVisT(bufAdr)
+    else #SetVisF(bufAdr);
+  }
+  //#endregion РАЗДЕЛ 8
+  //**********************************************************************************************************
+
+@end.
+//#endregion On_Visable ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ УСТАНОВКЕ ВИДИМОСТИ ПОЛЕЙ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region On_Check ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ ПОЛЕЙ
+//------------------------------------------------------------------------------------------------------------
+@Script On_Check : boolean;
+  //==========================================================================================================
+  //#region СЕРВИС On_Check
+  //----------------------------------------------------------------------------------------------------------
+  #include AllTaxObj.Vih
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidSerL(strIn: string; var strGetMes: string) : boolean;
+  begin
+    strGetMes := 'Формат поля: 3 символа';
+    Result := False;
+    Result :=    Length(strIn) =  3;
+  end;
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidSerL_3_4(strIn: string; var strGetMes: string) : boolean;
+  begin
+    strGetMes := 'Формат поля: 3-4 символа';
+    Result := False;
+    Result := (Length(strIn) = 3) or (Length(strIn) = 4);
+  end;
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidNomL(strIn: string; var strGetMes: string) : boolean;
+  begin
+    strGetMes := 'Формат поля: 5 символа';
+    Result := False;
+    Result :=    Length(strIn) = 5;
+  end;
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidVidL(strIn: string; var strGetMes: string) : boolean;
+  begin
+    strGetMes := 'Формат поля: 2 символа';
+    Result := False;
+    Result :=    Length(strIn) = 2;
+  end;
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidMGod(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Налоговая база
+    //НалБаза
+    strGetMes := 'Формат поля: ММ.ГГГГ';
+    Result := False;
+    Result := CheckError.isRegExpr('^[0]{1}[1-9]{1}[.][1-2]{1}[0-9]{3}$', strIn)
+             or  CheckError.isRegExpr('^[1]{1}[0-2]{1}[.][1-2]{1}[0-9]{3}$', strIn) ;
+  end;
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidGod(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Налоговая база
+    //НалБаза
+    strGetMes := 'Формат поля: ГГГГ';
+    Result := False;
+    Result := CheckError.isRegExpr('^[[1-2]{1}[0-9]{3}$', strIn);
+  end;
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidDol(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Налоговая база
+    //НалБаза
+    strGetMes := 'Формат поля: X.XXXX';
+    Result := False;
+    Result := CheckError.isRegExpr('^[0]{1}[.][0-9]{3}[1-9]{1}$', strIn)
+             or  CheckError.isRegExpr('^[1]{1}[.][0-9]{4}$', strIn) ;
+  end;
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidPrizn(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Признак применения ставки акциза на этиловый спирт
+    //ПризнСтав
+    strGetMes := 'Возможные значения: 1, 2, 3 или 4';
+
+    Result := False;
+    Result := CheckError.isRegExpr('^(1|2|3|4)$', strIn);
+  end;
+
+  #declare _IsValidNoKor_Decimal(_StrMes,_adrXML, _Cel, _Drob, _Pole, _CutIterMode=0, _flMin=False)
+    if not IsValidDecimal(GetStrVal(#_adrXML), #_Cel, #_Drob, getMes, #_flMin)
+      MessageErrorStop_ALG
+      (
+        #_adrXML,
+        #_Pole,
+        'Поле не соответствует формату. Формат поля '+  #_StrMes + getMes ,
+        #_CutIterMode
+      );
+  #end
+
+  #declare No_IsValidNoKor_Decimal(_StrMes,_adrXML, _Cel, _Drob, _Pole, _CutIterMode=0, _flMin=False)
+   if GetFldVis(#_adrXML)
+    if not IsValidDecimal(GetStrVal(#_adrXML), #_Cel, #_Drob, getMes, #_flMin)
+      MessageErrorStop_ALG
+      (
+        #_adrXML,
+        #_Pole,
+        'Поле не соответствует формату. Формат поля '+  #_StrMes + getMes,
+        #_CutIterMode
+      );
+  #end
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsValidKtd(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Налоговая база
+    //НалБаза
+    strGetMes := 'Формат поля: X.X';
+    Result := False;
+    Result := CheckError.isRegExpr('^[0-9]{1}[.][1-9]{1}$', strIn)
+             or  CheckError.isRegExpr('^[1-9]{1}[.][0-9]{1}$', strIn) ;
+  end;
+
+  #declare _InsMes(_AdrXML, _Pole, _StrMes, _CutIterMode=0)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      #_Pole,
+      #_StrMes,
+      #_CutIterMode
+    );
+  #end
+
+  #declare _NoKor_(_StrMes, _AdrXML, _Pole, _flIter = 0)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      #_Pole,
+      'Поле не соответствует формату. Формат поля' + getMes+' '+#_StrMes,
+      #_flIter
+    );
+  #end
+
+  #declare _MesNoKor(_AdrXML, _Pole, _CutIterMode=0)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      #_Pole,
+      'Поле не соответствует регулярному выражению. ' + getMes,
+      #_CutIterMode
+    );
+  #end
+  //#endregion СЕРВИС On_Check
+  //**********************************************************************************************************
+@begin
+  var getMes: string;
+  getMes := '';
+  var  aKodNO   , aNomKorr   , aPoMestu , aKND , aDataDok , aPeriod , aOtchetGod , aPrPodp , aFamilija , aImja  , aOtchestvo ,
+       aNaimDok , aNaimOrg_2 , aOKVJED  , aTlf , aNaimOrg , aINNJUL , aFormReorg , aKPP    , aINNJUL_2 , aKPP_2 ,
+       sKodNO   , sNomKorr   , sPoMestu , sKND , sDataDok , sPeriod , sOtchetGod , sPrPodp , sFamilija , sImja  , sOtchestvo ,
+       sNaimDok  , sNaimOrg_2 , sOKVJED  , sTlf , sNaimOrg , sINNJUL , sFormReorg , sKPP    , sINNJUL_2 , sKPP_2 :string;
+
+  var tB : Boolean;
+
+  if not IsValidDate(GetStrVal('Файл/Документ/ДатаДок'), getMes)
+    MessageErrorStop_ALG('Файл/Документ/ДатаДок', '"Дата"', 'Заполните поле или произведите перерасчет для установки текущей даты');
+  if not IsValidOKVED(GetStrVal('Файл/Документ/СвНП/ОКВЭД'), getMes) #_MesNoKor('Файл/Документ/СвНП/ОКВЭД', '"ОКВЭД"');
+
+  aKodNO     := 'Файл/Документ/КодНО'                        ;   sKodNO     := GetStrVal(aKodNO    );
+  aNomKorr   := 'Файл/Документ/НомКорр'                      ;   sNomKorr   := GetStrVal(aNomKorr  );
+  aPoMestu   := 'Файл/Документ/ПоМесту'                      ;   sPoMestu   := GetStrVal(aPoMestu  );
+  aKND       := 'Файл/Документ/КНД'                          ;   sKND       := GetStrVal(aKND      );
+  aDataDok   := 'Файл/Документ/ДатаДок'                      ;   sDataDok   := GetStrVal(aDataDok  );
+  aPeriod    := 'Файл/Документ/Период'                       ;   sPeriod    := GetStrVal(aPeriod   );
+  aOtchetGod := 'Файл/Документ/ОтчетГод'                     ;   sOtchetGod := GetStrVal(aOtchetGod);
+  aPrPodp    := 'Файл/Документ/Подписант/ПрПодп'             ;   sPrPodp    := GetStrVal(aPrPodp   );
+  aFamilija  := 'Файл/Документ/Подписант/ФИО/Фамилия'        ;   sFamilija  := GetStrVal(aFamilija );
+  aImja      := 'Файл/Документ/Подписант/ФИО/Имя'            ;   sImja      := GetStrVal(aImja     );
+  aOtchestvo := 'Файл/Документ/Подписант/ФИО/Отчество'       ;   sOtchestvo := GetStrVal(aOtchestvo);
+  aNaimDok   := 'Файл/Документ/Подписант/СвПред/НаимДок'     ;   sNaimDok   := GetStrVal(aNaimDok  );
+  aNaimOrg_2 := 'Файл/Документ/Подписант/СвПред/НаимОрг'     ;   sNaimOrg_2 := GetStrVal(aNaimOrg_2);
+  aOKVJED    := 'Файл/Документ/СвНП/ОКВЭД'                   ;   sOKVJED    := GetStrVal(aOKVJED   );
+  aTlf       := 'Файл/Документ/СвНП/Тлф'                     ;   sTlf       := GetStrVal(aTlf      );
+  aNaimOrg   := 'Файл/Документ/СвНП/НПЮЛ/НаимОрг'            ;   sNaimOrg   := GetStrVal(aNaimOrg  );
+  aINNJUL    := 'Файл/Документ/СвНП/НПЮЛ/ИННЮЛ'              ;   sINNJUL    := GetStrVal(aINNJUL   );
+  aKPP       := 'Файл/Документ/СвНП/НПЮЛ/КПП'                ;   sKPP       := GetStrVal(aKPP      );
+  aFormReorg := 'Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг';   sFormReorg := GetStrVal(aFormReorg);
+  aINNJUL_2  := 'Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ'    ;   sINNJUL_2  := GetStrVal(aINNJUL_2 );
+  aKPP_2     := 'Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'      ;   sKPP_2     := GetStrVal(aKPP_2    );
+
+  if (sFormReorg <> '')
+  {
+    if not IsValidFormReorg(sFormReorg, getMes) #_InsMes(aFormReorg, '"Форма реорганизации"', getMes);
+    else
+    {
+      if sFormReorg <> '0'
+      {
+        if not CheckError.Prov_INN(sINNJUL_2, getMes) #_InsMes(aINNJUL_2, '"ИНН реорганизованной организации"', getMes);
+        if not IsValidKPP(sKPP_2, getMes) #_InsMes(aKPP_2, '"КПП реорганизованной организации"', getMes);
+      }
+      else
+      {
+        getMes := 'Строка не должна быть заполнена при текущем значении поля "Форма реорганизации"';
+        if (Length(sINNJUL_2) > 0) #_InsMes(aINNJUL_2, '"ИНН реорг. орг."', getMes);
+        if (Length(sKPP_2   ) > 0) #_InsMes(aINNJUL_2, '"ИНН реорг. орг."', getMes);
+      }
+    }
+  }
+  else
+  {
+    getMes := 'Строка не должна быть заполнена при текущем значении поля "Форма реорганизации"';
+    if (Length(sINNJUL_2) > 0) #_InsMes(aINNJUL_2, '"ИНН реорг. орг."', getMes);
+    if (Length(sKPP_2)    > 0) #_InsMes(aKPP_2   , '"КПП реорг. орг."', getMes);
+  }
+
+  if not IsValidSONO(sKodNO, getMes) #_MesNoKor(aKodNO, 'Код налогового органа');
+  if not CheckError.Prov_INN(sINNJUL, getMes) #_InsMes(aINNJUL, '"ИНН"', getMes);
+  if not IsValidKPP(sKPP, getMes) #_MesNoKor(aKPP, '"КПП"');
+  if (sNaimOrg = '') MessageErrorStop_ALG(aNaimOrg, '"Налогоплательщик"', 'Поле обязательно для заполнения');
+  else if not IsValidNaimOrg(sNaimOrg, getMes) #_MesNoKor(aNaimOrg, '"Налогоплательщик"');
+  if (sTlf <> '')
+    if not IsValidTlf(sTlf, getMes) #_MesNoKor(aTlf, '"Номер контактного телефона"');
+  if (sNaimDok <> '')
+    if not IsValidNaimDok(sNaimDok, getMes) #_MesNoKor(aNaimDok, '"Форма реорганизации"');
+
+  if not IsValidFIO(sFamilija, getMes) #_MesNoKor(aFamilija, '"Фамилия"');
+  if not IsValidFIO(sImja    , getMes) #_MesNoKor(aImja    , '"Имя"'    );
+  if sOtchestvo <> ''
+    if not IsValidFIO(sOtchestvo, getMes) #_MesNoKor(aOtchestvo, '"Отчество"');
+
+  if not IsValidPrPodp(sPrPodp, getMes) #_InsMes(aPrPodp, '"Признак подписанта"', getMes)
+  else
+  {
+    if (sPrPodp = '2')
+    {
+      if not IsValidNaimDok(sNaimDok, getMes) #_InsMes(aNaimDok, '"Наим. док., подтв. полномочия предст."', 'Поле обязательно для заполнения при значении поля "Признак подписанта" равного 2. ' + getMes);
+        if sNaimOrg_2 <> ''
+          if not IsValidNaimOrg(sNaimOrg_2, getMes) #_InsMes(aNaimOrg_2, '"Наименование организации"', getMes);
+    }
+    else
+    {
+      getMes := 'Поле заполняется только при значении поля "Признак подписанта" равного 2';
+      if (Length(sNaimDok  ) > 0) MessageErrorStop_ALG(aNaimDok  , '"Наименование документа"'  , getMes);
+      if (Length(sNaimOrg_2) > 0) MessageErrorStop_ALG(aNaimOrg_2, '"Наименование организации"', getMes);
+    }
+  }
+  //***********************************************************************************************
+  //***********************************************************************************************
+
+
+  var i,j,k,g,z,count,countOKTMO,countKodOsn,stj,n :longint;
+  var sKBK, sOKTMO, aNalPU, aKBK, aOKTMO , sNalPU,
+      aKodDPI, aOKEI, aNalIsch, aSepLicN, aNomLicN, aVidLicN, aKodOsnov, aKolDPI, aKoef, aNalBaza, aPriznkG, aGodNach,
+      sKodDPI, sOKEI, sNalIsch, sSepLicN, sNomLicN, sVidLicN, sKodOsnov, sKolDPI, sKoef, sNalBaza, sPriznkG, sGodNach :string;
+  var tBool, tbool1, tbool2: boolean;
+  var iCutIterMode : integer;
+    var flIter :integer;
+  for (i := 0; i <  GetCountFld('Файл/Документ/НДПИ/СумНалПУ/СумПУ'); i++)
+  {
+    if GetFldVis('Файл/Документ/НДПИ/СумНалПУ/СумПУ' + getIter(i))
+    {
+      aKBK   :=  'Файл/Документ/НДПИ/СумНалПУ/СумПУ' + getIter(i) +'/КБК'  ; sKBK   := GetStrVal(aKBK   )  ;
+      aOKTMO :=  'Файл/Документ/НДПИ/СумНалПУ/СумПУ' + getIter(i) +'/ОКТМО'; sOKTMO := GetStrVal(aOKTMO )  ;
+      aNalPU :=  'Файл/Документ/НДПИ/СумНалПУ/СумПУ' + getIter(i) +'/НалПУ'; sNalPU := GetStrVal(aNalPU )  ;
+      if not IsValidKBK(sKBK, getMes) #_MesNoKor(aKBK, 'Стр. 010');
+      if not IsValidOKTMO(sOKTMO, getMes) #_MesNoKor(aOKTMO, 'Стр. 020');
+      if (sNalPU ='' )
+        #_InsMes(aNalPU, 'Стр. 030', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+    }
+  }
+
+  for (i := 0; i <  GetCountFld('Файл/Документ/НДПИ/ИсчНалНефт'); i++)
+  {
+    if GetFldVis('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i))
+    {
+      tbool1:= False;
+      aKodDPI  :=  'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/КодДПИ'     ;  sKodDPI  := GetStrVal(aKodDPI  );
+      aKBK     :=  'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/КБК'        ;  sKBK     := GetStrVal(aKBK     );
+      aOKEI    :=  'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ОКЕИ'       ;  sOKEI    := GetStrVal(aOKEI    );
+      if not IsValidKBK(sKBK, getMes) #_MesNoKor(aKBK, 'Стр. 020');
+      if (sOKEI ='' )
+        #_InsMes(aOKEI, 'Стр. 030', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if (sKodDPI ='' )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if not ((sKodDPI ='03100' ) )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Код вида добытого полезного ископаемого может принимать только значения 03100');
+      if (sOKEI <>'168' )
+        #_InsMes(aOKEI, 'Стр. 030', 'Код бюджетной классификации может принимать только значения 168');
+      tbool := False;
+      for (j := 0; j <  GetCountFld('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'); j++)
+      {
+        if GetFldVis('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) )
+        {
+          tbool := True;
+          aOKTMO   := 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/ОКТМО'     ;  sOKTMO   := GetStrVal(aOKTMO   );
+          aSepLicN := 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/СерЛицНедр';  sSepLicN := GetStrVal(aSepLicN );
+          aNomLicN := 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/НомЛицНедр';  sNomLicN := GetStrVal(aNomLicN );
+          aVidLicN := 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/ВидЛицНедр';  sVidLicN := GetStrVal(aVidLicN );
+          if not IsValidOKTMO(sOKTMO, getMes) #_MesNoKor(aOKTMO, 'Стр. 040', iCutIterMode);
+          if (sSepLicN ='' )
+            #_InsMes(aSepLicN, 'Стр. 050', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidSerL(sSepLicN, getMes) #_MesNoKor(aSepLicN, 'Стр. 050', iCutIterMode);
+          if (sNomLicN ='' )
+            #_InsMes(aNomLicN, 'Стр. 050', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidNomL(sNomLicN, getMes) #_MesNoKor(aNomLicN, 'Стр. 050', iCutIterMode);
+          if (sVidLicN ='' )
+            #_InsMes(aVidLicN, 'Стр. 050', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidVidL(sVidLicN, getMes) #_MesNoKor(aVidLicN, 'Стр. 050', iCutIterMode);
+          #_IsValidNoKor_Decimal('XXXXXX.XX'      , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/ПоказДм'  , 6, 2, 'Стр. 060');
+          #_IsValidNoKor_Decimal('XXXX'           , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/Кндпи'    , 4, 0, 'Стр. 070');
+          #_IsValidNoKor_Decimal('XX.XXXX'        , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/КоэфКц'   , 2, 4, 'Стр. 080');
+          #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/КоэфКв'   , 1, 4, 'Стр. 090');
+          #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/СтепеньСв', 1, 4, 'Стр. 100');
+          #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/КоэфКз'   , 1, 4, 'Стр. 110');
+          #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/КоэфКдв'  , 1, 4, 'Стр. 115');
+          #_IsValidNoKor_Decimal('X'              , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/КоэфКкан' , 1, 0, 'Стр. 120');
+          #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/НалИсчисл',15, 0, 'Стр. 130');
+          #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/НалВыч'   ,15, 0, 'Стр. 140');
+          #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/НалУпл'   ,15, 0, 'Стр. 150');
+          z := 3;
+          stj := 0;
+          for (g := 0; g <  GetCountFld('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтУчНедр'); g++)
+          {
+            if GetFldVis('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтУчНедр'+ getIter(g) )
+            {
+              if j>=1
+                 iCutIterMode :=1;
+              else
+                 iCutIterMode :=-1;
+              if (z <= g)
+              {
+                z:= z+3;
+                stj:=stj+3;
+              }
+
+              if not IsValidDecimal(GetStrVal('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтУчНедр'+ getIter(g)+'/КолНефтПН'), 11, 3, getMes,  True)
+                 #_NoKor_('XXXXXXXXXXX.XXX' ,'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтУчНедр'+ getIter(g-stj)+'/КолНефтПН' , 'Стр. '+string(g+1)+' гр.2', iCutIterMode);
+            }
+          }
+          for (g := 0; g <  GetCountFld('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'); g++)
+          {
+            if GetFldVis('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g))
+            {
+              tbool2:= True;
+              // режим вырезки итераторов из адреса показателя
+              aKodOsnov:=  'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/КолДПИЗалОсн'+ getIter(k)+'/КодОснов' ;  sKodOsnov:= GetStrVal(aKodOsnov);
+              if (GetStrVal('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/НаимЗлж') ='' )
+                #_InsMes('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/НаимЗлж', 'Стр.160', 'Строка обязательна к заполнению.', iCutIterMode);
+              #No_IsValidNoKor_Decimal('XX.XXXX'        , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/ЭфТолщПласт' ,  2, 4, 'Стр. 170');
+              #No_IsValidNoKor_Decimal('X.XXXXXXX'      , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/ПроницЗлж'   ,  1, 7, 'Стр. 180');
+              #_IsValidNoKor_Decimal('XXXX'           , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/ГлубПласт'   ,  4, 0, 'Стр. 190');
+              #_IsValidNoKor_Decimal('XX.XXX'         , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/ПлотнНефт'   ,  2, 3, 'Стр. 200');
+              #_IsValidNoKor_Decimal('XXXXXX.XX'      , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/ПоказатДм'   ,  6, 2, 'Стр. 210');
+              #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/СтепеньСвз'  ,  1, 4, 'Стр. 220');
+              #_IsValidNoKor_Decimal('X.X'            , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/КоэфКд'      ,  1, 1, 'Стр. 230');
+              #_IsValidNoKor_Decimal('XXX'            , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/КолНалПер'   ,  3, 0, 'Стр. 240');
+              #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/КоэфКдв'     ,  1, 4, 'Стр. 250');
+              #_IsValidNoKor_Decimal('XXX'            , 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/КолНалПерСт0',  3, 0, 'Стр. 260');
+              #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', 'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/НалИсчислЗлж', 15, 0, 'Стр. 270');
+
+              z := 3;
+              n := 0;
+              stj := 0;
+              for (k := 0; k <  GetCountFld('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/КолНефтОсн'); k++)
+              {
+                if GetFldVis('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/КолНефтОсн'+ getIter(k))
+                {
+                  tbool2:= True;
+                  if j>=1
+                    iCutIterMode :=1;
+                  else
+                    iCutIterMode :=-1;
+                  if (z <= k)
+                  {
+                    n:= n+1;
+                    z:= z+3;
+                    stj:=stj+3;
+                  }
+                  if not IsValidDecimal(GetStrVal('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/КолНефтОсн'+ getIter(k)+'/КолНефтПН'), 11, 3, getMes,  True)
+                     #_NoKor_('XXXXXXXXXXX.XXX' ,'Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/КолНефтОсн'+ getIter(k mod 3)+'/КолНефтПН', 'Стр. '+string(k+1)+' гр.2', iCutIterMode);
+                }
+              }
+              if not tbool2
+                #_InsMes('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/ДобНефтЗалеж'+ getIter(g)+'/КолНефтОсн/КодОснов', 'гр.1', 'Должна быть заполнена хоть 1 строчка');
+            }
+          }
+        }
+      }
+      if not tbool
+        #_InsMes('Файл/Документ/НДПИ/ИсчНалНефт'+ getIter(i) +'/ПокРасчНал/ОКТМО' , 'Стр. 040', 'Должна быть заполнена хотя бы 1 Раздел 3.1');
+    }
+  }
+
+
+
+  for (i := 0; i <  GetCountFld('Файл/Документ/НДПИ/ИсчНалГаз'); i++)
+  {
+    if GetFldVis('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i))
+    {
+      tbool1:= False;
+      aKodDPI  :=  'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/КодДПИ'     ;  sKodDPI  := GetStrVal(aKodDPI  );
+      aKBK     :=  'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/КБК'        ;  sKBK     := GetStrVal(aKBK     );
+      aOKEI    :=  'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ОКЕИ'       ;  sOKEI    := GetStrVal(aOKEI    );
+      if not IsValidKBK(sKBK, getMes) #_MesNoKor(aKBK, 'Стр. 020');
+      if (sOKEI ='' )
+        #_InsMes(aOKEI, 'Стр. 030', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if (sKodDPI ='' )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if not ((sKodDPI ='03200' ) or (sKodDPI ='03300' )  )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Код вида добытого полезного ископаемого  может принимать следующие значения 03200, 03300 )');
+      #_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX', 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/НалИсчисл' , 15, 0 , 'Стр. 040');
+      #No_IsValidNoKor_Decimal('XXXXXXXXXXX'    , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПоказатТг' , 11, 0 , 'Стр. 050');
+      #_IsValidNoKor_Decimal('X.XX', 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/КоэфОв'  ,  1, 2 , 'Стр. 060');
+      #_IsValidNoKor_Decimal('X.XX', 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/КоэфКгпн',  1, 2 , 'Стр. 070');
+      tbool := False;
+      for (j := 0; j <  GetCountFld('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'); j++)
+      {
+        if GetFldVis('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) )
+        {
+          tbool := True;
+          aOKTMO   := 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/ОКТМО'     ;  sOKTMO   := GetStrVal(aOKTMO   );
+          aSepLicN := 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/СерЛицНедр';  sSepLicN := GetStrVal(aSepLicN );
+          aNomLicN := 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/НомЛицНедр';  sNomLicN := GetStrVal(aNomLicN );
+          aVidLicN := 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/ВидЛицНедр';  sVidLicN := GetStrVal(aVidLicN );
+          if not IsValidOKTMO(sOKTMO, getMes) #_MesNoKor(aOKTMO, 'Стр. 080', iCutIterMode);
+          if (sSepLicN ='' )
+            #_InsMes(aSepLicN, 'Стр. 090', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidSerL(sSepLicN, getMes) #_MesNoKor(aSepLicN, 'Стр. 090', iCutIterMode);
+          if (sNomLicN ='' )
+            #_InsMes(aNomLicN, 'Стр. 090', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidNomL(sNomLicN, getMes) #_MesNoKor(aNomLicN, 'Стр. 090', iCutIterMode);
+          if (sVidLicN ='' )
+            #_InsMes(aVidLicN, 'Стр. 090', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidVidL(sVidLicN, getMes) #_MesNoKor(aVidLicN, 'Стр. 090', iCutIterMode);
+          #_IsValidNoKor_Decimal('X.XXXX'   , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/СтепеньСвг', 1, 4, 'Стр. 100');
+          #_IsValidNoKor_Decimal('XXXX.XXXX', 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/ЗначенЕут' , 4, 4, 'Стр. 110');
+          #No_IsValidNoKor_Decimal('X.X'      , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/КоэфКкм'   , 1, 1, 'Стр. 120');
+          #_IsValidNoKor_Decimal('X.XXXX'   , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j)+'/КоэфДг'    , 1, 4, 'Стр. 130');
+          tbool1 := False;
+          for (g := 0; g <  GetCountFld('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'); g++)
+          {
+            if GetFldVis('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g) )
+            {
+              tbool1 := True;
+              if (GetStrVal('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g) +'/НаимЗлж' ) ='' )
+                #_InsMes('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g) +'/НаимЗлж' , 'Стр. 140', 'Строка обязательна к заполнению.', iCutIterMode)
+              #_IsValidNoKor_Decimal('XXXX'           , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/ГлубПласт'   ,  4, 0, 'Стр. 150');
+              #_IsValidNoKor_Decimal('X.XXX'          , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/ПлотнУВСырья',  1, 3, 'Стр. 160');
+              #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/ЗначениеКвг' ,  1, 4, 'Стр. 170');
+              #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/ЗначениеКр'  ,  1, 4, 'Стр. 170');
+              #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/ЗначениеКгз' ,  1, 4, 'Стр. 170');
+              #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/ЗначениеКас' ,  1, 4, 'Стр. 170');
+              #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/ЗначениеКорз',  1, 4, 'Стр. 170');
+              #_IsValidNoKor_Decimal('X.XXXX'         , 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/КоэфКс'      ,  1, 4, 'Стр. 180');
+              #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', 'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/НалИсчислЗлж', 15, 0, 'Стр. 190');
+              tbool2 := False
+              n := 3;
+              z := 0;
+              stj:=0;
+              for (k := 0; k <  GetCountFld('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/КолДПИЗалОсн'); k++)
+              {
+                if GetFldVis('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/КолДПИЗалОсн'+ getIter(k))
+                {
+                  tbool2:= True;
+                  if (n <= k)
+                  {
+                     z:= z+1;
+                     n:= n+3;
+                     stj:=stj+3;
+                  }
+
+                  // режим вырезки итераторов из адреса показателя
+                  if i>=1
+                    iCutIterMode :=1;
+                  else
+                    iCutIterMode :=-1;
+                  aKodOsnov:=  'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/КолДПИЗалОсн'+ getIter(k)+'/КодОснов' ;  sKodOsnov:= GetStrVal(aKodOsnov);
+                  if (sKodOsnov ='' )
+                  {
+                    aKodOsnov:=  'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/КолДПИЗалОсн'+ getIter(k-stj)+'/КодОснов' ;
+                    #_InsMes(aKodOsnov,'Стр. '+string(k+1)+ ' гр.1', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode);
+                  }
+                  if not IsValidDecimal(GetStrVal('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/КолДПИЗалОсн'+ getIter(k)+'/КолДПИ'), 11, 3, getMes,  True)
+                     #_NoKor_('XXXXXXXXXXX.XXX' ,'Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/КолДПИЗалОсн'+ getIter(k-stj)+'/КолДПИ' , 'Стр. '+string(k+1)+' гр.2', iCutIterMode);
+                }
+              }
+              if not tbool2
+                #_InsMes('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал'+ getIter(g)+'/КолДПИЗалОсн/КодОснов', 'гр.1', 'Должна быть заполнена хоть 1 строчка');
+            }
+          }
+          if not tbool1
+            #_InsMes('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал'+ getIter(j) +'/КолДПИЗал/НаимЗлж' , 'Стр. 140', 'Должна быть заполнена хотяб 1 Раздел 3.1.1');
+        }
+      }
+      if not tbool
+        #_InsMes('Файл/Документ/НДПИ/ИсчНалГаз'+ getIter(i) +'/ПокРасчНал/ОКТМО' , 'Стр. 080', 'Должна быть заполнена хотя бы 1 Раздел 3.1');
+    }
+  }
+  for (i := 0; i <  GetCountFld('Файл/Документ/НДПИ/ИсчУплНалНов'); i++)
+  {
+    if GetFldVis('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i))
+    {
+      tbool1:= False;
+      aKodDPI  :=  'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i) +'/КодДПИ'     ;  sKodDPI  := GetStrVal(aKodDPI  );
+      aKBK     :=  'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i) +'/КБК'        ;  sKBK     := GetStrVal(aKBK     );
+      aOKEI    :=  'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i) +'/ОКЕИ'       ;  sOKEI    := GetStrVal(aOKEI    );
+      aOKTMO   :=  'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i) +'/ОКТМО'      ;  sOKTMO   := GetStrVal(aOKTMO   );
+      aSepLicN :=  'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i) +'/СерЛицНедр' ;  sSepLicN := GetStrVal(aSepLicN );
+      aNomLicN :=  'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i) +'/НомЛицНедр' ;  sNomLicN := GetStrVal(aNomLicN );
+      aVidLicN :=  'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i) +'/ВидЛицНедр' ;  sVidLicN := GetStrVal(aVidLicN );
+      if not IsValidKBK(sKBK, getMes) #_MesNoKor(aKBK, 'Стр. 020');
+      if (sOKEI ='' )
+        #_InsMes(aOKEI, 'Стр. 030', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if (sKodDPI ='' )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if not ((sKodDPI ='03100' ) or (sKodDPI ='03200' ) or (sKodDPI ='03300' )or (sKodDPI ='03401' ) )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Код вида добытого полезного ископаемого  может принимать следующие значения (03100, 03200, 03300 или 03401 )');
+      if (sKodDPI ='03401') and (sKBK <>'00000000000000000000')
+        #_InsMes(aKBK, 'Стр. 020', 'По коду вида полезного ископаемого "03401" КБК="00000000000000000000")');
+      if not IsValidOKTMO(sOKTMO, getMes) #_MesNoKor(aOKTMO, 'Стр. 040', iCutIterMode);
+      if (sSepLicN ='' )
+        #_InsMes(aSepLicN, 'Стр. 050', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+      else
+        if not IsValidSerL(sSepLicN, getMes) #_MesNoKor(aSepLicN, 'Стр. 050', iCutIterMode);
+      if (sNomLicN ='' )
+        #_InsMes(aNomLicN, 'Стр. 050', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+      else
+        if not IsValidNomL(sNomLicN, getMes) #_MesNoKor(aNomLicN, 'Стр. 050', iCutIterMode);
+      if (sVidLicN ='' )
+        #_InsMes(aVidLicN, 'Стр. 050', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+      else
+        if not IsValidVidL(sVidLicN, getMes) #_MesNoKor(aVidLicN, 'Стр. 050', iCutIterMode);
+      if (GetStrVal('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i) +'/НаимМест' ) ='' )
+        #_InsMes('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i) +'/НаимМест' , 'Стр. 060', 'Строка обязательна к заполнению.', iCutIterMode)
+      if (GetStrVal('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/НачДобУВС') ='' )
+        #_InsMes('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/НачДобУВС', 'Стр. 070', 'Строка обязательна к заполнению.')
+      else
+        if not IsValidMGod(GetStrVal('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/НачДобУВС'), getMes) #_MesNoKor('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/НачДобУВС', 'Стр. 070');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/СтоимЕдПИ'      , 15, 2 , 'Стр. 080');
+      #_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/СтоимЕдПИМин'   , 15, 2 , 'Стр. 090');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXX.XXX'  , 'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/КолРеалДПИ'     , 11, 3 , 'Стр. 100');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/ВырРеалДПИ'     , 15, 2 , 'Стр. 110');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/ВырРеалДПИ105.3', 15, 2 , 'Стр. 120');
+      #_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/НалБаза'        , 15, 2 , 'Стр. 130');
+      #_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX'   , 'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/НалИсчисл'      , 15, 0 , 'Стр. 140');
+      #_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX'   , 'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/НалИсчисл105.3' , 15, 0 , 'Стр. 150');
+      tbool := False
+      z := 3;
+      n := 0;
+      stj := 0;
+      for (k := 0; k <  GetCountFld('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/КолПИНалОсн'); k++)
+      {
+        if GetFldVis('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/КолПИНалОсн'+ getIter(k))
+        {
+          tbool:= True;
+          if (z <= k)
+          {
+            n:= n+1;
+            z:= z+3;
+            stj:=stj+3;
+          }
+
+          // режим вырезки итераторов из адреса показателя
+          if i>=1
+             iCutIterMode :=1;
+          else
+             iCutIterMode :=-1;
+          aKodOsnov:=  'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/КолПИНалОсн'+ getIter(k)+'/КодОснов' ;  sKodOsnov:= GetStrVal(aKodOsnov);
+          if (sKodOsnov ='' )
+          {
+            aKodOsnov:=  'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/КолПИНалОсн'+ getIter(k-stj)+'/КодОснов' ;
+            #_InsMes(aKodOsnov, 'Стр. '+string(k+1)+' гр.1', 'Строка обязательна к заполнению', iCutIterMode);
+          }
+          if not IsValidDecimal(GetStrVal('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/КолПИНалОсн'+ getIter(k)+'/КолПИНал'), 11, 3, getMes,  True)
+            #_NoKor_('XXXXXXXXXXX.XXX' ,'Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/КолПИНалОсн'+ getIter(k-stj)+'/КолПИНал', 'Стр. '+string(k+1)+' гр.2', iCutIterMode);
+        }
+      }
+      if not tbool
+        #_InsMes('Файл/Документ/НДПИ/ИсчУплНалНов'+ getIter(i)+'/КолПИНалОсн/КолПИНал', 'гр.1', 'Должна быть заполнена хоть 1 строчка');
+    }
+  }
+  for (i := 0; i <  GetCountFld('Файл/Документ/НДПИ/ИсчУплНалИскл'); i++)
+  {
+    if GetFldVis('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i))
+    {
+      tbool1:= False;
+      aKodDPI  :=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i) +'/КодДПИ'                             ;  sKodDPI  := GetStrVal(aKodDPI  );
+      aKBK     :=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i) +'/КБК'                                ;  sKBK     := GetStrVal(aKBK     );
+      aOKEI    :=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i) +'/ОКЕИ'                               ;  sOKEI    := GetStrVal(aOKEI    );
+      aNalIsch :=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i) +'/НалИсчисл'                          ;  sNalIsch := GetStrVal(aNalIsch );
+      aNalBaza :=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i) +'/НалБаза'                            ;  sNalBaza := GetStrVal(aNalBaza );
+      if not IsValidKBK(sKBK, getMes) #_MesNoKor(aKBK, 'Стр. 020');
+      if (sOKEI ='' )
+        #_InsMes(aOKEI, 'Стр. 030', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if (sKodDPI ='' )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if (sKodDPI ='03401' )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Раздел 5 не заполняется по попутному газу (код вида полезного ископаемого "03401")');
+      if (sKodDPI ='03400') and (sKBK <>'00000000000000000000')
+        #_InsMes(aKBK, 'Стр. 020', 'По коду вида полезного ископаемого "03400" КБК="00000000000000000000")');
+
+      #_IsValidNoKor_Decimal   ('X.X',                'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i) +'/НалСтавка'                , 1,  1, 'Стр. 040');
+      #_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/СтоимЕдПИ'      , 15, 2, 'Стр. 070');
+
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/СтоимЕдПИ'      , 15, 2, 'Стр. 070');
+      #No_IsValidNoKor_Decimal   ('X.XXXXXXXXXXX'     , 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/ДоляДрМетДПИ'   , 1, 10, 'Стр. 080');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXX.XXX'  , 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/КолРеалДПИ'     , 11, 3, 'Стр. 090');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/ВырРеалДПИ'     , 15, 2, 'Стр. 100');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/ВырРеалДПИ105.3', 15, 2, 'Стр. 110');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/РасхНПДост'     , 15, 2, 'Стр. 120');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/РасхНПАфнж'     , 15, 2, 'Стр. 130');
+      #_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/НалБаза'        , 15, 2, 'Стр. 140');
+      #_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/НалИсчисл'      , 15, 0, 'Стр. 150');
+      #No_IsValidNoKor_Decimal   ('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/РасчНалУпл/НалИсчисл105.3' , 15, 0, 'Стр. 160');
+      for (k := 0; k <  GetCountFld('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'); k++)
+      {
+        if GetFldVis('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k))
+        {
+          tbool1:= True;
+          aOKTMO   :=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k) +'/ОКТМО'              ;  sOKTMO   := GetStrVal(aOKTMO   );
+          aSepLicN :=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k) +'/СерЛицНедр'         ;  sSepLicN := GetStrVal(aSepLicN );
+          aNomLicN :=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k) +'/НомЛицНедр'         ;  sNomLicN := GetStrVal(aNomLicN );
+          aVidLicN :=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k) +'/ВидЛицНедр'         ;  sVidLicN := GetStrVal(aVidLicN );
+
+          // режим вырезки итераторов из адреса показателя
+
+          if not IsValidOKTMO(sOKTMO, getMes) #_MesNoKor(aOKTMO, 'Стр. 050', iCutIterMode);
+          if (sSepLicN ='' )
+            #_InsMes(aSepLicN, 'Стр. 060', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidSerL_3_4(sSepLicN, getMes) #_MesNoKor(aSepLicN, 'Стр. 060', iCutIterMode);
+          if (sNomLicN ='' )
+            #_InsMes(aNomLicN, 'Стр. 060', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidNomL(sNomLicN, getMes) #_MesNoKor(aNomLicN, 'Стр. 060', iCutIterMode);
+          if (sVidLicN ='' )
+            #_InsMes(aVidLicN, 'Стр. 060', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidVidL(sVidLicN, getMes) #_MesNoKor(aVidLicN, 'Стр. 060', iCutIterMode);
+          tBool := False;
+          z := 3;
+          n := 0;
+          stj := 0;
+          for (j := 0; j <  GetCountFld('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'); j++)
+          {
+            if GetFldVis('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j))
+            {
+              tBool:=True;
+              if (z <= j)
+              {
+                n:= n+1;
+                z:= z+3;
+                stj:=stj+3;
+              }
+              if i>=1
+                iCutIterMode :=1;
+              else
+                iCutIterMode :=-1;
+              aKodOsnov:=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j)+'/КодОснов' ;  sKodOsnov:= GetStrVal(aKodOsnov);
+              if (sKodOsnov ='' )
+              {
+                aKodOsnov:=  'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j mod 3)+'/КодОснов' ;
+                #_InsMes(aKodOsnov,  'Стр. '+string(j+1)+' гр.1', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', if(i>0,1,0)+if(k>0,1,0));
+              }
+              if not IsValidDecimal(GetStrVal('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j)+'/КолПИНал'), 11, 3, getMes,  True)
+                #_NoKor_('XXXXXXXXXXX.XXX' ,'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j mod 3)+'/КолПИНал' , 'Стр. '+string(j+1)+' гр.2', if(i>0,1,0)+if(k>0,1,0));
+              if( GetStrVal('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j)+'/КоэфКподз')<>'' )
+                if not IsValidDecimal(GetStrVal('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j)+'/КоэфКподз'), 1, 1, getMes,  True)
+                  #_NoKor_('X.X' ,'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j mod 3)+'/КоэфКподз' , 'Стр. '+string(j+1)+' гр.3', if(i>0,1,0)+if(k>0,1,0));
+              if( GetStrVal('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j)+'/КоэфКтд')<>'' )
+                if not IsValidDecimal(GetStrVal('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j)+'/КоэфКтд'), 1, 1, getMes,  True)
+                  #_NoKor_('X.X' ,'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн'+ getIter(j mod 3)+'/КоэфКтд' , 'Стр. '+string(j+1)+' гр.4', if(i>0,1,0)+if(k>0,1,0));
+            }
+          }
+          if not tbool
+            #_InsMes('Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал'+ getIter(k)+'/КолПИНалОсн/КодОснов', 'гр.1', 'Должна быть заполнена хоть 1 строчка');
+        }
+      }
+      if not tbool1
+      #_InsMes( 'Файл/Документ/НДПИ/ИсчУплНалИскл'+ getIter(i)+'/КолПИУчНал/ОКТМО', 'Стр. 050', 'Должен быть заполнен хоть 1 Раздел 5.1');
+    }
+  }
+  var aRasxOb, aNachPrav, aKonPrav, sRasxOb, aDolDPI, sNachPrav, sKonPrav, sDolDPI: string;
+  if GetFldVis('Файл/Документ/НДПИ/СтоимЕдДПИ')
+  {
+    if  GetFldVis('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ')
+    {
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхДобПер'  , 15, 2 , 'Стр. 010');
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ОстНПНачПер'   , 15, 2 , 'Стр. 020');
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ОстНПКонПер'   , 15, 2 , 'Стр. 030');
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхДПИПер'  , 15, 2 , 'Стр. 040');
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ВнереалРасхДПИ', 15, 2 , 'Стр. 050');
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/КосвРасхДПИ'   , 15, 2 , 'Стр. 060');
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/КосвРасхДр'    , 15, 2 , 'Стр. 070');
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхПерОбщ'  , 15, 2 , 'Стр. 080');
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/КосвИнРасхПер' , 15, 2 , 'Стр. 090');
+      #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/РасхОбщДобПер' , 15, 2 , 'Стр. 100')
+    }
+    else
+      #_InsMes('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхДобПер', 'Стр. 010', 'Должна быть заполнена Раздел 6.1');
+
+    aOKEI   := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/ОКЕИ'         ; sOKEI   := GetStrVal(aOKEI );
+
+    if (sOKEI='')
+      #_InsMes(aOKEI, 'Стр. 110', 'Строка обязательна к заполнению.');
+    tbool := False;
+    z := 7;
+    n := 0;
+    stj := 0;
+    for (i:=0 ; i<GetCountFld('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'); i++)
+    {
+      if GetFldVis('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'+ getIter(i))
+      {
+        tbool := True;
+        if (z <= i)
+        {
+          n:= n+1;
+          z:= z+7;
+          stj:=stj+7;
+        }
+
+        aKodDPI := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'+ getIter(i) +'/КодДПИ'; sKodDPI :=GetStrVal(aKodDPI);
+        if (sKodDPI ='' )
+        {
+           aKodDPI := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'+ getIter(i-stj) +'/КодДПИ';
+          #_InsMes(aKodDPI,'Стр. '+string(i+1)+ ' гр.1', 'Строка обязательна к заполнению.');
+        }
+        if not IsValidDecimal(GetStrVal( 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'+ getIter(i) +'/КоличДПИ'), 11, 3, getMes,  True)
+          #_NoKor_('XXXXXXXXXXX.XXX' , 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'+ getIter(i-stj) +'/КоличДПИ' , 'Стр. '+string(i+1)+' гр.2', iCutIterMode);
+        if not IsValidDecimal(GetStrVal( 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'+ getIter(i) +'/ДоляДПИОбщКол'), 1, 7, getMes,  True)
+          #_NoKor_('X.XXXXXXX' , 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'+ getIter(i-stj) +'/ДоляДПИОбщКол' , 'Стр. '+string(i+1)+' гр.3', iCutIterMode);
+        if not IsValidDecimal(GetStrVal( 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'+ getIter(i) +'/СумРасхДобПИ'), 10, 2, getMes,  True)
+          #_NoKor_('XXXXXXXXXX.XX' , 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод'+ getIter(i-stj) +'/СумРасхДобПИ' , 'Стр. '+string(i+1)+' гр.4', iCutIterMode);
+      }
+    }
+    if not tbool
+      #_InsMes('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод/КодДПИ', 'гр.1', 'Должна быть заполнена хоть 1 строчка');
+  }
+  for (i:=0 ; i<GetCountFld('Файл/Документ/НДПИ/ИсчУплНалУг'); i++)
+  {
+    if GetFldVis('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i))
+    {
+      aKBK     := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/КБК'        ;  sKBK     := GetStrVal(aKBK    );
+      aSepLicN := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/СерЛицНедр' ;  sSepLicN := GetStrVal(aSepLicN);
+      aNomLicN := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/НомЛицНедр' ;  sNomLicN := GetStrVal(aNomLicN);
+      aVidLicN := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ВидЛицНедр' ;  sVidLicN := GetStrVal(aVidLicN);
+      aOKEI    := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ОКЕИ'       ;  sOKEI    := GetStrVal(aOKEI   );
+      aOKTMO   := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ОКТМО'      ;  sOKTMO   := GetStrVal(aOKTMO );
+      if (sKBK ='' )
+        #_InsMes(aKBK, 'Стр. 010', 'Строка обязательна к заполнению.')
+      else
+        if not IsValidKBK(sKBK, getMes) #_MesNoKor(aKBK, 'Стр. 010');
+      if (sSepLicN ='' )
+        #_InsMes(aSepLicN, 'Стр. 020', 'Строка обязательна к заполнению.')
+      else
+        if not IsValidSerL(sSepLicN, getMes) #_MesNoKor(aSepLicN, 'Стр. 020');
+      if (sNomLicN ='' )
+        #_InsMes(aNomLicN, 'Стр. 020', 'Строка обязательна к заполнению.')
+      else
+        if not IsValidNomL(sNomLicN, getMes) #_MesNoKor(aNomLicN, 'Стр. 020');
+      if (sVidLicN ='' )
+        #_InsMes(aVidLicN, 'Стр. 020', 'Строка обязательна к заполнению.')
+      else
+        if not IsValidVidL(sVidLicN, getMes) #_MesNoKor(aVidLicN, 'Стр. 020');
+      if (sOKEI ='' )
+        #_InsMes(aOKEI, 'Стр. 030', 'Строка обязательна к заполнению.');
+      if (sOKTMO ='' )
+        #_InsMes(aOKTMO, 'Стр. 040', 'Строка обязательна к заполнению.')
+      else
+        if not IsValidOKTMO(sOKTMO, getMes) #_MesNoKor(aOKTMO, 'Стр. 040');
+      if (GetStrVal('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/Ктд') <>'' )
+        if not IsValidKtd(GetStrVal('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/Ктд'), getMes) #_MesNoKor('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/Ктд', 'Стр. 050');
+      tbool := False;
+      z:=1;
+      k:=19;
+      stj:=0;
+      for (j :=0; j<GetCountFld('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ДанДПИУг/ДанДПИУгУч'); j++)
+      {
+        if GetFldVis('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ДанДПИУг/ДанДПИУгУч'+ getIter(j))
+        {
+          if j>=k
+          {
+           z:=z+1;
+           k:=k+19;
+           stj:=stj+19;
+          }
+          if i>=1
+            flIter :=1;
+          else
+            flIter :=-1;
+
+          tbool := True;
+          aKodDPI := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ДанДПИУг/ДанДПИУгУч'+ getIter(j) +'/КодДПИ'; sKodDPI :=GetStrVal(aKodDPI);
+          if (sKodDPI ='' )
+            #_InsMes(aKodDPI, 'Стр. '+string(j+1) +' гр.1', 'Строка обязательна к заполнению.',flIter);
+          aKodOsnov := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ДанДПИУг/ДанДПИУгУч'+ getIter(j) +'/КодОснов'; sKodOsnov := GetStrVal(aKodOsnov);
+          if (sKodOsnov ='' )
+            {
+              aKodOsnov := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ДанДПИУг/ДанДПИУгУч'+ getIter(j-stj) +'/КодОснов';
+              #_InsMes(aKodOsnov, 'Стр. '+string(j+1) + ' гр.2', 'Строка обязательна к заполнению.',flIter);
+            }
+          aKolDPI   := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ДанДПИУг/ДанДПИУгУч'+ getIter(j) +'/КолДПИ'  ; sKolDPI   := GetStrVal(aKolDPI  );
+          if (sKolDPI ='' )
+            {
+              aKolDPI   := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ДанДПИУг/ДанДПИУгУч'+ getIter(j-stj) +'/КолДПИ'  ;
+              #_InsMes(aKolDPI,'Стр. '+string(j+1) +' гр.3', 'Строка обязательна к заполнению.',flIter)
+            }
+        }
+      }
+      if not tbool
+         #_InsMes('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/ДанДПИУг/ДанДПИУгУч/КодДПИ', 'гр.1', 'Должна быть заполнена хоть 1 строчка');
+      if GetFldVis('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл')
+      {
+        #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX'   , 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/ОстНачПер'            , 15, 0, 'Стр. 060');
+        #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX'   , 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/РасхОТПер/РасхОТПерВс', 15, 0, 'Стр. 070');
+        #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXХ.XX', 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/РасхОТПер/МатРасх'    , 15, 2, 'Стр. 080');
+        #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX.XX', 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/РасхОТПер/РасхАмИмущ' , 15, 2, 'Стр. 090');
+        #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXХХ.XX', 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/РасхОТПер/РасхРекон'  , 15, 2, 'Стр. 100');
+        #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX'   , 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/РасхОТВыч'            , 15, 0, 'Стр. 110');
+        #No_IsValidNoKor_Decimal('X.XXXX'            , 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/КоэфКт'               ,  1, 4, 'Стр. 120');
+        #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX'     , 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/ИсчислУчУг'           , 15, 0, 'Стр. 130');
+        #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX'   , 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/НалВычПред'           , 15, 0, 'Стр. 140');
+        #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX'   , 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/ИсчислПерУпл'         , 15, 0, 'Стр. 150');
+        #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX'   , 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/ОстКонПер'            , 15, 0, 'Стр. 160');
+
+        if GetDblVal('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/КоэфКт')>0.3
+          #_InsMes('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/КоэфКт', 'Стр. 120', 'Значение коэффициента Кт <= 0.3');
+      }
+      else
+        #_InsMes('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалУпл/ИсчислУчУг', 'Стр. 130', 'Должна быть заполнена хоть 1 Раздел 7.2');
+
+
+      for (j := 0; j < GetCountFld('Файл/Документ/НДПИ/ИсчУплНалУг'+getIter(i)+'/РасчНалВыч/РасчНалВычПер'); j++)
+      {
+        if GetFldVis('Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалВыч/РасчНалВычПер'+ getIter(j))
+        {
+          aNachPrav := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалВыч/РасчНалВычПер'+ getIter(j) +'/НачПравНалВыч' ;  sNachPrav := GetStrVal(aNachPrav);
+          aKonPrav  := 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалВыч/РасчНалВычПер'+ getIter(j) +'/КонПравНалВыч' ;  sKonPrav  := GetStrVal(aKonPrav );
+          #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX'  , 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалВыч/РасчНалВычПер'+ getIter(j) +'/НалВычНач'   , 15, 0, 'Стр. 180');
+          #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалВыч/РасчНалВычПер'+ getIter(j) +'/НалВычПред'  , 15, 0, 'Стр. 190');
+          #No_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX', 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалВыч/РасчНалВычПер'+ getIter(j) +'/НалВычТек'   , 15, 0, 'Стр. 200');
+          #_IsValidNoKor_Decimal('XXXXXXXXXXXXXXX  ', 'Файл/Документ/НДПИ/ИсчУплНалУг'+ getIter(i) +'/РасчНалВыч/РасчНалВычПер'+ getIter(j) +'/ОстНалВычКон', 15, 0, 'Стр. 210');
+          if (aNachPrav ='' )
+            #_InsMes(aNachPrav, 'Стр. 170', 'Строка обязательна к заполнению.')
+          else
+            if not IsValidMGod(sNachPrav, getMes) #_MesNoKor(aNachPrav, 'Стр. 170');
+          if (aKonPrav ='' )
+            #_InsMes(aKonPrav, 'Стр. 220', 'Строка обязательна к заполнению.')
+          else
+            if not IsValidMGod(sKonPrav, getMes) #_MesNoKor(aKonPrav, 'Стр. 20');
+        }
+      }
+    }
+  }
+
+  for (i := 0; i <  GetCountFld('Файл/Документ/НДПИ/ИсчНалНефтНДД'); i++)
+  {
+    if GetFldVis('Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i))
+    {
+      tbool1:= False;
+      aKodDPI  :=  'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/КодДПИ'     ;  sKodDPI  := GetStrVal(aKodDPI  );
+      aKBK     :=  'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/КБК'        ;  sKBK     := GetStrVal(aKBK     );
+      aOKEI    :=  'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/ОКЕИ'       ;  sOKEI    := GetStrVal(aOKEI    );
+      if not IsValidKBK(sKBK, getMes) #_MesNoKor(aKBK, 'Стр. 020');
+      if (sOKEI ='' )
+        #_InsMes(aOKEI, 'Стр. 030', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if (sKodDPI ='' )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет');
+      if not ((sKodDPI ='03100' ) )
+        #_InsMes(aKodDPI, 'Стр. 010', 'Код вида добытого полезного ископаемого может принимать только значения 03100');
+      if (sOKEI <>'168' )
+        #_InsMes(aOKEI, 'Стр. 030', 'Код бюджетной классификации может принимать только значения 168');
+      tbool := False;
+      for (j := 0; j <  GetCountFld('Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'); j++)
+      {
+        if GetFldVis('Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j) )
+        {
+          tbool := True;
+          aOKTMO   := 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/ОКТМО'     ;  sOKTMO   := GetStrVal(aOKTMO   );
+          aSepLicN := 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/СерЛицНедр';  sSepLicN := GetStrVal(aSepLicN );
+          aNomLicN := 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/НомЛицНедр';  sNomLicN := GetStrVal(aNomLicN );
+          aVidLicN := 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/ВидЛицНедр';  sVidLicN := GetStrVal(aVidLicN );
+          aPriznkG := 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/ПризнКг'   ;  sPriznkG := GetStrVal(aPriznkG );
+          aGodNach := 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/ГодНачДоб' ;  sGodNach := GetStrVal(aGodNach );
+
+          if not IsValidOKTMO(sOKTMO, getMes) #_MesNoKor(aOKTMO, 'Стр. 040', iCutIterMode);
+          if (sSepLicN ='' )
+            #_InsMes(aSepLicN, 'Стр. 050', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidSerL(sSepLicN, getMes) #_MesNoKor(aSepLicN, 'Стр. 050', iCutIterMode);
+          if (sNomLicN ='' )
+            #_InsMes(aNomLicN, 'Стр. 050', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidNomL(sNomLicN, getMes) #_MesNoKor(aNomLicN, 'Стр. 050', iCutIterMode);
+          if (sVidLicN ='' )
+            #_InsMes(aVidLicN, 'Стр. 050', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidVidL(sVidLicN, getMes) #_MesNoKor(aVidLicN, 'Стр. 050', iCutIterMode);
+          if (sGodNach ='' )
+            #_InsMes(aGodNach, 'Стр. 070', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidGod(sGodNach, getMes) #_MesNoKor(aGodNach, 'Стр. 070', iCutIterMode);
+          if (sPriznkG ='' )
+            #_InsMes(aPriznkG, 'Стр. 110', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет', iCutIterMode)
+          else
+            if not IsValidPrizn(sPriznkG, getMes) #_MesNoKor(aPriznkG, 'Стр. 110', iCutIterMode);
+
+
+
+          #_IsValidNoKor_Decimal('X.XX'         , 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/СтепВыраб' , 1, 2, 'Стр. 060');
+          #_IsValidNoKor_Decimal('XXXXXXXX.XXXX', 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/КоэфКндд'  , 8, 4, 'Стр. 080');
+          #_IsValidNoKor_Decimal('XXX.XX'       , 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/СрУрЦен'   , 3, 2, 'Стр. 090');
+          #_IsValidNoKor_Decimal('XXX.XXXX'     , 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/СрЗначКурс', 3, 4, 'Стр. 100');
+          #_IsValidNoKor_Decimal('X.XX'         , 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/КоэфКг'    , 1, 2, 'Стр. 120');
+          #_IsValidNoKor_Decimal('XXX.X'        , 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/СтавЭП'    , 3, 1, 'Стр. 130');
+          #_IsValidNoKor_Decimal('XXXXXXXXXXX'  , 'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j)+'/СумИсчНал' ,11, 0, 'Стр. 140');
+
+          z := 3;
+          stj := 0;
+          for (g := 0; g <  GetCountFld('Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j) +'/КолНефтНалОсн'); g++)
+          {
+            if GetFldVis('Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j) +'/КолНефтНалОсн'+ getIter(g) )
+            {
+              if j>=1
+                 iCutIterMode :=1;
+              else
+                 iCutIterMode :=-1;
+              if (z <= g)
+              {
+                z:= z+3;
+                stj:=stj+3;
+              }
+
+              if not IsValidDecimal(GetStrVal('Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j) +'/КолНефтНалОсн'+ getIter(g)+'/КолНефтНал'), 11, 3, getMes,  True)
+                 #_NoKor_('XXXXXXXXXX.XXX' ,'Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч'+ getIter(j) +'/КолНефтНалОсн'+ getIter(g-stj)+'/КолНефтНал' , 'Стр. '+string(g+1)+' гр.2', iCutIterMode);
+            }
+          }
+        }
+      }
+      if not tbool
+        #_InsMes('Файл/Документ/НДПИ/ИсчНалНефтНДД'+ getIter(i) +'/РасчНалУч/ОКТМО' , 'Стр. 040', 'Должна быть заполнена хотя бы 1 Раздел 3.1');
+    }
+  }
+ //***************************************************************************************************************************************************
+@end.
+//#endregion On_Check ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ ПОЛЕЙ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region On_Recalc ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ РАСЧЁТЕ ПОЛЕЙ
+//------------------------------------------------------------------------------------------------------------
+@Script On_Recalc : boolean;
+  //==========================================================================================================
+  //#region СЕРВИС On_Recalc
+  //----------------------------------------------------------------------------------------------------------
+  procedure _Log(_strAdr, _strMes, _strVal : string; _flIter : integer = 1);
+  {
+    MesError.InsertRasch('', _strAdr, _strMes, _strVal, _flIter);
+  }
+
+  function GV(_strAdr : string) : string;
+  {
+    Result := GetStrValFormat(_strAdr);
+  }
+
+  #declare SV(_adr, _val)
+    SetFldVal(#_adr, #_val);
+    #_val := GetDblVal(#_adr);
+  #end
+  //#endregion СЕРВИС On_Recalc
+  //**********************************************************************************************************
+@begin
+  //Документ
+  if ((GetStrVal('Файл/Документ/ДатаДок') = '') or (GetStrVal('Файл/Документ/ДатаДок') = 'ДД.ММ.ГГГГ'))
+    SetFldVal('Файл/Документ/ДатаДок', DateToStr(Cur_Date, 'DD.MM.YYYY'));
+
+  var flIter, i, j, k, g : integer;
+
+  var r6a010, r6a020, r6a030, r6a040, r6a050, r6a060, r6a070, r6a080, r6a090, r6a100, r2p1a130, r2p1a140, r2p1a150
+    , r6g2a, r6g3a, r6g4a
+    , r3a040, r3p1p1a190
+    , r5p2a070, r5p2a140, aGr5_1, sGr5_1, aGr5_2
+    , r7p2a060, r7p2a070, r7p2a080, r7p2a090, r7p2a100, r7p2a110, r7p2a120, r7p2a130, r7p2a140, r7p2a150, r7p2a160
+    , r7p3a180, r7p3a190, r7p3a200, r7p3a210
+
+    , mr3v040 : string;
+
+  var r6v010, r6v020, r6v030, r6v040, r6v050, r6v060, r6v070, r6v080, r6v090, r6v100, r2p1v130, r2p1v140, r2p1v150
+    , r6g2v, r6g3v, r6g4v, Sum_r6g2v
+    , r3v040, r3p1p1v190
+    , r5p2v070, r5p2v140, Summa_Gr5_2, sGr5_2
+    , r7p2v060, r7p2v070, r7p2v080, r7p2v090, r7p2v100, r7p2v110, r7p2v120, r7p2v130, r7p2v140, r7p2v150, r7p2v160
+    , r7p3v180, r7p3v190, r7p3v200, r7p3v210 : double;
+
+  var XMLAdr : string;
+  var CountI, CountJ, CountK : longint;
+
+  CountI := GetCountFld('Файл/Документ/НДПИ/ИсчНалНефт');
+  for (i := 0; i < CountI; i++)
+  {
+    XMLAdr := 'Файл/Документ/НДПИ/ИсчНалНефт' + getIter(i);
+
+    CountJ := GetCountFld('Файл/Документ/НДПИ/ИсчНалНефт/ПокРасчНал');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdr := 'Файл/Документ/НДПИ/ИсчНалНефт' + getIter(i) + '/ПокРасчНал' + getIter(j);
+
+      r2p1a130 := XMLAdr + '/НалИсчисл';   r2p1v130 := GetStrVal(r2p1a130);
+      r2p1a140 := XMLAdr + '/НалВыч'   ;   r2p1v140 := GetDblVal(r2p1a140);
+      r2p1a150 := XMLAdr + '/НалУпл'   ;   r2p1v150 := GetDblVal(r2p1a150);
+
+      if  r2p1v130 > r2p1v140
+      {
+        r2p1v150 := r2p1v130 - r2p1v140;   #SV(r2p1a150, r2p1v150);
+
+        _Log(r2p1a150, 'Стр.150 = стр. 130 - стр. 140', GV(r2p1a150)+' = '+GV(r2p1a130)+' - '+GV(r2p1a140));
+      }
+      else
+      {
+        r2p1v150 := 0;   #SV(r2p1a150, r2p1v150);
+
+        _Log(r2p1a150, 'Стр.150 = 0, т.к. стр. 130 <= стр. 140', GV(r2p1a150)+' = 0 (нулю)');
+      }
+
+    }
+  }
+
+  CountI := GetCountFld('Файл/Документ/НДПИ/ИсчНалГаз');
+  for (i := 0; i < CountI; i++)
+  {
+    XMLAdr := 'Файл/Документ/НДПИ/ИсчНалГаз' + getIter(i);
+
+    r3a040 := XMLAdr + '/НалИсчисл';   r3v040 := 0;
+
+    mr3v040 := '';
+
+    CountJ := GetCountFld(XMLAdr + '/ПокРасчНал');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdr := 'Файл/Документ/НДПИ/ИсчНалГаз' + getIter(i) + '/ПокРасчНал' + getIter(j);
+
+      CountK := GetCountFld(XMLAdr + '/КолДПИЗал');
+      for (k := 0; k < CountK; k++)
+      {
+        XMLAdr := 'Файл/Документ/НДПИ/ИсчНалГаз' + getIter(i) + '/ПокРасчНал' + getIter(j) + '/КолДПИЗал' + getIter(k);
+
+        r3p1p1a190 := XMLAdr + '/НалИсчислЗлж';   r3p1p1v190 := GetDblVal(r3p1p1a190);
+
+        r3v040  +=          r3p1p1v190 ;
+        mr3v040 += ' + '+GV(r3p1p1a190);
+      }
+    }
+
+    mr3v040 := '('+SubStr(mr3v040, 4, Length(mr3v040) - 3)+')';
+    #SV(r3a040, r3v040);
+    _Log(r3a040, 'Стр. 040 = Сумма(cтр. 190)', GV(r3a040)+' = '+mr3v040);
+  }
+
+  CountI := GetCountFld('Файл/Документ/НДПИ/ИсчУплНалИскл');
+  for (i := 0; i < CountI; i++)
+  {
+    XMLAdr := 'Файл/Документ/НДПИ/ИсчУплНалИскл' + getIter(i);
+
+    r5p2a070 := XMLAdr + '/РасчНалУпл/СтоимЕдПИ';   r5p2v070 := GetDblVal(r5p2a070);
+    r5p2a140 := XMLAdr + '/РасчНалУпл/НалБаза'  ;   r5p2v140 := 0;
+
+    Summa_Gr5_2 := 0;
+
+    CountJ := GetCountFld(XMLAdr + '/КолПИУчНал');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdr := 'Файл/Документ/НДПИ/ИсчУплНалИскл' + getIter(i) + '/КолПИУчНал' + getIter(j);
+
+      CountK := GetCountFld(XMLAdr + '/КолПИНалОсн');
+      for (k := 0; k < CountK; k++)
+      {
+        XMLAdr := 'Файл/Документ/НДПИ/ИсчУплНалИскл' + getIter(i) + '/КолПИУчНал' + getIter(j) + '/КолПИНалОсн' + getIter(k);
+
+        aGr5_1 := XMLAdr + '/КодОснов';   sGr5_1 := GetStrVal(aGr5_1);
+        aGr5_2 := XMLAdr + '/КолПИНал';   sGr5_2 := GetDblVal(aGr5_2);
+
+        if (sGr5_1 <> '')
+          if (SubStr(sGr5_1, 1, 1) <> '1')
+            Summa_Gr5_2 += sGr5_2;
+      }
+
+      r5p2v140 := Summa_Gr5_2 * r5p2v070;
+      #SV(r5p2a140, r5p2v140);
+      _Log(r5p2a140, 'Стр. 140 = Сумма (Р5.1, гр. 2) * Р5.2 стр. 070', GV(r5p2a140)+' = '+String(Summa_Gr5_2)+' * '+GV(r5p2a070));
+    }
+  }
+
+  r6a010 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхДобПер'  ;   r6v010 := GetDblVal(r6a010);
+  r6a020 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ОстНПНачПер'   ;   r6v020 := GetDblVal(r6a020);
+  r6a030 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ОстНПКонПер'   ;   r6v030 := GetDblVal(r6a030);
+  r6a050 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ВнереалРасхДПИ';   r6v050 := GetDblVal(r6a050);
+  r6a060 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/КосвРасхДПИ'   ;   r6v060 := GetDblVal(r6a060);
+  r6a070 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/КосвРасхДр'    ;   r6v070 := GetDblVal(r6a070);
+  r6a080 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхПерОбщ'  ;   r6v080 := GetDblVal(r6a080);
+  r6a040 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/ПрРасхДПИПер'  ;
+  r6a090 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/КосвИнРасхПер' ;
+  r6a100 := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОбщ/РасхОбщДобПер' ;
+
+  if (r6v080 <> 0)
+  {
+    r6v090 := r6v050 + r6v060 + r6v070 * r6v010 / r6v080;   #SV(r6a090, r6v090);
+
+    _Log(r6a090, 'Стр.090 = стр. 050 + стр. 060 + стр. 070 * стр. 010 / стр. 080', GV(r6a090)+' = '+GV(r6a050) +' + '+GV(r6a060)+' + '+GV(r6a070) +' * '+GV(r6a010) +' / '+GV(r6a080));
+  }
+  else
+  {
+    r6v090 := r6v050 + r6v060;   #SV(r6a090, r6v090);
+
+    _Log(r6a090, 'Стр.090 = стр. 050 + стр. 060', GV(r6a090)+' = '+ GV(r6a050) +' + '+ GV(r6a060));
+  }
+
+  r6v040 := r6v010 + r6v020 - r6v030;   #SV(r6a040, r6v040);
+  r6v100 := r6v040 + r6v090         ;   #SV(r6a100, r6v100);
+
+  _Log(r6a040, 'Стр.040 = стр. 010 + стр. 020 - стр. 030', GV(r6a040)+' = '+GV(r6a010)+' + '+GV(r6a020)+' - '+GV(r6a030));
+  _Log(r6a100, 'Стр.100 = стр. 040 + стр. 090'           , GV(r6a100)+' = '+GV(r6a040)+' + '+GV(r6a090)                 );
+
+  Sum_r6g2v := 0;
+
+  CountI := GetCountFld('Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод');
+  for (i := 0; i < CountI; i++)
+  {
+    XMLAdr := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод' + getIter(i);
+
+    r6g2a := XMLAdr + '/КоличДПИ';   Sum_r6g2v += GetDblVal(r6g2a);
+  }
+
+  if (Sum_r6g2v <> 0)
+  {
+    for (i := 0; i < CountI; i++)
+    {
+      XMLAdr := 'Файл/Документ/НДПИ/СтоимЕдДПИ/СумРасхДПИОтд/СумРасхДПИКод' + getIter(i);
+
+      r6g2a := XMLAdr + '/КоличДПИ'     ;   r6g2v := GetDblVal(r6g2a);
+      r6g3a := XMLAdr + '/ДоляДПИОбщКол';
+      r6g4a := XMLAdr + '/СумРасхДобПИ' ;
+
+      r6g3v := r6g2v / Sum_r6g2v;   #SV(r6g3a, r6g3v);
+
+      _Log(r6g3a, 'Стр. '+LPadCh(String(i+1), '0', 2)+', гр. 3 = гр. 2 / cумма(гр. 2)', GV(r6g3a)+' = '+ GV(r6g2a)+' / '+String(Sum_r6g2v), -1);
+
+      if (r6g2v <> 0)
+      {
+        r6g4v := r6g3v * r6v100;   #SV(r6g4a, r6g4v);
+
+        _Log(r6g4a, 'Стр. '+LPadCh(String(i+1), '0', 2)+', гр. 4 = гр. 3 * стр. 100', GV(r6g4a)+' = '+ GV(r6g3a)+' * '+GV(r6a100), -1);
+      }
+    }
+  }
+
+  CountI := GetCountFld('Файл/Документ/НДПИ/ИсчУплНалУг');
+  for (i := 0; i < CountI; i++)
+  {
+    XMLAdr := 'Файл/Документ/НДПИ/ИсчУплНалУг' + getIter(i);
+
+    r7p2a060 := XMLAdr + '/РасчНалУпл/ОстНачПер'            ;   r7p2v060 := GetDblVal(r7p2a060);
+    r7p2a080 := XMLAdr + '/РасчНалУпл/РасхОТПер/МатРасх'    ;   r7p2v080 := GetDblVal(r7p2a080);
+    r7p2a090 := XMLAdr + '/РасчНалУпл/РасхОТПер/РасхАмИмущ' ;   r7p2v090 := GetDblVal(r7p2a090);
+    r7p2a100 := XMLAdr + '/РасчНалУпл/РасхОТПер/РасхРекон'  ;   r7p2v100 := GetDblVal(r7p2a100);
+    r7p2a120 := XMLAdr + '/РасчНалУпл/КоэфКт'               ;   r7p2v120 := GetDblVal(r7p2a120);
+    r7p2a130 := XMLAdr + '/РасчНалУпл/ИсчислУчУг'           ;   r7p2v130 := GetDblVal(r7p2a130);
+    r7p2a070 := XMLAdr + '/РасчНалУпл/РасхОТПер/РасхОТПерВс';
+    r7p2a110 := XMLAdr + '/РасчНалУпл/РасхОТВыч'            ;
+    r7p2a140 := XMLAdr + '/РасчНалУпл/НалВычПред'           ;
+    r7p2a150 := XMLAdr + '/РасчНалУпл/ИсчислПерУпл'         ;
+    r7p2a160 := XMLAdr + '/РасчНалУпл/ОстКонПер'            ;
+
+    r7p2v070 := r7p2v080 + r7p2v090 + r7p2v100;   #SV(r7p2a070, r7p2v070);
+    r7p2v140 := r7p2v130 * r7p2v120           ;   #SV(r7p2a140, r7p2v140);
+
+    _Log(r7p2a070, 'Стр.070 = стр. 080 + стр. 090 + стр. 100', GV(r7p2a070)+' = '+ GV(r7p2a080)+' + '+GV(r7p2a090)+' + '+GV(r7p2a100));
+    _Log(r7p2a140, 'Стр.140 = стр. 130 * стр. 120'           , GV(r7p2a140)+' = '+ GV(r7p2a130)+' * '+GV(r7p2a120)                   );
+
+    if ((r7p2v060+ r7p2v070)< r7p2v140 )
+    {
+      r7p2v110 := r7p2v060 + r7p2v070;   #SV(r7p2a110, r7p2v110);
+
+      _Log(r7p2a110, 'Стр.110 = стр. 060 + стр. 070', GV(r7p2a110)+' = '+ GV(r7p2a060)+' + '+GV(r7p2a070));
+    }
+    else
+    {
+      r7p2v110 := r7p2v140;   #SV(r7p2a110, r7p2v110);
+
+      _Log(r7p2a110, 'Стр.110 = стр. 140', GV(r7p2a110 )+' = '+ GV(r7p2a140));
+    }
+
+    r7p2v150 := r7p2v130 - r7p2v110           ;   #SV(r7p2a150, r7p2v150);
+    r7p2v160 := r7p2v060 + r7p2v070 - r7p2v110;   #SV(r7p2a160, r7p2v160);
+
+    _Log(r7p2a150, 'Стр.150 = стр. 130 - стр. 110'           , GV(r7p2a150) +' = '+ GV(r7p2a130)+' - '+GV(r7p2a110)                   );
+    _Log(r7p2a160, 'Стр.160 = стр. 060 + стр. 070 - стр. 110', GV(r7p2a160) +' = '+ GV(r7p2a060)+' + '+GV(r7p2a070)+' - '+GV(r7p2a110));
+
+    CountJ := GetCountFld('Файл/Документ/НДПИ/ИсчУплНалУг' + getIter(i) + '/РасчНалВыч/РасчНалВычПер');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdr := 'Файл/Документ/НДПИ/ИсчУплНалУг' + getIter(i) + '/РасчНалВыч/РасчНалВычПер' + getIter(j);
+
+      r7p3a180 := XMLAdr + '/НалВычНач'   ;   r7p3v180 := GetDblVal(r7p3a180);
+      r7p3a190 := XMLAdr + '/НалВычПред'  ;   r7p3v190 := GetDblVal(r7p3a190);
+      r7p3a200 := XMLAdr + '/НалВычТек'   ;   r7p3v200 := GetDblVal(r7p3a200);
+      r7p3a210 := XMLAdr + '/ОстНалВычКон';
+
+      if (r7p3v180 <> 0) or (r7p3v190 <> 0) or (r7p3v200 <> 0)
+      {
+        r7p3v210 := r7p3v180 - r7p3v190 - r7p3v200;   #SV(r7p3a210, r7p3v210);
+
+        _Log(r7p3a210, 'Стр.210 = стр. 180 - стр. 190 - стр. 200', GV(r7p3a210)+' = '+ GV(r7p3a180)+' - '+GV(r7p3a190)+' - '+GV(r7p3a200));
+      }
+    }
+  }
+@end.
+//#endregion On_Recalc ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ РАСЧЁТЕ ПОЛЕЙ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region On_ExportXML ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ЭКСПОРТЕ В XML
+//------------------------------------------------------------------------------------------------------------
+@Script On_ExportXML : boolean;
+@begin
+  SetFldVal('Файл/ИдФайл', Replace(_IdFail_, '.xml', ''));
+
+  if (not XMLMap.ExpToXml(_XmlFileName_)) {
+    Message('On_ExportXML: '+ XMLMap.GetStLastError, cancelButton+Warning);
+    Exit;
+  }
+
+  message('Выгружен в файл ' + _XmlFileName_);
+@end.
+//#endregion On_ExportXML ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ЭКСПОРТЕ В XML
+//************************************************************************************************************

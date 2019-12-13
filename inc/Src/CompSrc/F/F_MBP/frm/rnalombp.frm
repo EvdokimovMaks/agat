@@ -55,7 +55,10 @@
 .}
 .{ cirOItog CheckEnter // Итоги
 .Fields
-  lBorder : String : 'T:-'  ItogName : String : 'T:-'
+  lBorder  : String : 'T:-'
+  ItogName : String : 'T:-'
+  ItogKol  : Double //ERP-632
+
   ItogSum : Double  ItogIznSum : Double
 .EndFields
 
@@ -64,6 +67,7 @@
 .{ cirOItogName CheckEnter
 
   ^ Строка "Итого по ..."
+  ^ итого кол-во
 .}
 
   Первоначальная стоимость  .{.?noS10; ^ .}
@@ -275,11 +279,13 @@ end.
 .}
 .{ cirOItog CheckEnter
 .Fields
-  ItogName : 'T:-'  ItogSum  ItogIznSum
+  ItogName : 'T:-'
+  ItogKol  //ERP-632
+  ItogSum  ItogIznSum
   PadCh(LBorder, '─', 97+NRange*16) : 'T:-'
 .EndFields
 .{ cirOItogName CheckEnter
- Б@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Б
+ Б@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ &#'&&&.&&& Б
 .}
  Б                                                      Первоначальная стоимость    .{.?noS10;&#'&&&&&&&&&.&& .} Б
  Б                                                      Амортизация                 .{.?noS11;&#'&&&&&&&&&.&& .} Б

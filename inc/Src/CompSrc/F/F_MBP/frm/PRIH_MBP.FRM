@@ -9,25 +9,30 @@
 #end
 .Form 'Prih_MBP'
 .Fields
-  MoveRec  : Comp
-  dNom     : String
-  dDate    : Date
-  Podr     : String
-  MOL      : String
-  cSigners : Comp
-  InRec    : Comp
-  MBPName  : String
-  MBPKod   : String
-  MBPEd    : String
-  MBPKol   : Double
-  MBPPrice : Double
-  MBPIznP  : Double
-  MBPStoim : Double
+  MoveRec   : Comp
+  dNom      : String
+  dDate     : Date
+  Podr      : String
+  MOL       : String
+  cSigners  : Comp
+  InvDoc    : Comp
+  InvNom    : String
+  InvDate   : Date
+  InRec     : Comp
+  MBPName   : String
+  MBPKod    : String
+  MBPEd     : String
+  MBPKol    : Double
+  MBPPrice  : Double
+  MBPIznP   : Double
+  MBPStoim  : Double
+  PartyKod  : String
+  PartyName : String
 .endFields
 .{
-  ^  ^ ^ ^ ^  ^
+  ^  ^ ^ ^ ^  ^  ^ ^ ^
 .{
-  ^  ^ ^ ^ ^ ^ ^ ^
+  ^  ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}
 .}
 .endForm
@@ -48,8 +53,10 @@
 .endvar
 .Fields
   CommonFormHeader
-  dNom  DateToStr(dDate, 'DD/MM/YYYY')  Podr  MOL
-  MBPName  MBPKod  MBPEd  MBPKol  MBPPrice
+  dNom  DateToStr(dDate, 'DD/MM/YYYY')
+  '№' + InvNom + ' от ' + DateToStr(InvDate, 'DD/MM/YYYY')
+  Podr  MOL
+  MBPName  MBPKod  PartyName  MBPEd  MBPKol  MBPPrice
 .endFields
 .begin
   DocNpp := 0;
@@ -81,34 +88,35 @@ end.
 .{?Internal;(DocNpp > 1);
 
 .}
- И ^
+ Р ^
 
                             АКТ ИНВЕНТАРИЗАЦИИ ОБ ИЗЛИШКАХ
                              № ^ от ^
 
-Подразделение: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-МОЛ          : @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.{?Internal;(InvDoc <> 0);
+Инвентаризация: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.}
+Подразделение : @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+МОЛ           : @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 .begin
   totSum := 0
 end.
-──────────────────────────────┬────────────┬───────────────┬──────────┬───────────────
-         Наименование         │ Ном. номер │ Ед. измерения │Количество│     Цена
-──────────────────────────────┴────────────┴───────────────┴──────────┴───────────────
+─────────────────────────────────┬────────────────┬───────────────┬─────────────┬──────────┬───────────────
+           Наименование          │   Ном. номер   │    Партия     │Ед. измерения│Количество│     Цена
+─────────────────────────────────┴────────────────┴───────────────┴─────────────┴──────────┴───────────────
 .{
 .begin
   totSum := totSum + MBPKol * MBPPrice;
 end.
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@ @@@@@@@@@@@@@@@ &&&&&&&.&& &'&&&&&&&&&&.&&
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@@ @@@@@@@@@@@@@@@ @@@@@@@@@@@@@ &&&&&&&.&& &'&&&&&&&&&&.&&
 .}
-──────────────────────────────────────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 .Fields
-  totSum
-  DoubleToStr(totSum, '\2p\m4')+
-    if (Pos('ноль', DoubleToStr(totSum, '\2p5')) <> 0, '',
-      DoubleToStr(totSum, 'целых \2p5'))
+  totSum  if (sGetTune('NDE.ShortRub') <> '', sGetTune('NDE.ShortRub'), 'руб.')
+  DoubleToString(0, totSum)
 .endFields
-Сумма по акту: &'&&&&&&&&&&.&& руб.
+Сумма по акту: &'&&&&&&&&&&.&& ^
      Прописью: ^
 
 .begin
@@ -122,8 +130,8 @@ end.
   Post[i]
   FIOs[i]
 .endfields
-@@@@@@@@@@@@@: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-.} И
+@@@@@@@@@@@@@: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+.} Р
 .}
 .endForm
 

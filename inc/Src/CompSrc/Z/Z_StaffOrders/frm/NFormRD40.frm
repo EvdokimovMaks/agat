@@ -13,6 +13,7 @@
 Организация
 ОКПО
 TitleDocNrec : comp
+sBarCode
 PersNrec : comp
 AppointNrec : comp
 Номер_Приказа
@@ -20,7 +21,7 @@ AppointNrec : comp
 FIO
 TabN
 должность
-подразделение
+подразделение : WideString
 Дата_Отзыва
 Тип_Отпуска
 Наименование_отпуска
@@ -41,7 +42,7 @@ FIO_1
 ДолжнРук
 ФиоРук
 .EndFields
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 ^
 .{ PushReasonCycle CheckEnter
 ^
