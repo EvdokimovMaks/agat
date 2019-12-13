@@ -19,8 +19,8 @@ if "%Version%"=="" (
 if "%Version%"=="" set Version=%DefaultVersion%
 
 call :compile common "Компиляция Сommon (общеиспользуемый функционал)"
-call :compile alter "Компиляция alter (докомпиляции)"
-call :compile barcode "Компиляция barcode (штрихкодирование)"
+rem call :compile alter "Компиляция alter (докомпиляции)"
+rem call :compile barcode "Компиляция barcode (штрихкодирование)"
 call :compile basedoc "Компиляция basedoc (документы основания)"
 call :compile budget "Компиляция budget (доработки по бюджетам)"
 call :compile buh "Компиляция buh (доработки бухгалтерского контура)"
