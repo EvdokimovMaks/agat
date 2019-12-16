@@ -84,7 +84,10 @@ from
   Persons,
   tTotals tTotals0,
   tTotals tTotals1,
-  tTotals tTotals2
+  tTotals tTotals2,
+  tTotals tTotals3,
+  tTotals tTotals4,
+  tTotals tTotals5
 where ((
   _cCatDepTop     == tCatDepTop.cParent   and
   _cCatDep        == tCatDepChild.cParent and
@@ -102,7 +105,14 @@ where ((
   _cCatDep        == tTotals1.cCatDep     and
   2               == tTotals2.wType       and
   _cCatDep        == tTotals2.cCatDep     and
-  tTotals1.cPodgr == tTotals2.cPodgr
+  tTotals1.cPodgr == tTotals2.cPodgr      and
+  3               == tTotals3.wType       and
+  _cCatDep        == tTotals3.cCatDep     and
+  4               == tTotals4.wType       and
+  _cCatDep        == tTotals4.cCatDep     and
+  5               == tTotals5.wType       and
+  _cCatDep        == tTotals5.cCatDep     and
+  tTotals4.cPodgr == tTotals5.cPodgr
 ));
 
 
@@ -115,9 +125,14 @@ from
   tCatDep tCatDepChild,
   tTotals tTotalsChild,
   tTotals tTotalsCur,
+  //Итоги по текущему подразделению с учетом подчиненных
   tTotals tTotals2,
   tTotals tTotals1,
-  tTotals tTotals0
+  tTotals tTotals0,
+  //Итоги по текущему подразделению без учета подчиненных
+  tTotals tTotals5,
+  tTotals tTotals4,
+  tTotals tTotals3
 where ((
   vTotals._cCatDep    == tCatDepChild.cParent and
 
@@ -129,6 +144,7 @@ where ((
   tTotalsChild.cPodgr == tTotalsCur.cPodgr    and
   tTotalsChild.cCateg == tTotalsCur.cCateg    and
 
+  //Итоги по текущему подразделению с учетом подчиненных
   2                   == tTotals2.wType       and
   vTotals._cCatDep    == tTotals2.cCatDep     and
 
@@ -137,7 +153,18 @@ where ((
   tTotals2.cPodgr     == tTotals1.cPodgr      and
 
   0                   == tTotals0.wType       and
-  vTotals._cCatDep    == tTotals0.cCatDep
+  vTotals._cCatDep    == tTotals0.cCatDep     and
+
+  //Итоги по текущему подразделению без учета подчиненных
+  5                   == tTotals5.wType       and
+  vTotals._cCatDep    == tTotals5.cCatDep     and
+
+  4                   == tTotals4.wType       and
+  vTotals._cCatDep    == tTotals4.cCatDep     and
+  tTotals5.cPodgr     == tTotals4.cPodgr      and
+
+  3                   == tTotals3.wType       and
+  vTotals._cCatDep    == tTotals3.cCatDep
 ));
 
 function GetDepFld: string;
@@ -377,6 +404,65 @@ procedure DropSqlTmpTables;
   sqlDropTmpTable('tTotals');
 }
 
+//Заполняет таблицу tTotals итогами по подразделению __cCatDep без учета подчиненных
+//только в том случае, если подразделение содержит подчиненные. Итоги по подразеделению
+//без подчиненных сформирует CalcHierTotals.
+//Итоги формируются на 3-х уровнях wType=5: Подгруппа/Категория, wType=4: Подгруппа, wType=3: Общий итог по подразделению
+procedure CalcNotHierTotals(__cCatDep: comp);
+{
+  vTotals._cCatDep := __cCatDep;
+
+  //Если по текущему подразделению нет подчиненных - не добавляем итоги без учета иерархии,
+  //т.к. итоги по нему будут добавлены в CalcHierTotals
+  if vTotals.getFirst tCatDepChild != tsOk exit;
+
+  //добавляем итоги по текущему подразделению без учета подчиненных
+  vTotals._loop tTotals2
+  {
+    vTotals.ClearBuffer(vTotals.tntTotals5);
+    vTotals.tTotals5.wType   := 5;
+    vTotals.tTotals5.cCatDep := vTotals._cCatDep;
+    vTotals.tTotals5.cPodgr  := vTotals.tTotals2.cPodgr;
+    vTotals.tTotals5.cCateg  := vTotals.tTotals2.cCateg;
+    vTotals.tTotals5.Qty     := vTotals.tTotals2.Qty;
+    vTotals.tTotals5.Sum     := vTotals.tTotals2.Sum;
+    vTotals.Insert current tTotals5;
+
+    if vTotals.getFirst tTotals4 != tsOk
+    {
+      vTotals.ClearBuffer(vTotals.tntTotals4);
+      vTotals.tTotals4.wType   := 4;
+      vTotals.tTotals4.cCatDep := vTotals.tTotals5.cCatDep;
+      vTotals.tTotals4.cPodgr  := vTotals.tTotals5.cPodgr;
+      vTotals.tTotals4.Qty     := vTotals.tTotals5.Qty;
+      vTotals.tTotals4.Sum     := vTotals.tTotals5.Sum;
+      vTotals.Insert current tTotals4;
+    }
+    else
+    {
+      vTotals.tTotals4.Qty     += vTotals.tTotals5.Qty;
+      vTotals.tTotals4.Sum     += vTotals.tTotals5.Sum;
+      vTotals.Update current tTotals4;
+    }
+
+    if vTotals.getFirst tTotals3 != tsOk
+    {
+      vTotals.ClearBuffer(vTotals.tntTotals3);
+      vTotals.tTotals3.wType   := 3;
+      vTotals.tTotals3.cCatDep := vTotals.tTotals5.cCatDep;
+      vTotals.tTotals3.Qty     := vTotals.tTotals5.Qty;
+      vTotals.tTotals3.Sum     := vTotals.tTotals5.Sum;
+      vTotals.Insert current tTotals3;
+    }
+    else
+    {
+      vTotals.tTotals3.Qty     += vTotals.tTotals5.Qty;
+      vTotals.tTotals3.Sum     += vTotals.tTotals5.Sum;
+      vTotals.Update current tTotals3;
+    }
+  }
+}
+
 procedure CalcHierTotals(__cCatDep: comp);
 {
   //Записываем в маркер нреки подчиненных подразделений
@@ -502,11 +588,106 @@ procedure PrepareData;
     sqlCopyInto(q, tntTotals, true);
   else
     Message('Ошибка расчета итогов по категориям:' + rslt, error);
-  //Дополняем таблицу tTotals итогами с учетом иерархии
 
+  //Дополняем таблицу tTotals итогами без учета подчиненных по подразделениям,
+  //у которых есть подчиненные
+  _loop tCatDep
+    CalcNotHierTotals(tCatDep.Nrec);
+
+  //Дополняем таблицу tTotals итогами с учетом иерархии
   vRep._cCatDepTop := 0;
     vRep._loop tCatDepTop
       CalcHierTotals(vRep.tCatDepTop.Nrec);
+}
+
+procedure PrintXlsHierTotals(cCatStaffStruct: comp; wLevel: word = 0);
+{
+  //Итоги по текущему узлу структурных единиц ШР
+  set vRep._cCatDep := cCatStaffStruct;
+  if vRep.getfirst tCatDep = tsOk
+  {
+    if vRep.getfirst tTotals0 = tsOk
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Level'    , wLevel);
+      pXL.SetTblNumberFldValue('NPP'      , -1);
+      pXL.SetTblStringFldValue('PostName' , 'Итого по ' + vRep.tCatDep.Name);
+      pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals0.Qty);
+      pXL.SetTblNumberFldValue('Total'    , vRep.tTotals0.Sum);
+      pXL.InsTblRow;
+    }
+
+    vRep._loop tTotals1
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Level'    , wLevel);
+      pXL.SetTblNumberFldValue('NPP'      , -2);
+      pXL.SetTblStringFldValue('PostName' , 'В том числе ' + if (vRep.tTotals1.cPodgr = 0, 'НГр',
+                                            ShowKau(KODGRKAU_PODGR, vRep.tTotals1.cPodgr)));
+      pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals1.Qty);
+      pXL.SetTblNumberFldValue('Total'    , vRep.tTotals1.Sum);
+      pXL.InsTblRow;
+
+      vRep._loop tTotals2
+      {
+        if vRep.tTotals2.cPodgr = 0 continue;
+        pXL.ClearTblBuffer;
+        pXL.SetTblNumberFldValue('Level'    , wLevel);
+        pXL.SetTblNumberFldValue('NPP'      , -3);
+        pXL.SetTblStringFldValue('PostName' , ShowKau(KODGRKAU_CATEG, vRep.tTotals2.cCateg) + ' ' +
+                                              ShowKau(KODGRKAU_PODGR, vRep.tTotals2.cPodgr));
+        pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals2.Qty);
+        pXL.SetTblNumberFldValue('Total'    , vRep.tTotals2.Sum);
+        pXL.InsTblRow;
+      }
+
+    }
+
+  }
+}
+
+procedure PrintXlsNoHierTotals(cCatStaffStruct: comp; wLevel: word = 0);
+{
+  //Итоги по текущему узлу структурных единиц ШР
+  set vRep._cCatDep := cCatStaffStruct;
+  if vRep.getfirst tCatDep = tsOk
+  {
+    if vRep.getfirst tTotals3 = tsOk
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Level'    , wLevel);
+      pXL.SetTblNumberFldValue('NPP'      , -4);
+      pXL.SetTblStringFldValue('PostName' , 'Итого по ' + vRep.tCatDep.Name);
+      pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals3.Qty);
+      pXL.SetTblNumberFldValue('Total'    , vRep.tTotals3.Sum);
+      pXL.InsTblRow;
+    }
+
+    vRep._loop tTotals4
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblNumberFldValue('Level'    , wLevel);
+      pXL.SetTblNumberFldValue('NPP'      , -5);
+      pXL.SetTblStringFldValue('PostName' , 'В том числе ' + if (vRep.tTotals4.cPodgr = 0, 'НГр',
+                                            ShowKau(KODGRKAU_PODGR, vRep.tTotals4.cPodgr)));
+      pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals4.Qty);
+      pXL.SetTblNumberFldValue('Total'    , vRep.tTotals4.Sum);
+      pXL.InsTblRow;
+
+      vRep._loop tTotals5
+      {
+        if vRep.tTotals5.cPodgr = 0 continue;
+        pXL.ClearTblBuffer;
+        pXL.SetTblNumberFldValue('Level'    , wLevel);
+        pXL.SetTblNumberFldValue('NPP'      , -6);
+        pXL.SetTblStringFldValue('PostName' , ShowKau(KODGRKAU_CATEG, vRep.tTotals5.cCateg) + ' ' +
+                                              ShowKau(KODGRKAU_PODGR, vRep.tTotals5.cPodgr));
+        pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals5.Qty);
+        pXL.SetTblNumberFldValue('Total'    , vRep.tTotals5.Sum);
+        pXL.InsTblRow;
+      }
+    }
+  }
 }
 
 procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
@@ -565,6 +746,8 @@ procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
         pXL.SetTblNumberFldValue('NPP'      , npp++);
         pXL.InsTblRow;
       }
+      //Итоги по текущему узлу структурных единиц ШР без учета подчиненных, если по подразделению есть подчиненные
+      PrintXlsNoHierTotals(cCatStaffStruct, wLevel);
     }
 
     //Записываем в маркер подчиненные узлы структурных единиц ШР
@@ -580,48 +763,8 @@ procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
     DoneMarker(m, '');
   }
 
-  //Итоги по текущему узлу структурных единиц ШР
-  set vRep._cCatDep := cCatStaffStruct;
-  if vRep.getfirst tCatDep = tsOk
-  {
-    if vRep.getfirst tTotals0 = tsOk
-    {
-      pXL.ClearTblBuffer;
-      pXL.SetTblNumberFldValue('Level'    , wLevel);
-      pXL.SetTblNumberFldValue('NPP'      , -1);
-      pXL.SetTblStringFldValue('PostName' , 'Итого по ' + vRep.tCatDep.Name);
-      pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals0.Qty);
-      pXL.SetTblNumberFldValue('Total'    , vRep.tTotals0.Sum);
-      pXL.InsTblRow;
-    }
-
-    vRep._loop tTotals1
-    {
-      pXL.ClearTblBuffer;
-      pXL.SetTblNumberFldValue('Level'    , wLevel);
-      pXL.SetTblNumberFldValue('NPP'      , -2);
-      pXL.SetTblStringFldValue('PostName' , 'В том числе ' + if (vRep.tTotals1.cPodgr = 0, 'НГр',
-                                            ShowKau(KODGRKAU_PODGR, vRep.tTotals1.cPodgr)));
-      pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals1.Qty);
-      pXL.SetTblNumberFldValue('Total'    , vRep.tTotals1.Sum);
-      pXL.InsTblRow;
-
-      vRep._loop tTotals2
-      {
-        if vRep.tTotals2.cPodgr = 0 continue;
-        pXL.ClearTblBuffer;
-        pXL.SetTblNumberFldValue('Level'    , wLevel);
-        pXL.SetTblNumberFldValue('NPP'      , -3);
-        pXL.SetTblStringFldValue('PostName' , ShowKau(KODGRKAU_CATEG, vRep.tTotals2.cCateg) + ' ' +
-                                              ShowKau(KODGRKAU_PODGR, vRep.tTotals2.cPodgr));
-        pXL.SetTblNumberFldValue('Qty'      , vRep.tTotals2.Qty);
-        pXL.SetTblNumberFldValue('Total'    , vRep.tTotals2.Sum);
-        pXL.InsTblRow;
-      }
-
-    }
-
-  }
+  //Итоги по текущему узлу структурных единиц ШР с учетом подчиненных
+  PrintXlsHierTotals(cCatStaffStruct, wLevel);
 
 }
 
