@@ -3,19 +3,28 @@
 #include CatFunc.vih
 #include UserReport.vih
 #include DeptIer.vih
+#include GetKau.vih
 
 #component "AGAT"
 
 interface ag_shr_spravka 'АГАТ. Справка по ШР' escclose;
-show(,,70,12);
+show(,,74,22);
 
 const
-  FLAGS_BIT_CATDEP   : word = 1;
-  FLAGS_BIT_VACFREE  : word = 2;
-  FLAGS_BIT_VACUSED  : word = 4;
-  FLAGS_BIT_NOBONUS  : word = 8;
-  FLAGS_BIT_BONUSSEKR: word = 16;
-  FLAGS_BIT_BONUSVRED: word = 32;
+  FLT_CATDEP     : word = 1;
+  FLT_CATEG      : word = 2;
+  FLT_PODGR      : word = 4;
+  FLTBONUS_NOBONUS: word = 1;
+  FLTBONUS_SEKR   : word = 2;
+  FLTBONUS_VRED   : word = 4;
+  FLTVACANCY_ALL  : word = 0;
+  FLTVACANCY_VAC  : word = 1;
+  FLTVACANCY_NOVAC: word = 2;
+  FOTQTY_VSEGO    : word = 0;
+  FOTQTY_WRK      : word = 1;
+  FOTQTY_VACANCY  : word = 2;
+  FOTBONUS_VRED   : word = 1;
+  FOTBONUS_SEKR   : word = 2;
 end;
 
 table struct tCatDep (
@@ -27,6 +36,7 @@ table struct tCatDep (
   Wrk      : double,
   QtyTotal : double,
   Salary   : double,
+  FOT      : double,
   BonusAll : double,
   BonusVred: double,
   BonusSekr: double
@@ -36,12 +46,20 @@ table struct tCatDep (
 );
 
 var
-  _departIer: DepartIer;
-  _catFunc: CatalogsFunctions;
-  pXL: XLSRepBuilder;
-  _date: date;
-  _flags: comp;
-  _mDep: TPtr;
+  _departIer  : DepartIer;
+  _catFunc    : CatalogsFunctions;
+  pXL         : XLSRepBuilder;
+  _date       : date;
+  _wFlt       : word;
+  _wFltBonus  : word;
+  _wFltVacancy: word;
+  _wFotQty    : word;
+  _wFotBonus  : word;
+  _mDep       : TPtr;
+  _mPodgr     : TPtr;
+  _mCateg     : TPtr;
+
+#include GetKau.var
 
 create view
 var
@@ -88,11 +106,49 @@ function GetDepFld: string;
   end;
 }
 
+function GetCategFld: string;
+{
+  var cnt: longint = GetMarkerCount(_mCateg);
+  if cnt = 0
+    result := 'Все категории';
+  else
+  {
+    var i: longint = 0;
+    var c: comp = 0;
+    result := '';
+    for(i := 0; GetMarker(_mCateg, i, c); ++i)
+      result += if(result = '', '', ', ') + ShowKau(KODGRKAU_CATEG, c);
+    result := cnt + ': ' + result;
+  }
+}
+
+function GetPodgrFld: string;
+{
+  var cnt: longint = GetMarkerCount(_mPodgr);
+  if cnt = 0
+    result := 'Все подгруппы';
+  else
+  {
+    var i: longint = 0;
+    var c: comp = 0;
+    result := '';
+    for(i := 0; GetMarker(_mPodgr, i, c); ++i)
+      result += if(result = '', '', ', ') + ShowKau(KODGRKAU_PODGR, c);
+    result := cnt + ': ' + result;
+  }
+}
+
 screen sc1;
   fields
     _date: noprotect;
-    _flags: noprotect, noframe;
+    _wFlt: noprotect, noframe;
     [DepFld] GetDepFld: protect, pickbutton;
+    [CategFld] GetCategFld: protect, pickbutton;
+    [PodgrFld] GetPodgrFld: protect, pickbutton;
+    _wFltBonus: noprotect;
+    _wFltVacancy: noprotect;
+    _wFotQty: noprotect;
+    _wFotBonus: noprotect;
   buttons
     cmOk, default;
     cmCancel;
@@ -100,14 +156,24 @@ screen sc1;
 
 `Дата отчета`.@@@@@@@@@@
 
-    [.] Фильтр по подразделениям`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    [.] Вакансии`
-    [.] Занятые единицы`
-    [.] Без доплат`
-    [.] С доплатой за секретность`
-    [.] С доплатой за вредность`
+ Фильтры
+    [.] По подразделениям`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    [.] По категориям`    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    [.] По подгруппам`    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-                                             <.Продолжить.> <.Отмена.>
+ Фильтр по надбавкам:                   Фильтр по вакансиям:
+    [.] ШЕ без надбавок`                   (.) Все (с вакансиями и без)`
+    [.] ШЕ с надбавкой за секретность`     (.) Только с вакансиями`
+    [.] ШЕ с надбавкой за вредность`       (.) Только без вакансий`
+
+ Параметры расчета ФОТ:
+
+ Количество штатных единиц:             Учитывать надбавки:
+    (.) Всего`                             [.] За секретность`
+    (.) Занято`                            [.] За вредность`
+    (.) Вакансий`
+
+                                                <.Продолжить.> <.Отмена.>
 >>
 end;
 
@@ -157,16 +223,28 @@ sql query qCatDep =
 
 //#region sql query qSS
 sql query qSS =
-  select *
+  select
+    cCatDep                                                 as cCatDep
+   ,sum(Qty)                                                as Qty
+   ,sum(Wrk)                                                as Wrk
+   ,sum(Salary * %QtySalary)                                as Salary
+   ,sum(BonusVred * %QtyBonusVred)                          as BonusVred
+   ,sum(BonusSekr * %QtyBonusSekr)                          as BonusSekr
+   ,sum((Salary + %BonusVredFot + %BonusSekrFot) * %QtyFot) as FOT
   from (
     select
-      tCatDep.Nrec                                     as cCatDep,
-      sum(ssHist.hWorkStations)                        as Qty,
-      sum(tApp.cnt)                                    as Wrk,
-      sum((case when ssHist.hTaxRate > 1000 then ssHist.hTaxRate else 0 end + coalesce(tRaise.Summa, 0)) * ssHist.hWorkStations)  as Salary,
-      sum(coalesce(tRaise.Summa, 0) * ssHist.hWorkStations) as BonusAll,
-      sum(coalesce(tRaise.BonusVred, 0) * ssHist.hWorkStations) as BonusVred,
-      sum(coalesce(tRaise.BonusSekr, 0) * ssHist.hWorkStations) as BonusSekr
+      tCatDep.Nrec                      as cCatDep,
+      coalesce(avPodgr.vComp, #comp(0)) as cPodgr,
+      coalesce(avCateg.vComp, #comp(0)) as cCateg,
+      ssHist.hWorkStations              as Qty,
+      coalesce(tApp.cnt,0)              as Wrk,
+      case when ssHist.hTaxRate > 1000
+             then ssHist.hTaxRate
+           else 0
+      end                               as Salary: double,
+      coalesce(tRaise.Summa, 0)         as BonusAll,
+      coalesce(tRaise.BonusVred, 0)     as BonusVred,
+      coalesce(tRaise.BonusSekr, 0)     as BonusSekr
     from
       tCatDep
     join StaffStruct ss
@@ -179,6 +257,16 @@ sql query qSS =
           group by StaffStr) ssHistLast on ssHistLast.StaffStr = ss.Nrec
     join HistoryStr ssHist
       on ssHist.StaffStr = ss.Nrec and ssHist.wFld = ssHistLast.wFld and ssHist.hWorkStations > 0
+    left join KlKatego
+      on KlKatego.Nrec = ssHist.cSpr2
+    left join AttrVal avCateg
+      on avCateg.wTable = 16005 and        //coKlKatego
+         avCateg.cRec = KlKatego.Nrec and
+         avCateg.cAttrNam = :cAttrNamCateg //ATTRNAM_NREC_KLKATEGO_CATEG
+    left join AttrVal avPodgr
+      on avPodgr.wTable = 16005 and        //coKlKatego
+         avPodgr.cRec = KlKatego.Nrec and
+         avPodgr.cAttrNam = :cAttrNamPodgr //ATTRNAM_NREC_KLKATEGO_PODGR
     outer apply (
       select sum(app.Rate) as cnt: double
       from Appointments app
@@ -218,10 +306,9 @@ sql query qSS =
                 group by RaiseStS.StaffStr
               ) tRaise
       on tRaise.cStaffStr = ss.Nrec
-    group by
-      tCatDep.Nrec
   ) t
-  %sFilterWhere
+  %sWhere
+  group by t.cCatDep
 ;
 //#endregion sql query qSS
 
@@ -237,7 +324,7 @@ function CreateSqlTmpTables: integer;
 
   //Готовим sql таблицу с фильтрами
   sqlFreeStr(s);
-  sqlAddStr(s, 'table TmpFltr (cRec: comp);');
+  sqlAddStr(s, 'table TmpFltr (wType: word, cRec: comp) with index (i01 = wType + cRec);');
   result := sqlCreateTmpTable(s, ctmNormal);
   if result != tsOk exit;
 }
@@ -274,11 +361,6 @@ procedure CalcTotals(cCurDep: comp);
   _loop tChildDep
   {
     tCurDep.QtyTotal     += tChildDep.QtyTotal;
-    // tCurDep.Wrk       += tChildDep.Wrk;
-    // tCurDep.Salary    += tChildDep.Salary;
-    // tCurDep.BonusAll  += tChildDep.BonusAll;
-    // tCurDep.BonusSekr += tChildDep.BonusSekr;
-    // tCurDep.BonusVred += tChildDep.BonusVred;
   }
   if tCurDep.QtyTotal = 0
     delete current tCurDep;
@@ -293,7 +375,7 @@ function isBitSet(w: word; b: word): boolean;
 
 function isFlagSet(b: word): boolean;
 {
-  result := isBitSet(_flags, b);
+  result := isBitSet(_wFlt, b);
 }
 
 procedure sqlAddWhereStr(var l: longint; s: string);
@@ -301,27 +383,44 @@ procedure sqlAddWhereStr(var l: longint; s: string);
   sqlAddStr(l, if(l=0, 'where ' + s, 'and ' + s));
 }
 
+var _qFltr: IQuery;
+procedure MarkerToTmpFltr(m: TPtr; wType: word);
+{
+  if _qFltr = NullRef
+    _qFltr := queryManager.createQuery('insert TmpFltr (wType, cRec) Values (:wType, :cRec)');
+  _qFltr.setParam('wType', wType);
+  var cFltrRec: comp = 0;
+  var lFltrInd: longint = 0;
+  for (lFltrInd := 0; GetMarker(m, lFltrInd, cFltrRec); lFltrInd++)
+    _qFltr.setParam('cRec', cFltrRec).execute;
+}
+
 procedure PrepareData;
 {
- //Признак, что применен фильтр по подразделениям
-  var isDepFltrSet: boolean = (_flags and FLAGS_BIT_CATDEP) > 0 and GetMarkerCount(_mDep) > 0;
-
+  //Признак, что применен фильтр по подразделениям
+  var isDepFltrSet: boolean = isBitSet(_wFlt, FLT_CATDEP) and GetMarkerCount(_mDep) > 0;
   //Если есть фильтр по подразделениям - пишем нреки выбранных подразделений в sql-таблицу TmpFltr
   if isDepFltrSet
-  {
-    var qFltr: IQuery = queryManager.createQuery('insert TmpFltr (cRec) Values (:cRec)');
-    var cFltrRec: comp = 0;
-    var lFltrInd: longint = 0;
-    for (lFltrInd := 0; GetMarker(_mDep, lFltrInd, cFltrRec); lFltrInd++)
-      qFltr.setParam('cRec', cFltrRec).execute;
-  }
+    MarkerToTmpFltr(_mDep, FLT_CATDEP);
+
+  //Признак, что применен фильтр по категориям
+  var isCategFltrSet: boolean = isBitSet(_wFlt, FLT_CATEG) and GetMarkerCount(_mCateg) > 0;
+  //Если есть фильтр по категориям - пишем нреки выбранных категорий в sql-таблицу TmpFltr
+  if isCategFltrSet
+    MarkerToTmpFltr(_mCateg, FLT_CATEG);
+
+  //Признак, что применен фильтр по подгруппам
+  var isPodgrFltrSet: boolean = isBitSet(_wFlt, FLT_PODGR) and GetMarkerCount(_mPodgr) > 0;
+  //Если есть фильтр по подгруппам - пишем нреки выбранных подгрупп в sql-таблицу TmpFltr
+  if isPodgrFltrSet
+    MarkerToTmpFltr(_mPodgr, FLT_PODGR);
 
   //Заполняем sql таблицу tCatDep действующими на дату _date структурными единицами ШР
   var rslt: integer = queryManager.createQuery(qCatDep)
                                   .setParam('dateSts', _date)
                                   .setParam('topEntry', -11)
-                                  .setMacro('CatParentFltr', if(isDepFltrSet, 'and CatParent.Nrec in (select cRec from TmpFltr)', ''))
-                                  .setMacro('WhereFltr', if(isDepFltrSet, 'and Catalogs.Nrec in (select cRec from TmpFltr)', ''))
+                                  .setMacro('CatParentFltr', if(isDepFltrSet, 'and CatParent.Nrec in (select cRec from TmpFltr where wType = 1)', ''))
+                                  .setMacro('WhereFltr', if(isDepFltrSet, 'and Catalogs.Nrec in (select cRec from TmpFltr where wType = 1)', ''))
                                   .execute
                                   .errorCode;
   if rslt != tsOk { Message('Ошибка выборки структурных единиц ШР: ' + rslt, error); exit; }
@@ -333,35 +432,56 @@ procedure PrepareData;
 
   //Заполняем tCatDep данными по вакансиям
 
-  //Готовим строку для макроса с фильтрами по вакансиям и доплатам
+  //Готовим строку для макроса с фильтрами по штатным единицам
   var sWhere: longint = 0;
-  //Фильтры по вакансиям
-  if not(isFlagSet(FLAGS_BIT_VACUSED) and isFlagSet(FLAGS_BIT_VACFREE))
-  {
-    if isFlagSet(FLAGS_BIT_VACUSED)
-      sqlAddWhereStr(sWhere, 'Qty - Wrk <= 0');
-    if isFlagSet(FLAGS_BIT_VACFREE)
-      sqlAddWhereStr(sWhere, 'Qty - Wrk > 0');
-  }
+
+  //Фильтр по категориям
+  if isCategFltrSet
+    sqlAddWhereStr(sWhere, 't.cCateg in (select TmpFltr2.cRec from TmpFltr TmpFltr2 where TmpFltr2.wType = 2)');
+
+  //Фильтр по подгруппам
+  if isPodgrFltrSet
+    sqlAddWhereStr(sWhere, 't.cPodgr in (select TmpFltr4.cRec from TmpFltr TmpFltr4 where TmpFltr4.wType = 4)');
+
   //Фильтры по доплатам
-  if not(isFlagSet(FLAGS_BIT_NOBONUS) and isFlagSet(FLAGS_BIT_BONUSVRED) and isFlagSet(FLAGS_BIT_BONUSSEKR))
+  if not(isBitSet(_wFltBonus, FLTBONUS_VRED) and isBitSet(_wFltBonus, FLTBONUS_SEKR) and isBitSet(_wFltBonus, FLTBONUS_NOBONUS))
   {
     var sFlt: string = '';
-    if isFlagSet(FLAGS_BIT_NOBONUS)
-      sFlt += 'BonusAll = 0';
-    if isFlagSet(FLAGS_BIT_BONUSSEKR)
-      sFlt += if(sFlt='','',' or ') + 'BonusSekr <> 0';
-    if isFlagSet(FLAGS_BIT_BONUSVRED)
-      sFlt += if(sFlt='','',' or ') + 'BonusVred <> 0';
+    if isBitSet(_wFltBonus, FLTBONUS_VRED)
+      sFlt += if(sFlt='','',' or ') + '(BonusVred * Qty) <> 0';
+    if isBitSet(_wFltBonus, FLTBONUS_SEKR)
+      sFlt += if(sFlt='','',' or ') + '(BonusSekr * Qty) <> 0';
+    if isBitSet(_wFltBonus, FLTBONUS_NOBONUS)
+      sFlt += if(sFlt='','',' or ') + '(BonusAll * Qty) = 0';
     if sFlt != ''
       sqlAddWhereStr(sWhere, '(' + sFlt + ')');
   }
+
+  //Фильтры по вакансиям
+  case _wFltVacancy of
+    FLTVACANCY_NOVAC: sqlAddWhereStr(sWhere, '(Qty - Wrk) <= 0');
+    FLTVACANCY_VAC: sqlAddWhereStr(sWhere, '(Qty - Wrk) > 0');
+  end;
+
+  //Готовим строку для макроса расчета суммы ФОТ
+  var sQty: string = case(_wFotQty;
+                          FOTQTY_VSEGO: 'Qty',
+                          FOTQTY_VACANCY: '(Qty - Wrk)',
+                          FOTQTY_WRK: 'Wrk';
+                          '');
+
   //Готовим запрос
   var q: IQuery = queryManager.createQuery(qSS)
                               .setParam('dateSts', _date)
                               .setParam('cAttrNamCateg', ATTRNAM_NREC_KLKATEGO_CATEG)
                               .setParam('cAttrNamPodgr', ATTRNAM_NREC_KLKATEGO_PODGR)
-                              .setMacro('sFilterWhere', sWhere);
+                              .setMacro('sWhere', sWhere)
+                              .setMacro('QtySalary', sQty)
+                              .setMacro('QtyBonusVred', sQty)
+                              .setMacro('QtyBonusSekr', sQty)
+                              .setMacro('QtyFot', sQty)
+                              .setMacro('BonusVredFot', if(isBitSet(_wFotBonus, FOTBONUS_VRED), 'BonusVred', '0'))
+                              .setMacro('BonusSekrFot', if(isBitSet(_wFotBonus, FOTBONUS_SEKR), 'BonusSekr', '0'));
 
   rslt := q.execute.errorCode;
   if rslt != tsOk { Message('Ошибка выборки вакансий ШР: ' + rslt, error); exit; }
@@ -377,6 +497,7 @@ procedure PrepareData;
       tCurDep.BonusAll  := q.row.val('BonusAll');
       tCurDep.BonusVred := q.row.val('BonusVred');
       tCurDep.BonusSekr := q.row.val('BonusSekr');
+      tCurDep.FOT       := q.row.val('FOT');
       update current tCurDep;
     }
   }
@@ -415,6 +536,7 @@ procedure PrintXlsNode(cCatStaffStruct: comp; wLevel: word = 0);
       pXL.SetTblNumberFldValue('Salary'        , vRep.tCatDep.Salary);
       pXL.SetTblNumberFldValue('BonusSekr'     , vRep.tCatDep.BonusSekr);
       pXL.SetTblNumberFldValue('BonusVred'     , vRep.tCatDep.BonusVred);
+      pXL.SetTblNumberFldValue('FOT'           , vRep.tCatDep.FOT);
       pXL.InsTblRow;
     }
 
@@ -450,6 +572,7 @@ procedure PrintXlsReport(isCreateXLT: boolean; sXLTFileName: string);
   pXL.CreateTblFld('Salary');
   pXL.CreateTblFld('BonusSekr');
   pXL.CreateTblFld('BonusVred');
+  pXL.CreateTblFld('FOT');
 
   if not isCreateXLT
     PrintXlsNode(_catFunc.GetCatalogsNRec(-11));
@@ -476,7 +599,27 @@ cmPick:
       {
         DoneMarker(_mDep, '');
         _mDep := InitMarker('CatalogsMarker', 8, 30, 10, true);
-        set _flags := _flags or 1;
+        set _wFlt := _wFlt or FLT_CATDEP;
+        rereadrecord;
+      }
+    }
+    #PodgrFld:
+    {
+      if iGetKau.GetCodeKau(cgiMulti, KODGRKAU_PODGR, 0) > 0
+      {
+        DoneMarker(_mPodgr, '');
+        _mPodgr := InitMarker(iGetKau.GetMarkerName(KODGRKAU_PODGR), 8, 10, 10, true);
+        set _wFlt := _wFlt or FLT_PODGR;
+        rereadrecord;
+      }
+    }
+    #CategFld:
+    {
+      if iGetKau.GetCodeKau(cgiMulti, KODGRKAU_CATEG, 0) > 0
+      {
+        DoneMarker(_mCateg, '');
+        _mCateg := InitMarker(iGetKau.GetMarkerName(KODGRKAU_CATEG), 8, 10, 10, true);
+        set _wFlt := _wFlt or FLT_Categ;
         rereadrecord;
       }
     }
@@ -489,8 +632,22 @@ cmDelOnProtect:
     #DepFld:
     {
       ClearMarker(_mDep);
-      if (_flags and 2) = 2
-        set _flags := _flags xor 2;
+      if isBitSet(_wFlt, FLT_CATDEP)
+        set _wFlt := _wFlt xor FLT_CATDEP;
+      rereadrecord;
+    }
+    #PodgrFld:
+    {
+      ClearMarker(_mPodgr);
+      if isBitSet(_wFlt, FLT_PODGR)
+        set _wFlt := _wFlt xor FLT_PODGR;
+      rereadrecord;
+    }
+    #CategFld:
+    {
+      ClearMarker(_mCateg);
+      if isBitSet(_wFlt, FLT_CATEG)
+        set _wFlt := _wFlt xor FLT_CATEG;
       rereadrecord;
     }
   end;
@@ -513,16 +670,34 @@ cmOk:
 
 cmInit:
 {
-  if not ReadMyDsk(_date, 'ag_shr_spravka_date', false) _date := cur_date;
-  if not ReadMyDsk(_flags, 'ag_shr_spravka_flags', false) _flags := 62;
+  if not ReadMyDsk(_date, 'ag_shr_spravka_date', false)
+    _date := cur_date;
+  if not ReadMyDsk(_wFlt, 'ag_shr_spravka_wFlt', false)
+    _wFlt := 0;
+  if not ReadMyDsk(_wFltBonus, 'ag_shr_spravka_wFltBonus', false)
+    _wFltBonus := FLTBONUS_VRED + FLTBONUS_SEKR + FLTBONUS_NOBONUS;
+  if not ReadMyDSK(_wFltVacancy, 'ag_shr_spravka_wFltVacancy', false)
+    _wFltVacancy := 0;
+  if not ReadMyDSK(_wFotQty, 'ag_shr_spravka_wFotQty', false)
+    _wFotQty := 0;
+  if not ReadMyDSK(_wFotBonus, 'ag_shr_spravka_wFotBonus', false)
+    _wFotBonus := FOTBONUS_SEKR + FOTBONUS_VRED;
   _mDep := InitMarker('ag_shr_spravka_mDep', 8, 30, 10, true);
+  _mPodgr := InitMarker('ag_shr_spravka_mPodgr', 8, 10, 10, true);
+  _mCateg := InitMarker('ag_shr_spravka_mCateg', 8, 10, 10, true);
 }
 
 cmDone:
 {
   SaveMyDsk(_date, 'ag_shr_spravka_date');
-  SaveMyDsk(_flags, 'ag_shr_spravka_flags');
+  SaveMyDsk(_wFlt, 'ag_shr_spravka_wFlt');
+  SaveMyDsk(_wFltBonus, 'ag_shr_spravka_wFltBonus');
+  SaveMyDsk(_wFltVacancy, 'ag_shr_spravka_wFltVacancy');
+  SaveMyDsk(_wFotBonus, 'ag_shr_spravka_wFotBonus');
+  SaveMyDsk(_wFotQty, 'ag_shr_spravka_wFotQty');
   DoneMarker(_mDep, 'ag_shr_spravka_mDep');
+  DoneMarker(_mPodgr, 'ag_shr_spravka_mPodgr');
+  DoneMarker(_mCateg, 'ag_shr_spravka_mCateg');
 }
 
 end;
