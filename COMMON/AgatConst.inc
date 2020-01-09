@@ -139,4 +139,7 @@ const
   //Типы операций
   TYPOPER_REZERV                  : comp = 000100000000186Dh;
   TYPOPER_FACT                    : comp = 000100000000186Fh;
+
+  //Типы связей DocRef
+  DOCREF_STAFFSTRUCT              : word = 65001;
 end;
