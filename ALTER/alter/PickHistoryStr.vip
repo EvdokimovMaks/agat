@@ -1,0 +1,172 @@
+#include PickCat.vih                 // Работа с выбором в каталогах
+#include CatFunc.vih
+
+#component "AGAT"
+
+interface PickHistoryStr 'Выбор записи истории изменения ставки' escClose;
+
+var
+  _cDepartment : comp;
+  _cStaffStruct: comp;
+  _cHistoryStr : comp;
+  _mCodOper    : TPtr;
+  _pickCat     : PickCatalog2 new;
+  _cCurDep     : comp;
+  _catFunc     : CatalogsFunctions;
+  _vacancyDate : date;
+
+function GetWorkersStaff(d: date): double; forward;
+
+create view
+as select
+  if(Cur_Date >= StaffStruct.dClose and (Day(StaffStruct.dClose) <> 0), true, false) (FieldName = HidePost)
+ ,(StaffStruct.SeqNmb + 0) (fieldname = fSeqNmb)
+ ,(CatPost.Name + '') (fieldname = fPostName)
+ ,(CatPost.Code + '') (fieldname = fPostCode)
+ ,(StaffStruct.WorkStations + 0) (fieldname = fWorkStations)
+ ,Add_Day(StaffStruct.dInput, 0) (fieldname = fInput)
+ ,Add_Day(StaffStruct.dClose, 0) (fieldname = fClose)
+ ,if(Cur_Date < StaffStruct.dInput, StaffStruct.dInput,
+     if((Cur_Date > StaffStruct.dClose) and (StaffStruct.dClose <> 0), StaffStruct.dClose, Cur_Date)) (fieldname = fDate)
+ ,(GetWorkersStaff(fDate)) (fieldname = fWorkers)
+from
+  StaffStruct
+ ,Catalogs CatPost
+ ,HistoryStr
+ ,CatStrPr
+ ,HistoryStr HistoryStrDate
+ ,Appointments AppDate
+ ,Persons PersDate
+where ((
+      _cCurDep            == StaffStruct.Department
+  and StaffStruct.Post    == CatPost.NRec
+  and StaffStruct.Nrec    == HistoryStr.StaffStr
+  and (_mCodOper = 0 or FoundMarker(_mCodOper, HistoryStr.wCodOper))
+  and HistoryStr.wCodOper == CatStrPr.wCodOper
+  and StaffStruct.Nrec    == HistoryStrDate.StaffStr
+  and _vacancyDate       >>= HistoryStrDate.DHist
+  and StaffStruct.Nrec    == AppDate.StaffStr
+  and (AppDate.wAddWord1 = 1 and (AppDate.AppointDate <= _vacancyDate and (AppDate.DismissDate = 0 or AppDate.DismissDate >= _vacancyDate)))
+  and AppDate.Person      == PersDate.Nrec
+  and (PersDate.IsEmployee = 'С' or PersDate.IsEmployee = 'У')
+));
+
+parameters _cDepartment, _cStaffStruct, _cHistoryStr, _mCodOper
+
+embedded embPickCat interface _pickCat;
+  show at (,,39,);
+end;
+
+Browse brwStaffStruct 'Рабочие места' (,);
+  Show at (40,,,10);
+  Table StaffStruct;
+  Fields
+    { Font = { Color = if (HidePost, ColorGray, ColorSysBlack)}};
+    fSeqNmb '№', 'п/п' ('N п/п', ): [5], protect;
+    fPostName 'Должность' ('Должность по штатному расписанию',, scStaffStructPick): [30], skip;
+    fPostCode 'Код', 'должности' ('Код должности по штатному расписанию'): [10], skip;
+    fWorkStations  'Штат.', 'ед-ц' ('Количество штатных единиц'): [8.3], skip;
+    fWorkers 'Вакансий' ('Количество вакантных рабочих мест'): [8.3], skip,
+      { Font= { BackColor = if(fWorkers < 0, ColorError, 0) } };
+    fInput  'Дата', 'введения' ('Дата введения'): [10], skip;
+    fClose 'Дата', 'закрытия' ('Дата закрытия'): [10], skip;
+End; //Browse brwStaffStruct
+
+browse brwHistoryStr;
+  Show at (40,11,,);
+  Table HistoryStr;
+  fields
+    HistoryStr.wFld '№ п/п': [5], protect;
+    CatStrPr.NOper 'Вид операции': [20], protect;
+    HistoryStr.dHist 'Дата изменения': [10], protect;
+    HistoryStr.DocNmb 'Приказ №': [10], protect;
+    HistoryStr.DocDate 'от': [10], protect;
+end; // browse brwHistoryStr
+
+// Возвращает количество занятых рабочих мест для структурной единицы на дату
+function GetRateOnDate(d: date): double;
+{
+  result:= 0;
+  _vacancyDate := d;
+
+  _loop AppDate
+  {
+    if getfirst PersDate != tsOk continue;
+    result += AppDate.Rate;
+  }
+}
+
+// Возвращает количество вакантных рабочих мест для стуктурной единицы на дату
+function GetWorkersStaff(d: date): double;
+{
+  result := 0;
+  _vacancyDate := d;
+
+  if (GetLast HistoryStrDate = tsOK)
+    result := HistoryStrDate.HWorkStations;
+  else
+    result := StaffStruct.WorkStations;
+
+  result -= GetRateOnDate(d);
+
+  // отсекаем нежелательный хвост при работе double
+  if (abs(result) < 0.0001) result := 0;
+}
+
+
+procedure OnCatalogIdle(_cCat: comp);
+{
+  _cCurDep := _cCat;
+  RereadRecord(#StaffStruct);
+}
+
+procedure RefreshTitle;
+{
+  if _mCodOper != 0
+  {
+    var w: word = 0;
+    var i: longint = 0;
+    var sOpers: string = '';
+    for(i := 0; GetMarker(_mCodOper, i, w); i++)
+      sOpers += if(sOpers = '', '', ', ') + if(getfirst CatStrPr where ((w == CatStrPr.wCodOper)) = tsOk, CatStrPr.NOper, '');
+    if sOpers != ''
+      SetWindowTitle(wnMainWindow, 'Выбор записи истории изменения ставки: ' + sOpers);
+  }
+}
+
+handleevent
+  cmInit:
+  {
+    if not ReadMyDsk(_cCurDep, 'StaffStructView_CurDep', false) _cCurDep := 0;
+
+    BindEvent(OnCatalogIdle, _pickCat.OnCatalogIdle);
+
+    if not _pickCat.InitEmbedded(-11, _cCurDep, 0, 1)
+    {
+      Message('Ошибка инициализации каталога подразделений!', Error);
+      abort;
+      exit;
+    }
+
+    RefreshTitle;
+  }
+  cmDone:
+  {
+    SaveMyDsk(_cCurDep, 'StaffStructView_CurDep');
+    UnbindEvent(OnCatalogIdle, _pickCat.OnCatalogIdle);
+  }
+  cmDefault:
+  {
+    if IsValidAll(#HistoryStr)
+    {
+      _cDepartment := _cCurDep;
+      _cStaffStruct :=  StaffStruct.Nrec;
+      _cHistoryStr := HistoryStr.Nrec;
+      CloseInterface(cmDefault);
+    }
+    else
+      CloseInterface(cmCancel);
+  }
+end;
+
+end.
