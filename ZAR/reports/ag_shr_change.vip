@@ -25,6 +25,7 @@ table struct TmpData (
  ,cDep        : comp
  ,wOper       : word
  ,cOtherSS    : comp
+ ,cOtherDep   : comp
  ,OldQty      : double
  ,OldSalary   : double
  ,OldBonusVred: double
@@ -77,12 +78,22 @@ from
  ,TmpData
  ,TmpDep
  ,TmpTotals
+ ,DocRef DocRefIn
+ ,StaffStruct StaffStructFrom
+ ,DocRef DocRefOut
+ ,StaffStruct StaffStructTo
 where ((
       HistoryStr.StaffStr == StaffStruct.Nrec
   and HistoryStr.StaffStr == HistoryStrPrev.StaffStr
   and HistoryStr.DHist    >> HistoryStrPrev.DHist
   and HistoryStr.StaffStr == TmpDataHS.cStaffStruct
   and _dDate              == Str_RHist.DRec (noindex)
+  and DOCREF_STAFFSTRUCT  == DocRefIn.wTypeRef
+  and HistoryStr.Nrec     == DocRefIn.cDopFld2
+  and DocRefIn.cField1    == StaffStructFrom.Nrec
+  and DOCREF_STAFFSTRUCT  == DocRefOut.wTypeRef
+  and HistoryStr.Nrec     == DocRefOut.cDopFld1
+  and DocRefOut.cField2   == StaffStructTo.Nrec
 ))
 bounds byDHist = _dDate              == HistoryStr.DHist
 
@@ -92,17 +103,15 @@ bounds byRHist = Str_RHist.cStaffStr == HistoryStr.StaffStr
 
 create view vLink
 as select
-  TmpDataDel.cStaffStruct
+  TmpDataCreate.cStaffStruct
 from
-  TmpData TmpDataDel
- ,TmpData TmpDataCreate
+  TmpData TmpDataCreate
+ ,TmpData TmpDataDel
 where ((
-      OPER_DEL         == TmpDataDel.wOper
-  and 0                == TmpDataDel.cOtherSS
-  and OPER_CREATE      == TmpDataCreate.wOper
-  and 0                == TmpDataCreate.cOtherSS
-  and TmpDataDel.cPost == TmpDataCreate.cPost
-  and (TmpDataDel.cDep <> tmpDataCreate.cDep)
+      OPER_CREATE             == TmpDataCreate.wOper
+  and (TmpDataCreate.cDep      = TmpDataCreate.cOtherDep
+  and  TmpDataCreate.cDep     <> 0)
+  and TmpDataCreate.cOtherSS  == TmpDataDel.cStaffStruct
 ));
 
 screen sc1 (,,sci1Esc);
@@ -190,6 +199,18 @@ procedure PrepareDataByHistoryStr;
       TmpDataHS.cDep := StaffStruct.Department;
       insert current TmpDataHS;
     }
+    if getfirst DocRefIn = tsOk
+      if getfirst StaffStructFrom = tsOk
+      {
+        TmpDataHS.cOtherSS  := StaffStructFrom.Nrec;
+        TmpDataHS.cOtherDep := StaffStructFrom.Department;
+      }
+    if getfirst DocRefOut = tsOk
+      if getfirst StaffStructTo = tsOk
+      {
+        TmpDataHS.cOtherSS  := StaffStructTo.Nrec;
+        TmpDataHS.cOtherDep := StaffStructTo.Department;
+      }
     case HistoryStr.wCodOper of
       20: //Создание ставки
       {
@@ -257,13 +278,19 @@ procedure PrepareDataByStr_RHist;
 
 procedure LinkDelAndCreate;
 {
-  vLink._loop TmpDataDel
-    if vLink.getfirst TmpDataCreate = tsOk
+  while vLink.getfirst TmpDataCreate = tsOk
+    if vLink.getfirst TmpDataDel = tsOk
     {
-      vLink.TmpDataCreate.cOtherSS := vLink.TmpDataDel.cStaffStruct;
-      vLink.TmpDataDel.cOtherSS := vLink.TmpDataCreate.cStaffStruct;
+      vLink.TmpDataCreate.OldQty       := vLink.TmpDataDel.OldQty;
+      vLink.TmpDataCreate.OldSalary    := vLink.TmpDataDel.OldSalary;
+      vLink.TmpDataCreate.OldBonusVred := vLink.TmpDataDel.OldBonusVred;
+      vLink.TmpDataCreate.OldBonusPrem := vLink.TmpDataDel.OldBonusPrem;
+      vLink.TmpDataCreate.OldBonusSekr := vLink.TmpDataDel.OldBonusSekr;
+      vLink.delete current TmpDataDel;
+      vLink.TmpDataCreate.wOper        := OPER_EDIT;
+      vLink.TmpDataCreate.cOtherSS     := 0;
+      vLink.TmpDataCreate.cOtherDep    := 0;
       vLink.update current TmpDataCreate;
-      vLink.update current TmpDataDel;
     }
 }
 
@@ -434,16 +461,14 @@ from
   TmpDep (i02)
  ,TmpData
  ,Catalogs CatPost
- ,TmpData TmpDataOther
- ,TmpDep TmpDepOther
+ ,Catalogs CatDepOther
  ,TmpTotals TT0
  ,TmpTotals TT1
  ,TmpTotals TT2
 where ((
       TmpDep.Nrec       == TmpData.cDep
   and TmpData.cPost     == CatPost.Nrec
-  and TmpData.cOtherSS  == TmpDataOther.cStaffStruct
-  and TmpDataOther.cDep == TmpDepOther.Nrec
+  and TmpData.cOtherDep == CatDepOther.Nrec
   and 0                 == TT0.wType
   and TmpDep.Nrec       == TT0.cDep
   and 1                 == TT1.wType
@@ -473,12 +498,11 @@ procedure PrintXLSOneRec;
   pXL.SetTblNumberFldValue('NewBonusPrem', vRep.TmpData.NewBonusPrem);
   pXL.SetTblNumberFldValue('Oper'        , vRep.TmpData.wOper);
   pXL.SetTblStringFldValue('cOtherSS'    , vRep.TmpData.cOtherSS);
-  if vRep.getfirst TmpDataOther = tsOk
-    if vRep.getfirst TmpDepOther = tsOk
-    {
-      pXL.SetTblStringFldValue('OtherDepCode', vRep.TmpDepOther.Code);
-      pXL.SetTblStringFldValue('OtherDepName', vRep.TmpDepOther.Name);
-    }
+  if vRep.getfirst CatDepOther = tsOk
+  {
+    pXL.SetTblStringFldValue('OtherDepCode', vRep.CatDepOther.Code);
+    pXL.SetTblStringFldValue('OtherDepName', vRep.CatDepOther.Name);
+  }
   pXL.InsTblRow;
 }
 
@@ -575,7 +599,10 @@ handleevent
   cmOk:
   {
     PrepareData;
-    PrintXlsReport(false, TranslatePath('%StartPath%xls\AG_SHR_Change.xltm'));
+    if getfirst TmpData = tsOk
+      PrintXlsReport(false, TranslatePath('%StartPath%xls\AG_SHR_Change.xltm'));
+    else
+      Message('Отсутствуют данные для формирования отчета', Warning);
   }
 
   cmInit:
