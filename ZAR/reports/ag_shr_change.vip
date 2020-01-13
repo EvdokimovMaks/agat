@@ -375,27 +375,23 @@ sql query qDepTotals =
        avPodgr.cAttrNam = :cAttrNamPodgr //ATTRNAM_NREC_KLKATEGO_PODGR
   left join SpKau spkPodgr
     on spkPodgr.Nrec = avPodgr.vComp
-  left join ( select
-                RaiseStS.StaffStr as cStaffStr,
-                sum(case when Str_RHist.wHAttr = 2 then (case when ssHist.hTaxRate > 1000 then ssHist.hTaxRate else 0 end) * Str_RHist.RHSum / 100 else Str_RHist.RHSum end) as Summa
-              from
-                Str_RHist
-              join RaiseStS
-                on RaiseStS.Nrec = Str_RHist.cRaiseStS
-              join Catalogs CatRaise
-                on CatRaise.Nrec = RaiseStS.RaiseType
-              join (Select StaffStr, max(wFld) as wFld
-                    from HistoryStr
-                    where dHist <= :dateSts
-                    group by StaffStr) ssHistLast on ssHistLast.StaffStr = RaiseStS.StaffStr
-              join HistoryStr ssHist
-                on ssHist.StaffStr = RaiseStS.StaffStr and ssHist.wFld = ssHistLast.wFld
-              where
-                Str_RHist.dRec <= :dateSts and (Str_RHist.dEnd = 0 or Str_RHist.dEnd >= :dateSts) and
-                (CatRaise.Name like '%вредность%' or CatRaise.Name like '%премия%' or CatRaise.Name like '%секретность%')
-              group by RaiseStS.StaffStr
-            ) tRaise
-    on tRaise.cStaffStr = ss.Nrec
+  outer apply (
+    select
+      sum(case when Str_RHist.wHAttr = 2 then (case when HistoryStr.hTaxRate > 1000 then HistoryStr.hTaxRate else 0 end) * Str_RHist.RHSum / 100 else Str_RHist.RHSum end) as Summa
+    from RaiseStS
+    outer apply (
+      select max(Str_RHist_Last.dRec) as dRec
+      from Str_RHist Str_RHist_Last
+      where Str_RHist_Last.cRaiseStS=RaiseStS.Nrec and Str_RHist_Last.dRec <= :dateSts
+    ) tStr_RHist_Last
+    join Str_RHist on Str_RHist.cRaiseStS=RaiseStS.Nrec and Str_RHist.dRec = tStr_RHist_Last.dRec
+    join Catalogs CatRaise on CatRaise.Nrec = RaiseStS.RaiseType
+    join HistoryStr on HistoryStr.Nrec = ssHist.Nrec
+    where
+      RaiseStS.StaffStr=ss.Nrec and
+      RaiseStS.dRBeg <= :dateSts and (RaiseStS.dREnd = 0 or RaiseStS.dREnd >= :dateSts) and
+      (CatRaise.Name like '%вредность%' or CatRaise.Name like '%премия%' or CatRaise.Name like '%секретность%')
+  ) tRaise
   where tCatDep.Nrec = :cDep
   group by
     coalesce(spkPodgr.Name, 'НГр'),
