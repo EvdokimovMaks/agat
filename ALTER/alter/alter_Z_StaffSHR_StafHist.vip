@@ -10,21 +10,11 @@ as select
 from
   DocRef DocRefSS
  ,StaffStruct LinkedSS
- ,HistoryStr LinkedHS
- ,CatStrPr LinkedCatStrPr
-bounds LinkedSSFrom =
-      DOCREF_STAFFSTRUCT       == DocRefSS.wTypeRef
-  and HistoryStrOrder.Nrec     == DocRefSS.cDopFld1
-  and DocRefSS.cField2         == LinkedSS.Nrec
-  and DocRefSS.cDopFld2        == LinkedHS.Nrec
-  and LinkedHS.wCodOper        == LinkedCatStrPr.wCodOper
-
-bounds LinkedSSTo =
+where ((
       DOCREF_STAFFSTRUCT       == DocRefSS.wTypeRef
   and HistoryStrOrder.Nrec     == DocRefSS.cDopFld2
   and DocRefSS.cField1         == LinkedSS.Nrec
-  and DocRefSS.cDopFld1        == LinkedHS.Nrec
-  and LinkedHS.wCodOper        == LinkedCatStrPr.wCodOper
+))
 ;
 
 function GetLinkedSSFld: string;
@@ -33,16 +23,15 @@ function GetLinkedSSFld: string;
   if IsValid(tnDocRefSS)
   {
     if IsValid(tnLinkedSS)
-      result += iCatFunc.GetCatalogsCode(LinkedSS.Department) + ' / ' + iCatFunc.GetCatalogsName(LinkedSS.Post);
-    if IsValid(tnLinkedHS)
-    {
-      result += ' / ' + if(IsValid(tnLinkedCatStrPr), LinkedCatStrPr.NOper, LinkedHS.wCodOper);
-      result += ' / ' + LinkedHS.DHist;
-    }
+      result += iCatFunc.GetCatalogsCode(LinkedSS.Department) + ' / ' +
+                LinkedSS.SeqNmb + ' ' + iCatFunc.GetCatalogsName(LinkedSS.Post) +
+                ' (' + DateToStr(StaffStruct.dInput,'DD.MM.YY') + '-' +
+                if(StaffStruct.dClose = 0, '...', DateToStr(StaffStruct.dClose,'DD.MM.YY')) +
+                ' ' + StaffStruct.TaxRate + ')';
   }
 }
 
-procedure CreateLinkHistoryStr(ccSS: comp; ccHS: comp);
+procedure CreateLinkHistoryStr(ccSS: comp);
 {
   case HistoryStrOrder.wCodOper of
     20: //Создание ставки
@@ -51,26 +40,13 @@ procedure CreateLinkHistoryStr(ccSS: comp; ccHS: comp);
       {
         ClearBuffer(#DocRefSS);
         DocRefSS.wTypeRef := DOCREF_STAFFSTRUCT;
+        DocRefSS.wTable1  := coStaffStruct;
+        DocRefSS.wTable2  := coStaffStruct;
         DocRefSS.cDopFld2 := HistoryStrOrder.Nrec;
         DocRefSS.cField2  := StaffStruct.Nrec;
         insert current DocRefSS;
       }
-      DocRefSS.cDopFld1 := ccHS;
       DocRefSS.cField1  := ccSS;
-      update current DocRefSS;
-    }
-    21: //Ликвидация ставки
-    {
-      if getfirst DocRefSS != tsOk
-      {
-        ClearBuffer(#DocRefSS);
-        DocRefSS.wTypeRef := DOCREF_STAFFSTRUCT;
-        DocRefSS.cDopFld1 := HistoryStrOrder.Nrec;
-        DocRefSS.cField1  := StaffStruct.Nrec;
-        insert current DocRefSS;
-      }
-      DocRefSS.cDopFld2 := ccHS;
-      DocRefSS.cField2  := ccSS;
       update current DocRefSS;
     }
   end;
@@ -93,17 +69,7 @@ tableevent table HistoryStrOrder;
   cmPositionChanged:
   {
     inherited::handleevent(cmPositionChanged);
-    ToggleFieldState(#LinkedSSFld, sfVisible, HistoryStrOrder.wCodOper = 20 or HistoryStrOrder.wCodOper = 21);
-    if HistoryStrOrder.wCodOper = 20 //Создание ставки
-    {
-      if BoundActive(tbLinkedSSFrom) SubBounds(tbLinkedSSFrom);
-      if not BoundActive(tbLinkedSSTo) AddBounds(tbLinkedSSTo);
-    }
-    if HistoryStrOrder.wCodOper = 21 //Ликвидация ставки
-    {
-      if BoundActive(tbLinkedSSTo) SubBounds(tbLinkedSSTo);
-      if not BoundActive(tbLinkedSSFrom) AddBounds(tbLinkedSSFrom);
-    }
+    ToggleFieldState(#LinkedSSFld, sfVisible, HistoryStrOrder.wCodOper = 20);
   }
 end; //tableevent table HistoryStrOrder
 
@@ -114,18 +80,15 @@ handleevent
     case CurField of
       #LinkedSSFld:
       {
-        var ccDep, ccSS, ccHS: comp = 0;
-        var mCodOper: tPtr = InitMarker('', 2, 3, 3, true); //Маркер с видами операций для выбора
-        case HistoryStrOrder.wCodOper of
-          20: InsertMarker(mCodOper, word(21)); //Если текущая операция - создание ставки, то выбираем удаление ставки
-          21: InsertMarker(mCodOper, word(20)); //Если текущая операция - удаление ставки, то выбираем создание ставки
-        end;
-        if RunInterface(AGAT::PickHistoryStr, ccDep, ccSS, ccHS, mCodOper) = cmDefault
+        var ccDep: comp = if(IsValidAll(#LinkedSS), LinkedSS.Department,
+                             if(IsValidAll(#StaffStruct), StaffStruct.Department, 0));
+        var ccSS: comp = if(IsValidAll(#LinkedSS), LinkedSS.Nrec,
+                            if(IsValidAll(#StaffStruct), StaffStruct.Nrec, 0));
+        if RunInterface(AGAT::PickStaffStruct, ccDep, ccSS, Sub_Day(StaffStruct.dInput, 1)) = cmDefault
         {
-          CreateLinkHistoryStr(ccSS, ccHS);
+          CreateLinkHistoryStr(ccSS);
           RereadRecord(#DocRefSS);
         }
-        DoneMarker(mCodOper, '');
       }
     else
       inherited::handleevent(cmPick);
