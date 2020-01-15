@@ -1,0 +1,139 @@
+#component "Z_StaffSHR"
+
+alter interface StaffStruct;
+
+function GetLinkedSSFld: string; forward;
+
+create view
+as select
+  GetLinkedSSFld() (fieldname=LinkedSSFld)
+from
+  DocRef DocRefSS
+ ,StaffStruct LinkedSS
+ ,HistoryStr HistoryStrCreate
+where ((
+      DOCREF_STAFFSTRUCT           == DocRefSS.wTypeRef
+  and coStaffStruct                == DocRefSS.wTable2
+  and TableForStaffStru.cStaffStru == DocRefSS.cField2
+  and DocRefSS.cField1             == LinkedSS.Nrec
+  and TableForStaffStru.cStaffStru == HistoryStrCreate.StaffStr
+  and 20                           == HistoryStrCreate.wCodOper
+))
+;
+
+function GetLinkedSSFld: string;
+{
+  result := '';
+  if IsValid(tnDocRefSS)
+  {
+    if IsValid(tnLinkedSS)
+      result += iCatFunc.GetCatalogsCode(LinkedSS.Department) + ' / ' +
+                LinkedSS.SeqNmb + ' ' + iCatFunc.GetCatalogsName(LinkedSS.Post) +
+                ' (' + DateToStr(StaffStruct.dInput,'DD.MM.YY') + '-' +
+                if(StaffStruct.dClose = 0, '...', DateToStr(StaffStruct.dClose,'DD.MM.YY')) +
+                ' ' + StaffStruct.TaxRate + ')';
+  }
+}
+
+extendformats brwStaffStruct;
+Browse brwStaffStruct 'Рабочие места' (,);
+  Table TableForStaffStru;
+  fields
+    LinkedSSFld 'Ставка-откуда': [10], protect, pickbutton;
+end; //Browse brwStaffStruct
+
+extendformats scrStaffStruct;
+Screen scrStaffStruct 'Атрибуты ставки';
+  Table TableForStaffStru;
+  fields
+    LinkedSSFld: protect, pickbutton;
+<<
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+`Ставка-откуда`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+end; //Screen scrStaffStruct
+
+procedure CreateLinkHistoryStr(ccSS: comp);
+{
+  if getfirst DocRefSS != tsOk
+  {
+    ClearBuffer(#DocRefSS);
+    DocRefSS.wTypeRef := DOCREF_STAFFSTRUCT;
+    DocRefSS.wTable1  := coStaffStruct;
+    DocRefSS.wTable2  := coStaffStruct;
+    DocRefSS.cDopFld2 := HistoryStrCreate.Nrec;
+    DocRefSS.cField2  := TableForStaffStru.cStaffStru;
+    insert current DocRefSS;
+  }
+  DocRefSS.cField1  := ccSS;
+  update current DocRefSS;
+}
+
+TableEvent Table TableForStaffStru;
+
+  cmPick:
+  {
+    case CurField of
+      #LinkedSSFld:
+      {
+        if not IsValidAll(#TableForStaffStru) exit;
+        if getfirst HistoryStrCreate != tsOk
+        {
+          Message('В истории изменения ставки не найдена запись создания ставки', error);
+          exit;
+        }
+        var ccDep: comp = if(IsValidAll(#LinkedSS), LinkedSS.Department, cDepParam);
+        var ccSS: comp = if(IsValidAll(#LinkedSS), LinkedSS.Nrec, TableForStaffStru.cStaffStru);
+        if RunInterface(AGAT::PickStaffStruct, ccDep, ccSS, Sub_Day(StaffStruct.dInput, 1)) = cmDefault
+        {
+          CreateLinkHistoryStr(ccSS);
+          RereadRecord(#DocRefSS);
+        }
+      }
+      else
+        Inherited::Handleevent(cmPick);
+    end;
+  }
+
+  cmDelOnProtect:
+  {
+    case CurField of
+      #LinkedSSFld:
+      {
+        if IsValidAll(#DocRefSS)
+        {
+          delete current DocRefSS;
+          RereadRecord(#TableForStaffStru);
+        }
+      }
+      else
+        Inherited::Handleevent(cmDelOnProtect);
+    end;
+  }
+
+end; //TableEvent Table TableForStaffStru;
+
+end.

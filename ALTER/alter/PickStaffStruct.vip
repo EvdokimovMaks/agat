@@ -1,0 +1,149 @@
+#include PickCat.vih                 // Работа с выбором в каталогах
+#include CatFunc.vih
+
+#component "AGAT"
+
+interface PickStaffStruct 'Выбор штатной единицы' escClose;
+show(,,150, 25);
+
+table struct TmpStaffStructExt (
+  cStaffStruct: comp,
+  VacancyQty: double,
+  Persons: string
+) with index (
+  IDX0 = cStaffStruct
+);
+
+var
+  _cDepartment : comp;
+  _cStaffStruct: comp;
+  _dDate       : date;
+  _pickCat     : PickCatalog2 new;
+  _cCurDep     : comp;
+  _catFunc     : CatalogsFunctions;
+
+create view
+as select
+  if(Cur_Date >= StaffStruct.dClose and (Day(StaffStruct.dClose) <> 0), true, false) (FieldName = HidePost)
+ ,(CatPost.Name + '') (fieldname = fPostName)
+ ,(CatPost.Code + '') (fieldname = fPostCode)
+ ,if(IsValid(tnTmpStaffStructExt), TmpStaffStructExt.VacancyQty, 0) (fieldname = fVacancyQty)
+ ,if(IsValid(tnTmpStaffStructExt), TmpStaffStructExt.Persons, '') (fieldname = fPersons)
+from
+  StaffStruct
+ ,TmpStaffStructExt
+ ,Catalogs CatPost
+ ,HistoryStr HistoryStrDate
+ ,Appointments AppDate
+ ,Persons PersDate
+where ((
+      _cCurDep            == StaffStruct.Department
+
+  and StaffStruct.Nrec    == HistoryStr.StaffStr
+
+  and StaffStruct.Nrec    == TmpStaffStructExt.cStaffStruct
+
+  and StaffStruct.Post    == CatPost.NRec
+
+  and StaffStruct.Nrec    == HistoryStrDate.StaffStr
+  and _dDate             >>= HistoryStrDate.DHist
+
+  and StaffStruct.Nrec    == AppDate.StaffStr
+  and (AppDate.wAddWord1 = 1 and (AppDate.AppointDate <= _dDate and (AppDate.DismissDate = 0 or AppDate.DismissDate >= _dDate)))
+  and AppDate.Person      == PersDate.Nrec
+  and (PersDate.IsEmployee = 'С' or PersDate.IsEmployee = 'У')
+));
+
+parameters _cDepartment, _cStaffStruct, _dDate
+
+embedded embPickCat interface _pickCat;
+  show at (,,39,);
+end;
+
+Browse brwStaffStruct 'Рабочие места' (,);
+  Show at (40,,,);
+  Table StaffStruct;
+  Fields
+    { Font = { Color = if (HidePost, ColorGray, ColorSysBlack)}};
+    StaffStruct.SeqNmb       '№', 'п/п' ('N п/п', )                                              : [5], protect;
+    CatPost.Name             'Должность' ('Должность по штатному расписанию',, scStaffStructPick): [30], skip;
+    CatPost.Code             'Код', 'должности' ('Код должности по штатному расписанию')         : [10], skip;
+    StaffStruct.WorkStations 'Штат.', 'ед-ц' ('Количество штатных единиц')                       : [8.3], skip;
+    fVacancyQty              'Вакансий' ('Количество вакантных рабочих мест')                    : [8.3], skip,
+      { Font= { BackColor = if(fVacancyQty < 0, ColorError, 0) } };
+    StaffStruct.dInput       'Дата', 'введения' ('Дата введения')                                : [10], skip;
+    StaffStruct.dClose       'Дата', 'закрытия' ('Дата закрытия')                                : [10], skip;
+    StaffStruct.TaxRate      'Оклад'                                                             : [14,'\2p[|-]3666`666`666`666`666`666`666.88'], protect;
+    fPersons                 'Сотрудники'                                                        : [40], protect;
+End; //Browse brwStaffStruct
+
+procedure OnCatalogIdle(_cCat: comp);
+{
+  var dPrev: date = Sub_Day(_dDate,1);
+  _cCurDep := _cCat;
+  MTClear(#TmpStaffStructExt, mfNormal);
+  _loop StaffStruct
+  {
+    ClearBuffer(#TmpStaffStructExt);
+    TmpStaffStructExt.cStaffStruct := StaffStruct.Nrec;
+    TmpStaffStructExt.VacancyQty := if(getlast HistoryStrDate = tsOk, HistoryStrDate.HWorkStations, StaffStruct.WorkStations);
+
+    _loop AppDate
+    {
+      if getfirst PersDate != tsOk continue;
+      TmpStaffStructExt.VacancyQty -= AppDate.Rate;
+      TmpStaffStructExt.Persons += if(TmpStaffStructExt.Persons = '', '', ', ') + GetSurnameWithInitials(PersDate.FIO);
+    }
+    insert current TmpStaffStructExt;
+  }
+  RereadRecord(#StaffStruct);
+}
+
+procedure RefreshTitle;
+{
+  var sTitle: string = 'Выбор записи истории изменения ставки на ' + _dDate;
+  SetWindowTitle(wnMainWindow, sTitle);
+}
+
+handleevent
+  cmInit:
+  {
+    _cCurDep := _cDepartment;
+    if _cCurDep = 0
+      ReadMyDsk(_cCurDep, 'StaffStructView_CurDep', false);
+
+    BindEvent(OnCatalogIdle, _pickCat.OnCatalogIdle);
+
+    if not _pickCat.InitEmbedded(-11, _cCurDep, 0, 1)
+    {
+      Message('Ошибка инициализации каталога подразделений!', Error);
+      abort;
+      exit;
+    }
+
+    if _cStaffStruct != 0
+      if getfirst StaffStruct where ((_cStaffStruct == StaffStruct.Nrec)) = tsOk {}
+
+    if _dDate = 0 _dDate := Cur_Date;
+
+    RefreshTitle;
+  }
+  cmDone:
+  {
+    SaveMyDsk(_cCurDep, 'StaffStructView_CurDep');
+    UnbindEvent(OnCatalogIdle, _pickCat.OnCatalogIdle);
+  }
+  cmDefault:
+  {
+    if IsValidAll(#StaffStruct)
+    {
+      _cDepartment := _cCurDep;
+      _cStaffStruct :=  StaffStruct.Nrec;
+      CloseInterface(cmDefault);
+    }
+    else
+      CloseInterface(cmCancel);
+  }
+end;
+
+end.
