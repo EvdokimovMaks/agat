@@ -1,11 +1,13 @@
 #include Query.vih
 #include XlReport.vih
 #include UserReport.vih
+#include Marker.vih
+#include FeeSigners.vih
 
 #component "AGAT"
 
 interface ag_shr_change 'Изменение штатного расписания' escClose, doAccept;
-show(,,30,5);
+show(,,50,7);
 
 const
   OPER_CREATE: word = 1;
@@ -15,31 +17,36 @@ end;
 
 var
   _dDate: date;
+  _cSelection: comp;
   _qBonus: IQuery;
   _qDepTotals: IQuery;
+  _signers: FeeSigners new;
+  _mDep: IMarker(Marker) new;
+  _mRepDep: TPtr;
   pXL: XLSRepBuilder;
 
 table struct TmpData (
   cStaffStruct: comp
- ,cPost       : comp
+ ,cHistoryStr : comp
  ,cDep        : comp
  ,wOper       : word
  ,cOtherSS    : comp
  ,cOtherDep   : comp
+ ,cOldPost    : comp
  ,OldQty      : double
  ,OldSalary   : double
  ,OldBonusVred: double
  ,OldBonusPrem: double
  ,OldBonusSekr: double
+ ,cNewPost    : comp
  ,NewQty      : double
  ,NewSalary   : double
  ,NewBonusVred: double
  ,NewBonusPrem: double
  ,NewBonusSekr: double
 ) with index (
-  i01 = cStaffStruct
- ,i02 = wOper + cOtherSS + cPost
- ,i03 = cDep + wOper + cPost
+  i01 = cStaffStruct + wOper + cOtherSS
+ ,i02 = cDep
 );
 
 table struct TmpDep (
@@ -67,56 +74,81 @@ table struct TmpTotals (
 );
 
 create view
+var
+  _wOper: word;
+  _cOtherSS: comp;
 as select
   HistoryStr.Nrec
 from
   HistoryStr
  ,StaffStruct
+ ,HistoryStr HistoryStr20
+ ,HistoryStr HistoryStr21
  ,HistoryStr HistoryStrPrev
  ,TmpData TmpDataHS
+ ,StaffStruct OtherStaffStruct
  ,Str_RHist
  ,TmpData
  ,TmpDep
+ ,TmpData TmpDataDep
  ,TmpTotals
  ,DocRef DocRefIn
  ,StaffStruct StaffStructFrom
+ ,HistoryStr HistoryStrFrom
  ,DocRef DocRefOut
  ,StaffStruct StaffStructTo
+ ,Selection
 where ((
-      HistoryStr.StaffStr == StaffStruct.Nrec
-  and HistoryStr.StaffStr == HistoryStrPrev.StaffStr
-  and HistoryStr.DHist    >> HistoryStrPrev.DHist
-  and HistoryStr.StaffStr == TmpDataHS.cStaffStruct
-  and _dDate              == Str_RHist.DRec (noindex)
-  and DOCREF_STAFFSTRUCT  == DocRefIn.wTypeRef
-  and HistoryStr.Nrec     == DocRefIn.cDopFld2
-  and DocRefIn.cField1    == StaffStructFrom.Nrec
-  and DOCREF_STAFFSTRUCT  == DocRefOut.wTypeRef
-  and HistoryStr.Nrec     == DocRefOut.cDopFld1
-  and DocRefOut.cField2   == StaffStructTo.Nrec
+      HistoryStr.StaffStr   == StaffStruct.Nrec
+
+  and HistoryStr.StaffStr   == HistoryStr20.StaffStr
+  and _dDate                == HistoryStr20.DHist
+  and (HistoryStr20.wCodOper = 20)
+
+  and HistoryStr.StaffStr   == HistoryStr21.StaffStr
+  and _dDate                == HistoryStr21.DHist
+  and (HistoryStr21.wCodOper = 21)
+
+  and HistoryStr.StaffStr   == HistoryStrPrev.StaffStr
+  and HistoryStr.DHist      >> HistoryStrPrev.DHist
+
+  and _cOtherSS             == OtherStaffStruct.Nrec
+
+  and _dDate                == Str_RHist.DRec (noindex)
+
+  and DOCREF_STAFFSTRUCT    == DocRefIn.wTypeRef
+  and HistoryStr.Nrec       == DocRefIn.cDopFld2
+
+  and DocRefIn.cField1      == StaffStructFrom.Nrec
+
+  and StaffStructFrom.Nrec  == HistoryStrFrom.StaffStr
+  and HistoryStr.DHist      >> HistoryStrFrom.DHist
+  and (HistoryStrFrom.wCodOper <> 21)
+
+  and DOCREF_STAFFSTRUCT    == DocRefOut.wTypeRef
+  and coStaffStruct         == DocRefOut.wTable1
+  and HistoryStr.StaffStr   == DocRefOut.cField1
+
+  and DocRefOut.cField2     == StaffStructTo.Nrec
+
+  and _cSelection           == Selection.Nrec
+
+  and TmpDep.Nrec           == TmpDataDep.cDep
 ))
-bounds byDHist = _dDate              == HistoryStr.DHist
+bounds byDHist = _dDate                == HistoryStr.DHist
+             and HistoryStr.StaffStr   == TmpDataHS.cStaffStruct
+             and _wOper                == TmpDataHS.wOper
+             and _cOtherSS             == TmpDataHS.cOtherSS
 
-bounds byRHist = Str_RHist.cStaffStr == HistoryStr.StaffStr
-             and _dDate             >>= HistoryStr.DHist
+bounds byRHist = Str_RHist.cStaffStr   == HistoryStr.StaffStr
+             and _dDate               >>= HistoryStr.DHist
+             and HistoryStr.StaffStr   == TmpDataHS.cStaffStruct
 ;
-
-create view vLink
-as select
-  TmpDataCreate.cStaffStruct
-from
-  TmpData TmpDataCreate
- ,TmpData TmpDataDel
-where ((
-      OPER_CREATE             == TmpDataCreate.wOper
-  and (TmpDataCreate.cDep      = TmpDataCreate.cOtherDep
-  and  TmpDataCreate.cDep     <> 0)
-  and TmpDataCreate.cOtherSS  == TmpDataDel.cStaffStruct
-));
 
 screen sc1 (,,sci1Esc);
   fields
     _dDate: NoProtect;
+    Selection.Name: Protect, PickButton;
   buttons
     cmOk, default;
     cmCancel;
@@ -124,9 +156,23 @@ screen sc1 (,,sci1Esc);
 
  `Дата`.@@@@@@@@@@
 
-<. Продолжить .> <. Отмена .>
+ `Подписанты` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                     <. Продолжить .> <. Отмена .>
 >>
 end;
+
+window wPickDep 'Выбор подразделений, по которым формировать отчет' escClose doAccept;
+
+  browse brDep (,,sci1Esc);
+    table TmpDep;
+    recmarker = _mDep {TmpDep.Nrec};
+    fields
+      TmpDep.Code 'Код подразделения': [10], protect, noautosize;
+      TmpDep.Name 'Наименование подразделения': [30], protect;
+  end;
+
+end; //window wPickDep
 
 sql query qBonus =
 select sum(Str_RHist_Last.Summa)
@@ -164,108 +210,191 @@ function GetBonusOnDate(d: date; cSS: comp; doSalary: double; sName: string): do
     result := _qBonus.row.valAt(1);
 }
 
-procedure SetTmpDataOldValues(var buf: Type$TmpData);
+//Проверяет, нужно ли выводить в отчет текущую запись IsRegHistoryStr
+function IsRegHistoryStr: boolean;
 {
-  if getlast HistoryStrPrev = tsOk
+  result := true;
+  case HistoryStr.wCodOper of
+    21: //Удаление ставки
+    {
+      result &= getfirst HistoryStr20 != tsOk;
+      //Если есть исходящая ставка с таким же подразделением, что и у текущей ставки
+      //и дата ввода другой ставки = дате отчета - не добавляем эту запись в отчет
+      _loop DocRefOut
+        if getfirst StaffStructTo = tsOk
+          result &= not(StaffStructTo.Department = StaffStruct.Department and (StaffStructTo.dInput = Add_Day(_dDate,1) or StaffStructTo.dInput = _dDate));
+    }
+    22: //Изменение количества ставок
+    {
+      result &= HistoryStr.HWorkStations > 0;
+      result &= getfirst HistoryStr21 != tsOk;
+      //Если есть исходящая ставка с таким же подразделением, что и у текущей ставки
+      //и дата ввода другой ставки = дате отчета - не добавляем эту запись в отчет
+      _loop DocRefOut
+        if getfirst StaffStructTo = tsOk
+          result &= not(StaffStructTo.Department = StaffStruct.Department and StaffStructTo.dInput = _dDate);
+    }
+    else
+      result &= getfirst HistoryStr21 != tsOk;
+  end;
+}
+
+//ищет или создает новую запись во временной таблице по текущей ставке
+procedure GetTmpDataHS(wwOper: word; ccOtherSS: comp);
+{
+  _wOper := wwOper;
+  _cOtherSS := ccOtherSS;
+  if getfirst TmpDataHS != tsOk
   {
-    buf.OldQty       := HistoryStrPrev.HWorkStations;
-    buf.OldSalary    := HistoryStrPrev.HTaxRate;
-    buf.OldBonusVred := GetBonusOnDate(Sub_Day(_dDate, 1), buf.cStaffStruct, buf.OldSalary, '%вредность%');
-    buf.OldBonusPrem := GetBonusOnDate(Sub_Day(_dDate, 1), buf.cStaffStruct, buf.OldSalary, '%премия%');
-    buf.OldBonusSekr := GetBonusOnDate(Sub_Day(_dDate, 1), buf.cStaffStruct, buf.OldSalary, '%секретность%');
+    ClearBuffer(#TmpDataHS);
+    TmpDataHS.cStaffStruct := HistoryStr.StaffStr;
+    TmpDataHS.cHistoryStr := HistoryStr.Nrec;
+    TmpDataHS.cDep := StaffStruct.Department;
+    TmpDataHS.wOper := _wOper;
+    TmpDataHS.cOtherSS := _cOtherSS;
+    if getfirst OtherStaffStruct = tsOk
+      TmpDataHS.cOtherDep := OtherStaffStruct.Department;
+    insert current TmpDataHS;
   }
 }
 
-procedure SetTmpDataNewValues(var buf: Type$TmpData);
+function GetOper: word;
 {
-  buf.NewQty       := HistoryStr.HWorkStations;
-  buf.NewSalary    := HistoryStr.HTaxRate;
-  buf.NewBonusVred := GetBonusOnDate(_dDate, buf.cStaffStruct, buf.NewSalary, '%вредность%');
-  buf.NewBonusPrem := GetBonusOnDate(_dDate, buf.cStaffStruct, buf.NewSalary, '%премия%');
-  buf.NewBonusSekr := GetBonusOnDate(_dDate, buf.cStaffStruct, buf.NewSalary, '%секретность%');
+  case HistoryStr.wCodOper of
+    20: //Создание ставки
+    {
+      result := OPER_CREATE;
+      if getfirst DocRefIn = tsOk
+        if getfirst StaffStructFrom = tsOk
+          if StaffStructFrom.Department = StaffStruct.Department
+            result := OPER_EDIT;
+    }
+    21:
+      result := OPER_DEL;
+    else
+      result := OPER_EDIT;
+  end;
 }
 
 procedure PrepareDataByHistoryStr;
 {
   AddBounds(tbByDHist);
+
+  var cnt: longint = 0;
+  _loop HistoryStr cnt++;
+  StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak, 'Выборка по истории изменения ШЕ', cnt);
+
   _loop HistoryStr
   {
+    if not nextvisual break;
     if getfirst StaffStruct != tsOk continue;
-    if getfirst TmpDataHS != tsOk
-    {
-      ClearBuffer(#TmpDataHS);
-      TmpDataHS.cStaffStruct := HistoryStr.StaffStr;
-      TmpDataHS.cPost := StaffStruct.Post;
-      TmpDataHS.cDep := StaffStruct.Department;
-      insert current TmpDataHS;
-    }
-    if getfirst DocRefIn = tsOk
-      if getfirst StaffStructFrom = tsOk
+
+    //Если выводить в отчет не нужно - пропускаем текущую запись
+    if not IsRegHistoryStr continue;
+
+    //Определяем вид операции, который будем отображать в отчете
+    var wwOper: word = GetOper;
+
+    case wwOper of
+      OPER_CREATE:
       {
-        TmpDataHS.cOtherSS  := StaffStructFrom.Nrec;
-        TmpDataHS.cOtherDep := StaffStructFrom.Department;
+        var ccOtherSS: comp = if(getfirst DocRefIn = tsOk, DocRefIn.cField1, 0);
+        GetTmpDataHS(wwOper, ccOtherSS);
+        TmpDataHS.cNewPost     := StaffStruct.Post;
+        TmpDataHS.NewQty       := HistoryStr.HWorkStations;
+        TmpDataHS.NewSalary    := HistoryStr.HTaxRate;
+        TmpDataHS.NewBonusVred := GetBonusOnDate(_dDate, TmpDataHS.cStaffStruct, TmpDataHS.NewSalary, '%вредность%');
+        TmpDataHS.NewBonusPrem := GetBonusOnDate(_dDate, TmpDataHS.cStaffStruct, TmpDataHS.NewSalary, '%премия%');
+        TmpDataHS.NewBonusSekr := GetBonusOnDate(_dDate, TmpDataHS.cStaffStruct, TmpDataHS.NewSalary, '%секретность%');
       }
-    if getfirst DocRefOut = tsOk
-      if getfirst StaffStructTo = tsOk
+      OPER_DEL:
       {
-        TmpDataHS.cOtherSS  := StaffStructTo.Nrec;
-        TmpDataHS.cOtherDep := StaffStructTo.Department;
-      }
-    case HistoryStr.wCodOper of
-      20: //Создание ставки
-      {
-        TmpDataHS.wOper := OPER_CREATE;
-        SetTmpDataNewValues(TmpDataHS.Buffer);
-      }
-      21: //Ликвидация ставки
-      {
-        TmpDataHS.wOper := OPER_DEL;
-        SetTmpDataOldValues(TmpDataHS.Buffer);
-      }
-      22: //Изменение количества ставок
-      {
-        if HistoryStr.HWorkStations = 0
+        var ccOtherSS: comp = 0;
+        _loop DocRefOut
+          if getfirst StaffStructTo = tsOk
+            if StaffStructTo.dInput = Add_Day(_dDate,1)
+              ccOtherSS := StaffStructTo.Nrec;
+        GetTmpDataHS(wwOper, ccOtherSS);
+        if getlast HistoryStrPrev = tsOk
         {
-          TmpDataHS.wOper := OPER_DEL;
-          SetTmpDataOldValues(TmpDataHS.Buffer);
+          TmpDataHS.cOldPost     := StaffStruct.Post;
+          TmpDataHS.OldQty       := HistoryStrPrev.HWorkStations;
+          TmpDataHS.OldSalary    := HistoryStrPrev.HTaxRate;
+          TmpDataHS.OldBonusVred := GetBonusOnDate(Sub_Day(_dDate, 1), TmpDataHS.cStaffStruct, TmpDataHS.OldSalary, '%вредность%');
+          TmpDataHS.OldBonusPrem := GetBonusOnDate(Sub_Day(_dDate, 1), TmpDataHS.cStaffStruct, TmpDataHS.OldSalary, '%премия%');
+          TmpDataHS.OldBonusSekr := GetBonusOnDate(Sub_Day(_dDate, 1), TmpDataHS.cStaffStruct, TmpDataHS.OldSalary, '%секретность%');
         }
-        else
-        {
-          TmpDataHS.wOper := OPER_EDIT;
-          SetTmpDataOldValues(TmpDataHS.Buffer);
-          SetTmpDataNewValues(TmpDataHS.Buffer);
-        }
+
       }
-      23: //Изменение атрибутов ставки
+      OPER_EDIT:
       {
-        if TmpDataHS.wOper != OPER_CREATE
-          TmpDataHS.wOper := OPER_EDIT;
-        SetTmpDataOldValues(TmpDataHS.Buffer);
-        SetTmpDataNewValues(TmpDataHS.Buffer);
+        GetTmpDataHS(wwOper, 0);
+        TmpDataHS.cNewPost     := StaffStruct.Post;
+        TmpDataHS.NewQty       := HistoryStr.HWorkStations;
+        TmpDataHS.NewSalary    := HistoryStr.HTaxRate;
+        TmpDataHS.NewBonusVred := GetBonusOnDate(_dDate, TmpDataHS.cStaffStruct, TmpDataHS.NewSalary, '%вредность%');
+        TmpDataHS.NewBonusPrem := GetBonusOnDate(_dDate, TmpDataHS.cStaffStruct, TmpDataHS.NewSalary, '%премия%');
+        TmpDataHS.NewBonusSekr := GetBonusOnDate(_dDate, TmpDataHS.cStaffStruct, TmpDataHS.NewSalary, '%секретность%');
+
+        if getfirst DocRefIn = tsOk
+        {
+          if getfirst StaffStructFrom = tsOk
+            if getlast HistoryStrFrom = tsOk
+            {
+              TmpDataHS.cOldPost     := StaffStructFrom.Post;
+              TmpDataHS.OldQty       := HistoryStr.HWorkStations;
+              TmpDataHS.OldSalary    := HistoryStrFrom.HTaxRate;
+              TmpDataHS.OldBonusVred := GetBonusOnDate(_dDate, StaffStructFrom.Nrec, TmpDataHS.OldSalary, '%вредность%');
+              TmpDataHS.OldBonusPrem := GetBonusOnDate(_dDate, StaffStructFrom.Nrec, TmpDataHS.OldSalary, '%премия%');
+              TmpDataHS.OldBonusSekr := GetBonusOnDate(_dDate, StaffStructFrom.Nrec, TmpDataHS.OldSalary, '%секретность%');
+            }
+        }
+        else if getlast HistoryStrPrev = tsOk
+        {
+          TmpDataHS.cOldPost     := StaffStruct.Post;
+          TmpDataHS.OldQty       := HistoryStrPrev.HWorkStations;
+          TmpDataHS.OldSalary    := HistoryStrPrev.HTaxRate;
+          TmpDataHS.OldBonusVred := GetBonusOnDate(Sub_Day(_dDate, 1), TmpDataHS.cStaffStruct, TmpDataHS.OldSalary, '%вредность%');
+          TmpDataHS.OldBonusPrem := GetBonusOnDate(Sub_Day(_dDate, 1), TmpDataHS.cStaffStruct, TmpDataHS.OldSalary, '%премия%');
+          TmpDataHS.OldBonusSekr := GetBonusOnDate(Sub_Day(_dDate, 1), TmpDataHS.cStaffStruct, TmpDataHS.OldSalary, '%секретность%');
+        }
       }
     end;
+
     update current TmpDataHS;
   }
+  StopVisual;
   SubBounds(tbByDHist);
 }
 
 procedure PrepareDataByStr_RHist;
 {
   AddBounds(tbByRHist);
+
+  var cnt: longint = 0;
+  _loop Str_RHist cnt++;
+  StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak, 'Выборка по истории изменения надбавок', cnt);
+
   _loop Str_RHist
+  {
+    if not nextvisual break;
+
     if getlast HistoryStr = tsOk
       if getfirst StaffStruct = tsOk
         if getfirst TmpDataHS != tsOk
         {
           ClearBuffer(#TmpDataHS);
           TmpDataHS.cStaffStruct := HistoryStr.StaffStr;
-          TmpDataHS.cPost        := StaffStruct.Post;
+          TmpDataHS.cHistoryStr  := HistoryStr.Nrec;
           TmpDataHS.cDep         := StaffStruct.Department;
+          TmpDataHS.wOper        := OPER_EDIT;
+          TmpDataHS.cOldPost     := StaffStruct.Post;
           TmpDataHS.OldQty       := HistoryStr.HWorkStations;
           TmpDataHS.OldSalary    := HistoryStr.HTaxRate;
           TmpDataHS.OldBonusVred := GetBonusOnDate(Sub_Day(_dDate, 1), TmpDataHS.cStaffStruct, TmpDataHS.OldSalary, '%вредность%');
           TmpDataHS.OldBonusPrem := GetBonusOnDate(Sub_Day(_dDate, 1), TmpDataHS.cStaffStruct, TmpDataHS.OldSalary, '%премия%');
           TmpDataHS.OldBonusSekr := GetBonusOnDate(Sub_Day(_dDate, 1), TmpDataHS.cStaffStruct, TmpDataHS.OldSalary, '%секретность%');
+          TmpDataHS.cNewPost     := StaffStruct.Post;
           TmpDataHS.NewQty       := HistoryStr.HWorkStations;
           TmpDataHS.NewSalary    := HistoryStr.HTaxRate;
           TmpDataHS.NewBonusVred := GetBonusOnDate(_dDate, TmpDataHS.cStaffStruct, TmpDataHS.NewSalary, '%вредность%');
@@ -273,29 +402,15 @@ procedure PrepareDataByStr_RHist;
           TmpDataHS.NewBonusSekr := GetBonusOnDate(_dDate, TmpDataHS.cStaffStruct, TmpDataHS.NewSalary, '%секретность%');
           insert current TmpDataHS;
         }
+  }
+  StopVisual;
   SubBounds(tbByRHist);
-}
-
-procedure LinkDelAndCreate;
-{
-  while vLink.getfirst TmpDataCreate = tsOk
-    if vLink.getfirst TmpDataDel = tsOk
-    {
-      vLink.TmpDataCreate.OldQty       := vLink.TmpDataDel.OldQty;
-      vLink.TmpDataCreate.OldSalary    := vLink.TmpDataDel.OldSalary;
-      vLink.TmpDataCreate.OldBonusVred := vLink.TmpDataDel.OldBonusVred;
-      vLink.TmpDataCreate.OldBonusPrem := vLink.TmpDataDel.OldBonusPrem;
-      vLink.TmpDataCreate.OldBonusSekr := vLink.TmpDataDel.OldBonusSekr;
-      vLink.delete current TmpDataDel;
-      vLink.TmpDataCreate.wOper        := OPER_EDIT;
-      vLink.TmpDataCreate.cOtherSS     := 0;
-      vLink.TmpDataCreate.cOtherDep    := 0;
-      vLink.update current TmpDataCreate;
-    }
 }
 
 procedure PrepareTmpDep;
 {
+  StartNewVisual(vtRotateVisual, vfTimer, 'Формирование списка подразделений', 0);
+
   insert TmpDep(Nrec, Code, Name)
   select
     CatDep.Nrec
@@ -306,6 +421,50 @@ procedure PrepareTmpDep;
     TmpData.cDep == CatDep.Nrec
   ))
   ignore_errors(tsDuplicateKey);
+
+  StopVisual;
+}
+
+create view vHistoryStr
+var cHistoryStr: comp;
+as select
+  HistoryStr.Nrec
+from
+  HistoryStr
+ ,AttrVal avPodgr
+ ,SpKau spkPodgr
+ ,AttrVal avCateg
+ ,SpKau spkCateg
+where ((
+      vHistoryStr.cHistoryStr     == HistoryStr.Nrec
+  and coKlKatego                  == avPodgr.wTable
+  and HistoryStr.cSpr2            == avPodgr.cRec
+  and ATTRNAM_NREC_KLKATEGO_PODGR == avPodgr.cAttrNam
+  and avPodgr.vComp               == spkPodgr.Nrec
+  and coKlKatego                  == avCateg.wTable
+  and HistoryStr.cSpr2            == avCateg.cRec
+  and ATTRNAM_NREC_KLKATEGO_CATEG == avCateg.cAttrNam
+  and avCateg.vComp               == spkCateg.Nrec
+));
+
+function GetPodgr(ccHistoryStr: comp): string;
+{
+  result := 'НГр';
+  vHistoryStr.cHistoryStr := ccHistoryStr;
+  if vHistoryStr.getfirst HistoryStr = tsOk
+    if vHistoryStr.getfirst avPodgr = tsOk
+      if vHistoryStr.getfirst spkPodgr = tsOk
+        result := vHistoryStr.spkPodgr.Name;
+}
+
+function GetCateg(ccHistoryStr: comp): string;
+{
+  result := '';
+  vHistoryStr.cHistoryStr := ccHistoryStr;
+  if vHistoryStr.getfirst HistoryStr = tsOk
+    if vHistoryStr.getfirst avCateg = tsOk
+      if vHistoryStr.getfirst spkCateg = tsOk
+        result := vHistoryStr.spkCateg.Name;
 }
 
 procedure AddTmpTotals(ccDep   : comp;
@@ -405,8 +564,12 @@ procedure PrepareTmpDepTotals;
                               .setParam('cAttrNamCateg', ATTRNAM_NREC_KLKATEGO_CATEG)
                               .setParam('cAttrNamPodgr', ATTRNAM_NREC_KLKATEGO_PODGR);
 
+  StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, 'Расчет итогов по подразделениям', RecordsInTable(#TmpDep));
+
   _loop TmpDep
   {
+    if not nextvisual break;
+
     q.setParam('cDep', TmpDep.Nrec);
     var d: date = _dDate;
     q.setParam('dateSts', d);
@@ -417,25 +580,25 @@ procedure PrepareTmpDepTotals;
     }
     while q.fetch.errorCode = tsOk
     {
-      AddTmpTotals(TmpDep.Nrec, 2, q.row.val('podgr'), q.row.val('categ'), 0, 0, q.row.val('Qty'), q.row.val('Salary'));
-      AddTmpTotals(TmpDep.Nrec, 1, q.row.val('podgr'), ''                , 0, 0, q.row.val('Qty'), q.row.val('Salary'));
-      AddTmpTotals(TmpDep.Nrec, 0, ''                , ''                , 0, 0, q.row.val('Qty'), q.row.val('Salary'));
+      AddTmpTotals(TmpDep.Nrec, 2, q.row.val('podgr'), q.row.val('categ'), q.row.val('Qty'), q.row.val('Salary'), q.row.val('Qty'), q.row.val('Salary'));
+      AddTmpTotals(TmpDep.Nrec, 1, q.row.val('podgr'), ''                , q.row.val('Qty'), q.row.val('Salary'), q.row.val('Qty'), q.row.val('Salary'));
+      AddTmpTotals(TmpDep.Nrec, 0, ''                , ''                , q.row.val('Qty'), q.row.val('Salary'), q.row.val('Qty'), q.row.val('Salary'));
     }
 
-    d := Sub_Day(_dDate, 1);
-    q.setParam('dateSts', d);
-    if q.execute.errorCode != tsOk
+    _loop TmpDataDep
     {
-      Message('Ошибка выполнения qDepTotals: ' + q.errorCode, error);
-      exit;
-    }
-    while q.fetch.errorCode = tsOk
-    {
-      AddTmpTotals(TmpDep.Nrec, 2, q.row.val('podgr'), q.row.val('categ'), q.row.val('Qty'), q.row.val('Salary'), 0, 0);
-      AddTmpTotals(TmpDep.Nrec, 1, q.row.val('podgr'), ''                , q.row.val('Qty'), q.row.val('Salary'), 0, 0);
-      AddTmpTotals(TmpDep.Nrec, 0, ''                , ''                , q.row.val('Qty'), q.row.val('Salary'), 0, 0);
+      var sPodgr: string = GetPodgr(TmpDataDep.cHistoryStr);
+      var sCateg: string = GetCateg(TmpDataDep.cHistoryStr);
+      var dDeltaQty: double = TmpDataDep.OldQty - TmpDataDep.NewQty;
+      var dDeltaSum: double = TmpDataDep.OldQty * (TmpDataDep.OldSalary + TmpDataDep.OldBonusVred + TmpDataDep.OldBonusSekr + TmpDataDep.OldBonusPrem) -
+                              TmpDataDep.NewQty * (TmpDataDep.NewSalary + TmpDataDep.NewBonusVred + TmpDataDep.NewBonusSekr + TmpDataDep.NewBonusPrem);
+      AddTmpTotals(TmpDataDep.cDep, 2, sPodgr, sCateg, dDeltaQty, dDeltaSum, 0, 0);
+      AddTmpTotals(TmpDataDep.cDep, 1, sPodgr, ''    , dDeltaQty, dDeltaSum, 0, 0);
+      AddTmpTotals(TmpDataDep.cDep, 0, ''    , ''    , dDeltaQty, dDeltaSum, 0, 0);
     }
   }
+
+  StopVisual;
 }
 
 procedure PrepareData;
@@ -445,7 +608,6 @@ procedure PrepareData;
   MtClear(#TmpTotals, mfNormal);
   PrepareDataByHistoryStr;
   PrepareDataByStr_RHist;
-  LinkDelAndCreate;
   PrepareTmpDep;
   PrepareTmpDepTotals;
 }
@@ -456,37 +618,46 @@ as select
 from
   TmpDep (i02)
  ,TmpData
- ,Catalogs CatPost
+ ,Catalogs OldPost
+ ,Catalogs NewPost
  ,Catalogs CatDepOther
+ ,Appointments App
+ ,Persons
  ,TmpTotals TT0
  ,TmpTotals TT1
  ,TmpTotals TT2
 where ((
-      TmpDep.Nrec       == TmpData.cDep
-  and TmpData.cPost     == CatPost.Nrec
-  and TmpData.cOtherDep == CatDepOther.Nrec
-  and 0                 == TT0.wType
-  and TmpDep.Nrec       == TT0.cDep
-  and 1                 == TT1.wType
-  and TmpDep.Nrec       == TT1.cDep
-  and 2                 == TT2.wType
-  and TmpDep.Nrec       == TT2.cDep
-  and TT1.sPodgr        == TT2.sPodgr
-));
+      TmpDep.Nrec          == TmpData.cDep
+  and TmpData.cOldPost     == OldPost.Nrec
+  and TmpData.cNewPost     == NewPost.Nrec
+  and TmpData.cOtherDep    == CatDepOther.Nrec
+  and TmpData.cStaffStruct == App.StaffStr
+  and (App.wAddWord1 = 1 and (App.AppointDate <= _dDate and (App.DismissDate = 0 or App.DismissDate >= _dDate)))
+  and App.Person           == Persons.Nrec
+  and (Persons.IsEmployee = 'С' or Persons.IsEmployee = 'У')
+  and 0                    == TT0.wType
+  and TmpDep.Nrec          == TT0.cDep
+  and 1                    == TT1.wType
+  and TmpDep.Nrec          == TT1.cDep
+  and 2                    == TT2.wType
+  and TmpDep.Nrec          == TT2.cDep
+  and TT1.sPodgr           == TT2.sPodgr
+)) and FoundMarker(_mRepDep, vRep.TmpDep.Nrec);
 
-procedure PrintXLSOneRec;
+procedure PrintXLSOneRec(isFirstRec: boolean);
 {
   pXL.ClearTblBuffer;
   pXL.SetTblStringFldValue('cStaffStruct', string(vRep.TmpData.cStaffStruct,0,0));
   pXL.SetTblStringFldValue('Type'        , 1);
   pXL.SetTblStringFldValue('DepCode'     , vRep.TmpDep.Code);
-  pXL.SetTblStringFldValue('DepName'     , vRep.TmpDep.Name);
-  pXL.SetTblStringFldValue('PostName'    , if(vRep.getfirst CatPost = tsOk, vRep.CatPost.Name, ''));
+  pXL.SetTblStringFldValue('DepName'     , if(isFirstRec, vRep.TmpDep.Name, ''));
+  pXL.SetTblStringFldValue('OldPostName' , if(vRep.getfirst OldPost = tsOk, vRep.OldPost.Name, ''));
   pXL.SetTblNumberFldValue('OldQty'      , vRep.TmpData.OldQty);
   pXL.SetTblNumberFldValue('OldSalary'   , vRep.TmpData.OldSalary);
   pXL.SetTblNumberFldValue('OldBonusVred', vRep.TmpData.OldBonusVred);
   pXL.SetTblNumberFldValue('OldBonusSekr', vRep.TmpData.OldBonusSekr);
   pXL.SetTblNumberFldValue('OldBonusPrem', vRep.TmpData.OldBonusPrem);
+  pXL.SetTblStringFldValue('NewPostName' , if(vRep.getfirst NewPost = tsOk, vRep.NewPost.Name, ''));
   pXL.SetTblNumberFldValue('NewQty'      , vRep.TmpData.NewQty);
   pXL.SetTblNumberFldValue('NewSalary'   , vRep.TmpData.NewSalary);
   pXL.SetTblNumberFldValue('NewBonusVred', vRep.TmpData.NewBonusVred);
@@ -499,6 +670,9 @@ procedure PrintXLSOneRec;
     pXL.SetTblStringFldValue('OtherDepCode', vRep.CatDepOther.Code);
     pXL.SetTblStringFldValue('OtherDepName', vRep.CatDepOther.Name);
   }
+  vRep._loop App
+    if vRep.getfirst Persons = tsOk
+      pXL.AddTblStringFldValue('Comment', GetSurnameWithInitials(vRep.Persons.FIO));
   pXL.InsTblRow;
 }
 
@@ -507,7 +681,7 @@ procedure PrintXLSOneDepTotals;
   if vRep.getfirst TT0 = tsOk
   {
     pXL.ClearTblBuffer;
-    pXL.SetTblStringFldValue('PostName' , 'Итого по ' + vRep.TmpDep.Code);
+    pXL.SetTblStringFldValue('OldPostName' , 'Итого по ' + vRep.TmpDep.Code);
     pXL.SetTblNumberFldValue('OldQty'   , vRep.TT0.OldQty);
     pXL.SetTblNumberFldValue('OldSalary', vRep.TT0.OldSum);
     pXL.SetTblNumberFldValue('NewQty'   , vRep.TT0.NewQty);
@@ -519,7 +693,7 @@ procedure PrintXLSOneDepTotals;
   vRep._loop TT1
   {
     pXL.ClearTblBuffer;
-    pXL.SetTblStringFldValue('PostName' , 'В том числе ' + vRep.TT1.sPodgr + ':');
+    pXL.SetTblStringFldValue('OldPostName' , 'В том числе ' + vRep.TT1.sPodgr + ':');
     pXL.SetTblNumberFldValue('OldQty'   , vRep.TT1.OldQty);
     pXL.SetTblNumberFldValue('OldSalary', vRep.TT1.OldSum);
     pXL.SetTblNumberFldValue('NewQty'   , vRep.TT1.NewQty);
@@ -530,7 +704,7 @@ procedure PrintXLSOneDepTotals;
     vRep._loop TT2
     {
       pXL.ClearTblBuffer;
-      pXL.SetTblStringFldValue('PostName' , vRep.TT2.sCateg + ' ' + vRep.TT2.sPodgr);
+      pXL.SetTblStringFldValue('OldPostName' , vRep.TT2.sCateg + ' ' + vRep.TT2.sPodgr);
       pXL.SetTblNumberFldValue('OldQty'   , vRep.TT2.OldQty);
       pXL.SetTblNumberFldValue('OldSalary', vRep.TT2.OldSum);
       pXL.SetTblNumberFldValue('NewQty'   , vRep.TT2.NewQty);
@@ -543,8 +717,12 @@ procedure PrintXLSOneDepTotals;
 
 procedure PrintXLSOneDep;
 {
+  var isFirstRec: boolean = true;
   vRep._loop TmpData
-    PrintXLSOneRec;
+  {
+    PrintXLSOneRec(isFirstRec);
+    isFirstRec := false;
+  }
   PrintXLSOneDepTotals;
 }
 
@@ -556,6 +734,18 @@ procedure PrintXlsReport(isCreateXLT: boolean; sXLTFileName: string);
 
   pXL.CreateVar(sXLSFileName);
   pXL.SetDateVar('dRep', _dDate);
+  if getfirst Selection = tsOk
+    if _signers.FindFeeSignersByNRec(Selection.Nrec)
+      if _signers.GetSignerFirst
+      {
+        pXL.SetStringVar('SignerFIO', _signers.GetSignerFIO(7));
+        pXL.SetStringVar('SignerPost', _signers.GetSignerPosition(1));
+        if _signers.GetSignerNext
+        {
+          pXL.SetStringVar('SoglFIO', _signers.GetSignerFIO(7));
+          pXL.SetStringVar('SoglPost', _signers.GetSignerPosition(1));
+        }
+      }
   pXL.PublishVar;
 
   pXL.CreateTbls(sXLSFileName);
@@ -564,12 +754,13 @@ procedure PrintXlsReport(isCreateXLT: boolean; sXLTFileName: string);
   pXL.CreateTblFld('Type'        );
   pXL.CreateTblFld('DepCode'     );
   pXL.CreateTblFld('DepName'     );
-  pXL.CreateTblFld('PostName'    );
+  pXL.CreateTblFld('OldPostName' );
   pXL.CreateTblFld('OldQty'      );
   pXL.CreateTblFld('OldSalary'   );
   pXL.CreateTblFld('OldBonusVred');
   pXL.CreateTblFld('OldBonusSekr');
   pXL.CreateTblFld('OldBonusPrem');
+  pXL.CreateTblFld('NewPostName' );
   pXL.CreateTblFld('NewQty'      );
   pXL.CreateTblFld('NewSalary'   );
   pXL.CreateTblFld('NewBonusVred');
@@ -579,10 +770,16 @@ procedure PrintXlsReport(isCreateXLT: boolean; sXLTFileName: string);
   pXL.CreateTblFld('cOtherSS'    );
   pXL.CreateTblFld('OtherDepCode');
   pXL.CreateTblFld('OtherDepName');
+  pXL.CreateTblFld('Comment');
 
   if not isCreateXLT
+  {
+    _mRepDep := InitMarker('', 8, 10, 10, true);
+    _mDep.ExportTo(_mRepDep);
     vRep._loop TmpDep
       PrintXLSOneDep;
+    DoneMarker(_mRepDep, '');
+  }
 
   pXL.PublishTbl('Main');
 
@@ -596,19 +793,46 @@ handleevent
   {
     PrepareData;
     if getfirst TmpData = tsOk
+    {
+      if RecordsInTable(#TmpData) > 1
+        if RunWindowModal(wPickDep) != cmDefault
+          exit;
+
+      if _mDep.Count = 0
+        _mDep.MarkUnmarkRec(TmpDep.Nrec);
+
       PrintXlsReport(false, TranslatePath('%StartPath%xls\AG_SHR_Change.xltm'));
+    }
     else
       Message('Отсутствуют данные для формирования отчета', Warning);
+  }
+
+  cmPick:
+  {
+    case CurField of
+      #Selection.Name:
+      {
+        _signers.RunWindowFeeSigners(1);
+        _cSelection := _signers.GetFeeSigners;
+        if getfirst Selection = tsOk
+          RereadRecord;
+      }
+    end;
   }
 
   cmInit:
   {
     if not ReadMyDSK(_dDate, '_dDate_ag_shr_change', true) _dDate := Cur_Date;
+    if not ReadMyDSK(_cSelection, '_cSelection_ag_shr_change', true) _cSelection := 0;
+    _signers.InitFeeSigners(32002);
+    if getfirst Selection = tsOk
+      _signers.FindFeeSignersByNRec(Selection.Nrec);
   }
 
   cmDone:
   {
     SaveMyDSK(_dDate, '_dDate_ag_shr_change');
+    SaveMyDSK(_cSelection, '_cSelection_ag_shr_change');
   }
 
 end;
