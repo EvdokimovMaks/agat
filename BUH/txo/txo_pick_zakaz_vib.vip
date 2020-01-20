@@ -1,0 +1,146 @@
+#include Query.vih
+#include GetKau.vih
+#include TxoApi.vih
+
+#component "AGAT"
+
+VipInterface Txo_pick_zakaz_vib Implements ObjTxoIdentPlugin;
+
+Interface Txo_pick_zakaz_vib;
+
+table struct TmpZakVib (
+    cZakVib: comp
+   ,sZakVib: string
+   ,Summa: double
+   ,SumOb: double
+   ,Saldo: double
+) with index (
+  i01 = sZakVib
+);
+
+#include GetKau.var
+
+create view
+var
+  _cSoprHoz: comp;
+as select
+  TmpZakVib.Saldo - SoprHoz.Summa (fieldname=SaldoMinusSoprHozFld)
+from
+  SoprHoz
+ ,StepDoc
+ ,BaseDoc BaseDocPredopl
+ ,Stepdoc StepDocPredopl
+ ,TmpZakVib
+where ((
+      _cSoprHoz           == SoprHoz.Nrec
+  and SoprHoz.cStepDoc    == StepDoc.Nrec
+  and SoprHoz.cPredoplDO  == BaseDocPredopl.Nrec
+  and BaseDocPredopl.Nrec == StepDocPredopl.cBaseDoc
+))
+;
+
+function GetInfo : string;
+{
+  result := 'Агат. Выбор заказа выбытия из спецификации ДО, связанного с хозоперацией';
+}
+
+function ParamMaster : string;
+{
+  Message('Выбранный заказ помещается в Режим 9'#13''+
+          'Если хозоперация не связана с ДО,'#13''+
+          'выбор осуществляется из каталога объектов строительства');
+  result := '';
+}
+
+window wPickZakVib 'Выбор заказа выбытия' escClose, doAccept;
+  browse brZakVib (,,sci1Esc);
+    table TmpZakVib;
+    fields
+      TmpZakVib.sZakVib 'Заказ выбытия': [40], protect;
+      TmpZakVib.Summa 'Сумма','по ДО': [14, '\2p[|-]3666`666`666`666`666`666`666.88'], protect;
+      TmpZakVib.SumOb 'Сумма','оплачено': [14, '\2p[|-]3666`666`666`666`666`666`666.88'], protect;
+      TmpZakVib.Saldo 'Остаток': [14, '\2p[|-]3666`666`666`666`666`666`666.88'], protect;
+      SaldoMinusSoprHozFld 'Остаток с учетом','суммы хозоперации': [14, '\2p[|-]3666`666`666`666`666`666`666.88'], protect;
+  end;
+end; //window wPickZakVib
+
+sql query qZakVib =
+  select
+    t.cZakVib,
+    KatStroy.Name as sZakVib,
+    round(t.Summa, 2) as Summa,
+    round(tOborot.SumOb, 2) as SumOb,
+    round(t.Summa, 2) - round(tOborot.SumOb, 2) as Saldo
+  from (
+    select
+      BaseDoc.Nrec as cBaseDoc
+     ,KatStroy.Nrec as cZakVib
+     ,sum(SpStep.Summa + case when BaseDoc.VhodNal = 2 then SpStep.NDS else 0 end) as Summa
+    from StepDoc
+    join BaseDoc on BaseDoc.Nrec = StepDoc.cBaseDoc
+    join SpStep on SpStep.cStepDoc = StepDoc.Nrec
+    join AttrVal avZakVib on avZakVib.wTable = 1104 and avZakVib.cRec = SpStep.Nrec and avZakVib.cAttrNam=#comp(0001000000000A87h)
+    join KatStroy on KatStroy.Nrec = avZakVib.vComp
+    where StepDoc.Nrec = :cStepDoc
+    group by BaseDoc.Nrec, KatStroy.Nrec
+  ) t
+  outer apply (
+    select
+      sum(o.SumOb) as SumOb: double
+    from (
+      select o.SumOb
+      from BaseFin
+      join SoprHoz on SoprHoz.Nrec = BaseFin.cSoprHoz
+      join Oborot o on o.cSoprHoz = SoprHoz.Nrec and o.cPlansSch = #comp(000100000000000Eh)
+      where
+          (BaseFin.cBaseDoc = t.cBaseDoc or BaseFin.cPredoplDO = t.cBaseDoc)
+      and o.SchetK = '851'
+      and o.KauKs[4] = t.cZakVib
+      union all
+      select -o.SumOb
+      from BaseFin
+      join SoprHoz on SoprHoz.Nrec = BaseFin.cSoprHoz
+      join Oborot o on o.cSoprHoz = SoprHoz.Nrec and o.cPlansSch = #comp(000100000000000Eh)
+      where
+          (BaseFin.cBaseDoc = t.cBaseDoc or BaseFin.cPredoplDO = t.cBaseDoc)
+      and o.SchetO = '851'
+      and o.KauOs[4] = t.cZakVib
+    ) o
+  ) tOborot
+  left join KatStroy on KatStroy.Nrec = t.cZakVib
+;
+
+procedure StoreCycles(hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  _cSoprHoz := buf.cSoprHoz;
+  if getfirst SoprHoz != tsOk exit;
+
+  SetWindowTitle(wPickZakVib, 'Выбор заказа выбытия. Сумма хозоперации: ' + DoubleToStr(SoprHoz.Summa, '\2p[|-]3666`666`666`666`666`666`666.88'));
+
+  var cSD: comp = 0;
+  if getfirst StepDoc = tsOk
+    cSD := StepDoc.Nrec;
+  else if getfirst BaseDocPredopl = tsOk
+    if getfirst StepDocPredopl = tsOk
+      cSD := StepDocPredopl.Nrec;
+
+  mtClear(#TmpZakVib, mfNormal);
+  var q: IQuery = queryManager.createQuery(qZakVib).setParam('cStepDoc', cSD);
+  sqlCopyInto(q, #TmpZakVib, true);
+  RereadRecord(#TmpZakVib);
+
+  var cZakVib: comp = 0;
+
+  var isOk: boolean = false;
+  if RecordsInTable(#TmpZakVib) = 0
+    isOk := iGetKau.GetCodeKau(cgiPick, cgKau_ObjBuild, cZakVib) > 0;
+  else if RunWindowModal(wPickZakVib) = cmDefault
+  {
+    isOk := true;
+    cZakVib := TmpZakVib.cZakVib;
+  }
+
+  if isOk
+    TxoHeadAddKau(hTxo, wflKau_Mode9, cgKau_ObjBuild, cZakVib);
+}
+end.
