@@ -9,7 +9,7 @@
 #component "PD_AGAT"
 
 interface PD_SetCalPlanTxo 'Контроль наличия проводок в ТПС по исполняемым ПКП расходных договоров' escClose;
-
+show(,,180,);
 table struct TmpCalPlan
 (
   Nrec: comp
@@ -21,10 +21,18 @@ table struct TmpCalPlan
  ,DDoc: date
  ,NoDoc: string[100]
  ,sZakaz: string
+ ,Summa: double
 )
 with index
 (
   IDX0 = DDDoc + DNoDoc + DDoc + NoDoc
+);
+
+table struct TmpZakaz (
+  cCalPlan: comp
+ ,Zakaz: string[20]
+) with index (
+  i01 = cCalPlan
 );
 
 var
@@ -39,10 +47,12 @@ as select
   oExtAttr.sGetAttrID(coDogovor, DS.Nrec, ATTRNAM_NREC_DOGOVOR_STZ) (fieldname = DSStZFld)
 from
   TmpCalPlan
+ ,TmpZakaz
  ,CalPlan
  ,Dogovor
  ,KatOrg
  ,Dogovor DS
+ ,AttrDog DSAttr
  ,MagOper
  ,HozOper
 where ((
@@ -50,11 +60,13 @@ where ((
   and TmpCalPlan.cDogovor == Dogovor.Nrec
   and TmpCalPlan.cOrg     == KatOrg.Nrec
   and TmpCalPlan.cDS      == DS.Nrec
+  and TmpCalPlan.cDS      == DSAttr.cDogovor
   and 403                 == MagOper.TipDoc
   and TmpCalPlan.Nrec     == MagOper.cSoprDoc
   and PLANSSCH_NREC_TEHN  == MagOper.cPlansSch
   and MagOper.cHozOper    == HozOper.Nrec
 ))
+bounds TmpZakazCP = TmpCalPlan.Nrec == TmpZakaz.cCalPlan
 ;
 
 browse br1 (,,sci14Esc);
@@ -67,9 +79,11 @@ browse br1 (,,sci14Esc);
     TmpCalPlan.DNoDoc 'Номер договра': [10], protect;
     [DSFld] DS.NoDoc + ' ' + DS.DDoc 'Доп.согл.': [10], protect, editButton;
     DSStZFld 'ДС Статья затрат': [10], protect;
+    DSAttr.Subject1 'Предмет ДС': [10], protect;
     TmpCalPlan.DDoc 'Дата ПКП': [10], protect;
     TmpCalPlan.NoDoc 'Номер ПКП': [10], protect;
     TmpCalPlan.sZakaz 'Заказы': [10], protect;
+    TmpCalPlan.Summa 'Сумма ПКП': [12,'\2p[|-]3666`666`666`666`666`666`666.88'], protect;
     HozOper.Name1 'ТХО': [30], protect;
 end;
 
@@ -84,7 +98,15 @@ end;
 
 sql query qData =
 select
-  cp.Nrec, d2.Nrec as cDogovor, d2.cOrg as cOrg, d.Nrec as cDS, d2.dDoc as DDDoc, d2.NoDoc as DNoDoc, cp.dfrom as DDoc, cp.nodoc as NoDoc
+  cp.Nrec,
+  d2.Nrec as cDogovor,
+  d2.cOrg as cOrg,
+  d.Nrec as cDS,
+  d2.dDoc as DDDoc,
+  d2.NoDoc as DNoDoc,
+  cp.dfrom as DDoc,
+  cp.nodoc as NoDoc,
+  cp.SummaSpec as Summa
 from CalPlan cp
 join Dogovor d on d.nrec = cp.cDogovor
 left join Dogovor d1 on d1.Nrec = d.cDogovor
@@ -98,11 +120,13 @@ where cp.DirectMc = 2 and cp.Status = 1 and coalesce(t.cnt, 0) > 0 and d.status 
 ;
 
 sql query qZakaz =
-select distinct ks.name
-from SpDocs
+select distinct cp.Nrec as cCalPlan, SubString(ks.name, 1, InStr(' ', ks.name+' ', 1)-1) as Zakaz: string[20]
+from CalPlan cp
+join Dogovor d on d.nrec = cp.cDogovor
+join SpDocs on SpDocs.tidk = 403 and SpDocs.cdoc = cp.Nrec
 join specmtr on specmtr.cotable = 1723 and specmtr.cspec = spdocs.nrec
 join katstroy ks on ks.nrec = specmtr.cobj
-where spdocs.tidk = 403 and spdocs.cdoc = :cCalPlan
+where cp.DirectMc = 2 and cp.Status = 1 and d.status <> 3
 ;
 
 handleevent
@@ -110,23 +134,22 @@ handleevent
   cmInit:
   {
     var q: IQuery = queryManager.createQuery(qData);
-    if q.execute.errorCode = tsOk
-      sqlCopyInto(q, tnTmpCalPlan, true);
+    sqlCopyInto(q, tnTmpCalPlan, true);
+
     var q1: IQuery = queryManager.createQuery(qZakaz);
 
     StartNewVisual(vtIndicatorVisual, vfTimer+vfBreak, 'Заполнение колонки Заказы', RecordsInTable(tnTmpCalPlan));
+    sqlCopyInto(q1, tnTmpZakaz, true);
+
+    AddBounds(tbTmpZakazCP);
     _loop TmpCalPlan
     {
-      q1.setParam('cCalPlan', TmpCalPlan.Nrec);
-      if q1.execute.errorCode = tsOk
-        while q1.fetch.errorCode = tsOk
-        {
-          var s: string = q1.row.valAt(1) + ' ';
-          TmpCalPlan.sZakaz += substr(s, 1, pos(' ', s));
-        }
+      _loop TmpZakaz
+        TmpCalPlan.sZakaz += TmpZakaz.Zakaz + ' ';
       if TmpCalPlan.sZakaz != '' update current TmpCalPlan;
       if not NextVisual break;
     }
+    SubBounds(tbTmpZakazCP);
     StopVisual;
   }
 
