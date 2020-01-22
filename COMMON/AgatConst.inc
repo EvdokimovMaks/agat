@@ -142,4 +142,8 @@ const
 
   //Типы связей DocRef
   DOCREF_STAFFSTRUCT              : word = 65001;
+  DOCREF_STAFFSTRUCT_TYPE_PEREMESH: word = 0; //тип связи в штатке - единица перемещена из другой ШЕ
+  DOCREF_STAFFSTRUCT_TYPE_PEREDANO: word = 1; //тип связи в штатке - единица передана из другого подразделения
+  DOCREF_STAFFSTRUCT_TYPE_PEREMESH_REPR: string = 'Перемещение';
+  DOCREF_STAFFSTRUCT_TYPE_PEREDANO_REPR: string = 'Передача из другого подразделения';
 end;
