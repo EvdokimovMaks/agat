@@ -1,0 +1,251 @@
+#include query.vih
+#include ag_shr.vih;
+
+#component "AGAT"
+
+interface   AG_StaffStruct;
+
+table struct TmpStaffStruct (
+  Nrec     : comp
+ ,cDep     : comp
+ ,sSort    : string[50]
+ ,cPost    : comp
+ ,cCateg   : comp
+ ,cPodgr   : comp
+ ,Qty      : double
+ ,Oklad    : double
+ ,BonusVred: double
+ ,BonusPrem: double
+ ,BonusSekr: double
+ ,FOT      : double
+) with index (
+  i00 = Nrec
+ ,i01 = cDep + sSort
+);
+
+create view
+var
+  _nrec: comp;
+as select
+  TmpStaffStruct.Nrec
+from
+  TmpStaffStruct
+bounds ByNrec = _nrec == TmpStaffStruct.Nrec
+;
+
+function  getCount: longint;
+{
+  result := RecordsInTable(#TmpStaffStruct);
+}
+
+function  first: boolean;
+{
+  result := getfirst TmpStaffStruct = tsOk;
+}
+
+function  next: boolean;
+{
+  result := getnext TmpStaffStruct = tsOk;
+}
+
+function  find(cStaffStruct: comp): boolean;
+{
+  _nrec := cStaffStruct;
+  AddBounds(tbByNrec);
+  result := getfirst TmpStaffStruct = tsOk;
+  SubBounds(tbByNrec);
+}
+
+function  exist(cStaffStruct: comp): boolean;
+{
+  PushPos(#TmpStaffStruct);
+  result := find(cStaffStruct);
+  PopPos(#TmpStaffStruct);
+}
+
+function  toNewSqlTmpTable(sqlTmpTableName: string): boolean;
+{
+  result := sqlCreateTmpTableAs(sqlTmpTableName, #TmpStaffStruct, ctmNormal) = tsOk;
+  result &= toExistingSqlTmpTable(sqlTmpTableName);
+}
+
+function  toExistingSqlTmpTable(sqlTmpTableName: string): boolean;
+{
+  result := sqlFlushIntoTmp(#TmpStaffStruct, sqlTmpTableName, FIT_ByName) = tsOk;
+}
+
+sql query qSS =
+  select
+    t.Nrec
+   ,t.cDep
+   ,t.cPost
+   ,case
+      when t.SSPriority <> '' then SubString('00000000000000000000', 1, 20-length(t.SSPriority)) + t.SSPriority
+      when t.PostPriority = '' then '99999999999999999999'
+      else SubString('00000000000000000000', 1, 20-length(t.PostPriority)) + t.PostPriority
+    end + cast((999999999999-t.Oklad-t.BonusVred-t.BonusSekr) as string) as sSort
+   ,t.cCateg
+   ,t.cPodgr
+   ,t.Qty
+   ,t.Oklad
+   ,t.BonusVred
+   ,t.BonusSekr
+   ,t.BonusPrem
+   ,(t.Oklad+t.BonusVred+t.BonusSekr+t.BonusPrem) * t.Qty as FOT
+  from (
+    select
+      ss.Nrec as Nrec
+     ,ss.Department as cDep
+     ,ss.Post as cPost
+     ,Trim(coalesce(avPriority.vString,'')) as SSPriority: string[20]
+     ,Trim(coalesce(CatPost.Code,'')) as PostPriority: string[20]
+     ,coalesce(avCateg.vComp, #comp(0)) as cCateg
+     ,coalesce(avPodgr.vComp, #comp(0)) as cPodgr
+     ,case when hs.wCodOper=21 then 0 else hs.hWorkStations end + coalesce(tOut.Qty, 0) as Qty
+     ,case when hs.hTaxRate > 1000 then hs.hTaxRate else 0 end as Oklad
+     ,coalesce(tRaise.BonusVred, 0) as BonusVred
+     ,coalesce(tRaise.BonusPrem, 0) as BonusPrem
+     ,coalesce(tRaise.BonusSekr, 0) as BonusSekr
+
+    from TmpShrDep
+
+    join StaffStruct ss
+      on ss.Department = TmpShrDep.Nrec
+     and ss.dInput <= :dDate
+
+    outer apply (
+      Select max(wFld) as wFld
+      from HistoryStr
+      where HistoryStr.StaffStr = ss.Nrec and HistoryStr.dHist <= :dDate
+    ) LastHistoryStr
+    join HistoryStr hs on hs.StaffStr = ss.Nrec and hs.wFld = LastHistoryStr.wFld
+
+    outer apply (
+      select sum(hsOther.HWorkStations) as Qty
+      from DocRef
+      left join StaffStruct ssOther on ssOther.Nrec = DocRef.cField2
+      left join HistoryStr hsOther
+        on hsOther.Nrec = DocRef.cDopFld2
+       and ( (hs.wCodOper=22 and hsOther.dHist = hs.dHist) or
+             (hs.wCodOper=21 and hsOther.dHist >= hs.dHist) )
+      where
+          DocRef.wTypeRef = :wDocRefStaffStruct
+      and DocRef.cField1 = ss.Nrec
+      and hsOther.dHist = :dDate
+      and ssOther.Department not in (select TSD.Nrec from TmpShrDep TSD)
+    ) tOut
+
+    left join AttrVal avPriority
+      on avPriority.wTable = 25018
+     and avPriority.cRec = ss.Nrec
+     and avPriority.cAttrNam = #comp(00010000000025DAh)
+
+    left join Catalogs CatPost
+      on CatPost.Nrec = ss.Post
+
+    left join KlKatego on KlKatego.Nrec = hs.cSpr2
+
+    left join AttrVal avCateg
+      on avCateg.wTable = 16005
+     and avCateg.cRec = KlKatego.Nrec
+     and avCateg.cAttrNam = :cAttrNamCateg
+    left join SpKau spkCateg on spkCateg.Nrec = avCateg.vComp
+
+    left join AttrVal avPodgr
+      on avPodgr.wTable = 16005
+     and avPodgr.cRec = KlKatego.Nrec
+     and avPodgr.cAttrNam = :cAttrNamPodgr
+    left join SpKau spkPodgr on spkPodgr.Nrec = avPodgr.vComp
+
+    //Надбавки
+    outer apply (
+      select
+        sum(case when tAllRaises.Name like '%вредность%' then tAllRaises.Summa
+                 else 0
+            end) as BonusVred
+       ,sum(case when tAllRaises.Name like '%премия%' then tAllRaises.Summa
+                 else 0
+            end) as BonusPrem
+       ,sum(case when tAllRaises.Name like '%секретность%' then tAllRaises.Summa
+                 else 0
+            end) as BonusSekr
+      from (
+        select
+          CatRaise.Name
+         ,case when Str_RHist.wHAttr = 2
+               then (case when HistoryStr.hTaxRate > 1000
+                          then HistoryStr.hTaxRate
+                          else 0
+                     end) * Str_RHist.RHSum / 100
+               else Str_RHist.RHSum
+          end as Summa
+
+        from RaiseStS
+
+        outer apply (
+          select max(Str_RHist_Last.dRec) as dRec
+          from Str_RHist Str_RHist_Last
+          where
+              Str_RHist_Last.cRaiseStS = RaiseStS.Nrec
+          and Str_RHist_Last.dRec <= :dDate
+        ) tStr_RHist_Last
+
+        join Str_RHist
+          on Str_RHist.cRaiseStS = RaiseStS.Nrec
+         and Str_RHist.dRec = tStr_RHist_Last.dRec
+
+        join Catalogs CatRaise on CatRaise.Nrec = RaiseStS.RaiseType
+
+        join HistoryStr on HistoryStr.Nrec = hs.Nrec
+
+        where
+            RaiseStS.StaffStr = ss.Nrec
+        and RaiseStS.Dat1 <= :dDate
+        and (RaiseStS.Dat2 = 0 or RaiseStS.Dat2 >= :dDate )
+        and (CatRaise.Name like '%вредность%' or
+             CatRaise.Name like '%премия%' or
+             CatRaise.Name like '%секретность%')
+      ) tAllRaises
+    ) tRaise
+
+  ) t
+  where t.Qty <> 0
+;
+
+constructor Create(dDate: date; deps: IAG_ShrDep);
+{
+  var wDocRefStaffStruct: word = DOCREF_STAFFSTRUCT;
+  var cAttrNamCateg: comp = ATTRNAM_NREC_KLKATEGO_CATEG;
+  var cAttrNamPodgr: comp = ATTRNAM_NREC_KLKATEGO_PODGR;
+
+  result := deps.toNewSqlTmpTable('TmpShrDep');
+  if not result exit;
+
+  var q: IQuery = queryManager.createQuery(qSS);
+  q.setParam('dDate', dDate);
+  q.setParam('wDocRefStaffStruct', DOCREF_STAFFSTRUCT);
+  q.setParam('cAttrNamCateg', ATTRNAM_NREC_KLKATEGO_CATEG);
+  q.setParam('cAttrNamPodgr', ATTRNAM_NREC_KLKATEGO_PODGR);
+
+  sqlCopyInto(q, #TmpStaffStruct, true);
+  sqlDropTmpTable('TmpShrDep');
+  result := true;
+}
+
+property Nrec     : comp       absolute TmpStaffStruct.Nrec     ;
+property cDep     : comp       absolute TmpStaffStruct.cDep     ;
+property sSort    : string[50] absolute TmpStaffStruct.sSort    ;
+property cPost    : comp       absolute TmpStaffStruct.cPost    ;
+property cCateg   : comp       absolute TmpStaffStruct.cCateg   ;
+property cPodgr   : comp       absolute TmpStaffStruct.cPodgr   ;
+property Qty      : double     absolute TmpStaffStruct.Qty      ;
+property Oklad    : double     absolute TmpStaffStruct.Oklad    ;
+property BonusVred: double     absolute TmpStaffStruct.BonusVred;
+property BonusPrem: double     absolute TmpStaffStruct.BonusPrem;
+property BonusSekr: double     absolute TmpStaffStruct.BonusSekr;
+property FOT      : double     absolute TmpStaffStruct.FOT      ;
+
+index idxNrec auto;
+index idxDep auto;
+
+end.

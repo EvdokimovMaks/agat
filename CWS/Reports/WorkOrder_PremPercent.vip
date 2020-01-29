@@ -1,0 +1,306 @@
+#include Query.vih
+#include xlReport.vih
+#component "AGAT"
+
+interface WorkOrder_PremPercent 'Сводные наряды - проценты премий' escClose doAccept;
+show(,,40,5);
+
+var
+  _wYear: word;
+  _wMonth: word;
+  _query: IQuery;
+  pXL: XLSRepBuilder;
+
+screen scParams;
+  fields
+    _wMonth: [list 1 'Январь', 2 'Февраль', 3 'Март', 4 'Апрель', 5 'Май', 6 'Июнь',
+                   7 'Июль', 8 'Август', 9 'Сентябрь', 10 'Октябрь', 11 'Ноябрь', 12 'Декабрь'];
+    _wYear: NoProtect, SpinButton[1, 1900, 2100];
+  buttons
+    cmOk, default;
+    cmCancel;
+<<
+
+  `Месяц` .@@@@@@@@@@@@@@ `Год`.@@@@@@@
+
+    <.Продолжить.>      <.   Отмена   .>
+
+>>
+end; // screen scParams
+
+
+sql query qData =
+select
+  KatPodr.Name            as Podr
+ ,Persons.FIO             as Person
+ ,KatStroy.Name           as Zakaz
+ ,t.SumPrem               as SumPrem: double
+ ,coalesce(t.SumOklad, 0) as SumOklad: double
+ ,coalesce(t.SumHours, 0) as SumHours: double
+
+from (
+  select
+    cPodr
+   ,cPerson
+   ,cKatstroy
+   ,sum(SumPrem)  as SumPrem
+   ,sum(SumOklad) as SumOklad
+   ,sum(SumHours) as SumHours
+  from (
+
+    //Данные из текущего месяца: премии
+    select
+      MnPlan.cAnVal2    as cPodr
+     ,SpMnPlan.cIzd     as cPerson
+     ,SpMnPlan.cAnVal1  as cKatStroy
+     ,ValSpMnP.Kol      as SumPrem
+     ,0                 as SumOklad
+     ,0                 as SumHours
+
+    from MnPlan
+
+    join FpPeriod on FpPeriod.Nrec = MnPlan.cAnVal1
+
+    join SpMnPlan on SpMnPlan.cMnPlan = MnPlan.Nrec
+
+    join SpMnPl on
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = FpPeriod.Nrec
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000000903h) //статья "Премия|ежемесячная"
+
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+
+    where
+      MnPlan.cWayAccou = #comp(0001000000000088h)  //шаблон "Сводный наряд"
+    and D_Year(FpPeriod.dEnd) = :Year
+    and D_Month(FpPeriod.dEnd) = :Month
+    //Данные из текущего месяца: премии
+
+    union all
+
+    //Данные из предыдущего месяца: оклады и часы
+    Select
+      MnPlan.cAnVal2                as cPodr
+     ,SpMnPlan.cIzd                 as cPerson
+     ,SpMnPlan.cAnVal1              as cKatStroy
+     ,0                             as SumPrem: double
+     ,coalesce(tPrevOklad.Summa, 0) as SumOklad: double
+     ,coalesce(tPrevHours.Qty, 0)   as SumHours: double
+
+    from MnPlan
+
+    join FpPeriod on FpPeriod.Nrec = MnPlan.cAnVal1
+
+    join SpMnPlan on SpMnPlan.cMnPlan = MnPlan.Nrec
+
+    outer apply (
+      select sum(ValSpMnP.Kol) as Summa: double
+      from SpMnPl
+      join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+      where
+          SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+      and SpMnPl.wKolAn    = 22
+      and SpMnPl.wKodGr4   = 21
+      and SpMnPl.cAnVal4   = FpPeriod.Nrec
+      and SpMnPl.wKodGr5   = 10029
+      and SpMnPl.cAnVal5   = #comp(00010000000008FBh) //статья "По должностному|окладу"
+    ) tPrevOklad
+
+    outer apply (
+      select sum(ValSpMnP.Kol) as Qty: double
+      from SpMnPl
+      join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+      where
+          SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+      and SpMnPl.wKolAn    = 22
+      and SpMnPl.wKodGr4   = 21
+      and SpMnPl.cAnVal4   = FpPeriod.Nrec
+      and SpMnPl.wKodGr5   = 10029
+      and SpMnPl.cAnVal5   = #comp(00010000000008AEh) //статья "Отработано часов по заказу и виду работ за месяц"
+    ) tPrevHours
+
+    where
+        MnPlan.cWayAccou = #comp(0001000000000088h)  //шаблон "Сводный наряд"
+    and D_Year(FpPeriod.dEnd) = :YearPrev
+    and D_Month(FpPeriod.dEnd) = :MonthPrev
+    and SpMnPlan.cIzd in ( //Выбираем только тех сотрудников прошлого месяца, по которым есть премии в текущем месяце
+      select distinct SpMnPlan.cIzd
+      from MnPlan
+      join FpPeriod on FpPeriod.Nrec = MnPlan.cAnVal1
+      join SpMnPlan on SpMnPlan.cMnPlan = MnPlan.Nrec
+      join SpMnPl on
+          SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+      and SpMnPl.wKolAn    = 22
+      and SpMnPl.wKodGr4   = 21
+      and SpMnPl.cAnVal4   = FpPeriod.Nrec
+      and SpMnPl.wKodGr5   = 10029
+      and SpMnPl.cAnVal5   = #comp(0001000000000903h) //статья "Премия|ежемесячная"
+      join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+      where
+        MnPlan.cWayAccou = #comp(0001000000000088h)  //шаблон "Сводный наряд"
+      and D_Year(FpPeriod.dEnd) = :Year
+      and D_Month(FpPeriod.dEnd) = :Month
+      and ValSpMnP.Kol <> 0
+    )
+    //Данные из предыдущего месяца: оклады и часы
+
+  ) t
+  group by cPodr, cPerson, cKatStroy
+
+) t
+
+join KatStroy on KatStroy.Nrec = t.cKatStroy
+
+join Persons on Persons.Nrec = t.cPerson
+
+join KatPodr on KatPodr.Nrec = t.cPodr
+;
+
+procedure XlsAddVars;
+{
+  var d1: date = date(1, _wMonth, _wYear);
+  var d2: date = date(Last_Day(d1), _wMonth, _wYear);
+  pXL.SetDateVar('dRepBeg', d1);
+  pXL.SetDateVar('dRepEnd', d2);
+  pXL.SetStringVar('MonthName', DateToStr(d1, 'Month'));
+  pXL.SetNumberVar('MonthNum', _wMonth);
+  pXL.SetNumberVar('Year', _wYear);
+}
+
+procedure XlsAddMainTableFields;
+{
+  pXL.CreateTblFld('Подразделение');
+  pXL.CreateTblFld('Сотрудник');
+  pXL.CreateTblFld('Заказ');
+  pXL.CreateTblFld('Премия');
+  pXL.CreateTblFld('Оклад_Пред');
+  pXL.CreateTblFld('Часы_Пред');
+  pXL.CreateTblFld('Процент');
+}
+
+procedure XlsFillMainTableRec;
+{
+  var sZakaz: string = _query.row.val('Zakaz');
+  var okladPrev: double = _query.row.val('SumOklad');
+  var prem: double = _query.row.val('SumPrem');
+
+  pXL.SetTblStringFldValue('Подразделение', _query.row.val('Podr'));
+  pXL.SetTblStringFldValue('Сотрудник'    , _query.row.val('Person'));
+  pXL.SetTblStringFldValue('Заказ'        , SubStr(sZakaz, 1, pos(' ', sZakaz+' ')));
+  pXL.SetTblNumberFldValue('Премия'       , prem);
+  pXL.SetTblNumberFldValue('Оклад_Пред'   , okladPrev);
+  pXL.SetTblNumberFldValue('Часы_Пред'    , _query.row.val('SumHours'));
+  pXL.SetTblNumberFldValue('Процент'      , if(okladPrev = 0, 0, prem / okladPrev * 100));
+}
+
+procedure XlsAddMainTableRecs;
+{
+  while _query.fetch.errorCode = tsOk
+  {
+    pXL.ClearTblBuffer;
+    XlsFillMainTableRec;
+    pXL.InsTblRow;
+  }
+}
+
+procedure XlsAddTables(isCreateXlt: boolean);
+{
+  pXL.CreateTbl('Main');
+  XlsAddMainTableFields;
+  if not isCreateXlt
+    XlsAddMainTableRecs;
+  pXL.PublishTbl('Main');
+}
+
+procedure PrintXlsReport(sXltFileName: string; isCreateXlt: boolean);
+{
+  var sXlsFileName: string = if(isCreateXlt,
+                                pXL.CreateXLT(sXLTFileName, True),
+                                pXL.CreateReport(sXLTFileName, True));
+
+  pXL.CreateVar(sXLSFileName);
+  XlsAddVars;
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXLSFileName);
+  XlsAddTables(isCreateXlt);
+
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+handleevent
+
+  cmOk:
+  {
+    var dPrev: date = date(1, _wMonth, _wYear);
+    dPrev := Sub_Months(dPrev, 1);
+
+    var wYearPrev: word = Year(dPrev);
+    var wMonthPrev: word = Month(dPrev);
+
+    _query.setParam('Year', _wYear);
+    _query.setParam('Month', _wMonth);
+    _query.setParam('YearPrev', wYearPrev);
+    _query.setParam('MonthPrev', wMonthPrev);
+
+    if _query.execute.errorCode != tsOk
+    {
+      Message('Ошибка выполнения запроса выборки данных: ' + _query.errorCode, error);
+      exit;
+    }
+
+    PrintXlsReport(TranslatePath('%StartPath%xls\WorkOrder_PremPercent.xltm'), false);
+  }
+
+  cmInit:
+  {
+    if not ReadMyDSK(_wYear, '_wYear_PremPercent', true) _wYear := Year(Cur_Date);
+    if not ReadMyDSK(_wMonth, '_wMonth_PremPercent', true) _wMonth := Month(Cur_Date);
+    _query := queryManager.createQuery(qData);
+  }
+
+  cmDone:
+  {
+    SaveMyDSK(_wYear, '_wYear_PremPercent');
+    SaveMyDSK(_wMonth, '_wMonth_PremPercent');
+  }
+
+end;
+
+end.
+
+
+VipInterface UserReport_WorkOrder_PremPercent Implements IUserReport licensed(free);
+Interface UserReport_WorkOrder_PremPercent;
+  create view dummy;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::WorkOrder_PremPercent);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'Агат. Сводные наряды - проценты премий';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := 0;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    Ind := 0;
+    VisibleInModule := 'MANUFPLAN';
+  }
+end.

@@ -1,0 +1,116 @@
+#component "Z_StaffSHR"
+
+alter interface StafHist;
+
+function GetLinkedSSFld: string; forward;
+
+create view
+as select
+  GetLinkedSSFld() (fieldname=LinkedSSFld)
+from
+  DocRef DocRefSS
+ ,StaffStruct LinkedSS
+where ((
+      DOCREF_STAFFSTRUCT       == DocRefSS.wTypeRef
+  and HistoryStrOrder.Nrec     == DocRefSS.cDopFld2
+  and DocRefSS.cField1         == LinkedSS.Nrec
+))
+;
+
+function GetLinkedSSFld: string;
+{
+  result := '';
+  if IsValid(tnDocRefSS)
+  {
+    if IsValid(tnLinkedSS)
+      result += iCatFunc.GetCatalogsCode(LinkedSS.Department) + ' / ' +
+                LinkedSS.SeqNmb + ' ' + iCatFunc.GetCatalogsName(LinkedSS.Post) +
+                ' (' + DateToStr(LinkedSS.dInput,'DD.MM.YY') + '-' +
+                if(LinkedSS.dClose = 0, '...', DateToStr(LinkedSS.dClose,'DD.MM.YY')) +
+                ' ' + LinkedSS.TaxRate + ')';
+  }
+}
+
+procedure CreateLinkHistoryStr(ccSS: comp);
+{
+  case HistoryStrOrder.wCodOper of
+    20: //Создание ставки
+    {
+      if getfirst DocRefSS != tsOk
+      {
+        ClearBuffer(#DocRefSS);
+        DocRefSS.wTypeRef := DOCREF_STAFFSTRUCT;
+        DocRefSS.wTable1  := coStaffStruct;
+        DocRefSS.wTable2  := coStaffStruct;
+        DocRefSS.cDopFld2 := HistoryStrOrder.Nrec;
+        DocRefSS.cField2  := StaffStruct.Nrec;
+        insert current DocRefSS;
+      }
+      DocRefSS.cField1  := ccSS;
+      update current DocRefSS;
+    }
+  end;
+}
+
+extendformats scrAppHist;
+screen scrAppHist;
+  Show at (, 10);
+  Table HistoryStrOrder;
+  fields
+    LinkedSSFld: protect, pickbutton;
+<<
+
+
+  `Связ. ставка`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+end; //screen scrAppHist
+
+tableevent table HistoryStrOrder;
+  cmPositionChanged:
+  {
+    inherited::handleevent(cmPositionChanged);
+    ToggleFieldState(#LinkedSSFld, sfVisible, HistoryStrOrder.wCodOper = 20);
+  }
+end; //tableevent table HistoryStrOrder
+
+handleevent
+
+  cmPick:
+  {
+    case CurField of
+      #LinkedSSFld:
+      {
+        var ccDep: comp = if(IsValidAll(#LinkedSS), LinkedSS.Department,
+                             if(IsValidAll(#StaffStruct), StaffStruct.Department, 0));
+        var ccSS: comp = if(IsValidAll(#LinkedSS), LinkedSS.Nrec,
+                            if(IsValidAll(#StaffStruct), StaffStruct.Nrec, 0));
+        if RunInterface(AGAT::PickStaffStruct, ccDep, ccSS, Sub_Day(StaffStruct.dInput, 1)) = cmDefault
+        {
+          CreateLinkHistoryStr(ccSS);
+          RereadRecord(#DocRefSS);
+        }
+      }
+    else
+      inherited::handleevent(cmPick);
+    end;
+  }
+
+  cmDelOnProtect:
+  {
+    case CurField of
+      #LinkedSSFld:
+      {
+        if IsValidAll(#DocRefSS)
+        {
+          delete current DocRefSS;
+          RereadRecord(#HistoryStrOrder);
+        }
+      }
+    else
+      inherited::handleevent(cmDelOnProtect);
+    end;
+  }
+
+end; //handleevent
+
+end.

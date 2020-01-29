@@ -1,0 +1,210 @@
+#include CatFunc.vih
+#include ag_shr.vih
+
+#component "AGAT"
+
+interface AG_ShrDep;
+
+table struct TmpShrDep (
+  Nrec   : comp
+ ,cParent: comp
+ ,Code   : string[100]
+ ,Name   : string
+ ,DatN   : date
+ ,DatOk  : date
+) with index (
+  i01 = Nrec
+ ,i02 = cParent + Code
+);
+
+var
+  _mDep: TPtr;
+  _cMainLink: comp;
+  _catFunc: CatalogsFunctions;
+
+create view
+var
+  _nrec: comp;
+as select
+  TmpShrDep.Nrec
+from
+  TmpShrDep
+ ,TmpShrDep TmpShrDepChildren
+ ,TmpShrDep TmpShrDepOne
+where ((
+      _nrec == TmpShrDepChildren.cParent
+  and _nrec == TmpShrDepOne.Nrec
+))
+bounds byNrec = _nrec == TmpShrDep.Nrec
+condition byMarker = FoundMarker(_mDep, TmpShrDep.Nrec)
+;
+
+function getCount: longint;
+{
+  result := 0;
+  if ConditionActiveInLeave(tcByMarker, #TmpShrDep)
+    _loop TmpShrDep result++
+  else
+    result := RecordsInTable(#TmpShrDep);
+}
+
+function first: boolean;
+{
+  result := getfirst TmpShrDep = tsOk;
+}
+
+function next: boolean;
+{
+  result := getnext TmpShrDep = tsOk;
+}
+
+function find(cDep: comp): boolean;
+{
+  _nrec := cDep;
+  AddBounds(tbByNrec);
+  result := getfirst TmpShrDep = tsOk;
+  SubBounds(tbByNrec);
+}
+
+function exist(cDep: comp): boolean;
+{
+  PushPos(#TmpShrDep);
+  result := find(cDep);
+  PopPos(#TmpShrDep);
+}
+
+private procedure addFilterByChildren(cParentDep: comp; lvl: integer; hierMaxLevel: integer);
+{
+  _nrec := cParentDep;
+  var mChildren: TPtr = InitMarker('', 8, 10, 10, true);
+  _loop TmpShrDepChildren
+  {
+    InsertMarker(_mDep, TmpShrDepChildren.Nrec);
+    if lvl < hierMaxLevel or hierMaxLevel = 0
+      InsertMarker(mChildren, TmpShrDepChildren.Nrec);
+  }
+  var i: longint = 0;
+  var c: comp = 0;
+  for(i := 0; GetMarker(mChildren, i, c); ++i)
+    addFilterByChildren(c, lvl+1, hierMaxLevel);
+  DoneMarker(mChildren, '');
+}
+
+procedure addFilterByDep(cDep: comp; bWithChildren: boolean = false; hierMaxLevel: integer = 0);
+{
+  InsertMarker(_mDep, cDep);
+  if bWithChildren
+    addFilterByChildren(cDep, 1, hierMaxLevel);
+
+  if not ConditionActiveInLeave(tcByMarker, #TmpShrDep)
+    PushConditionForLeave(tcByMarker, #TmpShrDep);
+}
+
+procedure addFilterByDeps(mDep: TPtr; bWithChildren: boolean = false; hierMaxLevel: integer = 0);
+{
+  var i: longint = 0;
+  var c: comp = 0;
+  for(i := 0; GetMarker(mDep, i, c); ++i)
+    addFilterByDep(c, bWithChildren, hierMaxLevel);
+}
+
+procedure delAllFilters;
+{
+  ClearMarker(_mDep);
+  if ConditionActiveInLeave(tcByMarker, #TmpShrDep)
+    PopConditionForLeave(tcByMarker, #TmpShrDep);
+}
+
+function toNewSqlTmpTable(sqlTmpTableName: string): boolean;
+{
+  result := sqlCreateTmpTableAs(sqlTmpTableName, #TmpShrDep, ctmNormal) = tsOk;
+  result &= toExistingSqlTmpTable(sqlTmpTableName);
+}
+
+function toExistingSqlTmpTable(sqlTmpTableName: string): boolean;
+{
+  result := sqlFlushIntoTmp(#TmpShrDep, sqlTmpTableName, FIT_ByName) = tsOk;
+}
+
+function  hasChildren: boolean;
+{
+  _nrec := TmpShrDep.Nrec;
+  result := recordexists TmpShrDepChildren = tsOk;
+}
+
+function  getTopDepNrec(cDep: comp): comp;
+{
+  result := 0;
+  _nrec := cDep;
+  if getfirst TmpShrDepOne = tsOk
+  {
+    if TmpShrDepOne.cParent = 0 or TmpShrDepOne.cParent = _cMainLink
+      result := TmpShrDepOne.Nrec;
+    else
+      result := getTopDepNrec(TmpShrDepOne.cParent);
+  }
+}
+
+constructor Create(dDate: date; bWithTopEntry: boolean);
+{
+  _cMainLink := _catFunc.GetCatalogsNRec(-11);
+  sql
+  select
+    CatHist.cCat    as Nrec,
+    CatHist.cParent as cParent,
+    CatHist.Name    as Name,
+    Catalogs.Code   as Code,
+    Catalogs.DatN   as DatN,
+    Catalogs.DatOk  as DatOk
+  from Catalogs
+  inner join (
+    select CatHist.cCat, max(CatHist.Dat1) MaxDate: date
+    from CatHist
+    where :(dDate) >= CatHist.Dat1 and (CatHist.wFld1 <> 2 or #Date(0,0,0) = CatHist.Dat2 or :(dDate) <= CatHist.Dat2)
+    group by CatHist.cCat
+  ) CatH1 on (Catalogs.NRec = CatH1.cCat)
+  inner join (
+    select CatHist.cCat, CatHist.Dat1, max(cast(CatHist.lastuser as integer)) MaxNpp
+    from CatHist
+    where :(dDate) >= CatHist.Dat1 and (CatHist.wFld1 <> 2 or #Date(0,0,0) = CatHist.Dat2 or :(dDate) <= CatHist.Dat2)
+    group by CatHist.cCat, CatHist.Dat1
+  ) CatH2 on (Catalogs.NRec = CatH2.cCat and CatH1.MaxDate = CatH2.Dat1)
+  inner join CatHist on (Catalogs.NRec = CatHist.cCat and CatH1.MaxDate = CatHist.Dat1 and CatH2.MaxNpp = cast(CatHist.lastuser as integer))
+  where
+    Catalogs.MainLink = :(_cMainLink) and
+    Catalogs.DatN <= :(dDate) and
+    (Catalogs.DatOk = 0 or Catalogs.DatOk >= :(dDate))
+  into TmpShrDep byName;
+
+  if bWithTopEntry
+  {
+    ClearBuffer(#TmpShrDep);
+    TmpShrDep.Nrec := _cMainLink;
+    TmpShrDep.Name := 'Штатное расписание';
+    TmpShrDep.Code := 'ШР';
+  }
+  else
+  {
+    update TmpShrDep where ((_cMainLink == TmpShrDep.cParent))
+    set TmpShrDep.cParent := 0;
+  }
+
+  _mDep := InitMarker('', 8, 100, 100, true);
+  result := true;
+}
+
+destructor Done;
+{
+  DoneMarker(_mDep, '');
+}
+
+property Nrec   : comp        absolute TmpShrDep.Nrec   ;
+property cParent: comp        absolute TmpShrDep.cParent;
+property Code   : string[100] absolute TmpShrDep.Code   ;
+property Name   : string      absolute TmpShrDep.Name   ;
+property DatN   : date        absolute TmpShrDep.DatN   ;
+property DatOk  : date        absolute TmpShrDep.DatOk  ;
+
+index idxNrec auto;
+index idxParent auto;
+end.
