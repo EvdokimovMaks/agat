@@ -8,7 +8,7 @@
 #component "AGAT"
 
 interface ag_shr_spravka 'АГАТ. Справка по ШР' escclose;
-show(,,74,22);
+show(,,74,19);
 
 const
   FLT_CATDEP     : word = 1;
@@ -19,12 +19,9 @@ const
   FLTBONUS_VRED   : word = 4;
   FLTVACANCY_ALL  : word = 0;
   FLTVACANCY_VAC  : word = 1;
-  FLTVACANCY_NOVAC: word = 2;
-  FOTQTY_VSEGO    : word = 0;
-  FOTQTY_WRK      : word = 1;
-  FOTQTY_VACANCY  : word = 2;
-  FOTBONUS_VRED   : word = 1;
-  FOTBONUS_SEKR   : word = 2;
+  FLTVACANCY_USED : word = 2;
+  FOTBONUS_SEKR   : word = 1;
+  FOTBONUS_VRED   : word = 2;
 end;
 
 table struct tCatDep (
@@ -53,7 +50,6 @@ var
   _wFlt       : word;
   _wFltBonus  : word;
   _wFltVacancy: word;
-  _wFotQty    : word;
   _wFotBonus  : word;
   _mDep       : TPtr;
   _mPodgr     : TPtr;
@@ -147,7 +143,6 @@ screen sc1;
     [PodgrFld] GetPodgrFld: protect, pickbutton;
     _wFltBonus: noprotect;
     _wFltVacancy: noprotect;
-    _wFotQty: noprotect;
     _wFotBonus: noprotect;
   buttons
     cmOk, default;
@@ -164,14 +159,11 @@ screen sc1;
  Фильтр по надбавкам:                   Фильтр по вакансиям:
     [.] ШЕ без надбавок`                   (.) Все (с вакансиями и без)`
     [.] ШЕ с надбавкой за секретность`     (.) Только с вакансиями`
-    [.] ШЕ с надбавкой за вредность`       (.) Только без вакансий`
+    [.] ШЕ с надбавкой за вредность`       (.) Только занятые`
 
- Параметры расчета ФОТ:
-
- Количество штатных единиц:             Учитывать надбавки:
-    (.) Всего`                             [.] За секретность`
-    (.) Занято`                            [.] За вредность`
-    (.) Вакансий`
+ Учитывать надбавки при расчете ФОТ:
+    [.] За секретность`
+    [.] За вредность`
 
                                                 <.Продолжить.> <.Отмена.>
 >>
@@ -237,7 +229,10 @@ sql query qSS =
       coalesce(avPodgr.vComp, #comp(0)) as cPodgr,
       coalesce(avCateg.vComp, #comp(0)) as cCateg,
       ssHist.hWorkStations              as Qty,
-      coalesce(tApp.cnt,0)              as Wrk,
+      case when ssHist.hWorkStations > coalesce(tApp.cnt,0)
+             then coalesce(tApp.cnt,0)
+           else ssHist.hWorkStations
+      end                               as Wrk,
       case when ssHist.hTaxRate > 1000
              then ssHist.hTaxRate
            else 0
@@ -428,6 +423,13 @@ procedure PrepareData;
 
   //Заполняем tCatDep данными по вакансиям
 
+  //Готовим строку для макроса расчета суммы ФОТ
+  var sQty: string = case(_wFltVacancy;
+                          FLTVACANCY_ALL: 'Qty',
+                          FLTVACANCY_VAC: '(Qty - Wrk)',
+                          FLTVACANCY_USED: 'Wrk';
+                          '');
+
   //Готовим строку для макроса с фильтрами по штатным единицам
   var sWhere: longint = 0;
 
@@ -444,29 +446,24 @@ procedure PrepareData;
   {
     var sFlt: string = '';
     if isBitSet(_wFltBonus, FLTBONUS_VRED)
-      sFlt += if(sFlt='','',' or ') + '(BonusVred * Qty) <> 0';
+      sFlt += if(sFlt='','',' or ') + '(BonusVred * '+sQty+') <> 0';
     if isBitSet(_wFltBonus, FLTBONUS_SEKR)
-      sFlt += if(sFlt='','',' or ') + '(BonusSekr * Qty) <> 0';
+      sFlt += if(sFlt='','',' or ') + '(BonusSekr * '+sQty+') <> 0';
     if isBitSet(_wFltBonus, FLTBONUS_NOBONUS)
-      sFlt += if(sFlt='','',' or ') + '(BonusAll * Qty) = 0';
+      sFlt += if(sFlt='','',' or ') + '(BonusAll * '+sQty+') = 0';
     if sFlt != ''
       sqlAddWhereStr(sWhere, '(' + sFlt + ')');
   }
 
   //Фильтры по вакансиям
   case _wFltVacancy of
-    FLTVACANCY_NOVAC: sqlAddWhereStr(sWhere, '(Qty - Wrk) <= 0');
+    FLTVACANCY_USED: sqlAddWhereStr(sWhere, 'Wrk > 0');
     FLTVACANCY_VAC: sqlAddWhereStr(sWhere, '(Qty - Wrk) > 0');
   end;
 
-  //Готовим строку для макроса расчета суммы ФОТ
-  var sQty: string = case(_wFotQty;
-                          FOTQTY_VSEGO: 'Qty',
-                          FOTQTY_VACANCY: '(Qty - Wrk)',
-                          FOTQTY_WRK: 'Wrk';
-                          '');
-
   //Готовим запрос
+  var sBonusVredFot: string = if(isBitSet(_wFotBonus, FOTBONUS_VRED), 'BonusVred', '0');
+  var sBonusSekrFot: string = if(isBitSet(_wFotBonus, FOTBONUS_SEKR), 'BonusSekr', '0');
   var q: IQuery = queryManager.createQuery(qSS)
                               .setParam('dateSts', _date)
                               .setParam('cAttrNamCateg', ATTRNAM_NREC_KLKATEGO_CATEG)
@@ -476,8 +473,8 @@ procedure PrepareData;
                               .setMacro('QtyBonusVred', sQty)
                               .setMacro('QtyBonusSekr', sQty)
                               .setMacro('QtyFot', sQty)
-                              .setMacro('BonusVredFot', if(isBitSet(_wFotBonus, FOTBONUS_VRED), 'BonusVred', '0'))
-                              .setMacro('BonusSekrFot', if(isBitSet(_wFotBonus, FOTBONUS_SEKR), 'BonusSekr', '0'));
+                              .setMacro('BonusVredFot', sBonusVredFot)
+                              .setMacro('BonusSekrFot', sBonusSekrFot);
 
   rslt := q.execute.errorCode;
   if rslt != tsOk { Message('Ошибка выборки вакансий ШР: ' + rslt, error); exit; }
@@ -576,7 +573,10 @@ procedure PrintXlsReport(isCreateXLT: boolean; sXLTFileName: string);
   pXL.PublishTbl('Main');
 
   pXL.CreateVar(sXLSFileName);
-  pXL.SetStringVar('dRep', _date);
+  pXL.SetStringVar('dRep'      , _date);
+  pXL.SetNumberVar('FltBonus'  , _wFltBonus);
+  pXL.SetNumberVar('FltVacancy', _wFltVacancy);
+  pXL.SetNumberVar('FotBonus'  , _wFotBonus);
   pXL.PublishVar;
 
   pXL.LoadReport(sXLSFileName);
@@ -674,8 +674,6 @@ cmInit:
     _wFltBonus := FLTBONUS_VRED + FLTBONUS_SEKR + FLTBONUS_NOBONUS;
   if not ReadMyDSK(_wFltVacancy, 'ag_shr_spravka_wFltVacancy', false)
     _wFltVacancy := 0;
-  if not ReadMyDSK(_wFotQty, 'ag_shr_spravka_wFotQty', false)
-    _wFotQty := 0;
   if not ReadMyDSK(_wFotBonus, 'ag_shr_spravka_wFotBonus', false)
     _wFotBonus := FOTBONUS_SEKR + FOTBONUS_VRED;
   _mDep := InitMarker('ag_shr_spravka_mDep', 8, 30, 10, true);
@@ -690,7 +688,6 @@ cmDone:
   SaveMyDsk(_wFltBonus, 'ag_shr_spravka_wFltBonus');
   SaveMyDsk(_wFltVacancy, 'ag_shr_spravka_wFltVacancy');
   SaveMyDsk(_wFotBonus, 'ag_shr_spravka_wFotBonus');
-  SaveMyDsk(_wFotQty, 'ag_shr_spravka_wFotQty');
   DoneMarker(_mDep, 'ag_shr_spravka_mDep');
   DoneMarker(_mPodgr, 'ag_shr_spravka_mPodgr');
   DoneMarker(_mCateg, 'ag_shr_spravka_mCateg');
