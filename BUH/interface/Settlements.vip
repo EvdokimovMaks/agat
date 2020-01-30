@@ -210,27 +210,30 @@ procedure CalcTmpSettlForKatStroy(ccKatStroy: comp);
 {
   //Устанавливаем во вьюхе текущий заказ
   _cKatStroy := ccKatStroy;
-  //Устанавливаем во вьюхе текущее ДО - заведомо несуществующее
-  _cBaseDoc  := comp(-1);
 
-  //Идем в цикле по записям TmpSettl, ограниченных текущим заказом
+  //Формируем маркер с нреками ДО текущего заказа
+  var mBaseDoc: TPtr = InitMarker('', 8, 100, 100, true);
+  //Идем в цикле по записям TmpSettl, ограниченных текущим заказом, заполняем маркер
   _loop TmpSettlKS
+    if not FoundMarker(mBaseDoc, TmpSettlKS.cBaseDoc)
+      InsertMarker(mBaseDoc, TmpSettlKS.cBaseDoc);
+
+  var i: longint;
+  //Проходим в цикле по ДО заказа, убираем сторнирующие платежи и поставки на Д91 счета
+  for(i := 0; GetMarker(mBaseDoc, i, _cBaseDoc); ++i)
   {
-    //Если текущая запись TmpSettlKS с тем же ДО, что и текущее ДО - пропускаем запись
-    if _cBaseDoc = TmpSettlKS.cBaseDoc continue;
-
-    //Если наткнулись на новое ДО - делаем его текущим
-    _cBaseDoc := TmpSettlKS.cBaseDoc;
-
     //Избавляемся от сторнирующих платежей по ДО - закрываем их на предыдущие и последующие обычные платежи
     CompensateTmpSettlStorno;
-
     //Избавляемся от поставок на Д91 счета и платежей по ним
     CompensateTmpSettlAktD91;
+  }
 
-    //Идем в цикле по платежным записям TmpSettl, ограниченных текущим заказом и ДО
+  //Проходим в цикле по ДО заказа, вычисляем суммы аванса, постоплаты, зачета аванса и поставка-оплачено
+  PushConditionForLeave(tcTmpSettlBD_Payment, #TmpSettlBD);
+  for(i := 0; GetMarker(mBaseDoc, i, _cBaseDoc); ++i)
+  {
+    //Идем в цикле по платежным записям TmpSettl, ограниченных текущим заказом и ДО _cBaseDoc
     //Зачитываем сумму платежа по отгрузкам
-    PushConditionForLeave(tcTmpSettlBD_Payment, #TmpSettlBD);
     _loop TmpSettlBD
     {
       //Сумма платежа для зачета на отгрузки
@@ -268,9 +271,9 @@ procedure CalcTmpSettlForKatStroy(ccKatStroy: comp);
       TmpSettlBD.Advance := TmpSettlBD.Payment - TmpSettlBD.PostPay;
       update current TmpSettlBD;
     }
-    PopConditionForLeave(tcTmpSettlBD_Payment, #TmpSettlBD);
-
-  } //_loop TmpSettlKS
+  }
+  PopConditionForLeave(tcTmpSettlBD_Payment, #TmpSettlBD);
+  DoneMarker(mBaseDoc, '');
 }
 
 sql query qData =
