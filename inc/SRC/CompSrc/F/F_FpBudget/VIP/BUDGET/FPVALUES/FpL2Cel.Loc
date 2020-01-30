@@ -1,0 +1,141 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 9.10 - модуль "Управление бюджетом"
+// Визуальный интерфейс : "Распределение агрегатов аналитик"
+//------------------------------------------------------------------------------
+
+//==============================================================================
+//#region БЛОКИРОВКА ДАННЫХ БЮДЖЕТА
+//------------------------------------------------------------------------------
+// Снятие блокировки
+function UnLockValuesData(
+  _SessionID  : LongInt
+) : boolean;
+{
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+  do
+  {
+    if (not pLockValues.Session_TryUnLock(_SessionID) )
+    {
+      sLastError := pLockValues.GetStLastError;
+      FpLog('UnLockValuesData: '+sLastError);
+      isAllOk := False;
+    }
+    if (not pLockValues.Session_End(_SessionID) )
+    {
+      sLastError := pLockValues.GetStLastError;
+      FpLog('UnLockValuesData: '+sLastError);
+      isAllOk := False;
+    }
+  }
+  while False;
+  if (not isAllOk)
+  {
+    RunShowError;
+  }
+  Result := isAllOk;
+}
+
+//------------------------------------------------------------------------------
+// Установка блокировки
+function LockValuesData(
+var _SessionID  : LongInt
+) : boolean;
+{
+  Result := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  _SessionID := 0;
+  StartNewVisual(vtRotateVisual, vfTimer+vfBreak+vfConfirm+vfScreenBottom, 'Блокировка данных...', 1);
+  do
+  {
+    _SessionID := pLockValues.Session_Begin;
+    if (_SessionID = 0)
+    {
+      sLastError := pLockValues.GetStLastError;
+      FpLog('LockValuesData: '+sLastError);
+      isAllOk := False;
+      Break;
+    }
+
+    //--------------------------------------------------------------------------
+    // построение списака блокировки
+    var SBMID : TPtr;  SBMID := InitMarker('', 8, 200, 100, False);
+    do
+    {
+      //------------------------------------------------------------------------
+      // построение списка "листовых" статей
+      ClearMarker(SBMID);
+      if (not pExtFpStBud.MakeMarkerLeafStBud(SBMID, rcCellInfo.cStBud) )
+      {
+        sLastError := pExtFpStBud.GetStLastError;
+        FpLog('LockValuesData: '+sLastError);
+        isAllOk := False;
+        Break;
+      }
+      if (GetMarkerCount(SBMID) = 0)
+      {
+        sLastError := ForMatStr_1(
+          'Не удалось построить список подчиненных статей для статьи "%S"...'
+        , pExtFpStBud.GetName(rcCellInfo.cStBud)
+        );
+        FpLog('LockValuesData: '+sLastError);
+        isAllOk := False;
+        Break;
+      }
+      // построение списка "листовых" статей
+      //------------------------------------------------------------------------
+
+      //------------------------------------------------------------------------
+      // цикл по "листовым" статьям
+      var iSB : LongInt;
+      var cSB : comp;
+      for (iSB := 0; iSB < GetMarkerCount(SBMID); iSB++ )
+      {
+        if (not GetMarker(SBMID, iSB, cSB) )
+        { Continue; }
+
+        var LockParam  : TFpLockLaluesParam;  ClearAdvRecord(LockParam);
+        LockParam.wSegBit  := word(fpcgBudVarLock or fpcgKodRegLock or fpcgStBudLock);
+        LockParam.cBudVar  := rcCellInfo.cBudVar;
+        LockParam.wKodReg  := rcCellInfo.wKodReg;
+        LockParam.cStBud   := cSB;
+        pLockValues.Session_AddALock(_SessionID, LockParam);
+
+      } // for iSB
+      // цикл по "листовым" статьям
+      //------------------------------------------------------------------------
+
+    }
+    while False;
+    DoneMarker(SBMID, '');
+    // построение списака блокировки
+    //--------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------
+    // непосредственно блокировка данных
+    if (not pLockValues.Session_TryLock(_SessionID) )
+    {
+      sLastError := pLockValues.GetStLastError;
+      FpLog('LockValuesData: '+sLastError);
+      isAllOk := False;
+      Break;
+    }
+    //--------------------------------------------------------------------------
+
+  }
+  while False;
+  StopVisual('', 0);
+  if (not isAllOk)
+  {
+    RunShowError;
+    UnLockValuesData(_SessionID);
+  }
+
+  Result := isAllOk;
+} // function LockValuesData
+
+//#endregion БЛОКИРОВКА БЮДЖЕТА
+//******************************************************************************
+

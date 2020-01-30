@@ -109,5 +109,19 @@ const
   cntNAK521CorrectPricePoOrder = 'NAK521.CorrectPricePoOrder';
 end;
 
+//DsNastr.wVid
+//1
+//2
+//3
+//4
+//5
+//6
+//7
+//8
+//9
+//10
+//11
+//14 - настройки для ДВС(список отображаемых полей для DSVVODS)
+
 
 #endif

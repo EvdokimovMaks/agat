@@ -1,0 +1,816 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Спецоснастка
+// Процедуры печати форм Акта инвентаризации спецоснастки
+//------------------------------------------------------------------------------
+
+var Stopped, isZeroSum : Boolean;
+
+// В зависимости от выбранной группы отчетов интерпретируется по-разному
+
+function GetZeroSum : boolean;
+{
+  GetZeroSum := false;
+
+  // Сличительная ведомость
+  if (dType = 1)
+    Exit;
+
+  // Флажок обнуления балансовых сумм
+  if ((dopFlt AND 1) <> 1)
+    Exit;
+
+  if (MBPInvS.inExpl = 0)
+    Exit;
+
+  if (not isValid(#MBPWrite))
+    Exit;
+
+  if (MBPWrite.wPar[1] = 0)
+    Exit;
+
+  if (MBPWrite.sPar[1] < 99.99)
+    Exit;
+
+  if (MBPInvS.Perc < 99.99)
+    Exit;
+
+  GetZeroSum := true;
+}
+
+procedure PrintMBPInv;
+var nom : longint;
+    i : integer;
+{
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm, 'Формирование инвентаризационной описи', 1);
+
+  case (dType) of
+  //------------
+    0:
+    if ((PrnInfo and 2) = 0)
+    {
+      if wGetTune('Country') = 1
+         frmMBPInv.SetGroup('Инвентаризационные описи << Беларусь >>')
+       else
+         frmMBPInv.SetGroup('Инвентаризационные описи');
+    }
+    else
+    {
+      if wGetTune('Country') = 1
+        frmMBPInv.SetGroup('Ведомости по итогам инвентаризации << Беларусь >>')
+      else
+        frmMBPInv.SetGroup('Ведомости по итогам инвентаризации');
+    }
+  //------------
+    1: frmMBPInv.SetGroup('Сличительные ведомости');
+  //------------
+  end;
+
+  #WriteCommission_FeeSigners(iFeeSigners,frmMBPInv,MBPInvProtPlus);
+
+  frmMBPInv.Write(if (isValid(#KatPodr), KatPodr.nRec, Comp(0)));
+  frmMBPInv.Write(dType);
+  frmMBPInv.Write(MBPMove.wParams[1]);
+  // Шапка
+  frmMBPInv.Write(iOrgInfo.GetMyOrgNameT(MBPMove.dMove));
+  frmMBPInv.Write(iOrgInfo.MyOrgOKPO);
+  frmMBPInv.Write(if (isValid(#KatMOL), KatMOL.Name, ''));
+  frmMBPInv.Write(if (isValid(#KatPodr), KatPodr.Name, ''));
+  frmMBPInv.Write(From_Days(MBPMove.cValNew));
+  frmMBPInv.Write(MBPMove.DopInfo);
+  frmMBPInv.Write(MBPMove.dMove);
+
+  case (MBPMove.wParams[2]) of
+    1: frmMBPInv.Write('спецоборудование и спецоснастка ');
+    2: frmMBPInv.Write('специальная и форменная одежда ');
+  else
+    frmMBPInv.Write('спецоборудование и спецоснастка, специальная и форменная одежда ');
+  end;
+
+  case (MBPMove.wParams[1]) of
+    1: frmMBPInv.Write('на складе');
+    2: frmMBPInv.Write('в эксплуатации');
+  else
+    frmMBPInv.Write('на складе и в эксплуатации');
+  end;
+
+  frmMBPInv.Write('в собственности организации');
+  frmMBPInv.Write(stNpp);
+  frmMBPInv.Write(MBPMove.Nom);
+  frmMBPInv.Write(From_Days(MBPMove.cValOld));
+  frmMBPInv.Write(if (isValid(#KatMOL), oSDfuns.Get_MOL_Post(KatMOL.nRec), ''));
+  frmMBPInv.Write(MBPMove.wParams[2]);
+  frmMBPInv.Write(TipName);
+  frmMBPInv.Write(if ((PrnInfo and 2) = 2, 1, if ((PrnInfo and 1) = 0, 2, 0)));
+  frmMBPInv.Write(PageNum);
+  frmMBPInv.Write(VidStoim);
+
+  // Строки спецификации
+  Stopped := False;
+  nom := 0;
+
+  if (not frmMBPInv.Error)
+  {
+    PushPos(#MBPInvS);
+
+    _LOOP MBPInvS
+    {
+      if (not NextVisual)
+      {
+        Stopped := True;
+        Break;
+      }
+
+      if (dType = 1) and (rParam > 0)
+        case (rParam) of
+        //--------------
+          1: // Рассогласованные позиции
+            if (MBPInvS.cntKol = MBPInvS.fctKol)
+              Continue;
+        //--------------
+          2: // Недостачи
+            if (MBPInvS.cntKol <= MBPInvS.fctKol)
+              Continue;
+        //--------------
+          3: // Излишки
+            if (MBPInvS.cntKol >= MBPInvS.fctKol)
+              Continue;
+        //--------------
+        end;
+
+      nom++;
+      isZeroSum := GetZeroSum;
+      frmMBPInv.Write(KatMBPS.Name);
+      frmMBPInv.Write(KatMBPS.NNumber);
+      frmMBPInv.Write(if (isValid(#KatEd), KatEd.Name, ''));
+      frmMBPInv.Write(if (isValid(#KatEd), piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код'), ''));
+      frmMBPInv.Write(if (isZeroSum, 0, MBPInvS.Price));
+      frmMBPInv.Write(MBPInvS.InvNom);
+      frmMBPInv.Write(MBPInvS.PasNom);
+      frmMBPInv.Write(if (isValid(#KatPartyS), KatPartyS.Kod, ''));
+      frmMBPInv.Write(if (isValid(#KatPartyS), KatPartyS.Name, ''));
+      frmMBPInv.Write(MBPInvS.inExpl);
+      frmMBPInv.Write(if (isZeroSum, 0, MBPInvS.Perc));
+
+      if (dType = 0) and ((PrnInfo and 1) = 0)
+        frmMBPInv.Write(Double(0));
+      else
+        frmMBPInv.Write(MBPInvS.cntKol);
+
+      if (dType = 0) and ((PrnInfo and 2) = 0)
+        frmMBPInv.Write(Double(0));
+      else
+        frmMBPInv.Write(MBPInvS.fctKol);
+
+      frmMBPInv.Write(MBPInvS.dInv);
+      frmMBPInv.Write(if (IsBit(MBPMove.wParams[3], cgGrp_Size) and isValid(#GroupSFO), iSizes.GetSfoReqSizeStr2(MBPInvS.Sizes, GroupSFO.Positions), ''));
+
+      if (not IsBit(MBPMove.wParams[3], cgGrp_Pers))
+        frmMBPInv.SkipFormat(3);
+      else
+      {
+        frmMBPInv.Write(if (isValid(#PersCard), PersCard.CardNom, ''));
+        frmMBPInv.Write(if (isValid(#PersCard), iPersInfo.GetTabNum(PersCard.nRec), ''));
+        frmMBPInv.Write(if (isValid(#Persons), Persons.FIO, ''));
+      }
+
+      frmMBPInv.Write(MBPInvS.nRec);
+
+      case (FillSchet) of
+      //-----------------
+        1: // по типу МЦ
+          frmMBPInv.Write(if (isValid(#TypeMC), Trim(TypeMC.Kod), ''));
+      //-----------------
+        2: // по налоговой группе МЦ
+          frmMBPInv.Write(if (isValid(#GrNal), Trim(GrNal.Kod), ''));
+      //-----------------
+      else
+        frmMBPInv.SkipFormat(1);
+      //-----------------
+      end;
+    }
+
+    PopPos(#MBPInvS);
+
+    if (dType = 0)
+      if (nLines > 0) // Вывести пустые строки
+      {
+        nom++;
+
+        for (i := 0; i < nLines; i := i+1)
+          frmMBPInv.SkipFormat(20);
+      }
+  }
+
+  if (nom = 0)
+    frmMBPInv.SkipFormat(20);
+
+  frmMBPInv.PutEvent(feBreak);
+  StopVisual('', 0);
+
+  if ((Stopped) or (frmMBPInv.Error))
+  {
+    if (Stopped)
+      Message('Процесс прерван пользователем.', Warning);
+
+    frmMBPInv.AbortForm;
+  }
+  else
+    frmMBPInv.ShowFile('Ведомость по инвентаризации спецоснастки (MBP_INV.OUT)');
+}
+
+//================================== For Excel =====================================================
+
+var pXL : XLSRepBuilder;  // объект формирования Excel-отчетов
+var IDSh : string;
+
+//=============================================================================
+// процедура добавления пустой записи в Excel-поток
+
+procedure AddEmptyLinesXLS(nom: comp);
+{
+  pXL.ClearTblBuffer;
+
+  pXL.SetTblNumberFldValue('n01a', nom);
+  pXL.SetTblStringFldValue('n03a', '');
+  pXL.SetTblStringFldValue('n04a', '');
+  pXL.SetTblStringFldValue('n05a', '');
+  pXL.SetTblStringFldValue('n06a', '');
+  pXL.SetTblNumberFldValue('n07a', 0);
+  pXL.SetTblStringFldValue('n08a', '');
+  pXL.SetTblStringFldValue('n09a', '');
+
+  if (wGetTune('Country') = 1) // для Беларуси в инв. опись печатаем нули, а для других стран нули не выводим
+  {
+    pXL.SetTblNumberFldValue('n12a', 0);
+    pXL.SetTblNumberFldValue('n13a', 0);
+    pXL.SetTblNumberFldValue('n16a', 0);
+  }
+
+  pXL.InsTblRow;
+}
+
+//=============================================================================
+
+procedure PrintMBPInv3;  // Печать в Excel формы ИНВ-3
+var f_cntkol, f_fctkol : double;
+    nom : longint;
+{
+  ID := 'F_MBP\INVMBPOP';
+
+  var sXLTFileName, sXLSFileName : string = '';
+
+  if (not ReadMyDsk(sXLTFileName, ID, true))
+    Set sXLTFileName := TranslatePath('%ClientStartPath%') + 'XLS\' + ID + '.xlt';
+
+  Set sXLSFileName := pXL.CreateReport(sXLTFileName, True);
+
+  var tStr, repStr : string = '';
+
+  case (MBPMove.wParams[2]) of
+    1: tStr := 'спецоборудование и спецоснастка ';
+    2: tStr := 'специальная и форменная одежда ';
+  else
+    tStr := 'спецоборудование и спецоснастка, специальная и форменная одежда ';
+  end;
+
+  case (MBPMove.wParams[1]) of
+    1: repStr := 'на складе';
+    2: repStr := 'в эксплуатации';
+  else
+    repStr := 'на складе и в эксплуатации';
+  end;
+
+  // инициализация переменных Excel-БД (DBVar Constructor)
+  pXL.CreateVar(sXLSFileName);
+
+  // выгрузка значений переменных
+  pXL.SetStringVar('CFH', CommonFormHeader);
+  pXL.SetNumberVar('iscopy', if ((PrnInfo and 2) = 2, 1, if ((PrnInfo and 1) = 0, 2, 0)));
+  pXL.SetNumberVar('PageNum', PageNum);
+  pXL.SetStringVar('dfor', DateToStr(MBPMove.dMove, 'DD/MM/YYYY'));
+  pXL.SetStringVar('orgn', iOrgInfo.GetMyOrgNameT(MBPMove.dMove));
+  pXL.SetStringVar('okpo', iOrgInfo.MyOrgOKPO);
+  pXL.SetStringVar('Podr', if (isValid(#KatPodr), KatPodr.Name, ''));
+  pXL.SetNumberVar('KatPodr_NRec', if (isValid(#KatPodr), KatPodr.nRec, Comp(0)));
+  pXL.SetStringVar('GrPodr', if (GetFirst GrPodr where (( KatPodr.cGrPodr == GrPodr.nRec )) = tsOk, GrPodr.Name, ''));
+  #WriteXltFeeSignersVarOS(iFeeSigners,pXL);
+  pXL.SetStringVar('repstr', tStr + repStr);
+  pXL.SetStringVar('vsorg', 'в собственности организации');
+  pXL.SetStringVar('startNpp', stNpp);
+  pXL.SetStringVar('MOL' , if (isValid(#KatMOL), KatMOL.Name, ''));
+  pXL.SetStringVar('MolPost', if (isValid(#KatMOL), oSDfuns.Get_MOL_Post(KatMOL.nRec), ''));
+  pXL.SetNumberVar('country', wGetTune('Country'));
+  pXL.SetNumberVar('VidRep', if ((wGetTune('Country') = ccRus) and GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0) and ((VidRep = 0) or (VidRep = 2)), 1000+VidRep, VidRep));
+  pXL.SetStringVar('BarCode', Ean13ToEanGnivcTTF(GenerateBarCode(cgDoc_0737, MBPMove.nRec)));
+  pXL.SetStringVar('DocDate', if (MBPMove.cValNew > 0, DateToStr(From_Days(MBPMove.cValNew),'DD/MM/YYYY'), ''));
+  pXL.SetStringVar('DocNom' , MBPMove.DopInfo);
+  pXL.SetNumberVar('DocType' , DType);
+  pXL.SetStringVar('Nom', MBPMove.Nom);
+  pXL.SetStringVar('dTo', if (MBPMove.cValOld > 0, DateToStr(From_Days(MBPMove.cValOld),'DD/MM/YYYY'), ''));
+
+  // Проверяющее лицо
+  var ProvFio, ProvPost : string;
+  ProvFIO := '';
+  ProvPost := '';
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_ProvLico))
+    {
+      ProvFIO := iFeeSigners.GetSignerFIO(1);
+      ProvPost := iFeeSigners.GetSignerPosition(1);
+    }
+
+    iFeeSigners.ClearRestriction;
+  }
+
+  pXL.SetStringVar('ProvFIO', ProvFIO);  // Проверяющее лицо
+  pXL.SetStringVar('ProvPost', ProvPost);  // Должность проверяющего лица
+
+  var i : word = 0;
+
+  for (i := 1; i <= 10; i++)
+    pXL.SetStringVar('ExtAttr_Name' + String(i), '');
+
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXLSFileName);
+  #WriteXltFeeSignersTableOS(iFeeSigners,pXL);
+
+  // МОЛ
+  var j : word = 0;
+  pXL.CreateTbl('Responsible');
+  pXL.CreateTblFld('MOL_FIO');
+  pXL.CreateTblFld('MOL_Post');
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_Otvetstv))
+     if (iFeeSigners.GetSignerFirst)
+       do
+       {
+         j++;
+         pXL.ClearTblBuffer;
+         pXL.SetTblStringFldValue('MOL_FIO', iFeeSigners.GetSignerFIO(1));
+         pXL.SetTblStringFldValue('MOL_Post', iFeeSigners.GetSignerPosition(1));
+         pXL.InsTblRow;
+       }
+       while (iFeeSigners.GetSignerNext);
+
+    iFeeSigners.ClearRestriction;
+  }
+
+  if (j = 0) and (VidRep <> 2)
+  {
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('MOL_FIO', if (isValid(#KatMOL), KatMOL.Name, ''));
+    pXL.SetTblStringFldValue('MOL_Post', if (isValid(#KatMOL), oSDfuns.Get_MOL_Post(KatMOL.nRec), ''));
+    pXL.InsTblRow;
+
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('MOL_FIO', '');
+    pXL.SetTblStringFldValue('MOL_Post', '');
+    pXL.InsTblRow;
+  }
+
+  pXL.PublishTbl('Responsible');
+
+  // определение таблицы отчета (DBTbl Constructor)
+  pXL.CreateTbl('Table');
+  pXL.CreateTblFld('n01a');  // Номер п/п
+  pXL.CreateTblFld('n02a');  // Счет/субсчет
+  pXL.CreateTblFld('n03a');  // Наименование МЦ
+  pXL.CreateTblFld('n04a');  // Ном. Номер
+  pXL.CreateTblFld('n05a');  // Код ЕдИзм
+  pXL.CreateTblFld('n06a');  // Наименование ЕдИзм
+  pXL.CreateTblFld('n07a');  // Цена
+  pXL.CreateTblFld('n08a');  // Номер инв.
+  pXL.CreateTblFld('n09a');  // Номер паспорта
+  pXL.CreateTblFld('n10a');  // Кол-во фактически
+  pXL.CreateTblFld('n11a');  // Сумма фактически
+  pXL.CreateTblFld('n12a');  // Кол-во по данным бухг. учета
+  pXL.CreateTblFld('n13a');  // Сумма  по данным бухг. учета
+  pXL.CreateTblFld('n14a');  // Доп. информация из прихода (здесь не используется)
+  pXL.CreateTblFld('n15a');  // Ост. стоимость фактически
+  pXL.CreateTblFld('n16a');  // Ост. стоимость по данным бухг. учета
+  pXL.CreateTblFld('n17a');  // Код партии
+  pXL.CreateTblFld('n18a');  // Наименование партии
+  pXL.CreateTblFld('n19a');  // Наименование группировки (здесь не используется)
+  pXL.CreateTblFld('n20a');  // Номер ЛК работника (здесь не используется)
+  pXL.CreateTblFld('n21a');  // Табельный номер работника (здесь не используется)
+  pXL.CreateTblFld('n22a');  // ФИО работника (здесь не используется)
+  pXL.CreateTblFld('MBP_Pod');  // Подразделение из прихода (здесь не используется)
+  pXL.CreateTblFld('MBP_Mol');  // МОЛ из прихода (здесь не используется)
+  pXL.CreateTblFld('MBP_Org');  // Поставщик из прихода (здесь не используется)
+  pXL.CreateTblFld('Nakl_Nom');  // Номер накладной Склад МЦ -> Спецоснастка (здесь не используется)
+  pXL.CreateTblFld('Nakl_Dat');  // Дата накладной Склад МЦ -> Спецоснастка (здесь не используется)
+  pXL.CreateTblFld('Move_Nom');  // Номер документа на внутреннее перемещение (здесь не используется)
+  pXL.CreateTblFld('Move_Dat');  // Дата документа на внутреннее перемещение (здесь не используется)
+
+  for (i := 1; i <= 10; i++) // Значения внешних атрибутов (здесь не используются)
+    pXL.CreateTblFld('ExtAttr_Val' + String(i));
+
+  StartNewVisual(vtNumericVisual, vfTimer+vfBreak+vfConfirm, 'Формирование инвентаризационной описи', 1);
+  Stopped := False;
+  nom := stNpp - 1;
+  PushPos(#MBPInvS);
+
+  _LOOP MBPInvS
+  {
+    if (not NextVisual)
+    {
+      Stopped := True;
+      Break;
+    }
+
+    nom := nom + 1;
+    var namem, sizename, tabnum : string = '';
+
+    if ((KatMBPS.Name <> '') or (KatMBPS.NNumber <> ''))
+    {
+      if (VidRep = 2) // приложение к ИНВ-3
+        namem := KatMBPS.NNumber + if (KatMBPS.NNumber <> '', ' - ', '') + KatMBPS.Name;
+      else
+      {
+        if (MBPMove.wParams[1] = 3)
+          namem := if (MBPInvS.inExpl = 0, 'скл', 'экс');
+
+        if (MBPInvS.Perc > 0)
+          namem := namem + if (namem = '', '', ',') + ' изн ' + String(MBPInvS.Perc) + '%';
+
+        if (isValid(#KatPartyS) and (TipName > 0))
+          namem := namem + if (namem = '', '', ',') + ' партия: ' + if (TipName = 2, KatPartyS.Kod, KatPartyS.Name);
+
+        if (IsBit(MBPMove.wParams[3], cgGrp_Size))
+        {
+          sizename := if (isValid(#GroupSFO), iSizes.GetSfoReqSizeStr2(MBPInvS.Sizes, GroupSFO.Positions), '');
+
+          if (sizename <> '')
+            namem := namem + if (namem = '', '', ',') + ' размер: ' + sizename;
+        }
+
+        namem := KatMBPS.Name + if (namem = '', '', ' (' + namem + ')');
+      }
+    }
+
+    f_cntkol := if ((PrnInfo and 1) = 0, 0, MBPInvS.cntKol);
+    f_fctkol := if ((PrnInfo and 2) = 0, 0, MBPInvS.fctKol);
+    isZeroSum := GetZeroSum;
+
+    // Строки спецификации
+    pXL.ClearTblBuffer;
+    pXL.SetTblNumberFldValue('n01a', nom);
+
+    case (FillSchet) of
+    //-----------------
+      1: // по типу МЦ
+        pXL.SetTblStringFldValue('n02a', if (isValid(#TypeMC), Trim(TypeMC.Kod), ''));
+    //-----------------
+      2: // по налоговой группе МЦ
+        pXL.SetTblStringFldValue('n02a', if (isValid(#GrNal), Trim(GrNal.Kod), ''));
+    //-----------------
+    end;
+
+    pXL.SetTblStringFldValue('n03a', namem);
+    pXL.SetTblStringFldValue('n04a', KatMBPS.NNumber);
+    pXL.SetTblStringFldValue('n05a', if (isValid(#KatEd), piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код'), ''));
+    pXL.SetTblStringFldValue('n06a', if (isValid(#KatEd), KatEd.Name, ''));
+    pXL.SetTblNumberFldValue('n07a', if (isZeroSum, 0, MBPInvS.Price));
+    pXL.SetTblStringFldValue('n08a', MBPInvS.InvNom);
+    pXL.SetTblStringFldValue('n09a', MBPInvS.PasNom);
+
+    if (f_fctkol <> 0)
+    {
+      pXL.SetTblNumberFldValue('n10a', f_fctkol);
+      pXL.SetTblNumberFldValue('n11a', f_fctkol * if(isZeroSum, 0,
+          if ((VidRep = 2) or (VidStoim = 0), MBPInvS.Price,
+              MBPInvS.Price - MBPInvS.Price * MBPInvS.Perc/100)));
+      pXL.SetTblNumberFldValue('n15a', f_fctkol * MBPInvS.Price * (1 - MBPInvS.Perc/100));
+    }
+
+    if (f_cntkol <> 0)
+    {
+      pXL.SetTblNumberFldValue('n12a', f_cntkol);
+      pXL.SetTblNumberFldValue('n13a', f_cntkol * if(isZeroSum, 0,
+            if ((VidRep = 2) or (VidStoim = 0), MBPInvS.Price,
+                MBPInvS.Price - MBPInvS.Price * MBPInvS.Perc/100)));
+      pXL.SetTblNumberFldValue('n16a', f_cntkol * MBPInvS.Price * (1 - MBPInvS.Perc/100));
+    }
+
+    pXL.SetTblStringFldValue('n17a', if (isValid(#KatPartyS), KatPartyS.Kod, ''));
+    pXL.SetTblStringFldValue('n18a', if (isValid(#KatPartyS), KatPartyS.Name, ''));
+
+    if (IsBit(MBPMove.wParams[3], cgGrp_Pers))
+    {
+      pXl.SetTblStringFldValue('n20a', if (isValid(#PersCard), PersCard.CardNom, ''));
+      tabnum := if (isValid(#PersCard), iPersInfo.GetTabNum(PersCard.nRec), '');
+      pXl.SetTblStringFldValue('n21a', tabnum);
+      pXl.SetTblStringFldValue('n22a', if ((VidRep = 2) and (tabnum <> ''), tabnum + ' - ', '') + if (isValid(#Persons), Persons.FIO, ''));
+    }
+
+    pXL.InsTblRow;
+  }
+
+  PopPos(#MBPInvS);
+
+  if (Stopped)
+  {
+    StopVisual('', 0);
+    Message('Процесс прерван пользователем.', Warning);
+    Exit;
+  }
+  else
+  {
+    // добавляем пустые строки, если это необходимо
+    if (nLines > 0)
+      for (i := 0; i < nLines; i := i + 1)
+      {
+        nom := nom + 1;
+        AddEmptyLinesXLS(nom);
+      }
+
+    if (nom = (stNpp - 1))
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('n01a', '');
+      pXL.InsTblRow;
+    }
+
+    pXL.PublishTbl('Table');
+
+    // формирование отчета по заданному шаблону
+    pXL.LoadReport(sXLSFileName);
+    pXL.DisConnectExcel;
+    StopVisual('', 0);
+  }
+}
+
+// Печать сличительной ведомости в Excel
+procedure PrintMBPInv_xl;
+{
+  var j, parr : word;
+  var sXLTFileName : string = '';
+  var sXLSFileName : string;
+
+  // создаем отчет на основании существующего шаблона,
+  // либо если это надо создает заготовку шаблона отчета
+  ID := 'F_MBP\dix_INV19';
+
+  if (not ReadMyDsk(sXLTFileName, ID ,true))
+    Set sXLTFileName := TranslatePath('%ClientStartPath%') + 'XLS\' + ID + '.xlt';
+
+  Set sXLSFileName := pXL.CreateReport(sXLTFileName, True);
+  // Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+
+  var tStr, repStr, namem, sizename : String = '';
+  var f_kol, i_s, i_k, n_s, n_k, PgIzlKol, PgNedKol, PgIzlSum, PgNedSum : double = 0;
+  var nom : integer = 0;
+
+  pXL.CreateTbls(sXLSFileName);
+
+  // МОЛ
+  j := 0;
+  pXL.CreateTbl('Responsible');
+  pXL.CreateTblFld('MOL_FIO');
+  pXL.CreateTblFld('MOL_Post');
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_Otvetstv))
+     if (iFeeSigners.GetSignerFirst)
+       do
+       {
+         j++;
+         pXL.ClearTblBuffer;
+         pXL.SetTblStringFldValue('MOL_FIO', iFeeSigners.GetSignerFIO(1));
+         pXL.SetTblStringFldValue('MOL_Post', iFeeSigners.GetSignerPosition(1));
+         pXL.InsTblRow;
+       }
+       while (iFeeSigners.GetSignerNext);
+
+    iFeeSigners.ClearRestriction;
+  }
+
+  if (j = 0)
+  {
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('MOL_FIO', if (isValid(#KatMOL), KatMOL.Name, ''));
+    pXL.SetTblStringFldValue('MOL_Post', if (isValid(#KatMOL), oSDfuns.Get_MOL_Post(KatMOL.nRec), ''));
+    pXL.InsTblRow;
+
+    if (wGetTune('Country') <> ccBel)
+    {
+      pXL.ClearTblBuffer;
+      pXL.SetTblStringFldValue('MOL_FIO', '');
+      pXL.SetTblStringFldValue('MOL_Post', '');
+      pXL.InsTblRow;
+    }
+  }
+
+  pXL.PublishTbl('Responsible');
+
+  // определение таблицы отчета (DBTbl Constructor)
+  pXL.CreateTbl('TableA');
+  pXL.ClearTblBuffer;
+  // объявление полей таблицы
+  pXL.CreateTblFld('Nom');
+  pXL.CreateTblFld('MBPName');
+  pXL.CreateTblFld('MBPKod');
+  pXL.CreateTblFld('Ed');
+  pXL.CreateTblFld('EdKod');
+  pXL.CreateTblFld('InvNum');
+  pXL.CreateTblFld('PasNum');
+  pXL.CreateTblFld('State');
+  pXL.CreateTblFld('Izn');
+  pXL.CreateTblFld('isum');
+  pXL.CreateTblFld('ikol');
+  pXL.CreateTblFld('nsum');
+  pXL.CreateTblFld('nkol');
+  pXL.CreateTblFld('dOst');
+  pXL.CreateTblFld('PrtKod');
+  pXL.CreateTblFld('PrtName');
+
+  // Строки спецификации
+  Stopped := False;
+  PushPos(#MBPInvS);
+  StartNewVisual(vtNumericVisual, vfTimer + vfBreak + vfConfirm, 'Формирование сличительной ведомости', 1);
+
+  if (GetFirst MBPInvS = tsOk)
+  {
+    nom := stNpp - 1;
+
+    do
+    {
+      pXL.ClearTblBuffer;
+
+      case (rParam) of
+      //--------------
+        1: // Рассогласованные позиции
+          if (MBPInvS.cntKol = MBPInvS.fctKol)
+            Continue;
+      //--------------
+        2: // Недостачи
+          if (MBPInvS.cntKol <= MBPInvS.fctKol)
+            Continue;
+      //--------------
+        3: // Излишки
+          if (MBPInvS.cntKol >= MBPInvS.fctKol)
+            Continue;
+      //--------------
+      end;
+
+      nom := nom + 1;
+      namem := sizename := '';
+
+      if ((KatMBPS.Name <> '') or (KatMBPS.NNumber <> ''))
+      {
+        if (MBPMove.wParams[1] = 3)
+          namem := if (MBPInvS.inExpl = 0, 'скл', 'экс');
+
+        if (MBPInvS.Perc > 0)
+          namem := namem + if (namem = '', '', ',') + ' изн ' + String(MBPInvS.Perc) + '%';
+
+        if (isValid(#KatPartyS) and (TipName > 0))
+          namem := namem + if (namem = '', '', ',') + ' партия: ' + if (TipName = 2, KatPartyS.Kod, KatPartyS.Name);
+
+        if (IsBit(MBPMove.wParams[3], cgGrp_Size))
+        {
+          sizename := if (isValid(#GroupSFO), iSizes.GetSfoReqSizeStr2(MBPInvS.Sizes, GroupSFo.Positions), '');
+
+          if (sizename <> '')
+            namem := namem + if (namem = '', '', ',') + ' размер: ' + sizename;
+        }
+
+        namem := KatMBPS.Name + if (namem = '', '', ' (' + namem + ')');
+      }
+
+      pXL.SetTblNumberFldValue('Nom', nom);
+      pXL.SetTblStringFldValue('MBPName', namem);
+      pXL.SetTblStringFldValue('MBPKod', KatMBPS.NNumber);
+      pXL.SetTblStringFldValue('Ed', if (isValid(#KatEd), KatEd.Name, ''));
+      pXL.SetTblStringFldValue('EdKod', if (isValid(#KatEd), piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код'), ''));
+      pXL.SetTblStringFldValue('InvNum', MBPInvS.InvNom);
+      pXL.SetTblStringFldValue('PasNum', MBPInvS.PasNom);
+      pXL.SetTblNumberFldValue('State', MBPInvS.inExpl);
+      pXL.SetTblNumberFldValue('Izn', MBPInvS.Perc);
+
+      f_kol := MBPInvS.fctKol;
+
+      i_s := 0;
+      i_k := 0;
+      n_s := 0;
+      n_k := 0;
+
+      pXL.SetTblStringFldValue('dOst', DateToStr(MBPInvS.dInv, 'DD/MM/YY'));
+      pXl.SetTblStringFldValue('PrtKod', if (isValid(#KatPartyS), KatPartyS.Kod, ''));
+      pXl.SetTblStringFldValue('PrtName', if (isValid(#KatPartyS), KatPartyS.Name, ''));
+
+      if (f_kol > MBPInvS.cntKol)
+      {
+        i_s := f_kol - MBPInvS.cntKol;
+        pXL.SetTblNumberFldValue('isum', i_s);
+        i_k := (f_kol - MBPInvS.cntKol) * if (VidStoim = 0, MBPInvS.Price, MBPInvS.Price * (1 - MBPInvS.Perc/100)) ;
+        pXL.SetTblNumberFldValue('ikol', i_k);
+        PgIzlKol := PgIzlKol + i_s;
+        PgIzlSum := PgIzlSum + i_k;
+      }
+
+      if (f_kol < MBPInvS.cntKol)
+      {
+        n_s := MBPInvS.cntKol - f_kol;
+        pXL.SetTblNumberFldValue('nsum', n_s);
+        n_k := (MBPInvS.cntKol - f_kol) * if (VidStoim = 0,  MBPInvS.Price,  MBPInvS.Price * (1 - MBPInvS.Perc/100));
+        pXL.SetTblNumberFldValue('nkol', n_k);
+        PgNedKol := PgNedKol + n_s;
+        PgNedSum := PgNedSum + n_k;
+      }
+
+      pXL.InsTblRow;
+
+      if (not NextVisual)
+      {
+        Stopped := True;
+        Break;
+      }
+    }
+    while (GetNext MBPInvS = tsOk);
+
+    pXL.PublishTbl('TableA');
+  }
+
+  // инициализация переменных Excel-БД (DBVar Constructor)
+  pXL.CreateVar(sXLSFileName);
+
+   // выгрузка значений переменных
+  pXL.SetStringVar('CFH', CommonFormHeader);
+  pXL.SetNumberVar('country', wGetTune('Country'));
+  pXL.SetNumberVar('PgIzlKol', PgIzlKol);
+  pXL.SetNumberVar('PgIzlSum', PgIzlSum);
+  pXL.SetNumberVar('PgNedKol', PgNedKol);
+  pXL.SetNumberVar('PgNedSum', PgNedSum);
+  pXL.SetNumberVar('RepType', dType);
+  pXL.SetNumberVar('expVal', MBPMove.wParams[1]);
+  pXL.SetNumberVar('KatPodr_NRec', if(isValid(#KatPodr), KatPodr.nRec, Comp(0)));
+  pXL.SetStringVar('OrgName', iOrgInfo.GetMyOrgNameT(MBPMove.dMove));
+  pXL.SetStringVar('OKPO', iOrgInfo.MyOrgOKPO);
+  pXL.SetStringVar('MOL', if (isValid(#KatMOL), KatMOL.Name, ''));
+  pXL.SetStringVar('Podr', if (isValid(#KatPodr), KatPodr.Name, ''));
+  pXL.SetStringVar('GrPodr', if (GetFirst GrPodr where (( KatPodr.cGrPodr == GrPodr.nRec )) = tsOk, GrPodr.Name, ''));
+  pXL.SetStringVar('begDate', DateToStr(MBPMove.dMove, 'DD/MM/YYYY'));
+
+  case (MBPMove.wParams[2]) of
+    1: tStr := 'спецоборудование и спецоснастка ';
+    2: tStr := 'специальная и форменная одежда ';
+  else
+    tStr := 'спецоборудование и спецоснастка, специальная и форменная одежда ';
+  end;
+
+  case (MBPMove.wParams[1]) of
+    1: repStr := 'на складе';
+    2: repStr := 'в эксплуатации';
+  else
+    repStr := 'на складе и в эксплуатации';
+  end;
+
+  pXL.SetStringVar('vidMC', tStr);
+  pXL.SetStringVar('placeMC', repStr);
+  pXL.SetStringVar('ownerMC', 'в собственности организации');
+  pXL.SetNumberVar('expVal', stNpp);
+  pXL.SetStringVar('BarCode', Ean13ToEanGnivcTTF(GenerateBarCode(cgDoc_0737, MBPMove.nRec)));
+  pXL.SetStringVar('DocDate', if (MBPMove.cValNew > 0, DateToStr(From_Days(MBPMove.cValNew),'DD/MM/YYYY'), ''));
+  pXL.SetStringVar('DocNom', MBPMove.DopInfo);
+  pXL.SetStringVar('Nom', MBPMove.Nom);
+  pXL.SetStringVar('dTo', if (MBPMove.cValOld > 0, DateToStr(From_Days(MBPMove.cValOld),'DD/MM/YYYY'), ''));
+  pXL.SetStringVar('MolPost', if(isValid(#KatMOL), oSDfuns.Get_MOL_Post(KatMOL.nRec), ''));
+
+  // Бухгалтер
+  var BuhFio : string;
+  BuhFio := '';
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(1, cgRole_Bux))
+      BuhFio := iFeeSigners.GetSignerFIO(1);
+
+    iFeeSigners.ClearRestriction;
+  }
+
+  pXL.SetStringVar('Buh', BuhFio); // Бухгалтер
+  pXL.PublishVar;
+
+  PopPos(#MBPInvS);
+
+  if (Stopped)
+  {
+    StopVisual('', 0);
+    Message('Процесс прерван пользователем.', Warning);
+  }
+  else
+  {
+    // формирование отчета по заданному шаблону
+    pXL.LoadReport(sXLSFileName);
+    pXL.DisConnectExcel;
+    StopVisual('', 0);
+  }
+}

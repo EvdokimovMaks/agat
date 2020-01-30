@@ -1,0 +1,517 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 9.10 - модуль "Управление бюджетом"
+// Визуальный интерфейс : "Импорт бюджетов"
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+Const
+  Var_sWorkBookFName     = 'sWB';
+  Var_sDBFKatName        = 'sDB';
+  Var_wMultiBugetMode    = 'wMM';
+  Var_cRepVal            = 'cRV';
+  Var_cKatImp            = 'cKI';
+
+  Tbl_ListBudget  = 'TBud';
+
+  TblVar__ListBudget_fOrder      = 'LBOrd';
+  TblVar__ListBudget_wBitReg     = 'LBRg';
+  TblVar__ListBudget_cCO         = 'LBCO';
+  TblVar__ListBudget_cPeriod     = 'LBPrd';
+  TblVar__ListBudget_cBudVariant = 'LBVar';
+  TblVar__ListBudget_sBudStage   = 'LBStg';
+
+  TblVar__ListBudget_wDelMode    = 'LBSDl';
+
+  TblVar__ListBudget_Note        = 'LBNt';
+  TblVar__ListBudget_NoDoc       = 'LBND';
+end;
+//------------------------------------------------------------------------------
+Const
+  Tbl_ListSheet  = 'TLS';
+  TblVar__ListSheet_SheetName    = 'LSNm';
+  TblVar__ListSheet_cBudget      = 'LSBud';
+  TblVar__ListSheet_cBudPer      = 'LSBP';
+  TblVar__ListSheet_cBudVar      = 'LSBV';
+  TblVar__ListSheet_wBitReg      = 'LSReg';
+  TblVar__ListSheet_wMode        = 'LSMod';
+  TblVar__ListSheet_cCO          = 'LBCO';
+  TblVar__ListSheet_cPeriod      = 'LBPrd';
+  TblVar__ListSheet_cBudVariant  = 'LBVar';
+  TblVar__ListSheet_sBudStage    = 'LBStg';
+
+  TblVar__ListSheet_OborotNoDoc  = 'LSOND';
+  TblVar__ListSheet_cOborotCO    = 'LSOCO';
+end;
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+#include FpPerParam.Inc    // Константы идентификаторов параметров типа "Периоды и подпериоды"
+#include FpCOParam.Inc     // Константы идентификаторов параметров типа "ЦО"
+#include FpStageParam.Inc  // Константы идентификаторов параметров типа "Реквизиты копии"
+#include FpKodRegParam.Inc // Константы идентификаторов параметров типа "Регистр учета"
+#include FpReplaceParam.Inc // Константы идентификаторов параметров типа "Режим замены"
+#include FpITune.Mac       // Макросы для чтения настроек интерфейсов
+//------------------------------------------------------------------------------
+
+
+//------------------------------------------------------------------------------
+// OLD GetTBL
+//------------------------------------------------------------------------------
+function MyGetTblListSheet(_cTune : comp) : boolean;
+{
+  MyGetTblListSheet := False;
+
+  delete all ListBudget where ((fListBudgetID == ListBudget.ID));
+  if (not pObjITune.GetTblBoxRec(_cTune, Tbl_ListSheet) )
+  { Exit; }
+
+  while GetFirst FastFirstRow BoxRec = tsOk
+  {
+    do
+    {
+      if (BoxRec.cRec = 0)  { Break; }
+      var cSavedRec : comp;  cSavedRec := BoxRec.cRec;
+      ClearBuffer(#ListBudget);
+      ListBudget.ID   := GetListBudgetID;
+
+      var cTmpBudget : comp;  cTmpBudget := 0;
+      var cTmpBudPer : comp;  cTmpBudPer := 0;
+      var cTmpBudVar : comp;  cTmpBudVar := 0;
+
+      var cTmpOborotCO : comp;    cTmpOborotCO := 0;
+      var sSheetName   : string;  sSheetName   := '';
+      var sOborotNoDoc : string;  sOborotNoDoc := '';
+
+      #GetTblFld(Comp,Tbl_ListSheet,cSavedRec,TblVar__ListSheet_cBudget,cTmpBudget)
+      #GetTblFld(Comp,Tbl_ListSheet,cSavedRec,TblVar__ListSheet_cBudPer,cTmpBudPer)
+      #GetTblFld(Comp,Tbl_ListSheet,cSavedRec,TblVar__ListSheet_cBudVar,cTmpBudVar)
+      #GetTblFld(Word,Tbl_ListSheet,cSavedRec,TblVar__ListSheet_wBitReg,ListBudget.wBitReg)
+      #GetTblFld(String,Tbl_ListSheet,cSavedRec,TblVar__ListSheet_SheetName,sSheetName)
+
+      #GetTblFld(Word,Tbl_ListSheet,cSavedRec,TblVar__ListSheet_wMode,ListBudget.wSlaveDelMode)
+
+      #GetTblFld(String,Tbl_ListSheet,cSavedRec,TblVar__ListSheet_OborotNoDoc,sOborotNoDoc)
+      #GetTblFld(Comp,Tbl_ListSheet,cSavedRec,TblVar__ListSheet_cOborotCO,cTmpOborotCO)
+
+      // корректируем регистр
+      if (ListBudget.wBitReg > 0)
+        ListBudget.wBitReg := ListBudget.wBitReg - 1;
+
+      if (GetIsImportFpOborotMode)
+      {
+        ListBudget.cCO     := cTmpOborotCO;
+      } // if (GetIsImportFpOborotMode)
+      else if (not GetIsImportFpOborotMode)
+      {
+        if (isMultiMode)
+        {
+          ListBudget.cPeriod := cTmpBudPer;
+        }
+        else if (not isMultiMode)
+        {
+          // определение бюджета
+          ListBudget.cBudget := cTmpBudget;
+          if (ListBudget.cBudget <> 0 )
+          {
+            ListBudget.cCO     := pExtFpBudget.GetCO    (ListBudget.cBudget);
+            ListBudget.cPeriod := pExtFpBudget.GetPeriod(ListBudget.cBudget);
+          }
+
+          // определение копии
+          if (ListBudget.cBudget <> 0)
+          {
+            ListBudget.cBudVar := cTmpBudVar;
+            if (ListBudget.cBudVar <> 0 )
+            {
+              ListBudget.cBudVariant := pExtFpBudVar.GetVariant(ListBudget.cBudVar);
+              ListBudget.sBudStage   := pExtFpBudVar.GetStage  (ListBudget.cBudVar);
+            }
+          }
+
+        } // if (not isMultiMode)
+
+      } // if (not GetIsImportFpOborotMode)
+
+      // доп. поля
+      ListBudget.Note  := sSheetName  ;
+      ListBudget.NoDoc := sOborotNoDoc;
+
+      // вставка в список бюджетов
+      var tsRes : word;  tsRes := insert current ListBudget;
+      if (tsRes <> tsOk)
+      { FpLog('MyGetTblListSheet : (insert current ListBudget <> tsOk)'+string(tsRes)); }
+
+    }
+    while False;
+
+    var cBoxRec : comp;  cBoxRec := BoxRec.cRec;
+    delete all BoxRec where ((cBoxRec == BoxRec.cRec));
+  }
+
+  // удаляем таблицу, чтоб указать что больше "старого" грузить не будем
+  pObjITune.DelTbl(_cTune, Tbl_ListSheet);
+
+  pEditListBudget.ReCalcOrder;
+  MyGetTblListSheet := True;
+}
+
+//------------------------------------------------------------------------------
+// GetTBL
+//------------------------------------------------------------------------------
+function MyGetTblListBudget(_cTune : comp) : boolean;
+{
+  MyGetTblListBudget := False;
+
+  // если получится, загрузим "старые" настройки
+  if (MyGetTblListSheet(_cTune) )
+  { MyGetTblListBudget := True; Exit; }
+
+  delete all ListBudget where ((fListBudgetID == ListBudget.ID));
+  if (not pObjITune.GetTblBoxRec(_cTune, Tbl_ListBudget) )
+  {Exit;}
+
+  while GetFirst FastFirstRow BoxRec = tsOk
+  {
+    do
+    {
+      if (BoxRec.cRec = 0)  { Break; }
+      var cSavedRec : comp;  cSavedRec := BoxRec.cRec;
+      ClearBuffer(#ListBudget);
+      ListBudget.ID   := GetListBudgetID;
+
+      #GetTblFld(LongInt,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_fOrder, ListBudget.fOrder)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cCO,ListBudget.cCO)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cPeriod,ListBudget.cPeriod)
+      #GetTblFld(Word,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_wBitReg,ListBudget.wBitReg)
+      #GetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudVariant,ListBudget.cBudVariant)
+      #GetTblFld(string,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_sBudStage,ListBudget.sBudStage)
+
+      #GetTblFld(Word,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_wDelMode,ListBudget.wSlaveDelMode)
+
+      #GetTblFld(String,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_Note,ListBudget.Note)
+      #GetTblFld(String,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_NoDoc,ListBudget.NoDoc)
+
+      // определение бюджета
+      if (ListBudget.cCO <> 0) and (ListBudget.cPeriod <> 0)
+      { // определим бюджет
+        ListBudget.cBudget := pExtFpBudget.FindBudget(ListBudget.cCO, ListBudget.cPeriod, cgiNoMessage);
+      }
+
+      // определение копии
+      if (ListBudget.cBudget <> 0)
+      {
+        if (ListBudget.cBudVariant <> 0)
+        { // определим копию
+          ListBudget.cBudVar := pExtFpBudVar.FindBudVar(ListBudget.cBudget, ListBudget.cBudVariant, ListBudget.sBudStage, cgiNoMessage);
+        }
+      }
+
+      // наименование бюджета
+      if (ListBudget.cBudget <> 0)
+      {
+        ListBudget.Name := pExtFpBudget.GetName(word(4), ListBudget.cBudget);
+      }
+
+      // вставка в список бюджетов
+      var tsRes : word;  tsRes := insert current ListBudget;
+      if (tsRes <> tsOk)
+      { FpLog('MyGetTblListBudget : (insert current ListBudget <> tsOk)'+string(tsRes)); }
+
+    }
+    while False;
+
+    var cBoxRec : comp;  cBoxRec := BoxRec.cRec;
+    delete all BoxRec where ((cBoxRec == BoxRec.cRec));
+  }
+
+  MyGetTblListBudget := True;
+}
+
+//------------------------------------------------------------------------------
+// SetTBL
+//------------------------------------------------------------------------------
+function MySetTblListBudget(_cTune : comp) : boolean;
+{
+  MySetTblListBudget := False;
+
+  pObjITune.DelTbl(_cTune, Tbl_ListBudget);
+  _Loop ListBudget where ((fListBudgetID == ListBudget.ID))
+  {
+      var cSavedRec : comp;  cSavedRec := ListBudget.NRec;
+
+      #SetTblFld(LongInt,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_fOrder, ListBudget.fOrder)
+      #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cCO,ListBudget.cCO)
+      #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cPeriod,ListBudget.cPeriod)
+      #SetTblFld(Word,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_wBitReg,ListBudget.wBitReg)
+      #SetTblFld(Comp,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_cBudVariant,ListBudget.cBudVariant)
+      #SetTblFld(string,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_sBudStage,ListBudget.sBudStage)
+
+      #SetTblFld(Word,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_wDelMode,ListBudget.wSlaveDelMode)
+
+      #SetTblFld(String,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_Note,ListBudget.Note)
+      #SetTblFld(String,Tbl_ListBudget,cSavedRec,TblVar__ListBudget_NoDoc,ListBudget.NoDoc)
+  }
+  MySetTblListBudget := True;
+}
+
+//------------------------------------------------------------------------------
+function MyRead_ITune(_Entity : word; _cTune : comp) : boolean;
+{
+  MyRead_ITune := False;
+
+  // служебные режимы
+  if (not GetIsImportXLSMode) and (not GetIsImportDBFMode)
+  { MyRead_ITune := True; Exit; }
+
+  // признак "загружены настройки из пакета заданий"
+  if ( not isLoadBatchITune )
+  {
+    if _cTune = 0
+    {
+      if pObjFpProfileManager.UpdateZerroIDToOneID
+        Set CurProfileID := 1;
+      _Entity := CurIntEntity;
+    }
+  }
+
+  pObjITune.InitEnt(_Entity, _cTune);
+  var isAllOK : boolean; isAllOk := True;
+  do
+  {
+    // загрузка полей интерфейса
+    #GetFld(String, Var_sWorkBookFName   , sWorkBookFName)
+    #GetFld(String, Var_sDBFKatName      , sDBFKatName)
+    #GetFld(Word,   Var_wMultiBugetMode  , wMultiBugetMode)
+    #GetFld(Comp,   Var_cRepVal          , cRepVal)
+    #GetFld(Comp,   Var_cKatImp          , cKatImp)
+
+    if GetFirst FastFirstRow fpKatImp <> tsOk
+    { FpLog('Read_ITune : (Не найдено соответствие!!!)'+#var(cKatImp) ); }
+    ReReadRecord;
+
+    if (GetIsImportXLSMode)
+    {
+      if GetFirst FastFirstRow fpKatImp = tsOk
+      {
+        if (fpKatImp.Attr = 1)
+        { Set cKatImp := 0; }
+      }
+    }
+
+    // загрузка временных таблиц интерфейса
+    MyGetTblListBudget(_cTune);
+
+    if (GetIsImportDBFMode)
+    {
+      if (trim(sDBFKatName) = '')
+      { Break; }
+      var Mes : string;  Mes := '';
+      if (not PrepareDBFImport(Mes) )
+      {
+        Set sDBFKatName := '';
+        isAllOk := False;
+        Break;
+      }
+    }
+
+  }
+  while False;
+  pObjITune.DoneEnt(_Entity, _cTune);
+
+  pEditListBudget.ReCalcOrder;
+
+  CheckFieldsState;
+  ShowMyHeader;
+
+  MyRead_ITune := isAllOk;
+}
+
+//------------------------------------------------------------------------------
+function Read_ITune(_cTune : comp) : boolean;
+{
+  isLoadBatchITune := True;
+  Read_ITune := MyRead_ITune(CurIntEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+function MySave_ITune(_Entity : word; _cTune : comp) : boolean;
+{
+  MySave_ITune := False;
+
+  // служебные режимы
+  if (not GetIsImportXLSMode) and (not GetIsImportDBFMode)
+  { MySave_ITune := True; Exit; }
+
+  // были загружены настройки из пакета заданий
+  if ( not isLoadBatchITune )
+  {
+  }
+
+  pObjITune.InitEnt(_Entity, _cTune);
+
+  // сохранение полей интерфейса
+  #SetFld(String, Var_sWorkBookFName   , sWorkBookFName)
+  #SetFld(String, Var_sDBFKatName      , sDBFKatName)
+  #SetFld(Word,   Var_wMultiBugetMode  , wMultiBugetMode)
+  #SetFld(Comp,   Var_cRepVal          , cRepVal)
+  #SetFld(Comp,   Var_cKatImp          , cKatImp)
+  // сохранение временных таблиц интерфейса
+  MySetTblListBudget(_cTune);
+  pObjITune.DoneEnt(_Entity, _cTune);
+
+  MySave_ITune := True;
+}
+
+//------------------------------------------------------------------------------
+function Save_ITune(_cTune : comp) : boolean;
+{ isLoadBatchITune := True;
+  Save_ITune := MySave_ITune(CurIntEntity, _cTune)
+}
+
+//------------------------------------------------------------------------------
+function MyDel_ITune(_Entity : word; _cTune : comp) : boolean;
+{ MyDel_ITune := pObjITune.DelEnt(_Entity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+function Del_ITune(_cTune : comp) : boolean;
+{ Del_ITune := MyDel_ITune(CurIntEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера центра ответственности
+//------------------------------------------------------------------------------
+function Read_ITune1CO(_cTune : comp; _wEntity : word) : comp;
+{
+  Read_ITune1CO := 0;
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Comp, Var_cCurCO, Read_ITune1CO)
+  pObjITune.DoneEnt(_wEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера периода планирования
+//------------------------------------------------------------------------------
+function Read_ITune1Per(_cTune : comp; _wEntity : word) : comp;
+{
+  Read_ITune1Per := 0;
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Comp, Var_cCurPer, Read_ITune1Per)
+  pObjITune.DoneEnt(_wEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера стадии
+//------------------------------------------------------------------------------
+function Read_ITune1Stage(_cTune : comp; _wEntity : word) : string;
+{
+  Read_ITune1Stage := '';
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(String, Var_sCurStage, Read_ITune1Stage)
+  pObjITune.DoneEnt(_wEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера варианта
+//------------------------------------------------------------------------------
+function Read_ITune1Variant(_cTune : comp; _wEntity : word) : comp;
+{
+  Read_ITune1Variant := 0;
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Comp,   VAR_cCurBudVariant, Read_ITune1Variant )
+  pObjITune.DoneEnt(_wEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера регистров учёта
+//------------------------------------------------------------------------------
+function Read_ITune1KodReg(_cTune : comp; _wEntity : word) : word;
+{
+  Read_ITune1KodReg := 10;
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Word, VAR_wKodReg1, Read_ITune1KodReg)
+  pObjITune.DoneEnt(_wEntity, _cTune);
+}
+
+//------------------------------------------------------------------------------
+// Загрузка из менеджера режима замены
+//------------------------------------------------------------------------------
+function Read_ITune1ReplaceMode(_cTune : comp; _wEntity : word) : word;
+{
+  Read_ITune1ReplaceMode := 10;
+  pObjITune.InitEnt(_wEntity, _cTune);
+  #GetFld(Word, VAR_wReplaceMode1, Read_ITune1ReplaceMode)
+  pObjITune.DoneEnt(_wEntity, _cTune);
+}
+//------------------------------------------------------------------------------
+// Обновление списка бюджетов в соответствии с заданными параметрами
+//------------------------------------------------------------------------------
+function SetNewListBudgetParam(_cCO : comp; _cPer: comp; _cVariant : comp; _sStage : string; _wKodReg : word; _wReplaceMode : word) : boolean;
+{
+  SetNewListBudgetParam := False;
+  var bNeedUpdBud    : boolean;
+  var bNeedUpdBudVar : boolean;
+  _Loop ListBudget where ((fListBudgetID == ListBudget.ID))
+  {
+    bNeedUpdBud := False;
+    bNeedUpdBudVar := False;
+    if ( _cCO <> 0 )
+    {
+      ListBudget.cCO := _cCO;
+      bNeedUpdBud := True;
+      bNeedUpdBudVar := True;
+    }
+    if ( _cPer <> 0 )
+    {
+      ListBudget.cPeriod := _cPer;
+      bNeedUpdBud := True;
+      bNeedUpdBudVar := True;
+    }
+    if ( _cVariant <> 0 )
+    {
+      ListBudget.cBudVariant := _cVariant;
+      bNeedUpdBudVar := True;
+    }
+    if ( _sStage <> '' )
+    {
+      ListBudget.sBudStage := _sStage;
+      bNeedUpdBudVar := True;
+    }
+    if ( _wKodReg <> 10 )
+    {
+      ListBudget.wBitReg := _wKodReg;
+      bNeedUpdBudVar := True;
+    }
+
+    if (_wReplaceMode <> 10 )
+    {
+      ListBudget.wSlaveDelMode := _wReplaceMode;
+    }
+
+    if bNeedUpdBud
+    {
+      ListBudget.cBudget := pExtFpBudget.FindBudget(ListBudget.cCO, ListBudget.cPeriod, cgiNoMessage);
+      // наименование бюджета
+      if (ListBudget.cBudget <> 0)
+      {
+        ListBudget.Name := pExtFpBudget.GetName(word(4), ListBudget.cBudget);
+      }
+    }
+    if bNeedUpdBudVar
+    {
+      if (ListBudget.cBudVariant <> 0)
+      { // определим копию
+        ListBudget.cBudVar := pExtFpBudVar.FindBudVar(ListBudget.cBudget, ListBudget.cBudVariant, ListBudget.sBudStage, cgiNoMessage);
+      }
+
+    }
+    if ( update current ListBudget <> tsOk )
+    { fplog('SetNewListBudgetParam : update current ListBudget <> tsOk'); }
+  }
+
+  ReScanPanel(#KatH);
+  pEditListBudget.MyReReadRecord;
+
+  SetNewListBudgetParam := True;
+}

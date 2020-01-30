@@ -104,6 +104,7 @@
  nSchfact         : Comp         //   0 nrec СФ
  skipInReestr     : Boolean      //   0a не печатать в реестре
  wPrStav          : word         //   Признак рассчетности ставки НДС.
+ Flag             : word         //   1 бит - корректировочный авансовый СФ
  // Стандартный СФ. Для корректировочного СФ - информация об исходном СФ.
  dFact            : Date         //   1 дата составления СФ
  dPost            : Date         //   2 дата получения СФ
@@ -209,9 +210,11 @@
  PlatNazn      :string    //  4 назначение из ТХО
  PlatNo_Date   :string    //    информация о платеже
  GruzFromNRec  :Comp      //  NRec грузоотправителя
- GruzFrom      :string    //  6 грузоотправитель
+ GruzFrom                 //  6 грузоотправитель
+ GruzFromAddr             //  6 грузоотправитель
  GruzToNRec    :Comp      //  NRec грузополучателя
- GruzTo        :string    //  7 грузополучатель
+ GruzTo                   //  7 грузополучатель
+ GruzToAddr               //  7 грузополучатель
 // валюта СФ
  cSchfVal      :comp      //  8
  Dollar        :string    //  8
@@ -220,8 +223,8 @@
  StatusEDO     :string
  isNDS_NA      :boolean
 .endfields
-0a1234           56abcd*89abc012345abc6a78901 9012345a67890123 2345678a90123456 12345678890
-^^^^^^^ ^^^^^^^^ ^^^^^^^^^^^*^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^ ^^^^^^^^^^^
+0a1234           56abcd*89abc012345abc6a78901 9012345a67890123 2345678a90123456 1234566778890
+^^^^^^^^ ^^^^^^^^ ^^^^^^^^^^^*^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^ ^^^^^^^^^^^^^
 .if Dopol
 .fields
   Nazn         :string    //  5 назначение из СФ
@@ -348,7 +351,7 @@
   SpPrNoNds_Src  :double     //   цена без НДС
   SpSumNoNDS_Src :double     // 1 без НДС
   SpNDS_Src      :double     // 2 НДС
-  SpPerc_Src     :double     // 3 ставка
+  SpPerc_Src     :string     // 3 ставка
   SpAkciz_Src    :double     // 4 акциз
   SpDrNal_Src    :double     // 5 прочие налоги
   SpSaleTax_Src  :double     // 5a налог с продаж

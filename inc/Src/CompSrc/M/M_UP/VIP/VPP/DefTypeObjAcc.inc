@@ -82,5 +82,5 @@ Type
 Type
   varSpObjAcc     = record as table SpObjAcc;
 
-#include TypeTbl.vpp
+#include typetbl.inc
 #end

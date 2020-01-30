@@ -1,5 +1,6 @@
-set CompilerPath=\\galtest\gal910$\exe\vip.exe
-set FrresPath=\\galtest\gal910$\exe\frres.exe
-set OutputResourceDir=\\galtest\gal910$\exe\_argument
-set FrmPath=\\galtest\gal910$\FRM\
+set CompilerPath=\\galtest\gal910p$\exe\vip.exe
+set FrresPath=\\galtest\gal910p$\exe\frres.exe
+set OutputResourceDir=\\galtest\gal910p$\exe\_argument
+rem set OutputResourceDir=c:\GAL910P\exe\_argument
+set FrmPath=\\galtest\gal910p$\FRM\
 set TmpDir=C:\temp\

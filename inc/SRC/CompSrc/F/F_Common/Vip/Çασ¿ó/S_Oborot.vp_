@@ -1,0 +1,1431 @@
+//------------------------------------------------------------------------------
+//                                                      (c) Корпорация ГАЛАКТИКА
+//------------------------------------------------------------------------------
+// Галактика 8.1 - Бухгалтерский контур
+// Функции редактирования Oborot
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+//
+// Подключается в Oborot.vip и EditOborot.vip
+//
+//------------------------------------------------------------------------------
+
+!-------------------------------------------------------------------------------
+! Проверка, ведется ли количественный учет на счетах проводки
+!-------------------------------------------------------------------------------
+#declare CheckKolUchetForSchet(IsDebet,BuhSchet=BuhSchetSubO,Kau=KauOs)
+  // в переменную _Level возвратится уровень, на котором ведется количественный учет
+  if(iBuhCheck.CheckQuantitativeAccounting(#BuhSchet.Another, _Level))
+  {
+    _wKau := #BuhSchet.KodTable[_Level];
+    if (Oborot.#Kau[_Level] <> SetDefKodeKau) {
+      _IsDebet := #IsDebet;
+      CheckKolUchet := true;
+      Exit;
+    }
+  }
+#end
+
+Function CheckKolUchet(var _Level : word; var _wKau : word; var _IsDebet : boolean) : boolean;
+{
+  CheckKolUchet := false;
+  _Level := 0;
+  _wKau  := 0;
+  _IsDebet := true;
+
+  if (isValid(#BuhSchetSubO))
+    #CheckKolUchetForSchet(true)
+
+  if (isValid(#BuhSchetSubK))
+    #CheckKolUchetForSchet(false,BuhSchetSubK,KauKs)
+
+  // если не вывалились в предыдущих проверках
+  CheckKolUchet := false;
+}
+
+// открывает/закрывает поле "Количество"
+procedure SetSelectableOborotKol;
+{
+  var _Level : word; var _wKau : word; var _Debet : boolean;
+
+  if (CheckKolUchet(_Level,_wKau,_Debet))
+    SetFieldOption  (#Oborot.Kol, ofSelectable);
+  else
+    ClearFieldOption(#Oborot.Kol, ofSelectable);
+}
+
+// если изменились КАУ (вручную или авто), нужно вызвать эту процедуру !!!
+// устанавливает единицу измерения и открывает/закрывает поле "Количество" для редактирования
+procedure SetKauEdOborotKol;
+{
+  var _Level : word; var _wKau : word; var _Debet : boolean;
+
+  if (CheckKolUchet(_Level,_wKau,_Debet))
+  {
+    Oborot.cEd := if(_Debet,GetKauEd(_wKau, Oborot.KauOs[_Level]),GetKauEd(_wKau, Oborot.KauKs[_Level]));
+    if (not isNew) set Oborot.cEd := Oborot.cEd;
+    SetFieldOption (#Oborot.Kol, ofSelectable);
+  }
+  else
+  {
+    Oborot.Kol := 0;
+    Oborot.cEd := comp(0);
+    if (not isNew) set Oborot.cEd := Oborot.cEd;
+    ClearFieldOption(#Oborot.Kol, ofSelectable);
+  }
+  RescanPanel(#Oborot);
+}
+
+!-------------------------------------------------------------------------------
+! IsZabalansSchet
+!-------------------------------------------------------------------------------
+function IsZabalansSchet(_IsDebet: boolean) : boolean;
+{
+  if (_IsDebet)
+    IsZabalansSchet := if(isValid(#BuhSchetSubO),(BuhSchetSubO.Balans=1),false);
+  else
+    IsZabalansSchet := if(isValid(#BuhSchetSubK),(BuhSchetSubK.Balans=1),false);
+}
+
+!-------------------------------------------------------------------------------
+! GetBackColorWinEdit
+!-------------------------------------------------------------------------------
+Function GetBackColorWinEdit(iFld : integer) : integer;
+{
+  GetBackColorWinEdit := 0;
+  case iFld of
+    #Oborot.dbSchetO :
+    { GetBackColorWinEdit := if (Oborot.dbSchetO = cgDefSch, if(IsZabalansSchet(_Kredit),0,ColorNeed),
+                               if ((not isValid(#BuhSchetO)) or
+                                  (Oborot.dbSchetO <> #GetDbSch(Oborot.SchetO)),ColorError,0));
+    }
+    #Oborot.krSchetK :
+    { GetBackColorWinEdit := if (Oborot.krSchetK = cgDefSch, if(IsZabalansSchet(_Debet),0,ColorNeed),
+                               if (not isValid(#BuhSchetK),ColorError,0));
+    }
+
+    #Oborot.SubOsSch :
+    { GetBackColorWinEdit := if (Oborot.SubOsSch = cgDefSub,0,
+                               if (not isValid(#BuhSchetSubO),ColorError,0));
+    }
+    #Oborot.SubSchK :
+    { GetBackColorWinEdit := if (Oborot.SubSchK = cgDefSub,0,
+                               if (not isValid(#BuhSchetSubK),ColorError,0));
+    }
+    #Oborot.DatOb :
+    { GetBackColorWinEdit := if (longint(Oborot.DatOb) = 0,ColorNeed,0);
+    }
+    #Oborot.SumOb :
+    { GetBackColorWinEdit := if (((abs(Oborot.SumOb) < 0.005) and (abs(Oborot.Kol) < 0.00005)) or
+                                 ((abs(Oborot.SumOb) < 0.005) and (abs(Oborot.SumValut) >= 0.005)) ,ColorNeed,0)
+    }
+    #Oborot.SumValut, #KlValO.Dollar, #KlValO.Dollarah :
+    { GetBackColorWinEdit := if (((Oborot.KodValut <> 0) and (abs(Oborot.SumValut) < 0.005) or
+                                  (Oborot.KodValut = 0) and (abs(Oborot.SumValut) >= 0.005)),ColorNeed,0);
+    }
+    #KatPodrO.Name :
+    { GetBackColorWinEdit := if ((Oborot.KodSPO <> 0) and
+                                 (not isValid(#KatPodrO)),ColorError,0);
+    }
+    #KatPodrK.Name :
+    { GetBackColorWinEdit := if ((Oborot.KodSPK <> 0) and
+                                 (not isValid(#KatPodrK)),ColorError,0);
+    }
+    // Дебет
+    #declare GetBackColor(Num)
+      #dbKau#Num : {
+        GetBackColorWinEdit := if (((Oborot.KauOs[#Num] <> 0) and (Oborot.TblOs[#Num] =  0)) or
+                                   ((Oborot.KauOs[#Num] =  0) and (Oborot.TblOs[#Num] <> 0)) or
+                                   ((Oborot.KauOs[#Num] <> 0) and (dbKau#Num = '')),ColorError,0);
+      }
+    #end
+    #GetBackColor(1)
+    #GetBackColor(2)
+    #GetBackColor(3)
+    #GetBackColor(4)
+    #GetBackColor(5)
+    #GetBackColor(6)
+    #undef GetBackColor
+    // Кредит
+    #declare GetBackColor(Num)
+      #krKau#Num : {
+        GetBackColorWinEdit := if (((Oborot.KauKs[#Num] <> 0) and (Oborot.TblKs[#Num] =  0)) or
+                                   ((Oborot.KauKs[#Num] =  0) and (Oborot.TblKs[#Num] <> 0)) or
+                                   ((Oborot.KauKs[#Num] <> 0) and (krKau#Num = '')),ColorError,0);
+      }
+    #end
+    #GetBackColor(1)
+    #GetBackColor(2)
+    #GetBackColor(3)
+    #GetBackColor(4)
+    #GetBackColor(5)
+    #GetBackColor(6)
+    #undef GetBackColor
+  end; // case
+} // function GetBackColorWinEdit
+
+!-------------------------------------------------------------------------------
+! Доработка для ЮКОСа - отображение только используемых уровней КАУ
+!-------------------------------------------------------------------------------
+procedure DisableOrEnableKauFields (ForDeb, ForKred : boolean);
+begin
+
+  if (not boGetTune('Fin.Anal.ShowUsedKau'))
+    Exit;
+  if (ForDeb) {
+    if (isValid(#BuhSchetSubO)) {
+      #declare ShowHideKauFields(Num)
+        if (BuhSchetSubO.KodTable[#Num] = 0) {
+          ClearFieldState(#dbChislo#Num,sfVisible);
+          ClearFieldState(#dbKau#Num,sfVisible);
+        }
+        else {
+          SetFieldState(#dbChislo#Num,sfVisible);
+          SetFieldState(#dbKau#Num,sfVisible);
+        }
+      #end
+      #ShowHideKauFields(1)
+      #ShowHideKauFields(2)
+      #ShowHideKauFields(3)
+      #ShowHideKauFields(4)
+      #ShowHideKauFields(5)
+      #ShowHideKauFields(6)
+      #undef ShowHideKauFields
+    }
+    else {
+      #declare ShowHideKauFields(Num)
+        ClearFieldState(#dbChislo#Num,sfVisible);
+        ClearFieldState(#dbKau#Num,sfVisible);
+      #end
+      #ShowHideKauFields(1)
+      #ShowHideKauFields(2)
+      #ShowHideKauFields(3)
+      #ShowHideKauFields(4)
+      #ShowHideKauFields(5)
+      #ShowHideKauFields(6)
+      #undef ShowHideKauFields
+    }
+  }
+  if (ForKred) {
+    if (isValid(#BuhSchetSubK)) {
+      #declare ShowHideKauFields(Num)
+        if (BuhSchetSubK.KodTable[#Num] = 0) {
+          ClearFieldState(#krChislo#Num,sfVisible);
+          ClearFieldState(#krKau#Num,sfVisible);
+        }
+        else {
+          SetFieldState(#krChislo#Num,sfVisible);
+          SetFieldState(#krKau#Num,sfVisible);
+        }
+      #end
+      #ShowHideKauFields(1)
+      #ShowHideKauFields(2)
+      #ShowHideKauFields(3)
+      #ShowHideKauFields(4)
+      #ShowHideKauFields(5)
+      #ShowHideKauFields(6)
+      #undef ShowHideKauFields
+    }
+    else {
+      #declare ShowHideKauFields(Num)
+        ClearFieldState(#krChislo#Num,sfVisible);
+        ClearFieldState(#krKau#Num,sfVisible);
+      #end
+      #ShowHideKauFields(1)
+      #ShowHideKauFields(2)
+      #ShowHideKauFields(3)
+      #ShowHideKauFields(4)
+      #ShowHideKauFields(5)
+      #ShowHideKauFields(6)
+      #undef ShowHideKauFields
+    }
+  }
+end; // DisableOrEnableKauFields
+
+//------------------------------------------------------------------------------
+// SetOborotFieldOption
+//------------------------------------------------------------------------------
+procedure SetOborotFieldOption(_IsClosed : boolean);
+{
+  if (boGetTune('FIN.USER.NOEDITPROV') = 0) Exit;
+  var wTune : word;
+  wTune := wGetTune('FIN.USER.CHECKS');
+  if ((wTune and 1) = 1)
+    wTune := wTune xor 1;
+  if (wTune <> 0)
+    if (_IsClosed)
+      message('Внимание!' + ''#13'Введен запрет на редактирование некоторых полей проводки!',OkButton);
+
+  ClearFieldOption(#Oborot.Descr,ofSelectAble);
+  ClearFieldOption(#Oborot.DesGr,ofSelectAble);
+
+  if ((wTune and 1)    <> 0) {};                                           // 1  первичные документы (по F4)
+  if ((wTune and 2)    <> 0) #MySetFieldOption(_IsClosed,#Oborot.DatOb)    // 2  дату формирования
+  if ((wTune and 4)    <> 0) #MySetFieldOption(_IsClosed,#Oborot.SumOb)    // 3  сумму оборота в НДЕ
+  if ((wTune and 8)    <> 0) #MySetFieldOption(_IsClosed,#Oborot.SumValut) // 4  сумму оборота в валюте
+  if ((wTune and 16)   <> 0) #MySetFieldOption(_IsClosed,#KlValO.Dollarah) // 5  валюта проводки
+  if ((wTune and 32)   <> 0) #MySetFieldOption(_IsClosed,#ConvMake)        // 6  режим конвертации валют
+  if ((wTune and 64)   <> 0) #MySetFieldOption(_IsClosed,#ConvValut)       // 7  валюту конвертации
+  if ((wTune and 128)  <> 0) #MySetFieldOption(_IsClosed,#Oborot.SodPr)    // 8  содержание проводки
+  if ((wTune and 256)  <> 0) #MySetFieldOption(_IsClosed,#Oborot.dbSchetO) // 9  номер счета
+  if ((wTune and 512)  <> 0) #MySetFieldOption(_IsClosed,#Oborot.SubOsSch) //10  номер субсчета счета
+  if ((wTune and 1024) <> 0)
+  {
+     #MySetFieldOption(_IsClosed,#DbKAU)                                   //11  код объекта аналитического учета
+     #MySetFieldOption(_IsClosed,#DbKAU1)
+     #MySetFieldOption(_IsClosed,#DbKAU2)
+     #MySetFieldOption(_IsClosed,#DbKAU3)
+     #MySetFieldOption(_IsClosed,#dbKau4)
+     #MySetFieldOption(_IsClosed,#dbKau5)
+     #MySetFieldOption(_IsClosed,#dbKau6)
+  }
+  if ((wTune and 2048) <> 0) #MySetFieldOption(_IsClosed,#KatPodrO.Name)   //12  подразделение
+  if ((wTune and 4096) <> 0) #MySetFieldOption(_IsClosed,#Oborot.krSchetK) //13  номер счета
+  if ((wTune and 8192) <> 0) #MySetFieldOption(_IsClosed,#Oborot.SubSchK)  //14  номер субсчета счета
+  if ((wTune and 16384)<> 0)
+  {
+     #MySetFieldOption(_IsClosed,#KrKAU)                                   //15  код объекта аналитического учета
+     #MySetFieldOption(_IsClosed,#KrKAU1)
+     #MySetFieldOption(_IsClosed,#KrKAU2)
+     #MySetFieldOption(_IsClosed,#KrKAU3)
+     #MySetFieldOption(_IsClosed,#krKau4)
+     #MySetFieldOption(_IsClosed,#krKau5)
+     #MySetFieldOption(_IsClosed,#krKau6)
+  }
+  if ((wTune and 32768)<> 0) #MySetFieldOption(_IsClosed,#KatPodrK.Name)   //16  подразделение
+}
+
+//---------------------------------------------------------------------------------------------
+// функции для заполнения КАУ и подразделения в проводках
+//---------------------------------------------------------------------------------------------
+procedure GetKodKauOS;
+{
+  if ((wOpMode = cgiOborot_AllOborot) or
+      (not isValid(#SoprHoz)) )
+  {
+    SetKauEdOborotKol; // количественный учет
+    Exit;
+  }
+
+  var i    : integer;
+  var cKau : comp;
+  TxoResetServer;
+  if (FindKauKode(Oborot.SchetO,Oborot.SubOsSch,false,SoprHoz.TiDkGal,SoprHoz.NRec))
+  {
+    //------------------------------------------------
+    // заполняем КАУ
+    for(i:=cFirstKau; i<=cLastKau; i:=i+1)
+    {
+      cKau := GivenKauKode(i);
+      if (cKau = SetDefKodeKau)
+        Oborot.TblOs[i] := 0;
+      else
+        Oborot.TblOs[i] := GivenKauTbl(i);
+      Oborot.KauOs[i] := cKau;
+    }
+  }
+  //------------------------------------------------
+  // заполняем подразделение
+  if( isValid(#BuhSchetSubO) ) {
+    case iBuhCheck.AnalysisPodrTunes(BuhSchetSubO.Visib) of
+      0 :  Oborot.KodSPO := 0;
+      1 :  #GetPodrToPersons(Oborot);   // по сотруднику
+      else Oborot.KodSPO := GivenKodSp; // из документа
+    end;
+  }
+  else {
+    case wGetTune('Fin.Anal.AvtoPodr') of
+      0 :  Oborot.KodSPO := GivenKodSp;  // из документа
+      1 :  #GetPodrToPersons(Oborot);    // по сотруднику
+      2 :  Oborot.KodSPO := 0;           // не заполнять
+    end;
+  }
+  SetKauEdOborotKol; // количественный учет
+}
+
+procedure GetKodKauKS;
+{
+  if ((wOpMode = cgiOborot_AllOborot) or
+      (not isValid(#SoprHoz)) )
+  {
+    SetKauEdOborotKol; // количественный учет
+    Exit;
+  }
+
+  var i : integer;
+  var cKau : comp;
+
+  TxoResetServer;
+  if (FindKauKode(Oborot.SchetK,Oborot.SubSchK,true,SoprHoz.TiDkGal,SoprHoz.NRec))
+  {
+    //------------------------------------------------
+    // заполняем КАУ
+    for(i:=cFirstKau; i<=cLastKau; i:=i+1)
+    {
+      cKau := GivenKauKode(i);
+      if (cKau = SetDefKodeKau)
+        Oborot.TblKs[i] := 0;
+      else
+        Oborot.TblKs[i] := GivenKauTbl(i);
+      Oborot.KauKs[i] := cKau;
+    }
+    //--------------------------------------`----------
+    // заполняем подразделение
+    if( isValid(#BuhSchetSubK) ) {
+      case iBuhCheck.AnalysisPodrTunes(BuhSchetSubK.Visib) of
+        0 :  Oborot.KodSPK := 0;
+        1 :  #GetPodrToPersons(Oborot,TblKs,KauKs,KodSPK);   // по сотруднику
+        else Oborot.KodSPK := GivenKodSp; // из документа
+      end;
+    }
+    else {
+      case wGetTune('Fin.Anal.AvtoPodr') of
+        0 :  Oborot.KodSPK := GivenKodSp;  // из документа
+        1 :  #GetPodrToPersons(Oborot,TblKs,KauKs,KodSPK);    // по сотруднику
+        2 :  Oborot.KodSPK := 0;           // не заполнять
+      end;
+    }
+    SetKauEdOborotKol; // количественный учет
+  }
+}
+
+procedure GetKodKauOS_Differ;
+{
+  var i : integer;
+
+  if ((wOpMode = cgiOborot_AllOborot) or
+      (not isValid(#SoprHoz)) )
+  {
+    for(i:=cFirstKau; i<=cLastKau; i:=i+1)
+      // обнуляем только различающиеся
+      if (Oborot.TblOs[i] <> BuhSchetSubO.KodTable[i])
+      {
+        Oborot.TblOs[i] := 0;
+        Oborot.KauOs[i] := SetDefKodeKau;
+      }
+    SetKauEdOborotKol; // количественный учет
+    exit;
+  }
+
+  var cKau : comp;
+  var wKau : word;
+
+  TxoResetServer;
+  if (FindKauKode(Oborot.SchetO,Oborot.SubOsSch,false,SoprHoz.TiDkGal,SoprHoz.NRec))
+    {
+      //------------------------------------------------
+      // заполняем КАУ
+      for(i:=cFirstKau; i<=cLastKau; i:=i+1)
+      { cKau := GivenKauKode(i);
+        wKau := GivenKauTbl(i);
+        // меняем, только если различаются старая и новая группы КАУ
+        if (Oborot.TblOs[i] <> wKau)
+        {
+          if (cKau = SetDefKodeKau)
+            Oborot.TblOs[i] := 0;
+          else
+            Oborot.TblOs[i] := wKau;
+          Oborot.KauOs[i] := cKau;
+        }
+      }
+      //------------------------------------------------
+      // если не было подразделения, то попробуем заполнить, а если было, то не трогаем
+      if (Oborot.KodSPO = 0) {
+        if( isValid(#BuhSchetSubO) )
+         case iBuhCheck.AnalysisPodrTunes(BuhSchetSubO.Visib) of
+          0 :  {}                           // не заполнять
+          1 :  #GetPodrToPersons(Oborot);   // по сотруднику //,TblKs,KauKs,KodSPK
+          else Oborot.KodSPO := GivenKodSp; // из документа
+         end;
+      }
+      SetKauEdOborotKol; // количественный учет
+    }
+}
+
+procedure GetKodKauKS_Differ;
+{
+  var i : integer;
+
+  if ((wOpMode = cgiOborot_AllOborot) or
+      (not isValid(#SoprHoz)) )
+  {
+    for(i:=cFirstKau; i<=cLastKau; i:=i+1)
+      // обнуляем только различающиеся
+      if (Oborot.TblKs[i] <> BuhSchetSubK.KodTable[i])
+      {
+        Oborot.TblKs[i] := 0;
+        Oborot.KauKs[i] := SetDefKodeKau;
+      }
+    SetKauEdOborotKol; // количественный учет
+    exit;
+  }
+
+  var cKau : comp;
+  var wKau : word;
+  TxoResetServer;
+  if (FindKauKode(Oborot.SchetK,Oborot.SubSchK,false,SoprHoz.TiDkGal,SoprHoz.NRec))
+    {
+      for(i:=cFirstKau; i<=cLastKau; i:=i+1)
+      { cKau := GivenKauKode(i);
+        wKau := GivenKauTbl(i);
+        // меняем, только если различаются старая и новая группы КАУ
+        if (Oborot.TblKs[i] <> wKau)
+        {
+          if (cKau = SetDefKodeKau)
+            Oborot.TblKs[i] := 0;
+          else
+            Oborot.TblKs[i] := wKau;
+          Oborot.KauKs[i] := cKau;
+        }
+      }
+      //------------------------------------------------
+      // если не было подразделения, то попробуем заполнить, а если было, то не трогаем
+      if (Oborot.KodSPK = 0) {
+        if( isValid(#BuhSchetSubK) )
+         case iBuhCheck.AnalysisPodrTunes(BuhSchetSubK.Visib) of
+          0 :  {}                                             // не заполнять
+          1 :  #GetPodrToPersons(Oborot,TblKs,KauKs,KodSPK);  // по сотруднику
+          else Oborot.KodSPK := GivenKodSp;                   // из документа
+         end;
+      }
+      SetKauEdOborotKol; // количественный учет
+    }
+}
+
+// функции для авто-заполнения поля подразделения см. I_OBOROT.VPP
+procedure GetPodrOS;
+{
+  if (wOpMode = cgiOborot_AllOborot) exit;
+
+  TxoResetServer;
+  if (FindKauKode(Oborot.SchetO,Oborot.SubOsSch,false,SoprHoz.TiDkGal,SoprHoz.NRec))
+  {
+      // заполняем подразделение
+      if( isValid(#BuhSchetSubO) ) {
+        case iBuhCheck.AnalysisPodrTunes(BuhSchetSubO.Visib) of
+          0 :  Oborot.KodSPO := 0;
+          1 :  #GetPodrToPersons(Oborot);   // по сотруднику
+          else Oborot.KodSPO := GivenKodSp; // из документа
+        end;
+      }
+      else {
+        case wGetTune('Fin.Anal.AvtoPodr') of
+          0 :  Oborot.KodSPO := GivenKodSp;  // из документа
+          1 :  #GetPodrToPersons(Oborot);    // по сотруднику
+          2 :  Oborot.KodSPO := 0;           // не заполнять
+        end;
+      }
+  }
+}
+
+procedure GetPodrKS;
+{
+  if (wOpMode = cgiOborot_AllOborot) exit;
+
+  TxoResetServer;
+  if (FindKauKode(Oborot.SchetK,Oborot.SubSchK,false,SoprHoz.TiDkGal,SoprHoz.NRec))
+  {
+      // заполняем подразделение
+      if( isValid(#BuhSchetSubK) ) {
+        case iBuhCheck.AnalysisPodrTunes(BuhSchetSubK.Visib) of
+          0 :  Oborot.KodSPK := 0;
+          1 :  #GetPodrToPersons(Oborot,TblKs,KauKs,KodSPK);   // по сотруднику
+          else Oborot.KodSPK := GivenKodSp; // из документа
+        end;
+      }
+      else {
+        case wGetTune('Fin.Anal.AvtoPodr') of
+          0 :  Oborot.KodSPK := GivenKodSp;  // из документа
+          1 :  #GetPodrToPersons(Oborot,TblKs,KauKs,KodSPK);    // по сотруднику
+          2 :  Oborot.KodSPK := 0;           // не заполнять
+        end;
+      }
+  }
+}
+
+!---------------------------------------------------------------------------------------------
+! Сумма оборота в новой проводке
+!---------------------------------------------------------------------------------------------
+procedure GetNewSumOb( DocSum    : double;
+                       DocSumV   : double;
+                   var NewVal    : comp;
+                   var NewSumOb  : double;
+                   var NewSumObV : double);
+var
+  mybol : boolean;
+{
+  PushPos(#Oborot);
+  mybol := false;
+  if (GetFirst Oborot = tsOk)
+    { NewSumOb := 0;
+      NewSumObV := 0;
+      do
+        if (Oborot.VhProp = '+')
+          { NewSumOb  := NewSumOb + Oborot.SumOb;
+            NewSumObV := NewSumObV + Oborot.SumValut;
+            if ((not mybol) and
+                (NewVal <> Oborot.KodValut)) mybol := true;
+          }
+      while (GetNext Oborot = tsOk);
+      if DocSum > 0
+       if (NewSumOb >= DocSum)
+         { NewSumOb := 0;
+           NewSumObV := 0;
+         }
+       else
+         { NewSumOb := DocSum - NewSumOb;
+           NewSumObV := DocSumV - NewSumObV;
+         }
+      else
+       if (NewSumOb <= DocSum)
+         { NewSumOb := 0;
+           NewSumObV := 0;
+         }
+       else
+         { NewSumOb := DocSum - NewSumOb;
+           NewSumObV := DocSumV - NewSumObV;
+         }
+    }
+  else
+    { NewSumOb := DocSum;
+      NewSumObV := DocSumV;
+    }
+  if (mybol)
+    { NewVal := 0;
+      NewSumObV := 0;
+    }
+  PopPos(#Oborot);
+}
+
+!------------------------------------------------------------------------------
+! Контроль полей в проводке (использовать в cmChekField)
+!------------------------------------------------------------------------------
+function CheckFieldOborot : boolean;
+{
+  CheckFieldOborot := true;
+  case CurField of
+    #Oborot.DatOb, #Oborot.SumOb, #Oborot.SumValut :
+    {
+      // Проверка корректности даты проводки
+      if (CurField = #Oborot.DatOb)
+        if iCheckPer.DateInCloseBuhPeriod(Oborot.DatOb)
+        {
+          message('Дата проводки не должна попадать в закрытый отчетный период!', Information);
+          set Oborot.DatOb := StrToDate(OldFieldValue, 'DD/MM/YYYY');
+          Exit;
+        }
+      if ((Oborot.ConvOb = 5) or (Oborot.ConvOb = 6))
+      {
+        if (abs(Oborot.SumOb) >= 0.005)
+        {
+          message('Проводка сформирована при расчете курсовых разниц!'#13 +
+                  'Это курсовая разница в ВАЛЮТЕ на сумму в НДЕ,'#13 +
+                  'сумма в НДЕ по проводке должна быть равной нулю.'#13#13 +
+                  'Редактирование таких проводок не допускается.', Information);
+            set Oborot.SumOb := 0;
+        }
+        Exit;
+      }
+      if (Oborot.KodValut = 0) and (Oborot.ConvVal = 0)
+        Exit;
+      if (not oValFunc.ReCalcCursVal)
+        Exit;
+      if (longint(GetDatObDoc) = 0)
+      {
+        if (Oborot.TiDkgal = 14)
+        {
+          if (CurField = #Oborot.DatOb)
+          {
+            Message('Не задана дата формирования проводки.', Information);
+            CheckFieldOborot := false;
+            Exit;
+          }
+        }
+        if (message('Внимание!'#13 +
+                    'Не задана дата для определения курса валют'#13 +
+                    'при пересчете сумм в валюте и НДЕ в проводке.'#13#13 +
+                    'Восстановить старое значение поля?', YesNo + Confirmation) = cmYes)
+          case CurField of
+            #Oborot.SumOb:    set Oborot.SumOb := double(OldFieldValue);
+            #Oborot.DatOb:    set Oborot.DatOb := StrToDate(OldFieldValue, 'DD/MM/YYYY');
+            #Oborot.SumValut: set Oborot.SumValut := double(OldFieldValue);
+          end;
+        Exit;
+      }
+      if (Oborot.KodValut <> 0)
+      {
+        case CurField of
+          #Oborot.SumOb:
+          {
+            if (abs(Oborot.SumOb) >= 0.005)
+              Oborot.SumValut := 0
+            else
+              if (abs(Oborot.SumValut) >= 0.005)
+                Oborot.SumOb := 0
+              else
+                Exit;
+          }
+          #Oborot.DatOb, #Oborot.SumValut:
+          {
+            if (abs(Oborot.SumValut) >= 0.005)
+              Oborot.SumOb := 0
+            else
+              if (abs(Oborot.SumOb) >= 0.005)
+                Oborot.SumValut := 0
+              else
+                Exit;
+          }
+          else
+            Exit;
+        end;
+        oValFunc.ReCalcSumRubVal((CurField = #Oborot.SumOb), GetDatObDoc,
+                                 Oborot.KodValut, Oborot.SumOb, Oborot.SumValut);
+      }
+      if (Oborot.ConvVal <> 0) and (abs(Oborot.SumOb) >= 0.005)
+      {
+        Oborot.ConvSum := 0;
+        oValFunc.ReCalcSumRubVal((CurField = #Oborot.SumOb), GetDatObDoc,
+                                 Oborot.ConvVal, Oborot.SumOb, Oborot.ConvSum);
+      }
+      ReScanPanel(#Oborot);
+    }
+    #Oborot.ConvSum, #ConvValut :
+    {
+      var isOk : boolean;
+      case Oborot.ConvOb of
+        5,6 :
+        {
+          message('Проводка сформирована при расчете курсовых разниц!'#13 +
+                  'Это курсовая разница в ВАЛЮТЕ на сумму в НДЕ.'#13 +
+                  'Редактирование таких проводок не допускается.', Information);
+          set Oborot.ConvSum := 0;
+          set Oborot.ConvVal := 0;
+          Exit;
+        }
+      end;
+      if ( (Oborot.ConvOb = 0) and
+           (Oborot.ConvVal = 0) and
+           (abs(Oborot.ConvSum) < 0.005) )
+        Exit;
+      isOk := true;
+      if (abs(Oborot.SumOb) < 0.005)
+      {
+        message('Не определена сумма оборота в проводке.', Information);
+        isOk := false;
+      }
+      else
+        if (Oborot.ConvOb = 0)
+        {
+          message('Не определен режим конвертации валют.', Information);
+          isOk := false;
+        }
+      if (not IsOk)
+      {
+        if (CurField = #Oborot.ConvSum)
+          set Oborot.ConvSum := double(OldFieldValue)
+        else
+          if (CurField = #ConvValut)
+            set Oborot.ConvVal := comp(OldFieldValue);
+        if (abs(Oborot.SumOb) < 0.005)
+          SelectField(#Oborot.SumOb)
+        else
+        {
+          SelectField(#ConvMake);
+          ProcessCommand(cmPick);
+        }
+        CheckFieldOborot := false;
+      }
+    }
+    #Oborot.Kol :
+    {
+      if (trunc(Oborot.Kol) < Oborot.Kol) and (KatEd.Diskret = 1)
+      {
+        message('Единица измерения ' + UpCase(KatEd.Name) + ' неделима!', Warning);
+        Abort;
+      }
+    }
+  end;
+  ReScanPanel(#Oborot);
+}
+
+!-------------------------------------------------------------------------------
+! Выбор КАУ для дебета
+!-------------------------------------------------------------------------------
+function PickConnectOS (PickNum : word) : boolean;
+begin
+  PickConnectOS := false;
+
+  if (not #PickKauBuh(cgiPick,PickNum,Oborot))
+    Exit;
+  PickConnectOS := true;
+  set Oborot.KauOs[1] := Oborot.KauOs[1];
+
+  if (iBuhCheck.AnalysisPodrTunes(BuhSchetSubO.Visib) = 1)
+     #GetPodrToPersons(Oborot);   // по сотруднику
+  set Oborot.KodSPO := Oborot.KodSPO;
+
+  SetKauEdOborotKol; // количественный учет
+
+end; // PickConnectOS
+
+!-------------------------------------------------------------------------------
+! Выбор КАУ для кредита
+!-------------------------------------------------------------------------------
+function PickConnectKS (PickNum : word) : boolean;
+begin
+  PickConnectKS := false;
+  if (not #PickKauBuh(cgiPick,PickNum,Oborot,SchetK,SubSchK,TblKs,KauKs))
+    Exit;
+  PickConnectKS := true;
+  set Oborot.KauKs[1] := Oborot.KauKs[1];
+
+  if (iBuhCheck.AnalysisPodrTunes(BuhSchetSubK.Visib) = 1)
+    #GetPodrToPersons(Oborot,TblKs,KauKs,KodSPK);   // по сотруднику
+  set Oborot.KodSPK := Oborot.KodSPK;
+
+  SetKauEdOborotKol; // количественный учет
+
+end; // PickConnectKS
+
+!-------------------------------------------------------------------------------
+! Выбор счета в проводке
+!-------------------------------------------------------------------------------
+function PickSchet(KorSch : boolean) : boolean;
+{
+  PickSchet := false;
+  if (not GetBuhSchet(KorSch,myPlansNo,Oborot.SchetO,Oborot.SubOsSch,Oborot.SchetK,Oborot.SubSchK))
+    Exit;
+  PickSchet := true;
+  if (not KorSch)
+    {
+      set Oborot.dbSchetO := #GetDbSch(Oborot.SchetO);
+      set Oborot.KodSpO := 0;
+      #NullingKauFields(Oborot)
+    }
+  else
+    {
+      set Oborot.krSchetK := #GetDbSch(Oborot.SchetK);
+      set Oborot.KodSpK := 0;
+      #NullingKauFields(Oborot,TblKs,KauKs)
+    }
+  SetModified(true);
+}
+
+!-------------------------------------------------------------------------------
+! Выбор вида оборота при конвертации валют
+!-------------------------------------------------------------------------------
+function PickViObConvert : boolean;
+{
+  PickViObConvert := true;
+  case RunMenu(#AddComp('F_Oborot') + 'mnuEditOborot_ConvValViOb') of
+    cmCancel : Exit;
+    cmValue1 : { set Oborot.ConvOb := 0;
+                 Oborot.ConvVal := 0;
+                 Oborot.ConvSum := 0;
+               }
+    cmValue2 : set Oborot.ConvOb := wFlConvMode_Debet;  // =3, см. tpp_key.inc
+    cmValue3 : set Oborot.ConvOb := wFlConvMode_Kredit; // =4, см. tpp_key.inc
+  end; // case
+  SetModified(true);
+}
+
+!-------------------------------------------------------------------------------
+! Удалить КАУ
+!-------------------------------------------------------------------------------
+procedure DeleteConnectOS;
+{
+  #NullingKauFields(Oborot)
+  set Oborot.TblOs[1] := 0;
+  SetModified(true);
+
+  SetKauEdOborotKol; // количественный учет
+}
+
+procedure DeleteConnectKS;
+{
+  #NullingKauFields(Oborot,TblKs,KauKs)
+  set Oborot.TblKs[1] := 0;
+  SetModified(true);
+
+  SetKauEdOborotKol; // количественный учет
+}
+
+procedure DeleteConnectOS_Differ;
+{ var i : integer;
+  for(i:=cFirstKau; i<=cLastKau; i:=i+1)
+    // обнуляем только различающиеся
+    if (Oborot.TblOs[i] <> BuhSchetSubO.KodTable[i])
+    {
+      Oborot.TblOs[i] := 0;
+      Oborot.KauOs[i] := SetDefKodeKau;
+    }
+  set Oborot.TblOs[1] := Oborot.TblOs[1];
+  SetModified(true);
+
+  SetKauEdOborotKol; // количественный учет
+}
+
+procedure DeleteConnectKS_Differ;
+{ var i : integer;
+  for(i:=cFirstKau; i<=cLastKau; i:=i+1)
+    // обнуляем только различающиеся
+    if (Oborot.TblKs[i] <> BuhSchetSubK.KodTable[i])
+    {
+      Oborot.TblKs[i] := 0;
+      Oborot.KauKs[i] := SetDefKodeKau;
+    }
+  set Oborot.TblKs[1] := Oborot.TblKs[1];
+  SetModified(true);
+
+  SetKauEdOborotKol; // количественный учет
+}
+
+!-------------------------------------------------------------------------------
+! Выбор полей в проводке (использовать в cmPick и в cmOpenSearch)
+!-------------------------------------------------------------------------------
+function PickFieldOborot : boolean;
+var MyDate : date;
+{
+  PickFieldOborot := true;
+  if not CanEdit(cgMessage)
+  {
+    PickFieldOborot := false;
+    Exit;
+  }
+  case CurField of
+    #Oborot.DesGr :
+    {
+      if (PickNewGrDescr(Oborot.DesGr,Oborot.Descr))
+        set Oborot.DesGr := Oborot.DesGr;
+    }
+    #Oborot.Descr :
+    {
+      if (PickNewDescriptor(Oborot.DesGr,Oborot.Descr))
+        set Oborot.DesGr := Oborot.DesGr;
+    }
+    #Oborot.DatOb :
+    {
+      if (CurWindow = wnMainWindow)
+        Exit;
+      if (Oborot.TiDkGal = 14)
+        set Oborot.DatOb := Cur_Date;
+      else
+        {
+          myDate := GetDatObDoc;
+          if (longint(myDate) <> 0)
+            set Oborot.DatOb := myDate
+          else
+            set Oborot.DatOb := Cur_Date;
+        }
+      ProcessCommand(cmCheckField);
+    }
+    #Oborot.DataOt :
+    {
+      set Oborot.DataOt := Cur_Date;
+    }
+    #Oborot.VhProp :
+    {
+      if (Oborot.VhProp = '+')
+        set Oborot.VhProp = '-'
+      else
+        set Oborot.VhProp = '+';
+    }
+    #Oborot.dbSchetO :
+    {
+      if (PickSchet(false))
+        { set Oborot.SchetO := Oborot.SchetO;
+          GetKodKauOS;
+          DisableOrEnableKauFields(true,false);
+          SelectField(#Oborot.SubOsSch);
+        }
+    }
+    #Oborot.krSchetK :
+    {
+      if (PickSchet(true))
+        { set Oborot.SchetK := Oborot.SchetK;
+          GetKodKauKS;
+          DisableOrEnableKauFields(false,true);
+          SelectField(#Oborot.SubSchK);
+        }
+    }
+    #Oborot.SubOsSch :
+    {
+      if (CurCommand = cmOpenSearch)
+        QuickChoiceName := 'qcBuh_SubSchet';
+      else
+        QuickChoiceName := '';
+      if (RunInterface('GetBuhSchet',word(cgiPickSub),myPlansNo,Oborot.SchetO,Oborot.SubOsSch) <> cmCancel)
+      {
+        DisableOrEnableKauFields(true,false);
+        GetKodKauOS_Differ;
+        SelectField(#DbKAU);
+      }
+    }
+    #Oborot.SubSchK  :
+    {
+      if (CurCommand = cmOpenSearch)
+        QuickChoiceName := 'qcBuh_SubSchet';
+      else
+        QuickChoiceName := '';
+      if (RunInterface('GetBuhSchet',word(cgiPickSub),myPlansNo,Oborot.SchetK,Oborot.SubSchK) <> cmCancel)
+      {
+        DisableOrEnableKauFields(false,true);
+        GetKodKauKS_Differ;
+        SelectField(#KrKAU);
+      }
+    }
+    #KatPodrO.Name :
+      runinterface(GetAnyPodr, Oborot.KodSpO, 0);
+    #KatPodrK.Name :
+      runinterface(GetAnyPodr, Oborot.KodSpK, 0);
+    #Oborot.SodPr :
+      runinterface('GetProv', cgiPick, Oborot.SodPr);
+    #dbKAU    :
+    {
+      PickConnectOS(0);
+      SelectField(#KatPodrO.Name);
+    }
+    #krKAU    :
+    {
+      PickConnectKS(0);
+      SelectField(#KatPodrK.Name);
+    }
+    #KlValO.Dollarah, #KlValO.Dollar :
+    {
+      case Oborot.ConvOb of
+        5,6 :
+        {
+          message(''#3'Проводка сформирована при расчете курсовых разниц!' +
+               ''#13#3'Это курсовая разница в ВАЛЮТЕ на сумму в НДЕ.' +
+               ''#13#3'Редактирование таких проводок не допускается.',CancelButton);
+          Exit;
+        }
+      end;
+      if (oValFunc.ChoiceVal(Oborot.KodValut,GetDatObDoc,Oborot.SumOb,Oborot.SumValut))
+        {
+          set Oborot.KodValut := Oborot.KodValut;
+        }
+    }
+    //конвертация валют в проводке
+    #ConvMake :
+    {
+      case Oborot.ConvOb of
+        5,6 :
+        {
+          message(''#3'Проводка сформирована при расчете курсовых разниц!' +
+               ''#13#3'Это курсовая разница в ВАЛЮТЕ на сумму в НДЕ.' +
+               ''#13#3'Редактирование таких проводок не допускается.',CancelButton);
+          Exit;
+        }
+      end;
+      if (abs(Oborot.SumOb) < 0.005)
+        {
+          message(''#3'Не определена сумма оборота в проводке.',CancelButton);
+          SelectField(#Oborot.SumOb);
+          PickFieldOborot := false;
+          Exit;
+        }
+      else
+        if (PickViObConvert)
+        {
+          set Oborot.ConvOb := Oborot.ConvOb;
+        }
+    }
+    #ConvValut :
+    {
+      case Oborot.ConvOb of
+        0 :
+        {
+          message(''#3'Не определен режим конвертации валют.',CancelButton);
+          SelectField(#ConvMake);
+          PickFieldOborot := false;
+          Exit;
+        }
+        3,4 :
+        {}
+        else
+        {
+          message(''#3'Проводка сформирована при расчете курсовых разниц!' +
+               ''#13#3'Это курсовая разница в ВАЛЮТЕ на сумму в НДЕ.' +
+               ''#13#3'Редактирование таких проводок не допускается.',CancelButton);
+          Exit;
+        }
+      end;
+      var tmpSum : double;
+      tmpSum := Oborot.SumOb;
+      if (oValFunc.ChoiceVal(Oborot.ConvVal,GetDatObDoc,tmpSum,Oborot.ConvSum))
+        {
+          set Oborot.ConvVal := Oborot.ConvVal;
+        }
+    }
+  end;
+  ReScanPanel(#Oborot);
+}
+!-------------------------------------------------------------------------------
+! Сброс полей (использовать в cmDelOnProtect)
+!-------------------------------------------------------------------------------
+function DelFieldOborot : boolean;
+{
+  DelFieldOborot := true;
+  case CurField of
+    #Oborot.dbSchetO, #Oborot.SchetO :
+    {
+      Oborot.dbSchetO := cgDefSch;
+      set Oborot.SchetO := cgDefSch;
+      Oborot.SubOsSch := cgDefSub;
+      set Oborot.KodSpO := 0;
+      DeleteConnectOS;
+      DisableOrEnableKauFields(true,false);
+    }
+    #Oborot.krSchetK, #Oborot.SchetK :
+    {
+      Oborot.krSchetK := cgDefSch;
+      set Oborot.SchetK := cgDefSch;
+      Oborot.SubSchK := cgDefSub;
+      set Oborot.KodSpK := 0;
+      DeleteConnectKS;
+      DisableOrEnableKauFields(false,true);
+    }
+    #Oborot.SubOsSch :
+    {
+      set Oborot.SubOsSch := cgDefSub;
+      DeleteConnectOS_Differ;
+      DisableOrEnableKauFields(true,false);
+    }
+    #Oborot.SubSchK :
+    {
+      set Oborot.SubSchK := cgDefSub;
+      DeleteConnectKS_Differ;
+      DisableOrEnableKauFields(false,true);
+    }
+    #ConvMake :
+    {
+      case Oborot.ConvOb of
+        5,6 :
+        { message(''#3'Проводка сформирована при расчете курсовых разниц!' +
+               ''#13#3'Это курсовая разница в ВАЛЮТЕ на сумму в НДЕ.' +
+               ''#13#3'Редактирование таких проводок не допускается.',CancelButton);
+          Exit;
+        }
+      end;
+      set Oborot.ConvOb  := 0;
+      set Oborot.ConvVal := 0;
+      set Oborot.ConvSum := 0;
+    }
+    #ConvValut :
+    {
+      set Oborot.ConvVal := 0;
+      set Oborot.ConvSum := 0;
+    }
+    #dbKau  :
+    {
+      DeleteConnectOS;
+    }
+    #krKau  :
+    {
+      DeleteConnectKS;
+    }
+    #KlValO.Dollarah, #KlValO.Dollar :
+    {
+      Oborot.SumValut := 0;
+      set Oborot.KodValut := 0;
+    }
+    #KatPodrO.Name :
+    {
+      set Oborot.KodSpO := 0;
+    }
+    #KatPodrK.Name :
+    {
+      set Oborot.KodSpK := 0;
+    }
+    else
+    {
+      Exit;
+    }
+  end;
+  SetModified(true);
+  ReScanPanel(#Oborot);
+  Stop;
+}
+
+!------------------------------------------------------------------------------
+! Проверка корректности проводки
+!------------------------------------------------------------------------------
+function CheckRecordOborot : boolean;
+var
+  isOkOS,
+  isOkKS,
+  isBalOS,
+  isBalKS : boolean;
+{
+  CheckRecordOborot := true;
+  if ( IsNew )
+    Exit;
+  CheckRecordOborot := false;
+
+  // Контроль счетов в проводке
+  isOkOS  := false;
+  isOkKS  := false;
+  isBalOS := false;
+  isBalKS := false;
+  if (isValid(#BuhSchetSubO))
+  {
+    isOkOS  := true;
+    isBalOS := (BuhSchetSubO.Balans = 0);
+  }
+  else
+    isOkOS := false;
+  if (isValid(#BuhSchetSubK))
+  {
+    isOkKS  := true;
+    isBalKS := (BuhSchetSubK.Balans = 0);
+  }
+  else
+    isOkKS := false;
+  if ((not isOkOS) and (not isOkKS))
+  {
+    message('Определите корреспонденцию счетов в проводке'#13 +
+            'или удалите проводку.', Information);
+    SelectField(#Oborot.dbSchetO);
+    Exit;
+  }
+  if (not isOkKS)
+  {
+    // есть дебет, но нет счета по кредиту
+    if (isBalOS)
+    {
+      Message('Не определен номер счета по кредиту в проводке.'#13+
+              'Определите значение или удалите проводку.', Information);
+      SelectField(#Oborot.krSchetK);
+      Exit;
+    }
+  }
+  if (not isOkOS)
+  {
+    // есть кредит, но нет счета по дебету
+    if (isBalKS)
+    {
+      Message('Не определен номер счета по дебету в проводке.'#13+
+              'Определите значение или удалите проводку.', Information);
+      SelectField(#Oborot.dbSchetO);
+      Exit;
+    }
+  }
+
+  // Контроль аналитики в проводке
+  if (isOkOS) and (not #CheckAnalitikByTune(Oborot))
+  {
+    SelectField(#Oborot.dbSchetO);
+    Exit;
+  }
+  if (isOkKS) and (not #CheckAnalitikByTune(Oborot,SchetK,SubSchK,KauKs))
+  {
+    SelectField(#Oborot.krSchetK);
+    Exit;
+  }
+
+  // Контроль подразделения согласно всех настроек
+  if (isOkOs)
+    if (not iBuhCheck.CheckPodrByTune(Oborot.SchetO,Oborot.SubOsSch,
+                                      Oborot.KodSPO,BuhSchetSubO.Visib))
+    {
+      SelectField(#KatPodrO.Name);
+      Abort; Exit;
+    }
+  if (isOkKs)
+    if (not iBuhCheck.CheckPodrByTune(Oborot.SchetK,Oborot.SubSchK,
+                                      Oborot.KodSPK,BuhSchetSubK.Visib))
+    {
+      SelectField(#KatPodrK.Name);
+      Abort; Exit;
+    }
+
+  // Контроль сумм в проводке
+  if (abs(Oborot.SumOb) < 0.005)
+    if (abs(Oborot.SumValut) < 0.005)
+      if (abs(Oborot.Kol) < 0.000001)
+      {
+        message('Не задана сумма оборота или количество в проводке.'#13 +
+                'Задайте ее или удалите запись.', Information);
+        SelectField(#Oborot.SumOb);
+        Exit;
+      }
+  if (abs(Oborot.SumOb) < 0.005)
+    if (abs(Oborot.SumValut) >= 0.005)
+      if ((Oborot.ConvOb <> 5) and (Oborot.ConvOb <> 6))
+      {
+        message('Не задана сумма оборота в проводке.'#13 +
+                'Задайте ее или удалите запись.', Information);
+        SelectField(#Oborot.SumOb);
+        Exit;
+      }
+  if ((abs(Oborot.SumValut) < 0.005) and (Oborot.KodValut <> 0))
+  {
+    message('Не задана сумма в валюте в проводке.'#13 +
+            'Это допустимо для проводок по курсовым'#13 +
+            'разницам иностранных валют', Information);
+  }
+  if (abs(Oborot.SumValut) >= 0.005)
+  {
+    if (Oborot.KodValut = 0)
+    {
+      message('Не задана валюта оборота в проводке.'#13 +
+              'Определите значение.', Information);
+      SelectField(#Oborot.SumValut);
+      Exit;
+    }
+    else
+      if ((Oborot.SumValut * Oborot.SumOb) < 0)
+      {
+        message('Суммы в валюте и НДЕ в проводке должны быть одного знака.'#13 +
+                'Измените значение одной из сумм.', Information);
+        SelectField(#Oborot.SumValut);
+        Exit;
+      }
+  }
+  if ( ((abs(Oborot.ConvSum) >= 0.005) or (Oborot.ConvVal <> 0)) and
+       (Oborot.ConvOb = 0) )
+  {
+    message('Не определен вид оборота (дебет/кредит)'#13 +
+            'для конвертации суммы оборота в проводке.'#13 +
+            'Определите значение.', Information);
+    SelectField(#ConvMake);
+    Exit;
+  }
+  if ( (Oborot.ConvOb  <> 0) and
+       (Oborot.KodValut = 0) and
+       (Oborot.ConvVal  = 0) )
+  {
+    message('Не определены валюта проводки и валюта конвертации,'#13 +
+            'должно быть определено хотя бы одно из значений.'#13 +
+            'Определите значение.', Information);
+    SelectField(#ConvValut);
+    Exit;
+  }
+  if ((Oborot.ConvOb <> 0) and
+      (Oborot.ConvVal = 0) and
+      (abs(Oborot.ConvSum) >= 0.005))
+  {
+    message('При конвертации суммы в валюте в проводке в НДЕ'#13 +
+            'сумма в валюте конвертации должна быть равна нулю,'#13 +
+            'значение будет взято из суммы оборота в НДЕ.'#13 +
+            'Измените значение.', Information);
+    SelectField(#Oborot.ConvSum);
+    Exit;
+  }
+  if ((Oborot.ConvOb  <> 0) and
+      (Oborot.ConvVal <> 0) and
+      (Oborot.KodValut = Oborot.ConvVal))
+  {
+    message('Операция конвертации валют в проводке некорректна,'#13 +
+            'валюта проводки и валюта конвертации одинаковые.'#13 +
+            'Измените одно из этих значений.', Information);
+    SelectField(#ConvValut);
+    Exit;
+  }
+  if ( (Oborot.ConvOb  <> 0) and  (Oborot.ConvVal <> 0) )
+    if (abs(Oborot.ConvSum) < 0.005)
+    {
+      message('Не определена сумма в валюте конвертации.'#13 +
+              'Она будет рассчитана исходя из курсов валют'#13 +
+              'на дату формирования проводки.', Information);
+    }
+    else
+      if ( (Oborot.SumOb * Oborot.ConvSum) < 0)
+      {
+        message('Суммы в НДЕ проводки и валюте конвертации должны быть одного знака.'#13 +
+                'Измените значение одной из сумм.', Information);
+        SelectField(#Oborot.ConvSum);
+        Exit;
+      }
+
+  // Контроль рублевых сумм на счетах, для которых настроены Курсовые разницы
+  if ((Abs(Oborot.SumOb) > 0.005) and (Oborot.KodValut = 0))
+  {
+    if (isOkOs)
+      if (not iBuhCheck.CheckTuneDeltaVal(Oborot.SchetO,Oborot.SubOsSch))
+      {
+        if ((BuhSchetSubO.Visib and cgCheckVal) = cgNoVal)   // Опа! Конфликт настроек!
+          message(''#3'Конфликт настроек!'+
+                  ''#13#3'По счету ' + RTrim(#GetDbSch(Oborot.SchetO)+cgSSSimv+Oborot.SubOsSch,cgSSSimv) +
+                  ' не ведется учет в валюте, но есть настройка пересчет курсовых разниц!', Cancelbutton);
+        exit;
+      }
+    if (isOkKs)
+      if (not iBuhCheck.CheckTuneDeltaVal(Oborot.SchetK,Oborot.SubSchK))
+      {
+        if ((BuhSchetSubK.Visib and cgCheckVal) = cgNoVal)   // Опа! Конфликт настроек!
+          message(''#3'Конфликт настроек!'+
+                  ''#13#3'По счету ' + RTrim(#GetDbSch(Oborot.SchetK)+cgSSSimv+Oborot.SubSchK,cgSSSimv) +
+                  ' не ведется учет в валюте, но есть настройка пересчет курсовых разниц!', Cancelbutton);
+        exit;
+      }
+  }
+
+  // Проверка ссылок валюты и валюты конвертации согласно настройки счета (учет в валюте)
+  if (not iBuhCheck.CheckValutByTune(Oborot.SchetO,Oborot.SubOsSch,
+                                     Oborot.SchetK,Oborot.SubSchK,
+                                     BuhSchetSubO.Visib,BuhSchetSubK.Visib,
+                                     Oborot.KodValut,Oborot.ConvOb,Oborot.ConvVal)) Exit;
+
+  CheckRecordOborot := true;
+}
+
+!-------------------------------------------------------------------------------
+! Восстановить проводку
+!-------------------------------------------------------------------------------
+procedure RestoreProvodka;
+var OldRecord : type$Oborot;
+{
+  if (not UpdateTable)
+    Exit;
+  if (SavedRecord.NRec <> 0)
+    {
+      if (SavedRecord.cPlansSch = myPlansNo)
+        {
+          if (longint(dFormNa) = 0) dFormNa := Cur_Date;
+          if (not isNew) ProcessCommand(cmInsert);
+
+          // в новой записи
+          ClearAdvRecord(OldRecord);
+          OldRecord       := Oborot.Buffer; // запомним некоторые поля проводки
+
+          Oborot.Buffer   := SavedRecord;
+
+          Oborot.NRec     := 0;
+          Oborot.DatOb    := dFormNa;
+          Oborot.cSoprDoc := OldRecord.cSoprDoc;
+          Oborot.NoDok    := OldRecord.NoDok;
+          Oborot.cHozOper := 0;
+          Oborot.RuchAuto := cgOborotManual;
+          Oborot.Descr    := OldRecord.Descr;
+          Oborot.DesGr    := OldRecord.DesGr;
+
+          if (wOpMode = cgiOborot_AllOborot)
+          {
+            Oborot.cSoprHoz := 0;
+            Oborot.TiDk     := cgDoc_0014;
+            Oborot.TiDkGal  := cgDoc_0014;
+          }
+          else
+          {
+            Oborot.TiDk      := bInfoDoc.TiDk;
+            Oborot.TiDkGal   := bInfoDoc.TiDkGal;
+            Oborot.cSoprDoc  := bInfoDoc.cSoprDoc;
+            Oborot.cSoprHoz  := bInfoDoc.cSoprHoz;
+          }
+          SetModified(true);
+          ReScanPanel(#Oborot);
+          DisableOrEnableKauFields(true,true);
+        }
+      else
+        message('В текущем плане счетов нет сохраненных проводок.'#13 +
+                'Сначала запомните проводку'#13 +
+                'при помощи Ctrl-F2.', OkButton+Information);
+    }
+  else
+    message('Нет сохраненных проводок.'#13 +
+            'Запомните сначала проводку'#13 +
+            'при помощи Ctrl-F2.', OkButton+Information);
+}

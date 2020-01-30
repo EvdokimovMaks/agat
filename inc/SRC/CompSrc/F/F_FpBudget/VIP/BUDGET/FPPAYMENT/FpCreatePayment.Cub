@@ -1,0 +1,395 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 9.10 - модуль "Управление бюджетом"
+// Базовый объект : "Формирования платежных документов"
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+Const
+  MeasureIndex = 1;
+  MeasureCount = 1;
+end;
+
+//==============================================================================
+// CONTAN
+//------------------------------------------------------------------------------
+function ContAnSetToDef(_CAnID : TPtr; _Ind : integer) : boolean;
+{
+  ContAnSetToDef := False;
+  var i : integer;
+  var KolAn : integer;  KolAn := ContAnKolAn(_CAnID);
+  for (i:=_Ind; i <= KolAn; inc(i) )
+  {
+    ContAnSetAn(_CAnID, i, 0);
+  }
+  ContAnSetToDef := True;
+}
+//------------------------------------------------------------------------------
+function ContAnSetThisAn(_CAnID : TPtr; _wAn : word; _cAn : comp) : boolean;
+{
+  ContAnSetThisAn := False;
+  var Ind : integer;
+  Ind := ContAnGetIndKod(_CAnID, _wAn);
+  if (Ind = 0)   { Exit; }
+  ContAnSetAn(_CAnID, Ind, _cAn);
+  ContAnSetThisAn := True;
+}
+//------------------------------------------------------------------------------
+function ContAnGetThisAn(_CAnID : TPtr; _wAn : word) : comp;
+{
+  ContAnGetThisAn := 0;
+  var Ind : integer;
+  Ind := ContAnGetIndKod(_CAnID, _wAn);
+  if (Ind = 0)   { Exit; }
+  ContAnGetThisAn := ContAnGetAn(_CAnID, Ind);
+}
+
+
+//==============================================================================
+// CUBE
+//------------------------------------------------------------------------------
+function MyCreateCube : boolean;
+{
+  MyCreateCube := False;
+
+  // определение аналитик куба
+  ContAnClear(CAnCube);
+
+  // аналитика агрегации
+  _Loop TblKauPayTempl where
+    ((cCurAlgTune == TblKauPayTempl.cMain))
+  {
+    ContAnAdd(CAnCube, TblKauPayTempl.wAn, 0);
+  }
+  // аналитика доп. информации
+  _Loop TblEMailKauTempl where
+    ((cCurAlgTune == TblEMailKauTempl.cMain))
+  {
+    ContAnAdd(CAnCube, TblEMailKauTempl.wAn, 0);
+  }
+
+  ContAnCopy(CAnData, CAnCube);
+
+  CubeID := FpCubeInit(CAnCube, MeasureCount, FpCubeType_Memory);
+  if (CubeID = 0)
+  {
+    sLastError := 'Ошибка инициализации куба!';
+    Exit;
+  }
+
+  MyCreateCube := True;
+}
+//------------------------------------------------------------------------------
+function MyDoneCube : boolean;
+{
+  MyDoneCube := True;
+  if (CubeID = 0)
+  { Exit; }
+  FpCubeDone(CubeID);
+  CubeID := 0;
+}
+
+//------------------------------------------------------------------------------
+function MyCubeReProcess : boolean;
+{
+  MyCubeReProcess := False;
+  StartNewVisual(vtRotateVisual, vfTimer+vfScreenBottom, 'Пересчет куба...', 1);
+  FpCubeReProcess(CubeID);
+  StopVisual('', 0);
+  MyCubeReProcess := True;
+}
+
+
+//==============================================================================
+// DIMS
+//------------------------------------------------------------------------------
+function MyCubeAddDim(_wAn : word; _cAn : comp) : boolean;
+{
+  MyCubeAddDim := True;
+  if (_cAn <> 0)
+    MyCubeAddDim := FpCubeAddDim(CubeID, _wAn, _cAn, 0);
+}
+
+//------------------------------------------------------------------------------
+function MyCubeAllDimCheckNode : boolean;
+{
+  MyCubeAllDimCheckNode := False;
+
+  StartNewVisual(vtRotateVisual, vfTimer+vfScreenBottom
+  , 'Корректировка ссылок на вышестоящие в измерениях...', 1);
+  var i : integer;
+  var KolAn : integer;  KolAn := ContAnKolAn(CAnCube);
+  for (i:=1; i <= KolAn; inc(i) )
+  {
+    var wAn : word;  wAn := ContAnGetKod(CAnCube, i);
+    if (wAn = cgKau_FpStBud )
+      FpCubeSetDimTopRule(CubeID, wAn, 0, FpCubeDimFlag_DefaultTopRule);
+    else
+      FpCubeSetDimTopRule(CubeID, wAn, 0, FpCubeDimFlag_AutoAddTopSub );
+  }
+  FpCubeDimCheckNode(CubeID);
+  StopVisual('', 0);
+
+  MyCubeAllDimCheckNode := True;
+}
+
+//------------------------------------------------------------------------------
+function MyFpGetAnalitCode(_wAn : word; _cAn : comp) : string;
+{
+  var sCode : string;  sCode := pExtFpBudAn.GetMeanCode(_wAn, _cAn);
+  if (_wAn = cgKau_FpStBud)
+  {
+    // коды статей выравлниваем, добавляя 0-и справа,
+    // т.к. это коды во всей иерархии
+    sCode :=  Padch(sCode, '0', 20);
+  }
+  else
+  {
+    // коды аналитик выравлниваем, добавляя 0-и слева,
+    // т.к. это коды на уровне
+    if (_cAn = cKauNRecForOthers)
+      sCode := Padch('', '9', 20);
+    sCode := LPadch(sCode, '0', 20);
+  }
+  MyFpGetAnalitCode := sCode;
+}
+//------------------------------------------------------------------------------
+function MyCubeLoadDimTbl(_wAn : word) : boolean;
+{
+  MyCubeLoadDimTbl := False;
+
+  var i : LongInt;
+  var DimCount : LongInt;  DimCount := FpCubeDimGetCount(CubeID, _wAn);
+  for (i:=1; i<=DimCount; i:=i+1 )
+  {
+    var wAn : word;  wAn := _wAn;
+    var cAn : comp;  cAn := 0;
+    var cUp : comp;  cUp := 0;
+    if (not FpCubeDimGetByInd(CubeID, wAn, i, cAn, cUp) )
+    { Continue; }
+    if (cAn = 0)
+    { Continue; }
+
+    ClearBuffer(#TblDim);
+    TblDim.wAn       := wAn;
+    TblDim.cAn       := cAn;
+    TblDim.cNode     := cUp;
+    TblDim.LevelCode := MyFpGetAnalitCode(wAn, cAn);
+    insert current TblDim;
+  }
+
+  MyCubeLoadDimTbl := True;
+}
+//------------------------------------------------------------------------------
+function MyCubeLoadAllDimTbl : boolean;
+{
+  MyCubeLoadAllDimTbl := False;
+  delete all TblDim;
+
+  var i : integer;
+  var KolAn : integer;  KolAn := ContAnKolAn(CAnCube);
+  for (i:=1; i <= KolAn; inc(i) )
+  {
+    var wAn : word;  wAn := ContAnGetKod(CAnCube, i);
+    MyCubeLoadDimTbl(wAn);
+  }
+
+  MyCubeLoadAllDimTbl := True;
+}
+
+
+//==============================================================================
+// CELLS
+//------------------------------------------------------------------------------
+function MyCubeAddValue(_CAn : TPtr; _Sum : double) : boolean;
+{
+  MyCubeAddValue := False;
+
+  // обновляем соответствующие измерения
+  var i : integer;
+  var KolAn : integer;  KolAn := ContAnKolAn(_CAn);
+  for (i := 1; i <= KolAn; inc(i) )
+  {
+    var wAn : word;  wAn := 0;
+    var cAn : comp;  cAn := 0;
+    ContAnGet(_CAn, i, wAn, cAn);
+    MyCubeAddDim(wAn, cAn);
+  } // for
+
+  if (not pExtFpBudAn.IsMeanAgrInContAn(_CAn) )
+  {
+    if (not FpCubeAddLeafAnValue(CubeID, _CAn, MeasureIndex, _Sum) )
+    {
+      sLastError := 'Ошибка добавления данных в куб!';
+      Exit;
+    }
+  }
+
+  MyCubeAddValue := True;
+}
+//------------------------------------------------------------------------------
+function MyCubeGetValue(_CAn : TPtr) : double;
+{
+  MyCubeGetValue := 0;
+
+  ContAnSetToDef(CAnData, 1);
+
+  var i : integer;
+  var KolAn : integer;  KolAn := ContAnKolAn(CAnData);
+  for (i := 1; i <= KolAn; inc(i) )
+  {
+    var wAn : word;  wAn := ContAnGetKod(CAnData, i);
+    var cAn : comp;  cAn := ContAnGetThisAn(_CAn, wAn);
+    ContAnSetAn(CAnData, i, cAn);
+  } // for
+  MyCubeGetValue := FpCubeGetValue(CubeID, CAnData, MeasureIndex);
+}
+
+
+//==============================================================================
+// AXIS
+//------------------------------------------------------------------------------
+var CurTblEmailTFNpp : word;
+function MyBuildAxisLevel(
+  _Lev : word;
+  _iAn : word;
+  _cUp : comp
+) : boolean;
+{
+  MyBuildAxisLevel := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  var Lev : word;  Lev := _Lev;
+  var iAn : word;  iAn := _iAn;
+  var cUp : comp;  cUp := _cUp;
+  var wAn : word;  wAn := ContAnGetKod(ContAnInf, integer(iAn));
+
+  PushPos(#TblDim);
+  if GetFirst TblDim where
+    ((wAn == TblDim.wAn
+  and cUp == TblDim.cNode)) = tsOk
+  do
+  {
+    var cAn : comp;  cAn := TblDim.cAn;
+
+    inc(CurTblEmailTFNpp);
+    ClearBuffer(#TblEmailTF);
+    TblEmailTF.Npp      := CurTblEmailTFNpp;
+    TblEmailTF.Lev      := Lev;
+    TblEmailTF.iAn      := iAn;
+    TblEmailTF.wAn[iAn] := wAn;
+    TblEmailTF.cAn[iAn] := cAn;
+    insert current TblEmailTF;
+
+    if (not pExtFpBudAn.GetMeanIsLeaf(wAn, cAn) )
+    { // это агрегат - переходим на другой уровень
+
+      PushPos(#TblDim);
+      isAllOk := MyBuildAxisLevel(Lev + 1, iAn, cAn);
+      PopPos (#TblDim);
+      if (not isAllOk)
+      { Break; }
+
+    } // это агрегат - переходим на другой уровень
+    else
+    { // это лист - переходим на другую аналитику
+
+      if (ContAnKolAn(ContAnInf) > iAn)
+      { // есть еще аналитика
+
+        PushPos(#TblDim);
+        isAllOk := MyBuildAxisLevel(Lev + 1, iAn + 1, 0);
+        PopPos (#TblDim);
+        if (not isAllOk)
+        { Break; }
+
+      } // есть еще аналитика
+
+    } // это лист - переходим на другую аналитику
+
+  }
+  while (GetNext TblDim where
+    ((wAn == TblDim.wAn
+  and cUp == TblDim.cNode)) = tsOk);
+  PopPos (#TblDim);
+
+  MyBuildAxisLevel := isAllOk;
+}
+//------------------------------------------------------------------------------
+function MySetAnAxis : boolean;
+{
+  MySetAnAxis := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  var wAn : array[1..10] of word;
+  var cAn : array[1..10] of comp;
+  _Loop TblEmailTF ordered by TblEmailTF.Npp
+  {
+    wAn[TblEmailTF.iAn] := TblEmailTF.wAn[TblEmailTF.iAn];
+    cAn[TblEmailTF.iAn] := TblEmailTF.cAn[TblEmailTF.iAn];
+
+    var i : word;
+    for (i:=1; i<iAn; inc(i) )
+    {
+      TblEmailTF.wAn[i] := wAn[i];
+      TblEmailTF.cAn[i] := cAn[i];
+      update current TblEmailTF;
+    }
+
+  } // _Loop TblEmailTF
+
+  MySetAnAxis := isAllOk;
+}
+
+//------------------------------------------------------------------------------
+function MyBuildAxis : boolean;
+{
+  MyBuildAxis := False;
+  var isAllOk : boolean;  isAllOk := True;
+
+  do
+  {
+
+    // корректировка иерархии в измерениях
+    MyCubeAllDimCheckNode;
+
+    // пересчет куба
+    MyCubeReProcess;
+
+    // выгрузка из куба измерений в таблицу
+    MyCubeLoadAllDimTbl;
+
+    // таблица доп инфо
+    delete all TblEmailTF;
+
+    if (RecordsInTable(#TblDim) > 0)
+    { // есть измерения
+
+      if (ContAnKolAn(ContAnInf) > 0)
+      { // есть аналитика доп. инфо
+
+        CurTblEmailTFNpp := 0;
+        if (not MyBuildAxisLevel(0, 1, 0) )
+        { // сторим развертку оси
+          isAllOk := False;
+          Break;
+        }
+        if (not MySetAnAxis )
+        { // установка полной аналитики по оси
+          isAllOk := False;
+          Break;
+        }
+
+        // отладка
+        //MyPrintAllDimTbl;
+        //MyPrintAnAxis;
+
+      } // есть аналитика доп. инфо
+
+    } // есть измерения
+
+  }
+  while False;
+
+  MyBuildAxis := isAllOk;
+}

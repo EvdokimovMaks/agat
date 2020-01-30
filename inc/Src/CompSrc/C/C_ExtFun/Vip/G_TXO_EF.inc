@@ -109,7 +109,8 @@ function  doTxoGetExtAttr(String, String, Comp) : Double;                       
 function  dTxoGetExtAttr(String, String, Comp) : Date;                                   external 'G_TXO.DLL';
 function  tTxoGetExtAttr(String, String, Comp) : Time;                                   external 'G_TXO.DLL';
 function  coTxoGetExtAttr(String, String, Comp) : Comp;                                  external 'G_TXO.DLL';
-function coTxoGetRealExtAttr(String, String, Comp) : Comp;                               external 'G_TXO.DLL';
+function  boTxoGetExtAttr(String, String, Comp) : boolean;                               external 'G_TXO.DLL';
+function  coTxoGetRealExtAttr(String, String, Comp) : Comp;                              external 'G_TXO.DLL';
 function  sTxoGetRealExtAttr(String, String, Comp) : string;                             external 'G_TXO.DLL';
 function doTxoGetRealExtAttr(String, String, Comp) : double;                             external 'G_TXO.DLL';
 function  dTxoGetRealExtAttr(String, String, Comp) : date;                               external 'G_TXO.DLL';
@@ -129,8 +130,10 @@ function  coTxoGetField(String, String, Comp) : Comp;                           
 function  GetSpKauByCode (wKau: word, sKau: String) : comp;                              external 'G_TXO.DLL';
 function  TxoGetExClassCode1(string, word, comp) : String;                               external 'G_TXO.DLL';
 function  TxoGetExClassName1(string, word, comp) : String;                               external 'G_TXO.DLL';
+function  TxoGetExClassNRec1(string, word, comp) : comp;                               external 'G_TXO.DLL';
 function  TxoGetExClassCode2(string, string, comp) : String;                             external 'G_TXO.DLL';
 function  TxoGetExClassName2(string, string, comp) : String;                             external 'G_TXO.DLL';
+function  TxoGetExClassNRec2(string, string, comp) : comp;                             external 'G_TXO.DLL';
 function  TxoGetNrecCU(string, comp) : comp;                                             external 'G_TXO.DLL';
 function  TxoGetNameCU(string, comp) : string;                                           external 'G_TXO.DLL';
 // Функции для работы с сервером формул из VIP
@@ -188,16 +191,17 @@ function  TxoExecPat(#TPtr, string, var double, var double, var double) : boolea
 function  TxoGetInfoCloSch(#TPtr, var AnyType) : boolean;                              external 'G_TXO.DLL';
 function  TxoGetInfoDocLink(#TPtr, var word, var comp) : boolean;                      external 'G_TXO.DLL';
 procedure TxoAllowRecallStoreCycles(#TPtr);                                            external 'G_TXO.DLL';
-function  TxoSetKau(word, word, comp) : boolean;                                         external 'G_TXO.DLL';
-function  TxoSetDate(word, date) : boolean;                                              external 'G_TXO.DLL';
-function  TxoSetDateOt(date) : boolean;                                                  external 'G_TXO.DLL';
-function  TxoSetSchetNrec(word, comp) : boolean;                                         external 'G_TXO.DLL';
-function  TxoSetSchet(word, string, string, boolean) : boolean;                          external 'G_TXO.DLL';
-function  GetKauMcUsl(comp, comp, byte, comp) : comp;                                    external 'G_TXO.DLL';
-function  TxoGetCursVal(string, date, word) : double;                                                        external 'G_TXO.DLL';
-function  TxoGetCursValByNrec(comp, date, word) : double;                                external 'G_TXO.DLL';
-function  TxoSetStatus(comp) : boolean;                                                  external 'G_TXO.DLL';
-function  TxoAddCycle(word, word, string) : boolean;                                     external 'G_TXO.DLL';
+function  TxoSetKau(word, word, comp) : boolean;                                       external 'G_TXO.DLL';
+function  TxoSetDate(word, date) : boolean;                                            external 'G_TXO.DLL';
+function  TxoSetDateOt(date) : boolean;                                                external 'G_TXO.DLL';
+function  TxoSetSchetNrec(word, comp) : boolean;                                       external 'G_TXO.DLL';
+function  TxoSetSchet(word, string, string, boolean) : boolean;                        external 'G_TXO.DLL';
+function  GetKauMcUsl(comp, comp, byte, comp) : comp;                                  external 'G_TXO.DLL';
+function  TxoGetCursVal(string, date, word) : double;                                  external 'G_TXO.DLL';
+function  TxoGetCursValByNrec(comp, date, word) : double;                              external 'G_TXO.DLL';
+function  TxoSetStatus(comp) : boolean;                                                external 'G_TXO.DLL';
+function  TxoAddCycle(word, word, string) : boolean;                                   external 'G_TXO.DLL';
+
 //------------------------------------------------------------------------------------------------------------
 // Coun_Gal.pas
 function  CountPatReport(String, String, Longint, Word, var String) : boolean;           external 'G_TXO.DLL';

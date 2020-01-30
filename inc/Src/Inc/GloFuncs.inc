@@ -21,6 +21,8 @@
 #include Cache_KatMC.vih
 #include ClearCurLSchet.vih
 #include MBP_MinDbl.vih
+#include ParamStore.vih
+#include Global_Function.Vih
 
 Global F_KatDoc::KatDocName
      , F_KatDoc::TiDkInfo
@@ -39,4 +41,6 @@ Global F_KatDoc::KatDocName
      , L_MCU::Cache_KatMC
      , Z_LSchet::ClearCurLSchet
      , F_MBP::MBP_MinDbl
+     , C_Common::ParamStore
+     , C_Common::Global_Function
      ;

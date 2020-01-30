@@ -97,6 +97,7 @@ const
   cp_AppDogovor_dDoc        = 172;
   cp_CalPlan_dInput         = 173;
   cp_WoodFondName           = 174;
+  cp_KatNotesSp_Name        = 179;
 
 //-----------------------------------
   cp_FactoryPrice           = 301;
@@ -186,4 +187,6 @@ const
   cpC_CanLinkDogovor       = 15;
   cpC_KatNotes             = 16;
   cpC_DelUsedOborot        = 17;
+  cpC_StatUserSp           = 20;
+  cpC_KatNotesSp           = 21;
 end;

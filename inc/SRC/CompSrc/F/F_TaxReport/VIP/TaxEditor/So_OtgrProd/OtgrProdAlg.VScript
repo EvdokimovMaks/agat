@@ -1,0 +1,521 @@
+//------------------------------------------------------------------------------------------------------------
+//                                                                                    (c) корпорация Галактика
+// Галактика 9.1 - модуль "Электронная отчетность"
+// Алгоритмы расчета : "Сведения о состоянии расчетов за отгруженную продукцию, выполненные работы (услуги) (1-РП (срочная))"
+//------------------------------------------------------------------------------------------------------------
+
+//============================================================================================================
+//#region ДОБЫЧА ДАННЫХ ИЗ ГАЛАКТИКИ
+//------------------------------------------------------------------------------------------------------------
+&p_NaimOrg = &СобсОрг[Рез:Наим]
+&p_Adr     = &СобсОрг[Рез:Адр]
+&p_Tel     = &СобсОрг[Рез:Тел]
+&p_OKPO    = &СобсОрг[Рез:ОКПО]
+
+&p_Dolgn   = 'Руководитель организации'
+&p_FIO     = &РукПред[Рез:Фам] + ' ' +  &РукПред[Рез:Имя] + ' ' +  &РукПред[Рез:Отч]
+//#endregion ДОБЫЧА ДАННЫХ ИЗ ГАЛАКТИКИ
+//************************************************************************************************************
+
+
+
+@Script GetStrVal(fld:string):string;
+@begin
+  Result := XMLMAP.GetAttrValueByName(fld);
+@end.
+
+@Script GetDblVal(fld:string):double;
+@begin
+  Result := Double(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+@Script SetFldVal(fld:string; val:string);
+@begin
+  XMLMAP.SetAttrValueByName(fld,val);
+@end.
+
+@Script On_ExportXML : boolean;
+@begin
+  if (not XMLMap.ExpToXml(_XmlFileName_)) {
+    Message('On_ExportXML: '+ XMLMap.GetStLastError, cancelButton+Warning);
+    Exit;
+  }
+
+  message('Выгружен в файл ' + _XmlFileName_);
+@end.
+
+//***************************************************************************************************************************************************
+
+@Script MessageErrorStop(mesMesAdrXML: string; mesPri_t: comp; mesStr, mesPole, mesMes: string): boolean;
+@begin
+  MesError.InsertMesError(mesMesAdrXML, mesPri_t, mesStr, mesPole, mesMes);
+  Result := True;
+@end.
+
+@Script Prov_Length(mesPri_t: comp; plAdr, plStr, plPole, plMes: string; Min, Max: integer; flag: boolean): boolean;
+@begin
+  Result := False;
+  var Str: string;
+  var Len: integer;
+
+  Str := '';
+  Str := GetStrVal(plAdr);
+  Len := Length(Str);
+
+  if ((flag) or ((not flag) and (Str <> '')))
+  {
+    if (Max = -1)
+    {
+      if (Len <> Min)
+        if (MessageErrorStop(plAdr, mesPri_t, plStr, plPole, plMes)) Exit;
+    }
+    else
+    {
+      if (Min = -1)
+      {
+        if (Len > Max)
+          if (MessageErrorStop(plAdr, mesPri_t, plStr, plPole, plMes)) Exit;
+      }
+      else
+      {
+        if ((Len < Min) or (Len > Max))
+          if (MessageErrorStop(plAdr, mesPri_t, plStr, plPole, plMes)) Exit;
+      }
+    }
+  }
+@end.
+
+@Script On_Check : boolean;
+  #declare _InsMes(_AdrXML, _Pole)
+    MessageErrorStop
+    (
+      #_AdrXML,
+      Prior,
+      Razd,
+      #_Pole,
+      StrMes
+    );
+  #end
+@begin
+  var Prior: comp;
+
+  Prior := 0;
+  Prov_Length(Prior, 'Документ/НаимОрг'            , '01 Титульный лист'     , '"Наименование организации"', 'Поле обязательно для заполнения. Необходимая длинна от 1 до 100', 1, 100, True);
+  Prov_Length(Prior, 'Документ/Адрес'              , '01 Титульный лист'     , '"Адрес организации"'       , 'Поле обязательно для заполнения. Необходимая длинна от 1 до 100', 1, 100, True);
+  Prov_Length(Prior, 'Документ/ОКПО'               , '01 Титульный лист'     , '"Код ОКПО"'                , 'Поле обязательно для заполнения. Необходимая длинна от 1 до 10' , 1, 10 , True);
+
+  Prior := 1;
+  Prov_Length(Prior, 'Документ/Подписант/Должность', '02 Информационный лист', '"Должность"'               , 'Поле обязательно для заполнения. Необходимая длинна от 1 до 34' , 1, 34 , True);
+  Prov_Length(Prior, 'Документ/Подписант/ФИО'      , '02 Информационный лист', '"ФИО"'                     , 'Поле обязательно для заполнения. Необходимая длинна от 1 до 34' , 1, 34 , True);
+  Prov_Length(Prior, 'Документ/Тел'                , '02 Информационный лист', '"Телефон"'                 , 'Поле обязательно для заполнения. Необходимая длинна от 1 до 34' , 1, 34 , True);
+
+  if (GetStrVal('Документ/ДатаДок') = '' or GetStrVal('Документ/ДатаДок') = 'ДД мес ГГГГ')
+    MessageErrorStop('Документ/ДатаДок', Prior, '02 Информационный лист', '"Дата документа"','Поле обязательно для заполнения');
+
+  var
+    str01_1, str02_1, str03_1, str04_1, str05_1, str06_1,
+    str01_2, str02_2, str03_2, str04_2, str05_2, str06_2,
+    str01_3, str02_3, str03_3, str04_3, str05_3, str06_3,
+    str01_4, str02_4, str03_4, str04_4, str05_4, str06_4,
+
+    str07_1, str08_1, str09_1, str10_1, str11_1, str12_1,
+    str07_2, str08_2, str09_2, str10_2, str11_2, str12_2,
+    str07_3, str08_3, str09_3, str10_3, str11_3, str12_3,
+    str07_4, str08_4, str09_4, str10_4, str11_4, str12_4 : double;
+
+  var
+    strAdr01_1, strAdr02_1, strAdr03_1, strAdr04_1, strAdr05_1, strAdr06_1,
+    strAdr01_2, strAdr02_2, strAdr03_2, strAdr04_2, strAdr05_2, strAdr06_2,
+    strAdr01_3, strAdr02_3, strAdr03_3, strAdr04_3, strAdr05_3, strAdr06_3,
+    strAdr01_4, strAdr02_4, strAdr03_4, strAdr04_4, strAdr05_4, strAdr06_4,
+
+    strAdr07_1, strAdr08_1, strAdr09_1, strAdr10_1, strAdr11_1, strAdr12_1,
+    strAdr07_2, strAdr08_2, strAdr09_2, strAdr10_2, strAdr11_2, strAdr12_2,
+    strAdr07_3, strAdr08_3, strAdr09_3, strAdr10_3, strAdr11_3, strAdr12_3,
+    strAdr07_4, strAdr08_4, strAdr09_4, strAdr10_4, strAdr11_4, strAdr12_4 : string;
+
+
+  str01_1 := 0; str03_1 := 0; str05_1 := 0; str07_1 := 0; str09_1 := 0;  str11_1 := 0;
+  str01_2 := 0; str03_2 := 0; str05_2 := 0; str07_2 := 0; str09_2 := 0;  str11_2 := 0;
+  str01_3 := 0; str03_3 := 0; str05_3 := 0; str07_3 := 0; str09_3 := 0;  str11_3 := 0;
+  str01_4 := 0; str03_4 := 0; str05_4 := 0; str07_4 := 0; str09_4 := 0;  str11_4 := 0;
+
+  str02_1 := 0; str04_1 := 0; str06_1 := 0; str08_1 := 0; str10_1 := 0; str12_1 := 0;
+  str02_2 := 0; str04_2 := 0; str06_2 := 0; str08_2 := 0; str10_2 := 0; str12_2 := 0;
+  str02_3 := 0; str04_3 := 0; str06_3 := 0; str08_3 := 0; str10_3 := 0; str12_3 := 0;
+  str02_4 := 0; str04_4 := 0; str06_4 := 0; str08_4 := 0; str10_4 := 0; str12_4 := 0;
+
+
+
+  strAdr01_1 := 'Документ/ОбОтгрПрод/ОПНаКон'                           ;     str01_1 := GetDblVal(strAdr01_1);
+  strAdr01_2 := 'Документ/ОбОтгрПрод/ОПВклРФ'                           ;     str01_2 := GetDblVal(strAdr01_2);
+  strAdr01_3 := 'Документ/ОбОтгрПрод/СПНаКон'                           ;     str01_3 := GetDblVal(strAdr01_3);
+  strAdr01_4 := 'Документ/ОбОтгрПрод/СПВклРФ'                           ;     str01_4 := GetDblVal(strAdr01_4);
+
+  strAdr02_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/ОПНаКон'                 ;     str02_1 := GetDblVal(strAdr02_1);
+  strAdr02_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/ОПВклРФ'                 ;     str02_2 := GetDblVal(strAdr02_2);
+  strAdr02_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/СПНаКон'                 ;     str02_3 := GetDblVal(strAdr02_3);
+  strAdr02_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/СПВклРФ'                 ;     str02_4 := GetDblVal(strAdr02_4);
+
+  strAdr03_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/ОПНаКон'           ;     str03_1 := GetDblVal(strAdr03_1);
+  strAdr03_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/ОПВклРФ'           ;     str03_2 := GetDblVal(strAdr03_2);
+  strAdr03_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/СПНаКон'           ;     str03_3 := GetDblVal(strAdr03_3);
+  strAdr03_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/СПВклРФ'           ;     str03_4 := GetDblVal(strAdr03_4);
+
+  strAdr04_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/БезНал/ОПНаКон'    ;     str04_1 := GetDblVal(strAdr04_1);
+  strAdr04_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/БезНал/ОПВклРФ'    ;     str04_2 := GetDblVal(strAdr04_2);
+  strAdr04_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/БезНал/СПНаКон'    ;     str04_3 := GetDblVal(strAdr04_3);
+  strAdr04_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/БезНал/СПВклРФ'    ;     str04_4 := GetDblVal(strAdr04_4);
+
+  strAdr05_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/Нал/ОПНаКон'       ;     str05_1 := GetDblVal(strAdr05_1);
+  strAdr05_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/Нал/ОПВклРФ'       ;     str05_2 := GetDblVal(strAdr05_2);
+  strAdr05_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/Нал/СПНаКон'       ;     str05_3 := GetDblVal(strAdr05_3);
+  strAdr05_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/Нал/СПВклРФ'       ;     str05_4 := GetDblVal(strAdr05_4);
+
+  strAdr06_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ОПНаКон'         ;     str06_1 := GetDblVal(strAdr06_1);
+  strAdr06_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ОПВклРФ'         ;     str06_2 := GetDblVal(strAdr06_2);
+  strAdr06_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/СПНаКон'         ;     str06_3 := GetDblVal(strAdr06_3);
+  strAdr06_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/СПВклРФ'         ;     str06_4 := GetDblVal(strAdr06_4);
+
+  strAdr07_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Вексели/ОПНаКон' ;     str07_1 := GetDblVal(strAdr07_1);
+  strAdr07_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Вексели/ОПВклРФ' ;     str07_2 := GetDblVal(strAdr07_2);
+  strAdr07_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Вексели/СПНаКон' ;     str07_3 := GetDblVal(strAdr07_3);
+  strAdr07_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Вексели/СПВклРФ' ;     str07_4 := GetDblVal(strAdr07_4);
+
+  strAdr08_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ЦенБум/ОПНаКон'  ;     str08_1 := GetDblVal(strAdr08_1);
+  strAdr08_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ЦенБум/ОПВклРФ'  ;     str08_2 := GetDblVal(strAdr08_2);
+  strAdr08_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ЦенБум/СПНаКон'  ;     str08_3 := GetDblVal(strAdr08_3);
+  strAdr08_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ЦенБум/СПВклРФ'  ;     str08_4 := GetDblVal(strAdr08_4);
+
+  strAdr09_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Переуст/ОПНаКон' ;     str09_1 := GetDblVal(strAdr09_1);
+  strAdr09_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Переуст/ОПВклРФ' ;     str09_2 := GetDblVal(strAdr09_2);
+  strAdr09_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Переуст/СПНаКон' ;     str09_3 := GetDblVal(strAdr09_3);
+  strAdr09_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Переуст/СПВклРФ' ;     str09_4 := GetDblVal(strAdr09_4);
+
+  strAdr10_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ВзаимЗач/ОПНаКон';     str10_1 := GetDblVal(strAdr10_1);
+  strAdr10_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ВзаимЗач/ОПВклРФ';     str10_2 := GetDblVal(strAdr10_2);
+  strAdr10_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ВзаимЗач/СПНаКон';     str10_3 := GetDblVal(strAdr10_3);
+  strAdr10_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ВзаимЗач/СПВклРФ';     str10_4 := GetDblVal(strAdr10_4);
+
+  strAdr11_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Бартер/ОПНаКон'  ;     str11_1 := GetDblVal(strAdr11_1);
+  strAdr11_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Бартер/ОПВклРФ'  ;     str11_2 := GetDblVal(strAdr11_2);
+  strAdr11_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Бартер/СПНаКон'  ;     str11_3 := GetDblVal(strAdr11_3);
+  strAdr11_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Бартер/СПВклРФ'  ;     str11_4 := GetDblVal(strAdr11_4);
+
+  strAdr12_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Прочее/ОПНаКон'  ;     str12_1 := GetDblVal(strAdr12_1);
+  strAdr12_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Прочее/ОПВклРФ'  ;     str12_2 := GetDblVal(strAdr12_2);
+  strAdr12_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Прочее/СПНаКон'  ;     str12_3 := GetDblVal(strAdr12_3);
+  strAdr12_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Прочее/СПВклРФ'  ;     str12_4 := GetDblVal(strAdr12_4);
+
+
+  var StrMes, Razd: string;
+
+  Prior := 1;
+  Razd := '02 Информационный лист';
+
+  StrMes := 'Значение поля должно быть больше либо равно 0 (нулю)';
+  if (Double(str01_1) < 0) #_InsMes(strAdr01_1, 'Стр. 01, гр. 3');
+  if (Double(str01_2) < 0) #_InsMes(strAdr01_2, 'Стр. 01, гр. 4');
+  if (Double(str01_3) < 0) #_InsMes(strAdr01_3, 'Стр. 01, гр. 5');
+  if (Double(str01_4) < 0) #_InsMes(strAdr01_4, 'Стр. 01, гр. 6');
+
+  if (Double(str02_1) < 0) #_InsMes(strAdr02_1, 'Стр. 02, гр. 3');
+  if (Double(str02_2) < 0) #_InsMes(strAdr02_2, 'Стр. 02, гр. 4');
+  if (Double(str02_3) < 0) #_InsMes(strAdr02_3, 'Стр. 02, гр. 5');
+  if (Double(str02_4) < 0) #_InsMes(strAdr02_4, 'Стр. 02, гр. 6');
+
+  if (Double(str03_1) < 0) #_InsMes(strAdr03_1, 'Стр. 03, гр. 3');
+  if (Double(str03_2) < 0) #_InsMes(strAdr03_2, 'Стр. 03, гр. 4');
+  if (Double(str03_3) < 0) #_InsMes(strAdr03_3, 'Стр. 03, гр. 5');
+  if (Double(str03_4) < 0) #_InsMes(strAdr03_4, 'Стр. 03, гр. 6');
+
+  if (Double(str04_1) < 0) #_InsMes(strAdr04_1, 'Стр. 04, гр. 3');
+  if (Double(str04_2) < 0) #_InsMes(strAdr04_2, 'Стр. 04, гр. 4');
+  if (Double(str04_3) < 0) #_InsMes(strAdr04_3, 'Стр. 04, гр. 5');
+  if (Double(str04_4) < 0) #_InsMes(strAdr04_4, 'Стр. 04, гр. 6');
+
+  if (Double(str05_1) < 0) #_InsMes(strAdr05_1, 'Стр. 05, гр. 3');
+  if (Double(str05_2) < 0) #_InsMes(strAdr05_2, 'Стр. 05, гр. 4');
+  if (Double(str05_3) < 0) #_InsMes(strAdr05_3, 'Стр. 05, гр. 5');
+  if (Double(str05_4) < 0) #_InsMes(strAdr05_4, 'Стр. 05, гр. 6');
+
+  if (Double(str06_1) < 0) #_InsMes(strAdr06_1, 'Стр. 06, гр. 3');
+  if (Double(str06_2) < 0) #_InsMes(strAdr06_2, 'Стр. 06, гр. 4');
+  if (Double(str06_3) < 0) #_InsMes(strAdr06_3, 'Стр. 06, гр. 5');
+  if (Double(str06_4) < 0) #_InsMes(strAdr06_4, 'Стр. 06, гр. 6');
+
+  if (Double(str07_1) < 0) #_InsMes(strAdr07_1, 'Стр. 07, гр. 3');
+  if (Double(str07_2) < 0) #_InsMes(strAdr07_2, 'Стр. 07, гр. 4');
+  if (Double(str07_3) < 0) #_InsMes(strAdr07_3, 'Стр. 07, гр. 5');
+  if (Double(str07_4) < 0) #_InsMes(strAdr07_4, 'Стр. 07, гр. 6');
+
+  if (Double(str08_1) < 0) #_InsMes(strAdr08_1, 'Стр. 08, гр. 3');
+  if (Double(str08_2) < 0) #_InsMes(strAdr08_2, 'Стр. 08, гр. 4');
+  if (Double(str08_3) < 0) #_InsMes(strAdr08_3, 'Стр. 08, гр. 5');
+  if (Double(str08_4) < 0) #_InsMes(strAdr08_4, 'Стр. 08, гр. 6');
+
+  if (Double(str09_1) < 0) #_InsMes(strAdr09_1, 'Стр. 09, гр. 3');
+  if (Double(str09_2) < 0) #_InsMes(strAdr09_2, 'Стр. 09, гр. 4');
+  if (Double(str09_3) < 0) #_InsMes(strAdr09_3, 'Стр. 09, гр. 5');
+  if (Double(str09_4) < 0) #_InsMes(strAdr09_4, 'Стр. 09, гр. 6');
+
+  if (Double(str10_1) < 0) #_InsMes(strAdr10_1, 'Стр. 10, гр. 3');
+  if (Double(str10_2) < 0) #_InsMes(strAdr10_2, 'Стр. 10, гр. 4');
+  if (Double(str10_3) < 0) #_InsMes(strAdr10_3, 'Стр. 10, гр. 5');
+  if (Double(str10_4) < 0) #_InsMes(strAdr10_4, 'Стр. 10, гр. 6');
+
+  if (Double(str11_1) < 0) #_InsMes(strAdr11_1, 'Стр. 11, гр. 3');
+  if (Double(str11_2) < 0) #_InsMes(strAdr11_2, 'Стр. 11, гр. 4');
+  if (Double(str11_3) < 0) #_InsMes(strAdr11_3, 'Стр. 11, гр. 5');
+  if (Double(str11_4) < 0) #_InsMes(strAdr11_4, 'Стр. 11, гр. 6');
+
+  if (Double(str12_1) < 0) #_InsMes(strAdr12_1, 'Стр. 12, гр. 3');
+  if (Double(str12_2) < 0) #_InsMes(strAdr12_2, 'Стр. 12, гр. 4');
+  if (Double(str12_3) < 0) #_InsMes(strAdr12_3, 'Стр. 12, гр. 5');
+  if (Double(str12_4) < 0) #_InsMes(strAdr12_4, 'Стр. 12, гр. 6');
+
+
+  StrMes := 'Значение по графе 3 должна быть больше либо равно значению по графе 4';
+  if (str01_1 < str01_2) #_InsMes(strAdr01_1, 'Стр. 01, гр. 3');
+  if (str02_1 < str02_2) #_InsMes(strAdr02_1, 'Стр. 02, гр. 3');
+  if (str03_1 < str03_2) #_InsMes(strAdr03_1, 'Стр. 03, гр. 3');
+  if (str04_1 < str04_2) #_InsMes(strAdr04_1, 'Стр. 04, гр. 3');
+  if (str05_1 < str05_2) #_InsMes(strAdr05_1, 'Стр. 05, гр. 3');
+  if (str06_1 < str06_2) #_InsMes(strAdr06_1, 'Стр. 06, гр. 3');
+  if (str07_1 < str07_2) #_InsMes(strAdr07_1, 'Стр. 07, гр. 3');
+  if (str08_1 < str08_2) #_InsMes(strAdr08_1, 'Стр. 08, гр. 3');
+  if (str09_1 < str09_2) #_InsMes(strAdr09_1, 'Стр. 09, гр. 3');
+  if (str10_1 < str10_2) #_InsMes(strAdr10_1, 'Стр. 10, гр. 3');
+  if (str11_1 < str11_2) #_InsMes(strAdr11_1, 'Стр. 11, гр. 3');
+  if (str12_1 < str12_2) #_InsMes(strAdr12_1, 'Стр. 12, гр. 3');
+
+  StrMes := 'Значение по графе 5 должна быть больше либо равно значению по графе 6';
+  if (str01_3 < str01_4) #_InsMes(strAdr01_3, 'Стр. 01, гр. 5');
+  if (str02_3 < str02_4) #_InsMes(strAdr02_3, 'Стр. 02, гр. 5');
+  if (str03_3 < str03_4) #_InsMes(strAdr03_3, 'Стр. 03, гр. 5');
+  if (str04_3 < str04_4) #_InsMes(strAdr04_3, 'Стр. 04, гр. 5');
+  if (str05_3 < str05_4) #_InsMes(strAdr05_3, 'Стр. 05, гр. 5');
+  if (str06_3 < str06_4) #_InsMes(strAdr06_3, 'Стр. 06, гр. 5');
+  if (str07_3 < str07_4) #_InsMes(strAdr07_3, 'Стр. 07, гр. 5');
+  if (str08_3 < str08_4) #_InsMes(strAdr08_3, 'Стр. 08, гр. 5');
+  if (str09_3 < str09_4) #_InsMes(strAdr09_3, 'Стр. 09, гр. 5');
+  if (str10_3 < str10_4) #_InsMes(strAdr10_3, 'Стр. 10, гр. 5');
+  if (str11_3 < str11_4) #_InsMes(strAdr11_3, 'Стр. 11, гр. 5');
+  if (str12_3 < str12_4) #_InsMes(strAdr12_3, 'Стр. 12, гр. 5');
+
+
+  StrMes := 'Значение поля должна быть больше либо равно строке 2 по соответствующей графе';
+  if (str01_1 < str02_1) #_InsMes(strAdr01_1, 'Стр. 01, гр. 3');
+  if (str01_2 < str02_2) #_InsMes(strAdr01_2, 'Стр. 01, гр. 4');
+  if (str01_3 < str02_3) #_InsMes(strAdr01_3, 'Стр. 01, гр. 5');
+  if (str01_4 < str02_4) #_InsMes(strAdr01_4, 'Стр. 01, гр. 6');
+
+  StrMes := 'Значение поля должно быть равно сумме строк 03, 06 по соответствующей графе';
+  if (str02_1 <> (str03_1 + str06_1)) #_InsMes(strAdr02_1, 'Стр. 02, гр. 3');
+  if (str02_2 <> (str03_2 + str06_2)) #_InsMes(strAdr02_2, 'Стр. 02, гр. 4');
+  if (str02_3 <> (str03_3 + str06_3)) #_InsMes(strAdr02_3, 'Стр. 02, гр. 5');
+  if (str02_4 <> (str03_4 + str06_4)) #_InsMes(strAdr02_4, 'Стр. 02, гр. 6');
+
+  StrMes := 'Значение поля должно быть равно сумме строк 04, 05 по соответствующей графе';
+  if (str03_1 <> (str04_1 + str05_1)) #_InsMes(strAdr03_1, 'Стр. 03, гр. 3');
+  if (str03_2 <> (str04_2 + str05_2)) #_InsMes(strAdr03_2, 'Стр. 03, гр. 4');
+  if (str03_3 <> (str04_3 + str05_3)) #_InsMes(strAdr03_3, 'Стр. 03, гр. 5');
+  if (str03_4 <> (str04_4 + str05_4)) #_InsMes(strAdr03_4, 'Стр. 03, гр. 6');
+
+  StrMes := 'Значение поля должно быть равно сумме строк 07, 08, 09, 10, 11, 12 по соответствующей графе';
+  if (str06_1 <> (str07_1 + str08_1 + str09_1 + str10_1 + str11_1 + str12_1)) #_InsMes(strAdr06_1, 'Стр. 06, гр. 3');
+  if (str06_2 <> (str07_2 + str08_2 + str09_2 + str10_2 + str11_2 + str12_2)) #_InsMes(strAdr06_2, 'Стр. 06, гр. 4');
+  if (str06_3 <> (str07_3 + str08_3 + str09_3 + str10_3 + str11_3 + str12_3)) #_InsMes(strAdr06_3, 'Стр. 06, гр. 5');
+  if (str06_4 <> (str07_4 + str08_4 + str09_4 + str10_4 + str11_4 + str12_4)) #_InsMes(strAdr06_4, 'Стр. 06, гр. 6');
+
+
+
+  MesError.RereadTable;
+
+@end.
+
+//***************************************************************************************************************************************************
+
+@Script On_Recalc : boolean;
+  #declare _Log(_strAdr, _strMes, _strVal)
+    MesError.InsertRasch(NameStr, #_strAdr, #_strMes, #_strVal, 0);
+  #end
+
+ #declare GD0(_val)
+    IF (
+         #_val < 0,
+        '('+DoubleToStr(Round(#_val), '[|-]36666666666666666666666666')+')',
+            DoubleToStr(Round(#_val), '[|-]36666666666666666666666666')
+       )
+  #end
+
+@begin
+  //Документ
+  if ((GetStrVal('Документ/ДатаДок') = '') or (GetStrVal('Документ/ДатаДок') = 'ДД мес ГГГГ'))
+    SetFldVal('Документ/ДатаДок', DateToStr(Cur_Date, 'DD mon YYYY'));
+
+
+  var
+    str01_1, str02_1, str03_1, str04_1, str05_1, str06_1,
+    str01_2, str02_2, str03_2, str04_2, str05_2, str06_2,
+    str01_3, str02_3, str03_3, str04_3, str05_3, str06_3,
+    str01_4, str02_4, str03_4, str04_4, str05_4, str06_4,
+
+    str07_1, str08_1, str09_1, str10_1, str11_1, str12_1,
+    str07_2, str08_2, str09_2, str10_2, str11_2, str12_2,
+    str07_3, str08_3, str09_3, str10_3, str11_3, str12_3,
+    str07_4, str08_4, str09_4, str10_4, str11_4, str12_4 : double;
+
+  var
+    Adr01_1, Adr02_1, Adr03_1, Adr04_1, Adr05_1, Adr06_1,
+    Adr01_2, Adr02_2, Adr03_2, Adr04_2, Adr05_2, Adr06_2,
+    Adr01_3, Adr02_3, Adr03_3, Adr04_3, Adr05_3, Adr06_3,
+    Adr01_4, Adr02_4, Adr03_4, Adr04_4, Adr05_4, Adr06_4,
+
+    Adr07_1, Adr08_1, Adr09_1, Adr10_1, Adr11_1, Adr12_1,
+    Adr07_2, Adr08_2, Adr09_2, Adr10_2, Adr11_2, Adr12_2,
+    Adr07_3, Adr08_3, Adr09_3, Adr10_3, Adr11_3, Adr12_3,
+    Adr07_4, Adr08_4, Adr09_4, Adr10_4, Adr11_4, Adr12_4,
+    NameStr, _MesStr, str06  , str02  , str03            : string;
+
+  str01_1 := 0; str03_1 := 0; str05_1 := 0; str07_1 := 0; str09_1 := 0;  str11_1 := 0;
+  str01_2 := 0; str03_2 := 0; str05_2 := 0; str07_2 := 0; str09_2 := 0;  str11_2 := 0;
+  str01_3 := 0; str03_3 := 0; str05_3 := 0; str07_3 := 0; str09_3 := 0;  str11_3 := 0;
+  str01_4 := 0; str03_4 := 0; str05_4 := 0; str07_4 := 0; str09_4 := 0;  str11_4 := 0;
+
+  str02_1 := 0; str04_1 := 0; str06_1 := 0; str08_1 := 0; str10_1 := 0; str12_1 := 0;
+  str02_2 := 0; str04_2 := 0; str06_2 := 0; str08_2 := 0; str10_2 := 0; str12_2 := 0;
+  str02_3 := 0; str04_3 := 0; str06_3 := 0; str08_3 := 0; str10_3 := 0; str12_3 := 0;
+  str02_4 := 0; str04_4 := 0; str06_4 := 0; str08_4 := 0; str10_4 := 0; str12_4 := 0;
+
+  Adr01_1 := 'Документ/ОбОтгрПрод/ОПНаКон'                           ; str01_1 := GetDblVal(Adr01_1);
+  Adr01_2 := 'Документ/ОбОтгрПрод/ОПВклРФ'                           ; str01_2 := GetDblVal(Adr01_2);
+  Adr01_3 := 'Документ/ОбОтгрПрод/СПНаКон'                           ; str01_3 := GetDblVal(Adr01_3);
+  Adr01_4 := 'Документ/ОбОтгрПрод/СПВклРФ'                           ; str01_4 := GetDblVal(Adr01_4);
+
+  Adr02_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/ОПНаКон'                 ; str02_1 := GetDblVal(Adr02_1);
+  Adr02_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/ОПВклРФ'                 ; str02_2 := GetDblVal(Adr02_2);
+  Adr02_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/СПНаКон'                 ; str02_3 := GetDblVal(Adr02_3);
+  Adr02_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/СПВклРФ'                 ; str02_4 := GetDblVal(Adr02_4);
+
+  Adr03_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/ОПНаКон'           ; str03_1 := GetDblVal(Adr03_1);
+  Adr03_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/ОПВклРФ'           ; str03_2 := GetDblVal(Adr03_2);
+  Adr03_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/СПНаКон'           ; str03_3 := GetDblVal(Adr03_3);
+  Adr03_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/СПВклРФ'           ; str03_4 := GetDblVal(Adr03_4);
+
+  Adr04_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/БезНал/ОПНаКон'    ; str04_1 := GetDblVal(Adr04_1);
+  Adr04_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/БезНал/ОПВклРФ'    ; str04_2 := GetDblVal(Adr04_2);
+  Adr04_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/БезНал/СПНаКон'    ; str04_3 := GetDblVal(Adr04_3);
+  Adr04_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/БезНал/СПВклРФ'    ; str04_4 := GetDblVal(Adr04_4);
+
+  Adr05_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/Нал/ОПНаКон'       ; str05_1 := GetDblVal(Adr05_1);
+  Adr05_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/Нал/ОПВклРФ'       ; str05_2 := GetDblVal(Adr05_2);
+  Adr05_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/Нал/СПНаКон'       ; str05_3 := GetDblVal(Adr05_3);
+  Adr05_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/ДенСр/Нал/СПВклРФ'       ; str05_4 := GetDblVal(Adr05_4);
+
+  Adr06_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ОПНаКон'         ; str06_1 := GetDblVal(Adr06_1);
+  Adr06_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ОПВклРФ'         ; str06_2 := GetDblVal(Adr06_2);
+  Adr06_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/СПНаКон'         ; str06_3 := GetDblVal(Adr06_3);
+  Adr06_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/СПВклРФ'         ; str06_4 := GetDblVal(Adr06_4);
+
+  Adr07_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Вексели/ОПНаКон' ; str07_1 := GetDblVal(Adr07_1);
+  Adr07_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Вексели/ОПВклРФ' ; str07_2 := GetDblVal(Adr07_2);
+  Adr07_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Вексели/СПНаКон' ; str07_3 := GetDblVal(Adr07_3);
+  Adr07_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Вексели/СПВклРФ' ; str07_4 := GetDblVal(Adr07_4);
+
+  Adr08_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ЦенБум/ОПНаКон'  ; str08_1 := GetDblVal(Adr08_1);
+  Adr08_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ЦенБум/ОПВклРФ'  ; str08_2 := GetDblVal(Adr08_2);
+  Adr08_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ЦенБум/СПНаКон'  ; str08_3 := GetDblVal(Adr08_3);
+  Adr08_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ЦенБум/СПВклРФ'  ; str08_4 := GetDblVal(Adr08_4);
+
+  Adr09_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Переуст/ОПНаКон' ; str09_1 := GetDblVal(Adr09_1);
+  Adr09_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Переуст/ОПВклРФ' ; str09_2 := GetDblVal(Adr09_2);
+  Adr09_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Переуст/СПНаКон' ; str09_3 := GetDblVal(Adr09_3);
+  Adr09_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Переуст/СПВклРФ' ; str09_4 := GetDblVal(Adr09_4);
+
+  Adr10_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ВзаимЗач/ОПНаКон'; str10_1 := GetDblVal(Adr10_1);
+  Adr10_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ВзаимЗач/ОПВклРФ'; str10_2 := GetDblVal(Adr10_2);
+  Adr10_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ВзаимЗач/СПНаКон'; str10_3 := GetDblVal(Adr10_3);
+  Adr10_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/ВзаимЗач/СПВклРФ'; str10_4 := GetDblVal(Adr10_4);
+
+  Adr11_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Бартер/ОПНаКон'  ; str11_1 := GetDblVal(Adr11_1);
+  Adr11_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Бартер/ОПВклРФ'  ; str11_2 := GetDblVal(Adr11_2);
+  Adr11_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Бартер/СПНаКон'  ; str11_3 := GetDblVal(Adr11_3);
+  Adr11_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Бартер/СПВклРФ'  ; str11_4 := GetDblVal(Adr11_4);
+
+  Adr12_1 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Прочее/ОПНаКон'  ; str12_1 := GetDblVal(Adr12_1);
+  Adr12_2 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Прочее/ОПВклРФ'  ; str12_2 := GetDblVal(Adr12_2);
+  Adr12_3 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Прочее/СПНаКон'  ; str12_3 := GetDblVal(Adr12_3);
+  Adr12_4 := 'Документ/ОбОтгрПрод/ОбОплПрод/НеДенСр/Прочее/СПВклРФ'  ; str12_4 := GetDblVal(Adr12_4);
+
+  NameStr := '02 Информационный лист';
+
+  str06_1 := str07_1 + str08_1 + str09_1 + str10_1 + str11_1 + str12_1;
+  str06_2 := str07_2 + str08_2 + str09_2 + str10_2 + str11_2 + str12_2;
+  str06_3 := str07_3 + str08_3 + str09_3 + str10_3 + str11_3 + str12_3;
+  str06_4 := str07_4 + str08_4 + str09_4 + str10_4 + str11_4 + str12_4;
+
+  _MesStr := 'Стр.06 гр.1 = Стр.07 гр.1 + Стр.08 гр.1 + Стр.09 гр.1 + Стр.10 гр.1 + Стр.11 гр.1 + Стр.12 гр.1';
+  str06 := #GD0(str06_1) + ' = ' +#GD0(str07_1)+' + '+#GD0(str08_1)+' + '+#GD0(str09_1)+' + '+#GD0(str10_1)+' + '+#GD0(str11_1)+' + '+#GD0(str12_1);
+  #_Log(Adr06_1, _MesStr, str06);
+  _MesStr := 'Стр.06 гр.2 = Стр.07 гр.2 + Стр.08 гр.2 + Стр.09 гр.2 + Стр.10 гр.2 + Стр.11 гр.2 + Стр.12 гр.2';
+  str06 := #GD0(str06_2)+' = '+#GD0(str07_2)+' + '+#GD0(str08_2)+' + '+#GD0(str09_2)+' + '+#GD0(str10_2)+' + '+#GD0(str11_2)+' + '+#GD0(str12_2);
+  #_Log(Adr06_2, _MesStr, str06 );
+  _MesStr := 'Стр.06 гр.3 = Стр.07 гр.3 + Стр.08 гр.3 + Стр.09 гр.3 + Стр.10 гр.3 + Стр.11 гр.3 + Стр.12 гр.3';
+  str06 := #GD0(str06_3)+' = '+#GD0(str07_3)+' + '+#GD0(str08_3)+' + '+#GD0(str09_3)+' + '+#GD0(str10_3)+' + '+#GD0(str11_3)+' + '+#GD0(str12_3);
+  #_Log(Adr06_3, _MesStr, str06 );
+  _MesStr := 'Стр.06 гр.4 = Стр.07 гр.4 + Стр.08 гр.4 + Стр.09 гр.4 + Стр.10 гр.4 + Стр.11 гр.4 + Стр.12 гр.4';
+  str06 :=  #GD0(str06_4)+' = '+#GD0(str07_4)+' + '+#GD0(str08_4)+' + '+#GD0(str09_4)+' + '+#GD0(str10_4)+' + '+#GD0(str11_4)+' + '+#GD0(str12_4);
+  #_Log(Adr06_4, _MesStr, str06);
+
+  str03_1 := str04_1 + str05_1;
+  str03_2 := str04_2 + str05_2;
+  str03_3 := str04_3 + str05_3;
+  str03_4 := str04_4 + str05_4;
+
+  _MesStr := 'Стр.03 гр.1 = Стр.04 гр.1 + Стр.05 гр.1';
+  str03 := #GD0(str03_1)+' = '+#GD0(str04_1)+' + '+#GD0(str05_1);
+  #_Log(Adr03_1,_MesStr, str03);
+  _MesStr := 'Стр.03 гр.2 = Стр.04 гр.2 + Стр.05 гр.2';
+  str03 := #GD0(str03_2)+' = '+#GD0(str04_2)+' + '+#GD0(str05_2);
+  #_Log(Adr03_2, _MesStr, str03);
+  _MesStr := 'Стр.03 гр.3 = Стр.04 гр.3 + Стр.05 гр.3';
+  str03 := #GD0(str03_3)+' = '+#GD0(str04_3)+' + '+#GD0(str05_3);
+  #_Log(Adr03_3,_MesStr, str03);
+   _MesStr := 'Стр.03 гр.4 = Стр.04 гр.4 + Стр.05 гр.4';
+  str03 := #GD0(str03_4)+' = '+#GD0(str04_4)+' + '+#GD0(str05_4);
+  #_Log(Adr03_4,_MesStr, str03);
+
+  str02_1 := str03_1 + str06_1;
+  str02_2 := str03_2 + str06_2;
+  str02_3 := str03_3 + str06_3;
+  str02_4 := str03_4 + str06_4;
+
+  _MesStr := 'Стр.02 гр.1 = Стр.03 гр.1 + Стр.06 гр.1';
+  str02 :=  #GD0(str02_1)+' = '+#GD0(str03_1)+' + '+#GD0(str06_1);
+  #_Log(Adr02_1,_MesStr, str02);
+  _MesStr := 'Стр.02 гр.2 = Стр.03 гр.2 + Стр.06 гр.2';
+  str02 := #GD0(str02_2)+' = '+#GD0(str03_2)+' + '+#GD0(str06_2);
+  #_Log(Adr02_2,_MesStr, str02);
+  _MesStr := 'Стр.02 гр.3 = Стр.03 гр.3 + Стр.06 гр.3';
+  str02 := #GD0(str02_3)+' = '+#GD0(str03_3)+' + '+#GD0(str06_3);
+  #_Log(Adr02_3,_MesStr, str02);
+  _MesStr := 'Стр.02 гр.4 = Стр.03 гр.4 + Стр.06 гр.4';
+  str02 := #GD0(str02_4)+' = '+#GD0(str03_4)+' + '+#GD0(str06_4);
+  #_Log(Adr02_4,_MesStr, str02);
+
+  SetFldVal(Adr02_1, #GD0(str02_1));
+  SetFldVal(Adr02_2, #GD0(str02_2));
+  SetFldVal(Adr02_3, #GD0(str02_3));
+  SetFldVal(Adr02_4, #GD0(str02_4));
+
+  SetFldVal(Adr03_1, #GD0(str03_1));
+  SetFldVal(Adr03_2, #GD0(str03_2));
+  SetFldVal(Adr03_3, #GD0(str03_3));
+  SetFldVal(Adr03_4, #GD0(str03_4));
+
+  SetFldVal(Adr06_1, #GD0(str06_1));
+  SetFldVal(Adr06_2, #GD0(str06_2));
+  SetFldVal(Adr06_3, #GD0(str06_3));
+  SetFldVal(Adr06_4, #GD0(str06_4));
+@end.

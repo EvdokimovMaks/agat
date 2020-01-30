@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UserForm2 
    Caption         =   "Дизайнер отчетов"
-   ClientHeight    =   2940
+   ClientHeight    =   3030
    ClientLeft      =   30
    ClientTop       =   330
-   ClientWidth     =   3645
+   ClientWidth     =   6345
    OleObjectBlob   =   "UserForm2.frx":0000
    StartUpPosition =   1  'CenterOwner
 End

@@ -19,6 +19,7 @@
 Организация
 ОКПО
 TitleDocNrec : comp
+sBarCode
 PersNrec : comp
 AppointNrec : comp
 номер_документа
@@ -29,7 +30,7 @@ DateBeg
 FIO
 FIO_VP
 TabN
-подразделение
+подразделение : WideString
 должность
 
 FIO2
@@ -44,6 +45,7 @@ Reason
 Организация                   ^
 ОКПО                          ^
 TitleDocNrec : comp           ^
+sBarCode                      ^
 PersNrec : comp               ^
 AppointNrec : comp            ^
 номер_документа               ^
@@ -54,7 +56,7 @@ DateBeg                       ^
 FIO                           ^
 FIO_VP                        ^
 TabN                          ^
-подразделение                 ^
+подразделение : WideString    ^
 должность                     ^
 
 FIO2                          ^

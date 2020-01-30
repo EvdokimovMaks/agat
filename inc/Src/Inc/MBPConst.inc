@@ -159,11 +159,12 @@ Const
   fldMBPIn_DopInfo  = 23;
   fldMBPIn_cPers    = 24;
   fldMBPIn_ExtMod   = 25;
+  fldMBPIn_Sizes    = 26;
 /*
-  fldMBPIn_Status   = 26;
-  fldMBPIn_DateZero = 27;
+  fldMBPIn_Status   = 27;
+  fldMBPIn_DateZero = 28;
 */
-  mbpInFld_Count    = 25;
+  mbpInFld_Count    = 26;
 
 //-------------------------------------------------------------------------
 // Порядковые номера полей таблицы MBPOut для проверок корректности.

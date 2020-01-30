@@ -1,0 +1,162 @@
+/*
+ ╔═══════════════════════════════════════════════════════════════════════════╗
+ ║                     (c) 1994,98 корпорация ГАЛАКТИКА                      ║
+ ║ Проект        : ГАЛАКТИКА                                                 ║
+ ║ Система       : Модуль Управление ремонтами                               ║
+ ║ Версия        : 5.80                                                      ║
+ ║ Назначение    : Генерация нового дерева объектов ремонта                  ║
+ ║ Ответственный : Бургардт Александр                                        ║
+ ║ Изменения     :                                                           ║
+ ╚═══════════════════════════════════════════════════════════════════════════╝
+*/
+#ifdef GAL7_12
+if (wGetTune('Remont.ObjRem.Var20') = 0)
+#else
+if (wGetTune('Remont.Var20') = 0)
+#endif
+     message('Настройка модуля запрещает Вам создание нового дерева объектов ремонта!!!'
+             ,CancelButton+Warning);
+else
+{
+   ResetBounds(#ObjRemDoc);
+
+   p_Del   := 0;
+   Kol_Obj := RecordsInTable(#ObjRem3) * 2; // * 2, т.к. генерация за два прохода ObjRem3
+   tree1:=0; tree2:=0; tree3:=0; tree4:=0; tree5:=0;
+   tree6:=0; tree7:=0; tree8:=0; tree9:=0;
+   State   := TRUE;
+   ts_ok   := 1;
+
+   s_t[0] := '';
+   s_t[1] := ' + подразделениям (с иерархией)';
+   s_t[2] := ' + типам';
+   s_t[3] := ' + группам';
+   s_t[4] := ' + маркам';
+   s_t[5] := ' + техн.линиям';
+   s_t[6] := ' + объектам ремонта';
+   s_t[7] := ' + кураторам';
+   s_t[8] := ' + исполнителям';
+   s_t[9] := ' + способам';
+   s_t[10]:= ' + подразделениям (без иерархии)';
+
+   GenTree_TrObj;
+
+   p_fgr1 := RunWindowModal(GetGenTree);
+
+if (p_fgr1 = cmOk)
+{
+  if (GetFirst ObjRemDescr = tsOk)
+    if(message(' В дереве связей объектов ремонта уже существуют записи!'#13#13''+
+               ' При создании нового дерева связей старые записи будут удалены!'#13#13''+
+               '  Выйти из режима создания нового дерева?'#13''
+               ,YesNo+Warning)=Yes) then p_Del := 1;
+  if p_Del=0
+  {
+
+   mes_title:='Удаление старого дерева объектов';
+   StartNewVisual (vtRotateVisual,vfBreak+vfConfirm+vfTimer,
+                   ''+mes_title, 1);  // инициализация визуализации
+   SetVisualTitle(mes_title);
+
+
+   if (GenObj_Tree = word(0))
+     TreeCloseAllOpenedNode(MyTree);
+
+   reSetBounds(#ObjRemDescr);
+   Delete all from ObjRemDescr;
+
+   TrLevel[0] := word(0);
+   TrLevel[1] := GenTree_NextLevel(TrLevel[0]); // номер первого уровня в дереве
+   TrLevel[2] := if(TrLevel[1]>0,GenTree_NextLevel(TrLevel[1]),0); // номер следующего уровня в дереве
+   TrLevel[3] := if(TrLevel[2]>0,GenTree_NextLevel(TrLevel[2]),0); // номер следующего уровня в дереве
+   TrLevel[4] := if(TrLevel[3]>0,GenTree_NextLevel(TrLevel[3]),0); // номер следующего уровня в дереве
+   TrLevel[5] := if(TrLevel[4]>0,GenTree_NextLevel(TrLevel[4]),0); // номер следующего уровня в дереве
+   TrLevel[6] := if(TrLevel[5]>0,GenTree_NextLevel(TrLevel[5]),0); // номер следующего уровня в дереве
+   TrLevel[7] := if(TrLevel[6]>0,GenTree_NextLevel(TrLevel[6]),0); // номер следующего уровня в дереве
+   TrLevel[8] := if(TrLevel[7]>0,GenTree_NextLevel(TrLevel[7]),0); // номер следующего уровня в дереве
+   TrLevel[9] := if(TrLevel[8]>0,GenTree_NextLevel(TrLevel[8]),0); // номер следующего уровня в дереве
+
+   str_tree := s_t[tree1]+s_t[tree2]+s_t[tree3]+s_t[tree4]+s_t[tree5]+
+               s_t[tree6]+s_t[tree7]+s_t[tree8]+s_t[tree9];
+   str_tree := rtrim(substr(str_tree,4,1000));
+
+   StopVisual('',0);                // закрыть визуализацию
+
+   // Новая изуализация
+   StartNewVisual (vtIndicatorVisual,vfBreak+vfConfirm+vfTimer,
+           'Генерация дерева по '+str_tree,kol_obj);
+
+
+for (I:=1; I<=2; I:=I+1) // 1-вставка объектов, 2-вставка не объектов
+begin
+
+if (GetFirst ObjRem3=tsOk)
+DO BEGIN        //  ЦИКЛ ПО ObjRem3
+   ////////////// вставить в дерево записи объектов ремонта  //////////////////
+    if (I=1) // вставка объектов
+    {
+      CurGroup := 0; // код группы
+      Rem_Descr(1,ObjRem3.Name,ObjRem3.Nrec,CurGroup,1); // Добавить в дерево
+    }
+   ////////////////////////////////////////////////////////////////////
+
+
+   ////////////// вставить записи не объектов ремонта  //////////////////
+    else      // вставка не объектов (I=2)
+    {
+      CurGroup  := comp(0);              // код группы уровня 0
+      TrL2      := 0;
+      TrObjOld  := 0;
+
+      ObjLevel := GenTree_ObjLevel(ObjRem3.Nrec);
+
+      // ищу вышестоящий объект в дереве
+      if (ObjRem3.cGoods <> 0)
+      if ((GetFirst ObjRemDescr where((ObjRem3.cGoods==ObjRemDescr.cRec))
+                                  and (ObjRemDescr.cTable=word(1))) = tsOk)
+      {
+        CurGroup := ObjRemDescr.Nrec;     // код группы уровня
+        if (ObjRemDescr.isLeaf <> 0)  // если еще не узел
+        { ObjRemDescr.isLeaf := 0;    // перевести в состояние "узел"
+          update current ObjRemDescr;
+        }
+      }
+
+      for (U:=1; U<=9; U:=U+1) // Цикл по количеству уровней (9)
+      begin
+          TrL0 := TrLevel[U];
+          if (TrL0>0 and TrL2<>1) // если есть уровень
+          {
+            TrL1 := GenTree_ObjTree(TrL0);
+            TrL2 := if(TrL1=ObjLevel,1,TrL2);
+            TrL3 := GenTree_TLevel(TrL0);
+          if (TrL2<>1)
+          if(TrL1 < ObjLevel and TrL3 = 6) or
+            (TrL3 <> 6 and (ObjRem3.cGoods =  0 or
+                            (ObjRem3.cGoods <> 0 and TrL0 > TrObj[ObjLevel-1])))
+            GenTree_CurGroup(U);
+          }
+      end; // for U
+
+      ////////////////////  установить ссылку на новую группу  /////////////////
+      if (GetFirst ObjRemDescr Where((word(1)      == ObjRemDescr.cTable and
+                                      comp(0)      == ObjRemDescr.cGroup and
+                                      ObjRem3.Nrec == ObjRemDescr.cRec ))=tsOk)
+      if (ObjRemDescr.cGroup <> CurGroup and CurGroup<>0) // надо менять сылку на группу
+      { ObjRemDescr.cGroup := CurGroup;
+        update current ObjRemDescr;
+      }
+    }
+   ////////////// конец - вставить записи не объектов ремонта  /////////////////
+
+  State := NextVisual; // следующий шаг визуализации
+END;          // КОНЕЦ ЦИКЛА ПО ObjRem3
+while (GetNext ObjRem3=tsOk and State)
+
+end; // for I
+   StopVisual('',0);                // закрыть визуализацию
+  }
+}
+   setBounds(#ObjRemDoc);
+}
+/**************************************************************************/

@@ -11,7 +11,10 @@
 .fields
 DateFormir
 NameGroup
-Tabn SumZarpl SumMonth
+!------------
+  Tabn
+  SumZarpl : double
+  SumMonth : double
 .endfields
 ^
 .{ RasshifrGroupCycle CheckEnter

@@ -59,6 +59,7 @@ end.
  Дов_Лицо
  МОЛ_Разрешил_Должность
  МОЛ_Разрешил
+ //Объект
  Сдал_Отправитель_Должность
  Сдал_Отправитель
  Затребовал
@@ -115,6 +116,7 @@ end.
  KAU1 KAU2 KAU3 KAU4 KAU5
  KAU6 KAU7 KAU8 KAU9 KAU10
  KAU3_Kod
+ PID
 
  DEI1_Kod DEI1_Name DEI1_Kol: double
  DEI2_Kod DEI2_Name DEI2_Kol: double
@@ -370,6 +372,7 @@ end.
  KAU1 ^ KAU2 ^ KAU3 ^ KAU4 ^ KAU5 ^
  KAU6 ^ KAU7 ^ KAU8 ^ KAU9 ^ KAU10 ^
  KAU3_Kod ^
+ PID^
 
  DEI1_Kod ^ DEI1_Name ^ DEI1_Kol ^
  DEI2_Kod ^ DEI2_Name ^ DEI2_Kol ^

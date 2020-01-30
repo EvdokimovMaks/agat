@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UserForm1 
    Caption         =   "Дизайнер отчетов"
-   ClientHeight    =   5970
+   ClientHeight    =   9300.001
    ClientLeft      =   30
    ClientTop       =   330
-   ClientWidth     =   4680
+   ClientWidth     =   6225
    OleObjectBlob   =   "UserForm1.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -221,6 +221,7 @@ Private Sub ComboBox1_Change()
     
     SetListTblFld (GetCurTblSName)
 End Sub
+
 
 Private Sub CommandButton4_Click()
 Dim OldRng As Range

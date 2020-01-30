@@ -13,6 +13,7 @@
 .Fields
 Организация ОКПО
 TitleDocNrec : comp
+sBarCode
 ContDocNrec  : comp
 PersNrec     : comp
 NewAppNrec   : comp
@@ -24,13 +25,13 @@ FIO
 FIO_VP
 TabN
 type_move
-подразделение1
+подразделение1 : WideString
 должность1
 reason_move
 
 FIO2
 TabNSovm
-подразделение2
+подразделение2 : WideString
 должность2
 
 sum_rubl
@@ -115,6 +116,7 @@ StaffStrOldSeqNmb
                            наименование организации                                                                    └────────┘
 
 TitleDocNrec  ^
+sBarCode      ^
 ContDocNrec   ^
 PersNrec      ^
 NewAppNrec    ^

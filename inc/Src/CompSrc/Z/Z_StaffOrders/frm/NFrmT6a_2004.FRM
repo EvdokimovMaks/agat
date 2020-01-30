@@ -13,6 +13,7 @@
 Организация
 ОКПО
 TitleDocNrec        : comp
+sBarCode
 номер_документа
 дата_составления
 !.{ myPsnCycle6 CheckEnter
@@ -22,7 +23,7 @@ AppointNrec         : comp
 FIO
 FIO_VP
 TabN
-подразделение
+подразделение : String
 должность
 OtpTypeOS
 OtpTypeDOP
@@ -44,7 +45,7 @@ TabN_Req
 FIO_
 FIO_VP_
 TabN_
-подразделение_
+подразделение_ : String
 должность_
 OtpType_OS
 OtpType_DOP
@@ -67,6 +68,7 @@ sFoundation_
 Организация               ^
 ОКПО                      ^
 TitleDocNrec              ^
+sBarCode		  ^
 номер_документа           ^
 дата_составления          ^
 
@@ -77,7 +79,7 @@ AppointNrec               ^
 FIO                       ^
 FIO_VP                    ^
 TabN                      ^
-подразделение             ^
+подразделение : String    ^
 должность                 ^
 OtpTypeOS                 ^
 OtpTypeDOP                ^
@@ -99,7 +101,7 @@ TabN_Req                  ^
 FIO_                      ^
 FIO_VP_                   ^
 TabN_                     ^
-подразделение_            ^
+подразделение_  : String  ^
 должность_                ^
 OtpType_OS                ^
 OtpType_DOP               ^

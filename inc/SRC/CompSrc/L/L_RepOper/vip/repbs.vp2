@@ -1,0 +1,1664 @@
+/*
+ ╔═══════════════════════════════════════════════════════════════════════════╗
+ ║                     (c) 1998,2000 корпорация ГАЛАКТИКА                    ║
+ ║ Проект        : ГАЛАКТИКА                                                 ║
+ ║ Система       : Оперативный контур                                        ║
+ ║ Версия        : 5.80                                                      ║
+ ║ Назначение    : процедура добавления записи в таблицу TempSNT             ║
+ ║ Ответственный : Шукан А.Л..                                               ║
+ ╚═══════════════════════════════════════════════════════════════════════════╝
+*/
+
+//******************************************************************************
+//        добавление суммы оплаченного товара
+
+Create view SH1
+
+Var
+  c1: comp;
+
+From
+  SoprHoz
+, SpSopHoz
+
+Where
+((
+     c1                == SpSopHoz.cSpSopr
+and  SpSopHoz.cSoprHoz == SoprHoz.Nrec
+))
+;
+
+//******************************************************************************
+
+Procedure GetOplata(_cSpSopr : comp; bChangeKol : boolean);
+var
+  sr, sv, kol : double;
+  tempr, tempv: TSumma;
+  ddd: date;
+{
+  sr := sv := kol := 0;
+
+  SH1.c1 := _cSpSopr;
+
+  SH1._LOOP SpSopHoz
+    {
+      if ( SH1.GetFirst SoprHoz <> tsOk )
+        ddd := TempSNT.CurseDat;
+      else
+        {
+          ddd              :=  SH1.SoprHoz.DatOb;
+          TempSNT.Date4    :=  SH1.SoprHoz.DatOb;
+          TempSNT.Nomer4   :=  SH1.SoprHoz.NoDoc;
+          TempSNT.NRecDoc4 :=  SH1.SoprHoz.cSoprDoc;
+          TempSNT.DscDoc4  :=  SH1.SoprHoz.Descr;
+        }
+
+//------------ суммы в нац. валюте и валюте для отчетов ------------------------
+
+      if (   (UserDeskRep.ResWord[7] = 2)
+          AND ((SH1.SoprHoz.DatOb < UserDeskRep.ResDate[1])
+          OR   (SH1.SoprHoz.DatOb > UserDeskRep.ResDate[2]))
+         )
+        {}
+      else
+        {
+          tempr := tempv := 0;
+
+          MyGetNatTarCurrency(0
+                            , SH1.SpSopHoz.Summa
+                            , SH1.SpSopHoz.cVal
+                            , SH1.SpSopHoz.SumVal
+                            , UserDeskRep.ResComp[11]
+                            , UserDeskRep.ResWord[3]
+                            , tempr
+                            , tempv
+                             );
+
+          sr += tempr;
+          sv += tempv;
+
+//--------- количество оплаченного в учетных единицах измерения ----------------
+
+          kol += SH1.SpSopHoz.Kolvo * TempSNT.KoefOtpEd;
+        }
+    }
+
+  TempSNT.Sum4  += sr;
+  TempSNT.Sum4v += sv;
+  TempSNT.cVal4 := UserDeskRep.ResComp[11];  // UserTune.cVal;
+
+  if bChangeKol
+    TempSNT.Kol4 := kol;
+} // GetOplata
+
+//******************************************************************************
+
+Function CheckSkladFilter(cPodr: comp): boolean;
+{
+  Result := false;
+
+  if ( fSklad and PickRepItemYes(5) ) // фильтр по складу "перебивает" действие настройки "разрешенные группы подразделений"
+    {
+      if ( not FoundRecInPickRep(5, cPodr) )
+        Exit;
+    }
+  else // фильтр по складу не установлен, проверим входит ли подразделение в разрешенную группу
+    if fADGL AND ( cPodr <> 0 )
+      if ( GetFirst KatPodr where (( cPodr == KatPodr.nRec )) = tsOk )
+        if ( not ADGL.Has(KatPodr.cGrPodr) )
+          Exit;
+
+  Result := true;
+}
+
+//******************************************************************************
+
+Procedure DoCycle(pGroupPodr : comp = 0; pGroupMOL : comp = 0);
+Var
+  KoefR
+, KoefV
+, _summa
+, _summaV
+                    : TSumma;
+
+  PrcNal
+, PrcNalv
+, PriceNDS
+, PriceNDSV
+, SumR
+, SumV
+, ProcN
+, StRN
+, StVN
+, fKoeffSoprOrdB
+                    : double;
+
+  i_1
+                    : word;
+
+  NameGroup
+, NameParty
+                    : string[103];
+
+  bSplitBySoprOrdB
+                    : boolean;
+
+  sClassName        : string;
+{
+  if (UserDeskRep.ResWord[6] = 0)                   // проверка по признаку товар / услуга
+    {
+      if (SpSopr1.PRMC <> 1)  // если не товар
+        if (UserDeskRep.ResWord[21] = 0)
+        // не включать сопроводительные услуги
+          exit
+        else
+        // включать сопроводительные услуги
+        // -вывод простых услуг по накладным на отпуск
+        // -простая услуга в накладной на закупку считается сопутствующей
+          if not ((SpSopr1.PRMC = 2) AND (SpSopr1.VidSopr <> 101))
+            exit;
+
+      if (UserDeskRep.ResWord[14] = 0)               // в случае закупок
+        {
+          if (SpSopr1.VidSopr <> 101) and      // cgNaklPriem
+             (SpSopr1.VidSopr <> 206)          // cgReklamacToSeller
+            exit;
+
+        }
+      else                      // в случае продаж
+         {
+          if (SpSopr1.VidSopr <> 201) and      // cgNaklOtpusk
+             (SpSopr1.VidSopr <> 106) and      // cgReklamacFromBuyer
+             (SpSopr1.VidSopr <> 205)          // cgTTN
+            exit;
+        }
+    }
+  else
+    {
+      if (UserDeskRep.ResWord[14] = 0)               // в случае приема услуг
+        {
+          case SpSopr1.VidSopr of
+            111 :                               // cgAktPriemUsl
+                  {
+                    if (SpSopr1.PRMC <> 2)      // если не услуга
+                      exit;
+                  }
+            101 :                               // cgNaklPriem
+                  {
+                    if (SpSopr1.PRMC <> 2) and     // если не услуга (простая)
+                       (SpSopr1.PRMC <> 3) and     // если не услуга, входящая в процент стоимости,
+                       (SpSopr1.PRMC <> 4) and     // не услуга, входящая как сумма к стоимости товара,
+                       (SpSopr1.PRMC <> 5) and     // не услуга, входящая как сумма распределенная по цене товара
+                       (SpSopr1.PRMC <> 7)         // не услуга, входящая как сумма распределенная по количеству
+                      exit;
+                  }
+            else exit;
+          end; // case
+        }
+      else                      // в случае оказания услуг
+        {
+           case SpSopr1.VidSopr of
+            211                                 // cgAktOkasUsl
+          , 201 :                               // cgNaklOtpusk
+                  {
+                    if (SpSopr1.PRMC <> 2)      // если не услуга
+                      exit;
+                  }
+            else exit;
+          end; // case
+        }
+    }
+
+  case SpSopr1.PrMC of
+    3 : SpSopr1.KolFact := 1;
+  end; // case
+
+  if f_KolIsZero(SpSopr1.KolFact)
+    exit;
+/*
+  if Not NextVisual
+    {
+      PrintCode := false;
+      exit;
+    }
+*/
+!------------ обработка фильтров ------------------
+  if fParty                                     // фильтрация по партиям
+    if (not FoundRecInPickRep(3, SpSopr1.cParty))
+      exit;
+
+  if (UserDeskRep.ResComp[13] <> 0)
+    {
+      if (IsValid(#KlPrice))
+        {
+          if (KlPrice.cGrPrice <> UserDeskRep.ResComp[13])
+            exit;
+        }
+      else
+        exit;
+    }
+
+  ClearBuffer(#TempSNT);
+
+  TempSNT.nRec := GetNextNRec(#TempSNT, 0);
+!----------- определение параметров товара / услуги --------------------
+
+  if (SpSopr1.PrMC = 1)
+    {
+      if (not IsValid(#KatMC))                 // определение параметров товара
+        exit;
+
+      // добавили фильтр по скидка при включенной настройке
+      if ( ExistTune('Oper.Sell.DO.CalcDiscount') )
+        if ( boGetTune('Oper.Sell.DO.CalcDiscount') )
+          if ( UserDeskRep.ResComp[14] <> 0 )
+            {
+              if ( GetFirst SkidSum Where ((   word(1)         == SkidSum.coTable
+                                           and SpSopr1.cSpStep == SkidSum.cRec )) <> tsOk )
+                Exit;
+
+              _loop SkidSum Where ((   word(1)         == SkidSum.coTable
+                                   and SpSopr1.cSpStep == SkidSum.cRec ))
+                if ( UserDeskRep.ResComp[14] <> SkidSum.cKatSkid )
+                  Exit;
+            }
+
+      TempSNT.nRecMC    := KatMC.nRec;
+      TempSNT.BarKod    := KatMC.BarKod;
+      TempSNT.NameMC    := KatMC.Name;
+      TempSNT.tovMassa  := SpSopr1.Netto;
+
+      // определение объема в зависимости от единицы измерения отчета
+      case UserDeskRep.ResWord[42] of
+        0 : TempSNT.tovVolume := KatMC.Volume;                        // для учетной единицы
+        1 : TempSNT.tovVolume := KatMC.Volume * KatOtpEd.Koef;        // для отпускной единицы из накладной/акта
+        2 : TempSNT.tovVolume := KatMC.Volume * KatOtpEd_MCAkt.Koef;  // для активной отпускной единицы
+      end;
+
+      if fTovar
+        if not FoundRecInPickRep(1, KatMC.nRec)      // фильтрация по товарам
+          exit;
+
+      if fGroup                                      // фильтрация по группам МЦ
+        if GrpSubLevels
+          {
+            if (not FoundInTempKol(KatMC.kGroupMC))
+              exit;
+          }
+        else
+          {
+            if (not FoundRecInPickRep(2, KatMC.cGroupMC))
+              exit;
+          }
+
+      if (IsValid(#GroupMC1))                        // определение группы
+        {
+          TempSNT.nRecGroup := GroupMC1.nRec;
+          NameGroup := GroupMC1.Kod + ' - '+ GroupMC1.Name;
+        }
+      else
+        {
+          TempSNT.nRecGroup := 0;
+          NameGroup := '';
+        }
+
+      if (UserDeskRep.ResWord[1] = 7)                // определение кода по внеш.классиф.
+        {
+          var cTmpSeg : comp = 0;
+
+          if (UserDeskRep.ResWord[25] = 0)
+            {
+              if (GetFirst ExClassVal where (( coKatMC    == ExClassVal.wTable
+                                           AND KatMC.nRec == ExClassVal.cRec)) = tsOK)
+                cTmpSeg := ExClassVal.cClassSeg;
+            }
+          else
+            if (GetFirst ExClassVal where (( UserDeskRep.ResWord[25] == ExClassVal.ClassCode
+                                         AND coKatMC                 == ExClassVal.wTable
+                                         AND KatMC.nRec              == ExClassVal.cRec)) = tsOK)
+              cTmpSeg := ExClassVal.cClassSeg;
+
+          if (cTmpSeg = 0)
+            sClassName := '???';
+          else
+            if (GetFirst ExClassIer where ((cTmpSeg == ExClassIer.cRecDs)) = tsOK)
+              sClassName := ExClassIer.Name;
+            else
+              sClassName := string(cTmpSeg);
+        }
+
+      if fClass                 // фильтрация по внеш.классификации
+        if (GetFirst ExClassVal
+          where ((KatMC.nRec == ExClassVal.cRec and
+                  ClassCode == ExClassVal.ClassCode)) <> tsOk)
+          exit;
+        else
+          if (GetFirst ExClassIer
+            where ((ClassName == ExClassIer.cGroup and
+                    ExClassVal.cClassSeg == ExClassIer.cRecDs)) <> tsOk)
+               exit;
+
+      TempSNT.NameEd := fEdIzm.GetKatEdName(KatMC.cEd);
+    }
+  else
+    {
+      if (not IsValid(#KatUsl))                    // определение параметров услуги
+        exit;
+
+      // добавили фильтр по скидка при включенной настройке
+      if ( ExistTune('Oper.Sell.DO.CalcDiscount') )
+        if ( boGetTune('Oper.Sell.DO.CalcDiscount') )
+          if ( UserDeskRep.ResComp[14] <> 0 )
+            {
+              if ( GetFirst SkidSum Where ((   SpSopr1.PrMC    == SkidSum.coTable
+                                           and SpSopr1.cSpStep == SkidSum.cRec )) <> tsOk )
+                Exit;
+
+              _loop SkidSum Where ((   SpSopr1.PrMC    == SkidSum.coTable
+                                   and SpSopr1.cSpStep == SkidSum.cRec ))
+                if ( UserDeskRep.ResComp[14] <> SkidSum.cKatSkid )
+                  Exit;
+            }
+
+      TempSNT.nRecMC := KatUsl.nRec;
+      TempSNT.BarKod := KatUsl.Kod;
+      TempSNT.NameMC := KatUsl.Name;
+
+      if fTovar                        // фильтрация по услугам
+        if not FoundRecInPickRep(1, KatUsl.nRec)
+          exit;
+
+      if fGroup                       // фильтрация по группам услуг
+        if GrpSubLevels
+          {
+            if (not FoundInTempKol(KatUsl.kGroupUsl))
+              exit;
+          }
+        else
+          if (not FoundRecInPickRep(2, KatUsl.cGroupUsl))
+            exit;
+
+      if (IsValid(#GroupUsl1))                    // определение группы
+        {
+          TempSNT.nRecGroup := GroupUsl1.nRec;
+          NameGroup := GroupUsl1.Kod + ' - '+ GroupUsl1.Name;
+        }
+      else
+        {
+          TempSNT.nRecGroup := 0;
+          NameGroup := '';
+        }
+
+      if (UserDeskRep.ResWord[1] = 7)                    // определение кода по внеш.классиф.
+        {
+          var cTmpSeg : comp = 0;
+
+          if (UserDeskRep.ResWord[25] = 0)
+            {
+              if (GetFirst ExClassVal where (( coKatUsl    == ExClassVal.wTable
+                                           AND KatUsl.nRec == ExClassVal.cRec)) = tsOK)
+                cTmpSeg := ExClassVal.cClassSeg;
+            }
+          else
+            if (GetFirst ExClassVal where (( UserDeskRep.ResWord[25] == ExClassVal.ClassCode
+                                         AND coKatUsl                == ExClassVal.wTable
+                                         AND KatUsl.nRec             == ExClassVal.cRec)) = tsOK)
+              cTmpSeg := ExClassVal.cClassSeg;
+
+          if (cTmpSeg = 0)
+            sClassName := '???';
+          else
+            if (GetFirst ExClassIer where ((cTmpSeg == ExClassIer.cRecDs)) = tsOK)
+              sClassName := ExClassIer.Name;
+            else
+              sClassName := string(cTmpSeg);
+        }
+
+      if fClass                   // фильтрация по внеш.классификации
+        if (GetFirst ExClassVal
+                where ((KatUsl.nRec == ExClassVal.cRec and
+                        ClassCode == ExClassVal.ClassCode)) <> tsOk)
+          exit;
+        else
+          if (GetFirst ExClassIer
+                where ((ClassName == ExClassIer.cGroup and
+                        ExClassVal.cClassSeg == ExClassIer.cRecDs)) <> tsOk)
+            exit;
+
+      TempSNT.NameEd := fEdIzm.GetKatEdName(KatUsl.cEd);
+    }
+
+  if (IsValid(#KatParty))                  // определение партии товара/услуги
+    {
+      TempSNT.nRecParty := KatParty.nRec;
+      NameParty := KatParty.Kod + ' - ' + KatParty.Name;
+    }
+  else
+    {
+      TempSNT.nRecParty := 0;
+      NameParty := '';
+    }
+
+  var bOprRozn : boolean;
+  bOprRozn := false;
+
+  PrcNal := PrcNalV := 0;
+
+ TempSNT.nRecKontr := cKontrNakl;
+ TempSNT.n_Name[10]:= sNrecDogovor;
+
+ if (VhodNalNakl <> 1) and NOT f_KolIsZero(SpSopr1.KolOpl)
+   {
+     PrcNal  := SpSopr1.SumNDS  / SpSopr1.KolOpl;
+     PrcNalv := SpSopr1.SumVNDS / SpSopr1.KolOpl;
+   }
+
+ TempSNT.CurseDat := dCurseNakl;       // дата цен
+ TempSNT.Nomer    := NomerNakl;
+ TempSNT.DscSopr  := DscNakl;
+
+ bSplitBySoprOrdB := false;
+ fKoeffSoprOrdB   := 0;
+
+ if   (UserDeskRep.ResWord[14] = 0)                           // определение подразделения
+   OR (SpSopr1.VidSopr = 201)
+   {                                   // закупка
+     cMOLNakl  := 0;
+     cPodrNakl := 0;
+
+     if (SpSopr1.VidSopr = 206)
+       {
+         if (GetFirst SpOrder1 where (( SpSopr1.nRec == SpOrder1.cSpSopr )) = tsOK)
+           {
+             cMOLNakl  := SpOrder1.ccMOL;
+             cPodrNakl := SpOrder1.ccPodr;
+           }
+
+         if ( not CheckSkladFilter(cPodrNakl) )
+             exit;
+
+         if fMOL                                   // фильтрация
+           if (not FoundRecInPickRep(4, cMOLNakl))       // по МОЛ
+             exit;
+       }
+     else
+       {
+         cPodrNakl := KatSoprArray.cPodrNakl;
+         cMOLNakl  := KatSoprArray.cMOLNakl;
+
+         if ( IsValid(#SoprOrdB) )
+           {
+             bSplitBySoprOrdB := true;
+
+             _loop SoprOrdB
+               {
+                 if (pGroupPodr <> 0) AND (SoprOrdB.cPodr <> pGroupPodr)
+                   Continue;
+
+                 if (pGroupMOL <> 0) AND (SoprOrdB.cMOL <> pGroupMOL)
+                   Continue;
+
+                 if ( not CheckSkladFilter(SoprOrdB.cPodr) )
+                   Continue;
+
+                 if fMOL                                   // фильтрация
+                   if (not FoundRecInPickRep(4, SoprOrdB.cMOL))       // по МОЛ
+                     continue;
+
+                 fKoeffSoprOrdB += SoprOrdB.Kol;
+               }
+
+             if f_KolIsZero(fKoeffSoprOrdB)
+               exit;
+
+             if NOT f_KolIsZero(SpSopr1.KolFact)
+               fKoeffSoprOrdB := fKoeffSoprOrdB / SpSopr1.KolFact;
+           }
+
+         if ( not bSplitBySoprOrdB )
+           {
+             if ( not CheckSkladFilter(cPodrNakl) )
+                 exit;
+
+             if fMOL                                   // фильтрация
+               if (not FoundRecInPickRep(4, cMOLNakl))       // по МОЛ
+                 exit;
+           }
+       }
+
+     if (GetFirst KatPodr where ((cPodrNakl == KatPodr.Nrec)) = tsOK)
+       {
+         NamePodr := trim(upcase(KatPodr.Name));
+         bOprRozn := bOprRozn  or
+                     ((datOpr <> ZeroDate) and (KatPodr.Sklad = 2));
+       }
+
+     if (GetFirst KatMol where ((cMOLNakl == KatMol.Nrec)) = tsOK)
+       {
+         NameMOL := trim(upcase(KatMOL.Name));
+       }
+   }
+
+ TempSNT.NrecPodr := cPodrNakl;
+ TempSNT.NrecMOL  := cMOLNakl;
+ TempSNT.nRecDO   := cDONakl;
+/*
+ if Not NextVisual
+    {
+      PrintCode := false;
+      exit;
+    }
+*/
+!------- определение даты, кол-ва, цены и сумм в рублях и валюте ------------
+
+  #ifdef PIR_101_46352
+  TempSNT.nRecSpSopr := SpSopr1.nRec;
+  #else
+  Insert tmpSpSoprRec set tmpSpSoprRec.cTempSNT := TempSNT.nRec
+                        , tmpSpSoprRec.cSpSopr  := SpSopr1.nRec;
+  #end
+  TempSNT.nRecSopr   := SpSopr1.cSopr;
+  TempSNT.Date1      := SpSopr1.dSopr;
+  TempSNT.Date1Skl   := SpSopr1.dOprTTN;
+
+  if TempSNT.CurseDat = ZeroDate then
+    TempSNT.CurseDat := TempSNT.Date1;
+
+  if (SpSopr1.PrMC > 2)
+    TempSNT.Kol1 := 1
+  else
+  {
+    // корректировочный акт, в котором редактировалась только цена (количество выводим = 0)
+    if ((SpSopr1.wADocSp = adSoprDocKDO) OR (SpSopr1.wADocSp = adSoprDocKD)) AND (SpSopr1.Kol = 0) AND (SpSopr1.KolFact = 1)
+      TempSNT.Kol1 := 0
+    else
+      TempSNT.Kol1 := SpSopr1.KolFact;
+
+    if ( bSplitBySoprOrdB )
+      TempSNT.Kol1 *= fKoeffSoprOrdB;
+  }
+
+  MyGetNatTarCurrency(0,
+                      SpSopr1.Price  + PrcNal,
+                      SpSopr1.cVal,
+                      SpSopr1.VPrice + PrcNalV,
+                      UserDeskRep.ResComp[11],
+                      TempSNT.CurseDat,
+                      TempSNT.Price1,
+                      TempSNT.Price1v);
+
+  if ((SpSopr1.wADocSp = adSoprDocKDO) OR (SpSopr1.wADocSp = adSoprDocKD)) AND (SpSopr1.Kol = 0) AND (SpSopr1.KolFact = 1)
+    {
+      TempSNT.Sum1   := TempSNT.Price1;
+      TempSNT.Sum1v  := TempSNT.Price1v;
+    }
+  else
+    {
+      TempSNT.Sum1   := TempSNT.Price1  * TempSNT.Kol1;
+      TempSNT.Sum1v  := TempSNT.Price1v * TempSNT.Kol1;
+    }
+
+  TempSNT.cVal1   := SpSopr1.cVal;                        // валюта накладной
+  TempSNT.Price1r := if (SpSopr1.cVal = 0,                // цена в валюте
+                            (SpSopr1.Price + PrcNal),     // накладной
+                            (SpSopr1.VPrice + PrcNalV));
+
+!------------------------------------------------------------------------------
+!       рассчитываем налоги - начиная с версии 5.20
+!------------------------------------------------------------------------------
+     // Находим НДС
+  if (pNDS <> 0)
+    if (GetFirst SpDocNal where ((  SpSopr1.Nrec    == SpDocNal.cSpDoc
+                                AND SpSopr1.VidSopr == SpDocNal.TipDoc
+                                AND pNDS            == SpDocNal.cNalog )) = tsOK)
+      {
+        MyGetNatTarCurrency(0,
+                            SpDocNal.Summa,
+                            SpDocNal.cVal,
+                            SpDocNal.SumVal,
+                            UserDeskRep.ResComp[11],
+                            TempSNT.CurseDat,
+                            TempSNT.C_SumBas[1],
+                            TempSNT.C_SumBas[2]);
+
+        if bSplitBySoprOrdB
+          {
+            TempSNT.C_SumBas[1] *= fKoeffSoprOrdB;
+            TempSNT.C_SumBas[2] *= fKoeffSoprOrdB;
+          }
+      }
+
+  if otcNalog
+    {
+      i_1 := 1;
+
+      _loop SpDocNal
+        {
+          if ((SpDocNal.IsCustom And 32) <> 0)
+            Continue;
+
+          TempSNT.n_Name[i_1] := if (IsValid(#KatNalog), KatNalog.Kod, '??');
+
+          MyGetNatTarCurrency(0,
+                              SpDocNal.Summa,
+                              SpDocNal.cVal,
+                              SpDocNal.SumVal,
+                              UserDeskRep.ResComp[11],
+                              TempSNT.CurseDat,
+                              TempSNT.n_SumTar[i_1],
+                              TempSNT.n_SumBas[i_1]);
+
+          if bSplitBySoprOrdB
+            {
+              TempSNT.n_SumTar[i_1] *= fKoeffSoprOrdB;
+              TempSNT.n_SumBas[i_1] *= fKoeffSoprOrdB;
+            }
+
+          if (++i_1 > 20) Break;
+        }
+    }
+/*
+  if Not NextVisual
+    {
+      PrintCode := false;
+      exit;
+    }
+*/
+!------- определение сумм в рублях и валюте по складскому ордеру ------------
+
+  TempSNT.Kol2 := 0;
+
+  var cTmpSp : comp = SpSopr1.nRec;
+
+  if (datOpr <> ZeroDate) AND (SpSopr1.VidSopr = 101)
+    if (GetFirst SpecZatr where (( SpSopr1.nRec == SpecZatr.cAddSumTune
+                               AND 0            == SpecZatr.coTable (NoIndex) )) = tsOk)
+      cTmpSp := SpecZatr.cUKS;
+
+  _LOOP SpOrder1 where (( cTmpSp == SpOrder1.cSpSopr ))
+    {
+      if (SpOrder1.cMC <> SpSopr1.cMCUSL)
+        continue;
+
+      TempSNT.nRecSpOrd := SpOrder1.nRec;
+      TempSNT.DscOrd    := SpOrder1.Descr;
+      TempSNT.Kol2      := TempSNT.Kol2 + SpOrder1.Kol;
+
+      MyGetNatTarCurrency(0,
+                          SpOrder1.SrPrice,
+                          SpOrder1.cVal,
+                          SpOrder1.VPrice,
+                          UserDeskRep.ResComp[11],
+                          TempSNT.CurseDat,
+                          _summa,
+                          _summaV);
+
+      TempSNT.Sum2  += _summa  * SpOrder1.Kol;
+      TempSNT.Sum2v += _summaV * SpOrder1.Kol;
+
+      if (otcVozvrat and (UserDeskRep.ResWord[12] = 0))              // обработка возвратов
+        HandleVozvrat(SpOrder1.Nrec);             // только частично
+
+      if ((UserDeskRep.ResWord[1] = 4) and otcVozvrat and (UserDeskRep.ResWord[12] = 0))
+        if (GetFirst KatPodr
+                    where ((SpOrder1.ccPodr == KatPodr.NRec)) = tsOK)
+          {
+            NamePodr := trim(upcase(KatPodr.Name));
+            TempSNT.NrecPodr := KatPodr.nRec;
+          }
+    }
+
+  if ( bSplitBySoprOrdB )
+    TempSNT.Kol2 *= fKoeffSoprOrdB;
+
+  if NOT f_KolIsZero(TempSNT.Kol2)
+    {
+      TempSNT.Price2  := TempSNT.Sum2 / TempSNT.Kol2;
+      TempSNT.Price2v := TempSNT.Sum2v / TempSNT.Kol2;
+    }
+
+  if ( UserDeskRep.ResWord[42] < 2 )
+  {
+    if ( IsValid(#KatOtpEd) )                                    // наименование и
+      if ( KatOtpEd.Koef <> 0 )                                  // коэф. оптовой
+      {                                                          // ед. измерения
+        TempSNT.nRecOtpEd := KatOtpEd.nRec;
+        TempSNT.NameOtpEd := KatOtpEd.Name;
+        TempSNT.KoefOtpEd := KatOtpEd.Koef;
+        if ( UserDeskRep.ResWord[42] = 0 )   // для вывода учетной единицы в отчет
+        {
+          // для накладной
+          TempSNT.Kol1      := TempSNT.Kol1    * KatOtpEd.Koef;
+          TempSNT.Price1    := TempSNT.Price1  / KatOtpEd.Koef;
+          TempSNT.Price1v   := TempSNT.Price1v / KatOtpEd.Koef;
+
+          // для ордеров
+          TempSNT.Kol2      := TempSNT.Kol2;      
+          TempSNT.Price2    := TempSNT.Price2;    
+          TempSNT.Price2v   := TempSNT.Price2v;   
+        }
+        if ( UserDeskRep.ResWord[42] = 1 )   // для вывода отпускной единицы в отчет
+        {
+          // для ордеров
+          TempSNT.Kol2      := TempSNT.Kol2    / KatOtpEd.Koef;
+          TempSNT.Price2    := TempSNT.Price2  * KatOtpEd.Koef;
+          TempSNT.Price2v   := TempSNT.Price2v * KatOtpEd.Koef;
+        }
+      }
+  }
+  else                                       // для вывода активной отпускной единицы в отчет
+  {
+    if ( SpSopr1.PrMC = 1 )                  // для товара
+    {
+      if ( IsValid(#KatOtpEd_MCAkt) )                            // наименование и
+        if ( KatOtpEd_MCAkt.Koef <> 0 )                          // коэф. оптовой активной
+        {                                                        // ед. измерения для МЦ
+          TempSNT.nRecOtpEd := KatOtpEd_MCAkt.nRec;
+          TempSNT.NameOtpEd := KatOtpEd_MCAkt.Name;
+          TempSNT.KoefOtpEd := KatOtpEd_MCAkt.Koef;
+
+          // для накладной
+          TempSNT.Kol1      := TempSNT.Kol1    * KatOtpEd.Koef / KatOtpEd_MCAkt.Koef;
+          TempSNT.Price1    := TempSNT.Price1  / KatOtpEd.Koef * KatOtpEd_MCAkt.Koef;
+          TempSNT.Price1v   := TempSNT.Price1v / KatOtpEd.Koef * KatOtpEd_MCAkt.Koef;
+
+          // для ордеров
+          TempSNT.Kol2      := TempSNT.Kol2    / KatOtpEd_MCAkt.Koef;
+          TempSNT.Price2    := TempSNT.Price2  * KatOtpEd_MCAkt.Koef;
+          TempSNT.Price2v   := TempSNT.Price2v * KatOtpEd_MCAkt.Koef;
+        }
+    }
+    else                                     // для услуги
+    {
+      if ( IsValid(#KatOtpEd_UslAkt) )                           // наименование и
+        if ( KatOtpEd_UslAkt.Koef <> 0 )                         // коэф. оптовой активной
+        {                                                        // ед. измерения для услуги
+          TempSNT.nRecOtpEd := KatOtpEd_UslAkt.nRec;
+          TempSNT.NameOtpEd := KatOtpEd_UslAkt.Name;
+          TempSNT.KoefOtpEd := KatOtpEd_UslAkt.Koef;
+
+          TempSNT.Kol1      := TempSNT.Kol1    * KatOtpEd.Koef / KatOtpEd_UslAkt.Koef;
+          TempSNT.Price1    := TempSNT.Price1  / KatOtpEd.Koef * KatOtpEd_UslAkt.Koef;
+          TempSNT.Price1v   := TempSNT.Price1v / KatOtpEd.Koef * KatOtpEd_UslAkt.Koef;
+
+          TempSNT.Kol2      := TempSNT.Kol2    * KatOtpEd.Koef / KatOtpEd_UslAkt.Koef;
+          TempSNT.Price2    := TempSNT.Price2  / KatOtpEd.Koef * KatOtpEd_UslAkt.Koef;
+          TempSNT.Price2v   := TempSNT.Price2v / KatOtpEd.Koef * KatOtpEd_UslAkt.Koef;
+        }
+    }
+  }  
+
+  if bOprRozn                         // если оприходовано в розницу
+    TempSNT.Kol2 := TempSNT.Kol1;
+
+  if (UserDeskRep.ResWord[6] = 0) AND (SpSopr1.PrMC = 1)
+    case UserDeskRep.ResWord[15] of
+      0 : if NOT f_KolIsZero(TempSNT.Kol2)                exit; // только выписанный, но не отгруженный товар
+      2 : if NOT f_KolIsZero(TempSNT.Kol1 - TempSNT.Kol2) exit; // отгрузка должна равняться выписке!
+      3 : if     f_KolIsZero(TempSNT.Kol2)                exit; // не было отгрузок - выйти!
+    end; // case
+
+  TempSNT.tovMassa  *= TempSNT.Kol1;
+  TempSNT.tovVolume *= TempSNT.Kol1;
+
+  KoefR := 1;
+  KoefV := 1;
+/*
+  if Not NextVisual
+    {
+      PrintCode := false;
+      exit;
+    }
+*/
+  if (UserDeskRep.ResWord[14] = 0)    // посчитать коэффициент в случае сопроводительных услуг
+    {
+      if ( (SpSopr1.PrMC = 1) and (UserDeskRep.ResWord[21] = 1) ) // включать сопроводительные услуги
+        if ((KatMC.kGroupMC = s_KodGrMcTara) and             //  сопутствующая услуга на тару не
+            (not b_SoprUslTara))                             //  разносится
+          {}
+        else
+          {
+            SumR := SumV := ProcN := StRN := StVN := 0;
+
+            _loop SpSopr2
+              {
+                if ((SpSopr2.PrMC = 1) and                       //  соп.услуга
+                    (KatMC2.kGroupMC = s_KodGrMcTara) and        //  на тару не
+                    (not b_SoprUslTara))                         //  разносится
+                  continue;
+
+!------------------------------------------------------------------------------
+!                     расчет цены с учетом налогов
+
+                if (VhodNalNakl <> 1) and NOT f_KolIsZero(SpSopr1.KolOpl)
+                  {
+                    PriceNDS  := SpSopr2.Price  + SpSopr2.SumNDS  / SpSopr2.KolOpl;
+                    PriceNDSV := SpSopr2.VPrice + SpSopr2.SumVNDS / SpSopr2.KolOpl;
+                  }
+                else
+                  {
+                    PriceNDS  := SpSopr2.Price;
+                    PriceNDSV := SpSopr2.VPrice;
+                  }
+
+!------------------------------------------------------------------------------
+!                        KoefV - сумма в валюте
+!------------------------------------------------------------------------------
+                KoefV := 0;
+                MyGetNatTarCurrency(0,
+                                    PriceNDS,
+                                    SpSopr2.cVal,
+                                    PriceNDSV,
+                                    UserDeskRep.ResComp[11],
+                                    TempSNT.CurseDat,
+                                    KoefR,
+                                    KoefV);
+                KoefR := 1;
+
+!------------------------------------------------------------------------------
+                case SpSopr2.PrMC of
+                  1 : {
+                        SumR += PriceNDS * SpSopr2.KolFact;
+                        SumV += KoefV    * SpSopr2.KolFact;
+                      }
+                  2 :
+                      {
+                        if (SpSopr1.VidSopr = 101)
+                        {
+                          StRN += PriceNDS * SpSopr2.KolFact;
+                          StVN += KoefV    * SpSopr2.KolFact;
+                          GetOplata(SpSopr2.nRec, FALSE);
+                        }
+                      }
+                  3 :
+                      {
+                        ProcN += SpSopr2.Kol;
+                        GetOplata(SpSopr2.nRec, FALSE);
+                      }
+                  4
+                , 7:  {
+                        StRN += PriceNDS;
+                        StVN += KoefV;
+                        GetOplata(SpSopr2.nRec, FALSE);
+                      }
+                end; // case
+              }
+
+            KoefV := 1;
+
+            if (SumR > 0) then
+              KoefR := (SumR * (1 + ProcN / 100) + StRN) / SumR;
+
+            if (SumV > 0) then
+              KoefV := (SumV * (1 + ProcN / 100) + StVN) / SumV;
+
+            TempSNT.Price1  := TempSNT.Price1  * KoefR;
+            TempSNT.Price1v := TempSNT.Price1v * KoefV;
+            TempSNT.Sum1    := TempSNT.Sum1    * KoefR;
+            TempSNT.Sum1v   := TempSNT.Sum1v   * KoefV;
+          }
+    }
+  else
+!------ рассчитать отпускную цену без налогов - только для наценок в продажах
+    {
+      _summa := _summaV := 0;
+
+      if (coGetTune('Nalog.cNalogNDS') <> 0)
+        if (GetFirst SpDocNal where (( SpSopr1.Nrec                 == SpDocNal.cSpDoc
+                                   AND SpSopr1.VidSopr              == SpDocNal.TipDoc
+                                   AND coGetTune('Nalog.cNalogNDS') == SpDocNal.cNalog )) = tsOK)
+          MyGetNatTarCurrency(0
+                            , SpDocNal.Summa
+                            , SpDocNal.cVal
+                            , SpDocNal.SumVal
+                            , UserDeskRep.ResComp[11]
+                            , TempSNT.CurseDat
+                            , _summa
+                            , _summaV);
+
+      if ( bSplitBySoprOrdB )
+        {
+          TempSNT.SumOtpNoNal  := TempSNT.Sum1  - _summa  * fKoeffSoprOrdB;
+          TempSNT.SumOtpNoNalV := TempSNT.Sum1v - _summaV * fKoeffSoprOrdB;
+        }
+      else
+        {
+          TempSNT.SumOtpNoNal  := TempSNT.Sum1  - _summa;
+          TempSNT.SumOtpNoNalV := TempSNT.Sum1v - _summaV;
+        }
+    }
+/*
+  if Not NextVisual
+    {
+      PrintCode := false;
+      exit;
+    }
+*/
+!------------------------------------------------------------------------------
+!                         подсчет информации об оплате
+!------------------------------------------------------------------------------
+
+  if otcOplata
+    GetOplata(SpSopr1.nRec, TRUE);
+
+!------------------------------------------------------------------------------
+!         изменение знака для количества, сумм, массы, объема, налогов
+!------------------------------------------------------------------------------
+
+  if otcVozvrat and
+     (UserDeskRep.ResWord[12] = 1) and
+     ((SpSopr1.VidSopr = 206) or      // cgReklamacToSeller
+      (SpSopr1.VidSopr = 106))        // cgReklamacFromBuyer
+    {
+      TempSNT.Kol1         := -TempSNT.Kol1;         // количество по накладной
+      TempSNT.Sum1         := -TempSNT.Sum1;         // сумма по накладной
+      TempSNT.Sum1v        := -TempSNT.Sum1v;        // в базовой валюте
+      TempSNT.Kol2         := -TempSNT.Kol2;         // количество по складскому ордеру
+      TempSNT.Sum2         := -TempSNT.Sum2;         // сумма по складскому ордеру
+      TempSNT.Sum2v        := -TempSNT.Sum2v;        // в базовой валюте
+      TempSNT.Kol3         := -TempSNT.Kol3;         // количество возврата
+      TempSNT.Sum3         := -TempSNT.Sum3;         // сумма по ордеру на возврат
+      TempSNT.Sum3v        := -TempSNT.Sum3v;        // в базовой валюте
+      TempSNT.Kol4         := -TempSNT.Kol4;         // количество оплаченного
+      TempSNT.Sum4         := -TempSNT.Sum4;         // сумма оплаченного
+      TempSNT.Sum4v        := -TempSNT.Sum4v;        // сумма оплаченного в валюте
+      TempSNT.tovMassa     := -TempSNT.tovMassa;     // масса товарной позиции
+      TempSNT.tovVolume    := -TempSNT.tovVolume;    // объем товарной позиции
+      TempSNT.SumOtpNoNal  := -TempSNT.SumOtpNoNal;  // отпускная цена без налогов
+      TempSNT.SumOtpNoNalV := -TempSNT.SumOtpNoNalv; // отпускная цена без налогов в валюте
+      TempSNT.C_SumBas[1]  := -TempSNT.C_SumBas[1];
+      TempSNT.C_SumBas[2]  := -TempSNT.C_SumBas[2];
+
+      for( i_1 := 1; i_1 <= 20; i_1++ )
+        {
+          TempSNT.N_SumTar[i_1] := -TempSNT.N_SumTar[i_1];
+          TempSNT.N_SumBas[i_1] := -TempSNT.N_SumBas[i_1];
+        }
+    }
+
+  TempSNT.NameSort1 := '';
+  TempSNT.NameSort2 := '';
+  TempSNT.NameSort3 := '';
+  TempSNT.DateSort  := TempSNT.Date1;
+
+  var sSortNameEdIzm : string = '';
+  if ( UserDeskRep.ResWord[42] > 0 )       // для отпускных единиц
+    sSortNameEdIzm := TempSNT.NameOtpEd;  
+
+  case UserDeskRep.ResWord[1] of
+  0 :
+    {
+      if (SortMCUsl = 0)
+        {
+          TempSNT.NameSort1 := TempSNT.NameMC + sSortNameEdIzm;
+          TempSNT.NameSort2 := TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort1 := TempSNT.BarKod;
+          TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+        }
+    }
+  1 :
+    {
+      TempSNT.NameSort1 := NameGroup;
+
+      if NOT otcDinam
+      if (SortMCUsl = 0)
+          {
+            TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+            TempSNT.NameSort3 := TempSNT.BarKod;
+          }
+      else
+          {
+            TempSNT.NameSort2 := TempSNT.BarKod;
+            TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm;
+          }
+    }
+  2 :
+    {
+      TempSNT.NameSort1 := NameParty;
+
+      if (SortMCUsl = 0)
+        {
+          TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+          TempSNT.NameSort3 := TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort2 := TempSNT.BarKod;
+          TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm;
+        }
+    }
+  3 :
+    {
+      TempSNT.NameSort1 := NameMOL;
+
+      if (SortMCUsl = 0)
+        {
+          TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+          TempSNT.NameSort3 := TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort2 := TempSNT.BarKod;
+          TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm;
+        }
+    }
+  4 :
+    {
+      TempSNT.NameSort1 := NamePodr;
+
+      if (SortMCUsl = 0)
+        {
+          TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+          TempSNT.NameSort3 := TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort2 := TempSNT.BarKod;
+          TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm;
+        }
+    }
+  5 :
+    {
+      TempSNT.NameSort1 := NameKontr;
+      TempSNT.NameSort2 := string(TempSNT.NrecKontr);
+
+      if (SortMCUsl = 0)
+        TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm + TempSNT.BarKod;        
+      else
+        TempSNT.NameSort3 := TempSNT.BarKod + TempSNT.NameMC + sSortNameEdIzm;
+    }
+
+  6 :
+    {
+      TempSNT.NameSort1 := NameOtvPodr;
+
+      if (SortMCUsl = 0)
+        {
+          TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+          TempSNT.NameSort3 := TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort2 := TempSNT.BarKod;
+          TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm;
+        }
+    }
+  7 :
+    {
+      TempSNT.NameSort1 := sClassName;
+
+      if (SortMCUsl = 0)
+        {
+          TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+          TempSNT.NameSort3 := TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort2 := TempSNT.BarKod;
+          TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm;
+        }
+    }
+  8 :
+    {
+      TempSNT.NameSort1 := NameKontr;
+      TempSNT.NameSort2 := string(TempSNT.NrecKontr) + String(To_Days(TempSNT.Date1), 10, 0) + ' ' +
+                           TempSNT.Nomer;
+      if (SortMCUsl = 0)
+        TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm + TempSNT.BarKod;
+      else
+        TempSNT.NameSort3 := TempSNT.BarKod + TempSNT.NameMC + sSortNameEdIzm;
+    }
+  9 :
+    {
+      TempSNT.NameSort1 := Otvetst;
+      if ( SortMCUsl = 0 )
+        {
+          TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+          TempSNT.NameSort3 := TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort2 := TempSNT.BarKod;
+          TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm;
+        }
+    }
+
+  10 :
+    {
+      TempSNT.NameSort1 := NameGruzPol;
+
+      if (SortMCUsl = 0)
+        {
+          TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+          TempSNT.NameSort3 := TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort2 := TempSNT.BarKod;
+          TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm;
+        }
+    }
+  11 :
+    {
+      TempSNT.NameSort2 := String(To_Days(TempSNT.Date1), 10, 0) + ' ' + TempSNT.Nomer;
+
+      if ( SortMCUsl = 0 )
+        TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm + TempSNT.BarKod
+      else
+        TempSNT.NameSort3 := TempSNT.BarKod + TempSNT.NameMC + sSortNameEdIzm;
+    }
+  12 :
+    {
+      TempSNT.NameSort1 := NameAttr;
+
+      if (SortMCUsl = 0)
+        {
+          TempSNT.NameSort2 := TempSNT.NameMC + sSortNameEdIzm;
+          TempSNT.NameSort3 := TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort2 := TempSNT.BarKod;
+          TempSNT.NameSort3 := TempSNT.NameMC + sSortNameEdIzm;
+        }
+    }
+  13 :
+    {
+      TempSNT.NameSort1 := NumbDateDog;
+      if (SortMCUsl = 0)
+        {
+          TempSNT.NameSort2 := TempSNT.n_Name[10] + TempSNT.NameMC;
+          TempSNT.NameSort3 := sSortNameEdIzm     + TempSNT.BarKod;
+        }
+      else
+        {
+          TempSNT.NameSort2 := TempSNT.n_Name[10] + TempSNT.BarKod;
+          TempSNT.NameSort3 := TempSNT.NameMC     + sSortNameEdIzm;
+        }
+    }
+  end; // case
+
+  if ((UserDeskRep.ResWord[6] = 0) and (UserDeskRep.ResWord[1] = 1) and GrpSubLevels and AddToAllGrps)
+    {
+      if (GetLast TempKol where ((KatMC.kGroupMC >>= TempKol.MC)) = tsOk)
+      do
+        if (pos(upcase(TempKol.MC), upcase(KatMC.kGroupMC)) = 1)
+          {
+            if (GetFirst GroupMC where ((TempKol.MC == GroupMC.Kod)) = tsOK)
+              NameGroup := GroupMC.Kod + ' - ' + GroupMC.Name;
+
+            TempSNT.NameSort1 := NameGroup;
+
+            if ( insert current TempSNT <> tsOk )
+              Message(''#3'Не прошел Insert в TempSNT в цикле!', Warning+OkButton)
+            else
+              TempSNT.nRec := GetNextNRec(#TempSNT, 0);
+          }
+      while getprev TempKol = tsOk;
+    }
+  else
+    if (insert current TempSNT <> tsOk)
+      Message(''#3'Не прошел Insert в TempSNT!', Warning+OkButton);
+}
+
+
+!------------------------------------------------------------------------------
+
+
+function ProverkaNakl : boolean;
+{
+  ProverkaNakl := false;
+
+  if (UserDeskRep.ResWord[7] = 1)                          // для выписанных накладных
+    {
+      if (UserDeskRep.ResWord[15] > 1)                  // отгруженный товар
+        {
+          if (UserDeskRep.ResWord[16] = 0)             // нет дополнительного фильтра
+            {
+              if (KatSoprTemp.dOpr = ZeroDate)
+                exit;
+            }
+          else                         // только проведенные вне диапазона выписки
+            if ((KatSoprTemp.dOpr >= UserDeskRep.ResDate[1]) and (KatSoprTemp.dOpr <= UserDeskRep.ResDate[2]))
+              exit;
+        }
+      else                             // выписанный товар (но не оприходованный)
+        if ((UserDeskRep.ResWord[15] = 0) and (KatSoprTemp.dOpr <> ZeroDate))
+          exit;
+    }
+
+  NamePodr := NameMOL := NameKontr := NameOtvPodr := NameGruzPol := NameAttr := NumbDateDog := '???';
+
+!------------ обработка фильтров ------------------
+
+  if fKontr                                     // фильтрация по контрагенту
+    {
+    if (ClOrgCode = 0)
+      if (not FoundRecInPickRep(6, KatSoprTemp.cOrgBase))
+          exit;
+    }
+  else
+    if UseAllowedOrgs
+      if not IsOrgInAlGroup(KatSoprTemp.cOrgBase)
+        exit;
+
+  if fOtvPodr                                  // фильтрация по отв.подразделению
+    {
+      if (KatSoprTemp.TipOtvPodr = 0)
+        {
+          if (not FoundRecInPickRep(7, KatSoprTemp.cOtvPodr))
+            exit;
+        }
+      else
+        exit;
+    }
+
+  if fValFlt                                    // фильтр по валюте
+    if (not FoundRecInPickRep(15, KatSoprTemp.cVal))
+      exit;
+
+  if fKatNotesFlt                               // фильтр по статусам
+    if oDocKNFuns.IsWorkFastClose(KatSoprTemp.VidSopr)
+      if (not FoundRecInPickRep(16, KatSoprTemp.cNote))
+        exit;
+
+  if fExAttrNameFlt                             // фильтр по внешнему атрибуту
+  {
+    var bIsAttrName : boolean = FALSE;
+    _loop AttrVal_F where (( coKatSopr == wTable AND KatSoprTemp.nRec == AttrVal_F.cRec ))
+      if FoundRecInPickRep(17, AttrVal_F.cAttrNam)
+      {
+        bIsAttrName := TRUE;
+        break;
+      }
+    if ( not bIsAttrName )
+      Exit;
+  }
+
+  if fDogovorFlt                                // фильтр по договорам и соглашениям
+    if ( FoundRecInPickRep(18, KatSoprTemp.cDogovor) or FoundRecInPickRep(18, KatSoprTemp.cAppDogovor) )
+    {}
+    else
+      Exit;
+
+  if (UserDeskRep.ResComp[12] <> 0)   // Фильтрация по назначению
+    {
+      if (IsValid(#KatNazna3))
+        {
+          cNazNakl := KatNazna3.nRec;
+
+          if (UserDeskRep.ResWord[18] > 0)
+            {
+              if (pos(upcase(cpsNazna), upcase(KatNazna3.NazCode)) <> 1)
+                exit;
+            }
+          else
+            if (upcase(cpsNazna) <> upcase(KatNazna3.NazCode))
+              exit;
+        }
+      else
+        exit;
+    }
+
+  if IsValid(#KatOrg3)                      // определение контрагента
+    {
+      cKontrNakl := KatOrg3.nRec;
+      NameKontr  := KatOrg3.Name;
+    }
+  else
+    {
+      cKontrNakl := 0;
+      NameKontr  := '';
+    }
+
+  if fKontr
+    if (ClOrgCode <> 0)              // с нулем - обработка фильтра выше
+      {
+        if (GetFirst ExClassVal
+               where ((KatSoprTemp.cOrgBase == ExClassVal.cRec and
+                       ClOrgCode == ExClassVal.ClassCode)) <> tsOk)
+          exit;
+        else
+          if (GetFirst ExClassIer
+                 where (( ClOrgName   == ExClassIer.cGroup and
+                          ExClassVal.cClassSeg == ExClassIer.cRecDs )) <> tsOk)
+            exit;
+          else
+            NameKontr := NameKontr + ' ("' +
+                         string(ExClassVal.cClassSeg) + '"-' +
+                                ExClassIer.Name+')';
+
+      }
+
+  if (KatSoprTemp.TipOtvPodr = 0)
+    if (GetFirst OtvPodr where ((KatSoprTemp.cOtvPodr == OtvPodr.Nrec)) = tsOK)
+      NameOtvPodr := OtvPodr.Name;
+
+  dCurseNakl  := KatSoprTemp.dPrice;       // дата цен
+  VhodNalNakl := KatSoprTemp.VhodNal;
+
+  if ((UserDeskRep.ResName[11] <> '') and                              // фильтрация
+     (pos(upcase(UserDeskRep.ResName[11]), upcase(KatSoprTemp.Descr)) <> 1))   // по дескриптору
+    exit;
+
+  if (UserDeskRep.ResName[12] <> '')                                      // фильтрация по
+    {                                                    // группе дескрипторов
+      if (UserDeskRep.ResWord[17] = 0)
+        {
+          if (upcase(KatSoprTemp.DesGr) <> upcase(UserDeskRep.ResName[12]))
+            exit;
+        }
+      else
+        {
+          if (GetFirst TmpGrDescr
+                 where ((KatSoprTemp.DesGr == TmpGrDescr.DesGr)) <> tsOk)
+            exit;
+        }
+    }
+
+  NomerNakl := PrintNumber(KatSoprTemp.Descr, KatSoprTemp.nSopr);
+
+  DscNakl := KatSoprTemp.Descr;
+
+  cPodrNakl := 0;
+  cMOLNakl  := 0;
+
+  if     (UserDeskRep.ResWord[14] = 1)                           // определение подразделения
+     AND (KatSoprTemp.VidSopr <> 201 OR (RecordExists SoprOrdB where ((KatSoprTemp.NRec == SoprOrdB.cSoprDoc)) <> tsOK))
+    { // продажа
+      cPodrNakl := if (KatSoprTemp.VidSopr = 106, KatSoprTemp.cPodrTo, KatSoprTemp.cPodrFrom);
+      cMOLNakl  := if (KatSoprTemp.VidSopr = 106, KatSoprTemp.cMOLTo , KatSoprTemp.cMOLFrom);
+
+      if ( not CheckSkladFilter(cPodrNakl) )
+          exit;
+
+      if fMOL                                  // фильтрация по МОЛ
+        if (not FoundRecInPickRep(4, cMOLNakl))
+          exit;
+
+      if (GetFirst KatPodr where ((cPodrNakl == KatPodr.Nrec)) = tsOK)
+        {
+          NamePodr := trim(upcase(KatPodr.Name));
+        }
+
+      if (GetFirst KatMol where ((cMOLNakl == KatMol.Nrec)) = tsOK)
+        {
+          NameMOL := trim(upcase(KatMOL.Name));
+        }
+    }
+  else
+    { // закупка
+      if (KatSoprTemp.VidSopr <> 206)
+        {
+          cPodrNakl := KatSoprTemp.cPodrTo;
+          cMOLNakl  := KatSoprTemp.cMOLTo;
+        }
+    }
+
+  if fGruzPol
+    if NOT FoundRecInPickRep(10, if(KatSoprTemp.VidSopr = 106 OR KatSoprTemp.VidSopr = 206, KatSoprTemp.cGruzFrom, KatSoprTemp.cGruzTo))
+      exit;
+
+  if (UserDeskRep.ResWord[23] = 1)
+    if (oBATFuns.GetEntryInGroup(coKatSopr, KatSoprTemp.nRec) <> 1)
+      Exit;
+
+  datOpr      := KatSoprTemp.dOpr;
+  cDONakl     := StepDoc.cBaseDoc;
+  Otvetst     := Persons.FIO;
+  NameGruzPol := GruzPol.Name;
+
+  NameAttr := GetAttrValueStr(coKatSopr, AttrVal.cRec, AttrNam.Name);
+  if (NameAttr = '0' AND ExtAttr_Type(coKatSopr, AttrNam.Name) = cgAttrType_Comp)
+    NameAttr := '';
+
+  if IsValid(#Dogovor)
+  {
+    NumbDateDog  := oDogFuns.DogNoDoc(Dogovor.buffer) + ' от ' + DateToStr(oDogFuns.DogDDoc(Dogovor.buffer), 'DD/MM/YYYY')
+    sNrecDogovor := string(Dogovor.nRec);
+  }
+  else
+  {
+    NumbDateDog  := '';
+    sNrecDogovor := '';
+  }
+
+  ProverkaNakl := true;
+}
+
+
+//------------------------------------------------------------------------------
+
+Procedure SpSopr1Loop;
+{
+  var bUsualLoop : boolean; bUsualLoop := TRUE;
+
+  if (   (UserDeskRep. ResWord[1] = 3) OR (UserDeskRep. ResWord[1] = 4)
+     AND ((UserDeskRep.ResWord[14] = 0) OR (SpSopr1.VidSopr = 201))
+     AND (SpSopr1.VidSopr <> 206)
+     AND (IsValid(#SoprOrdB))  )
+    _LOOP SoprOrdBTmp where (( SpSopr1.nRec  == SoprOrdBTmp.cSpSopr ))
+      {
+        bUsualLoop := FALSE;
+
+        cPodrNakl := SoprOrdBTmp.cPodr;
+        cMOLNakl  := SoprOrdBTmp.cMOL;
+
+        KatSoprArray.cPodrNakl := cPodrNakl;
+        KatSoprArray.cMOLNakl  := cMOLNakl;
+
+        DoCycle(SoprOrdBTmp.cPodr, SoprOrdBTmp.cMOL);
+      }
+
+  if bUsualLoop
+    DoCycle;
+}
+
+//-----------------------------------------------------------------------------
+
+Procedure FormTemp (n:longint);
+{
+  StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak + vfConfirm,
+             'Обработка сопроводительных документов...'#13, n);
+
+  _loop KatSoprArray
+    {
+      if Not NextVisual
+        {
+          PrintCode := false;
+          break
+        }
+
+      cPodrNakl   := KatSoprArray.cPodrNakl;
+      NamePodr    := KatSoprArray.NamePodr;
+      cMOLNakl    := KatSoprArray.cMOLNakl;
+      NameMOL     := KatSoprArray.NameMOL;
+      cKontrNakl  := KatSoprArray.cKontrNakl;
+      NameKontr   := KatSoprArray.NameKontr;
+      cNazNakl    := KatSoprArray.cNazNakl;
+      dCurseNakl  := KatSoprArray.dCurseNakl;
+      VhodNalNakl := KatSoprArray.VhodNalNakl;
+      NomerNakl   := KatSoprArray.NomerNakl;
+      DscNakl     := KatSoprArray.DscNakl;
+      cDONakl     := KatSoprArray.cDONakl;
+      cOtvPodr    := KatSoprArray.cOtvPodr;
+      NameOtvPodr := KatSoprArray.NameOtvPodr;
+      datOpr      := KatSoprArray.dOpr;
+      Otvetst     := KatSoprArray.Otvetst;
+      NameGruzPol := KatSoprArray.NameGruzPol;
+      NameAttr    := KatSoprArray.NameAttr;
+      NumbDateDog := KatSoprArray.NumbDateDog;
+
+      _loop SpSopr1 where ((KatSoprArray.cSopr == SpSopr1.cSopr))
+        {
+          SpSopr1Loop;
+
+          if (not PrintCode)
+            break;
+        }
+    }
+
+  StopVisual('',0);
+}
+
+Procedure FormTemp2 (n:longint);
+{
+  StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak + vfConfirm,
+             'Обработка сопроводительных документов...'#13, n);
+
+  PushBounds(tbByArray2);
+  PushBounds(tbByArray);
+
+  _loop KatSoprArray
+    {
+      if Not NextVisual
+        {
+          PrintCode := false;
+          break
+        }
+
+      if (ProverkaNakl)
+        {
+          _loop SpSoprArray where ((KatSoprArray.cSopr == SpSoprArray.cSopr))
+            {
+              SpSopr1Loop;
+
+              if (not PrintCode)
+                break;
+            }
+        }
+    }
+
+  PopBounds(tbByArray2);
+  PopBounds(tbByArray);
+
+  StopVisual('',0);
+}
+
+!------------------------------------------------------------------------------
+
+
+Procedure RunNakl;
+{
+  Delete All KatSoprArray;
+  var n : longint; n := 0;
+
+  StartNewVisual(vtNumericVisual, vfTimer + vfBreak + vfConfirm,
+             'Предварительный подсчет сопроводительных документов: ', 1);
+
+  case UserDeskRep.ResWord[7] of
+  0 : PushBounds(tbDateOprNakl);
+  1 : PushBounds(tbDateFormNakl);
+  end; //case
+
+  if  ((UserDeskRep.ResWord[10] AND 256) = 256) AND (cRecPersons <> 0)
+    AddBounds(tbPersonKatSopr);
+
+  _loop KatSoprTemp
+    {
+      if (ProverkaNakl)
+        {
+          KatSoprArray.cSopr       := KatSoprTemp.Nrec;
+          KatSoprArray.cPodrNakl   := cPodrNakl;
+          KatSoprArray.NamePodr    := NamePodr;
+          KatSoprArray.cMOLNakl    := cMOLNakl;
+          KatSoprArray.NameMOL     := NameMOL;
+          KatSoprArray.cKontrNakl  := cKontrNakl;
+          KatSoprArray.NameKontr   := NameKontr;
+          KatSoprArray.cNazNakl    := cNazNakl;
+          KatSoprArray.dCurseNakl  := dCurseNakl;
+          KatSoprArray.VhodNalNakl := VhodNalNakl;
+          KatSoprArray.NomerNakl   := NomerNakl;
+          KatSoprArray.DscNakl     := DscNakl;
+          KatSoprArray.cDONakl     := cDONakl;
+          KatSoprArray.cOtvPodr    := cOtvPodr;
+          KatSoprArray.NameOtvPodr := NameOtvPodr;
+          KatSoprArray.dOpr        := datOpr;
+          KatSoprArray.Otvetst     := Otvetst;
+          KatSoprArray.NameGruzPol := NameGruzPol;
+          KatSoprArray.NameAttr    := NameAttr;
+          KatSoprArray.NumbDateDog := NumbDateDog;
+
+          if (insert current KatSoprArray = tsOk)
+            {
+              if Not NextVisual
+                {
+                  PrintCode := false;
+                  break
+                }
+
+              n++;
+            }
+        }
+    }
+
+  case UserDeskRep.ResWord[7] of
+    0 : PopBounds(tbDateOprNakl);
+    1 : PopBounds(tbDateFormNakl);
+  end; //case
+
+  if  ((UserDeskRep.ResWord[10] AND 256) = 256) AND (cRecPersons <> 0)
+    SubBounds(tbPersonKatSopr);
+
+  StopVisual('',0);
+
+  FormTemp(n);
+}
+
+
+Procedure RunSoprOplat; // отчет по датам оплаты
+{
+  Delete All KatSoprArray;
+  Delete All SpSoprArray;
+  var n : longint; n := 0;
+
+  StartNewVisual(vtNumericVisual, vfTimer + vfBreak + vfConfirm,
+             'Предварительный подсчет сопроводительных документов: ', 1);
+
+  PushBounds(tbDateSoprHoz);
+
+  _loop SoprHoz
+    {
+      _loop SpSopHoz where ((SoprHoz.nRec == SpSopHoz.cSoprHoz))
+        {
+          if Not NextVisual
+            {
+              PrintCode := false;
+              break;
+            }
+
+          if (RecordExists SpSoprArray
+                    where ((SpSopHoz.cSpSopr == SpSoprArray.cSpSopr)) <> tsOk)
+            if (GetFirst SpSoprTemp
+                   where ((SpSopHoz.cSpSopr == SpSoprTemp.nRec)) = tsOk)
+              {
+                SpSoprArray.cSpSopr := SpSoprTemp.nRec;
+                SpSoprArray.cSopr   := SpSoprTemp.cSopr;
+
+                if (insert current SpSoprArray = tsOk)
+                  if (RecordExists KatSoprArray
+                            where ((SpSoprArray.cSopr == KatSoprArray.cSopr)) <> tsOk)
+                    if (GetFirst KatSoprTemp
+                           where ((SpSoprArray.cSopr == KatSoprTemp.nRec)) = tsOk)
+                      {
+                        KatSoprArray.cSopr := KatSoprTemp.Nrec;
+
+                        if (insert current KatSoprArray = tsOk)
+                          n++;
+                      }
+              }
+        }
+
+      if (not PrintCode)
+        break;
+    }
+
+  PopBounds(tbDateSoprHoz);
+
+  StopVisual('',0);
+
+  FormTemp2(n);
+}

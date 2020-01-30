@@ -1,0 +1,943 @@
+//------------------------------------------------------------------------------------------------------------
+//                                                                                    (c) корпорация Галактика
+// Галактика 9.1 - модуль "Электронная отчетность"
+// Алгоритмы расчета : "Декларация по налогу на имущество организаций"
+//------------------------------------------------------------------------------------------------------------
+
+
+//============================================================================================================
+//#region ДОБЫЧА ДАННЫХ ИЗ ГАЛАКТИКИ
+//------------------------------------------------------------------------------------------------------------
+// ЗНАЧЕНИЯ ПО ГРАФАМ
+// формат RN_YY_X, где:
+//   N  - номер раздела
+//   YY - номер строки
+//   X  - номер колонки
+&lk_R2_020_3 = if(MONTH(&КонРасч)<0, 0,  С[Тип:В][Период:М1.Г]Д01_01 - С[Тип:В][Период:М1.Г]К02)
+&lk_R2_030_3 = if(MONTH(&КонРасч)<1, 0,  С[Тип:В][Период:М2.Г]Д01_01 - С[Тип:В][Период:М2.Г]К02)
+&lk_R2_040_3 = if(MONTH(&КонРасч)<2, 0,  С[Тип:В][Период:М3.Г]Д01_01 - С[Тип:В][Период:М3.Г]К02)
+&lk_R2_050_3 = if(MONTH(&КонРасч)<3, 0,  С[Тип:В][Период:М4.Г]Д01_01 - С[Тип:В][Период:М4.Г]К02)
+&lk_R2_060_3 = if(MONTH(&КонРасч)<4, 0,  С[Тип:В][Период:М5.Г]Д01_01 - С[Тип:В][Период:М5.Г]К02)
+&lk_R2_070_3 = if(MONTH(&КонРасч)<5, 0,  С[Тип:В][Период:М6.Г]Д01_01 - С[Тип:В][Период:М6.Г]К02)
+&lk_R2_080_3 = if(MONTH(&КонРасч)<6, 0,  С[Тип:В][Период:М7.Г]Д01_01 - С[Тип:В][Период:М7.Г]К02)
+&lk_R2_090_3 = if(MONTH(&КонРасч)<7, 0,  С[Тип:В][Период:М8.Г]Д01_01 - С[Тип:В][Период:М8.Г]К02)
+&lk_R2_100_3 = if(MONTH(&КонРасч)<8, 0,  С[Тип:В][Период:М9.Г]Д01_01 - С[Тип:В][Период:М9.Г]К02)
+&lk_R2_110_3 = if(MONTH(&КонРасч)<9, 0,  С[Тип:В][Период:М10.Г]Д01_01 - С[Тип:В][Период:М10.Г]К02)
+&lk_R2_120_3 = if(MONTH(&КонРасч)<10, 0, С[Тип:В][Период:М11.Г]Д01_01 - С[Тип:В][Период:М11.Г]К02)
+&lk_R2_130_3 = if(MONTH(&КонРасч)<11, 0, С[Тип:В][Период:М12.Г]Д01_01 - С[Тип:В][Период:М12.Г]К02)
+&lk_R2_140_3 = if(MONTH(&КонРасч)<12, 0, С[Период:М12.Г]Д01_01 - С[Период:М12.Г]К02)
+
+&lk_R2_270_3 = if(MONTH(&КонРасч)=12, &lk_R2_140_3, 0)
+//#endregion ДОБЫЧА ДАННЫХ ИЗ ГАЛАКТИКИ
+//************************************************************************************************************
+
+
+@Script GetStrVal(fld:string):string;
+@begin
+  Result := XMLMAP.GetAttrValueByName(fld);
+@end.
+
+@Script GetDblVal(fld:string):double;
+@begin
+  Result := Double(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+@Script GetFldVis(fld:string):boolean;
+@begin
+  Result := XMLMAP.GetAttrVisByName(fld);
+@end.
+
+@Script SetFldVal(fld:string;val:string);
+@begin
+  XMLMAP.SetAttrValueByName(fld,val,2);
+@end.
+
+@Script SetFldVis(fld:string;vis:boolean);
+@begin
+  XMLMAP.SetAttrVisByName(fld,vis);
+@end.
+
+@Script GetCountFld(fld:string):longint;
+@begin
+  Result := XMLMap.GetNodeCountByName(fld);
+@end.
+
+@Script GetIter(iter:longint):string;
+@begin
+  Result := '';
+
+  if (iter > 0)
+    Result := '[' + String(iter) + ']';
+@end.
+
+//***************************************************************************************************************************************************
+
+@Script MessageErrorStop_ALG(mesMesAdrXML, mesStr, mesPole, mesMes: string; mesCountIter: integer = 0): boolean;
+@begin
+  MesError.InsertMesError(mesMesAdrXML, Comp(0), mesStr, mesPole, mesMes, mesCountIter);
+  Result := True;
+@end.
+ //***************************************************************************************************************************************************
+
+@Script GetStrNull(fld:string):boolean;
+@begin
+  Result := XMLMAP.GetIsNullAttrValueByName(fld);
+@end.
+
+//***************************************************************************************************************************************************
+@Script On_Pick(fld:string):string;
+@begin
+//  message(fld);
+@end.
+
+//***************************************************************************************************************************************************
+
+
+@Script On_Visable : boolean;
+ #declare SetVisF(adrIfVis)
+    SetFldVis(#adrIfVis, False);
+  #end
+  #declare SetVisT(adrIfVis)
+    SetFldVis(#adrIfVis, True);
+  #end
+
+@begin
+  var Adr_SumPU_, Adr_RachNalTS_: string;
+  var tBool:boolean;
+  var i,j, SumPU_count, RachNalTS_count ,posStr, LenStr:longint;
+
+! СТРАНИЦА 1
+  SetFldVis('Файл/Документ/СвНП/Тлф', (GetStrVal('Файл/Документ/СвНП/Тлф') <> ''));
+  SetFldVis('Файл/Документ/СвНП/НПЮЛ', (GetStrVal('Файл/Документ/СвНП/НПЮЛ/КПП') <> ''));
+  SetFldVis('Файл/Документ/СвНП/НПЮЛ/КПП', (GetStrVal('Файл/Документ/СвНП/НПЮЛ/КПП') <> ''));
+  SetFldVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ', (GetStrVal('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг') <> ''));
+  SetFldVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ', (GetStrVal('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг') <> ''));
+  SetFldVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП', (GetStrVal('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг') <> ''));
+  SetFldVis('Файл/Документ/Подписант/ФИО/Отчество', (GetStrVal('Файл/Документ/Подписант/ФИО/Отчество') <> ''));
+  SetFldVis('Файл/Документ/Подписант/СвПред', (GetStrVal('Файл/Документ/Подписант/ПрПодп') = '2'));
+  SetFldVis('Файл/Документ/Подписант/СвПред/НаимОрг', (GetStrVal('Файл/Документ/Подписант/СвПред/НаимОрг') <> ''));
+
+
+  SumPU_count := GetCountFld('Файл/Документ/ИмущНД/СумНалПУ');
+  for (i := 0; i < SumPU_count; i++)
+  {
+! СТРАНИЦА 2
+    if (i > 0)
+    {
+      tBool := ((GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/КБК') <> '') and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/ОКТМО') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i), tBool);
+    }
+
+! СТРАНИЦА 3
+    RachNalTS_count := GetCountFld('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб');
+    tBool:= True;
+    if RachNalTS_count = 0
+      tBool:= False;
+    SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ', tBool);
+
+    for (j := 0; j < RachNalTS_count; j++)
+    {
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ВидИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/ОКТМО' ) <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ', tBool);
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j), tBool);
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/КодНалЛьг', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/КодНалЛьг') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтИмущНеобл', (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтИмущНеобл') <> 0));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/ДолСт', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/ДолСт') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/КодЛгПНС', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/КодЛгПНС') <> ''));
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0101/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0101/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0101/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0101/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0101/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0101/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0102/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0102/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0102/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0102/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0102/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0102/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0103/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0103/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0103/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0103/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0103/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0103/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0104/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0104/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0104/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0104/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0104/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0104/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0105/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0105/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0105/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0105/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0105/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0105/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0106/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0106/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0106/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0106/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0106/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0106/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0107/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0107/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0107/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0107/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0107/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0107/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0108/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0108/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0108/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0108/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0108/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0108/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0109/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0109/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0109/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0109/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0109/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0109/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0110/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0110/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0110/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0110/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0110/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0110/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0111/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0111/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0111/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0111/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0111/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0111/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0112/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0112/СтОстОН') <> '')
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0112/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0112/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0112/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом0112/СтЛьгИмущ', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом3112/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом3112/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом3112/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом3112/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом3112/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ОстСтом3112/СтЛьгИмущ', tBool);
+      tBool := (GetDblval('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ВтчНедИм/СтОстОН') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ВтчНедИм/СтОстОН') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ВтчНедИм/СтОстОН', tBool);
+      tBool := (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ВтчНедИм/СтЛьгИмущ') <> 0);
+      tBool := tBool and (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ВтчНедИм/СтЛьгИмущ') <> '');
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/ВтчНедИм/СтЛьгИмущ', tBool);
+      tBool := (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумАвИсчисл') <> '');
+      tBool := tBool and (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумАвИсчисл') <> 0);
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумАвИсчисл', tBool);
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/КодЛгУмен', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/КодЛгУмен') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумЛгУмен', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумЛгУмен') <> ''));
+      tBool := (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумНалПред') <> '');
+      tBool := tBool and (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумНалПред') <> 0);
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумНалПред', tBool);
+    }
+! СТРАНИЦА 4
+    RachNalTS_count := GetCountFld('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб');
+    tBool:= True;
+    if RachNalTS_count = 0
+      tBool:= False;
+    SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО', tBool);
+
+    for (j := 0; j < RachNalTS_count; j++)
+    {
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/НомКадЗдан') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j), (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/НомКадЗдан') <> ''));
+
+      tBool := (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/СведСтИнв/СтИмущИ') <> '');
+      tBool := tBool and (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/СведСтИнв/СтИмущИ') <> 0);
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/СведСтИнв', tBool);
+      if GetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/СведСтИнв')
+      {
+        tBool := (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/СведСтКад/СтИмущК') <> '');
+        tBool := tBool and (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/СведСтКад/СтИмущК') <> 0);
+        SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/СведСтКад', tBool);
+      }
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/КодНалЛьг', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/КодНалЛьг') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/НомКадПом', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/НомКадПом') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/ДолСт', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/ДолСт') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/КодЛгПНС', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/КодЛгПНС') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/КоэфК', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/КоэфК') <> ''));
+      tBool := (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/СумАвИсчисл') <> '');
+      tBool := tBool and (GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/СумАвИсчисл') <> 0);
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/СумАвИсчисл', tBool);
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/КодЛгУмен', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/КодЛгУмен') <> ''));
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/СумЛгУмен', (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/КодЛгУмен') <> ''));
+    }
+    if (GetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО')
+     or  GetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ')) or SumPU_count=1
+    {  SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i), True)}
+    else
+      SetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i), False)
+  }
+@end.
+
+//***************************************************************************************************************************************************
+
+
+@Script On_Check : boolean;
+  #include AllTaxObj.Vih
+
+  function IsValidKodNalLg(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Код налоговой льготы
+    //КодНалЛьг
+    strGetMes := 'Возможные значения: 2012000/XXXXXXXXXXXX или [ЛЛЛЛЛЛЛ]. Формат: 7 или 20 символов';
+    Result := False;
+    Result :=    CheckError.isRegExpr('^(.......)$', strIn)
+              or CheckError.isRegExpr('^((2012000)/(............))$', strIn);
+  end;
+
+  function IsValidKodLgUmen(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Код налоговой льготы (в виде уменьшения суммы налога, подлежащей уплате в бюджет)
+    //КодЛгУмен
+    strGetMes := 'Возможные значения: 2012500/XXXXXXXXXXXX. Формат поля: 20 символов';
+    Result := False;
+    Result := CheckError.isRegExpr('^(2012500/(............))$', strIn);
+  end;
+
+  function IsValidKodLgPNS(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Код налоговой льготы (установленный  в виде понижения налоговой ставки)
+    //КодЛгПНС
+    strGetMes := 'Возможные значения: 2012400/XXXXXXXXXXXX. Формат поля: 20 символов';
+    Result := False;
+    Result := CheckError.isRegExpr('^(2012400/(............))$', strIn);
+  end;
+
+  function IsValidKodVid(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Код вида bveotcndf
+    //КодВидТС
+    strGetMes := 'Формат поля: 1 символов';
+    Result := False;
+    Result := CheckError.isRegExpr('^(.)$', strIn);
+  end;
+
+  function IsValidIDNomTS(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Идентификационный номер транспортного средства
+    //ИдНомТС
+    strGetMes := 'Формат поля: от 1 до 25 символов, либо пусто';
+    Result := False;
+    Result :=    Length(strIn) =  0
+              or Length(strIn) <= 25;
+  end;
+
+  function IsValidKadas(strIn: string; var strGetMes: string) : boolean;
+  begin
+    strGetMes := 'Формат поля: от 1 до 100 символов, либо пусто';
+    Result := False;
+    Result :=    Length(strIn) =  0
+              or Length(strIn) <= 100;
+  end;
+
+  function IsValidStroki(strIn: string; var strGetMes: string) : boolean;
+  begin
+    strGetMes := 'Формат поля: (от 1 до 10 знаков)/(от 1 до 10 знаков) ';
+    Result := False;
+    Result := CheckError.isRegExpr('^\-?[0-9]{1,15}$', strIn);
+  end;
+
+  function IsValidProstDrob21(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Простая дробь в формате: (от 1 до 10 знаков)/(от 1 до 10 знаков), где ведущие нули в числителе и знаменателе недопустимы
+    //ПростДроб21
+    strGetMes := 'Формат поля: XXXXXXXXXX/XXXXXXXXXX. Формат: 21 символов';
+
+    Result := False;
+    if (strIn = '') or (Pos('/', strIn) = 0) Exit;
+
+    var buf_1 : string; buf_1 := SubStr(strIn,                   1,                 Pos('/', strIn) - 1);
+    var buf_2 : string; buf_2 := SubStr(strIn, Pos('/', strIn) + 1, Length(strIn) - Pos('/', strIn)    );
+
+    Result := CheckError.isRegExpr('^([1-9]{1}|[1-9]{1}[0-9]{1}|[1-9]{1}[0-9]{0,2}|[1-9]{1}[0-9]{0,3}|[1-9]{1}[0-9]{0,4}|[1-9]{1}[0-9]{0,5}|[1-9]{1}[0-9]{0,6}|[1-9]{1}[0-9]{0,7}|[1-9]{1}[0-9]{0,8}|[1-9]{1}[0-9]{0,9})$', buf_1)
+          and CheckError.isRegExpr('^([1-9]{1}|[1-9]{1}[0-9]{1}|[1-9]{1}[0-9]{0,2}|[1-9]{1}[0-9]{0,3}|[1-9]{1}[0-9]{0,4}|[1-9]{1}[0-9]{0,5}|[1-9]{1}[0-9]{0,6}|[1-9]{1}[0-9]{0,7}|[1-9]{1}[0-9]{0,8}|[1-9]{1}[0-9]{0,9})$', buf_2);
+  end;
+
+  function IsValidKoef(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Коэффициент K
+    strGetMes := 'Формат поля: XX/XX';
+    Result := False;
+    Result := CheckError.isRegExpr('^[1-9]{1}[0-9]{0,1}\/?[1-9]{1}[0-9]{0,1}$', strIn);
+  end;
+
+  function IsValidNalStav(strIn: string; var strGetMes: string) : boolean;
+  begin
+    //Налоговая ставка
+    //НалСтавка
+    strGetMes := 'Формат поля: X.XX';
+    Result := False;
+    Result := CheckError.isRegExpr('^[0-9]{1}$', strIn)
+              or CheckError.isRegExpr('^[0-9]{1}\.[0-9]{1}[1-9]{0,1}|[1-9]{1}[0-9]{0,1}$', strIn);
+  end;
+
+  #declare _InsMes(_AdrXML, _Pole, _StrMes)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      NameStr,
+      #_Pole,
+      #_StrMes
+    );
+  #end
+
+  #declare _MesNoKor(_AdrXML, _Pole)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      NameStr,
+      #_Pole,
+      'Поле не соответствует регулярному выражению. ' + getMes
+    );
+  #end
+
+  #declare _NoKor(_AdrXML, _Pole)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      NameStr,
+      #_Pole,
+      'Поле не соответствует формату. ' + getMes
+    );
+  #end
+@begin
+  var getMes: string;
+  getMes := '';
+  var sNaimOrg , sINNJUL        , sKPP      , sFormReorg, sINNJUL_2  , sKPP_2     , sKBK       , sOKTMO       ,
+  sIdFajl      , sVersProg      , sVersForm , sKodNO    , sNomKorr   , sPoMestu   , sKolPril   , sKND         , sDataDok   , sPeriod ,
+  sSumLgYmen   , sNalPU         , sFormRasch, sKodLgYmen, sIdNomTS   , sSTIm      , sSumAvIsch , sStOstVs     ,
+  sOtchetGod   , sPrPodp        , sFamilija , sImja     , sOtchestvo , sNaimDok   , sNaimOrg_2 , sOKVJED      , sTlf       ,
+  sKodVid      , sSumNalPred    , sKodNalL  , sStImNeob , sDolST     , sNalBaz    , sKodLgPNS  , sNalStav     ,sSumNalIsch ,
+  sKojefKl     , sSumIschisl_Upl, sKodOsvNal, sSumOsvNal, sKodUmenSum, sSumUmenSum, sProcUm    , sKodSnizhStav,
+  sSumSnizhStav, sPonizhStav    , sDoljaTS  , sKojefKp  , sOKATO     , sKNalLg     , sKLgPNS    , sKLgYmen     ,
+  sNomKad      , sStImK         , sStImI    , sDolCT    , sNalBaza   , sNalSt     , sKoefK     , sSumNalIs    ,
+  aNomKad      , aStImK         , aStImI    , aDolCT    , aNalBaza   , aNalSt     , aKoefK     , aSumNalIs    ,
+  aNaimOrg     , aINNJUL        , aKPP      , aFormReorg, aINNJUL_2  , aKPP_2     , aKBK       , aOKTMO       , aNalIschisl, aOKATO,
+  aIdFajl      , aVersProg      , aVersForm , aKodNO    , aNomKorr   , aPoMestu   , aKolPril   , aKND         , aDataDok   , aPeriod ,
+  aAvPUKv2     , aSumNalPred    , aNalPU    , aFormRasch, aKodVidTS  , aIdNomTS   , aMarkaTS   , aRegZnakTS   , aSumNalIsch,
+  aOtchetGod   , aPrPodp        , aFamilija , aImja     , aOtchestvo , aNaimDok   , aNaimOrg_2 , aOKVJED      , aTlf       ,
+  aOKEINalBaza , aJEkologKl     , aVipuskTS , aVladenTS , aKojefKv   , aNalStavka , aSumIschisl, aLgotMesTS   ,
+  aSumAvIsch   , aKodLgYmen     , aSumLgYmen, aStOstVs  , aDolST     , aNalBaz    , aKodLgPNS  , aNalStav     ,
+  aKodVid      ,aSTIm           , aKodNalL  , aStImNeob , aKNalLg    , aKLgPNS    , aKLgYmen   : string;
+
+
+  var NameStr: string;
+  var tB: boolean;
+
+  NameStr := pFH.Func('myGetPage_Title');
+
+  if not IsValidDate(GetStrVal('Файл/Документ/ДатаДок'), getMes)
+    MessageErrorStop_ALG('Файл/Документ/ДатаДок', NameStr, '"Дата"', 'Заполните поле или произведите перерасчет для установки текущей даты');
+  if not IsValidOKVED(GetStrVal('Файл/Документ/СвНП/ОКВЭД'), getMes) #_MesNoKor('Файл/Документ/СвНП/ОКВЭД', '"ОКВЭД"');
+
+  aKodNO     := 'Файл/Документ/КодНО'                        ;   sKodNO     := GetStrVal(aKodNO    );
+  aNomKorr   := 'Файл/Документ/НомКорр'                      ;   sNomKorr   := GetStrVal(aNomKorr  );
+  aPoMestu   := 'Файл/Документ/ПоМесту'                      ;   sPoMestu   := GetStrVal(aPoMestu  );
+  aKND       := 'Файл/Документ/КНД'                          ;   sKND       := GetStrVal(aKND      );
+  aDataDok   := 'Файл/Документ/ДатаДок'                      ;   sDataDok   := GetStrVal(aDataDok  );
+  aPeriod    := 'Файл/Документ/Период'                       ;   sPeriod    := GetStrVal(aPeriod   );
+  aOtchetGod := 'Файл/Документ/ОтчетГод'                     ;   sOtchetGod := GetStrVal(aOtchetGod);
+  aPrPodp    := 'Файл/Документ/Подписант/ПрПодп'             ;   sPrPodp    := GetStrVal(aPrPodp   );
+  aFamilija  := 'Файл/Документ/Подписант/ФИО/Фамилия'        ;   sFamilija  := GetStrVal(aFamilija );
+  aImja      := 'Файл/Документ/Подписант/ФИО/Имя'            ;   sImja      := GetStrVal(aImja     );
+  aOtchestvo := 'Файл/Документ/Подписант/ФИО/Отчество'       ;   sOtchestvo := GetStrVal(aOtchestvo);
+  aNaimDok   := 'Файл/Документ/Подписант/СвПред/НаимДок'     ;   sNaimDok   := GetStrVal(aNaimDok  );
+  aNaimOrg_2 := 'Файл/Документ/Подписант/СвПред/НаимОрг'     ;   sNaimOrg_2 := GetStrVal(aNaimOrg_2);
+  aOKVJED    := 'Файл/Документ/СвНП/ОКВЭД'                   ;   sOKVJED    := GetStrVal(aOKVJED   );
+  aTlf       := 'Файл/Документ/СвНП/Тлф'                     ;   sTlf       := GetStrVal(aTlf      );
+  aNaimOrg   := 'Файл/Документ/СвНП/НПЮЛ/НаимОрг'            ;   sNaimOrg   := GetStrVal(aNaimOrg  );
+  aINNJUL    := 'Файл/Документ/СвНП/НПЮЛ/ИННЮЛ'              ;   sINNJUL    := GetStrVal(aINNJUL   );
+  aKPP       := 'Файл/Документ/СвНП/НПЮЛ/КПП'                ;   sKPP       := GetStrVal(aKPP      );
+  aFormReorg := 'Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг';   sFormReorg := GetStrVal(aFormReorg);
+  aINNJUL_2  := 'Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ'    ;   sINNJUL_2  := GetStrVal(aINNJUL_2 );
+  aKPP_2     := 'Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'      ;   sKPP_2     := GetStrVal(aKPP_2    );
+
+  if (sFormReorg <> '')
+  {
+    if not IsValidFormReorg(sFormReorg, getMes) #_InsMes(aFormReorg, '"Форма реорганизации"', getMes);
+    else
+    {
+      if sFormReorg <> '0'
+      {
+        if not CheckError.Prov_INN(sINNJUL_2, getMes) #_InsMes(aINNJUL_2, '"ИНН реорганизованной организации"', getMes);
+        if not IsValidKPP(sKPP_2, getMes) #_InsMes(aKPP_2, '"КПП реорганизованной организации"', getMes);
+      }
+      else
+      {
+        getMes := 'Строка не должна быть заполнена при текущем значении поля "Форма реорганизации"';
+        if (Length(sINNJUL_2) > 0) #_InsMes(aINNJUL_2, '"ИНН реорг. орг."', getMes);
+        if (Length(sKPP_2   ) > 0) #_InsMes(aINNJUL_2, '"ИНН реорг. орг."', getMes);
+      }
+    }
+  }
+  else
+  {
+    getMes := 'Строка не должна быть заполнена при текущем значении поля "Форма реорганизации"';
+    if (Length(sINNJUL_2) > 0) #_InsMes(aINNJUL_2, '"ИНН реорг. орг."', getMes);
+    if (Length(sKPP_2)    > 0) #_InsMes(aKPP_2   , '"КПП реорг. орг."', getMes);
+  }
+
+  if not IsValidSONO(sKodNO, getMes) #_MesNoKor(aKodNO, 'Код налогового органа');
+  if not CheckError.Prov_INN(sINNJUL, getMes) #_InsMes(aINNJUL, '"ИНН"', getMes);
+  if not IsValidKPP(sKPP, getMes) #_MesNoKor(aKPP, '"КПП"');
+
+  var SumPU_count, RachNalTS_count, i, j: longint;
+
+  if (sNaimOrg = '') MessageErrorStop_ALG(aNaimOrg, NameStr, '"Налогоплательщик"', 'Поле обязательно для заполнения');
+  else if not IsValidNaimOrg(sNaimOrg, getMes) #_MesNoKor(aNaimOrg, '"Налогоплательщик"');
+  if (sTlf <> '')
+    if not IsValidTlf(sTlf, getMes) #_MesNoKor(aTlf, '"Номер контактного телефона"');
+  if (sNaimDok <> '')
+    if not IsValidNaimDok(sNaimDok, getMes) #_MesNoKor(aNaimDok, '"Форма реорганизации"');
+
+  if not IsValidFIO(sFamilija, getMes) #_MesNoKor(aFamilija, '"Фамилия"');
+  if not IsValidFIO(sImja    , getMes) #_MesNoKor(aImja    , '"Имя"'    );
+  if sOtchestvo <> ''
+    if not IsValidFIO(sOtchestvo, getMes) #_MesNoKor(aOtchestvo, '"Отчество"');
+
+  if not IsValidPrPodp(sPrPodp, getMes) #_InsMes(aPrPodp, '"Признак подписанта"', getMes)
+  else
+  {
+    if (sPrPodp = '2')
+    {
+      if not IsValidNaimDok(sNaimDok, getMes) #_InsMes(aNaimDok, '"Наим. док., подтв. полномочия предст."', 'Поле обязательно для заполнения при значении поля "Признак подписанта" равного 2. ' + getMes);
+        if sNaimOrg_2 <> ''
+          if not IsValidNaimOrg(sNaimOrg_2, getMes) #_InsMes(aNaimOrg_2, '"Наименование организации"', getMes);
+    }
+    else
+    {
+      getMes := 'Поле заполняется только при значении поля "Признак подписанта" равного 2';
+      if (Length(sNaimDok  ) > 0) MessageErrorStop_ALG(aNaimDok  , NameStr, '"Наименование документа"'  , getMes);
+      if (Length(sNaimOrg_2) > 0) MessageErrorStop_ALG(aNaimOrg_2, NameStr, '"Наименование организации"', getMes);
+    }
+  }
+  //***********************************************************************************************
+  //***********************************************************************************************
+
+  //***********************************************************************************************
+
+  SumPU_count := GetCountFld('Файл/Документ/ИмущНД/СумНалПУ');
+  tB:=False;
+  for (i := 0; i < SumPU_count; i++)
+    if  GetFldVis('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i))
+       tB:=True;
+  if tB
+  {
+    for (i := 0; i < SumPU_count; i++)
+    {
+      if SumPU_count<>1 or
+       ( GetFldVis('Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ')
+       or  GetFldVis('Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО'))
+      {
+        if  GetFldVis('Файл/Документ/ИмущНД/СумНалПУ' + getIter(i))
+        {
+          NameStr := pFH.Func('myGetPage_R1', i+1);
+
+          aKBK        := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/КБК'  ;   sKBK   := GetStrVal(aKBK   );
+          aOKTMO      := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/ОКТМО';   sOKTMO := GetStrVal(aOKTMO );
+          aNalPU      := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/НалПУ';   sNalPU := GetStrVal(aNalPU );
+
+          if not IsValidKBK(sKBK, getMes) #_MesNoKor(aKBK, 'Стр. 020');
+          if not IsValidOKTMO(sOKTMO, getMes) #_MesNoKor(aOKTMO, 'Стр. 010');
+        }
+    //***********************************************************************************************
+        RachNalTS_count :=GetCountFld('Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб');
+        for (j := 0; j < RachNalTS_count; j++)
+        {
+          if GetFldVis('Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб')
+          {
+            NameStr := pFH.Func('myGetPage_R2', i+1, j+1);
+            aKodVid     := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/ВидИмущ'                 ; sKodVid     := GetStrVal(aKodVid    );
+            aSTIm       := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтИмущ'           ; sSTIm       := GetStrVal(aSTIm      );
+            aKodNalL    := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/КодНалЛьг'        ; sKodNalL    := GetStrVal(aKodNalL   );
+            aStImNeob   := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтИмущНеобл'      ; sStImNeob   := GetStrVal(aStImNeob  );
+            aDolST      := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/ДолСт'            ; sDolST      := GetStrVal(aDolST     );
+            aNalBaz     := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/НалБаза'          ; sNalBaz     := GetStrVal(aNalBaz    );
+            aKodLgPNS   := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/КодЛгПНС'         ; sKodLgPNS   := GetStrVal(aKodLgPNS  );
+            aNalStav    := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/НалСтав'          ; sNalStav    := GetStrVal(aNalStav   );
+            aSumNalIsch := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумНалИсчисл'     ; sSumNalIsch := GetStrVal(aSumNalIsch);
+            aSumAvIsch  := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумАвИсчисл'      ; sSumAvIsch  := GetStrVal(aSumAvIsch );
+            aKodLgYmen  := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/КодЛгУмен'        ; sKodLgYmen  := GetStrVal(aKodLgYmen );
+            aSumLgYmen  := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумЛгУмен'        ; sSumLgYmen  := GetStrVal(aSumLgYmen );
+            aSumNalPred := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумНалПред'       ; sSumNalPred := GetStrVal(aSumNalPred);
+            aStOstVs    := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОбДеятРФ/РасОб' + getIter(j) +'/ДанРас/СтоимМес/СтОстВс/СтОстВсего' ; sStOstVs    := GetStrVal(aStOstVs   );
+            if not IsValidKodVid  (sKodVid     , getMes) #_MesNoKor(aKodVid     , 'Стр. 001');
+            else
+              if (sKodVid='1' and  sKBK<>'18210602020021000110' )
+                #_InsMes(aKodVid, 'Стр. 001', 'В разд.1 должен быть КБК 18210602020021000110,т.к.в закладке "Разд.2" выбран кода имущества "1"(имущество, входящее в ЕСГ), или необходимо пересмотреть код имущества.')
+              else
+                if ((sKodVid='2' or sKodVid='3' or sKodVid='5') and  sKBK<>'18210602010021000110' )
+                 #_InsMes(aKodVid, 'Стр. 001', 'В разд.1 должен быть КБК 18210602010021000110,т.к.в закладке "Разд.2" выбран кода имущества "'+sKodVid+'", или необходимо пересмотреть код имущества.')
+
+            if (sSTIm  = '') #_InsMes(aSTIm, 'Стр. 150', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            else if not IsValidStroki  (sSTIm       , getMes) #_MesNoKor(aSTIm       , 'Стр. 150');
+            if (sKodVid ='2')
+              if not IsValidProstDrob21(sDolST, getMes)
+                #_NoKor(aDolST, 'Стр. 180');
+            if (sNalBaz  = '') #_InsMes(aNalBaz, 'Стр. 190', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            else if not IsValidStroki  (sNalBaz     , getMes) #_MesNoKor(aNalBaz     , 'Стр. 190');
+            if (sNalStav  = '') #_InsMes(aNalStav, 'Стр. 210', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            else if not IsValidNalStav (sNalStav    , getMes) #_MesNoKor(aNalStav    , 'Стр. 210');
+            if (sSumNalIsch  = '') #_InsMes(aSumNalIsch, 'Стр. 220', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            else if not IsValidStroki  (sSumNalIsch , getMes) #_MesNoKor(aSumNalIsch , 'Стр. 220');
+            if (sKodLgPNS <> '') or (sKodLgYmen <> '')
+              if (sKodNalL <> '') #_InsMes(aKodNalL, 'Стр. 160', 'Строка не должна быть заполнена');
+            else  if (sKodNalL <> '')
+              if not IsValidKodNalLg     (sKodNalL   , getMes) #_MesNoKor(aKodNalL  , 'Стр. 160');
+            if (sKodLgPNS  <> '')
+              if not IsValidKodLgPNS     (sKodLgPNS  , getMes) #_MesNoKor(aKodLgPNS , 'Стр. 200');
+            if (sKodLgYmen <> '')
+            {
+              if not IsValidKodLgUmen    (sKodLgYmen , getMes) #_MesNoKor(aKodLgYmen, 'Стр. 240');
+              if (sSumLgYmen  = '') #_InsMes(aSumLgYmen, 'Стр. 250', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            }
+          }
+        }
+  //***********************************************************************************************
+        RachNalTS_count := GetCountFld('Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб');
+        for (j := 0; j < RachNalTS_count; j++)
+        {
+          if GetFldVis('Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j))
+          {
+            NameStr := pFH.Func('myGetPage_R3', i+1, j+1);
+            aNomKad     := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/НомКадЗдан'         ; sNomKad    := GetStrVal(aNomKad   );
+            aStImK      := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/СведСтКад/СтИмущК'  ; sStImK     := GetStrVal(aStImK    );
+            aStImI      := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/СведСтИнв/СтИмущИ'  ; sStImI     := GetStrVal(aStImI    );
+            aDolCT      := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/ДолСт'              ; sDolCT     := GetStrVal(aDolCT    );
+            aNalBaza    := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/НалБаза'            ; sNalBaza   := GetStrVal(aNalBaza  );
+            aNalSt      := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/НалСтав'            ; sNalSt     := GetStrVal(aNalSt    );
+            aKoefK      := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/КоэфК'              ; sKoefK     := GetStrVal(aKoefK    );
+            aSumNalIs   := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/СумНалИсчисл'       ; sSumNalIs  := GetStrVal(aSumNalIs );
+            aKNalLg     := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/КодНалЛьг'          ; sKNalLg    := GetStrVal(aKNalLg   );
+            aKLgPNS     := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/ДанРас/КодЛгПНС'           ; sKLgPNS    := GetStrVal(aKLgPNS   );
+            aKLgYmen    := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/КодЛгУмен'          ; sKLgYmen   := GetStrVal(aKLgYmen  );
+            aSumLgYmen  := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i) +'/РасОБНедИО/РасОб' + getIter(j) +'/НалПер/СумЛгУмен'          ; sSumLgYmen := GetStrVal(aSumLgYmen);
+            if (sNomKad  = '') #_InsMes(aNomKad, 'Стр. 014', 'Строка обязательна к заполнению.')
+            else if not IsValidKadas(sNomKad , getMes) #_MesNoKor(aNomKad   , 'Стр. 014');
+            if (sStImI  = '')
+            if (sStImK   = '') #_InsMes(aStImK , 'Стр. 020', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            else if not IsValidStroki  (sStImK  , getMes) #_MesNoKor(aStImK , 'Стр. 020');
+            if (sStImK  = '')
+            if (sStImI  = '') #_InsMes(aStImI , 'Стр. 030', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            else if not IsValidStroki  (sStImI  , getMes) #_MesNoKor(aStImI , 'Стр. 030');
+            if  (sStImK  <> '') and (sStImI <> '')
+              #_InsMes('', 'ПРЕДУПРЕЖДЕНИЕ', 'Возможна ошибка Tester. Должно быть заполнено только одна из строк (Стр.020 или Стр.030)');
+            if (sDolCT <> '')
+              if not IsValidProstDrob21(sDolCT, getMes)
+                #_NoKor(aDolCT, 'Стр. 050');
+            if (sNalBaza  = '') #_InsMes(aNalBaza, 'Стр. 060', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            else if not IsValidStroki (sNalBaza     , getMes) #_MesNoKor(aNalBaza , 'Стр. 060');
+            if (sNalSt  = '') #_InsMes(aNalSt, 'Стр. 080', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            else if not IsValidNalStav (sNalSt    , getMes) #_MesNoKor(aNalSt     , 'Стр. 080');
+            if (sKoefK  <> '')
+              if not IsValidKoef (sKoefK    , getMes) #_MesNoKor(aKoefK , 'Стр. 090');
+            if (sSumNalIs  = '') #_InsMes(aSumNalIs, 'Стр. 100', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            else if not IsValidStroki  (sSumNalIs , getMes) #_MesNoKor(aSumNalIs  , 'Стр. 100');
+            if (sKLgPNS <> '') or (sKLgYmen <> '')
+              if (sKNalLg <> '') #_InsMes(aKNalLg, 'Стр. 040', 'Строка не должна быть заполнена');
+            else if (sKNalLg <> '')
+              if not IsValidKodNalLg(sKNalLg, getMes)
+                #_MesNoKor(aKNalLg, 'Стр. 040');
+            if (sKLgPNS  <> '')
+              if not IsValidKodLgPNS     (sKLgPNS  , getMes) #_MesNoKor(aKLgPNS , 'Стр. 070');
+            if (sKLgYmen <> '')
+            {
+              if not IsValidKodLgUmen    (sKLgYmen , getMes) #_MesNoKor(aKLgYmen, 'Стр. 120');
+              if (sSumLgYmen  = '') #_InsMes(aSumLgYmen, 'Стр. 130', 'Строка обязательна к заполнению. Заполните ее и произведите перерасчет')
+            }
+          }
+        }
+      }
+      else
+       #_InsMes('', 'ПРЕДУПРЕЖДЕНИЕ', 'Необходимо заполнить хотя бы один из подразделов.')
+    }
+  }
+  else
+    #_InsMes('', 'ПРЕДУПРЕЖДЕНИЕ', 'Необходимо заполнить хотя бы один Раздел 1 и один из его подразделов.');
+
+  //**********************************************************************************************************
+@end.
+//***************************************************************************************************************************************************
+
+@Script On_Recalc : boolean;
+  #declare _Log(_strAdr, _strMes, _strVal)
+    MesError.InsertRasch(NameStr, #_strAdr, #_strMes, #_strVal, 0);
+  #end
+
+  #declare GD0(_strVal)
+    DoubleToStr(Round(#_strVal), '[|-]36666666666666666666')
+  #end
+
+  #declare GD1_4(_strVal)
+    DoubleToStr(Round(#_strVal, 4), '6~9999')
+  #end
+
+  #declare GD1_1(_strVal)
+    DoubleToStr(Round(#_strVal, 1), '6~9')
+  #end
+ #declare SetSNull(_fld)
+    XMLMAP.SetIsNullAttrValueByName(#_fld, 2);
+  #end
+@begin
+  var tBool:boolean;
+  var posStr, LenStr:longint;
+  var SumPU_count, RachNalTS_count, i, j: longint;
+  Var sMSTUm, sMSTUmNeb, sMNalBaza1, sMNalBaza2, sMSumNalIsch, sMNalBaza3, sMNalBaza4, sMNalBaza5, sMSSumNalIsch2, NameStr, schDol, szmDol,
+     sMNalPU, aDolST_  , aDolCT_   , aSTImuK   , aSTImuNK    , aSTImuI   , aSTImuNI  , aNalBaza  , aKoefK ,sMNalPU02, buf : string;
+  var Sum, Sum1, Sum2, SumS, Sum3, Sum4,Sum5, DolST_, DolCT_,chDol,zmDol, KoefK_, NalStav,SumNal, sSTImuK, sSTImuNK, sSTImuI, sSTImuNI  :double;
+
+  sMSTUm          := 'Стр. 150 = Сумма гр.3(стр. 020-140) / 13 (результат округлен до целых)'   ;
+  sMSTUmNeb       := 'Стр. 170 = Сумма гр.4(стр. 020-140) / 13 (результат округлен до целых)'                                   ;
+  sMNalBaza1      := 'Стр. 190 = стр. 150 - стр. 170 * стр. 180 (результат округлен до целых)'   ;
+  sMNalBaza2      := 'Стр. 190 = стр. 150 - стр. 170'                                   ;
+  sMSumNalIsch    := 'Стр. 220 = стр. 190 * стр. 210 / 100';
+  sMNalBaza3      := 'Стр. 060 = (стр. 030 - стр.035) * стр. 050 (результат округлен до целых) '       ;
+  sMNalBaza4      := 'Стр. 060 = (стр. 020 - стр.025) * стр. 050 (результат округлен до целых)'                                                         ;
+  sMNalBaza5      := 'Стр. 060 = 0'                                              ;
+  sMSSumNalIsch2  := 'Стр. 100 = стр. 060 * стр. 090 * стр. 080 / 100'                                   ;
+  sMNalPU         := 'Стр. 030 = Cумма(Разделов 2) + Сумма( Разделов 3)';
+  if ((GetStrVal('Файл/Документ/ДатаДок') = '') or (GetStrVal('Файл/Документ/ДатаДок') = 'ДД.ММ.ГГГГ'))
+    SetFldVal('Файл/Документ/ДатаДок', DateToStr(Cur_Date, XMLMap.GetAttrVFormatByName('Файл/Документ/ДатаДок')));
+  SumPU_count := GetCountFld('Файл/Документ/ИмущНД/СумНалПУ');
+  for (i := 0; i < SumPU_count; i++)
+  {
+    RachNalTS_count := GetCountFld('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб');
+    for (j := 0; j < RachNalTS_count; j++)
+    {
+      DolST_ := 0;
+      aDolST_:= 'Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/ДолСт';
+      if (not GetStrNull(aDolST_))
+      {
+        buf := GetStrVal(aDolST_);
+        if (buf <> '') and (Pos('/', buf) <> 0)
+        then DolST_ := Round(Double(SubStr(buf, 1, Pos('/', buf) - 1)) / Double(SubStr(buf, Pos('/', buf) + 1, Length(buf) - Pos('/', buf))), 4);
+      }
+      NameStr := pFH.Func('myGetPage_R2', i+1, j+1);
+      Sum1 := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0101/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0102/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0103/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0104/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0105/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0106/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0107/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0108/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0109/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0110/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0111/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0112/СтОстОН');
+      Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом3112/СтОстОН');
+      SumS := Sum1;
+      Sum1 := Round(Sum1/13);
+      SetFldVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтИмущ',  #GD0(Sum1));
+      #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтИмущ', sMSTUm, #GD0(Sum1)+' = '+String(SumS)+' / 13');
+      Sum2 := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0101/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0102/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0103/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0104/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0105/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0106/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0107/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0108/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0109/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0110/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0111/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом0112/СтЛьгИмущ');
+      Sum2 := Sum2 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтоимМес/ОстСтом3112/СтЛьгИмущ');
+      SumS := Sum2;
+      Sum2 := Round(Sum2/13);
+      SetFldVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтИмущНеобл',  #GD0(Sum2));
+      #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/СтИмущНеобл', sMSTUmNeb, #GD0(Sum2)+' = '+String(SumS)+' / 13');
+      If (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ВидИмущ') <> '2')
+      {
+        Sum := Round(Sum1-Sum2);
+        #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/НалПер/НалБаза', sMNalBaza2 , #GD0(Sum)+' = '+String(Sum1)+' - '+String(Sum2));
+      }
+      else
+      {
+        Sum := Round((Sum1-Sum2)*DolST_);
+        #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/НалПер/НалБаза', sMNalBaza1 , #GD0(Sum)+' = ('+String(Sum1)+' - '+String(Sum2)+ ') * '+aDolST_);
+      }
+      SetFldVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/НалПер/НалБаза',  #GD0(Sum));
+      SumS := Sum;
+      NalStav := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/ДанРас/НалСтав');
+      Sum := Round(Sum*NalStav/100);
+      SetFldVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/НалПер/СумНалИсчисл',  #GD0(Sum));
+      #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб'+getIter(j)+'/НалПер/СумНалИсчисл', sMSumNalIsch , #GD0(Sum)+' = '+String(SumS)+' * '+String(NalStav)+ ' / 100');
+    }
+
+    RachNalTS_count := GetCountFld('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб');
+    Sum3 := 0;
+    for (j := 0; j < RachNalTS_count; j++)
+    {
+      DolCT_ := 0;
+      aDolCT_:= 'Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/ДанРас/ДолСт';
+      if (not GetStrNull(aDolST_))
+      {
+        buf := GetStrVal(aDolST_);
+        if (buf <> '') and (Pos('/', buf) <> 0)
+        then DolCT_ := Round(Double(SubStr(buf, 1, Pos('/', buf) - 1)) / Double(SubStr(buf, Pos('/', buf) + 1, Length(buf) - Pos('/', buf))), 4);
+      }
+      NameStr := pFH.Func('myGetPage_R3', i+1, j+1);
+      aSTImuK  := 'Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/ДанРас/СведСтКад/СтИмущК';
+      aSTImuNK := 'Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/ДанРас/СведСтКад/СтИмущНеоблК';
+      aSTImuI  := 'Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/ДанРас/СведСтИнв/СтИмущИ';
+      aSTImuNI := 'Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/ДанРас/СведСтИнв/СтИмущНеоблИ';
+      If (GetDblVal(aSTImuK)<>'')
+        sSTImuK :=GetDblVal(aSTImuK);
+      else
+        sSTImuK :=0;
+      If (GetDblVal(aSTImuNK)<>'')
+        sSTImuNK  :=GetDblVal(aSTImuNK);
+      else
+        sSTImuNK :=0;
+
+      If (GetDblVal(aSTImuI)<>'')
+        sSTImuI  :=GetDblVal(aSTImuI);
+      else
+        sSTImuI :=0;
+       If (GetDblVal(aSTImuNI)<>'')
+        sSTImuNI  :=GetDblVal(aSTImuNI);
+      else
+        sSTImuNI :=0;
+
+
+
+      Sum1 := sSTImuK-sSTImuNK;
+      Sum2 := sSTImuI-sSTImuNI;
+      if  (GetStrVal('Файл/Документ/ОтчетГод')='2013')
+      {
+        if Sum2 > 0
+        {
+          Sum := Round(Sum2*DolCT_,0)
+          #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/НалБаза', sMNalBaza3 , #GD0(Sum)+' = ('+sSTImuI+' - ' + sSTImuNI+') * '+chDol+' / ' + zmDol);
+           SetFldVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/НалБаза',  #GD0(Sum));
+
+        }
+        else
+          if Sum1 > 0
+          {
+            Sum := Round(Sum1*DolCT_,0)
+            #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/НалБаза', sMNalBaza4 , #GD0(Sum)+' = ('+sSTImuK+' - ' + sSTImuNK+') * '+chDol+' / ' + zmDol);
+          }
+          else
+          {
+            Sum := 0
+            #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/НалБаза', sMNalBaza5 , #GD0(Sum)+' = 0');
+          }
+      }
+      else
+        if Sum1 > 0
+        {
+          Sum := Round(Sum1*DolCT_,0)
+          #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/НалБаза', sMNalBaza4 , #GD0(Sum)+' = ('+sSTImuK + ' - ' + sSTImuNK+') * '+chDol+' / ' + zmDol);
+        }
+        else
+        {
+          Sum := 0
+          #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/НалБаза', sMNalBaza5 , #GD0(Sum)+' = 0');
+        }
+      SetFldVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/НалБаза',  #GD0(Sum));
+
+      aKoefK:=GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/ДанРас/КоэфК');
+      posStr := Pos('/', aKoefK);
+      lenStr  := length(aKoefK);
+      chDol:= Double(SubStr(aKoefK,0, posStr-1));
+      if  chDol<=0
+        chDol := 1;
+      zmDol:= Double(SubStr(aKoefK, posStr+1, LenStr-1));
+      if  zmDol<=0
+        zmDol := 1;
+      KoefK_  := chDol/zmDol;
+      NalStav := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/ДанРас/НалСтав');
+      SumNal := Sum * KoefK_  *NalStav/100;
+      SetFldVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/СумНалИсчисл',  #GD0(SumNal));
+      #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/СумНалИсчисл', sMSSumNalIsch2, #GD0(SumNal)+' = '+String(Sum)+' * '+aKoefK+' * '+String(NalStav)+ ' / 100');
+    }
+    RachNalTS_count := GetCountFld('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб');
+    Sum1 := 0;
+    Sum3:=0;
+    Sum4:=0;
+    NameStr := pFH.Func('myGetPage_R1', i+1);
+    for (j := 0; j < RachNalTS_count; j++)
+    {
+      If (GetStrVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/ВидИмущ')<>'4')
+      {
+        Sum1 := Sum1 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумНалИсчисл');
+        Sum1 := Sum1 - GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумАвИсчисл');
+        Sum1 := Sum1 - GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумЛгУмен');
+        Sum2:= GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумНалИсчисл');
+        Sum3:= GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумАвИсчисл');
+        Sum4:= GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумЛгУмен');
+        Sum:=Sum2-Sum3-Sum4;
+        sMNalPU02 := '03.'+String(i+1)+'.'+String(j+1)+' Раздел 2(стр. 220 - (стр. 230 + стр. 250))';
+        #_Log('', sMNalPU02, #GD0(Sum)+' = '+String(Sum2)+' - ('+String(Sum3)+' + '+String(Sum4)+')');
+      }
+      else
+      {
+
+        Sum2 := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумНалИсчисл');
+        Sum3 := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумЛгУмен');
+        Sum4 := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОбДеятРФ/РасОб' + getIter(j) +'/НалПер/СумНалПред');
+        if (Sum2-Sum3)<Sum4
+        {
+          Sum1:=Sum1-(Sum2-Sum3)
+          sMNalPU02:= '03.'+String(i+1)+'.'+String(j+1)+' Раздел 2(стр. 220 - Cтр. 250)';
+          Sum4:=0-(Sum2-Sum3);
+          #_Log('', sMNalPU02, #GD0(Sum4)+' =-( '+String(Sum2)+' - '+String(Sum3)+')');
+
+        }
+        else
+        {
+          Sum1:=Sum1-Sum4;
+          Sum4:=0-Sum4;
+          sMNalPU02 := '03.'+String(i+1)+'.'+String(j+1)+' Раздел 2(стр. 260)';
+          #_Log('', sMNalPU02, #GD0(Sum4)+' = '+String(Sum4));
+
+        }
+      }
+    }
+    Sum3:=0;
+    for (j := 0; j < GetCountFld('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'); j++)
+    {
+     Sum3 := Sum3 + GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/СумНалИсчисл');
+     Sum3 := Sum3 - GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/СумАвИсчисл');
+     Sum3 := Sum3 - GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/СумЛгУмен');
+     Sum5 := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/СумНалИсчисл');
+     Sum2 := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/СумАвИсчисл');
+     Sum4 := GetDblVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/РасОБНедИО/РасОб'+getIter(j)+'/НалПер/СумЛгУмен');
+     Sum := Sum5 -Sum2-Sum4;
+     sMNalPU02 := '04.'+String(i+1)+'.'+String(j+1)+' Раздел 3(стр. 100 - (стр. 110 + стр. 130))';
+     #_Log('', sMNalPU02, #GD0(Sum)+' = '+String(Sum5)+' - ('+String(Sum2)+' + '+String(Sum4)+')');
+    }
+
+    Sum := Round(Sum1+Sum3);
+    SetFldVal('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/НалПУ',  #GD0(Sum));
+    #_Log('Файл/Документ/ИмущНД/СумНалПУ'+getIter(i)+'/НалПУ', sMNalPU, #GD0(Sum)+' = '+String(Sum1)+' + '+String(Sum3));
+  }
+@end.
+
+@Script On_ExportXML : boolean;
+@begin
+  SetFldVal('Файл/ИдФайл', Replace(_IdFail_, '.xml', ''));
+
+  if (not XMLMap.ExpToXml(_XmlFileName_)) {
+    Message('On_ExportXML: '+ XMLMap.GetStLastError, cancelButton+Warning);
+    Exit;
+  }
+
+  message('Выгружен в файл ' + _XmlFileName_);
+@end.
+
+@Script Tst(fld:variant):variant;
+@begin
+
+@end.

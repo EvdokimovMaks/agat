@@ -1,0 +1,5 @@
+IMNCP
+MNCPFR01STREAMALL
+ПРОИЗВОДСТВЕННАЯ МОЩНОСТЬ_Оптима_Вертикальный
+
+IMNCP.MNCPFR01STREAMALL.Report_4.frf

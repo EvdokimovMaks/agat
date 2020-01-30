@@ -2,14 +2,13 @@
 {═════════════ Таблица : KAST "KAST" ══════════════}
 type
   String255        = String[255];
-  String150        = String[150];
   String20        = String[20];
   pKAST = ^tKAST;
   tKAST = record   { - KAST }
     PRCEX          : Comp;            { prCex                                 }
     PRNAMP         : String;          { prNamP                                }
     NREC           : Comp;            { Номер записи                          }
-    NAME           : String150;       { наименование подразделения            }
+    NAME           : String;          { наименование подразделения            }
     KOD            : String20;        { код подразделения                     }
   end;
 const

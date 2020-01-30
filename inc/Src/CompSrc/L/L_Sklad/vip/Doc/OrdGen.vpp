@@ -124,9 +124,6 @@ Function Check_wasSpis(_cSklOrder: comp; var wModeSpis : word): boolean;
   if ( loCheckRashOrd.GetFirst SklOrder <> tsOk )
     Exit;
 
-  if ( word(0) <> loCheckRashOrd.SklOrder.vidOrder )//проверять приходные ордера
-    Exit;
-
   if ( loCheckRashOrd.GetFirst SpOrder where ((_cSklOrder == SpOrder.cSklOrder)) <> tsOk )
     Exit;
 
@@ -172,6 +169,8 @@ Function Check_wasSpis(_cSklOrder: comp; var wModeSpis : word): boolean;
     loCheckRashOrd._LOOP SpOrderRash
     {
       // Модификация/создание приходных ордеров при наличии после них расходных - НЕТ
+     if (word(0) = loCheckRashOrd.SklOrder.vidOrder)   //приходные
+     {
       if (wGetTune('Oper.Sklad.EditPrihOrdWithRash') < 2)
         Result := True
       else
@@ -204,6 +203,44 @@ Function Check_wasSpis(_cSklOrder: comp; var wModeSpis : word): boolean;
           DoneMcInfo;
         }
       }
+     }
+
+      // Модификация/создание расходных ордеров при наличии после них расходных - НЕТ
+     if (word(0) <> loCheckRashOrd.SklOrder.vidOrder)   //расходные
+     {
+      if (wGetTune('Oper.Sklad.EditRashOrdWithRash') < 2)
+        Result := True
+      else
+      {
+        if (loCheckRashOrd.SpOrderRash.dOrd <> loCheckRashOrd.SpOrder.dOrd)
+          Result := True
+        else
+        {
+          if (loCheckRashOrd.SpOrderRash.Atl_LastDate > loCheckRashOrd.SpOrder.Atl_LastDate)
+            Result := True;
+          else
+            if (loCheckRashOrd.SpOrderRash.Atl_LastDate = loCheckRashOrd.SpOrder.Atl_LastDate)
+              if (loCheckRashOrd.SpOrderRash.Atl_LastTime > loCheckRashOrd.SpOrder.Atl_LastTime)
+                Result := True;
+        }
+
+        if (Result) and (wGetTune('Oper.Sklad.EditRashOrdWithRash') = 3)
+        {
+          InitMCInfo(loCheckRashOrd.SpOrderRash.dOrd);
+          SkladProizv(loCheckRashOrd.SpOrderRash.SP);
+          StepMCInfo(loCheckRashOrd.SpOrderRash.cMC
+              , loCheckRashOrd.SpOrderRash.cVal
+              , if (loCheckRashOrd.SpOrderRash.ccPodr  = 0, comp(-1), loCheckRashOrd.SpOrderRash.ccPodr)
+              , if (loCheckRashOrd.SpOrderRash.ccMOL   = 0, comp(-1), loCheckRashOrd.SpOrderRash.ccMOL)
+              , if (loCheckRashOrd.SpOrderRash.cParty = 0, comp(-1), loCheckRashOrd.SpOrderRash.cParty) );
+
+          if (CountMC >= loCheckRashOrd.SpOrder.Kol)
+            Result := False;
+
+          DoneMcInfo;
+        }
+      }
+     }
 
       if (Result)
       {
@@ -490,13 +527,24 @@ var
                 , 'Oper.Box.ModOrdAftPer');
         Exit;
       }
+
+    if ( wGetTune('Doc.SerialN.ModPrih')<> 0 )
+      if ( not oSerialMove.CanDeleteOrder(SklOrder.nRec) )
+      {
+        Result := False;
+
+        ShowTune('Запрещена модификация ордеров c серийными номерами при наличии после них операций!', 'Doc.SerialN.ModPrih');
+
+        Exit;
+      }
   }
   else
   {
     Result := False;
 
     if ((wModeSpis and 1) <> 0)
-      if ( wGetTune('Oper.Sklad.EditPrihOrdWithRash') <> 0 )
+     {
+      if ( wGetTune('Oper.Sklad.EditPrihOrdWithRash') <> 0 )and (word(0) = SklOrder.Vidorder)
       {
         ShowTune( 'Запрещена модификация приходных ордеров при наличии после них расходных!'
                 , 'Oper.Sklad.EditPrihOrdWithRash');
@@ -504,11 +552,28 @@ var
         Exit;
       }
 
+      if ( wGetTune('Oper.Sklad.EditRashOrdWithRash') <> 0 )and (word(0) <> SklOrder.Vidorder)
+      {
+        ShowTune( 'Запрещена модификация расходных ордеров при наличии после них расходных!'
+                , 'Oper.Sklad.EditRashOrdWithRash');
+        frm1wed.ShowFile('Протокол расходных документов по расходному ордеру');
+        Exit;
+      }
+     }
+
     if ( wGetTune('Oper.Box.ModOrdAftPer') <> 0 )
       if ( oCheckSpisBox.Check_wasSpisBox(SklOrder.nRec) )
       {
         ShowTune( 'Запрещена модификация приходных ордеров при наличии перемещений из ячеек хранения!'
                 , 'Oper.Box.ModOrdAftPer');
+        Exit;
+      }
+
+    if ( wGetTune('Doc.SerialN.ModPrih')<> 0 )
+      if ( not oSerialMove.CanDeleteOrder(SklOrder.nRec) )
+      {
+        ShowTune('Запрещена модификация ордеров c серийными номерами при наличии после них операций!', 'Doc.SerialN.ModPrih');
+
         Exit;
       }
 
@@ -527,13 +592,13 @@ var
       {
         case wModeSpis of
           1: Result :=
-                 Message('По разрезу оприходования ордера (' + f_sNumDate(SklOrder.nOrder, SklOrder.dOrd) +
+                 Message('По разрезу '+if(word(0)<>SklOrder.Vidorder,'списания','оприходования')+' ордера (' + f_sNumDate(SklOrder.nOrder, SklOrder.dOrd) +
                          ') уже были проведены списания.'#13 +
                          ' При изменении данного ордера возможны неверные цены списания в расходных ордерах.'#13#13 +
                          + 'Продолжить?', YesNo+Confirmation+mfSwapButtons) = cmYes;
 
           2: Result :=
-                 Message('По разрезу оприходования ордера (' + f_sNumDate(SklOrder.nOrder, SklOrder.dOrd) +
+                 Message('По разрезу '+if(word(0)<>SklOrder.Vidorder,'списания','оприходования')+' ордера (' + f_sNumDate(SklOrder.nOrder, SklOrder.dOrd) +
                          ') уже были сформированы Акты изменения целевого назначения запасов МТР.'#13 +
                          'При изменении данного ордера возможны некорректные остатки запасов МТР в разрезе целевого учета.'#13#13 +
                          + 'Продолжить?', YesNo+Confirmation+mfSwapButtons) = cmYes;
@@ -541,20 +606,20 @@ var
           3:
           {
             Result :=
-                Message('По разрезу оприходования ордера (' + f_sNumDate(SklOrder.nOrder, SklOrder.dOrd) +
+                Message('По разрезу '+if(word(0)<>SklOrder.Vidorder,'списания','оприходования')+' ордера (' + f_sNumDate(SklOrder.nOrder, SklOrder.dOrd) +
                         ') уже были проведены списания.'#13 +
                         ' При изменении данного ордера возможны неверные цены списания в расходных ордерах.'#13#13 +
                         + 'Продолжить?', YesNo+Confirmation+mfSwapButtons) = cmYes;
 
             if (not Result)
             {
-              frm1wed.ShowFile('Протокол списаний по приходному ордеру');
+              frm1wed.ShowFile('Протокол списаний по '+if(word(0)<>SklOrder.Vidorder,'расходному','приходному')+' ордеру');
               Exit;
             }
             else
             {
               Result :=
-                   Message('По разрезу оприходования ордера (' + f_sNumDate(SklOrder.nOrder, SklOrder.dOrd) +
+                   Message('По разрезу '+if(word(0)<>SklOrder.Vidorder,'списания','оприходования')+' ордера (' + f_sNumDate(SklOrder.nOrder, SklOrder.dOrd) +
                            ') уже были сформированы Акты изменения целевого назначения запасов МТР.'#13 +
                            'При изменении данного ордера возможны некорректные остатки запасов МТР в разрезе целевого учета.'#13#13 +
                          + 'Продолжить?', YesNo+Confirmation+mfSwapButtons) = cmYes;
@@ -564,7 +629,7 @@ var
       }
 
     if (not Result)
-      frm1wed.ShowFile('Протокол списаний по приходному ордеру')
+      frm1wed.ShowFile('Протокол списаний по '+if(word(0)<>SklOrder.Vidorder,'расходному','приходному')+' ордеру')
     else
       frm1wed.AbortForm;
   }
@@ -889,7 +954,7 @@ Procedure ProtectedInput;
 
   if (KatSopr.wAdoc = adSoprDocSN)
   {
-    Message('Этот сторнирующий складской ордер сформирован для корректирующей накладной - редактировать нельзя');
+    Message('Этот сторнирующий складской ордер сформирован для исправительной накладной - редактировать нельзя');
     Exit;
   }
 
@@ -2828,7 +2893,7 @@ var
                                   Continue;
                                 }
 
-                              fEdIzm.CheckKolDiskretAll( Pick.PickKol, fEdIzm.GetUchOtpEdNRec(KatMC.nRec, 1), KatMC.cEd, True, True );
+                              fEdIzm.CheckKolDiskretAll( Pick.PickKol, fEdIzm.GetAktOtpEdNRec(KatMC.nRec, 1), KatMC.cEd, True, True );
 
                               var kol_    : double = SpOrder.kol;
                               var price_  : double = SpOrder.srPrice;
@@ -4198,6 +4263,19 @@ var
         PutCommand(cmOpenSearch);
       }
   //------------------------------------------------------------------------------
+#ifdef _USE_SERIAL_
+      #fSerialNum:
+      {
+        if(isValid(tnKatMC))
+          if(KatMC.wSerialReg = 1)
+          {
+            oSpOrdSerialN2.SetSpOrdSerialN(SpOrder.nRec);
+            RunWindowModal(SpSerialNInfo);
+            ReReadRecord(#SpSopr);
+          }
+      }
+#endif
+  //------------------------------------------------------------------------------
   end; // case
 
   if ( IsDoocen )
@@ -5275,7 +5353,7 @@ var Nal : double;
 
         var oldKol: double;  oldKol := Double(OldFieldValue);
 
-        fEdIzm.CheckKolDiskretAll ( SpOrder.Kol, fEdIzm.GetUchOtpEdNRec(KatMC.nRec, 1), KatEd.nRec, True, True );
+        fEdIzm.CheckKolDiskretAll ( SpOrder.Kol, fEdIzm.GetAktOtpEdNRec(KatMC.nRec, 1), KatEd.nRec, True, True );
 
         if ( SpOrder.VidOrder = 1 ) and (wGetTune('Sklad.ContrSpisRashOrd') <> 0)
         {

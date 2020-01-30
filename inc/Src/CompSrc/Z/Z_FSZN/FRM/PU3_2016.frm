@@ -90,6 +90,7 @@
   Sum1UdUpl:double
   SumVzUpl:double
   DateChangePer
+  sReason
   //------------------------------------------------------------------------------
   //====== стажи ======
   Наим_стажа
@@ -190,7 +191,7 @@
   │  Сведения о суммах начислений, больничных, удержаний и взносов                             │
   └────────────────────────────────────────────────────────────────────────────────────────────┘
 .{ CheckEnter PU3_2016_NACH
-   Mes ^  MesText ^  PrizPrint ^  PrizPrintSymb ^  PrizSum1 ^   ProcUd1 ^  ProcNach281 ^  ProcNach61 ^ Sum11 ^   Sum12 ^  SumUd1 ^   Sum28Vz ^  Sum6Vz ^  Sum1UdUpl ^  SumVzUpl ^  DateChangePer ^
+   Mes ^  MesText ^  PrizPrint ^  PrizPrintSymb ^  PrizSum1 ^   ProcUd1 ^  ProcNach281 ^  ProcNach61 ^ Sum11 ^   Sum12 ^  SumUd1 ^   Sum28Vz ^  Sum6Vz ^  Sum1UdUpl ^  SumVzUpl ^  DateChangePer ^ sReason ^
 .}
   └────────────────────────────────────────────────────────────────────────────────────────────┘
   ┌────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -382,8 +383,9 @@
   Sum1UdUpl
   SumVzUpl
   DateChangePer
+  sReason
 .endfields
-   Mes ^  MesText ^  PrizPrint ^  PrizPrintSymb ^  PrizSum1 ^   ProcUd1 ^  ProcNach281 ^  ProcNach61 ^ Sum11 ^   Sum12 ^  SumUd1 ^   Sum28Vz ^  Sum6Vz ^  Sum1UdUpl ^  SumVzUpl ^   DateChangePer ^
+   Mes ^  MesText ^  PrizPrint ^  PrizPrintSymb ^  PrizSum1 ^   ProcUd1 ^  ProcNach281 ^  ProcNach61 ^ Sum11 ^   Sum12 ^  SumUd1 ^   Sum28Vz ^  Sum6Vz ^  Sum1UdUpl ^  SumVzUpl ^   DateChangePer ^ sReason ^
 .}
   └────────────────────────────────────────────────────────────────────────────────────────────┘
   ┌────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -490,7 +492,7 @@ end.
 begin
    WriteInForm := '0,00';
    if (_sum <> 0)
-     WriteInForm := DoubleToStr(_sum,'[|-]36666666666667,8899')
+     WriteInForm := DoubleToStr(_sum,'[|-]36666666666667,88')
    else if (_sum = 0) and (prizn = 1 or prizn = 0)
      WriteInForm := '0,00';
    // уплаченные взносы для любого типа сотрудника выводятся числом
@@ -537,12 +539,12 @@ if(Trim(RegPFNum)<>'',Trim(RegPFNum),' ')
 if(Trim(Pred)<>'',UpCase(Trim(Pred)),' ')
 LPadCh(string(pach_nmb),'0',9)
 if(Trim(string(PersonsNumb))<>'',Trim(string(PersonsNumb)),' ')
-if(CharF<>2, DoubleToStr(Pach_NachItog,'[|-]36666666666667,8899'),'0,00')
-if(CharF<>2, DoubleToStr(Pach_BolnItog,'[|-]36666666666667,8899'),'0,00')
-if(CharF<>2, DoubleToStr(Pach_UdItog+Pach_28VzItog+Pach_6VzItog,'[|-]36666666666667,8899'), '0,00') // Сумма удержания (1%) + пенсионных взносов (28%) + страховых взносов (6%) по пачке
-if(CharF<>2, DoubleToStr(Pach_UdUplItog+Pach_28VzUplItog+Pach_6VzUplItog,'[|-]36666666666667,8899'), '0,00') // Сумма уплаченного удержания (1%) + уплаченных взносов 34%(28+6) по пачке
+if(CharF<>2, DoubleToStr(Pach_NachItog,'[|-]36666666666667,88'),'0,00')
+if(CharF<>2, DoubleToStr(Pach_BolnItog,'[|-]36666666666667,88'),'0,00')
+if(CharF<>2, DoubleToStr(Pach_UdItog+Pach_28VzItog+Pach_6VzItog,'[|-]36666666666667,88'), '0,00') // Сумма удержания (1%) + пенсионных взносов (28%) + страховых взносов (6%) по пачке
+if(CharF<>2, DoubleToStr(Pach_UdUplItog+Pach_28VzUplItog+Pach_6VzUplItog,'[|-]36666666666667,88'), '0,00') // Сумма уплаченного удержания (1%) + уплаченных взносов 34%(28+6) по пачке
 .endfields
-ЗГЛВ=1.6=
+ЗГЛВ=1.7=
 <ПАЧК=^=^=^=^= = =1=
 ТИПД=ПУ-3=^=^=^=^=^=>
 .}
@@ -566,21 +568,22 @@ if(Trim(Initial2)<>'',UpCase(Trim(Initial2)),' ')
 if(Trim(HP)<>'',UpCase(Trim(HP)),' ')
 if(Trim(Dog_Num)<>'',Trim(Dog_Num),' ')
 if(day(Dog_Date)<>0,DateToStr(Dog_Date,'DD/MM/YYYY'),' ')
-if((CharF <> 2)and(ISum1      <> 0),DoubleToStr(ISum1,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISum2      <> 0),DoubleToStr(ISum2,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISumUd1    <> 0),DoubleToStr(ISumUd1,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISum28Vz   <> 0),DoubleToStr(ISum28Vz,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISum6Vz    <> 0),DoubleToStr(ISum6Vz,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISumUdUpl1 <> 0),DoubleToStr(ISumUdUpl1,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
-if((CharF <> 2)and(ISumVzUpl  <> 0),DoubleToStr(ISumVzUpl,'[|-]36666666666667,8899'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISum1      <> 0),DoubleToStr(ISum1,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISum2      <> 0),DoubleToStr(ISum2,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISumUd1    <> 0),DoubleToStr(ISumUd1,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISum28Vz   <> 0),DoubleToStr(ISum28Vz,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISum6Vz    <> 0),DoubleToStr(ISum6Vz,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISumUdUpl1 <> 0),DoubleToStr(ISumUdUpl1,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
+if((CharF <> 2)and(ISumVzUpl  <> 0),DoubleToStr(ISumVzUpl,'[|-]36666666666667,88'), if((CharF <> 2), '0,00', ' '))
 if((CharF <> 2),string(KolNach),' ')
 if((CharF <> 2),string(KolStag),' ')
 curdate
+if((God >= 2019) and (CharF <> 2), квартал, ' ')
 God
 if(Trim(Fone_org)<>'',Trim(Fone_org),' ')
 if ( TrueType = 'О','>','')
 .endfields
-<ПУ-3=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^= =^=^=^
+<ПУ-3=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^=^
 .}
 .{ CheckEnter PU3_2016_PerScale
 .}
@@ -598,10 +601,11 @@ if ( TrueType = 'О','>','')
   WriteInFormPr(ProcNach281, PrizSum1)
   WriteInFormPr(ProcNach61,  PrizSum1)
   if (DateChangePer <> '', DateChangePer, ' ')
+  sReason
   PriznForLastChar
 .endfields
 .{?internal;(PrizPrint=true)and(CharF<>2)
-НЧСЛ=^=^=^=^=^=^=^=^=^=^=^=^=^
+НЧСЛ=^=^=^=^=^=^=^=^=^=^=^=^=^=^
 .}
 .}
 .{ CheckEnter PU3_2016_Stages
@@ -627,7 +631,7 @@ end.
 .fields
 pach_nmb
 .endfields
-___КОНЕЦ ^ ПАЧКИ
+___END ^ ПАЧКИ
 .begin
   pach_nmb:= pach_nmb + 1;
   nomer:= 0;

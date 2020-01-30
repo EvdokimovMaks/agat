@@ -13,6 +13,7 @@
 table  struct ExImDbfMy(
   NRec  : tNRec  "Номер записи"
 , DName : s80    "Имя поля"
+, lFileDbf : TSurrPtr
 , DType : Word   "Тип поля"
 , DLen  : Word   "Длина поля"
 , DKolZ : Word   "Количество знаков"

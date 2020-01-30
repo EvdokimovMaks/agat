@@ -23,6 +23,9 @@
   MolFrSh
   rNRec : Comp
 
+  MolToPost
+  FioRuk
+
 // Выданные предметы
   Npp : Longint
   CardN
@@ -46,6 +49,7 @@
   ^ ^ ^
   ^ ^ ^
   ^
+  ^ ^
 .{ ListBySFO CheckEnter
   ^
   ^ ^ ^

@@ -9,7 +9,7 @@
 
 #ifdef ComponentVersionInDict
 #include IFPBUDGET.vih
-#endif //ComponentVersion
+#endif
 #GalPublic type TFpBudget  = record as Table FpBudget;
 #GalPublic type TPFpBudget = record as Table FpBudget with x$position;
 

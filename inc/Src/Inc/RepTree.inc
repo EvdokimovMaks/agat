@@ -114,8 +114,24 @@
   cgTreeGroupCorrespondO   = 33;  // группа соответствия аналитике основного счета
   cgTreeGroupCorrespondK   = 34;  // группа соответствия аналитике корр. счета
   cgTreeGroupSodr    = 35;  // содержание проводки
-  cgTreeExtElem1     = 36;
-  cgTreeExtElem2     = 37;
+  cgTreeExtElem1     = 36;  // внешняя группировка 1
+  cgTreeExtElem2     = 37;  // внешняя группировка 2
+
+  cgTreeGroupKau7O   = 38;  // аналитика 7 основного счета
+  cgTreeGroupKau8O   = 39;  // аналитика 8 основного счета
+  cgTreeGroupKau9O   = 40;  // аналитика 9 основного счета
+  cgTreeGroupKau10O  = 41;  // аналитика 10 основного счета
+  cgTreeGroupKau11O  = 42;  // аналитика 11 основного счета
+  cgTreeGroupKau12O  = 43;  // аналитика 12 основного счета
+  cgTreeGroupKau7K   = 44;  // аналитика 7 корреспондирующего счета
+  cgTreeGroupKau8K   = 45;  // аналитика 8 корреспондирующего счета
+  cgTreeGroupKau9K   = 46;  // аналитика 9 корреспондирующего счета
+  cgTreeGroupKau10K  = 47;  // аналитика 10 корреспондирующего счета
+  cgTreeGroupKau11K  = 48;  // аналитика 11 корреспондирующего счета
+  cgTreeGroupKau12K  = 49;  // аналитика 12 корреспондирующего счета
+
+  cgTreeExtElem3     = 50;  // внешняя группировка 3
+  cgTreeExtElem4     = 51;  // внешняя группировка 4
 
   cgTreeGroupTotal   = 65000; // Итого по отчету (не должно пересекаться с кодами аналитик)
 

@@ -49,11 +49,42 @@
 ! 9.1      ? /  /     ?
 !-------------------------------------------------------------------------------
 
-#ifdef GalFuture               // Для изменений несовместимых со словарем 9.1
-  #define ComponentVersionInDict
-  #define Gal9_1
+#ifdef GalFuture               // Для изменений несовместимых со словарем 9.1 и 9.2
+  #define Gal9_2
   #define __UProcess__         // Учебный процесс
   #define PIR_101_46352
+  #define PIR_102_126419
+  #define PIR_102_179947
+  #define PIR_102_190717
+  #define PIR_102_179687
+  #define PIR_102_141861
+  #define PIR_101_60108
+#end
+
+!-------------------------------------------------------------------------------
+#ifdef Gal9_2
+  #ifNdef GalVersion
+    #define GalVersion 9.2     // Версия Галактики. Используется для версии компонент.
+  #end
+  #define Gal9_1
+  #define New_Fields_Veksl
+  #define _12KAU_
+  #define __TPR2__
+  #define __TNFpLimit__
+  #define __TNRLimits__
+  #define __TNDBIM__
+  #define __TNF_URIU__
+  #define __TNFpExpImp__
+  #define _TransNeftMnf_
+  #define _EXTR_UKVS_ALG_
+  #define __COFilial__
+  #define _MULTIPLE_UKVS_RASPR_
+  #define _AVR_BY_OBOROT_
+  #define __TNDocTestResult__
+  #define __PlPorDocBudItem__  // Разноска платежного документа по бюджетным позициям
+  #define __NewAnRel__         // Хранимые расширенные соответствия
+  #define __F_DocVO__          // Валютные операции по документу
+  #define __F_Insurance__      // Учет страхования
 #end
 
 !-------------------------------------------------------------------------------
@@ -336,11 +367,11 @@
 //пир 102.50662  #define __UKS_PLANNING__     // Планирование закупок
 //#end
 
-#if(#__TOOLVERSION__ >= 3003.022)
- #define _AttrValComp_              // Тип COMP для внешних атрибутов
-#end
-
 // #define NALOG_VEKSL
+
+#if(#__TOOLVERSION__ >= 5005.033)
+  #define __FRAPI_NewFormat__
+#endif
 
 // для ситуаций, в которых недопустимо использование синонимов типов (определённых через type)
 #ifdef Atl60

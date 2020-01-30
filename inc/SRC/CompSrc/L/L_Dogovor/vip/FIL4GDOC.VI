@@ -1,0 +1,373 @@
+/*
+ ╔═══════════════════════════════════════════════════════════════════════════╗
+ ║                     (c) 1987,98 корпорация ГАЛАКТИКА                      ║
+ ║ Проект        : ГАЛАКТИКА                                                 ║
+ ║ Система       : Оперативный контур                                        ║
+ ║ Версия        : 5.70                                                      ║
+ ║ Назначение    : Установка фильтров и запись их в DSK для GetDocs          ║
+ ║ Ответственный : Глушаков Дмитрий Сергеевич                                ║
+ ╚═══════════════════════════════════════════════════════════════════════════╝
+*/
+
+Interface Filter4GetDoc 'Установка фильтров' EscClose, DoAccept;
+Show at (2,6,76,15);
+
+Create View
+Var
+  optView,DateSrok_e,StatusKat_e,
+  pStatus,pSt_Erie : word;
+  Date01,Date02 : date;
+  cKontrag,cGruz_From,cGruzTo,cKNotes : comp;
+  DskParams : longint;
+  pDogovor,
+  pAppDogovor,
+  pKalPlan     : comp;
+  (
+  IspR
+  )
+
+As Select
+  if (KatNotes2.FilialNo = 1, '   Да' , '   Нет')  // Контроль (0-нет, 1-да, 2-нет всегда)
+
+From
+  KatNotes                       ,
+  KatOrg                         ,
+  synonym KatNotes KatNotes2     ,
+!  synonym KatNotes KatNotes2     (KatNotes03),
+  synonym KatOrg KatOrgFrom      ,
+  synonym KatOrg KatOrgTo        
+
+Where
+  ((
+  cKNotes       ==  KatNotes.NRec    and
+  cKontrag      ==  KatOrg.NRec      and
+  cGruz_From    ==  KatOrgFrom.NRec  and
+  cGruzTo       ==  KatOrgTo.NRec    and
+
+  word(400)     ==  KatNotes2.VidDoc and
+  comp(0)       ==  KatNotes2.cOwner and
+    ((pStatus and word(1 shl KatNotes2.Status)) = 0)
+!    ( (pSt_Erie=0) and ((pStatus and word(1 shl KatNotes2.Status)) = 0) )
+  ))
+  
+!order by KatNotes2.VidDoc, KatNotes2.Status, KatNotes2.Code
+;
+
+Parameters
+  pDogovor,
+  pAppDogovor,
+  pKalPlan,
+  DskParams;
+
+!------------------------------------------------------------------------------
+
+Window winRootDogNotes 'Выберите статус документов' (,,sci1EnEsc)
+  EscClose,
+  DoAccept,
+  Cyan;
+Show at (2,5,67,15);
+Browse br1
+table KatNotes2
+  KatNotes2.Name  'Наименование' ('',,) : [20], protect;
+  KatNotes2.sName 'Кратко'       ('',,) : [ 6], protect;
+  KatNotes2.Code  'Код'          ('',,) : [ 6], protect;
+  IspR            'Контроль'     ('Контролировать или нет количество при создании подчиненных документов',,) : [8], protect;
+end; // Browse
+
+HandleEvent
+cmInit :
+  if (GetFirst KatNotes2 where((cKNotes == KatNotes2.NRec)) <> tsOk) {};
+
+cmDefault :
+  cKNotes := KatNotes2.NRec;
+
+end; // HandleEvent
+end; // Window
+
+!------------------------------------------------------------------------------
+
+Panel p1
+Screen scr1 (,,sci1Esc);
+Fields
+  optView ('Установить фильтр') : noprotect;
+  Date01  ('Начальная дата',,sci1Esc) : [,'DD/MM/YYYY'], noprotect,
+     {Font = {BackColor = if (Date01>Date02, ColorError, 0) }};
+  Date02  ('Конечная дата' ,,sci1Esc) : [,'DD/MM/YYYY'], noprotect,
+     {Font = {BackColor = if (Date01>Date02, ColorError, 0) }};
+  DateSrok_e      ('Для каких документов применять выбор',,sci13Esc) :
+    [LIST 'для всех','для договоров','для соглашений'], protect;
+  KatOrg.Name     ('Выбор контрагента для всех документов',,sci13Esc) : protect;
+  KatOrgFrom.Name ('Выбор грузоотправителя для пунктов календарного плана',,sci13Esc) : protect;
+  KatOrgTo.Name   ('Выбор грузополучателя для пунктов календарного плана',,sci13Esc) : protect;
+  KatNotes.Name   ('Выбор статуса документов',,sci13Esc) : protect;
+  StatusKat_e     ('Для каких документов применять выбор',,sci13Esc) :
+    [LIST 'для всех','для договоров','для соглашений','для планов'], protect;
+Buttons
+  cmYes   ,Default,,'Применить фильтры',,sci1Esc;
+  cmCancel,,,'Отмена',,sci1Esc;
+<<
+
+ [.] По сроку действия  ` с .@@@@@@@@@@@  по .@@@@@@@@@@@ .@@@@@@@@@@@@@@
+ [.] По контрагенту     `.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ для всех
+ [.] По грузоотправителю`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ для планов
+ [.] По грузополучателю `.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ для планов
+ [.] По статусу         `.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ .@@@@@@@@@@@@@@
+
+               <.     Да     .>         <.   Отмена   .>
+
+>>
+end; //screen
+
+HandleEvent
+cmPick:
+  {
+  CASE CurField OF
+    #KatOrg.Name:
+      if (RunInterface('GetKatOr', cKontrag, comp(0), false, comp(0), comp(0)) <> cmCancel)
+        {
+        set optView := optView or 2;
+        ReScanPanel(#KatOrg);
+        }
+    #KatOrgFrom.Name:
+      if (RunInterface('GetKatOr', cGruz_From, comp(0), false, comp(0), comp(0)) <> cmCancel)
+        {
+        set optView := optView or 4;
+        ReScanPanel(#KatOrgFrom);
+        }
+    #KatOrgTo.Name:
+      if (RunInterface('GetKatOr', cGruzTo, comp(0), false, comp(0), comp(0)) <> cmCancel)
+        {
+        set optView := optView or 8;
+        ReScanPanel(#KatOrgTo);
+        }
+    #KatNotes.Name:
+      if (StatusKat_e = 0)
+        {
+        if (RunWindowModal(winRootDogNotes) <> cmCancel)
+          {
+          set optView := optView or 16;
+          set cKNotes := cKNotes;
+          ReScanPanel(#KatNotes);
+          }
+        }
+      else
+        if (RunInterface('GetSomKatNotes',
+                         if (StatusKat_e=1,400,if(StatusKat_e=2,401,403)), // pVidDoc - фильтр вида документа ( 0 - фильтр не задан )
+                         word(11), // pSysNum
+                         if ((pSt_Erie and StatusKat_e)<>0,pStatus,word(0)),  // pStatus,   // 0 - выбирать все, иначе битовая маска запрещенных
+                         false,    // TRUE - груповой выбор FALSE - только один
+                         cKNotes   // входной-выходной - KatNotes.nRec
+                        ) <> cmCancel)
+        {
+        set optView := optView or 16;
+        ReScanPanel(#KatNotes);
+        }
+  END;
+  }
+
+cmDelOnProtect:
+  {
+  CASE CurField OF
+    #KatOrg.Name:
+      {
+      set optView := optView and (1  +4+8+16) ;
+      set cKontrag := 0;
+      }
+    #KatOrgFrom.Name:
+      {
+      set optView := optView and (1+2  +8+16) ;
+      set cGruz_From := 0;
+      }
+    #KatOrgTo.Name:
+      {
+      set optView := optView and (1+2+4  +16) ;
+      set cGruzTo := 0;
+      }
+    #KatNotes.Name:
+      {
+      set optView := optView and (1+2+4+8   ) ;
+      set cKNotes := 0;
+      }
+  END;
+  }
+
+cmCheckField:
+  {
+  CASE CurField OF
+    #Date01, #Date02 :
+      if (Date01>Date02)
+        {
+        Message(''#3'Перепутаны даты...',OkButton+Warning);
+        if (CurField=#Date01) set Date01 := Date02;
+        Abort ;
+        }
+    #optView :
+      {
+      var wtmp : word ;
+      wtmp := optView xor word(OldFieldValue) ;
+      if (wtmp > 0)
+        CASE wtmp OF
+          1 : if ((optView and 1) > 0)
+                SelectField(#Date01) ;
+          2 : if ((optView and 2) > 0)
+                {
+                SelectField(#KatOrg.Name) ;
+                if (cKontrag = 0) PutCommand(cmPick) ;
+                }
+          4 : if ((optView and 4) > 0)
+                {
+                SelectField(#KatOrgFrom.Name) ;
+                if (cGruz_From = 0) PutCommand(cmPick) ;
+                }
+          8 : if ((optView and 8) > 0)
+                {
+                SelectField(#KatOrgTo.Name) ;
+                if (cGruzTo = 0) PutCommand(cmPick) ;
+                }
+         16 : if ((optView and 16) > 0)
+                {
+                SelectField(#KatNotes.Name) ;
+                if (cKNotes = 0) PutCommand(cmPick) ;
+                }
+        END ;
+
+      if ( ((optView and 2) > 0) and (cKontrag = 0) )
+        set optView := optView and (1  +4+8+16) ;
+
+      if ( ((optView and 4) > 0) and (cGruz_From = 0) )
+        set optView := optView and (1+2  +8+16) ;
+
+      if ( ((optView and 8) > 0) and (cGruzTo = 0) )
+        set optView := optView and (1+2+4  +16) ;
+
+      if ( ((optView and 8) > 0) and (cKNotes = 0) )
+        set optView := optView and (1+2+4+8   ) ;
+      }
+    #KatOrg.Name     : if (cKontrag   = 0) set optView := optView and (1  +4+8+16) ;
+    #KatOrgFrom.Name : if (cGruz_From = 0) set optView := optView and (1+2  +8+16) ;
+    #KatOrgTo.Name   : if (cGruzTo    = 0) set optView := optView and (1+2+4  +16) ;
+    #KatNotes.Name   : if (cKNotes    = 0) set optView := optView and (1+2+4+8   ) ;
+    #StatusKat_e:
+      {
+      if (StatusKat_e <> word(OldFieldValue))
+        {
+        set optView := optView and (1+2+4+8   );
+        set cKNotes = 0;
+        }
+      }
+  END ;
+  }
+end;//HandleEvent
+end; //panel
+
+HandleEvent
+cmInit :
+  {
+  var datechanged : boolean;
+  if (not ReadMyDsk(optView,'RunGetDocs1_optView',datechanged)) optView := 0;
+  if (not ReadMyDsk(Date01,'RunGetDocs1_Date01',datechanged))
+    Date01 := date(0,0,0);
+  if (not ReadMyDsk(Date02,'RunGetDocs1_Date02',datechanged) or datechanged)
+    Date02 := Cur_Date;
+  if (not ReadMyDsk(DateSrok_e ,'RunGetDocs1_DateSrok_e' ,datechanged)) DateSrok_e  := 0;
+  if (not ReadMyDsk(cKontrag   ,'RunGetDocs1_cKontrag'   ,datechanged)) cKontrag    := 0;
+  if (not ReadMyDsk(cGruz_From ,'RunGetDocs1_cGruz_From' ,datechanged)) cGruz_From  := 0;
+  if (not ReadMyDsk(cGruzTo    ,'RunGetDocs1_cGruzTo'    ,datechanged)) cGruzTo     := 0;
+  if (not ReadMyDsk(cKNotes    ,'RunGetDocs1_cKNotes'    ,datechanged)) cKNotes     := 0;
+  if (not ReadMyDsk(StatusKat_e,'RunGetDocs1_StatusKat_e',datechanged)) StatusKat_e := 0;
+  pStatus := 0FFFFh;
+  pSt_Erie := 0;
+  if ((DskParams and vcGetDog_Status) <> 0)
+    {
+    DskParams := 0;
+    if ReadMyDsk(pStatus,'GetDAK_Status',datechanged)
+      if ReadMyDsk(pSt_Erie,'GetDAK_Status_e',datechanged)
+        DskParams := vcGetDog_Status;
+    }
+  else
+    DskParams := 0;
+  }
+
+cmYes :
+  {
+  if (Date01 > Date02)
+    {
+    Message(''#3'Перепутаны даты...',OkButton+Warning);
+    SelectField(#Date01);
+    Exit;
+    }
+  if ((optView and 1) <> 0)
+    {
+    SaveMyDsk(Date01,'GetDAK_begDateSrok');
+    SaveMyDsk(Date02,'GetDAK_endDateSrok');
+    SaveMyDsk(byte(DateSrok_e),'GetDAK_DateSrok_e');
+    DskParams := DskParams or vcGetDog_DateSrok;
+    }
+  if ( ((optView and 2) <> 0) and (cKontrag <> 0) )
+    {
+    SaveMyDsk(cKontrag,'GetDAK_Kontr');
+    SaveMyDsk(byte(0),'GetDAK_Kontr_e');
+    DskParams := DskParams or vcGetDog_Kontr;
+    }
+  if ( ((optView and 4) <> 0) and (cGruz_From <> 0) )
+    {
+    SaveMyDsk(cGruz_From,'GetDAK_GruzFrom');
+    DskParams := DskParams or vcGetDog_GruzFrom;
+    }
+  if ( ((optView and 8) <> 0) and (cGruzTo <> 0) )
+    {
+    SaveMyDsk(cGruzTo,'GetDAK_GruzTo');
+    DskParams := DskParams or vcGetDog_GruzTo;
+    }
+  if ( ((optView and 16) <> 0) and (cKNotes <> 0))
+    {
+    if ((StatusKat_e = 0) or (KatNotes.cOwner = 0))
+      {
+      if (StatusKat_e = 0)
+        {
+        if (GetFirst KatNotes2 where((cKNotes == KatNotes2.NRec)) = tsOk)
+          {
+          SaveMyDsk(word(1 shl KatNotes2.Status),'GetDAK_Status');
+          SaveMyDsk(byte(0),'GetDAK_Status_e');
+          DskParams := DskParams or vcGetDog_Status;
+          }
+        }
+      else
+        {
+        SaveMyDsk(word(1 shl KatNotes2.Status),'GetDAK_Status');
+        SaveMyDsk(byte(0),'GetDAK_Status_e');
+        DskParams := DskParams or vcGetDog_Status;
+        }
+      }
+    else
+      {
+      SaveMyDsk(cKNotes,'GetDAK_KatStatus');
+      if (StatusKat_e = 3) StatusKat_e := 4;
+      SaveMyDsk(byte(StatusKat_e),'GetDAK_KatStatus_e');
+      DskParams := DskParams and (not vcGetDog_Status);
+      DskParams := DskParams or vcGetDog_KatStatus;
+      if (StatusKat_e = 4) StatusKat_e := 3;
+      }
+    }
+
+  SaveMyDsk(optView    ,'RunGetDocs1_optView'    );
+  SaveMyDsk(Date01     ,'RunGetDocs1_Date01'     );
+  SaveMyDsk(Date02     ,'RunGetDocs1_Date02'     );
+  SaveMyDsk(DateSrok_e ,'RunGetDocs1_DateSrok_e' );
+  SaveMyDsk(cKontrag   ,'RunGetDocs1_cKontrag'   );
+  SaveMyDsk(cGruz_From ,'RunGetDocs1_cGruz_From' );
+  SaveMyDsk(cGruzTo    ,'RunGetDocs1_cGruzTo'    );
+  SaveMyDsk(cKNotes    ,'RunGetDocs1_cKNotes'    );
+  SaveMyDsk(StatusKat_e,'RunGetDocs1_StatusKat_e');
+  if (RunInterface('GetDocs',
+                    pDogovor,
+                    pAppDogovor,
+                    pKalPlan,
+                    DskParams) <> cmCancel)
+    PutCommand(cmDefault);
+  else
+    PutCommand(cmCancel);
+  }
+
+end;
+end.

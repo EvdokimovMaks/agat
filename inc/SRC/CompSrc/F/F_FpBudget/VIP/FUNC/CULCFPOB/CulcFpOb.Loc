@@ -1,0 +1,301 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 9.10 - модуль "Управление бюджетом"
+// Визуальный интерфейс: "Загрузка финансовых операций"
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Блокировка данных бюджета
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+function UnLockValuesData(
+    _SessionID  : LongInt
+) : boolean;
+{
+  UnLockValuesData := False;
+  var Err : boolean;  Err := False;
+  do
+  {
+    if (not pLockValues.Session_TryUnLock(_SessionID) )
+    { Err := True; }
+    if (not pLockValues.Session_End(_SessionID) )
+    { Err := True; }
+  }
+  while False;
+  if (Err)
+    pLockValues.ShowMessageLastError;
+  UnLockValuesData := (not Err);
+}
+//------------------------------------------------------------------------------
+function LockValuesData(
+var _SessionID  : LongInt
+) : boolean;
+{
+  LockValuesData := False;
+  var Err : boolean;  Err := False;
+  StartNewVisual(vtDownVisual, vfTimer+vfBreak+vfConfirm, 'Блокировка данных для загрузки...', 1);
+  do
+  {
+    _SessionID := pLockValues.Session_Begin;
+    if (_SessionID = 0)
+    { Err := True; Break; }
+
+    var LockParam  : TFpLockLaluesParam;
+    _Loop FpBudOut
+    {
+      ClearAdvRecord(LockParam);
+      LockParam.wSegBit  := word(fpcgBudVarLock or fpcgKodRegLock or fpcgStBudLock or fpcgPeriodLock);
+      LockParam.cBudVar  := FpBudOut.cKau2;
+      LockParam.wKodReg  := GetBudReg;
+      LockParam.cStBud   := FpBudOut.cKau3;
+      LockParam.cPeriod  := FpBudOut.cKau4;
+      pLockValues.Session_AddALock(_SessionID, LockParam);
+    }
+    if (not pLockValues.Session_TryLock(_SessionID) )
+    { Err := True; Break; }
+
+  }
+  while False;
+  StopVisual('', 0);
+
+  if (Err)
+  {
+    pLockValues.ShowMessageLastError;
+    UnLockValuesData(_SessionID);
+  }
+  LockValuesData := (not Err);
+}
+
+//------------------------------------------------------------------------------
+// Работа с
+//------------------------------------------------------------------------------
+Create view vQuickValues
+Var
+  cFixBudVar : comp;
+  wFixKodReg : word;
+  cFixStBud  : comp;
+  cFixPeriod : comp;
+As select
+  '*'
+From
+  FpValues  ValuesBy3Seg
+, FpValues  ValuesBy4Seg
+Where
+((
+       cFixBudVar == ValuesBy3Seg.cBudVar
+  and  wFixKodReg == ValuesBy3Seg.KodReg
+  and  cFixStBud  == ValuesBy3Seg.cStBud
+
+  and  cFixBudVar == ValuesBy4Seg.cBudVar
+  and  wFixKodReg == ValuesBy4Seg.KodReg
+  and  cFixStBud  == ValuesBy4Seg.cStBud
+  and  cFixPeriod == ValuesBy4Seg.cPeriod
+
+))
+;
+
+//------------------------------------------------------------------------------
+function ClearValues_Existing(
+  _LockParam  : TFpLockLaluesParam
+) : boolean;
+{
+  ClearValues_Existing := True;
+  var Res : word;  Res := tsOk;
+
+  StartNewVisual(vtRotateVisual, vfTimer+vfScreenBottom, 'Удаление значений показателя...', 1 );
+  do
+  {
+    if (not IsBit(_LockParam.wSegBit, fpcgPeriodLock) )
+    { // если нет фильтра по периоду
+
+      vQuickValues.cFixBudVar := _LockParam.cBudVar;
+      vQuickValues.wFixKodReg := _LockParam.wKodReg;
+      vQuickValues.cFixStBud  := _LockParam.cStBud ;
+      if vQuickValues.RecordExists ValuesBy3Seg <> tsOk
+      { Break; }
+      Res := (vQuickValues.delete all ValuesBy3Seg);
+
+      // очистка протокола
+      if (pLoadOborot.GetIsJournalingOn)
+        pLoadOborot.DelLoadOb3Seg(
+          vQuickValues.cFixBudVar
+        , vQuickValues.wFixKodReg
+        , vQuickValues.cFixStBud    );
+
+    } // если нет фильтра по периоду
+    else
+    { // если есть фильтр по периоду
+
+      vQuickValues.cFixBudVar := _LockParam.cBudVar;
+      vQuickValues.wFixKodReg := _LockParam.wKodReg;
+      vQuickValues.cFixStBud  := _LockParam.cStBud ;
+      vQuickValues.cFixPeriod := _LockParam.cPeriod;
+      if vQuickValues.RecordExists ValuesBy4Seg <> tsOk
+      { Break; }
+      Res := (vQuickValues.delete all ValuesBy4Seg);
+
+      // очистка протокола
+      if (pLoadOborot.GetIsJournalingOn)
+        pLoadOborot.DelLoadOb4Seg(
+          vQuickValues.cFixBudVar
+        , vQuickValues.wFixKodReg
+        , vQuickValues.cFixStBud
+        , vQuickValues.cFixPeriod   );
+
+    } // если есть фильтр по периоду
+  }
+  while False;
+  StopVisual('',0);
+
+  if (Res <> tsOk)
+  {
+    FpLog('ClearValues_Existing : (Res <> tsOk)'+#var(Res) );
+  }
+
+  ClearValues_Existing := (Res = tsOk);
+}
+
+//------------------------------------------------------------------------------
+// Блокировка данных бюджета для очистки
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+function Session_AddALock_Existing(
+  _SessionID  : LongInt;
+  _LockParam  : TFpLockLaluesParam
+) : boolean;
+{
+  Session_AddALock_Existing := True;
+
+  if (not IsBit(_LockParam.wSegBit, fpcgPeriodLock) )
+  { // если нет фильтра по периоду
+
+    vQuickValues.cFixBudVar := _LockParam.cBudVar;
+    vQuickValues.wFixKodReg := _LockParam.wKodReg;
+    vQuickValues.cFixStBud  := _LockParam.cStBud ;
+    if vQuickValues.RecordExists ValuesBy3Seg <> tsOk
+    { Exit; }
+
+  } // если нет фильтра по периоду
+  else
+  { // если есть фильтр по периоду
+
+    vQuickValues.cFixBudVar := _LockParam.cBudVar;
+    vQuickValues.wFixKodReg := _LockParam.wKodReg;
+    vQuickValues.cFixStBud  := _LockParam.cStBud ;
+    vQuickValues.cFixPeriod := _LockParam.cPeriod;
+    if vQuickValues.RecordExists ValuesBy4Seg <> tsOk
+    { Exit; }
+
+  } // если есть фильтр по периоду
+
+  Session_AddALock_Existing := pLockValues.Session_AddALock(_SessionID, _LockParam);
+}
+
+//------------------------------------------------------------------------------
+function UnLockClrValuesData(
+    _SessionID  : LongInt
+) : boolean;
+{
+  UnLockClrValuesData := False;
+  var Err : boolean;  Err := False;
+  do
+  {
+    if (not pLockValues.Session_TryUnLock(_SessionID) )
+    { Err := True; }
+    if (not pLockValues.Session_End(_SessionID) )
+    { Err := True; }
+  }
+  while False;
+  if (Err)
+    pLockValues.ShowMessageLastError;
+  UnLockClrValuesData := (not Err);
+}
+//------------------------------------------------------------------------------
+function LockClrValuesData(
+var _SessionID  : LongInt;
+    _SBMID      : TPtr;
+    _PPMID      : TPtr;
+    _isPPFlt    : boolean
+) : boolean;
+{
+  LockClrValuesData := False;
+  var Err : boolean;  Err := False;
+
+  StartNewVisual(vtDownVisual, vfTimer+vfBreak+vfConfirm, 'Блокировка данных для очистки...', 1);
+  do
+  {
+
+    _SessionID := pLockValues.Session_Begin;
+    if (_SessionID = 0)
+    { Err := True; Break; }
+
+    var wBudReg : word;  wBudReg := GetBudReg;
+    var wSegBit : word;  wSegBit := word(fpcgBudVarLock or fpcgKodRegLock or fpcgStBudLock);
+    if (_isPPFlt)
+    { // если есть фильтр по периоду
+      wSegBit := (wSegBit or fpcgPeriodLock);
+    }
+
+    _Loop LoopBudVar where
+      ((fListBudgetID == LoopBudVar.ID))
+    {
+
+      var LockParam  : TFpLockLaluesParam;
+      ClearAdvRecord(LockParam);
+
+      LockParam.wSegBit  := wSegBit;
+      LockParam.cBudVar  := LoopBudVar.cBudVar;
+      LockParam.wKodReg  := wBudReg;
+
+      var i : LongInt;
+      var cSB : comp;  cSB := 0;
+      for (i := 0;  i < GetMarkerCount(_SBMID); inc(i) )
+      {
+        if (not GetMarker(_SBMID, i, cSB))
+        { Continue; }
+
+        LockParam.cStBud   := cSB;
+
+        if (not _isPPFlt)
+        { // если нет фильтра по периоду
+
+          Session_AddALock_Existing(_SessionID, LockParam);
+
+        } // если нет фильтра по периоду
+        else
+        { // если есть фильтр по периоду
+
+          var j : LongInt;
+          var cPP : comp;  cPP := 0;
+          for (j := 0;  j < GetMarkerCount(_PPMID); inc(j) )
+          {
+            if (not GetMarker(_PPMID, j, cPP))
+            { Continue; }
+
+            LockParam.cPeriod  := cPP;
+
+            Session_AddALock_Existing(_SessionID, LockParam);
+
+          } // по периодам
+
+        } // если есть фильтр по периоду
+
+      } // по статьям
+
+    } // по копиям
+
+    if (not pLockValues.Session_TryLock(_SessionID) )
+    { Err := True; Break; }
+
+  }
+  while False;
+  StopVisual('', 0);
+
+  if (Err)
+  {
+    pLockValues.ShowMessageLastError;
+    UnLockClrValuesData(_SessionID);
+  }
+
+  LockClrValuesData := (not Err);
+}

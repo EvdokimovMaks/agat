@@ -18,19 +18,26 @@
 .group 'V51_a3'
 .hide
 .fields
+  sNumDoc
   Pred
   OKPO
   DATAO : date
   Day1 Day2 Mes1 God1
   NaimK8 NaimK9 NaimK10 NaimK14
   DataOtch: date
+  NameSignatory
+  PostSignatory
 .endfields
  ^
  ^
  ^
+ ^
  ^^^^
  ^^^^
  ^
+  NameSignatory ^
+  PostSignatory ^
+!
 .{ Pord_Loop CheckEnter
 .fields
  Podr

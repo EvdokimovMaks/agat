@@ -13,6 +13,7 @@
 
 .Fields
 NRecTitleDoc : comp
+sBarCode
 
 организация
 ОКПО
@@ -22,7 +23,7 @@ NRecTitleDoc : comp
 FIO
 TabN
 должность
-подразделение
+подразделение : WideString
 
 Вид_отпуска
 Предоставить_C
@@ -38,7 +39,7 @@ PersNrec: comp
 
 .EndFields
 
-^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^
 .{ NformRD71aCycle CheckEnter
 ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}

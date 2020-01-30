@@ -222,6 +222,8 @@ Const
   wAlgSumma_SbBan_Summa            = 126;  // Сумма по реестру
   wAlgSumma_PlanDog_AvanPlat       = 127;  // Сумма из поля авансовые платежи по договору/соглашению
   wAlgSumma_Veksl_Summa            = 128;  // Сумма по кредиту
+  wAlgSumma_Dogovor_AccredNoOpl    = 129;  // Остаток к исполнению по договору (в разрезе аккредитива)
+  wAlgSumma_BaseDoc_AccredSumma    = 130;  // Сумма по ДО в разрезе аккредитива
   // COMP ( 200 - 299, 500 - 599 )
   wAlgRef_Def_CO                   = 200;  // ЦО по умолчанию (из настройки)
   wAlgRef_Def_Person               = 201;  // Куратор по умолчанию
@@ -412,6 +414,7 @@ Const
   wAlgWord_SoprHoz_Vid             = 394;  // вид платежа по хозоперации
   wAlgWord_Def_Queue               = 395;  // очередь платежа по умолчанию
   wAlgWord_AktOfp_StBud_Queue      = 396;  // очередь платежа из статьи бюджета ФОБ
+  wAlgWord_Def_Vid_Accred          = 397;  // явно - аккредитив
   // STRING ( 700 - 799 )
   wAlgStr_DocReq_NamePl1           = 700;  // назначение платежа заявки (1 строка)
   wAlgStr_DocReq_NamePl2           = 701;  // назначение платежа заявки (2 строка)

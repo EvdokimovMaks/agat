@@ -2,7 +2,7 @@
 #define _GalSignInvoice_INC
 const
   URL_AIS_INVOICE  = 'https://ws.vat.gov.by:443/InvoicesWS/services/InvoicesPort';
-  URL_AIS_TEST     = 'https://185.32.226.170:4443/InvoicesWS/services/InvoicesPort';
+  URL_AIS_TEST     = 'https://195.50.4.41:4443/InvoicesWS/services/InvoicesPort';
 
   ATR_INVOICE      = 'Invoice';
   ATR_SIGN_INVOICE = 'SignInvoice';
@@ -14,9 +14,6 @@ const
   BUILD_VERSION    = 53;
 
   SERVICE_CERT_CN  = 'Автоматизированный сервис портала АИС УСФ';
-  SERVICE_CERT_O   = 'МНС РБ';
-  SERVICE_CERT_C   = 'BY';
-  SERVICE_CERT_L   = 'Минск';
 end;
 
 function GalSignInvoice_B64Encode(S: string): string; external 'GalSignInvoice.dll#GalSignInvoice_B64Encode';

@@ -1,0 +1,202 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 8.10 - Спецодежда
+// Печать ведомости потребности в СФО в формате FastReport
+//------------------------------------------------------------------------------
+
+#include rflt_fr.vpp
+
+//--------------------
+
+function GetPodrName : string;
+{
+  GetPodrName := 'по всей организации';
+
+  // Фильтр по подразделениям не установлен
+  if (UserDeskRep.ResComp[1] = -1)
+    Exit;
+
+  if (UserDeskRep.ResWord[4] = 0) or (UserDeskRep.ResComp[1] = fltZerRef)
+    GetPodrName := f.GetFltTypeName(Word(11)) + ' (' + UserDeskRep.ResName[6] + ')';
+  else
+  {
+    var tStr : String[80] = '';
+    GetPodrName := '';
+
+    if (f.GetFirstPickedName(tStr, Word(11), UserDeskRep.ResComp[1]))
+      do
+      {
+        if (tStr <> '')
+          GetPodrName := GetPodrName + if (GetPodrName <> '', ', ', '') + tStr;
+      }
+      while (f.GetNextPickedName(tStr, Word(11), UserDeskRep.ResComp[1]));
+  }
+}
+
+function GetSrokName : string;
+{
+  GetSrokName := '';
+
+  if (tblNeedSFO.NormExDat = ZeroDate)
+    Exit;
+
+  if (Word(tblNeedSFO.NormSrok) = 0)
+    GetSrokName := 'Разовая';
+  else
+    if (Word(tblNeedSFO.NormSrok) = MaxWord)
+      GetSrokName := 'До износа';
+    else
+      GetSrokName := String(Word(tblNeedSFO.NormSrok));
+}
+
+//--------------------
+
+procedure InitFilters;
+{
+  fltNum := 0;
+  fltInRep := UserDeskRep.ResWord[4];
+  delete all Filters;
+
+  if (UserDeskRep.ResWord[10] < 3)
+  {
+    fltNum++;
+    ClearBuffer(tnFilters);
+    Filters.FiltNum  := fltNum;
+    Filters.FiltName := if (UserDeskRep.ResWord[10] = 1,
+                          'По ФОРМЕННОЙ одежде', 'По СПЕЦОДЕЖДЕ');
+    insert current Filters;
+  }
+
+  InitFltByType(Word(11), UserDeskRep.ResComp[1], UserDeskRep.ResName[6]);
+  InitFltByType(Word(45), UserDeskRep.ResComp[2], UserDeskRep.ResName[7]);
+  InitFltByType(Word(44), UserDeskRep.ResComp[3], UserDeskRep.ResName[8]);
+  InitFltByType(Word( 8), UserDeskRep.ResComp[4], UserDeskRep.ResName[9]);
+  InitFltByType(Word(55), UserDeskRep.ResComp[5], UserDeskRep.ResName[10]);
+  InitFltByType(Word(54), UserDeskRep.ResComp[6], UserDeskRep.ResName[11]);
+}
+
+//--------------------
+
+DataStream dtsSFO_NeedVed
+(
+  [CommonFormHeader] CommonFormHeader;
+  [TypeVed]          UserDeskRep.ResWord[3];
+  [NameVed]          strTitle;
+  [DateVed]          UserDeskRep.ResDate[1];
+  [GroupName]        UserDeskRep.ResName[1];
+  [MyOrgName]        iOrgInfo.GetMyOrgNameT(UserDeskRep.ResDate[1]);
+  [MyOrgOKPO]        iOrgInfo.MyOrgOKPO;
+  [PodrName]         GetPodrName;
+  [MaxLevel]         maxLevel;
+
+  Table Filters
+  (
+    [FiltName] Filters.FiltName;
+  );
+
+  Table tblNeedSFO
+  (
+    [Npp]       tblNeedSFO.Npp;
+    [Level]     tblNeedSFO.Level;
+
+    [PersNum]   tblNeedSFO.PersNum;
+    [PersTabN]  tblNeedSFO.PersTabN;
+    [PersFIO]   tblNeedSFO.PersFIO;
+
+    [NormKod]   tblNeedSFO.NormKod;
+    [NormName]  tblNeedSFO.NormName;
+    [NormNacop] tblNeedSFO.NormNacop;
+    [NormInd]   tblNeedSFO.NormInd;
+
+    [LevType]   tblNeedSFO.LevType;
+    [GroupName] tblNeedSFO.GroupName;
+    [GroupKod]  tblNeedSFO.GroupKod;
+    [EdName]    tblNeedSFO.EdName;
+    [EdKod]     tblNeedSFO.EdKod;
+    [ReqKol]    tblNeedSFO.ReqKol;
+    [NormFrDat] tblNeedSFO.NormFrDat;
+    [NormExDat] tblNeedSFO.NormExDat;
+    [NormToDat] tblNeedSFO.NormToDat;
+    [NormF_Kol] tblNeedSFO.NormF_Kol;
+    [NormN_Kol] tblNeedSFO.NormN_Kol;
+    [NormSrok]  GetSrokName;
+    [NormStat]  tblNeedSFO.NormStat;
+    [NormFlag]  tblNeedSFO.NormFlag;
+    [NormMain]  tblNeedSFO.NormMain;
+    [NormReqDt] tblNeedSFO.NormReqDt;
+  );
+
+  DataSet Signers
+  (
+    [FIO]   iFeeSigners.GetSignerFIO(1);
+    [TabN]  iFeeSigners.GetSignerTabN;
+    [Post]  iFeeSigners.GetSignerPosition(1);
+    [Role]  iFeeSigners.GetSignerRole;
+  );
+)
+
+HandleEvent DataSet Signers
+//-------------------------
+  cmPreProcess:
+  {
+    lSign := 0;
+
+    if (not iFeeSigners.FindFeeSignersByNRec(UserDeskRep.ResComp[10]))
+      AbortProcess;
+  }
+//-------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    lSign++;
+
+    if (lSign = 1)
+    {
+      if (iFeeSigners.GetSignerFirst)
+        ContinueDataSet;
+    }
+    else
+    {
+      if (iFeeSigners.GetSignerNext)
+        ContinueDataSet;
+    }
+  }
+//-------------------------
+End; // HandleEvent DataSet Signers
+
+HandleEvent Table tblNeedSFO
+//-------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+  }
+//-------------------------
+End; // HandleEvent Table tblNeedSFO
+
+HandleEvent Table Filters
+//-----------------------
+  cmPreProcess:
+    InitFilters;
+//-----------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+  }
+//-------------------------
+End; // HandleEvent DataSet Filters
+
+HandleEvent // HandleEvent DataStream dtsSFO_NeedVed
+//---------
+  cmPreProcess:
+    StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm,
+                   'Идет формирование ведомости потребности в СФО...', 0);
+//---------
+  cmPostProcess:
+    StopVisual('', 0);
+//---------
+end; // HandleEvent DataStream dtsSFO_NeedVed
+end; // DataStream dtsSFO_NeedVed

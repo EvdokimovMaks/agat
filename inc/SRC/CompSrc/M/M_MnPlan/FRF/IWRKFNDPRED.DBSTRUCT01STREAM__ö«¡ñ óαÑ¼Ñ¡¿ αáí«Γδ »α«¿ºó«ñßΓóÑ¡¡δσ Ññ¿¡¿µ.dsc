@@ -1,0 +1,5 @@
+IWRKFNDPRED
+DBSTRUCT01STREAM_
+Фонд времени работы производственных единиц
+
+IWRKFNDPRED.DBSTRUCT01STREAM__Фонд времени работы производственных единиц.frf

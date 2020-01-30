@@ -1,0 +1,106 @@
+//********************************************************************************
+// Галактика 8.1 -
+// Расчет срока использования после поступления
+//********************************************************************************
+
+#include SrokIsp.vih
+
+//******************************************************************************
+ObjInterface iRecalcSrokIsp;
+  Function Recalc_SrokIsp (_cKatOs : comp; _cNastrOs: comp) : boolean;
+end;
+VipInterface RecalcSrokIsp implements iRecalcSrokIsp licensed (FREE);
+
+//******************************************************************************
+// Обработчик точки расширения epRecalcSrokIsp
+// Должен вернуть FALSE если обработка проводилась. TRUE - если не проводилась.
+handler with replace User_RecalcSrokIsp on extensionPoint epRecalcSrokIsp (_cKatOs : comp; _cNastrOs: comp)
+action
+{
+   var ifc : RecalcSrokIsp;
+   result := not ifc.Recalc_SrokIsp (_cKatOs, _cNastrOs);
+}
+
+//******************************************************************************
+Interface RecalcSrokIsp;
+Create view
+var
+  cKatOs, cNastrOs : comp;
+
+As select
+  *
+From
+    KatOs
+  , SpKatOs
+  , ArcIznos
+  , IspOS
+
+where ((
+           cKatOs == KatOs.nRec
+   and KatOs.nRec == SpKatOs.cKatOs
+   and cNastrOs   == SpKatOs.cNastrOs
+));
+
+
+// Срок считается с даты ввода эксплуатацию по текущий отчетный период ИК,
+// за минусом месяца ввода в эксплуатацию и месяцем по которых есть запись в архве, но амортизация
+// по каким-то причинам не считалась.
+// Возвращает False если обработка не производилась, иначе true
+Public Function Recalc_SrokIsp (_cKatOs : comp; _cNastrOs: comp) : boolean;
+var
+  srok : double;
+  dStart, dEnd : date;
+{
+  result := false;
+  cKatOs := _cKatOs;
+  cNastrOs := _cNastrOs;
+  if (GetFirst KatOs <> tsOk)
+    Exit;
+
+  if ( LongInt(KatOS.DatOk) > 0 )  // обязательно должна быть определена !!!
+  {
+    srok:=0;
+    dStart := KatOs.DatOk;
+    dEnd   := KatOs.OtchPer;
+
+    if ( ( LongInt(KatOS.DatEk) > 0 ) AND ( KatOS.DatEk < KatOS.DatOk ) )
+      dStart := KatOS.DatEk;
+
+    dStart := date(Last_Day(dStart), Month(dStart), Year(dStart));
+    dEnd   := date(Last_Day(dEnd), Month(dEnd), Year(dEnd));
+
+    srok :=  Months_Between(date(1,Month(dEnd),Year(dEnd)), date(1, Month(dStart), Year(dStart)));  // Число месяце меду текущим отчетным периодок и датой ввода в эксплуатацию
+    srok := srok - 1; // Первый  месяц не учитываем
+
+    // Подсчет количества месяцев в которых не считалась амортизация
+    _LOOP ArcIznos  where ((   _cKatOs   == ArcIznos.cKatOs   and
+                             _cNastrOs   == ArcIznos.cNastrOs and
+                                dStart   << ArcIznos.Data     and
+                                  dEnd   >> ArcIznos.Data))
+    {
+      if ( ArcIznos.SIznM > 0.001 )
+        continue;
+      if (GetFirst IspOS where ((ArcIznos.cIsp == IspOS.nRec)) = tsOk)
+        {
+          if Not ( ( IspOS.AmOk = 0 ) OR  // начисление амортизации - да
+                   ( IspOs.AmOk = 2 ) )   // начисление амортизации - суммой
+            srok := srok - 1;
+        }
+      else
+        srok := srok - 1;
+    }
+
+    srok := srok / if(wGetTune('OS.SrokIspEdIzm') = 0, 1, 12);
+
+    if (GetFirst SpKatOs = tsOk)
+    {
+      if (srok < 0.001)
+        srok:=0;
+      SpKatOs.IspCur := srok;
+      if (UpDate Current SpKatOS = tsOk)
+        result := true;
+    }
+  }
+}
+
+end. // интерфейс

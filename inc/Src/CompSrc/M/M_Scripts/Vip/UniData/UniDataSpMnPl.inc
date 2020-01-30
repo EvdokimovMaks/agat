@@ -105,6 +105,7 @@ const
   reDeleteCurrent = 4052;
   reInsertRecord  = 4053;
 	reIsValid				= 4054;
+  reInsertRecordPeriod  = 4055;
 
   rePlanParam     = 5000;
   reSpMnPlanParam = 5001;

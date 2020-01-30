@@ -1,0 +1,5 @@
+IKPN
+KPNFR01STREAMALL
+Отчет_по_КПН
+
+IKPN.KPNFR01STREAMALL_Отчет_по_КПН.frf

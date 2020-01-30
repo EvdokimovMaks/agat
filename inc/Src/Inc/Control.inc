@@ -424,6 +424,10 @@
 // признаки лимита распределяемых затрат
   PrzLimit_Summa   = 1;  // суммой
   PrzLimit_Procent = 2;  // процентом
+  
+  VirtCodeAnal_Nabor = 777;
+  NameAnal_Nabor     = 'Аналитика НАБОРЫ';
+  AbrAnal_Nabor      = 'Наборы';
 
 //признаки ставок начисления
   VidRate_Procent  =  0;  //процент
@@ -675,6 +679,8 @@
   wTune_Txo_Recive    = 23;  // настройки по формированию ТХО
   wTune_TxoMVZ_Send   = 24;  // настройки по формированию ТХО для мн выбора МВЗ-поставщиков
   wTune_TxoMVZ_Recive = 25;  // настройки по формированию ТХО для мн выбора МВЗ-приемников
+  wAnalit_Sopost      = 26;  // аналитика сопоставления ставок начисления
+  wAnalit_Sootnosh    = 27;  // аналитика соотношения сумм списания и БН
 
 // Варианты калькулирования
   MainVar_SpBalans      = 1;  // Первоначальный вариант Original=1
@@ -692,6 +698,7 @@
  ContrMinSumma = 0.00000001;  // для вссяческих расчетов и калькуляций
  ContrMinSumma_Report  = 0.001;  // для отчетов без аналогичных настроек
  ContrMinAmount_Report = 0.0001; // для отчетов без аналогичных настроек
+ ContrMinSummaVerySmall  = 0.001;  // для калькулирования
  
  FictNorm_Spis   = 7777; // фиктивные нормы при списаниях на продукцию
  FantomNorm_Spis = 7778; // нормы списания на продукцию по фантомным МЦ (листы допустимых замен)
@@ -898,9 +905,21 @@
   AnalNoOpred     = 'Объект не определен';
   AnalNaslBudj    = 'Наследование';
   AnalNaslSum_BR  = 'Из базы';
+  AnalNaslPB_Nazn = 'Из назначения';
+  AnalNasl_Syn    = 'Из синонима';
+  AnalBN_Syn      = 'Из синонима базы';
+  AnalCN_Syn      = 'Из синонима ставки';
+  AnalNasl_CN     = 'Из ставки';
+  AnalNoSet       = 'Не формировать';
   
   cnstAnalSendAll    = 0; //любые объекты поставщики
   cnstAnalNaslPB     = 0; //'Из баланса'
+  cnstAnalNasl_Nazn  = 7; //'Из назначения'
+  cnstAnalNasl_Syn   = 8; //'Из синонима'
+  cnstAnalBN_Syn     = 9; //'Из синонима базы'
+  cnstAnalCN_Syn     = 10; //'Из синонима ставки'
+  cnstAnalNasl_CN    = 11; //'Из ставки'
+  cnstAnalNoSet      = 13; //NoSet
 
   cnstAnalKonkr      = 1; //Конкретный объект
   cnstNoOpred        = 2; //Объект не определен

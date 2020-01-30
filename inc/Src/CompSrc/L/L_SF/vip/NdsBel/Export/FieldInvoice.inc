@@ -24,7 +24,7 @@ const
   fi_provider_providerStatus       = 11; // 6. Статус поставщика
   fi_provider_dependentPerson      = 12; // 6.1. Взаимозависимое лицо
   fi_provider_residentsOfOffshore  = 13; // 6.2. Сделка с резидентом оффшорной зоны
-  fi_provider_specialDealGoods     = 14; // 6.3. Сделка с товарами по перечню, определяемому Правительством РБ
+  fi_provider_specialDealGoods     = 14; // 6.3. Внешнеторговая сделка со стратегическими товарами
   fi_provider_bigCompany           = 15; // 6.4. Организация, включенная в перечень крупных плательщиков
   fi_provider_countryCode          = 16; // 7. Код страны поставщика
   fi_provider_unp                  = 17; // 8. УНП
@@ -46,7 +46,7 @@ const
   fi_recipient_recipientStatus     = 31; // 15. Статус получателя
   fi_recipient_dependentPerson     = 32; // 15.1. Взаимозависимое лицо
   fi_recipient_residentsOfOffshore = 33; // 15.2. Сделка с резидентом оффшорной зоны
-  fi_recipient_specialDealGoods    = 34; // 15.3. Сделка с товарами по перечню, определяемому Правительством РБ
+  fi_recipient_specialDealGoods    = 34; // 15.3. Внешнеторговая сделка со стратегическими товарами
   fi_recipient_bigCompany          = 35; // 15.4. Организация, включенная в перечень крупных плательщиков
   fi_recipient_countryCode         = 36; // 16. Код страны получателя
   fi_recipient_unp                 = 37; // 17. УНП
@@ -82,6 +82,13 @@ const
   fi_deliveryCondition_contract_document_number       = 68; // Номер
   fi_deliveryCondition_description                    = 69; // 31.Дополнительные сведения
 
+  fi_deliveryCondition_contract_document_typeDocument1 = 163; // Вид документа
+  fi_deliveryCondition_contract_document_nameDocument1 = 164; // Название
+  fi_deliveryCondition_contract_document_date1         = 165; // Дата
+  fi_deliveryCondition_contract_document_blankCode1    = 166; // Код типа бланка
+  fi_deliveryCondition_contract_document_seria1        = 167; // Серия
+  fi_deliveryCondition_contract_document_number1       = 168; // Номер
+
   fi_dopParamInvoice          = 70; // Дополнительные параметры ЭСЧФ
 
   // Раздел 6. Данные по товарам (работам, услугам), имущественным правам - roster
@@ -101,11 +108,13 @@ const
   fi_roster_item_descriptions = 84; // 12. Дополнительные данные
   fi_roster_item_descr_value  = 89; // 12. Дополнительные данные
   fi_roster_item_units_name   = 90; // Наименование единицы измерения
-  // итоговые суммы
-  fi_roster_totalCostVat      = 85; // Всего по счету. Стоимость товаров (работ, услуг), имущественных прав без НДС
-  fi_roster_totalExcise       = 86; // Всего по счету. Сумма акциза
-  fi_roster_totalVat          = 87; // Всего по счету. Сумма НДС
-  fi_roster_totalCost         = 88; // Стоимость товаров (работ, услуг), имущественных прав с учетом НДС
+  fi_roster_item_is_transport_uls = 91; // Признак транспортной услуги
+
+  // итоговые суммы. Не надо, вычисляемые поля.
+  //fi_roster_totalCostVat      = 85; // Всего по счету. Стоимость товаров (работ, услуг), имущественных прав без НДС
+  //fi_roster_totalExcise       = 86; // Всего по счету. Сумма акциза
+  //fi_roster_totalVat          = 87; // Всего по счету. Сумма НДС
+  //fi_roster_totalCost         = 88; // Стоимость товаров (работ, услуг), имущественных прав с учетом НДС
 
   // дополнительный параметры
   fi_roster_NDSFrom           = 100; // Брать НДС из
@@ -113,6 +122,12 @@ const
   fi_status                   = 102; // Статус
 
   fi_roster_NotFillGrEvrazes  = 103; // Не заполнять графы 4, 5, 6, 11
+
+  // Дополнительные поля, которые не используются для отображения в интерфейсах ЭСЧФ, но необходимы для проверок
+  fi_provider_wType   = 200; // Раздел 2. Реквизиты поставщика - provider,  признак физ.лица
+  fi_recipient_wType  = 201; // Раздел 3. Реквизиты получателя - recipient, признак физ.лица
+
+  fi_roster_item_cost_BySp = 210; // Признак, считать сумму без НДС по спецификации (True) или как разность суммы с НДС и суммы НДС
 end;
 
 #endif // _FieldInvoice_inc_

@@ -1,0 +1,1588 @@
+//******************************************************************************
+//                                                      (c) корпорация Галактика
+// Галактика 5.85 - логистика
+// Обработка фильтров для отчета "Закупки товаров, получение услуг"
+//******************************************************************************
+
+Function FoundInPickRep (w : word; c : comp) : boolean;
+{
+  FoundInPickRep := RecordExists PickRep where ((   UserID           == PickRep.cUser
+                                               and  UserDeskRep.NRec == PickRep.cUserDeskRep
+                                               and  w                == PickRep.wList
+                                               and  c                == PickRep.cRec
+                                               )) = tsOK;
+}
+
+Function FilterPass (w : word; c : comp) : boolean;
+{
+  FilterPass:=false;
+
+  if ( UserDeskRep.ResComp[w] = 0 )
+    {
+      FilterPass := FoundInPickRep(w, c);
+      Exit;
+    }
+
+  if( c = UserDeskRep.ResComp[w] )
+    FilterPass:=true;
+}
+
+Function TestGrKontr(p1 : comp) : boolean;
+{
+  TestGrKontr := false;
+
+  _loop KatOrgDescr where (( p1 == KatOrgDescr.cRec ))
+    {
+      if ( FilterPass(10, KatOrgDescr.cGroup) )
+        {
+          TestGrKontr := true;
+          Exit;
+        }
+    }
+}
+
+Function GetRndSum(S0 : double; pPr : integer) : double;
+{
+  if ( wRndNalog <> 0 )
+    Result := Round(S0, pPr)
+  else
+    Result := S0;
+}
+
+Procedure SetTmpKatalogSum( cNalRec, cTobotRec : comp; sNalKod : string; Sum1, Sum2, Sum1vz, Sum2vz : double);
+{
+  insert TmpKatalog
+     set TmpKatalog.cRec1 := cNalRec,
+         TmpKatalog.cRec  := cTobotRec,
+         TmpKatalog.Code  := 8,
+         TmpKatalog.Name  := sNalKod,
+         TmpKatalog.Sum1  := Sum1,
+         TmpKatalog.Sum2  := Sum2;
+
+  insert TmpKatalog
+     set TmpKatalog.cRec1 := cNalRec,
+         TmpKatalog.cRec  := cTobotRec,
+         TmpKatalog.Code  := 9,
+         TmpKatalog.Name  := sNalKod,
+         TmpKatalog.Sum1  := Sum1vz,
+         TmpKatalog.Sum2  := Sum2vz;
+}
+
+Function DoTobotInsert : boolean;
+{
+  TobotExtData.nRec := GetNextNRec(#TobotExtData, 0);
+
+  if ( insert current TobotExtData <> tsOk)
+    {
+      DoTobotInsert := false;
+      Exit;
+    }
+
+  Tobot.mSpDoc := TobotExtData.nRec;
+  if ( insert current Tobot <> tsOk)
+    {
+      DoTobotInsert := false;
+      Exit;
+    }
+
+  DoTobotInsert := true;
+}
+
+Procedure MyGetNatTarCurrency(    ValSrc1 : comp;
+                                  SumSrc1 : double;
+                                  ValSrc2 : comp;
+                                  SumSrc2 : double;
+                                  ValSrc3 : comp;
+                                  dCourse : date;
+                              var ResNat  : TSumma;
+                              var ResVal  : TSumma);
+{
+  ResNat := oValFunc.GetNatCurrency(ValSrc1, SumSrc1, dCourse);
+  if (ResNat = 0)
+    if (ValSrc2 <> ValSrc1)
+      ResNat := oValFunc.GetNatCurrency(ValSrc2, SumSrc2, dCourse);
+
+  ResVal := 0;
+  if (ValSrc2 <> ValSrc1)
+    ResVal := oValFunc.GetAnyCurrency(ValSrc2, SumSrc2, dCourse, ValSrc3);
+  if (ResVal = 0)
+    ResVal := oValFunc.GetAnyCurrency(ValSrc1, SumSrc1, dCourse, ValSrc3);
+}
+
+Function Percent (a : double; b : double) : double;
+{
+  if ( abs(b) < 0.001 )
+    percent := 0;
+  else
+    percent := a / b * 100;
+}
+
+Function Nacenka (a : double; b : double) : double;
+{
+  if ( abs(b) < 0.001 )
+    Nacenka := 0;
+  else
+    Nacenka := a - b;
+}
+//==============================================================================
+Function isUsedDSQL(): boolean;
+{
+  Result := (GetDbPlatformType <> dbptBtrieve) AND (wVidNakl <> 2);
+}
+//==============================================================================
+
+Function AddToTobotIns (cPodr, cMOL : comp; SoprOrdB_Kol : double; bSoprOrdB : boolean) : boolean;
+Var
+  PriceNal
+, PriceNalV
+, PriceNalVz
+, PriceNalVzV
+, PriceNDS
+, PriceNDSV
+, SumR
+, SumV
+, ProcN
+, StRN
+, StVN
+, sumt1
+, PercentSoprOrdB
+              : double;
+
+  t1
+, t2
+, KoefR
+, KoefV
+              : TSumma;
+
+  date1
+              : date;
+
+  i
+              : word;
+{
+  ClearBuffer(#Tobot);
+  ClearBuffer(#TobotExtData);
+
+  if (bSoprOrdB)
+    PercentSoprOrdB := (SoprOrdB_Kol * 100) / SpSopr.KolFact;
+
+  Tobot.nRec    := GetNextNRec(#Tobot, 0);
+  Tobot.Code    := wCurCode;
+  Tobot.flag1   := if(SpSopr.PRMC = 1, 0, 1);
+  Tobot.Cut[1]  := SpSopr.cMCUsl;
+  Tobot.Cut[2]  := if(Tobot.flag1 = 0, KatMC.cGroupMC, KatUsl.cGroupUsl);
+  Tobot.Cut[3]  := SpSopr.cParty;
+  Tobot.Cut[4]  := cPodr;
+  Tobot.Cut[5]  := cMOL;
+  Tobot.Cut[6]  := KatSopr.cOrgBase;
+  Tobot.Cut[7]  := KatSopr.cNazna;
+  Tobot.Cut[8]  := KatSopr.cOtvPodr;
+  Tobot.Cut[10] := KatSopr.nRec;
+  Tobot.Cut[11] := SpSopr.nRec;
+  Tobot.Cut[14] := cValOtch;
+  Tobot.Cut[15] := SpSopr.cVal;                      //валюта накладной
+
+  TobotExtData.cGrOtp  := KatSopr.cGruzFrom;
+  TobotExtData.cGrPol  := KatSopr.cGruzTO;
+  TobotExtData.cDog    := KatSopr.cDogovor;
+  TobotExtData.cGrDog  := GroupSch.nRec;
+  TobotExtData.cPunktP := MarPunktP.NRec;
+  TobotExtData.cPunktR := MarPunktR.NRec;
+  TobotExtData.cGrDO   := GroupSchDO.nRec;
+  TobotExtData.cFilial := KatSopr.Atl_Branch;
+  TobotExtData.data[5] := SpSopr.dSopr;
+  TobotExtData.data[6] := SpSopr.dOprTTN;
+
+  if ( TobotExtData.data[1] = ZeroDate )
+    TobotExtData.data[1] := TobotExtData.data[5];
+
+//-------------------------------- определение сумм по накладной ---------------
+
+  if ( Tobot.flag1 = 1 )                             //количество
+    {
+      if (  ( (SpSopr.PrMC = 2) and (SpSopr.VidSopr = 101) )
+         or (SpSopr.PrMC > 2)
+         )
+        Tobot.sum[1] := 1;
+      else
+        Tobot.sum[1] := SoprOrdB_Kol;
+    }
+  else
+    {
+      Tobot.sum[8] := SpSopr.Netto;
+      Tobot.sum[9] := KatMC.Volume;
+      Tobot.sum[1] := SoprOrdB_Kol;
+    }
+
+  PriceNal  := 0;
+  PriceNalV := 0;
+
+  if ( KatSopr.VhodNal <> 1) and ( abs(SpSopr.KolOpl) > 0.00000001 )
+  {
+    PriceNal  := SpSopr.SumNDS  / SpSopr.KolOpl;
+    PriceNalV := SpSopr.SumVNDS / SpSopr.KolOpl;
+  }
+
+  MyGetNatTarCurrency( 0
+                     , (SpSopr.Price  + PriceNal)
+                     , SpSopr.cVal
+                     , (SpSopr.VPrice + PriceNalV)
+                     , cValOtch
+                     , TobotExtData.data[1]
+                     , Tobot.sum[15]                 //цена руб
+                     , Tobot.sum[16]                 //цена вал
+                     );
+
+  Tobot.sum[2] := Tobot.sum[15] * Tobot.sum[1];     //стоимость руб
+  Tobot.sum[3] := Tobot.sum[16] * Tobot.sum[1];     //стоимость вал
+
+//-------------------------------- определение сумм по складскому ордеру -------
+
+  SumR := 0;
+  SumV := 0;
+
+  _loop SpOrder
+    {
+      if ( SpOrder.cMC <> SpSopr.cMCUSL )
+        continue;
+
+      if (bSoprOrdB)
+        if ( SpOrder.ccPodr <> cPodr ) or ( SpOrder.ccMOL <> cMOL )
+          continue;
+
+      Tobot.kol += SpOrder.Kol;
+
+      MyGetNatTarCurrency( 0
+                         , SpOrder.SrPrice
+                         , SpOrder.cVal
+                         , SpOrder.VPrice
+                         , cValOtch
+                         , TobotExtData.data[1]
+                         , t1
+                         , t2
+                         );
+
+      Tobot.sum[18] += t1 * SpOrder.Kol;
+      Tobot.sum[19] += t2 * SpOrder.Kol;
+
+      if ( bVozvrat and ( wVozvr = 0) )     // обработка возвратов частично
+        {
+          _loop SpOrderV
+            {
+              if ( IsValid (#SpSoprV) )
+                {
+                  case ( wVozvrNakl ) of
+
+                    1 :
+                      if ( (dDate1 > KatSoprV.dSopr) or (dDate2 < KatSoprV.dSopr) )
+                        continue;
+
+                    2 :
+                      if ( (dDate1 > KatSoprV.dOpr) or (dDate2 < KatSoprV.dOpr) )
+                        continue;
+
+                  end;
+
+                  PriceNalVz  := 0;
+                  PriceNalVzV := 0;
+
+                  if ( KatSoprV.VhodNal <> 1 )
+                    {
+                      PriceNalVz  := SpSoprV.SumNDS  / SpSoprV.KolOpl;
+                      PriceNalVzV := SpSoprV.SumVNDS / SpSoprV.KolOpl;
+                    }
+
+                  MyGetNatTarCurrency( 0
+                                     , SpSoprV.Price + PriceNalVz
+                                     , SpSoprV.cVal
+                                     , SpSoprV.VPrice + PriceNalVzV
+                                     , cValOtch
+                                     , TobotExtData.data[1]
+                                     , t1
+                                     , t2
+                                     );
+
+                  t1 := SpSoprV.KolFact * t1;
+                  t2 := SpSoprV.KolFact * t2;
+
+                  Tobot.sum[10] += SpOrderV.Kol;
+                  Tobot.sum[11] += t1;
+                  Tobot.sum[12] += t2;
+                }
+            }
+
+          if ( wSort = 4 )
+            if ( GetFirst KatPodr where (( SpOrder.ccPodr == KatPodr.NRec )) = tsOK )
+              Tobot.Cut[4] := KatPodr.nRec;
+        }
+    }
+
+  if ( abs(Tobot.kol) > 0.0000001 )
+    {
+      Tobot.Sum[13] := Tobot.sum[18] / Tobot.kol;
+      Tobot.Sum[14] := Tobot.sum[19] / Tobot.kol;
+    }
+
+  // пересчитываем в учетных единицах измерения
+  Tobot.price := 1;
+  if ( IsValid(#KatOtpEd) )
+    {
+      TobotExtData.sEdIzm := KatOtpEd.Name;
+
+      if ( KatOtpEd.Koef <> 0 )
+        Tobot.price := KatOtpEd.Koef;
+    }
+
+  if ( wEdIzm = 1 ) // в активных отпускных
+    {
+      if ( (Tobot.flag1 = 0) and (IsValid(#KatAktOtpEdMC)) and (KatAktOtpEdMC.Koef <> 0) )
+        Tobot.price := Tobot.price / KatAktOtpEdMC.Koef;
+      else
+        if ( (Tobot.flag1 <> 0) and (IsValid(#KatAktOtpEdUsl)) and (KatAktOtpEdUsl.Koef <> 0) )
+          Tobot.price := Tobot.price / KatAktOtpEdUsl.Koef;
+    }
+
+  Tobot.sum[1]  := Tobot.sum[1]  * Tobot.price;
+  Tobot.sum[15] := Tobot.sum[15] / Tobot.price;
+  Tobot.sum[16] := Tobot.sum[16] / Tobot.price;
+
+  if ( Tobot.flag1 = 0 )
+    case wVidNakl1 of
+      0 : if abs(Tobot.kol) > 0.00005
+              Exit;                                  // только выписанный, но не отгруженный товар
+      2 : if abs(Tobot.sum[1] - Tobot.kol) > 0.00005
+              Exit;                                  // отгрузка должна равняться выписке!
+      3 : if abs(Tobot.kol) < 0.00005                // не было отгрузок - выйти!
+              Exit;
+    end; // case
+
+  Tobot.sum[8] := Tobot.sum[8] * Tobot.sum[1];
+  Tobot.sum[9] := Tobot.sum[9] * Tobot.sum[1];
+
+//----------------------------------- расчет налогов ---------------------------
+
+  Tobot.Sum[51] := Tobot.Sum[2];
+  Tobot.Sum[31] := Tobot.Sum[2];
+  sumt1 := 0;
+
+  _loop SpDocNal
+    {
+      if ((SpDocNal.IsCustom And 32) <> 0)
+        Continue;
+      
+      MyGetNatTarCurrency( 0
+                         , SpDocNal.Summa
+                         , SpDocNal.cVal
+                         , SpDocNal.SumVal
+                         , cValOtch
+                         , TobotExtData.data[1]
+                         , t1
+                         , t2
+                         );
+
+      /// округление налогов /// ПИР [102.56680]
+
+      t1 := GetRndSum(t1, wRndZnakRub);
+      t2 := GetRndSum(t2, wRndZnakVal);
+
+      if (   bVozvrat
+         and (  wVozvr = 1  )
+         and (  (SpSopr.VidSopr = 206)
+             or (SpSopr.VidSopr = 106)
+             )
+         )
+        {
+          t1 := -t1;
+          t2 := -t2;
+        }
+
+      if bNalog
+        SetTmpKatalogSum( KatNalog.nRec
+                        , Tobot.nRec
+                        , if (IsValid(#KatNalog), KatNalog.Name, '??')
+                        , t1
+                        , t2
+                        , if( Tobot.Sum[1]<>0
+                            , t1 * (Tobot.Sum[1] - Tobot.Sum[10]) / Tobot.Sum[1]
+                            , 0)
+                        , if( Tobot.Sum[1]<>0
+                            , t2 * (Tobot.Sum[1] - Tobot.Sum[10]) / Tobot.Sum[1]
+                            , 0)
+                        );
+
+      if (   bVozvrat
+         and (  wVozvr = 1  )
+         and (  (SpSopr.VidSopr = 206)
+             or (SpSopr.VidSopr = 106)
+             )
+         )
+        {
+          t1 := -t1;
+          t2 := -t2;
+        }
+
+      sumt1 := sumt1 + t1;
+    }
+
+  if (bSoprOrdB)
+    sumt1   := PercentSoprOrdB * (sumt1/100);
+
+  Tobot.Sum[51] -= sumt1;
+  Tobot.Sum[41] := Tobot.Sum[51] / Tobot.Sum[1];
+
+//------------- посчитать коэффициент в случае сопроводительных услуг ----------
+
+//  KoefR := 1;
+//  KoefV := 1;
+
+  if ( wZP = 0 )
+    {
+      if ( (SpSopr.PrMC = 1) and (bSoprUslTune) )
+        {
+          if (     (SpSopr.PrMC = 1)
+               and (KatMC.kGroupMC = sKodGrMcTara)                 //  соп.услуга
+               and (not bSoprUslTara)                              //  на тару не
+             )
+            {
+            }                                                      //  разносится
+          else
+            {
+              SumR := 0; SumV := 0; ProcN := 0; StRN := 0; StVN := 0;
+
+              _loop SpSoprS
+                {
+                  if (   (SpSoprS.PrMC = 1)                        //  соп.услуга
+                     and (KatMCS.kGroupMC = sKodGrMcTara)          //  на тару не
+                     and (not bSoprUslTara)                        //  разносится
+                     )
+                    continue;
+
+//------------------------------------------------------------------------------
+//                     расчет цены с учетом налогов
+//------------------------------------------------------------------------------
+
+                  if (KatSopr.VhodNal <> 1) and (SpSopr.KolOpl > 0)
+                    {
+                      PriceNDS  := SpSoprS.Price  + SpSoprS.SumNDS  / SpSoprS.KolOpl;
+                      PriceNDSV := SpSoprS.VPrice + SpSoprS.SumVNDS / SpSoprS.KolOpl;
+                    }
+                  else
+                    {
+                      PriceNDS  := SpSoprS.Price;
+                      PriceNDSV := SpSoprS.VPrice;
+                    }
+
+//------------------------------------------------------------------------------
+//                        KoefV - сумма в валюте
+//------------------------------------------------------------------------------
+
+                  KoefV := 0;
+                  MyGetNatTarCurrency( 0
+                                     , PriceNDS
+                                     , SpSoprS.cVal
+                                     , PriceNDSV
+                                     , cValOtch
+                                     , TobotExtData.data[1]
+                                     , KoefR
+                                     , KoefV
+                                     );
+                  KoefR := 1;
+
+//--------------------------------------------------------------------------------
+
+                  case SpSoprS.PrMC of
+                    1 :
+                      {
+                        SumR += PriceNDS * SpSoprS.KolFact;
+                        SumV += KoefV * SpSoprS.KolFact;
+                      }
+
+                    3 :
+                      {
+                        ProcN += SpSoprS.Kol;
+                      }
+
+                    4 :
+                      {
+                        StRN += PriceNDS;
+                        StVN += KoefV;
+                      }
+
+                  end; // case
+                }
+
+              KoefV := 1;
+
+              if ( SumR > 0 ) then
+                KoefR := (SumR * (1 + ProcN / 100) + StRN) / SumR;
+
+              if ( SumV > 0 ) then
+                KoefV := (SumV * (1 + ProcN / 100) + StVN) / SumV;
+
+              Tobot.sum[15]  := Tobot.sum[15] * KoefR;
+              Tobot.sum[16]  := Tobot.sum[16] * KoefV;
+              Tobot.sum[2]   := Tobot.sum[2]  * KoefR;
+              Tobot.sum[3]   := Tobot.sum[3]  * KoefV;
+            }
+        }
+    }
+  else //наценка
+    {
+      MyGetNatTarCurrency( 0
+                         , SpSopr.SumNDS
+                         , SpSopr.cVal
+                         , SpSopr.SumvNDS
+                         , cValOtch
+                         , TobotExtData.data[1]
+                         , t1
+                         , t2
+                         );
+
+      if (bSoprOrdB)
+      {
+        t1 := PercentSoprOrdB * (t1/100);
+        t2 := PercentSoprOrdB * (t2/100);
+      }
+
+      Tobot.Sum[7]  := Nacenka( Tobot.Sum[2] - t1, Tobot.Sum[18]); // наценка в НДЕ
+      Tobot.Sum[17] := Nacenka( Tobot.Sum[3] - t2, Tobot.Sum[19]); // наценка в валюте
+
+      //наценка с учетом возвратов
+      Tobot.Sum[20] := Tobot.Sum[7] * (1.0 - Tobot.Sum[10] / Tobot.Sum[1]);
+      Tobot.sum[21] := Tobot.Sum[17] * (1.0 - Tobot.Sum[10] / Tobot.Sum[1]);
+    }
+
+//--------------------------------- оплата -------------------------------------
+
+  if ( bOplata )
+    {
+      _loop SpSopHoz1
+        {
+          if (   (wVidNakl = 2)
+             and ((SoprHoz1.DatOb < dDate1) or (SoprHoz1.DatOb > dDate2))
+             )
+            continue;
+
+          if ( SoprHoz1.DatOb <> ZeroDate )
+            date1 := SoprHoz1.DatOb;
+          else
+            date1 := TobotExtData.data[1];
+
+          MyGetNatTarCurrency( 0
+                             , SpSopHoz1.Summa
+                             , SpSopHoz1.cVal
+                             , SpSopHoz1.SumVal
+                             , cValOtch
+                             , date1
+                             , t1
+                             , t2
+                             );
+
+          if (bSoprOrdB)
+          {
+            t1 := PercentSoprOrdB * (t1/100);
+            t2 := PercentSoprOrdB * (t2/100);
+            //количество оплаченного в учетных единицах измерения
+            Tobot.sum[4] := Tobot.sum[4] + PercentSoprOrdB * (SpSopHoz1.Kolvo/100) * Tobot.price;
+          }
+          else
+            //количество оплаченного в учетных единицах измерения
+            Tobot.sum[4] := Tobot.sum[4] + SpSopHoz1.Kolvo * Tobot.price;
+
+          Tobot.sum[5] := Tobot.sum[5] + t1;
+          Tobot.sum[6] := Tobot.sum[6] + t2;
+        }
+    }
+
+//------------------------------------------------------------------------------
+
+  if (   bVozvrat
+     and ( wVozvr = 1)
+     and (  (SpSopr.VidSopr = 206)
+         or (SpSopr.VidSopr = 106)
+         )
+     )
+    {
+      Tobot.sum[1]  := -Tobot.sum[1];         // количество по накладной
+      Tobot.sum[2]  := -Tobot.sum[2];         // сумма по накладной
+      Tobot.sum[3]  := -Tobot.sum[3];         // в валюте
+      Tobot.kol     := -Tobot.kol;            // количество по складскому ордеру
+      Tobot.sum[18] := -Tobot.sum[18];        // сумма по складскому ордеру
+      Tobot.sum[19] := -Tobot.sum[19];        // в валюте
+      Tobot.sum[10] := -Tobot.sum[10];        // количество возврата
+      Tobot.sum[11] := -Tobot.sum[11];        // сумма по ордеру на возврат
+      Tobot.sum[12] := -Tobot.sum[12];        // в валюте
+      Tobot.sum[4]  := -Tobot.sum[4];         // количество оплаченного
+      Tobot.sum[5]  := -Tobot.sum[5];         // сумма оплаченного
+      Tobot.sum[6]  := -Tobot.sum[6];         // сумма оплаченного в валюте
+      Tobot.sum[8]  := -Tobot.sum[8];         // масса товарной позиции
+      Tobot.sum[9]  := -Tobot.sum[9];         // объем товарной позиции
+      Tobot.sum[7]  := -Tobot.sum[7];         // наценка
+      Tobot.sum[17] := -Tobot.sum[17];        // наценка в валюте
+      Tobot.sum[31] := -Tobot.sum[31];        // сумма без налогов
+      Tobot.sum[41] := -Tobot.sum[41];        // цена без налогов
+      Tobot.sum[51] := -Tobot.sum[51];        // всего с налогами
+    }
+
+  i := 1;
+
+  _loop ExClassVal where (( coKatParty == ExClassVal.wTable and SpSopr.cParty == ExClassVal.cRec ))
+    if ( GetFirst ExClassSeg  where (( ExClassVal.cClassSeg  == ExClassSeg.nRec )) = tsOk )
+      {
+        TobotExtData.CutP[i++] := ExClassSeg.nRec;
+
+        if ( i > 8 )
+          break;
+      }
+
+  i := 1;
+
+  if ( SpSopr.PRMC = 1 )
+    {
+      _loop ExClassVal where (( coKatMC == ExClassVal.wTable and KatMC.nRec == ExClassVal.cRec ))
+        if ( GetFirst ExClassSeg  where (( ExClassVal.cClassSeg  == ExClassSeg.nRec )) = tsOk )
+          {
+            TobotExtData.CutM[i++] := ExClassSeg.nRec;
+
+            if ( i > 8 )
+              break;
+          }
+    }
+  else
+    {
+      _loop ExClassVal where (( coKatUsl == ExClassVal.wTable and KatUsl.nRec == ExClassVal.cRec ))
+        if ( GetFirst ExClassSeg  where (( ExClassVal.cClassSeg  == ExClassSeg.nRec )) = tsOk )
+          {
+            TobotExtData.CutM[i++] := ExClassSeg.nRec;
+
+            if ( i > 8 )
+              break;
+          }
+    }
+
+  i := 1;
+
+  _loop ExClassVal where (( coKatSopr == ExClassVal.wTable and KatSopr.nRec == ExClassVal.cRec ))
+    if ( GetFirst ExClassSeg  where (( ExClassVal.cClassSeg  == ExClassSeg.nRec )) = tsOk )
+      {
+        TobotExtData.CutS[i++] := ExClassSeg.nRec;
+
+        if ( i > 8 )
+          break;
+      }
+
+  if ( DoTobotInsert )
+    AddToTobotIns := true;
+  else
+  {
+    Message(''#3'Не прошел Insert в Tobot!', Warning+OkButton);
+    AddToTobotIns := false;
+  }
+}
+
+Function AddToTobot : boolean;
+Var
+  cPodr
+, cMOL
+              : comp;
+{
+  AddToTobot := false;
+
+  if ( UserDeskRep.ResWord[2] = 0 )
+    {
+      if ( SpSopr.PRMC <> 1 )
+        Exit;
+    }
+  else
+    {
+      case SpSopr.VidSopr of
+
+        111, 201, 211 :
+          {
+            if (SpSopr.PRMC <> 2)
+              Exit;
+          }
+
+        101 :
+          {
+            if (SpSopr.PRMC <> 3) and     // если не услуга, входящая в процент стоимости,
+               (SpSopr.PRMC <> 4) and     // не услуга, входящая как сумма к стоимости товара,
+               (SpSopr.PRMC <> 5)         // не услуга, входящая как сумма распределенная по цене товара
+              Exit;
+          }
+
+        else Exit;
+
+      end; // case
+    }
+
+//------------------------------- фильтры --------------------------------------
+//------------------------------------------------------------------------------
+                                                     // фильтрация по складам и МОЛ
+  if ( wZP = 1 )                                     // продажа
+    {
+      cPodr := if (KatSopr.VidSopr = 106, KatSopr.cPodrTo,
+                                          KatSopr.cPodrFrom);
+      cMOL  := if (KatSopr.VidSopr = 106, KatSopr.cMOLTo,
+                                          KatSopr.cMOLFrom);
+      if IsValid(#SoprOrdB) and (KatSopr.VidSopr = 201)
+      {
+        cPodr := SoprOrdB.cPodr;
+        cMOL  := SoprOrdB.cMOL;
+      }
+    }
+  else                                               // закупка
+    {
+      if ( SpSopr.VidSopr = 206 )
+        {
+          if IsValid(#SpOrder)
+            {
+              cPodr := SpOrder.ccMOL;
+              cMOL  := SpOrder.ccPodr;
+            }
+        }
+      else
+        {
+          if IsValid(#SoprOrdB)
+            {
+              cPodr := SoprOrdB.cPodr;
+              cMOL  := SoprOrdB.cMOL;
+            }
+        }
+    }
+
+                                                     // фильтрация по складам и МОЛ
+  if ( wZP = 1 )                                     // продажа
+    {
+      if ( fSklad ) and ((wLevelPodr = 0) or (not isValid(#SoprOrdB)))
+        if ( not FilterPass(6, cPodr) )
+          Exit;
+
+      if ( fMOL ) and ((wLevelMOL = 0) or (not isValid(#SoprOrdB)))
+        if ( not FilterPass(5, cMOL) )
+          Exit;
+    }
+  else                                               // закупка
+    {
+       if ( fSklad ) and ((wLevelPodr = 0) or (not isValid(#SoprOrdB)))
+         if ( not FilterPass(6, cPodr) )
+           Exit;
+
+       if ( fMOL ) and ((wLevelMOL = 0) or (not isValid(#SoprOrdB)))
+         if ( not FilterPass(5, cMOL) )
+           Exit;
+    }
+
+  if NOT isUsedDSQL
+    {
+      if ( (UserDeskRep.ResWord[2] = 0) and (SpSopr.PRMC <> 1) )
+        Exit;
+
+      if ( wVidNakl = 1 )                                // для выписанных накладных
+        {
+          if ( wVidNakl1 > 1 )                           // отгруженный товар
+            {
+              if ( wVidNakl2 = 0 )                       // нет дополнительного фильтра
+                {
+                  if ( KatSopr.dOpr = ZeroDate )
+                    Exit;
+                }
+              else                         // только проведенные вне диапазона выписки
+                if ( (KatSopr.dOpr >= dDate1) and (KatSopr.dOpr <= dDate2) )
+                  Exit;
+            }
+          else                             // выписанный товар (но не оприходованный)
+            if ( (wVidNakl1 = 0) and (KatSopr.dOpr <> ZeroDate) )
+              Exit;
+        }
+
+      if ( fKontr )                                      // фильтрация по контрагенту
+        if ( not FilterPass(7, KatSopr.cOrgBase) )
+          Exit;
+
+      if ( fOtvPodr )                                    // фильтрация по отв.подразделению
+        {
+          if ( KatSopr.TipOtvPodr = 0 )
+            {
+              if ( not FilterPass(8, KatSopr.cOtvPodr) )
+                Exit;
+            }
+          else
+            Exit;
+        }
+
+      if ( fNaznaFlt  )                                  // Фильтрация по назначению
+        {
+          if ( not IsValid(#KatNazna) )
+            Exit;
+
+          if ( upcase(sNaznaFlt) <> upcase(KatNazna.NazCode) )
+            Exit;
+        }
+
+      if (   (sFiltrDsc <> '')                           // фильтрация
+         and (pos(upcase(sFiltrDsc), upcase(KatSopr.Descr)) <> 1)// по дескриптору
+         )
+        Exit;
+
+      if (    ( sUserDescr <> '' )                       // фильтрация по группе дескрипторов
+         and  ( upcase(KatSopr.DesGr) <> upcase(sUserDescr) )
+         )
+        Exit;
+
+      if ( fParty )                                      // фильтрация по партиям
+        if (not FilterPass(4, SpSopr.cParty))
+          Exit;
+
+      if ( fGrPrice )
+        {
+          if ( not IsValid(#KlPrice) )
+            Exit;
+
+          if ( cGrPrice <> KlPrice.cGrPrice )            // фильтрация по группе прайс-листов
+            Exit;
+        }
+
+
+      if ( (not IsValid(#KatMC)) and (not IsValid(#KatUsl)) )
+        Exit;
+
+
+      if ( SpSopr.PRMC = 1 )
+        {
+          if fMC
+            if not FilterPass(2, KatMC.nRec)                 // фильтрация по товарам
+              Exit;
+
+          if fGroupMC                                        // фильтрация по группам МЦ
+            if ( not FoundInPickRep(1003, KatMC.cGroupMC) )
+              Exit;
+
+          if fClassMC                                        // фильтрация по внеш.классификации МЦ
+            {
+            }
+        }
+      else
+        {
+          if fUsl                                            // фильтрация по услугам
+            if not FilterPass(12, KatUsl.nRec)
+              Exit;
+
+          if fGroupUsl                                       // фильтрация по группам услуг
+            if ( not FoundInPickRep(1013, KatUsl.cGroupUsl) )
+              Exit;
+
+          if fClassUsl                                       // фильтрация по внеш.классификации услуг
+            {
+            }
+        }
+
+      if fDogovor
+        {
+          if not FilterPass(9, KatSopr.cDogovor)             // фильтрация по договорам
+            Exit;
+        }
+
+      if fGrKontr                                            // фильтрация по группам организаций
+        {
+          if not TestGrKontr(KatSopr.cOrgBase)
+            Exit;
+        }
+
+      if fKatNotes
+        {
+          if oDocKNFuns.IsWorkFastClose(KatSopr.VidSopr)
+            if not FilterPass(11, KatSopr.cNote)             // фильтрация по статусам
+              Exit;
+        }
+
+    } // if (not isUsedDSQL())
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+  if ((wLevelMOL <> 0) or (wLevelPodr <> 0)) and (isValid(#SoprOrdB)) and (KatSopr.VidSopr = 201)
+  {
+    Delete All TmpTobot;
+    _Loop SoprOrdB
+    {
+      cPodr := SoprOrdB.cPodr;
+      cMOL  := SoprOrdB.cMOL;
+
+       if ( fSklad )
+         if ( not FilterPass(6, cPodr) )
+           Continue;
+
+       if ( fMOL )
+         if ( not FilterPass(5, cMOL) )
+           ConTinue;
+
+      if (wLevelMOL <> 0) and (wLevelPodr <> 0)
+        if GetFirst TmpTobot where ((SpSopr.nRec    == TmpTobot.cSpSopr and
+                                     SoprOrdB.cPodr == TmpTobot.cPodr  and
+                                     SoprOrdB.cMOL  == TmpTobot.cMOL )) <> tsOK
+       {
+         ClearBuffer(#tmpTobot);
+         TmpTobot.cSpSopr := SpSopr.Nrec;
+         TmpTobot.cPodr   := cPodr;
+         TmpTobot.cMOL    := cMOL;
+         TmpTobot.Kol     := SoprOrdB.Kol;
+         insert current TmpTobot;
+       }
+       else
+       {
+         TmpTobot.Kol   += SoprOrdB.Kol;
+         update current TmpTobot;
+       }
+
+      if (wLevelMOL = 0) and (wLevelPodr <> 0)
+        if GetFirst TmpTobot where ((SpSopr.nRec    == TmpTobot.cSpSopr and
+                                     SoprOrdB.cPodr == TmpTobot.cPodr)) <> tsOK
+        {
+         ClearBuffer(#tmpTobot);
+         TmpTobot.cSpSopr := SpSopr.Nrec;
+         TmpTobot.cPodr   := cPodr;
+         TmpTobot.cMOL    := cMOL;
+         TmpTobot.Kol     := SoprOrdB.Kol;
+         insert current TmpTobot;
+       }
+       else
+       {
+         TmpTobot.Kol   += SoprOrdB.Kol;
+         update current TmpTobot;
+       }
+
+      if (wLevelMOL <> 0) and (wLevelPodr = 0)
+        if GetFirst TmpTobot where ((SpSopr.nRec    == TmpTobot.cSpSopr and
+                                     SoprOrdB.cMOL  == TmpTobot.cMOL)) <> tsOK
+        {
+         ClearBuffer(#tmpTobot);
+         TmpTobot.cSpSopr := SpSopr.Nrec;
+         TmpTobot.cPodr   := cPodr;
+         TmpTobot.cMOL    := cMOL;
+         TmpTobot.Kol     := SoprOrdB.Kol;
+         insert current TmpTobot;
+       }
+       else
+       {
+         TmpTobot.Kol   += SoprOrdB.Kol;
+         update current TmpTobot;
+       }
+    }
+
+    _loop TmpTobot
+      if (AddToTobotIns(TmpTobot.cPodr, TmpTobot.cMOL, TmpTobot.Kol, True))
+        AddToTobot := True;
+  }
+  else
+    if (AddToTobotIns(cPodr, cMOL, SpSopr.KolFact, False))
+      AddToTobot := True;
+}
+
+//==============================================================================
+
+Function AddToTobotRz : boolean;
+Var
+  cPodr
+, cMOL
+              : comp;
+
+  t1
+, t2
+              : TSumma;
+
+  i
+              : word;
+
+{
+  AddToTobotRz := false;
+
+  ClearBuffer(#Tobot);
+  ClearBuffer(#TobotExtData);
+
+//------------------------------- фильтры --------------------------------------
+//------------------------------------------------------------------------------
+                                                     // фильтрация по складам и МОЛ
+  cPodr := KatSopr.cPodrFrom;
+  cMOL  := KatSopr.cMOLFrom;
+
+  if IsValid(#SoprOrdB) and (KatSopr.VidSopr = 201)
+  {
+    cPodr := SoprOrdB.cPodr;
+    cMOL  := SoprOrdB.cMOL;
+  }
+
+  if ( fSklad )
+    if ( not FilterPass(6, cPodr) )
+      Exit;
+
+  if ( fMOL )
+    if ( not FilterPass(5, cMOL) )
+      Exit;
+
+  if ( not isUsedDSQL() )
+    {
+      if ( wVidNakl = 1 )                                // для выписанных накладных
+        {
+          if ( wVidNakl1 > 1 )                           // отгруженный товар
+            {
+              if ( wVidNakl2 = 0 )                       // нет дополнительного фильтра
+                {
+                  if ( RzDoc.dOpr = ZeroDate )
+                    Exit;
+                }
+              else                         // только проведенные вне диапазона выписки
+                if ( (RzDoc.dOpr >= dDate1) and (RzDoc.dOpr <= dDate2) )
+                  Exit;
+            }
+          else                             // выписанный товар (но не оприходованный)
+            if ( (wVidNakl1 = 0) and (RzDoc.dOpr <> ZeroDate) )
+              Exit;
+        }
+
+      if ( fKontr )                                      // фильтрация по контрагенту
+        if ( not FilterPass(7, RzDoc.cOrgBase) )
+          Exit;
+
+
+      if (   (sFiltrDsc <> '')                           // фильтрация
+         and (pos(upcase(sFiltrDsc), upcase(RzDoc.Descr)) <> 1)  // по дескриптору
+         )
+        Exit;
+
+      if (    ( sUserDescr <> '' )                       // фильтрация по группе дескрипторов
+         and  ( upcase(RzDoc.DesGr) <> upcase(sUserDescr) )
+         )
+        Exit;
+
+      if ( fParty )                                      // фильтрация по партиям
+        if (not FilterPass(4, RzSpDoc.cParty))
+          Exit;
+
+      if fMC
+        if not FilterPass(2, KatMC4.nRec)                 // фильтрация по товарам
+          Exit;
+
+      if fGroupMC                                        // фильтрация по группам МЦ
+        if ( not FilterPass(3, KatMC4.cGroupMC) )
+          Exit;
+
+      if fClassMC                                        // фильтрация по внеш.классификации МЦ
+        {
+        }
+
+      if fClassParty
+        {
+        }
+    } // if (not isUsedDSQL())
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+  Tobot.nRec := GetNextNRec(#Tobot,0);
+  Tobot.Code := wCurCode;
+
+  Tobot.flag1 := 2;
+
+  Tobot.Cut[1]  := RzSpDoc.cMC;
+  Tobot.Cut[2]  := KatMC4.cGroupMC;
+  Tobot.Cut[3]  := RzSpDoc.cParty;
+  Tobot.Cut[4]  := cPodr;
+  Tobot.Cut[5]  := cMOL;
+  Tobot.Cut[6]  := RzDoc.cOrgBase;
+  Tobot.Cut[8]  := 0;
+  Tobot.Cut[9]  := KatMC4.cEd;
+  Tobot.Cut[10] := RzDoc.nRec;
+  Tobot.Cut[14] := cValOtch;
+  Tobot.Cut[15] := RzSpDoc.cVal;
+
+  TobotExtData.cGrOtp  := 0;
+  TobotExtData.cGrPol  := 0;
+  TobotExtData.cDog    := 0;
+  TobotExtData.cGrDog  := 0;
+  TobotExtData.cPunktP := 0;
+  TobotExtData.cPunktR := 0;
+  TobotExtData.cGrDO   := 0;
+
+  TobotExtData.data[5] := RzDoc.dDoc;
+  TobotExtData.data[6] := RzDoc.dOpr;
+
+  if ( TobotExtData.data[1] = ZeroDate )
+    TobotExtData.data[1] := TobotExtData.data[5];
+
+//------- определение даты, кол-ва, цены и сумм в рублях и валюте ------------
+
+  Tobot.sum[1] := RzSpDoc.Kol;
+  Tobot.sum[8] := KatMC4.Massa;
+  Tobot.sum[9] := KatMC4.Volume;
+
+  MyGetNatTarCurrency( 0
+                     , (RzSpDoc.PPrice)
+                     , 0
+                     , (RzSpDoc.PPrice)
+                     , cValOtch
+                     , TobotExtData.data[1]
+                     , Tobot.sum[15]
+                     , Tobot.sum[16]
+                     );
+
+  Tobot.sum[2]  := Tobot.sum[15] * Tobot.sum[1];
+  Tobot.sum[3]  := Tobot.sum[16] * Tobot.sum[1];
+
+  // пересчитываем в учетных единицах измерения
+  Tobot.price := 1;
+  if ( IsValid(#KatOtpEdRz) )
+    {
+      TobotExtData.sEdIzm := KatOtpEdRz.Name;
+
+      if ( KatOtpEdRz.Koef <> 0 )
+        Tobot.price := KatOtpEdRz.Koef;
+    }
+
+  Tobot.sum[1]  := Tobot.sum[1] * Tobot.price;
+  Tobot.sum[15] := Tobot.sum[15] / Tobot.price;
+  Tobot.sum[16] := Tobot.sum[16] / Tobot.price;
+
+  Tobot.kol := Tobot.Sum[1];
+
+  if ( IsValid(#RzKutPrih) )
+    {
+      MyGetNatTarCurrency( 0
+                         , RzKutPrih.Price
+                         , RzKutPrih.cVal
+                         , RzKutPrih.VPrice
+                         , cValOtch
+                         , TobotExtData.data[1]
+                         , Tobot.sum[13]
+                         , Tobot.sum[14]
+                         );
+    }
+  else
+    {
+      MyGetNatTarCurrency( 0
+                         , RzSpDoc.Price
+                         , RzSpDoc.cVal
+                         , RzSpDoc.VPrice
+                         , cValOtch
+                         , TobotExtData.data[1]
+                         , Tobot.sum[13]
+                         , Tobot.sum[14]
+                         );
+    }
+
+  Tobot.sum[18] := Tobot.sum[13] * Tobot.kol;
+  Tobot.sum[19] := Tobot.sum[14] * Tobot.kol;
+  Tobot.sum[ 8] := Tobot.sum[ 8] * Tobot.sum[1];
+  Tobot.sum[ 9] := Tobot.sum[ 9] * Tobot.sum[1];
+
+//----------------------------------------------- наценка ----------------------
+
+  MyGetNatTarCurrency( 0
+                     , RzSpDoc.SNalog
+                     , 0
+                     , RzSpDoc.SNalog
+                     , cValOtch
+                     , TobotExtData.data[1]
+                     , t1
+                     , t2
+                     );
+
+  Tobot.Sum[7]  := Nacenka( Tobot.Sum[2] - t1, Tobot.Sum[18]);
+  Tobot.Sum[17] := Nacenka( Tobot.Sum[3] - t2, Tobot.Sum[19]);
+
+
+//------------------------------------------------------------------------------
+
+  if ( bNalog )
+    _loop SpDocNalRz
+      {
+        if ((SpDocNalRz.IsCustom And 32) <> 0)
+          Continue;
+        
+        MyGetNatTarCurrency( 0
+                           , SpDocNalRz.Summa
+                           , SpDocNalRz.cVal
+                           , SpDocNalRz.SumVal
+                           , cValOtch
+                           , TobotExtData.data[1]
+                           , t1
+                           , t2
+                           );
+
+        if (   bVozvrat
+           and (  wVozvr = 1  )
+           and (  (RzSpDoc.TypePrih = 906)
+               or (RzSpDoc.TypePrih = 907)
+               )
+           )
+          {
+            t1 := -t1;
+            t2 := -t2;
+          }
+
+        SetTmpKatalogSum( KatNalogRz.nRec
+                        , Tobot.nRec
+                        , if (IsValid(#KatNalogRz), KatNalogRz.Name, '??')
+                        , t1
+                        , t2
+                        , 0
+                        , 0
+                        );
+      }
+
+//------------------------------------------------------------------------------
+
+  if ( bOplata )
+    {
+      _loop RzKutRash
+        {
+          if (  (wVidNakl <> 2)
+             or ( (RzKutRash.dDoc >= dDate1) and (RzKutRash.dDoc <= dDate2) )
+             )
+            {
+              MyGetNatTarCurrency( 0
+                                 , RzKutRash.Price
+                                 , RzKutRash.cVal
+                                 , RzKutRash.VPrice
+                                 , cValOtch
+                                 , RzKutRash.dDoc
+                                 , t1
+                                 , t2
+                                 );
+
+              t1 := t1 * RzKutRash.Kol;
+              t2 := t2 * RzKutRash.Kol;
+
+              Tobot.sum[5] := Tobot.sum[5] + t1;
+              Tobot.sum[6] := Tobot.sum[6] + t2;
+              Tobot.sum[4] := Tobot.sum[4] + RzKutRash.Kol * Tobot.price;
+            }
+        }
+    }
+
+//------------------------------------------------------------------------------
+
+  if (   bVozvrat
+     and ( wVozvr = 1)
+     and (  (RzSpDoc.TypePrih = 906)
+         or (RzSpDoc.TypePrih = 907)
+         )
+     )
+    {
+      Tobot.sum[1]  := -Tobot.sum[1];         // количество по накладной
+      Tobot.sum[2]  := -Tobot.sum[2];         // сумма по накладной
+      Tobot.sum[3]  := -Tobot.sum[3];         // в валюте
+      Tobot.kol     := -Tobot.kol;            // количество по складскому ордеру
+      Tobot.sum[18] := -Tobot.sum[18];        // сумма по складскому ордеру
+      Tobot.sum[19] := -Tobot.sum[19];        // в валюте
+      Tobot.sum[10] := -Tobot.sum[10];        // количество возврата
+      Tobot.sum[11] := -Tobot.sum[11];        // сумма по ордеру на возврат
+      Tobot.sum[12] := -Tobot.sum[12];        // в валюте
+      Tobot.sum[4]  := -Tobot.sum[4];         // количество оплаченного
+      Tobot.sum[5]  := -Tobot.sum[5];         // сумма оплаченного
+      Tobot.sum[6]  := -Tobot.sum[6];         // сумма оплаченного в валюте
+      Tobot.sum[8]  := -Tobot.sum[8];         // масса товарной позиции
+      Tobot.sum[9]  := -Tobot.sum[9];         // объем товарной позиции
+      Tobot.sum[7]  := -Tobot.sum[7];
+      Tobot.sum[17] := -Tobot.sum[17];
+    }
+
+  i := 1;
+
+  _loop ExClassVal where (( coKatParty == ExClassVal.wTable and SpSopr.cParty == ExClassVal.cRec ))
+    if ( GetFirst ExClassSeg  where (( ExClassVal.cClassSeg  == ExClassSeg.nRec )) = tsOk )
+      {
+        TobotExtData.CutP[i++] := ExClassSeg.nRec;
+
+        if ( i > 8 )
+          break;
+      }
+
+  i := 1;
+  _loop ExClassVal where (( coKatMC == ExClassVal.wTable and KatMC.nRec == ExClassVal.cRec ))
+    if ( GetFirst ExClassSeg  where (( ExClassVal.cClassSeg  == ExClassSeg.nRec )) = tsOk )
+      {
+        TobotExtData.CutM[i] := ExClassSeg.nRec;
+        i++;
+
+        if ( i > 8 )
+          break;
+      }
+
+  TobotExtData.CutS[1] := 0;
+
+  if ( DoTobotInsert )
+    {
+      AddToTobotRz := true;
+    }
+  else
+    {
+      Message(''#3'Не прошел Insert в Tobot!', Warning+OkButton);
+      AddToTobotRz := false;
+    }
+}
+
+//==============================================================================
+Procedure ClearSQLCommand(var vliSQLCommand : longint);
+{
+  if (vliSQLCommand <> 0)
+    {
+      sqlFreeStr(vliSQLCommand);
+      vliSQLCommand := 0;
+    }
+}
+
+//==============================================================================
+Function isMultiSelection(w : word): boolean;
+{
+  Result := RecordExists PickRep where ((   UserID           == PickRep.cUser
+                                        and UserDeskRep.NRec == PickRep.cUserDeskRep
+                                        and w                == PickRep.wList
+                                       )) = tsOK;
+}
+
+//==============================================================================
+Procedure FillDSQLTobot;
+  var vliSQLCommand
+    , vliSQLResCode : longint;
+{
+  var sDateFormatStr : String; sDateFormatStr := 'DD.MM.YYYY';
+  var isFirst : boolean;
+
+  mtClear(#TmpSopr, mfNormal);
+
+  vliSQLCommand := 0;
+
+  sqlAddStr(vliSQLCommand, 'SELECT DISTINCT');
+
+  sqlAddStr(vliSQLCommand, '  xKatSopr.nRec');
+  sqlAddStr(vliSQLCommand, ', xSpSopr.nRec');
+
+  sqlAddStr(vliSQLCommand, ' FROM');
+  sqlAddStr(vliSQLCommand, '  KatSopr     xKatSopr');
+  sqlAddStr(vliSQLCommand, ', SpSopr      xSpSopr');
+
+  if fMC       sqlAddStr(vliSQLCommand, ', ttKatMC   ');
+  if fUsl      sqlAddStr(vliSQLCommand, ', ttKatUsl  ');
+  if fGroupMC  sqlAddStr(vliSQLCommand, ', ttGroupMC ');
+  if fGroupUsl sqlAddStr(vliSQLCommand, ', ttGroupUsl');
+  if fKontr    sqlAddStr(vliSQLCommand, ', ttKatOrg  ');
+  if fParty    sqlAddStr(vliSQLCommand, ', ttKatParty');
+  if fOtvPodr  sqlAddStr(vliSQLCommand, ', ttFpCO    ');
+  if fDogovor  sqlAddStr(vliSQLCommand, ', ttDogovor ');
+  if fGrKontr  sqlAddStr(vliSQLCommand, ', ttGroupOrg');
+  if fKatNotes sqlAddStr(vliSQLCommand, ', ttKatNotes');
+
+  if fGrKontr  sqlAddStr(vliSQLCommand, ', KatOrgDescr xKatOrgDescr');
+  if fGrPrice  sqlAddStr(vliSQLCommand, ', KlPrice     xKlPrice');
+  if fGroupMC  sqlAddStr(vliSQLCommand, ', KatMC       xKatMC');
+  if fGroupUsl sqlAddStr(vliSQLCommand, ', KatUsl      xKatUsl');
+
+  if ( wVidNakl = 2 )
+    {
+      sqlAddStr(vliSQLCommand, ', SpSoprHoz   xSpSoprHoz');
+      sqlAddStr(vliSQLCommand, ', SoprHoz     xSoprHoz');
+    }
+
+  sqlAddStr(vliSQLCommand, ' WHERE ');
+  sqlAddStr(vliSQLCommand, '     (xKatSopr.nRec    = xSpSopr.cSopr)');
+  sqlAddStr(vliSQLCommand, ' AND (xKatSopr.VidSopr = ' + String(wSopr) + ')');
+
+  if ( wVidNakl = 2 )
+    {
+      sqlAddStr(vliSQLCommand, ' AND (xSpSopr.nRec       == xSpSopHoz.cSpSopr)');
+      sqlAddStr(vliSQLCommand, ' AND (xSpSopHoz.cSoprHoz == xSoprHoz.nRec)');
+    }
+
+  if ((dDate1 <> ZeroDate) AND (dDate2 = ZeroDate))
+    sqlAddStr(vliSQLCommand, ' AND ( ' + iCase(wVidNakl; 'xKatSopr.dOpr', 'xKatSopr.dSopr', 'xSoprHoz.DatOb') + ' >= #date('
+                           +  String(Day(dDate1))   + ','
+                           +  String(Month(dDate1)) + ','
+                           +  String(Year(dDate1))  + ')'
+                           + ')');
+
+  if ((dDate1 = ZeroDate) AND (dDate2 <> ZeroDate))
+    sqlAddStr(vliSQLCommand, ' AND ( ' + iCase(wVidNakl; 'xKatSopr.dOpr', 'xKatSopr.dSopr', 'xSoprHoz.DatOb') + ' <= #date('
+                           +  String(Day(dDate1))   + ','
+                           +  String(Month(dDate1)) + ','
+                           +  String(Year(dDate1))  + ')'
+                           + ')');
+
+  if ((dDate1 <> ZeroDate) AND (dDate2 <> ZeroDate))
+    sqlAddStr(vliSQLCommand, ' AND ( ' + iCase(wVidNakl; 'xKatSopr.dOpr', 'xKatSopr.dSopr', 'xSoprHoz.DatOb')
+                           + ' BETWEEN #date('
+                           +  String(Day(dDate1))   + ','
+                           +  String(Month(dDate1)) + ','
+                           +  String(Year(dDate1))  + ')'
+                           + ' AND #date('
+                           +  String(Day(dDate2))   + ','
+                           +  String(Month(dDate2)) + ','
+                           +  String(Year(dDate2))  + ')'
+                           + ')');
+
+  if (UserDeskRep.ResWord[2] = 0)
+
+
+  if ( UserDeskRep.ResWord[2] = 0 )
+    sqlAddStr(vliSQLCommand, ' AND (xSpSopr.PrMc = 1)');
+  else
+    case SpSopr.VidSopr of
+      111, 201, 211 :
+        sqlAddStr(vliSQLCommand, ' AND (xSpSopr.PrMc = 2)');
+      101 :
+        sqlAddStr(vliSQLCommand, ' AND (xSpSopr.PrMc  BETWEEN 3 AND 5)');
+    end; // case
+
+  if ( wVidNakl = 1 )                            // для выписанных накладных
+    if ( wVidNakl1 > 1 )                         // отгруженный товар
+      if ( wVidNakl2 = 0 )                       // нет дополнительного фильтра
+        sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.dOpr <> #date(0, 0, 0))')
+      else                                       // только проведенные вне диапазона выписки
+        sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.dOpr < #date('
+                               +  String(Day(dDate1))   + ','
+                               +  String(Month(dDate1)) + ','
+                               +  String(Year(dDate1))  + ')'
+                               + ' AND xKatSopr.dOpr > #date('
+                               +  String(Day(dDate2))   + ','
+                               +  String(Month(dDate2)) + ','
+                               +  String(Year(dDate2))  + ')'
+                               + ')');
+    else                                           // выписанный товар (но не оприходованный)
+      if (wVidNakl1 = 0)
+        sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.dOpr = #date(0, 0, 0))');
+
+  if (sFiltrDsc  <> '') sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.Descr  = ''' + sFiltrDsc  + ''')');
+  if (sUserDescr <> '') sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.DesGr  = ''' + sUserDescr + ''')');
+  if fNaznaFlt          sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.cNazna = #comp(' + String(UserDeskRep.ResComp[22]) + '))');
+
+  if fKontr    sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.cOrgBase   = ttKatOrg.nRec)');
+  if fDogovor  sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.cDogovor   = ttDogovor.nRec)');
+  if fKatNotes sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.cNote      = ttKatNotes.nRec)');
+
+  if fOtvPodr  sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.TipOtvPodr = 0)');
+  if fOtvPodr  sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.cOtvPodr   = ttFpCO.nRec)');
+  if fGrKontr  sqlAddStr(vliSQLCommand, ' AND ( xKatSopr.cOrgBase   = xKatOrgDescr.cRec)');
+  if fGrKontr  sqlAddStr(vliSQLCommand, ' AND ( xKatOrgDescr.cGroup = ttGroupOrg.nRec)');
+
+  if fParty    sqlAddStr(vliSQLCommand, ' AND ( xSpSopr.cParty      = ttKatParty.nRec)');
+  if fMC       sqlAddStr(vliSQLCommand, ' AND ( xSpSopr.cMcUsl      = ttKatMC.nRec)');
+  if fUsl      sqlAddStr(vliSQLCommand, ' AND ( xSpSopr.cMcUsl      = ttKatUsl.nRec)');
+
+  if fGroupMC  sqlAddStr(vliSQLCommand, ' AND ( xSpSopr.cMcUsl      = xKatMC.nRec)');
+  if fGroupMC  sqlAddStr(vliSQLCommand, ' AND ( xKatMC.cGroupMC     = ttGroupMC.nRec)');
+  if fGroupUsl sqlAddStr(vliSQLCommand, ' AND ( xSpSopr.cMcUsl      = xKatUsl.nRec)');
+  if fGroupUsl sqlAddStr(vliSQLCommand, ' AND ( xKatUsl.cGroupUsl   = ttGroupUsl.nRec)');
+
+  if fGrPrice  sqlAddStr(vliSQLCommand, ' AND ( xSpSopr.cPriceList = xKlPrice.nRec)');
+  if fGrPrice  sqlAddStr(vliSQLCommand, ' AND ( xKlPrice.cGrPrice  = #comp(' + String(UserDeskRep.ResComp[23]) + '))');
+
+  vliSQLResCode := sqlSelectInto(vliSQLCommand, #TmpSopr);
+
+  _loop TmpSopr
+    {
+      NextVisual;
+
+      if (GetFirst KatSopr where ((TmpSopr.cKatSopr == KatSopr.nRec)) = tsOk)
+        if (GetFirst SpSopr where ((TmpSopr.cSpSopr == SpSopr.nRec)) = tsOk)
+          AddToTobot;
+    }
+
+  ClearSQLCommand(vliSQLCommand);
+}
+
+//==============================================================================
+
+
+Procedure RunNakl;
+{
+  if ( bStopNakl )
+    Exit;
+
+  if isUsedDSQL()
+    FillDSQLTobot
+  else
+    _loop KatSopr
+      _loop SpSopr
+        {
+          if ( Not NextVisual )
+            {
+              StopVisual('',0);
+              bStopNakl := true;
+              Exit;
+            }
+
+          AddToTobot;
+        }
+}
+
+Procedure RunNaklRz;
+{
+  if ( bStopNakl )
+    Exit;
+
+  _loop RzDoc
+    {
+      if ( (wVidNakl <> 1) and ( (RzDoc.dOpr < dDate1) or (RzDoc.dOpr > dDate2) ) )
+        continue;
+
+      _loop RzSpDoc
+        {
+          if ( Not NextVisual )
+            {
+              StopVisual('',0);
+              bStopNakl := true;
+              Exit;
+            }
+
+          AddToTobotRz;
+        }
+    }
+}
+
+Procedure RunSoprOplat;
+{
+  _loop SoprHoz
+    _loop SpSopHoz
+      {
+        if ( Not NextVisual )
+          {
+            StopVisual('',0);
+            bStopNakl := true;
+            Exit;
+          }
+
+        if ( GetFirst SpSopr where (( SpSopHoz.cSpSopr == SpSopr.nRec )) = tsOk )
+          {
+            if ( GetFirst Tobot where (( SpSopr.nRec == Tobot.Cut[11] (NoIndex) )) = tsOk )
+              continue;
+
+            if ( wZP = 0 )   // закупки
+              {
+                if ( UserDeskRep.ResWord[2] = 0 )
+                  {
+                    if ( (KatSopr.VidSopr = 101) or ((bVozvrat) and (wVozvr = 1) and (KatSopr.VidSopr = 206)) )
+                      AddToTobot;
+                  }
+                else
+                  {
+                    if ( (KatSopr.VidSopr = 111) or ( KatSopr.VidSopr = 101) )
+                      AddToTobot;
+                  }
+              }
+            else            // продажи
+              {
+                if ( UserDeskRep.ResWord[2] = 0 )
+                  {
+                    if (  (KatSopr.VidSopr = 201)
+                       or (KatSopr.VidSopr = 205)
+                       or ((bVozvrat) and (wVozvr = 1) and (KatSopr.VidSopr = 106))
+                       )
+                      AddToTobot;
+                  }
+                else
+                  {
+                    if ( (KatSopr.VidSopr = 211) or ( KatSopr.VidSopr = 201) )
+                      AddToTobot;
+                  }
+              }
+          }
+      }
+}

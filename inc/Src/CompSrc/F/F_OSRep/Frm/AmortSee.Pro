@@ -13,6 +13,7 @@
 
 .set name = 'AmortSee'
 .hide
+.group 'Разность данных по амортизации'
 .fields
 
   BegDate      : date
@@ -39,15 +40,17 @@
   Node_Stoim2  : double // стоимость объекта по методу учета для сравнения
   Node_SumIzn2 : double // сумма износа объекта по методу учета для сравнения
 
-  Node_Raznost : double // общая разница по суммам износа за месяц
-  Node_PR      : double // постоянная разность
-  Node_VVRNach : double // начисление вычитаемой временной разности (ВВР)
-  Node_VVRPog  : double // погашение ВВР
-  Node_NVRNach : double // начисление налогооблагаемой временной разности (НВР)
-  Node_NVRPog  : double // погашение НВР
-  Node_TotalPR  : double // накопленная величина постоянной разницы
-  Node_TotalVVR : double // накопленная величина вычитаемой временной разницы (ВВР)
-  Node_TotalNVR : double // накопленная величина налогооблагаемой временной разницы (НВР)
+  Node_Raznost    : double // общая разница по суммам износа за месяц
+  Node_PR         : double // постоянная разность
+  Node_PRPog      : double // погашено постоянная разность
+  Node_VVRNach    : double // начисление вычитаемой временной разности (ВВР)
+  Node_VVRPog     : double // погашение ВВР
+  Node_NVRNach    : double // начисление налогооблагаемой временной разности (НВР)
+  Node_NVRPog     : double // погашение НВР
+  Node_TotalPR    : double // накопленная величина постоянной разницы
+  Node_TotalPRPog : double // накопленная величина постоянной разницы
+  Node_TotalVVR   : double // накопленная величина вычитаемой временной разницы (ВВР)
+  Node_TotalNVR   : double // накопленная величина налогооблагаемой временной разницы (НВР)
 
   Node_ValName
   //---------------------------------------------
@@ -69,15 +72,17 @@
   Leaf_Algoritm2  // Наименование алгоритма начисления амортизации
   Leaf_TXO2       // Наименование ТХО по амортизации
 
-  Leaf_Raznost : double // общая разность
-  Leaf_PR      : double // постоянная разность
-  Leaf_VVRNach : double // начисление вычитаемой временной разности (ВВР)
-  Leaf_VVRPog  : double // погашение ВВР
-  Leaf_NVRNach : double // начисление налогооблагаемой временной разности (НВР)
-  Leaf_NVRPog  : double // погашение НВР
-  Leaf_TotalPR : double // накопленная величина постоянной разницы
-  Leaf_TotalVVR: double // накопленная величина вычитаемой временной разницы (ВВР)
-  Leaf_TotalNVR: double // накопленная величина налогооблагаемой временной разницы (НВР)
+  Leaf_Raznost    : double // общая разность
+  Leaf_PR         : double // постоянная разность
+  Leaf_PRPog      : double // погашено постоянная разность
+  Leaf_VVRNach    : double // начисление вычитаемой временной разности (ВВР)
+  Leaf_VVRPog     : double // погашение ВВР
+  Leaf_NVRNach    : double // начисление налогооблагаемой временной разности (НВР)
+  Leaf_NVRPog     : double // погашение НВР
+  Leaf_TotalPR    : double // накопленная величина постоянной разницы
+  Leaf_TotalPRPog : double // накопленная величина постоянной разницы
+  Leaf_TotalVVR   : double // накопленная величина вычитаемой временной разницы (ВВР)
+  Leaf_TotalNVR   : double // накопленная величина налогооблагаемой временной разницы (НВР)
 
   Leaf_ValName
   //---------------------------------------------
@@ -103,20 +108,24 @@
   Leaf_SUMIZN_IzmStm2  : double   // сумма износа за период BegDate-EndDate из операций Изм стоимости
   Leaf_OstSTOIM_2: double   // остаточная стоимость на EndDate
 
-  Leaf_VVR_Stoim : double   // ВВР первоначальной стоимости
-  Leaf_NVR_Stoim : double   // НВР первоначальной стоимости
-  Leaf_VVR_Inp   : double   // ВВР на BegDate
-  Leaf_NVR_Inp   : double   // НВР на BegDate
-  Leaf_PR_Inp    : double   // ПР  на BegDate
-  Leaf_VVR_Period: double   // ВВР за период BegDate-EndDate
-  Leaf_NVR_Period: double   // НВР за период BegDate-EndDate
-  Leaf_PR_Period : double   // ПР  за период BegDate-EndDate
+  Leaf_VVR_Stoim    : double   // ВВР первоначальной стоимости
+  Leaf_NVR_Stoim    : double   // НВР первоначальной стоимости
+  Leaf_VVR_Inp      : double   // ВВР на BegDate
+  Leaf_NVR_Inp      : double   // НВР на BegDate
+  Leaf_PR_Inp       : double   // ПР  на BegDate
+  Leaf_PRPog_Inp    : double   // погашено ПР  на BegDate
+
+  Leaf_VVR_Period   : double   // ВВР за период BegDate-EndDate
+  Leaf_NVR_Period   : double   // НВР за период BegDate-EndDate
+  Leaf_PR_Period    : double   // ПР  за период BegDate-EndDate
+  Leaf_PRPog_Period : double   // ПР  за период BegDate-EndDate
 
   Leaf_VVR_Cor      : double   // Корректировка ВВР за период BegDate-EndDate
   Leaf_VVRPog_Cor   : double   // Корректировка ПВВР за период BegDate-EndDate
   Leaf_NVR_Cor      : double   // Корректировка НВР за период BegDate-EndDate
   Leaf_NVRPog_Cor   : double   // Корректировка ПНВР за период BegDate-EndDate
   Leaf_PR_Cor       : double   // Корректировка ПР за период BegDate-EndDate
+  Leaf_PRPog_Cor    : double   // Корректировка погашено ПР за период BegDate-EndDate
 
   Leaf_Vyb_Period_1 : double   // выбытие по исходному методу учета за период BegDate-EndDate
   Leaf_Vyb_Period_2 : double   // выбытие по методу учета для сравнения за период BegDate-EndDate
@@ -156,16 +165,18 @@
      Node_Stoim2    ^
      Node_SumIzn2   ^
 
-     Node_Raznost   ^
-     Node_PR        ^
-     Node_VVRNach   ^
-     Node_VVRPog    ^
-     Node_NVRNach   ^
-     Node_NVRPog    ^
-     Node_TotalPR   ^
-     Node_TotalVVR  ^
-     Node_TotalNVR  ^
-     Node_ValName   ^
+     Node_Raznost    ^
+     Node_PR         ^
+     Node_PRPog      ^
+     Node_VVRNach    ^
+     Node_VVRPog     ^
+     Node_NVRNach    ^
+     Node_NVRPog     ^
+     Node_TotalPR    ^
+     Node_TotalPRPog ^
+     Node_TotalVVR   ^
+     Node_TotalNVR   ^
+     Node_ValName    ^
 .}
 .{ AmortSee_Body CheckEnter
      Leaf_Name      ^
@@ -185,16 +196,18 @@
      Leaf_Algoritm2 ^
      Leaf_TXO2      ^
 
-     Leaf_Raznost   ^
-     Leaf_PR        ^
-     Leaf_VVRNach   ^
-     Leaf_VVRPog    ^
-     Leaf_NVRNach   ^
-     Leaf_NVRPog    ^
-     Leaf_TotalPR   ^
-     Leaf_TotalVVR  ^
-     Leaf_TotalNVR  ^
-     Leaf_ValName   ^
+     Leaf_Raznost    ^
+     Leaf_PR         ^
+     Leaf_PRPog      ^
+     Leaf_VVRNach    ^
+     Leaf_VVRPog     ^
+     Leaf_NVRNach    ^
+     Leaf_NVRPog     ^
+     Leaf_TotalPR    ^
+     Leaf_TotalPRPog ^
+     Leaf_TotalVVR   ^
+     Leaf_TotalNVR   ^
+     Leaf_ValName    ^
 
      //--------------------------
      Leaf_wTiDk     ^
@@ -217,20 +230,25 @@
      Leaf_SUMIZN_IzmStm2  ^
      Leaf_OstSTOIM_2 ^
 
-     Leaf_VVR_Stoim  ^
-     Leaf_NVR_Stoim  ^
-     Leaf_VVR_Inp    ^
-     Leaf_NVR_Inp    ^
-     Leaf_PR_Inp     ^
-     Leaf_VVR_Period ^
-     Leaf_NVR_Period ^
-     Leaf_PR_Period  ^
+     Leaf_VVR_Stoim     ^
+     Leaf_NVR_Stoim     ^
+
+     Leaf_VVR_Inp       ^
+     Leaf_NVR_Inp       ^
+     Leaf_PR_Inp        ^
+     Leaf_PRPog_Inp     ^
+
+     Leaf_VVR_Period    ^
+     Leaf_NVR_Period    ^
+     Leaf_PR_Period     ^
+     Leaf_PRPog_Period  ^
 
      Leaf_VVR_Cor       ^
      Leaf_VVRPog_Cor    ^
      Leaf_NVR_Cor       ^
      Leaf_NVRPog_Cor    ^
      Leaf_PR_Cor        ^
+     Leaf_PRPog_Cor     ^
 
      Leaf_Vyb_Period_1 ^
      Leaf_Vyb_Period_2 ^

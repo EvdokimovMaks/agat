@@ -22,6 +22,8 @@ const
   reNSopr        = 1008;
   reUserField    = 1009;
   resDover       = 1010;
+  reGruzFromName = 1011;
+  reGruzToName   = 1012;
 
   // даты
   redPrice       = 2001;
@@ -83,6 +85,8 @@ const
   recOtvPodr      = 3051;
   recUKS          = 3052;
   reKatSoprFilial = 3053;
+  reKatOrgToName  = 3054;
+  reKatOrgFromName= 3055;
 
   reNoBound                  = 4000;
   reTieToKatSopr             = 4001;

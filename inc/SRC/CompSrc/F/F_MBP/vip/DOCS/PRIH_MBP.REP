@@ -1,0 +1,432 @@
+//--------------------------------------------------------------------------------
+//                                                        (c) корпорация Галактика
+// Галактика 7.12 - Спецоснастка
+// Печать Акта об излишке спецоснастки
+//--------------------------------------------------------------------------------
+
+Create View ctPrnDoc
+From
+  KatPodr,
+  KatMol;
+
+function GetFullPodrName(pPodr : comp) : string;
+{
+  GetFullPodrName := '';
+
+  if (ctPrnDoc.GetFirst KatPodr where (( pPodr == KatPodr.nRec )) <> tsOk)
+    Exit;
+
+  GetFullPodrName := ctPrnDoc.KatPodr.Name;
+
+  if (pTypeDoc = mbpPostDoc)
+    if (wGetTune('Fin.MBP.HighPodrToRep') > 0)
+    {
+      var pHiPodr : comp;
+      pHiPodr := ctPrnDoc.KatPodr.cPodr;
+
+      if (ctPrnDoc.GetFirst KatPodr where (( pHiPodr == KatPodr.nRec )) = tsOk)
+        GetFullPodrName := ctPrnDoc.KatPodr.Name + '/' + GetFullPodrName;
+    }
+}
+
+function GetMolName(pMol : comp; isFull : boolean) : string;
+{
+  GetMolName := '';
+
+  if (ctPrnDoc.GetFirst KatMol where (( pMol == KatMol.nRec )) = tsOk)
+    GetMolName := if (isFull, ctPrnDoc.KatMol.Name, GetShortName(ctPrnDoc.KatMol.Name));
+}
+
+//------------------------------------------------------------------------------
+
+function GetSrokExplStr : string;
+{
+  GetSrokExplStr := SrokExpl;
+
+  if (GetSrokExplStr = '') or
+     (UpCase(GetSrokExplStr) = 'РАЗОВАЯ') or
+     (UpCase(GetSrokExplStr) = 'ДО ИЗНОСА')
+    Exit;
+
+  GetSrokExplStr := GetSrokExplStr + ' мес.';
+}
+
+//--------------------------------------------------------------------------------
+
+procedure PrintPrihDoc;
+{
+  case (MBPMove.Status) of
+  //----------------------
+    mbpOverDoc: frmPrih_MBP.SetGroup('Излишек');
+  //----------------------
+    mbpPostDoc: frmPrih_MBP.SetGroup('Приход, поступление');
+  //----------------------
+  end; // case
+
+  var lCount, i : longint;
+  var _cNRec : comp;
+
+  if bPrintCurDoc // печатаем текущий документ
+    lCount := 0;
+  else            // печатаем помеченные документы
+    lCount := GetMarkerCount(DocMarker);
+
+  if (lCount = 0) // печатаем текущий документ
+  {
+    lCount := 1;
+    bPrintCurDoc := True;
+  }
+
+  PushPos(#MBPMove);
+  PushPos(#MBPIn);
+
+  for (i := 0; i < lCount; i++)
+  {
+    if (not bPrintCurDoc)
+    {
+      if (not GetMarker(DocMarker, i, _cNRec))
+        Continue;
+
+      if (GetFirst FastFirstRow MBPMove where (( _cNRec == MBPMove.nRec )) <> tsOk)
+        Continue;
+    }
+
+    frmPrih_MBP.Write(MBPMove.nRec);
+    frmPrih_MBP.Write(MBPMove.Nom);
+    frmPrih_MBP.Write(MBPMove.dMove);
+    frmPrih_MBP.Write(ToKatPodr.Name);
+    frmPrih_MBP.Write(ToKatMol.Name);
+    frmPrih_MBP.Write(iFeeSigners.GetFeeSigners);
+    frmPrih_MBP.Write(ParentDoc.nRec);
+    frmPrih_MBP.Write(ParentDoc.Nom);
+    frmPrih_MBP.Write(ParentDoc.dMove);
+
+    if (GetFirst MBPIn <> tsOk)
+      frmPrih_MBP.SkipFormat(10);
+    else
+      _LOOP MBPIn
+      {
+        frmPrih_MBP.Write(MBPIn.nRec);
+        frmPrih_MBP.Write(KatMBP.Name);
+        frmPrih_MBP.Write(KatMBP.NNumber);
+        frmPrih_MBP.Write(KatEd.Name);
+        frmPrih_MBP.Write(MBPIn.KolDoc);
+        frmPrih_MBP.Write(MBPIn.Price);
+        frmPrih_MBP.Write(MBPIn.PercNach);
+        frmPrih_MBP.Write(InDocSum);
+        frmPrih_MBP.Write(KatParty.Kod);
+        frmPrih_MBP.Write(KatParty.Name);
+      }
+
+    frmPrih_MBP.putEvent(feBreak);
+  }
+
+  frmPrih_MBP.putEvent(feBreak);
+
+  PopPos(#MBPIn);
+  PopPos(#MBPMove);
+  ReReadRecord(#MBPMove);
+
+  if (not frmPrih_MBP.Error)
+    frmPrih_MBP.ShowFile('');
+  else
+    frmPrih_MBP.AbortForm;
+}
+
+//--------------------------------------------------------------------------------
+var sReqPers, sReqPersSh, sReqPersPost,
+    sLetPers, sLetPersSh, sLetPersPost,
+    sDirect, sDirectSh, sDirectPost : string;
+
+procedure LoadSigners;
+{
+  sReqPers := sReqPersSh := sReqPersPost := '';
+  sLetPers := sLetPersSh := sLetPersPost := '';
+  sDirect  := sDirectSh  := sDirectPost  := '';
+
+  if (pTypeDoc <> mbpPostDoc) or (not iFeeSigners.FeeSignersIsValid)
+    Exit;
+
+  // Затребовал
+  if (iFeeSigners.RestrictFeeByRole(2, 'Requested'))
+  {
+    sReqPers := iFeeSigners.GetSignerFIO(1);
+    sReqPersSh := iFeeSigners.GetSignerFIO(7);
+    sReqPersPost := iFeeSigners.GetSignerPosition(1);
+  }
+
+  // Разрешил
+  if (iFeeSigners.RestrictFeeByRole(2, 'Allowed'))
+  {
+    sLetPers := iFeeSigners.GetSignerFIO(1);
+    sLetPersSh := iFeeSigners.GetSignerFIO(7);
+    sLetPersPost := iFeeSigners.GetSignerPosition(1);
+  }
+
+  // Руководитель
+  if (iFeeSigners.RestrictFeeByRole(2, 'Direct'))
+  {
+    sDirect := iFeeSigners.GetSignerFIO(1);
+    sDirectSh := iFeeSigners.GetSignerFIO(7);
+    sDirectPost := iFeeSigners.GetSignerPosition(1);
+  }
+
+  iFeeSigners.ClearRestriction;
+}
+
+procedure LoadFrPrih;
+var Npp : longint;
+{
+  Npp := 0;
+  TotSum := 0;
+
+  delete all FrPrih;
+
+  _LOOP MBPIn
+  {
+    Npp++;
+    ClearBuffer(#FrPrih);
+    FrPrih.Npp       := Npp;
+    FrPrih.MBPName   := KatMBP.Name;
+    FrPrih.MBPKod    := KatMBP.NNumber;
+    FrPrih.MBPEd     := KatEd.Name;
+    FrPrih.MBPEdKod  := piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код');
+    FrPrih.MBPKol    := MBPIn.KolDoc;
+    FrPrih.MBPPrice  := MBPIn.Price;
+    FrPrih.MBPIznP   := MBPIn.PercNach;
+    FrPrih.MBPStoim  := InDocSum;
+    FrPrih.MBPExpl   := MBPIn.InEkspl;
+    FrPrih.MBPExplD  := if (Longint(MBPIn.DateEksp) > 0, DateToStr(MBPIn.DateEksp, 'DD/MM/YYYY'), '');
+    FrPrih.MBPSrokS  := GetSrokExplStr;
+    FrPrih.SklNum    := GetMBPSklNum(KatMBP.DopInfo, MBPIn.DopInfo);
+    FrPrih.InvNum    := GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo);
+    FrPrih.PasNum    := GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo);
+    FrPrih.PartyKod  := KatParty.Kod;
+    FrPrih.PartyName := KatParty.Name;
+    FrPrih.PersFIO   := Persons.FIO;
+    FrPrih.PersTabN  := STabN;
+    insert current FrPrih;
+
+    case (MBPMove.Status) of
+    //----------------------
+      mbpOverDoc:
+        TotSum := TotSum + MBPIn.KolDoc * MBPIn.Price;
+    //----------------------
+      mbpPostDoc:
+        TotSum := TotSum + InDocSum;
+    //----------------------
+    end;
+  }
+
+  TotSum := Round(TotSum, 2);
+  TotSumStr := DoubleToString(0, TotSum);
+}
+
+var lMarkCount, lIndex, lSign : longint;
+
+function IsFindPrihDoc : boolean;
+var _cNRec : comp;
+{
+  IsFindPrihDoc := False;
+
+  if (lIndex = 0)
+  {
+    if bPrintCurDoc // печатаем текущий документ
+      lMarkCount := 0;
+    else            // печатаем помеченные документы
+      lMarkCount := GetMarkerCount(DocMarker);
+
+    if (lMarkCount = 0) // печатаем текущий документ
+    {
+      lMarkCount := 1;
+      bPrintCurDoc := True;
+    }
+  }
+
+  while (lIndex < lMarkCount)
+  {
+    if (not bPrintCurDoc)
+    {
+      if (not GetMarker(DocMarker, lIndex, _cNRec))
+      {
+        lIndex++;
+        Continue;
+      }
+
+      if (GetFirst FastFirstRow MBPMove where (( _cNRec == MBPMove.nRec )) <> tsOk)
+      {
+        lIndex++;
+        Continue;
+      }
+    }
+
+    IsFindPrihDoc := True;
+    lIndex++;
+    Break;
+  }
+}
+
+DataStream DTS
+(
+  [CFH]           CommonFormHeader;
+  [NDE_Rub]       if (sGetTune('NDE.ShortRub') <> '', sGetTune('NDE.ShortRub'), 'руб.');
+  [Rub_Str]       sGetTune('NDE.NameRubl')+';'+sGetTune('NDE.NameRubla')+';'+sGetTune('NDE.NameRublei');
+  [Kop_Str]       sGetTune('NDE.NameKop')+';'+sGetTune('NDE.NameKopki')+';'+sGetTune('NDE.NameKopek');
+
+  DataSet FrDoc
+  (
+    [BarCode]     GenerateBarCode(GetDocTiDkGal(pTypeDoc), MBPMove.nRec);
+    [OrgName]     iOrgInfo.GetMyOrgNameT(MBPMove.dMove);
+    [OKPO]        iOrgInfo.MyOrgOKPO;
+    [dNom]        MBPMove.Nom;
+    [dDate]       DateToStr(MBPMove.dMove, 'DD/MM/YYYY');
+    [Podr]        GetFullPodrName(ToKatPodr.nRec);
+    [Mol]         ToKatMol.Name;
+    [MolShort]    GetShortName(ToKatMol.Name);
+    [MolPost]     oSDfuns.Get_MOL_Post(ToKatMol.nRec);
+    [Pers]        DocPerson.FIO;
+    [PersShort]   GetShortName(DocPerson.FIO);
+    [FrPodr]      if (isValid(#KatSopr), GetFullPodrName(KatSopr.cPodrFrom), '');
+    [FrMol]       if (isValid(#KatSopr), GetMolName(KatSopr.cMolFrom, true), '');
+    [FrMolShort]  if (isValid(#KatSopr), GetMolName(KatSopr.cMolFrom, false), '');
+    [FrMolPost]   if (isValid(#KatSopr), oSDfuns.Get_MOL_Post(KatSopr.cMolFrom), '');
+    [InvDoc]      ParentDoc.NRec;
+    [InvNom]      ParentDoc.Nom;
+    [InvDate]     ParentDoc.dMove;
+    [ReqPersFIO]  sReqPers;
+    [ReqPersSh]   sReqPersSh;
+    [ReqPersPost] sReqPersPost;
+    [LetPersFIO]  sLetPers;
+    [LetPersSh]   sLetPersSh;
+    [LetPersPost] sLetPersPost;
+    [DirectFIO]   sDirect;
+    [DirectSh]    sDirectSh;
+    [DirectPost]  sDirectPost;
+    [frTotSum]    TotSum;
+    [frTotSumStr] TotSumStr;
+
+    Table FrPrih
+    (
+      [Npp]       FrPrih.Npp;
+      [MBPName]   FrPrih.MBPName;
+      [MBPKod]    FrPrih.MBPKod;
+      [MBPEd]     FrPrih.MBPEd;
+      [MBPEdKod]  FrPrih.MBPEdKod;
+      [MBPKol]    FrPrih.MBPKol;
+      [MBPPrice]  FrPrih.MBPPrice;
+      [MBPIznP]   FrPrih.MBPIznP;
+      [MBPStoim]  FrPrih.MBPStoim;
+      [MBPExpl]   FrPrih.MBPExpl;
+      [MBPExplD]  Frprih.MBPExplD;
+      [MBPSrokS]  FrPrih.MBPSrokS;
+      [SklNum]    FrPrih.SklNum;
+      [InvNum]    FrPrih.InvNum;
+      [PasNum]    FrPrih.PasNum;
+      [PartyKod]  FrPrih.PartyKod;
+      [PartyName] FrPrih.PartyName;
+      [PersFIO]   FrPrih.PersFIO;
+      [PersTabN]  FrPrih.PersTabN;
+    );
+  );
+
+  DataSet Signers
+  (
+    [FIO]   iFeeSigners.GetSignerFIO(1);
+    [TabN]  iFeeSigners.GetSignerTabN;
+    [Post]  iFeeSigners.GetSignerPosition(1);
+    [Role]  iFeeSigners.GetSignerRole;
+  );
+)
+
+HandleEvent DataSet Signers
+//-------------------------
+  cmPreProcess:
+  {
+    lSign := 0;
+
+    if (not iFeeSigners.FeeSignersIsValid)
+      AbortProcess;
+  }
+//-------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    lSign++;
+
+    if (lSign = 1)
+    {
+      if (iFeeSigners.GetSignerFirst)
+        ContinueDataSet;
+    }
+    else
+    {
+      if (iFeeSigners.GetSignerNext)
+        ContinueDataSet;
+    }
+  }
+//-------------------------
+End; // HandleEvent Table tblFeeSigners
+
+HandleEvent Table FrPrih
+//-------------
+  cmOnProcess:
+    if (not NextVisual)
+      BreakProcess;
+//-------------
+end; // HandleEvent Table FrPrih
+
+HandleEvent DataSet FrDoc
+//----------------------
+  cmPreProcess:
+    lIndex := 0;
+//----------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    if (IsFindPrihDoc)
+    {
+      LoadFrPrih;
+      ContinueDataSet;
+    }
+  }
+//----------------------
+End; // HandleEvent DataSet dsKatSopr
+
+HandleEvent // DataStream DTS
+//-------------
+  cmPreProcess:
+  {
+    StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak + vfConfirm, 'Идет формирование отчета...', 1);
+    LoadSigners;
+  }
+//-------------
+  cmPostProcess:
+  {
+    delete all FrPrih;
+    StopVisual('', 0);
+  }
+//-------------
+end; // HandleEvent DataStream DTS
+end; // DataStream DTS
+
+procedure PrintPrihDocFR;
+{
+  PushPos(#MBPMove);
+  PushPos(#MBPIn);
+
+  case (MBPMove.Status) of
+  //----------------------
+    mbpOverDoc: RunFReportByGroup(DTS, 'Izlishek');
+  //----------------------
+    mbpPostDoc: RunFReportByGroup(DTS, 'PrihPost');
+  //----------------------
+  end; // case
+
+  PopPos(#MBPIn);
+  PopPos(#MBPMove);
+  ReReadRecord(#MBPMove);
+}

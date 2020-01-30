@@ -1,0 +1,487 @@
+//******************************************************************************
+//                                                      (c) корпорация Галактика
+// Галактика 8.10 - Заработная плата
+// Обработка настроек с вызовом интерфейсов для компонента Z_Zar
+//******************************************************************************
+
+#include TuneSpec.vih
+
+#include PickCat.vih
+
+// описание интерфейсов
+#include  SetSend.vih
+
+// внешние аттрибуты
+
+#include Attribu_.vih
+#include ExtAttr.vih
+#include AttrTablePick.vih
+
+
+vipinterface IntrTune_Z_Zar implements objIntrTuneComponent licensed(free);
+
+// Обработчик точки расширения epPostTuneComponent
+// Должен вернуть FALSE если обработка проводилась. TRUE - если не проводилась.
+handler with replace Z_Zar_IntrTune on extensionPoint epIntrTuneComponent (TR: objTuneIntr; TVal: TTuneVal; Inter: string) [200]
+action
+{
+   var ifc : IntrTune_Z_Zar;
+   result := not ifc.TuneIntrComponent(TR, TVal, Inter);
+}
+
+//******************************************************************************
+// ObjIntrTuneComponent - вызвается интерфейсом UserReestrTune при Обработка настроек с вызовом интерфейсов.
+// Можно написать свои реализации этого объектного интерфейса, чтобы дополнить вызовы интерфейсов.
+// Все реализации должны начинатся с префикса "IntrTunePatch_"
+//******************************************************************************
+#doc
+Обработка настроек с вызовом интерфейсов для компонента Z_Zar
+#end
+interface IntrTune_Z_Zar;
+  create view
+  from
+      KLVIDPOS
+    , NAIMSOC
+    , PERECH
+    , KLNAIM
+    , RELSTORN
+    , CATALOGS
+    , KLVIDOPL
+    , KLVIDUD
+    , PLANSSCH
+    , KlOtpusk
+    , AttrNam
+    , AttrVal
+    , X$Files
+  where
+  ((
+           coTuneVal     ==  AttrNam.WTable
+      AND  coTuneVal     ==  AttrVal.WTable
+  ));
+  
+  var compVal: comp;
+  var strVal: string;
+  var ZnAt: string;
+  var TextMess: string;
+
+#include -get_us0.vpp
+//******************************************************************************
+
+Window ValueInputWindow 'Редактирование текста письма' EscClose;
+  Show at (, , 62, 5);
+
+//******************************************************************************
+
+Panel panMemoTbl;
+  Table AttrVal;
+
+//******************************************************************************
+Text
+  MemoID = memAttrVal
+  AttrVal.vLvar #3'   ';
+//******************************************************************************
+
+HandleEvent     // панель
+cmUpdateRecord:
+  {
+    Update Current AttrVal;
+    RereadRecord(#AttrVal);
+  }
+
+end; // of HandleEvent panMemoTbl
+end;
+
+HandleEvent //Окна
+
+  cmInit:
+  {
+     SetFormat(memAttrVal);
+     SetModified(TRUE);
+  }
+
+  cmDone:
+  {
+     UpdateTable;
+     RereadRecord(#AttrVal);
+  //   TextMess := GetFieldFromMemo(0, 250, ftString, tnAttrVal);
+  }
+  
+end; // HandleEvent Window
+end; // Window
+  
+//******************************************************************************
+
+//------------------------------------------------------------------------------
+// Обязательно должна вернуть False если обработка не производилась, иначе true
+//------------------------------------------------------------------------------
+  public function TuneIntrComponent (TR: objTuneIntr; TVal: TTuneVal; Inter: string): boolean;
+  {
+    var PrOk: boolean;
+    PrOk := false;
+
+    TuneIntrComponent := true;
+
+    case UpCase(Inter) of
+//------------------------------------------------------------------------------
+      'ZAR_TEKBUD': //Дата расчетного периода
+      {
+        TuneIntrComponent := false;  // Если не зашли в обработку, то обязательно установим в false
+        var  cm: word;
+        Cm := RunMenu('ZAR_TEKBUDMENU');
+        case Cm of
+          cmValue3:
+          {
+            set TVal.compVal := comp(0);
+            PrOk := true;
+            TuneIntrComponent := true;
+          }
+
+          cmValue4:
+          {
+            set TVal.compVal := comp(1);
+            PrOk := true;
+            TuneIntrComponent := true;
+          }
+          else
+            stop;
+        end;
+      }
+
+//------------------------------------------------------------------------------
+      'DEDUCTIONKIND':
+      {
+        var Z25: word;
+
+        Z25 := word(TVal.compVal);
+        if (RunInterface('pickud', Z25) <> cmCancel)
+        {
+          if (GetFirst klvidud where ((Z25 == klvidud.vidud)) = tsOk)
+          {
+            set TVal.compVal := comp(Z25);
+            TVal.strVal := string(klvidud.vidudp)+ ', '+klvidud.NVidUd;
+            PrOk := true;
+          }
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'PAYMENTKIND':
+      {
+        var Z25: longint;
+
+        Z25 := longint(TVal.compVal);
+        if (runInterface('Pickopl', Z25) <> cmcancel)
+        {
+          set TVal.compVal := comp(Z25);
+          if (GetFirst KLVIDOPL where ((longint(TVal.compVal) == KLVIDOPL.VIDOPL)) = tsOk)
+          {
+            TVal.strVal := string(klvidopl.vidoplp)+ ', '+klvidopl.NVidOpl;
+            PrOk := true;
+          }
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'ZAR_DEPROUND_MY': //настройка
+      {
+        var cdepround: comp;
+        var sdepround: string;
+
+        cdepround := TVal.CompVal;
+        RunInterface(DepRound, cdepround, sdepround, word(1));
+
+        if cdepround > 0
+        {
+          set TVal.CompVal := cdepround;
+          TVal.StrVal := sdepround;
+          PrOk := true;
+        }
+
+        if TVal.StrVal = ''
+        {
+          set TVal.CompVal := cdepround;
+          PrOk := true;
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'ZAR_DEPROUND': //настройка округления по конкретным подразделениям
+      {
+        var cdepround: comp;
+        var sdepround: string;
+
+        cdepround := TVal.CompVal;
+        RunInterface(DepRound, cdepround, sdepround, word(0));
+        if cdepround > 0
+        {
+          set TVal.CompVal := cdepround;
+          TVal.StrVal := sdepround;
+          PrOk := true;
+        }
+
+        if TVal.StrVal = ''
+        {
+          set TVal.CompVal := cdepround;
+          PrOk := true;
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'ZAR_SCH':        // Отнесение остатка округления
+      {
+        var myPlansNo:  comp;    // текущий план счетов
+        var shpSch:     tschet3;
+        var shpSubch:   string[21];
+
+        if (not GetUserTuneParam(myPlansNo))
+          exit;
+
+        if (GetFirst PLANSSCH where ((myPlansNo == PLANSSCH.NREC)) = tsOk)
+        {
+          shpSch := PLANSSCH.KOD + sGetTuneEx('UP.ZAR.XP.CSCHETP', TVal.Obj, TVal.cUser);
+          shpSubch := sGetTuneEx('UP.ZAR.XP.CSUBSCHP', TVal.Obj, TVal.cUser);
+
+          if (RunInterface('GetBuhSchet', word(cgiPick), MyPlansNo, shpSch, shpSubch)  <> cmcancel)
+          {
+            set TVal.strVal := SubStr(shpSch, 2, cgSchetLength-1);
+            SetTuneEx('UP.ZAR.XP.CSUBSCHP', TVal.Obj, TVal.cUser, shpSubch); //Округление окладов
+            PrOk := true;
+          }
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'ZAR_SUB': // Отнесение остатка округления
+      {
+        var myPlansNo:  comp;    // текущий план счетов
+        var shpSch:     string[21];
+        var shpSubch:   string[21];
+
+        if (not GetUserTuneParam(myPlansNo))
+          Exit;
+
+        if (getfirst PLANSSCH where ((myPlansNo == PLANSSCH.NREC)) = tsOk)
+        {
+          shpSch := PLANSSCH.KOD + sGetTuneEx('UP.ZAR.XP.CSCHETP', TVal.Obj, TVal.cUser);
+          shpSubch := sGetTuneEx('UP.ZAR.XP.CSUBSCHP', TVal.Obj, TVal.cUser);
+
+          if (RunInterface('GetBuhSchet', word(cgiPick), MyPlansNo, shpSch, shpSubch) <> cmcancel)
+          {
+            set TVal.strVal := shpSubch;
+            SetTuneEx('UP.ZAR.XP.CSCHETP', TVal.Obj, TVal.cUser, SubStr(shpSch, 2, cgSchetLength  -1)); //
+            PrOk := true;
+          }
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'ZAR_RKPODR': //настройка районного коэффициента
+      {
+        var cRKPODR: comp;
+        var sRKPODR: string;
+
+        cRKPODR := TVal.CompVal;
+        RunInterface(DepRound, cRKPODR, sRKPODR, word(2));
+        if cRKPODR > 0
+        {
+          set TVal.CompVal := cRKPODR;
+          TVal.StrVal := sRKPODR;
+          PrOk := true;
+        }
+
+        if TVal.StrVal = ''
+        {
+          set TVal.CompVal := cRKPODR;
+          PrOk := true;
+        }
+      }
+
+      'PICKLGOTTYPE':
+      {
+        var _YearRas: integer;
+        var _compParam: comp;
+        var _compParam2: comp;
+
+        _compParam := TVal.compVal;
+        _YearRas := Year(dGetTuneEx('UP.DatOtch', TVal.Obj, TVal.cUser));
+
+        if (runInterface('PickULGT', _compParam, _compParam2, _YearRas) <> cmCancel)
+        {
+           TVal.doubleVal := _compParam2;
+           TVal.compVal := _compParam2;
+           TVal.StrVal := '';
+           if (GetFirst RelStorn where ((_compParam == RelStorn.nrec )) = tsOk)
+             TVal.StrVal := Trim(RelStorn.NameEd) + ', ' + RelStorn.NameMc;
+           PrOk := true;
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'ZAR_TSCALE':
+      {
+        if (runInterface('klpostp', TVal.compVal) <> cmCancel) then
+        {
+          if (GetFirst KlNaim where ((TVal.compVal == KlNaim.Nrec)) = tsOk)
+          {
+            TVal.strVal := KlNaim.Name;
+            PrOk := true;
+          }
+        }
+      }
+
+//------------------------------------------------------------------------------
+       // налог на ФОТ
+      'PERECH':
+      {
+        var Z25: word;
+
+        Z25 := word(TVal.compVal);
+        if RunInterface('PicKPer', Z25 , '') <> cmcancel then
+        {
+          set TVal.compVal := comp(Z25);
+          if (GetFirst PERECH where ((Z25 == PERECH.VIDPER)) = tsOk)
+          {
+            TVal.strVal := string(PERECH.VIDPER) + ', ' + PERECH.NamePER;
+            PrOk := true;
+          }
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'ZAR_ESN': //выбор шкалы ЕСН
+      {
+        var Z25: word;
+
+        Z25 := word(TVal.compVal);
+        if (runInterface('picksocn', Z25) <> cmCancel) then
+        {
+          set TVal.compVal := comp(Z25);
+          if (GetFirst NAIMSOC where ((Z25 == NAIMSOC.SYSCODE)) = tsOk)
+          {
+            TVal.strVal := string(NAIMSOC.SYSCODE) + ', ' + NAIMSOC.Name;
+            PrOk := true;
+          }
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'ZAR_PFTN': //Начало интервала кодов больничных, связанных с производственными травмами
+      {
+        var ParentSav: word;
+
+        ParentSav := TVal.compVal;
+        if RunInterface('PickPos', ParentSav) <> cmcancel
+        {
+          if (GetFirst KLVIDPOS where ((ParentSav == KLVIDPOS.VIDPOS)) = tsOk)
+          {
+            set TVal.compVal := comp(ParentSav);
+            TVal.strVal := string(KLVIDPOS.VIDPOS) + ', ' + KLVIDPOS.NPOS;
+            if (coGetTuneEx('UP.ZAR.XP.Ocrug9', TVal.Obj, TVal.cUser) = 0)
+              coSetTuneEx('UP.ZAR.XP.Ocrug9', TVal.Obj, 0, TVal.compVal, TVal.strVal);
+            PrOk := true;
+          }
+        }
+      }
+
+//------------------------------------------------------------------------------
+      'ZAR_PFTK': //Конец интервала кодов больничных, связанных с производственными травмами
+      {
+        var ParentSav: word;
+
+        ParentSav := TVal.compVal;
+        if RunInterface('PickPos', ParentSav) <> cmcancel
+        {
+          if (GetFirst KLVIDPOS where ((ParentSav == KLVIDPOS.VIDPOS)) = tsOk)
+          {
+            set TVal.compVal := comp(ParentSav);
+            TVal.strVal := string(KLVIDPOS.VIDPOS) + ', ' + KLVIDPOS.NPOS;
+            PrOk := true;
+          }
+        }
+      }
+
+//------------------------------------------------------------------------------
+//  из TuneIntr.vpp не разнесенные по компонентам
+
+  //-------------------
+  //Для учета планирования отпусков
+  'PICKOTPPLAN':
+    { var i: word;
+      i := word(TVal.compVal);
+      if (runInterface('PickOtp', i, integer(0), integer(0), true) <> cmCancel) then
+        {
+          PrOk := FALSE;
+          if (GetFirst KlOtpusk where ((i == KlOtpusk.KotPus)) = tsOk)
+            {
+              TVal.compVal := comp(i);
+              TVal.strVal := KlOtpusk.NOTPUS;
+              PrOk := TRUE;
+            }
+        }
+    }
+  //-------------------
+  'PICKOTPOLD':
+    { var i: word
+      i := word(TVal.compVal);
+      if (runInterface('PickOtp', i, integer(5), integer(0), true) <> cmCancel) then
+        {
+          PrOk := FALSE;
+          if (GetFirst KlOtpusk where ((i == KlOtpusk.KotPus)) = tsOk)
+            {
+              TVal.compVal := comp(i);
+              TVal.strVal := KlOtpusk.NOTPUS;
+              PrOk := TRUE;
+            }
+        }
+    }
+  //-------------------
+  'PICKVIDSTAJ':
+    { if (RunInterface(PickCatalog2, integer(-19), TVal.compVal, comp(0)) = cmDefault)
+      {
+        PrOk := FALSE;
+        if (GetFirst Catalogs where ((TVal.compVal == Catalogs.Nrec)) = tsOk)
+          { TVal.strVal := Catalogs.Name;
+            PrOk := TRUE;
+          }
+      }
+    }
+  //-------------------
+  'PICKMAILSET':
+    {
+      RunInterface(SetupSendMess, word(0));
+      TVal.strVal := UserName;
+      PrOk := TRUE;
+    }
+  //-------------------
+   'PICKCOMMONREPPACH':
+    {
+      StrVal := GetDirName('Укажите путь к дирректории настроек отчета...');
+      if (StrVal <> '')
+      { TVal.strVal := StrVal + '\';
+        PrOk := TRUE;
+      }
+    }
+  //-------------------
+   'RAZB_TBL':
+    {
+      RunInterface(RAZB_TBL, TVal.strVal);
+      if trim(TVal.strVal) <>''
+        TVal.compVal := comp(1);//просто чтобы pick не выскакивал
+      PrOk := TRUE;
+    }
+//------------------------------------------------------------------------------
+    else
+      TuneIntrComponent := false;  // Если не зашли в обработку, то обязательно установим в false
+    end;  // case
+
+    if (PrOk)
+      TR.updateTuneVal(TVal);
+  }     // TuneIntrComponent
+
+end. // интерфейс
+
+ZAR_TEKBUDMENU Menu
+{
+  - 'Отчетный', cmValue3,'Расчет за отчетный период',hcmes,'',kbAltA,sci1Esc;
+  - 'Будущий', cmValue4,'Расчет за будущий период',hcmes,'',kbAltC,sci1Esc;
+}

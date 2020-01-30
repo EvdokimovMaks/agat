@@ -1,0 +1,513 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Спецоснастка
+// Печать документа на внутреннее перемещение спецоснастки
+//------------------------------------------------------------------------------
+
+Create View ctPrnDoc
+From
+  Persons,
+  Appointments,
+  Catalogs;
+
+function GetPersName(pPer : comp) : string;
+{
+  GetPersName := '';
+
+  if (ctPrnDoc.GetFirst Persons where (( pPer == Persons.nRec )) = tsOk)
+    GetPersName := ctPrnDoc.Persons.FIO;
+}
+
+function GetPersPost(pPer : comp) : string;
+{
+  GetPersPost := '';
+
+  if (ctPrnDoc.GetLast Appointments where (( pPer       == Appointments.Person and
+                                             Integer(0) == Appointments.lPrizn )) = tsOk)
+    if (ctPrnDoc.GetFirst Catalogs where (( ctPrnDoc.Appointments.Post == Catalogs.nRec )) = tsOk)
+      GetPersPost := ctPrnDoc.Catalogs.Name;
+}
+
+//-------------------------------------------------------------------------
+
+function GetFullPodrName(PodrName : string; cHiPodr : comp) : string;
+{
+  GetFullPodrName := PodrName;
+
+  // Только для документов на ввод в эксплуатацию
+  if (pTypeDoc <> mbpInExDoc)
+    Exit;
+
+  // Только если установлена настройка
+  if (wGetTune('Fin.MBP.HighPodrToRep') = 0)
+    Exit;
+
+  if (GetFirst HightPodr where (( cHiPodr == HightPodr.nRec )) = tsOk)
+    GetFullPodrName := HightPodr.Name + '/' + GetFullPodrName;
+}
+
+//-------------------------------------------------------------------------
+
+procedure PrintMove_MBP_Head;
+{
+  Npp := 0;
+  ItogKol := 0.0;
+  ItogSum := 0.0;
+
+  frmMove_MBP.Write(iOrgInfo.GetMyOrgType(MBPMove.dMove));
+  frmMove_MBP.Write(iOrgInfo.GetMyOrgNameT(MBPMove.dMove));
+  frmMove_MBP.Write(iOrgInfo.MyOrgOKPO);
+
+  frmMove_MBP.Write(GetDocTiDkGal(MBPMove.Status));
+  frmMove_MBP.Write(MBPMove.nRec);
+  frmMove_MBP.Write(MBPMove.Nom);
+  frmMove_MBP.Write(MBPMove.dMove);
+
+  if (not isValid(tnKatPodr))
+    frmMove_MBP.SkipFormat(1);
+  else
+    frmMove_MBP.Write(GetFullPodrName(KatPodr.Name, KatPodr.cPodr));
+
+  if (not isValid(tnKatMol))
+    frmMove_MBP.SkipFormat(3);
+  else
+  {
+    frmMove_MBP.Write(KatMol.Name);
+    frmMove_MBP.Write(GetShortName(KatMol.Name));
+    frmMove_MBP.Write(oSDfuns.Get_MOL_Post(KatMol.NRec)); // МОЛ_Откуда должность
+  }
+
+  if (MBPMove.Status = mbpNewPDoc) // Переоценка
+    frmMove_MBP.SkipFormat(4);
+  else
+  {
+    if (not isValid(tntoKatPodr))
+      frmMove_MBP.SkipFormat(1);
+    else
+      frmMove_MBP.Write(GetFullPodrName(toKatPodr.Name, toKatPodr.cPodr));
+
+    if (not isValid(tntoKatMol))
+      frmMove_MBP.SkipFormat(3);
+    else
+    {
+      frmMove_MBP.Write(toKatMol.Name);
+      frmMove_MBP.Write(GetShortName(toKatMol.Name));
+      frmMove_MBP.Write(oSDfuns.Get_MOL_Post(toKatMol.NRec)); // МОЛ_Откуда должность
+    }
+  }
+
+  frmMove_MBP.Write(GetShortName(sGetTune('MainBuh')));
+
+  if ((MBPMove.Status <> mbpInExDoc) and (MBPMove.Status <> mbpMoveDoc))
+    frmMove_MBP.SkipFormat(3);
+  else
+  {
+    if (not isValid(tnDocPerson))
+      frmMove_MBP.SkipFormat(3);
+    else
+    {
+      frmMove_MBP.Write(DocPerson.FIO);
+      frmMove_MBP.Write(GetShortName(DocPerson.FIO));
+
+      if (GetFirst Catalogs where (( PersCard.cPost == Catalogs.nRec )) = tsOk)
+        frmMove_MBP.Write(Catalogs.Name);
+      else
+        frmMove_MBP.SkipFormat(1);
+    }
+  }
+
+  var bPickPerson : boolean = False;
+  bPickPerson := ((pTypeDoc = mbpMoveDoc) and boGetTune('SKLAD.AKT_MOVE.ZAPRWIND'));
+
+  var bSkip : boolean;
+  bSkip := True;
+
+  if (MBPMove.Status = mbpNewPDoc)
+    frmMove_MBP.SkipFormat(6);
+  else
+  {
+    if (bPickPerson and (cReqPers <> 0))
+    {
+      bSkip :=  False;
+      frmMove_MBP.Write(GetPersName(cReqPers));
+      frmMove_MBP.Write(GetShortName(GetPersName(cReqPers)));
+      frmMove_MBP.Write(GetPersPost(cReqPers));
+    }
+    else
+      if (iFeeSigners.FeeSignersIsValid)
+      {
+        if (iFeeSigners.RestrictFeeByRole(2, 'Requested'))
+        {
+          bSkip :=  False;
+          frmMove_MBP.Write(iFeeSigners.GetSignerFIO(1));
+          frmMove_MBP.Write(iFeeSigners.GetSignerFIO(7));
+          frmMove_MBP.Write(iFeeSigners.GetSignerPosition(1));
+        }
+
+        iFeeSigners.ClearRestriction;
+      }
+
+    if (bSkip)
+      frmMove_MBP.SkipFormat(3);
+
+    bSkip := True;
+
+    if (bPickPerson and (cLetPers <> 0))
+    {
+      bSkip :=  False;
+      frmMove_MBP.Write(GetPersName(cLetPers));
+      frmMove_MBP.Write(GetShortName(GetPersName(cLetPers)));
+      frmMove_MBP.Write(GetPersPost(cLetPers));
+    }
+    else
+      if (iFeeSigners.FeeSignersIsValid)
+      {
+        if (iFeeSigners.RestrictFeeByRole(2, 'Allowed'))
+        {
+          bSkip :=  False;
+          frmMove_MBP.Write(iFeeSigners.GetSignerFIO(1));
+          frmMove_MBP.Write(iFeeSigners.GetSignerFIO(7));
+          frmMove_MBP.Write(iFeeSigners.GetSignerPosition(1));
+        }
+
+        iFeeSigners.ClearRestriction;
+      }
+
+    if (bSkip)
+      frmMove_MBP.SkipFormat(3);
+  }
+
+  frmMove_MBP.Write(iFeeSigners.GetFeeSigners);
+}
+
+//-------------------------------------------------------------------------
+
+Procedure PrintMove_MBP_Sp;
+{
+  Npp := Npp + 1;
+  ItogKol := ItogKol + MBPIn.KolDoc;
+  ItogSum := ItogSum + InDocSum;
+
+  frmMove_MBP.Write(if (isValid(#Persons), Persons.FIO, ''));
+  frmMove_MBP.Write(STabN);
+  frmMove_MBP.Write(MBPIn.nRec);
+  frmMove_MBP.Write(Npp);
+  frmMove_MBP.Write(KatMBP.Name);
+  frmMove_MBP.Write(KatMBP.NNumber);
+  frmMove_MBP.Write(if (isValid(tnKatEd), KatEd.Name, ''));
+  frmMove_MBP.Write(if (isValid(tnKatEd), piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код'), ''));
+  frmMove_MBP.Write(KatMBP.KodGr);
+  frmMove_MBP.Write(GroupMC.Name);
+  frmMove_MBP.Write(GetMBPSklNum(KatMBP.DopInfo, MBPIn.DopInfo));
+  frmMove_MBP.Write(GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo));
+  frmMove_MBP.Write(GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo));
+  frmMove_MBP.Write(MBPIn.KolDoc);
+  frmMove_MBP.Write(MBPIn.Price);
+  frmMove_MBP.Write(InDocSum);
+  frmMove_MBP.Write(OutBalSum);
+  frmMove_MBP.Write(SrokExpl);
+  frmMove_MBP.Write(MBPIn.IznKoef);
+}
+
+//-------------------------------------------------------------------------
+
+Procedure PrintMove_MBP_Foot;
+{
+  frmMove_MBP.Write(ItogKol);
+  frmMove_MBP.Write(ItogSum);
+  frmMove_MBP.Write(Npp);
+}
+
+//-------------------------------------------------------------------------
+
+Procedure PrintMBPMove;
+{
+  case (MBPMove.Status) of
+  //----------------------
+    mbpChgPDoc:
+      frmMove_MBP.SetGroup('Изменение параметров');
+  //----------------------
+    mbpNewPDoc:
+      frmMove_MBP.SetGroup('Переоценка МБП');
+  //----------------------
+    mbpInExDoc:
+      case (wGetTune('Country')) of
+      //----------------
+        ccRus:
+          {
+            if (not GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0))
+              frmMove_MBP.SetGroup('Ввод в эксплуатацию. Россия.');
+            else
+              frmMove_MBP.SetGroup('Ввод в эксплуатацию. ВСМН.');
+          }
+      //----------------
+        ccBel:
+          frmMove_MBP.SetGroup('Ввод в эксплуатацию'#1'Ввод в эксплуатацию. Беларусь.');
+      //----------------
+      else
+        frmMove_MBP.SetGroup('Ввод в эксплуатацию');
+      //----------------
+      end;
+  //----------------------
+    mbpMoveDoc, mbpFrExDoc:
+      case (wGetTune('Country')) of
+      //----------------
+        ccRus:
+          if (MBPMove.Status = mbpMoveDoc)
+          {
+            if (not GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0))
+              frmMove_MBP.SetGroup('Внутреннее перемещение. Россия.');
+            else
+              frmMove_MBP.SetGroup('Внутреннее перемещение. ВСМН.');
+          }
+          else
+          {
+            if (not GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0))
+              frmMove_MBP.SetGroup('Возврат из эксплуатации. Россия.');
+            else
+              frmMove_MBP.SetGroup('Возврат из эксплуатации. ВСМН.');
+          }
+      //----------------
+        ccBel: frmMove_MBP.SetGroup('Внутреннее перемещение (Беларусь)');
+      //----------------
+      else
+        frmMove_MBP.SetGroup('Внутреннее перемещение');
+      //----------------
+      end;
+  //----------------------
+  end;
+
+  var lCount, i : longint;
+  var _cNRec : comp;
+
+  if bPrintCurDoc // печатаем текущий документ
+    lCount := 0;
+  else            // печатаем помеченные документы
+    lCount := GetMarkerCount(DocMarker);
+
+  if (lCount = 0) // печатаем текущий документ
+  {
+    lCount := 1;
+    bPrintCurDoc := True;
+  }
+
+  PushPos(#MBPMove);
+  PushPos(#MBPIn);
+
+  for (i := 0; i < lCount; i++)
+  {
+    if (not bPrintCurDoc)
+    {
+      if (not GetMarker(DocMarker, i, _cNRec))
+        Continue;
+
+      if (GetFirst FastFirstRow MBPMove where (( _cNRec == MBPMove.nRec )) <> tsOk)
+        Continue;
+    }
+
+    PrintMove_MBP_Head;
+
+    if (GetFirst MBPIn <> tsOk)
+      frmMove_MBP.SkipFormat(19);
+    else
+      _LOOP MBPIn
+        PrintMove_MBP_Sp;
+
+    frmMove_MBP.putEvent(feBreak);
+    PrintMove_MBP_Foot;
+  }
+
+  frmMove_MBP.putEvent(feBreak);
+
+  PopPos(#MBPIn);
+  PopPos(#MBPMove);
+  ReReadRecord(#MBPMove);
+
+  if (not frmMove_MBP.Error)
+    frmMove_MBP.ShowFile('');
+  else
+    frmMove_MBP.AbortForm;
+}
+
+//-------------------------------------------------------------------------
+// ПРОЦЕДУРА - печать в Excel Акта ввода в эксплуатацию
+//-------------------------------------------------------------------------
+Procedure PrintMBPMove_Excel;
+{
+  // Проверка наличия шаблона
+  if (not pXlRepSetup.CheckParam(0, ID, sXLTFileName))
+  {
+    RunInterface('XlRepSetup', 1, ID, sXLTFileName);
+    ReadMyDsk(sXLTFileName, ID, true);
+  }
+
+  var dKol, dItogo : double;
+  var sDirectExp, sItemCosts, sElemCosts : string;
+
+  Set sXLSFileName := pXL.CreateReport(sXLTFileName, True);
+  // Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+
+  // Определение таблицы отчета (DBTbl Constructor)
+  pXL.CreateTbls(sXLSFileName);
+  // Вывод комиссии
+  #WriteXltFeeSignersTableOS(iFeeSigners,pXL);
+  // Спецификации документа
+  pXL.CreateTbl('Move_MBPFR');
+  pXL.ClearTblBuffer;
+  // Объявление полей таблицы
+  pXL.CreateTblFld('Наим_малОС');
+  pXL.CreateTblFld('Номен_Ном');
+  pXL.CreateTblFld('ЕдИз_наим');
+  pXL.CreateTblFld('ЕдИз_код');
+  pXL.CreateTblFld('ФактВыдВЭкс_кол');
+  pXL.CreateTblFld('ФактВыдВЭкс_цена');
+  pXL.CreateTblFld('ФактВыдВЭкс_сумма');
+  pXL.CreateTblFld('СрокЭкспл');
+  pXL.CreateTblFld('Скл_Ном');
+  pXL.CreateTblFld('Направл_расх');
+  pXL.CreateTblFld('СтЗатрат');
+  pXL.CreateTblFld('ЭлементЗатр');
+
+  // Строки спецификации
+  PushPos(#MBPIn);
+
+  dKol := 0;
+  dItogo := 0;
+
+  _LOOP MBPIn
+  {
+    dKol := dKol + MBPIn.KolDoc;
+    dItogo := dItogo + InDocSum;
+
+    // Направление расхода
+    sDirectExp := piExtAttr.sGetAttr(coMBPIn, MBPIn.nRec, 'Направление расхода');
+
+    if (sDirectExp = '')
+      sDirectExp := piExtAttr.sGetAttr(coMBPMove, MBPMove.nRec, 'Направление расхода');
+
+    // Статья затрат
+    sItemCosts := piExtAttr.sGetAttr(coMBPIn, MBPIn.nRec, 'Статья затрат');
+
+    if (sItemCosts = '')
+      sItemCosts := piExtAttr.sGetAttr(coMBPMove, MBPMove.nRec, 'Статья затрат');
+
+    // Элемент затрат
+    sElemCosts := piExtAttr.sGetAttr(coMBPIn, MBPIn.nRec, 'Элемент затрат');
+
+    if (sElemCosts = '')
+      sElemCosts := piExtAttr.sGetAttr(coMBPMove, MBPMove.nRec, 'Элемент затрат');
+
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('Наим_малОС', KatMBP.Name);
+    pXL.SetTblStringFldValue('Номен_Ном', KatMBP.NNumber);
+    pXL.SetTblStringFldValue('ЕдИз_наим', if (isValid(tnKatEd), KatEd.Name, ''));
+    pXL.SetTblStringFldValue('ЕдИз_код', if (isValid(tnKatEd), piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код'), ''));
+    pXL.SetTblNumberFldValue('ФактВыдВЭкс_кол', MBPIn.KolDoc);
+    pXL.SetTblNumberFldValue('ФактВыдВЭкс_цена', MBPIn.Price);
+    pXL.SetTblNumberFldValue('ФактВыдВЭкс_сумма', InDocSum);
+    pXL.SetTblStringFldValue('СрокЭкспл', SrokExpl);
+    pXL.SetTblStringFldValue('Скл_Ном', GetMBPSklNum(KatMBP.DopInfo, MBPIn.DopInfo));
+    pXL.SetTblStringFldValue('Направл_расх', sDirectExp);
+    pXL.SetTblStringFldValue('СтЗатрат', sItemCosts);
+    pXL.SetTblStringFldValue('ЭлементЗатр', sElemCosts);
+    pXL.InsTblRow;
+  }
+
+  pXL.PublishTbl('Move_MBPFR');
+  PopPos(#MBPIn);
+
+  // Выгрузка переменных
+  pXL.CreateVar(sXLSFileName);
+
+  // Выгрузка значений переменных
+  pXL.SetNumberVar('RepType', MBPMove.Status);
+  pXL.SetStringVar('CFH', CommonFormHeader);
+  pXL.SetNumberVar('FormType', wTypeRep);
+  pXL.SetStringVar('BarCode', Ean13ToEanGnivcTTF(GenerateBarCode(GetDocTiDkGal(pTypeDoc), MBPMove.nRec)));
+  pXL.SetStringVar('НомерАкта', MBPMove.Nom);
+  pXL.SetStringVar('ДатаАкта', DateToStr(MBPMove.dMove, 'DD/MM/YYYY'));
+  pXL.SetStringVar('ДатаАкта_День', DateToStr(MBPMove.dMove, 'DD'));
+  pXL.SetStringVar('ДатаАкта_Месяц', DaTetoStr(MBPMove.dMove, 'Mon'));
+  pXL.SetStringVar('ДатаАкта_Год', DateToStr(MBPMove.dMove, 'YYYY'));
+  pXL.SetStringVar('Предприятие', iOrgInfo.GetMyOrgNameT(MBPMove.dMove));
+  pXL.SetStringVar('Предприятие_ОКПО', iOrgInfo.MyOrgOKPO);
+  pXL.SetStringVar('СтруктПодразд_Откуда', if (isValid(#KatPodr), GetFullPodrName(KatPodr.Name, KatPodr.cPodr), ''));
+  pXL.SetStringVar('МОЛ_Откуда', if (isValid(#KatMol), KatMol.Name, ''));
+  pXL.SetStringVar('МОЛ_Откуда_Кр', if (isValid(#KatMol), GetShortName(KatMol.Name), ''));
+  pXL.SetStringVar('МОЛ_Откуда_должность', if (isValid(#KatMol), oSDfuns.Get_MOL_Post(KatMol.nRec), ''));
+  pXL.SetStringVar('СтруктПодразд', if (isValid(#toKatPodr), GetFullPodrName(toKatPodr.Name, toKatPodr.cPodr), ''));
+  pXL.SetStringVar('МОЛ', if (isValid(#toKatMol), toKatMol.Name, ''));
+  pXL.SetStringVar('МОЛ_Кр', if (isValid(#toKatMol), GetShortName(toKatMol.Name), ''));
+  pXL.SetStringVar('МОЛ_должность', if (isValid(#toKatMol), oSDfuns.Get_MOL_Post(toKatMol.nRec), ''));
+
+  var bPickPerson : boolean = False;
+  bPickPerson := ((pTypeDoc = mbpMoveDoc) and boGetTune('SKLAD.AKT_MOVE.ZAPRWIND'));
+
+  if (bPickPerson and (cReqPers <> 0))
+  {
+    pXL.SetStringVar('Затреб', GetPersName(cReqPers));
+    pXL.SetStringVar('Затреб_Кр', GetShortName(GetPersName(cReqPers)));
+    pXL.SetStringVar('Затреб_должность', GetPersPost(cReqPers));
+  }
+  else
+    if (iFeeSigners.FeeSignersIsValid)
+    {
+      if (iFeeSigners.RestrictFeeByRole(2, 'Requested'))
+      {
+        pXL.SetStringVar('Затреб', iFeeSigners.GetSignerFIO(1));
+        pXL.SetStringVar('Затреб_Кр', iFeeSigners.GetSignerFIO(7));
+        pXL.SetStringVar('Затреб_должность', iFeeSigners.GetSignerPosition(1));
+      }
+
+      iFeeSigners.ClearRestriction;
+    }
+
+  if (bPickPerson and (cLetPers <> 0))
+  {
+    pXL.SetStringVar('Разреш', GetPersName(cLetPers));
+    pXL.SetStringVar('Разреш_Кр', GetShortName(GetPersName(cLetPers)));
+    pXL.SetStringVar('Разреш_должность', GetPersPost(cLetPers));
+  }
+  else
+    if (iFeeSigners.FeeSignersIsValid)
+    {
+      if (iFeeSigners.RestrictFeeByRole(2, 'Allowed'))
+      {
+        pXL.SetStringVar('Разреш', iFeeSigners.GetSignerFIO(1));
+        pXL.SetStringVar('Разреш_Кр', iFeeSigners.GetSignerFIO(7));
+        pXL.SetStringVar('Разреш_должность', iFeeSigners.GetSignerPosition(1));
+      }
+
+      iFeeSigners.ClearRestriction;
+    }
+
+  // Итоговые значения
+  pXL.SetNumberVar('ИТОГО', dKol);
+  pXL.SetStringVar('ИТОГО_пропис', DoubleToStr(dKol, '\2p\m4') +
+                   if (Pos('ноль', DoubleToStr(dKol, '\f\2p5')) <> 0, '',
+                                   DoubleToStr(dKol, 'целых \f\2p5')));
+  pXL.SetNumberVar('ВСЕГО', dItogo);
+  pXL.SetStringVar('ВСЕГО_пропис', DoubleToString(0, dItogo));
+
+  // Приказ о назначении комиссии
+  if (iFeeSigners.GetFeeSigners <> Comp(0))
+  {
+    var sNomPrikaz, sDatPrikaz : string;
+    sNomPrikaz := piExtClass.GetSegName(piExtClass.GetClassCode(coSelection, '№ приказа'), iFeeSigners.GetFeeSigners);
+    sDatPrikaz := piExtClass.GetSegName(piExtClass.GetClassCode(coSelection, 'Дата приказа'), iFeeSigners.GetFeeSigners);
+
+    pXL.SetStringVar('НомерПриказа', if (sNomPrikaz = '', '№', sNomPrikaz));
+    pXL.SetStringVar('ДатаПриказа', if (sDatPrikaz = '', '"        "                               г.', sDatPrikaz));
+    pXL.SetStringVar('Подпись', piExtClass.GetSegName(piExtClass.GetClassCode(coSelection, 'Расшифровка подписи'), iFeeSigners.GetFeeSigners));
+    pXL.SetStringVar('Подпись_должность', piExtClass.GetSegName(piExtClass.GetClassCode(coSelection, 'Должность'), iFeeSigners.GetFeeSigners));
+  }
+
+  // Список членов комиссии
+  #WriteXltFeeSignersVarOS(iFeeSigners,pXL);
+
+  pXL.PublishVar;
+
+  // формирование отчета по заданному шаблону
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}

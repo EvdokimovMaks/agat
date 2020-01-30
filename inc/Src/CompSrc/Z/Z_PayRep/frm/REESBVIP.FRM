@@ -109,8 +109,9 @@
   OldFio             // Предыдущая фамилия
   BornDate           // Дата рождения сотрудника
   PCodePodr          // Паспортные данные Кем выдано, подразделение
+  sOrderNum          // Номер исполнительного листа
 .endFields
- ^^^^^^^^^^^^^^^^^^
+ ^^^^^^^^^^^^^^^^^^^
 .}
 ! Данные используются для настройки полей заголовков и подножий формы-прототипа
 .[f OverWrite
@@ -292,13 +293,13 @@ end.
      SummaStr3 : string
 .endvar
 .begin
-  KolList   := 0
-  SumList1  := 0
-  SumList2  := 0
-  SumList3  := 0
-  ItogSumma1:= 0
-  ItogSumma2:= 0
-  ItogSumma3:= 0
+  KolList   := 0;
+  SumList1  := 0;
+  SumList2  := 0;
+  SumList3  := 0;
+  ItogSumma1:= 0;
+  ItogSumma2:= 0;
+  ItogSumma3:= 0;
 end.
 
 .{
@@ -381,9 +382,9 @@ end.
   @@@@@@@@@@@@@@@@@@ ^ ^
                                                  _______________
                                                     (подпись) Р
-.begin SumList1:=0
-       SumList2:=0
-       SumList3:=0
+.begin SumList1:=0;
+       SumList2:=0;
+       SumList3:=0;
 end.
 .]f
 .}
@@ -439,9 +440,9 @@ end.
      SummaStr3 : string
 .endvar
 .begin
-  KolList   := 0
-  SumList1  := 0
-  ItogSumma1:= 0
+  KolList   := 0;
+  SumList1  := 0;
+  ItogSumma1:= 0;
 end.
 
 .{
@@ -573,13 +574,13 @@ end.
      SummaStr3  : string
 .endvar
 .begin
-  KolList   := 0
-  SumList1  := 0
-  SumList2  := 0
-  SumList3  := 0
-  ItogSumma1:= 0
-  ItogSumma2:= 0
-  ItogSumma3:= 0
+  KolList   := 0;
+  SumList1  := 0;
+  SumList2  := 0;
+  SumList3  := 0;
+  ItogSumma1:= 0;
+  ItogSumma2:= 0;
+  ItogSumma3:= 0;
 end.
 .{
 .{
@@ -658,9 +659,9 @@ end.
  Р   @@@@@@@@@@@@@@@@@@ ^ ^ Р
  Р                                                 _______________ Р
  Р                                                    (подпись)
-.begin SumList1:=0
-       SumList2:=0
-       SumList3:=0
+.begin SumList1:=0;
+       SumList2:=0;
+       SumList3:=0;
 end.
 .]f
 .}
@@ -715,9 +716,9 @@ end.
      SummaStr3 : string
 .endvar
 .begin
-  KolList   := 0
-  SumList1  := 0
-  ItogSumma1:= 0
+  KolList   := 0;
+  SumList1  := 0;
+  ItogSumma1:= 0;
 end.
 
 .{
@@ -859,15 +860,15 @@ end.
      SummaStr3  : string
 .endvar
 .begin
-  KolList   := 0
-  SumList1  := 0
-  SumList2  := 0
-  SumList3  := 0
-  ItogSumma1:= 0
-  ItogSumma2:= 0
-  ItogSumma3:= 0
-  SummNDS1  := 0
-  ItSummNDS1:= 0
+  KolList   := 0;
+  SumList1  := 0;
+  SumList2  := 0;
+  SumList3  := 0;
+  ItogSumma1:= 0;
+  ItogSumma2:= 0;
+  ItogSumma3:= 0;
+  SummNDS1  := 0;
+  ItSummNDS1:= 0;
 end.
 .{
 .{
@@ -945,10 +946,10 @@ end.
  Ш    Б@@@@@@@@@@@@@@@@@@ Б ^ ^ Ш
  Ш                                                 _______________ Ш
  Ш                                                    (подпись) Ш
-.begin SumList1:=0
-       SumList2:=0
-       SumList3:=0
-       SummNDS1:=0
+.begin SumList1:=0;
+       SumList2:=0;
+       SumList3:=0;
+       SummNDS1:=0;
 end.
 .]f
 .}
@@ -983,8 +984,8 @@ end.
  Ш  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Ь
  Ш                            (сумма прописью) Ш
 .begin
-  KolList:= 0
-  ItSummNDS1 := 0
+  KolList:= 0;
+  ItSummNDS1 := 0;
  end.
 .if BrPage
 ^
@@ -1130,9 +1131,9 @@ path
      SummaStr3 : string
 .endvar
 .begin
-  KolList   := 0
-  SumList1  := 0
-  ItogSumma1:= 0
+  KolList   := 0;
+  SumList1  := 0;
+  ItogSumma1:= 0;
 end.
 
 .{
@@ -1257,9 +1258,9 @@ end.
      SummaStr3 : string
  .endvar
 .begin
-  KolList   := 0
-  SumList1  := 0
-  ItogSumma1:= 0
+  KolList   := 0;
+  SumList1  := 0;
+  ItogSumma1:= 0;
 end.
 
 .{
@@ -1384,9 +1385,9 @@ end.
      SummaStr3 : string
  .endvar
 .begin
-  KolList   := 0
-  SumList1  := 0
-  ItogSumma1:= 0
+  KolList   := 0;
+  SumList1  := 0;
+  ItogSumma1:= 0;
 end.
 
 .{

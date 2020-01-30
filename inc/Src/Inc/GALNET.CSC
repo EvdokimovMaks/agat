@@ -96,6 +96,7 @@ sci14EscTreeG     =  6898;
 sci1378EscTreeA   =  6899;
 sci178EscTreeA    =  6900;
 sci178Esc         =  6901;
+sci178EscBrNastr  = 16901;
 sci1378Esc        =  6902;
 sci178EnEsc       =  6903;
 sci147EnEsc       =  6904;
@@ -134,6 +135,7 @@ sci1EnInsTree     =  6930;
 sci1EnInsTreePrn  = 16930;
 sci14EnInsTree    =  6931;
 sci178EscTree     =  6932;
+sci178EscTreeNastr= 16932;
 sci1EnEscTree     =  6933;
 sci1EnEscTreePrn  = 16933;
 sci1EnEscDial     =  6934;
@@ -242,6 +244,7 @@ sci1EscTree       =  6997;
 sci1478EnIns      =  6998;
 sci1478EnEscA     =  6999;
 sci14EnInsEsc     =  7000;
+sci148EscIns      =  7101;
 sci18InsPM        =  9042;
 
 sci1478EnEscTree  =  9000;
@@ -294,6 +297,8 @@ sci1478EscTreePlus = 9045;
 
 sci1378EscExTreeA =  9046;
 sci178EscExTreeA1 =  9047;
+
+sci148EnEsc       =  9048;
 
 sct1347           =  7000;
 sct1347Esc        =  7001;
@@ -394,8 +399,8 @@ sciRes178InsPM    =  7563;
 sciRes1378Esc     =  7564;
 
 //для УСГ
-sci1478EscExTree    = 7565;
-sci1478EscExInsTree = 7566;
+sci1478EscExTree      = 7565;
+sci1478EscExInsTree   = 7566;
 
 sciRes13478Esc    =  7567;
 
@@ -502,6 +507,11 @@ sci1EscZRep          = 8800;
 sci13EscZRep         = 8801;
 sci148EnEscTreeIZRep = 8802;
 sci1EnInsTreeZRep    = 8803;
+//банковские реквизиты
+sciZBANKCARDINSFSS   = 8804;
+sciZBANKCARDINS      = 8805;
+sciZBANKCARDDEL      = 8806;
+sciZBANKCARDFUNCDEL  = 8807;
 // Экспорт данных во внешнее хранилище
 scDE_TaskMan     = 30000;
 scDE_JobMan      = 30001;

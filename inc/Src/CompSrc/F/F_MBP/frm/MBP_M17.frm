@@ -46,6 +46,19 @@
 Размер МБП ^
 Срок службы МБП ^
 
+Драгоценные материалы:
+.{MBPDragM CheckEnter
+.Fields
+  DragNum
+  DragName
+  DragEdKod
+  DragEdName
+  DragKol : double
+.EndFields
+  ^       ^         ^        ^      ^
+.}
+
+Операции:
 .{MBPMatOper CheckEnter
 .Fields
   OperDate: Date  NumDoc  OperTxt  InKol: Double  OutKol: Double

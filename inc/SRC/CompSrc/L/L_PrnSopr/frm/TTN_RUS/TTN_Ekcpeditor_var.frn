@@ -1,0 +1,241 @@
+.declare
+
+#include AdrFunc.Vih
+#include ExtAttr.Vih
+#include History.vih
+#include StrFunc.vih
+#include CatFunc.vih
+#include TotalOrganizationAttributes.vih
+
+.enddeclare
+.var
+  wstr     : string;
+  boInit   : boolean;
+  Wform    : word;
+  NumPage  : word; //
+  sCountry : string; // //Страна происхождения груза
+  fBrutto  : double ;
+  fNetto  : double ;
+  fTara  : double ;
+  KODGRMCTARA : string;//TARA.KODGRMCTARA
+  sTara       : string;//
+
+  MassaBrItogFull,
+  MassaNetItogFull
+            : double ; // кол-во грузовых мест
+  //KolGrM :string;
+//7. Товарный код
+  sTovarKod : string;
+//Маркировка
+  sMark  : string;
+//Количество мест, вид упаковки
+  kol_mest : double;
+  sKol_Mest: string;
+//17. Объем
+  sVolume   : string;
+//Вес брутто, нетто
+  sBrutoNetto : string;
+//Уведомить сторону о прибытии груза 12
+  sUvedom : WideString;
+//Товары, готовые к отправке, место, дата 14
+  sTovPrepare : string;
+//Страхование
+  sStrax  : WideString;
+//Вид транспорта 15
+  sVidTransp : string;
+//Пункт назначения 16
+  sPunctNazn :string;
+//19. Размер упаковки
+  sRazmer    :String;
+//20. Требуемые документы
+  sDoc  : WideString;
+//21. Особые отметки
+  sSpecial_Notes : WideString;
+// 14. Условия
+  sCondition : WideString;
+// Склад адрес
+  sSkladAddr : string;
+//----------------
+  NameForm   :string;
+//----------------
+  iAdrFunc  : AddressFunc;
+  olHistory : iHistory;
+  iStrFunc  : StringFunctions;
+  TOAN      : TotalOrganizationAttributes;
+  iCatFunc  : CatalogsFunctions;
+  pExtAttr  : iExtAttr;
+.endvar
+.Create view vKatSoprMemTTN
+var
+  _sName :string;
+as select
+  KatSoprMemTTN.*
+From KatSoprMemTTN
+  , Katsopr
+  , TTNDOC
+  , PERSONS
+  , Appointments
+  , KatOrg
+  , SpSopr
+  , KatMc
+  , KatUsl
+  , GroupMc
+  , tmpSoprAgr
+where ((
+    comp(накладная_нрек) == KatSopr.Nrec
+and coKatSopr    == TTNDOC.wTable
+and KatSopr.Nrec == TTNDoc.cDoc
+and KatSopr.cPodrFrom == KatPodr.Nrec
+and 'С'    == Persons.ISEMPLOYEE
+and _sName == Persons.Fio
+and Persons.AppointCur == Appointments.Nrec
+and _sName == KatOrg.Name
+and comp(спецификацияМЦ_нрек) == SpSopr.Nrec
+and SpSopr.cMcUsl == KatMc.Nrec
+and SpSopr.cMcUsl == KatUsl.Nrec
+and KatMc.cGroupMC == GroupMc.Nrec
+and SpSopr.cOtpEd == KatOtpEd.Nrec
+));
+!===============================================
+! Надо переделать GroupWrap
+.Function MyGroupWrap(_str : WideString;_RowNum :string;  _RowLen:longint): WideString;
+var
+  _strtmp :WideString;
+begin
+  Result:= _str;
+
+ end.
+!=====================================
+! Найти адрес по наименованию
+.Function GetAddrByName(_sName :string ) :string;
+begin
+ Result := '';
+ vKatSoprMemTTN._sName := _sName;
+ if vKatSoprMemTTN.getfirst KatOrg=tsok
+ { //Result := oHistory.sGetField(coKatOrg, vKatSoprMemTTN.KatOrg.Nrec, 'CJURIDICALADDR', vKatSoprMemTTN.KatSopr.dSopr);
+   TOAN.Bind(vKatSoprMemTTN.KatOrg.Nrec);
+   Result := iAdrFunc.GetFullAddressInd(TOAN.GetJuridicalInfo.GetJuridicalAddress);
+   if trim(Result) = ''
+     Result := iAdrFunc.GetFullAddressInd(TOAN.GetJuridicalInfo.GetPostAddress);
+   if trim(Result) = ''
+     Result := vKatSoprMemTTN.KatOrg.Addr;
+
+ }
+ if Result=''
+ if vKatSoprMemTTN.getfirst Persons=tsok
+ { Result := iAdrFunc.GetFullAddressInd(vKatSoprMemTTN.Persons.PasspAddr);
+
+ }
+ end.
+!=====================================
+! Найти должность по Фио
+.Function GetPost( _sFio : string ) : string;
+begin
+  Result:='' ;
+  vKatSoprMemTTN._sName := _sName;
+  if vKatSoprMemTTN.getfirst Persons=tsok
+    if vKatSoprMemTTN.getfirst Appointments=tsok
+    { Result := iCatFunc.GetCatalogsName(vKatSoprMemTTN.Appointments.Post);
+    }
+ end.
+!=====================================
+! Найти адрес экспедитора
+.Function GetEkspeditorAddr( _sFio : string ) : string;
+begin
+  Result:=GetAddrByName( _sFio );
+  end.
+.begin
+
+  // инициализация переменных
+  KODGRMCTARA := sGetTune('TARA.KODGRMCTARA');
+end.
+!=====================================
+! Проинициализировать переменные
+.Procedure InitVar;
+begin
+  //---------------
+  if NameForm='' exit;
+  if vKatSoprMemTTN.Getfirst KatSopr<>tsok exit;
+  if vKatSoprMemTTN.Getfirst TTNDoc=tsok {}
+  vKatSoprMemTTN.delete tmpSoprAgr where (( NameForm == tmpSoprAgr.NmForm ));
+
+  KODGRMCTARA := sGetTune('TARA.KODGRMCTARA');
+
+  MassaBrItogFull :=0;
+  MassaNetItogFull:=0;
+
+  sTara       := '';
+//7. Товарный код
+  sTovarKod :=' - ' ;
+//Маркировка
+  sMark  :='' ;
+//Количество мест, вид упаковки
+  kol_mest :=0;
+  sKol_Mest:='';
+//Вес брутто, нетто
+  sBrutoNetto :='';
+// Склад адрес
+  sSkladAddr := ТТН_ПунктП_Адрес;
+//Уведомить сторону о прибытии груза 12
+  sUvedom :='';
+  sUvedom :=pExtAttr.mGetAttr(coKatSopr,vKatSoprMemTTN.KatSopr.Nrec,'Уведомить сторону о прибытии груза');
+  //if sUvedom='' sUvedom :='-';
+//Товары, готовые к отправке, место, дата 14
+  sTovPrepare :=if(ТТН_ПунктП_Дата_С<>ZeroDate,DateToStr(ТТН_ПунктП_Дата_С,'DD.M.YYYY'),'-') ;
+//Страхование
+  sStrax  :='';
+  sStrax  := pExtAttr.mGetAttr(coKatSopr,vKatSoprMemTTN.KatSopr.Nrec,'Страхование');
+  fplog('03 '+sStrax);
+  if sStrax='' sStrax :='-';
+//Вид транспорта 15
+  sVidTransp :=способ_транспортировки;
+//Пункт назначения 16
+  sPunctNazn :=if(ТТН_ПунктР_Адрес<>'' and ТТН_ПунктР_Имя<>'', ТТН_ПунктР_Адрес, Грузополучатель_Адрес);
+//19. Размер упаковки
+  sRazmer    :='-';
+//17. Объем
+  sVolume   :='-';
+//20. Требуемые документы
+  sDoc :=все_документы1+' '+все_документы2+' '+все_документы3+' '+все_документы4+' '+ все_документы5;
+//21. Особые отметки
+  sSpecial_Notes :='';
+  sSpecial_Notes :=pExtAttr.mGetAttr(coKatSopr,vKatSoprMemTTN.KatSopr.Nrec,'Особые отметки');
+  fplog('03 '+sSpecial_Notes);
+  if sSpecial_Notes='' sSpecial_Notes :='-';
+// 14. Условия
+  sCondition :='';
+  sCondition := pExtAttr.mGetAttr(coKatSopr,vKatSoprMemTTN.KatSopr.Nrec,'Условия транспортировки');
+  if sCondition='' sCondition :='-';
+  fplog('02 '+sCondition);
+  fplog('13 '+sSpecial_Notes);
+//=======================
+
+ end.
+!===============================================
+.Procedure TTN_Ekcpeditor_Finish;
+begin
+  //---- определим кол-во мест
+  if vKatSoprMemTTN.GetFirst tmpSoprAgr where (( NameForm == tmpSoprAgr.NmForm
+        and 'TARA' == tmpSoprAgr.NmGroup )) <>tsok
+  { vKatSoprMemTTN._Loop tmpSoprAgr where (( NameForm == tmpSoprAgr.NmForm
+        and 'TARA2' == tmpSoprAgr.NmGroup ))
+    { sKol_Mest := sKol_Mest + if(sKol_Mest='', '',', ') + vKatSoprMemTTN.tmpSoprAgr.SortName
+           +' - ' +string(vKatSoprMemTTN.tmpSoprAgr.fFld1[1]) ;//+' шт.'
+
+    }
+  }
+  else
+  { vKatSoprMemTTN._Loop tmpSoprAgr where (( NameForm == tmpSoprAgr.NmForm
+        and 'TARA' == tmpSoprAgr.NmGroup ))
+    { sKol_Mest := sKol_Mest + if(sKol_Mest='', '',', ') + vKatSoprMemTTN.tmpSoprAgr.SortName
+           +' - ' +string(vKatSoprMemTTN.tmpSoprAgr.fFld1[1]) ;
+
+    }
+  } //if vKatSoprMemTTN.GetFirst tmpSoprAgr where (( NameForm == tmpSoprAgr.NmForm
+//20. Требуемые документы
+//Вес брутто, нетто
+  sBrutoNetto := DoubleToStr(oPrnSoprFun.GetMassaBrTTN_(1, MassaBrItogFull ),'[|-]3666`666`666`666`666`666.899')
+          +' / '+DoubleToStr(oPrnSoprFun.GetMassaBrTTN_(1, MassaNetItogFull),'[|-]3666`666`666`666`666`666.899')
+  fplog('22 '+sCondition);
+  fplog('23 '+sSpecial_Notes);
+ end.

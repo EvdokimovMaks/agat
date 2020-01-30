@@ -21,15 +21,15 @@
     //-->3
     kod_groupmc name_groupmc   //7,8
            //-->4
-                        namnom_syr edizm_syr kol_syr cen_syr sum_syr nomdoc //9,10,11,12,13,14
+                        namnom_syr edizm_syr kol_syr cen_syr sum_syr nomdoc type_syr nrec_syr nrec_part_syr //9,10,11,12,13,14,15,16,17
            //<--4
-          sum_groupmc                //15
+          sum_groupmc                //18
     //<--3
-   sum_party                   //16
+   sum_party                   //19
    //<--2
-  sum_podr                    //17
+  sum_podr                    //20
   //<--1
-  SUM_VED                     //18
+  SUM_VED                     //21
 .endfields
 
 ^ ^
@@ -40,7 +40,7 @@
 .{
 ^ ^
 .{
-        ^ ^ ^ ^ ^ ^
+        ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}
 ^
 .}
@@ -59,10 +59,10 @@
   dateRec dateEnd             //1,2
   kod_podr name_podr          //3,4
   kod_party                   //5
-  kod_groupmc  sum_groupmc    //7,15
-  kod_party sum_party         //5,16
-  kod_podr name_podr sum_podr //3,4,17
-  SUM_VED                     //18
+  kod_groupmc  sum_groupmc    //7,18
+  kod_party sum_party         //5,19
+  kod_podr name_podr sum_podr //3,4,20
+  SUM_VED                     //21
 .endfields
 .[h skip
                                                               ‹¨αβ @NP@
@@ -104,10 +104,10 @@
   kod_party name_party        //5,6
   kod_groupmc name_groupmc    //7,8
         namnom_syr kol_syr edizm_syr cen_syr:'P:L' sum_syr:'P:L' nomdoc //9,10,11,12,13,14
-  kod_groupmc sum_groupmc     //7,15
-  kod_party sum_party         //5,16
-  kod_podr name_podr sum_podr //3,4,17
-  SUM_VED                     //18
+  kod_groupmc sum_groupmc     //7,18
+  kod_party sum_party         //5,19
+  kod_podr name_podr sum_podr //3,4,20
+  SUM_VED                     //21
 .endfields
 .[h skip
                                                               ‹¨αβ @NP@
@@ -155,15 +155,15 @@
     //-->3
     kod_groupmc name_groupmc  //7,8
            //-->4
-                        namnom_syr edizm_syr kol_syr cen_syr sum_syr nomdoc //9,10,11,12,13,14
+                        namnom_syr edizm_syr kol_syr cen_syr sum_syr nomdoc type_syr nrec_syr nrec_part_syr //9,10,11,12,13,14,15,16,17
            //<--4
-          sum_groupmc               //15
+          sum_groupmc               //18
     //<--3
-   sum_podr                   //16
+   sum_podr                   //19
    //<--2
-  sum_party                  //17
+  sum_party                   //20
   //<--1
-  SUM_VED                     //18
+  SUM_VED                     //21
 .endfields
 
 ^ ^
@@ -174,7 +174,7 @@
 .{
 ^ ^
 .{
-        ^ ^ ^ ^ ^ ^
+        ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}
 ^
 .}
@@ -193,10 +193,10 @@
   dateRec dateEnd             //1,2
   kod_party name_party        //3,4
   kod_podr name_podr          //5,6
-  kod_groupmc name_groupmc sum_groupmc //7,8,15
-  name_podr sum_podr          //6,16
-  name_party sum_party        //4,17
-  SUM_VED                     //18
+  kod_groupmc name_groupmc sum_groupmc //7,8,18
+  name_podr sum_podr          //6,19
+  name_party sum_party        //4,20
+  SUM_VED                     //21
 .endfields
 .[h skip
                                                               ‹¨αβ @NP@
@@ -238,10 +238,10 @@
   kod_podr name_podr          //5,6
   kod_groupmc name_groupmc    //7,8
         namnom_syr kol_syr edizm_syr cen_syr:'P:L' sum_syr:'P:L' nomdoc //9,10,11,12,13,14
-        name_groupmc sum_groupmc    //8,15
-  name_podr sum_podr          //6,16
-  name_party sum_party        //4,17
-  SUM_VED                     //18
+        name_groupmc sum_groupmc    //8,18
+  name_podr sum_podr          //6,19
+  name_party sum_party        //4,20
+  SUM_VED                     //21
 .endfields
 .[h skip
                                                               ‹¨αβ @NP@
@@ -291,17 +291,17 @@
       //-->4
       kod_groupmc name_groupmc  //8,9
              //-->5
-                         namnom_syr edizm_syr kol_syr cen_syr sum_syr nomdoc //10,11,12,13,14,15
+                         namnom_syr edizm_syr kol_syr cen_syr sum_syr nomdoc type_syr nrec_syr nrec_part_syr //10,11,12,13,14,15,16,17,18
              //<--5
-            sum_groupmc               //16
+            sum_groupmc               //19
       //<--4
-     sum_podr                   //17
+     sum_podr                   //20
      //<--3
-    sum_party                   //18
+    sum_party                   //21
     //<--2
-         sum_SchSbsch                //19
+         sum_SchSbsch                //22
          //<--1
-  SUM_VED                     //20
+  SUM_VED                     //23
 .endfields
 
 ^ ^
@@ -314,7 +314,7 @@
 .{
 ^ ^
 .{
-        ^ ^ ^ ^ ^ ^
+        ^ ^ ^ ^ ^ ^ ^ ^ ^
 .}
 ^
 .}
@@ -335,10 +335,10 @@
   dateRec dateEnd             //1,2
   name_SchSbsch               //3
   kod_party name_party        //4,5
-  kod_podr name_podr sum_podr //6,7,17
-  name_party sum_party        //5,18
-  name_SchSbsch sum_SchSbsch  //3,19
-  SUM_VED                     //20
+  kod_podr name_podr sum_podr //6,7,20
+  name_party sum_party        //5,21
+  name_SchSbsch sum_SchSbsch  //3,22
+  SUM_VED                     //23
 .endfields
 .[h skip
                                                               ‹¨αβ @NP@
@@ -380,10 +380,10 @@
   kod_party name_party        //4,5
   kod_podr name_podr          //6,7
   kod_groupmc name_groupmc sum_groupmc //8,9,16
-  name_podr sum_podr          //7,17
-  name_party sum_party        //5,18
-  name_SchSbsch sum_SchSbsch  //3,19
-  SUM_VED                     //20
+  name_podr sum_podr          //7,20
+  name_party sum_party        //5,21
+  name_SchSbsch sum_SchSbsch  //3,22
+  SUM_VED                     //23
 .endfields
 .[h skip
                                                               ‹¨αβ @NP@
@@ -430,10 +430,10 @@
   kod_groupmc name_groupmc    //8,9
   namnom_syr kol_syr edizm_syr cen_syr:'P:L' sum_syr:'P:L' nomdoc //10,11,12,13,14,15
   name_groupmc sum_groupmc    //9,16
-  name_podr sum_podr          //7,17
-  name_party sum_party        //5,18
-  name_SchSbsch sum_SchSbsch  //3,19
-  SUM_VED                     //20
+  name_podr sum_podr          //7,20
+  name_party sum_party        //5,21
+  name_SchSbsch sum_SchSbsch  //3,22
+  SUM_VED                     //23
 .endfields
 .[h skip
                                                               ‹¨αβ @NP@

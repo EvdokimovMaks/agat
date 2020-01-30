@@ -22,6 +22,10 @@
   wErrorsCount          : word;    // Число ошибок вставки документов в БД
 
   sImportField : string; // ДЛЯ ФОРМУЛ ИМПОРТА
+  sImportFieldO: string; // ДЛЯ ФОРМУЛ ИМПОРТА
+  sFormulaOrig : string; // формула для вычислений из поля
+
+  boFpLog      : boolean; //
 
   hMarkerInsRecs         : TPtr;    // маркер вставленных записей
 

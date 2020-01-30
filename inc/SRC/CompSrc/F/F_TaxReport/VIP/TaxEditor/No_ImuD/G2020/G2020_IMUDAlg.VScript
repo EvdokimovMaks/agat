@@ -1,0 +1,2278 @@
+//------------------------------------------------------------------------------------------------------------
+//                                                                                    (c) корпорация Галактика
+// Галактика 9.1 - модуль "Электронная отчетность"
+// Алгоритмы расчета : "Декларация по налогу на имущество организаций"
+//------------------------------------------------------------------------------------------------------------
+
+
+//============================================================================================================
+// #region СЕРВИСНЫЕ МЕТОДЫ
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrValFormat(fld:string):string;
+@begin
+  var bufRes: string;
+
+  bufRes := Trim(String(XMLMAP.GetAttrValueByName(fld)));
+
+  if (bufRes = '')
+  then Result := '0'
+  else if (Double(bufRes) < 0)
+       then Result := '('+bufRes+')'
+       else Result := bufRes;
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrVal(fld:string):string;
+@begin
+  Result := Trim(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetFldProt(fld:string):boolean;
+@begin
+  Result := (XMLMAP.GetAttrProtByName(fld) = Word(1));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetDblVal(fld:string):double;
+@begin
+  Result := Double(XMLMAP.GetAttrValueByName(fld));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetDolVal(fld:string):double;
+@begin
+  Result := 0;
+
+  var sValue : string;  sValue := GetStrVal(fld);
+  var dValue : double;  dValue := 0;
+  if (sValue = '') { Exit; }
+  var p : byte;  p := Pos('/', sValue);
+  if (p = 0) { Exit; }
+
+  var sSumChis : string;  sSumChis := SubStr(sValue, 1, p - 1);
+  var sSumZnam : string;  sSumZnam := SubStr(sValue, p + 1, Length(sValue) - p);
+  if (sSumChis = '') or (sSumZnam = '') { Exit; }
+
+  var wSumChis : word;  wSumChis := word(sSumChis);
+  var wSumZnam : word;  wSumZnam := word(sSumZnam);
+  if (wSumChis = 0) or (wSumZnam = 0) { Exit; }
+
+  dValue := Round(wSumChis/wSumZnam, 4);
+
+  Result := dValue;
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetFldVis(fld:string):boolean;
+@begin
+  Result := XMLMAP.GetAttrVisByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script SetFldVal(fld:string; val:variant);
+@begin
+  XMLMAP.SetVariantAttrValueByName_Formula(fld, val, 2);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script SetFldVis(fld:string;vis:boolean);
+@begin
+  XMLMAP.SetAttrVisByName(fld,vis);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetCountFld(fld:string):longint;
+@begin
+  Result := XMLMap.GetNodeCountByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script getIter(iter:longint):string;
+@begin
+  Result := '';
+  if (iter > 0)
+    Result := '[' + String(iter) + ']';
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script MessageErrorStop_ALG(mesMesAdrXML, mesPole, mesMes: string; mesCountIter: integer = 0): boolean;
+@begin
+  MesError.InsertMesError(mesMesAdrXML, Comp(0), '', mesPole, mesMes, mesCountIter);
+  Result := True;
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetPatVal(expr:string):String;
+#include AllTaxObj.Vih
+@begin
+  Result := String(ПАТ(expr));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetStrNull(fld:string):boolean;
+@begin
+  Result := XMLMAP.GetIsNullAttrValueByName(fld);
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GetValPrev(inpStr, XMLAdr_1, XMLAdr_2 : string) : double;
+@begin
+  var buf : string; buf := String(pFH.Func(inpStr));
+  Result := if (buf = '', 0, Double(pFH.Func('GetPrevVal', String(pFH.Func(inpStr)), XMLAdr_1, XMLAdr_2)));
+@end.
+
+//------------------------------------------------------------------------------------------------------------
+@Script GD0(_val : double) : string;
+@begin
+  Result := IF(_val < 0
+              , '('+DoubleToStr(Round(_val), '[|-]36666666666666666666666666')+')'
+              ,     DoubleToStr(Round(_val), '[|-]36666666666666666666666666')    );
+@end.
+// #endregion СЕРВИСНЫЕ МЕТОДЫ
+//************************************************************************************************************
+
+
+//============================================================================================================
+// #region On_Visable ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ УСТАНОВКЕ ВИДИМОСТИ ПОЛЕЙ
+//------------------------------------------------------------------------------------------------------------
+@Script IsVidImuch_2 (XMLAdr : string) : boolean;
+@begin // Элемент обязателен при <ВидИмущ>=2
+  Result := ( GetStrVal(XMLAdr + '/ВидИмущ') = '02');
+@end.
+//------------------------------------------------------------------------------------------------------------
+@Script On_Visable : boolean;
+  //==========================================================================================================
+  // #region СЕРВИС On_Visable
+  //----------------------------------------------------------------------------------------------------------
+  #undef IfVis
+  #undef SetVisF
+  #undef SetVisT
+
+  #define IfVis(adrIfVis)   SetFldVis(#adrIfVis, not GetStrNull(#adrIfVis));
+  #define SetVisF(adrIfVis) SetFldVis(#adrIfVis, False);
+  #define SetVisT(adrIfVis) SetFldVis(#adrIfVis, True );
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsFormReorg_1_6 : boolean;
+  { // Элемент обязателен при <ФормРеорг> = 1 | 2 | 3 | 5 | 6
+    var val : string; val := GetStrVal('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг');
+    Result := (    (val = '1')
+                or (val = '2')
+                or (val = '3')
+                or (val = '5')
+                or (val = '6') );
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  function IsPrPodp_2 : boolean;
+  { // Элемент обязателен при <ПрПодп>=2
+    Result := ( GetStrVal('Файл/Документ/Подписант/ПрПодп') = '2' );
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  procedure SetVis_OstStom (XMLAdr : string);
+  {
+    #IfVis(XMLAdr + '/СтОстОН'  )
+    #IfVis(XMLAdr + '/СтЛьгИмущ')
+  }
+  // #endregion СЕРВИС On_Visable
+  //**********************************************************************************************************
+@begin
+  var i, j, z, CountI, CountJ, CountZ : longint = 0;
+  var XMLAdrI, XMLAdrJ : string = '';
+  var flJ, flZ : boolean;
+
+  //----------------------------------------------------------------------------------------------------------
+  // #region ТИТУЛЬНЫЙ ЛИСТ
+
+  #IfVis('Файл/Документ/СвНП/Тлф')
+
+  if GetStrNull('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг')
+  then #SetVisF('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ')
+  else
+  {
+    #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ')
+
+    if IsFormReorg_1_6
+    { // ИННЮЛ, КПП :: Элемент обязателен при <ФормРеорг> = 1 | 2 | 3 | 5 | 6
+      #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ')
+      #SetVisT('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'  )
+    }
+    else
+    {
+      #IfVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ')
+      #IfVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'  )
+    }
+  }
+
+  #IfVis('Файл/Документ/Подписант/ФИО/Отчество')
+
+  // СвПред :: Элемент обязателен при <ПрПодп>=2
+  if (IsPrPodp_2)
+  {
+    #SetVisT('Файл/Документ/Подписант/СвПред'        )
+    #IfVis  ('Файл/Документ/Подписант/СвПред/НаимОрг')
+  }
+  else {
+    if GetStrNull('Файл/Документ/Подписант/СвПред/НаимДок')
+    then #SetVisF('Файл/Документ/Подписант/СвПред')
+    else
+    {
+      #SetVisT('Файл/Документ/Подписант/СвПред'        )
+      #IfVis  ('Файл/Документ/Подписант/СвПред/НаимОрг')
+    }
+  }
+
+  // #endregion ТИТУЛЬНЫЙ ЛИСТ
+  //----------------------------------------------------------------------------------------------------------
+
+  //----------------------------------------------------------------------------------------------------------
+  // #region РАЗДЕЛ 1
+
+  CountI := XMLMap.GetNodeCountByName('Файл/Документ/ИмущНД/СумНалПУ');
+  for (i := 0; i < CountI; i++)
+  {
+    XMLAdrI := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i);
+
+    if (    GetStrNull(XMLAdrI + '/ОКТМО'       )
+         or GetStrNull(XMLAdrI + '/КБК'         )
+         or GetStrNull(XMLAdrI + '/НалИсчислПер')
+         or GetStrNull(XMLAdrI + '/НалПУ'       ) )
+    then { #SetVisF(XMLAdrI) Continue; }
+
+    #SetVisT(XMLAdrI)
+    #IfVis  (XMLAdrI + '/НалИсчисл1кв')
+    #IfVis  (XMLAdrI + '/НалИсчисл2кв')
+    #IfVis  (XMLAdrI + '/НалИсчисл3кв')
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 2
+    //--------------------------------------------------------------------------------------------------------
+    flJ := False;
+
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/РасОбДеятРФ/РасОб');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/РасОбДеятРФ/РасОб' + getIter(j);
+
+      if (    GetStrNull(XMLAdrJ + '/ВидИмущ'             )
+           or GetStrNull(XMLAdrJ + '/РасчНал/СтИмущ'      )
+           or GetStrNull(XMLAdrJ + '/РасчНал/НалБаза'     )
+           or GetStrNull(XMLAdrJ + '/РасчНал/НалСтав'     )
+           or GetStrNull(XMLAdrJ + '/РасчНал/СумНалИсчисл')
+           or GetStrNull(XMLAdrJ + '/РасчНал/НалИсчислПер')
+           or ( // ДолСт :: Элемент обязателен при <ВидИмущ>=2
+                IsVidImuch_2(XMLAdrJ) and (GetStrVal(XMLAdrJ + '/РасчНал/ДолСт') = '') )
+         )
+      then { #SetVisF(XMLAdrJ) Continue; }
+
+      #SetVisT(XMLAdrJ)
+      flJ := True;
+
+      // ДолСт :: Элемент обязателен при <ВидИмущ>=2
+      if (IsVidImuch_2(XMLAdrJ))
+      then #SetVisT(XMLAdrJ + '/РасчНал/ДолСт')
+      else #IfVis  (XMLAdrJ + '/РасчНал/ДолСт')
+
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0101');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0102');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0103');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0104');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0105');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0106');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0107');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0108');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0109');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0110');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0111');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом0112');
+      SetVis_OstStom(XMLAdrJ + '/ДанРасСтПер/ОстСтом3112');
+
+
+      #IfVis(XMLAdrJ + '/РасчНал/КодНалЛьг'   )
+      #IfVis(XMLAdrJ + '/РасчНал/СтИмущНеобл' )
+      #IfVis(XMLAdrJ + '/РасчНал/КодЛгПНС'    )
+      #IfVis(XMLAdrJ + '/РасчНал/Кжд'         )
+      #IfVis(XMLAdrJ + '/РасчНал/КодЛгУмен'   )
+      #IfVis(XMLAdrJ + '/РасчНал/СумЛгУмен'   )
+      #IfVis(XMLAdrJ + '/РасчНал/СумНалПред'  )
+    }
+
+    SetFldVis(XMLAdrI + '/РасОбДеятРФ', flJ);
+    // #endregion РАЗДЕЛ 2
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 2.1
+    //--------------------------------------------------------------------------------------------------------
+    flJ := False;
+
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/ОбъектОблНал/ИнфОбъект');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/ОбъектОблНал/ИнфОбъект' + getIter(j);
+
+      if (    GetStrNull(XMLAdrJ + '/КодНомОбъект')
+           or GetStrNull(XMLAdrJ + '/НомОбъект'   )
+           or GetStrNull(XMLAdrJ + '/ОКОФ'        )
+           or GetStrNull(XMLAdrJ + '/СтОст3112'   ) )
+      { #SetVisF(XMLAdrJ) Continue; }
+
+      #SetVisT(XMLAdrJ)
+      flJ := True;
+
+      flZ := false;
+      if GetStrVal(XMLAdrJ + '/КодНомОбъект') <>'3'
+      { #SetVisF(XMLAdrJ+'/АдрОбъектРФ') Continue;}
+      else
+      {
+        #SetVisT(XMLAdrJ+'/АдрОбъектРФ')
+        #IfVis(XMLAdrJ + '/АдрОбъектРФ/ИдНом')
+
+        if GetStrNull(XMLAdrJ + '/АдрОбъектРФ/Регион/Значение'     )
+          #SetVisF(XMLAdrJ + '/АдрОбъектРФ/Регион'     )
+        else
+        {
+          flZ := true;
+          #SetVisT(XMLAdrJ + '/АдрОбъектРФ/Регион'     )
+        }
+        if (GetStrNull(XMLAdrJ + '/АдрОбъектРФ/МуниципРайон/ВидКод')
+         or GetStrNull(XMLAdrJ + '/АдрОбъектРФ/МуниципРайон/Наим'))
+          #SetVisF(XMLAdrJ+'/АдрОбъектРФ/МуниципРайон')
+        else
+        {
+          flZ := true;
+          #SetVisT(XMLAdrJ+'/АдрОбъектРФ/МуниципРайон')
+        }
+        if (GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/ВидКод')
+         or GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/Наим'))
+          #SetVisF(XMLAdrJ+'/АдрОбъектРФ/ГородСелПоселен')
+        else
+        {
+          flZ := true;
+          #SetVisT(XMLAdrJ+'/АдрОбъектРФ/ГородСелПоселен')
+        }
+        if (GetStrNull(XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Вид')
+         or GetStrNull(XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Наим'))
+          #SetVisF(XMLAdrJ+'/АдрОбъектРФ/НаселенПункт')
+        else
+        {
+          flZ := true;
+          #SetVisT(XMLAdrJ+'/АдрОбъектРФ/НаселенПункт')
+        }
+        if (GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Тип')
+         or GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Наим'))
+          #SetVisF(XMLAdrJ+'/АдрОбъектРФ/ЭлПланСтруктур')
+        else
+        {
+          flZ := true;
+          #SetVisT(XMLAdrJ+'/АдрОбъектРФ/ЭлПланСтруктур')
+        }
+        if (GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Тип')
+         or GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Наим'))
+          #SetVisF(XMLAdrJ+'/АдрОбъектРФ/ЭлУлДорСети')
+        else
+        {
+          flZ := true;
+          #SetVisT(XMLAdrJ+'/АдрОбъектРФ/ЭлУлДорСети')
+        }
+        if GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ЗемелУчасток/Значение')
+          #SetVisF(XMLAdrJ+'/АдрОбъектРФ/ЗемелУчасток')
+        else
+        {
+          flZ := true;
+          #SetVisT(XMLAdrJ+'/АдрОбъектРФ/ЗемелУчасток')
+        }
+        CountZ := XMLMap.GetNodeCountByName(XMLAdrJ+'/АдрОбъектРФ/Здание');
+        for (z := 0; z < CountZ; z++)
+        {
+          if (GetStrNull(XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z)+'/Тип')
+           or GetStrNull(XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z)+'/Номер'))
+            #SetVisF(XMLAdrJ+'/АдрОбъектРФ/Здание'+ getIter(z))
+          else
+          {
+            flZ := true;
+            #SetVisT(XMLAdrJ+'/АдрОбъектРФ/Здание'+ getIter(z))
+          }
+        }
+        if (GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Тип')
+         or GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Номер'))
+          #SetVisF(XMLAdrJ+'/АдрОбъектРФ/ПомещЗдания')
+        else
+        {
+          flZ := true;
+          #SetVisT(XMLAdrJ+'/АдрОбъектРФ/ПомещЗдания')
+        }
+        if (GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Тип')
+         or GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Номер'))
+          #SetVisF(XMLAdrJ+'/АдрОбъектРФ/ПомещКвартиры')
+        else
+        {
+          flZ := true;
+          #SetVisT(XMLAdrJ+'/АдрОбъектРФ/ПомещКвартиры')
+        }
+        if not flZ
+          #SetVisF(XMLAdrJ+'/АдрОбъектРФ')
+      }
+    }
+
+    SetFldVis(XMLAdrI + '/ОбъектОблНал', flJ);
+    // #endregion РАЗДЕЛ 2.1
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 3
+    //--------------------------------------------------------------------------------------------------------
+    flJ := False;
+
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/РасОБНедИО/РасОб');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/РасОБНедИО/РасОб' + getIter(j);
+
+      if (    GetStrNull(XMLAdrJ + '/ВидИмущ'     )
+           or GetStrNull(XMLAdrJ + '/ВидСвед'     )
+           or GetStrNull(XMLAdrJ + '/НомКад'      )
+           or GetStrNull(XMLAdrJ + '/СтКадастр'   )
+           or GetStrNull(XMLAdrJ + '/НалБаза'     )
+           or GetStrNull(XMLAdrJ + '/НалСтав'     )
+           or GetStrNull(XMLAdrJ + '/КоэфКв'      )
+           or GetStrNull(XMLAdrJ + '/СумНалИсчисл')
+           or GetStrNull(XMLAdrJ + '/НалИсчислПер') )
+      { #SetVisF(XMLAdrJ) Continue; }
+
+      #SetVisT(XMLAdrJ)
+      flJ := True;
+
+      #IfVis(XMLAdrJ + '/СтКадастрНеобл')
+      #IfVis(XMLAdrJ + '/ДоляПравСоб'   )
+      #IfVis(XMLAdrJ + '/Доля_6.378.2'  )
+      #IfVis(XMLAdrJ + '/КодНалЛьг'     )
+      #IfVis(XMLAdrJ + '/ДолСт'         )
+      #IfVis(XMLAdrJ + '/КодЛгПНС'      )
+      #IfVis(XMLAdrJ + '/КоэфКи'        )
+      #IfVis(XMLAdrJ + '/КодЛгУмен'     )
+      #IfVis(XMLAdrJ + '/СумЛгУмен'     )
+    }
+
+    SetFldVis(XMLAdrI + '/РасОБНедИО', flJ);
+    // #endregion РАЗДЕЛ 3
+    //--------------------------------------------------------------------------------------------------------
+
+    // РасОбДеятРФ :: Элемент обязателен при отсутствии элемента <РасОБНедИО>
+    // РасОБНедИО  :: Элемент обязателен при отсутствии элемента <РасОбДеятРФ>
+         if (not GetFldVis(XMLAdrI + '/РасОбДеятРФ')) #SetVisT(XMLAdrI + '/РасОБНедИО' )
+    else if (not GetFldVis(XMLAdrI + '/РасОБНедИО' )) #SetVisT(XMLAdrI + '/РасОбДеятРФ')
+  }
+  // #endregion РАЗДЕЛ 1
+  //----------------------------------------------------------------------------------------------------------
+
+@end.
+// #endregion On_Visable ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ УСТАНОВКЕ ВИДИМОСТИ ПОЛЕЙ
+//************************************************************************************************************
+
+
+//============================================================================================================
+// #region On_Check ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ ПОЛЕЙ
+//------------------------------------------------------------------------------------------------------------
+@Script On_Check : boolean;
+  //==========================================================================================================
+  // #region СЕРВИС On_Check
+  //----------------------------------------------------------------------------------------------------------
+  #include AllTaxObj.Vih
+
+  // #region ПРОВЕРКИ
+
+  // #region КПП
+  function IsValidKPP_5_6(strIn: string; var strGetMes: string) : boolean;
+  { // 5 и 6 знаки не могут принимать значение "50"
+    strGetMes := 'В значении элемента КПП 5 и 6 знаки не могут принимать значение 50';
+
+    Result := False;
+    Result := (SubStr(strIn, 5, 2) <> '50');
+  };
+  // #endregion КПП
+  //----------------------------------------------------------------------------------------------------------
+  // #region Налоговый период
+  function IsValidPeriod(strIn: string; var strGetMes: string) : boolean;
+  { // Период
+    strGetMes := 'Возможные значения: 34 или 50';
+
+    Result := False;
+    Result := CheckError.isRegExpr('^(34|50)$', strIn);
+  };
+  // #endregion Налоговый период
+  //----------------------------------------------------------------------------------------------------------
+  // #region Код места, по которому представляется документ
+  function IsValidPoMestu(strIn: string; var strGetMes: string) : boolean;
+  { //ПоМесту
+    strGetMes := 'Возможные значения: 213, 214, 215, 216, 221, 245 или 281';
+
+    Result := False;
+    Result := CheckError.isRegExpr('^(213|214|215|216|221|245|281)$', strIn);
+  };
+  // #endregion Код места, по которому представляется документ
+  //----------------------------------------------------------------------------------------------------------
+  // #region Код вида имущества (Раздел 2)
+  function IsValidVidImuch_R2(strIn: string; var strGetMes: string) : boolean;
+  { // ВидИмущ
+    strGetMes := 'Возможные значения: 01, 02, 03, 04, 05, 07, 08, 09 или 10';
+
+    Result := False;
+    Result := CheckError.isRegExpr('^(01|02|03|04|05|07|08|09|10)$', strIn);
+  };
+  // #endregion Код вида имущества (Раздел 2)
+  //----------------------------------------------------------------------------------------------------------
+  // #region Код номера объекта (Раздел 2.1)
+  function IsValidKodNomObekt(strIn: string; var strGetMes: string) : boolean;
+  { // КодНомОбъект
+    strGetMes := 'Возможные значения: 1, 2, 3, 4, 5 или 6';
+
+    Result := False;
+    Result := CheckError.isRegExpr('^(1|2|3|4|5|6)$', strIn);
+  };
+
+
+  // #region Код региона (Раздел 2.1)
+  function IsValidKodRegion(strIn: string; var strGetMes: string) : boolean;
+  { // КодРегион
+    // Указывается в соответствии со справочником "Коды субъектов Российской Федерации" Приложение N 3 к Приказу ФНС России от 09.11.2015 N ММВ-7-3/497@
+    strGetMes := 'Возможные значения: Коды субъектов РФ из Приложение №3 к Приказу ФНС России от 09.11.2015 №ММВ-7-3/497@. Формат: 2 цифры';
+
+    Result := False;
+    Result := CheckError.isRegExpr('^(01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29)$', strIn)
+           or CheckError.isRegExpr('^(30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58)$', strIn)
+           or CheckError.isRegExpr('^(59|60|61|62|63|64|65|66|67|68|69|70|71|72|73|74|75|76|77|78|79|83|86|87|89|91|92|99)$'   , strIn);
+  };
+  // #endregion Код региона (Раздел 2.1)
+  //----------------------------------------------------------------------------------------------------------
+  // #region Код вида имущества (Раздел 3)
+  function IsValidVidImuch_R3(strIn: string; var strGetMes: string) : boolean;
+  { // ВидИмущ
+    strGetMes := 'Возможные значения: 11, 12 или 13';
+
+    Result := False;
+    Result := CheckError.isRegExpr('^(11|12|13)$', strIn);
+  };
+  // #endregion Код вида имущества (Раздел 3)
+  //----------------------------------------------------------------------------------------------------------
+  // #region Код налоговой льготы
+  function IsValidKodNalLg(strIn: string; var strGetMes: string) : boolean;
+  { // КодНалЛьг
+    strGetMes := 'Возможные значения: KKKKKKK (за исключением 2012400 и 2012500) или 2012000/XXXXXXXXXXXX. Формат: 7 или 20 символов';
+
+    Result := False;
+    Result :=     CheckError.isRegExpr('^(([0-9]{7})|(2012000/(............)))$', strIn)
+              and (SubStr(strIn, 1, 7) <> '2012400')
+              and (SubStr(strIn, 1, 7) <> '2012500');
+  };
+  // #endregion Код налоговой льготы
+  //----------------------------------------------------------------------------------------------------------
+  // #region Простая дробь в формате: (от 1 до 10 знаков)/(от 1 до 10 знаков), где ведущие нули в числителе и знаменателе недопустимыимы
+  function IsValidProstDrob21(strIn: string; var strGetMes: string) : boolean;
+  { // ПростДроб21
+    strGetMes := 'Формат поля: XXXXXXXXXX/XXXXXXXXXX. Формат: 21 символ';
+
+    Result := False;
+    if (strIn = '') or (Pos('/', strIn) = 0) Exit;
+
+    var buf_1 : string; buf_1 := SubStr(strIn,                   1,                 Pos('/', strIn) - 1);
+    var buf_2 : string; buf_2 := SubStr(strIn, Pos('/', strIn) + 1, Length(strIn) - Pos('/', strIn)    );
+
+    Result := CheckError.isRegExpr('^([1-9]{1}|[1-9]{1}[0-9]{1}|[1-9]{1}[0-9]{0,2}|[1-9]{1}[0-9]{0,3}|[1-9]{1}[0-9]{0,4}|[1-9]{1}[0-9]{0,5}|[1-9]{1}[0-9]{0,6}|[1-9]{1}[0-9]{0,7}|[1-9]{1}[0-9]{0,8}|[1-9]{1}[0-9]{0,9})$', buf_1)
+          and CheckError.isRegExpr('^([1-9]{1}|[1-9]{1}[0-9]{1}|[1-9]{1}[0-9]{0,2}|[1-9]{1}[0-9]{0,3}|[1-9]{1}[0-9]{0,4}|[1-9]{1}[0-9]{0,5}|[1-9]{1}[0-9]{0,6}|[1-9]{1}[0-9]{0,7}|[1-9]{1}[0-9]{0,8}|[1-9]{1}[0-9]{0,9})$', buf_2);
+  };
+  // #endregion Простая дробь в формате: (от 1 до 10 знаков)/(от 1 до 10 знаков), где ведущие нули в числителе и знаменателе недопустимыимы
+  //----------------------------------------------------------------------------------------------------------
+  // #region Простая дробь в формате: (от 1 до 14 знаков)/(от 1 до 14 знаков), где ведущие нули в числителе и знаменателе недопустимы
+  function IsValidProstDrob29(strIn: string; var strGetMes: string) : boolean;
+  { // ПростДроб29
+    strGetMes := 'Формат поля: XXXXXXXXXXXXXX/XXXXXXXXXXXXXX. Формат: 29 символ';
+
+    Result := False;
+    if (strIn = '') or (Pos('/', strIn) = 0) Exit;
+
+    var buf_1 : string; buf_1 := SubStr(strIn,                   1,                 Pos('/', strIn) - 1);
+    var buf_2 : string; buf_2 := SubStr(strIn, Pos('/', strIn) + 1, Length(strIn) - Pos('/', strIn)    );
+
+    Result :=  ( CheckError.isRegExpr('^([1-9]{1}|[1-9]{1}[0-9]{1}|[1-9]{1}[0-9]{0,2}|[1-9]{1}[0-9]{0,3}|[1-9]{1}[0-9]{0,4}|[1-9]{1}[0-9]{0,5}|[1-9]{1}[0-9]{0,6}|[1-9]{1}[0-9]{0,7})$', buf_1)
+              or CheckError.isRegExpr('^([1-9]{1}[0-9]{0,8}|[1-9]{1}[0-9]{0,9}|[1-9]{1}[0-9]{0,10}|[1-9]{1}[0-9]{0,11}|[1-9]{1}[0-9]{0,12}|[1-9]{1}[0-9]{0,13})$'                      , buf_1) )
+          and  ( CheckError.isRegExpr('^([1-9]{1}|[1-9]{1}[0-9]{1}|[1-9]{1}[0-9]{0,2}|[1-9]{1}[0-9]{0,3}|[1-9]{1}[0-9]{0,4}|[1-9]{1}[0-9]{0,5}|[1-9]{1}[0-9]{0,6}|[1-9]{1}[0-9]{0,7})$', buf_2)
+              or CheckError.isRegExpr('^([1-9]{1}[0-9]{0,8}|[1-9]{1}[0-9]{0,9}|[1-9]{1}[0-9]{0,10}|[1-9]{1}[0-9]{0,11}|[1-9]{1}[0-9]{0,12}|[1-9]{1}[0-9]{0,13})$'                      , buf_2) );
+  };
+  // #endregion Простая дробь в формате: (от 1 до 14 знаков)/(от 1 до 14 знаков), где ведущие нули в числителе и знаменателе недопустимы
+  //----------------------------------------------------------------------------------------------------------
+  // #region Код налоговой льготы (установленной в виде понижения налоговой ставки)
+  function IsValidKodLgPNS(strIn: string; var strGetMes: string) : boolean;
+  { // КодЛгПНС
+    strGetMes := 'Возможные значения: 2012400/XXXXXXXXXXXX. Формат: 20 символов';
+
+    Result := False;
+    Result := CheckError.isRegExpr('^(2012400/(............))$', strIn);
+  };
+  // #endregion Код налоговой льготы (установленной в виде понижения налоговой ставки)
+  //----------------------------------------------------------------------------------------------------------
+  // #region Код налоговой льготы (в виде уменьшения суммы налога, подлежащей уплате в бюджет)
+  function IsValidKodLgUmen(strIn: string; var strGetMes: string) : boolean;
+  { // КодЛгУмен
+    strGetMes := 'Возможные значения: 2012500/XXXXXXXXXXXX. Формат: 20 символов';
+
+    Result := False;
+    Result := CheckError.isRegExpr('^(2012500/(............))$', strIn);
+  };
+  // #endregion Код налоговой льготы (в виде уменьшения суммы налога, подлежащей уплате в бюджет)
+
+  // #endregion ПРОВЕРКИ
+
+  // #region FUNCTION
+
+  function IsDbl_3_2(_Val: string; var _Mes: string) : boolean;  { Result := IsValidDecimal(_Val, 1, 2, _Mes, FALSE); }
+  function IsDbl_2_1(_Val: string; var _Mes: string) : boolean;  { Result := IsValidDecimal(_Val, 1, 1, _Mes, FALSE); }
+  function IsDbl_5_4(_Val: string; var _Mes: string) : boolean;  { Result := IsValidDecimal(_Val, 1, 4, _Mes, FALSE); }
+
+  function IsInt_1_15    (_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenNumber(_Val, 1, 15, _Mes, FALSE); }
+  function IsInt_1_15_Min(_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenNumber(_Val, 1, 15, _Mes, TRUE ); }
+
+  function IsStr_1_1    (_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenStr(_Val, 1,    1, _Mes); }
+  function IsStr_1_5    (_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenStr(_Val, 1,    5, _Mes); }
+  function IsStr_1_40   (_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenStr(_Val, 1,   40, _Mes); }
+  function IsStr_1_50   (_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenStr(_Val, 1,   50, _Mes); }
+  function IsStr_1_100  (_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenStr(_Val, 1,  100, _Mes); }
+  function IsStr_1_120  (_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenStr(_Val, 1,  120, _Mes); }
+  function IsStr_1_255  (_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenStr(_Val, 1,  255, _Mes); }
+  function IsStr_1_1000 (_Val: string; var _Mes: string) : boolean;  { Result := IsValidLenStr(_Val, 1, 1000, _Mes); }
+
+  // #endregion FUNCTION
+
+  // #region DECLARE
+
+  #declare _NoKor(_AdrXML, _Pole)
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      #_Pole,
+      'Поле не соответствует формату. ' + getMes
+    );
+  #end
+
+  #declare _NoPust(_AdrXML, _Pole,_getMes )
+    MessageErrorStop_ALG
+    (
+      #_AdrXML,
+      #_Pole,
+      #_getMes
+    );
+  #end
+
+  #declare _IfNotValid(_adrXML, _Valid, _Pole, _Iter=0)
+    if not #_Valid(GetStrVal(#_adrXML), getMes)
+      MessageErrorStop_ALG
+      (
+        #_adrXML
+      , #_Pole
+      , 'Поле не соответствует формату. ' + getMes
+      , #_Iter
+      );
+  #end
+
+  #declare _IfNotValidVis(_adrXML, _Valid, _Pole, _Iter=0)
+    if GetFldVis(#_adrXML)
+      if not #_Valid(GetStrVal(#_adrXML), getMes)
+        MessageErrorStop_ALG
+        (
+          #_adrXML
+        , #_Pole
+        , 'Поле не соответствует формату. ' + getMes
+        , #_Iter
+        );
+  #end
+
+  // #endregion DECLARE
+
+  // #endregion СЕРВИС On_Check
+  //**********************************************************************************************************
+@begin
+  var i, j, z, CountI, CountJ, CountZ : longint = 0;
+  var getMes, XMLAdrI, XMLAdrJ : string = '';
+  var flI, flJ, flZ : boolean;
+
+  //----------------------------------------------------------------------------------------------------------
+  // #region ТИТУЛЬНЫЙ ЛИСТ
+  //----------------------------------------------------------------------------------------------------------
+  #_IfNotValid('Файл/ВерсПрог', IsStr_1_40, 'Версия программы')
+  #_IfNotValid('Файл/ВерсФорм', IsStr_1_5 , 'Версия формы'    )
+
+  if not IsValidKND(GetStrVal('Файл/Документ/КНД'), '1152026', getMes)
+    #_NoKor('Файл/Документ/КНД', 'Код формы отчетности по КНД')
+
+  #_IfNotValid   ('Файл/Документ/ДатаДок'               , IsValidDate        , 'Дата документа'             )
+  #_IfNotValid   ('Файл/Документ/Период'                , IsValidPeriod      , 'Налоговый период'           )
+  #_IfNotValid   ('Файл/Документ/ОтчетГод'              , IsValidOtchGod     , 'Отчетный год'               )
+  #_IfNotValid   ('Файл/Документ/КодНО'                 , IsValidSONO        , 'Код налогового органа'      )
+  #_IfNotValid   ('Файл/Документ/НомКорр'               , IsValidNomKorr     , 'Номер корректировки'        )
+  #_IfNotValid   ('Файл/Документ/ПоМесту'               , IsValidPoMestu     , 'По месту нахождения (учета)')
+  #_IfNotValidVis('Файл/Документ/СвНП/Тлф'              , IsValidTlf         , 'Контактный телефон'         )
+  #_IfNotValid   ('Файл/Документ/Подписант/ПрПодп'      , IsValidPrPodp      , 'Признак подписанта'         )
+  #_IfNotValid   ('Файл/Документ/СвНП/НПЮЛ/НаимОрг'     , IsValidNaimOrg     , 'Наименование организации'   )
+  #_IfNotValid   ('Файл/Документ/СвНП/НПЮЛ/ИННЮЛ'       , IsValidINNUL       , 'ИНН'                        )
+  #_IfNotValid   ('Файл/Документ/СвНП/НПЮЛ/ИННЮЛ'       , CheckError.Prov_INN, 'ИНН'                        )
+  #_IfNotValid   ('Файл/Документ/СвНП/НПЮЛ/КПП'         , IsValidKPP         , 'КПП'                        )
+  #_IfNotValid   ('Файл/Документ/СвНП/НПЮЛ/КПП'         , IsValidKPP_5_6     , 'КПП'                        )
+  #_IfNotValid   ('Файл/Документ/Подписант/ФИО/Фамилия' , IsValidFIO         , 'Фамилия'                    )
+  #_IfNotValid   ('Файл/Документ/Подписант/ФИО/Имя'     , IsValidFIO         , 'Имя'                        )
+  #_IfNotValidVis('Файл/Документ/Подписант/ФИО/Отчество', IsValidFIO         , 'Отчество'                   )
+
+  if ( GetFldVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ') )
+  {
+    #_IfNotValid   ('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ФормРеорг', IsValidFormReorg    , 'Код формы реорганизации')
+    #_IfNotValidVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ'    , IsValidINNUL        , 'ИНН (реорг. орг)'       )
+    #_IfNotValidVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/ИННЮЛ'    , CheckError.Prov_INN , 'ИНН (реорг. орг)'       )
+    #_IfNotValidVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'      , IsValidKPP          , 'КПП (реорг. орг)'       )
+    #_IfNotValidVis('Файл/Документ/СвНП/НПЮЛ/СвРеоргЮЛ/КПП'      , IsValidKPP_5_6      , 'КПП (реорг. орг)'       )
+  }
+
+  if ( GetFldVis('Файл/Документ/Подписант/СвПред') )
+  {
+    #_IfNotValid   ('Файл/Документ/Подписант/СвПред/НаимДок', IsStr_1_120 , 'Наименование документа'  )
+    #_IfNotValidVis('Файл/Документ/Подписант/СвПред/НаимОрг', IsStr_1_1000, 'Наименование организации')
+  }
+  // #endregion ТИТУЛЬНЫЙ ЛИСТ
+  //----------------------------------------------------------------------------------------------------------
+
+  //----------------------------------------------------------------------------------------------------------
+  // #region РАЗДЕЛ 1
+  //----------------------------------------------------------------------------------------------------------
+  flI := False;
+
+  CountI := XMLMap.GetNodeCountByName('Файл/Документ/ИмущНД/СумНалПУ');
+  for (i := 0; i < CountI; i++)
+  {
+    XMLAdrI := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i);
+
+    if (not GetFldVis(XMLAdrI)) Continue;
+    flI := True;
+
+    #_IfNotValid   (XMLAdrI + '/ОКТМО'       , IsValidOKTMO  , 'Стр. 010'    )
+    #_IfNotValid   (XMLAdrI + '/КБК'         , IsValidKBK    , 'Стр. 020'    )
+    #_IfNotValid   (XMLAdrI + '/НалИсчислПер', IsInt_1_15_Min, 'Стр. 021'    )
+    #_IfNotValidVis(XMLAdrI + '/НалИсчисл1кв', IsInt_1_15_Min, 'Стр. 023'    )
+    #_IfNotValidVis(XMLAdrI + '/НалИсчисл2кв', IsInt_1_15_Min, 'Стр. 025'    )
+    #_IfNotValidVis(XMLAdrI + '/НалИсчисл3кв', IsInt_1_15_Min, 'Стр. 027'    )
+    #_IfNotValid   (XMLAdrI + '/НалПУ'       , IsInt_1_15_Min, 'Стр. 030/040')
+
+    // РасОбДеятРФ :: Элемент обязателен при отсутствии элемента <РасОБНедИО>
+    // РасОБНедИО  :: Элемент обязателен при отсутствии элемента <РасОбДеятРФ>
+    if (    not GetFldVis(XMLAdrI + '/РасОбДеятРФ')
+        and not GetFldVis(XMLAdrI + '/РасОБНедИО' ) )
+    {
+      MessageErrorStop_ALG (
+        XMLAdrI + '/РасОбДеятРФ/РасОб/ВидИмущ'
+      , 'Разделы 2, 3'
+      , 'Должен быть заполнен, хотя бы, Раздела 2 или Раздела 3'
+      )
+    }
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 2
+    //--------------------------------------------------------------------------------------------------------
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/РасОбДеятРФ/РасОб');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/РасОбДеятРФ/РасОб' + getIter(j);
+
+      if (not GetFldVis(XMLAdrJ)) Continue;
+
+      #_IfNotValid(XMLAdrJ + '/ВидИмущ', IsValidVidImuch_R2, 'Стр. 001')
+
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0101/СтОстОН', IsInt_1_15, 'Стр. 020, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0101/СтЛьгИмущ', IsInt_1_15, 'Стр. 020, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0102/СтОстОН', IsInt_1_15, 'Стр. 030, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0102/СтЛьгИмущ', IsInt_1_15, 'Стр. 030, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0103/СтОстОН', IsInt_1_15, 'Стр. 040, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0103/СтЛьгИмущ', IsInt_1_15, 'Стр. 040, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0104/СтОстОН', IsInt_1_15, 'Стр. 050, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0104/СтЛьгИмущ', IsInt_1_15, 'Стр. 050, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0105/СтОстОН', IsInt_1_15, 'Стр. 060, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0105/СтЛьгИмущ', IsInt_1_15, 'Стр. 060, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0106/СтОстОН', IsInt_1_15, 'Стр. 070, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0106/СтЛьгИмущ', IsInt_1_15, 'Стр. 070, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0107/СтОстОН', IsInt_1_15, 'Стр. 080, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0107/СтЛьгИмущ', IsInt_1_15, 'Стр. 080, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0108/СтОстОН', IsInt_1_15, 'Стр. 090, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0108/СтЛьгИмущ', IsInt_1_15, 'Стр. 090, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0109/СтОстОН', IsInt_1_15, 'Стр. 100, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0109/СтЛьгИмущ', IsInt_1_15, 'Стр. 100, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0110/СтОстОН', IsInt_1_15, 'Стр. 110, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0110/СтЛьгИмущ', IsInt_1_15, 'Стр. 110, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0111/СтОстОН', IsInt_1_15, 'Стр. 120, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0111/СтЛьгИмущ', IsInt_1_15, 'Стр. 120, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0112/СтОстОН', IsInt_1_15, 'Стр. 130, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом0112/СтЛьгИмущ', IsInt_1_15, 'Стр. 130, гр. 4')
+      #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом3112/СтОстОН', IsInt_1_15, 'Стр. 140, гр. 3')   #_IfNotValidVis(XMLAdrJ + '/ДанРасСтПер/ОстСтом3112/СтЛьгИмущ', IsInt_1_15, 'Стр. 140, гр. 4')
+
+      #_IfNotValid   (XMLAdrJ + '/РасчНал/СтИмущ'      , IsInt_1_15        , 'Стр. 150')
+      #_IfNotValidVis(XMLAdrJ + '/РасчНал/КодНалЛьг'   , IsValidKodNalLg   , 'Стр. 160')
+      #_IfNotValidVis(XMLAdrJ + '/РасчНал/СтИмущНеобл' , IsInt_1_15        , 'Стр. 170')
+      #_IfNotValidVis(XMLAdrJ + '/РасчНал/ДолСт'       , IsValidProstDrob21, 'Стр. 180')
+      #_IfNotValid   (XMLAdrJ + '/РасчНал/НалБаза'     , IsInt_1_15        , 'Стр. 190')
+      #_IfNotValidVis(XMLAdrJ + '/РасчНал/КодЛгПНС'    , IsValidKodLgPNS   , 'Стр. 200')
+      #_IfNotValid   (XMLAdrJ + '/РасчНал/НалСтав'     , IsDbl_3_2         , 'Стр. 210')
+      #_IfNotValidVis(XMLAdrJ + '/РасчНал/Кжд'         , IsDbl_2_1         , 'Стр. 215')
+      #_IfNotValid   (XMLAdrJ + '/РасчНал/СумНалИсчисл', IsInt_1_15        , 'Стр. 220')
+      #_IfNotValidVis(XMLAdrJ + '/РасчНал/КодЛгУмен'   , IsValidKodLgUmen  , 'Стр. 230')
+      #_IfNotValidVis(XMLAdrJ + '/РасчНал/СумЛгУмен'   , IsInt_1_15        , 'Стр. 240')
+      #_IfNotValidVis(XMLAdrJ + '/РасчНал/СумНалПред'  , IsInt_1_15        , 'Стр. 250')
+      #_IfNotValid   (XMLAdrJ + '/РасчНал/НалИсчислПер', IsInt_1_15        , 'Стр. 260')
+
+
+      // п.5.3 пп.7 :: Строка с кодом 180 заполняется только в Разделах 2 Декларации с кодом 02 по строке "Код вида имущества (код строки 001)".
+      if (GetStrVal(XMLAdrJ + '/ВидИмущ') <> '02')
+        if (not GetStrNull(XMLAdrJ + '/РасчНал/ДолСт'))
+            MessageErrorStop_ALG (
+              XMLAdrJ + '/РасчНал/ДолСт'
+            , 'Стр. 180'
+            , 'Стр. 180 заполняется только если стр. 001 = 02'
+            );
+
+      case GetStrVal(XMLAdrJ + '/ВидИмущ') of
+        '05': { // п.5.3 пп.10 :: В случае заполнения Раздела 2 Декларации с кодом 05 по строке "Код вида имущества (код строки 001)":
+                // - при отражении по строке с кодом 160 кода налоговой льготы 2010401 (налоговая ставка по налогу в размере 0 процентов в течение первых шести
+                //   календарных лет, начиная со дня включения юридического лица в единый реестр резидентов Особой экономической зоны в Калининградской области,
+                //   в отношении имущества, созданного или приобретенного при реализации инвестиционного проекта в соответствии с ФЗ от 10.01.2006 N 16-ФЗ) в
+                //   строке с кодом 210 указывается налоговая ставка в размере 0 процентов
+                if (GetStrVal(XMLAdrJ + '/РасчНал/КодНалЛьг') = '2010401')
+                  if (GetDblVal(XMLAdrJ + '/РасчНал/НалСтав') <> 0)
+                    MessageErrorStop_ALG (
+                      XMLAdrJ + '/РасчНал/НалСтав'
+                    , 'Стр. 210'
+                    , 'Если стр. 001 = 05 и стр. 160 = 2010401, то в строке с кодом 210 проставляется 0 (ноль)'
+                    );
+              }
+      end;
+    }
+    // #endregion РАЗДЕЛ 2
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 2.1
+    //--------------------------------------------------------------------------------------------------------
+
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/ОбъектОблНал/ИнфОбъект');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/ОбъектОблНал/ИнфОбъект' + getIter(j);
+
+      if (not GetFldVis(XMLAdrJ)) Continue;
+      #_IfNotValid(XMLAdrJ + '/КодНомОбъект', IsValidKodNomObekt, 'Стр. 010')
+      #_IfNotValid(XMLAdrJ + '/НомОбъект'   , IsStr_1_100       , 'Стр. 020')
+      #_IfNotValid(XMLAdrJ + '/ОКОФ'        , IsValidOKOF       , 'Стр. 040')
+      #_IfNotValid(XMLAdrJ + '/СтОст3112'   , IsInt_1_15        , 'Стр. 050')
+
+
+      if GetStrVal(XMLAdrJ+'/КодНомОбъект') = '3'
+      {
+        if GetFldVis(XMLAdrJ + '/АдрОбъектРФ')
+        {
+          if GetStrVal(XMLAdrJ + '/АдрОбъектРФ/Регион/Значение' ) <>''
+            #_IfNotValidVis(XMLAdrJ + '/АдрОбъектРФ/Регион/Значение'   , IsValidKodRegion, 'Стр. 030(Код региона)'      )
+          if GetStrVal(XMLAdrJ + '/АдрОбъектРФ/Регион/Значение' )=''
+            #_NoPust(XMLAdrJ + '/АдрОбъектРФ/Регион/Значение' ,'Стр. 030 (Код региона)','Поле не может быть пустым')
+
+          if GetFldVis(XMLAdrJ + '/АдрОбъектРФ/ЗемелУчасток')
+            #_IfNotValidVis(XMLAdrJ + '/АдрОбъектРФ/ЗемелУчасток/Значение', IsStr_1_50, 'Стр. 030( Земельный участок)')
+
+          if not GetStrNull(XMLAdrJ + '/АдрОбъектРФ/МуниципРайон/ВидКод')
+            #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/МуниципРайон/ВидКод', IsStr_1_50, 'Стр. 030 (Вид муниц. района)')
+          if GetStrNull(XMLAdrJ + '/АдрОбъектРФ/МуниципРайон/ВидКод')
+            #_NoPust(XMLAdrJ +  '/АдрОбъектРФ/МуниципРайон/ВидКод','Стр. 030 (Вид муниц. района)','Поле не может быть пустым')
+
+          if not GetStrNull(XMLAdrJ + '/АдрОбъектРФ/МуниципРайон/Наим')
+            #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/МуниципРайон/Наим',  IsStr_1_255, 'Стр. 030 (Наименование муниц. района)')
+           if GetStrNull(XMLAdrJ + '/АдрОбъектРФ/МуниципРайон/Наим')
+            #_NoPust(XMLAdrJ + '/АдрОбъектРФ/МуниципРайон/Наим','Стр. 030 (Наименование муниц. района )','Поле не может быть пустым')
+
+          if GetFldVis(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен')
+          {
+            if not GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/ВидКод')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/ВидКод', IsStr_1_50, 'Стр. 030 (Вид поселения )')
+            if GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/ВидКод')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/ВидКод','Стр. 030 (Вид поселения)','Поле не может быть пустым')
+            if not GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/Наим')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/Наим',  IsStr_1_255, 'Стр. 030 (Наименование поселения )')
+            if GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/Наим')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ГородСелПоселен/Наим','Стр. 030 (Наименование поселения )','Поле не может быть пустым')
+          }
+
+          if GetFldVis(XMLAdrJ + '/АдрОбъектРФ/НаселенПункт')
+          {
+            if not GetStrNull(XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Вид')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Вид', IsStr_1_50, 'Стр. 030 (Вид населенного пункта)')
+            if GetStrNull(XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Вид')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Вид','Стр. 030 (Вид населенного пункта)','Поле не может быть пустым')
+            if not GetStrNull (XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Наим')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Наим',  IsStr_1_255, 'Стр. 030 (Наименование населенного пункта)')
+            if GetStrNull (XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Наим')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/НаселенПункт/Наим','Стр. 030 (Наименование населенного пункта)','Поле не может быть пустым')
+          }
+
+          if GetFldVis(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур')
+          {
+            if not GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Тип')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Тип', IsStr_1_50, 'Стр. 030 (Тип элемента планир. струк.)' )
+            if GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Тип')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Тип','Стр. 030 (Тип элемента планир. струк.)','Поле не может быть пустым')
+            if not GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Наим')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Наим',  IsStr_1_255, 'Стр. 030 (Наименование элемента планир. струк.)')
+            if GetStrNull(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Наим')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ЭлПланСтруктур/Наим','Стр. 030 (Наименование элемента планир. струк.)','Поле не может быть пустым')
+          }
+
+          if GetFldVis(XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети')
+          {
+            if not GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Тип')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Тип', IsStr_1_50, 'Стр. 030 (Тип элемента улично-дорожной сети)')
+             if GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Тип')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Тип','Стр. 030 Тип элемента улично-дорожной сети)','Поле не может быть пустым')
+            if not GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Наим')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Наим',  IsStr_1_255, 'Стр. 030 (Наименование элемента улично-дорожной сети)')
+            if GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Наим')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ЭлУлДорСети/Наим','Стр. 030 (Наименование элемента улично-дорожной сети)','Поле не может быть пустым')
+          }
+
+          if GetFldVis(XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания')
+          {
+            if not GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Тип')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Тип', IsStr_1_50, 'Стр. 030  (Тип помещения в пред. здания/сооружения...)')
+            if GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Тип')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Тип','Стр. 030 (Тип помещения в пред. здания/сооружения...)','Поле не может быть пустым')
+            if not GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Номер')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Номер',  IsStr_1_255, 'Стр. 030 (Номер помещения в пред. здания/сооружения...)')
+            if GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Номер')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ПомещЗдания/Номер','Стр. 030 (Номер помещения в пред. здания/сооружение...)','Поле не может быть пустым')
+          }
+
+          if GetFldVis(XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры')
+          {
+            if not GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Тип')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Тип', IsStr_1_50, 'Стр. 030 (Тип помещения в пред. квартиры)')
+            if GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Тип')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Тип','Стр. 030 (Тип помещения в пред. квартиры)','Поле не может быть пустым')
+            if not GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Номер')
+              #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Номер',  IsStr_1_255, 'Стр. 030 (Номер помещения в пред. квартиры)')
+            if GetStrNull (XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Номер')
+              #_NoPust(XMLAdrJ + '/АдрОбъектРФ/ПомещКвартиры/Номер','Стр. 030(Номер помещения в пред. квартиры)','Поле не может быть пустым')
+          }
+          CountZ := XMLMap.GetNodeCountByName(XMLAdrJ+'/АдрОбъектРФ/Здание');
+          for (z := 1; z < CountZ; z++)
+          {
+            if GetFldVis(XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z))
+            {
+              if not GetStrNull (XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z) +'/Тип')
+                #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z) +'/Тип', IsStr_1_50, '(Тип здания/сооружения...)')
+              if GetStrNull (XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z) +'/Тип')
+                #_NoPust(XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z) +'/Тип','Стр. 030 (Тип здания/сооружения...)','Поле не может быть пустым')
+              if not GetStrNull (XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z) +'/Номер')
+                #_IfNotValid(XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z) +'/Номер',  IsStr_1_255, 'Стр. 030  (Номер здания/сооружения...)')
+              if GetStrNull (XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z) +'/Номер')
+                #_NoPust(XMLAdrJ + '/АдрОбъектРФ/Здание'+ getIter(z) +'/Номер','Стр. 030 (Номер здания/сооружения...)','Поле не может быть пустым')
+            }
+          }
+        }
+        else
+         #_NoPust(XMLAdrJ + '/КодНомОбъект','Стр. 010','Код номера объекта не может быть равен "3" или заполните адресные данные')
+      }
+
+    }
+    // #endregion РАЗДЕЛ 2.1
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 3
+    //--------------------------------------------------------------------------------------------------------
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/РасОБНедИО/РасОб');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/РасОБНедИО/РасОб' + getIter(j);
+
+      if (not GetFldVis(XMLAdrJ)) Continue;
+
+      #_IfNotValid   (XMLAdrJ + '/ВидИмущ'       , IsValidVidImuch_R3, 'Стр. 001')
+      #_IfNotValid   (XMLAdrJ + '/ВидСвед'       , IsStr_1_1         , 'Стр. 014')
+      #_IfNotValidVis(XMLAdrJ + '/НомКад'        , IsStr_1_100       , 'Стр. 015')
+      #_IfNotValid   (XMLAdrJ + '/СтКадастр'     , IsInt_1_15        , 'Стр. 020')
+      #_IfNotValidVis(XMLAdrJ + '/СтКадастрНеобл', IsInt_1_15        , 'Стр. 025')
+      #_IfNotValidVis(XMLAdrJ + '/ДоляПравСоб'   , IsValidProstDrob21, 'Стр. 030')
+      #_IfNotValidVis(XMLAdrJ + '/Доля_6.378.2'  , IsValidProstDrob29, 'Стр. 035')
+      #_IfNotValidVis(XMLAdrJ + '/КодНалЛьг'     , IsValidKodNalLg   , 'Стр. 040')
+      #_IfNotValidVis(XMLAdrJ + '/ДолСт'         , IsValidProstDrob21, 'Стр. 050')
+      #_IfNotValid   (XMLAdrJ + '/НалБаза'       , IsInt_1_15        , 'Стр. 060')
+      #_IfNotValidVis(XMLAdrJ + '/КодЛгПНС'      , IsValidKodLgPNS   , 'Стр. 070')
+      #_IfNotValid   (XMLAdrJ + '/НалСтав'       , IsDbl_3_2         , 'Стр. 080')
+      #_IfNotValid   (XMLAdrJ + '/КоэфКв'        , IsDbl_5_4         , 'Стр. 090')
+      #_IfNotValidvis(XMLAdrJ + '/КоэфКи'        , IsDbl_5_4         , 'Стр. 095')
+      #_IfNotValid   (XMLAdrJ + '/СумНалИсчисл'  , IsInt_1_15        , 'Стр. 100')
+      #_IfNotValidVis(XMLAdrJ + '/КодЛгУмен'     , IsValidKodLgUmen  , 'Стр. 110')
+      #_IfNotValidVis(XMLAdrJ + '/СумЛгУмен'     , IsInt_1_15        , 'Стр. 120')
+      #_IfNotValid   (XMLAdrJ + '/НалИсчислПер'  , IsInt_1_15        , 'Стр. 130')
+    }
+    // #endregion РАЗДЕЛ 3
+    //--------------------------------------------------------------------------------------------------------
+  }
+
+  if (not flI)
+    MessageErrorStop_ALG (
+      'Файл/Документ/ИмущНД/СумНалПУ/ОКТМО'
+    , 'Раздел 1'
+    , 'К заполнению обязателен хотя бы один Раздел 1'
+    );
+  // #endregion РАЗДЕЛ 1
+  //----------------------------------------------------------------------------------------------------------
+@end.
+// #endregion On_Check ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ ПОЛЕЙ
+//************************************************************************************************************
+
+
+//============================================================================================================
+//#region On_CheckKS ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ КОНТРОЛЬНЫХ СООТНОШЕНИЙ
+//------------------------------------------------------------------------------------------------------------
+@Script On_CheckKS : boolean;
+  //==========================================================================================================
+  // #region СЕРВИС On_CheckKS
+  //----------------------------------------------------------------------------------------------------------
+
+  // #region МАКРОСЫ
+
+  // Для работы с текущим отчетом
+  #undef GD // Вернуть значение поля типа Double
+  #declare GD(_XMLAdr)
+    if (XMLMap.GetAttrVisByName(#_XMLAdr), Double(XMLMap.GetAttrValueByName(#_XMLAdr)), 0.0);
+  #end
+  //----------------------------------------------------------------------------------------------------------
+  #undef GS // Вернуть значение поля типа String
+  #declare GS(_XMLAdr)
+    String(XMLMap.GetAttrValueByName(#_XMLAdr));
+  #end
+  //----------------------------------------------------------------------------------------------------------
+  // Сравнить
+  #undef KS
+  #declare KS(_If, _adrXML, _Pole, _Mes)
+    if (not #_If)
+    {
+      MesError.InsertMesError(#_adrXML, Comp(0), '', #_Pole, #_Mes);
+    }
+  #end
+  //----------------------------------------------------------------------------------------------------------
+  // Сравнить (описывается ошибка, а не условие КС)
+  #undef KSe
+  #declare KSe(_If, _adrXML, _Pole, _Mes)
+    if (#_If)
+    {
+      MesError.InsertMesError(#_adrXML, Comp(0), '', #_Pole, #_Mes);
+    }
+  #end
+  //----------------------------------------------------------------------------------------------------------
+  // Сравнить
+  #undef RezSum
+  #define RezSum(_Mes, _Val) #_Mes + ' (РАССЧИТАНО '+String(#_Val, 0, 0)
+
+  // #endregion МАКРОСЫ
+
+  // Проверка на наличие символов . , ; " / ! @ # $ % ^ & * ( ) _ + | \ - '' ] [ } { ` ~ N ? < > и букв О, З
+  function NeSodSimv(input : string) : boolean; // #region
+  {
+    Result := FALSE;
+
+    if (Pos('.' , input) > 0) Exit;
+    if (Pos(',' , input) > 0) Exit;
+    if (Pos(';' , input) > 0) Exit;
+    if (Pos('"' , input) > 0) Exit;
+    if (Pos('/' , input) > 0) Exit;
+    if (Pos('!' , input) > 0) Exit;
+    if (Pos('@' , input) > 0) Exit;
+    if (Pos('#' , input) > 0) Exit;
+    if (Pos('$' , input) > 0) Exit;
+    if (Pos('%' , input) > 0) Exit;
+    if (Pos('^' , input) > 0) Exit;
+    if (Pos('&' , input) > 0) Exit;
+    if (Pos('*' , input) > 0) Exit;
+    if (Pos('(' , input) > 0) Exit;
+    if (Pos(')' , input) > 0) Exit;
+    if (Pos('_' , input) > 0) Exit;
+    if (Pos('+' , input) > 0) Exit;
+    if (Pos('|' , input) > 0) Exit;
+    if (Pos('\' , input) > 0) Exit;
+    if (Pos('-' , input) > 0) Exit;
+    if (Pos('''', input) > 0) Exit;
+    if (Pos(']' , input) > 0) Exit;
+    if (Pos('[' , input) > 0) Exit;
+    if (Pos('}' , input) > 0) Exit;
+    if (Pos('{' , input) > 0) Exit;
+    if (Pos('`' , input) > 0) Exit;
+    if (Pos('~' , input) > 0) Exit;
+    if (Pos('N' , input) > 0) Exit;
+    if (Pos('?' , input) > 0) Exit;
+    if (Pos('<' , input) > 0) Exit;
+    if (Pos('>' , input) > 0) Exit;
+    if (Pos('О' , input) > 0) Exit;
+    if (Pos('З' , input) > 0) Exit;
+
+    Result := TRUE;
+  } // #endregion
+
+  // Проверка на то, что строка - текст. поле, сод. 1 - 100 зн. дес. чис. с 3 разд. ":", посл. фас. кот. <> 0
+  function CheckStrKad(input : string) : boolean; // #region
+  {
+    Result := FALSE;
+
+    if ((Length(input) = 0) or (Length(input) > 100)) Exit;
+
+    var p1, p2, p3 : byte; p1 := p2 := p3 := 0;
+    p1 :=      Pos(':', input                               );  if (p1 = 0) or (p1 = 1) Exit;
+    p2 := p1 + Pos(':', SubStr(input, p1 + 1, Length(input)));  if (p2 = 0)             Exit;
+    p3 := p2 + Pos(':', SubStr(input, p2 + 1, Length(input)));  if (p3 = 0)             Exit;
+
+    if (p1 + 1 = p2) Exit;
+    if (p2 + 1 = p3) Exit;
+
+    if (p3 = Length(input)) Exit;
+
+    Result := TRUE;
+  } // #endregion
+
+  // Вернуть минимальное из 2х значений
+  function GetMin(_val1, _val2 : double) : double; // #region
+  {
+    if (_val1 < _val2)
+    then Result := _val1;
+    else Result := _val2;
+  } // #endregion
+
+  // #endregion СЕРВИС On_CheckKS
+  //**********************************************************************************************************
+@begin
+  var i, j, k, CountI, CountJ, CountK, kol_R : integer;
+  var XMLAdrI, XMLAdrJ : string;
+  var remIter : integer;
+  var nStr : string;
+
+  // #region Объявление переменных
+
+  var mKSr1_1_01,  mKSr1_1_03,  mKSr1_1_02, mKSr1_1_04
+    , mKSr2_1_05,  mKSr2_1_06,  mKSr2_1_07, mKSr2_1_08, mKSr2_1_09, mKSr2_1_10, mKSr2_1_11, mKSr2_1_12, mKSr2_1_13, mKSr2_1_14, mKSr2_1_15, mKSr2_1_16
+    , mKSr2_1_17,  mKSr2_1_18
+    , mKSr21_19_1, mKSr21_19_2, mKSr21_20
+    , mKSr3_1_21,  mKSr3_1_22,  mKSr3_1_23, mKSr3_1_24, mKSr3_1_25, mKSr3_1_26, mKSr3_1_27, mKSr3_1_28, mKSr3_1_29
+    , mKSr3_1_30,  mKSr3_1_31,  mKSr3_1_32 : string;
+
+  var flPredPer, flR2_04 : boolean;
+  var buf3mes, buf6mes, buf9mes
+    , sumR2_220_240, sumR2_04_220_240_250, sumR3_100_120, sumR2_260 : double;
+
+  var aR1_030_040
+    , aR1_021, aR1_023, aR1_025, aR1_027 : string;
+
+  var dR1_030, dR1_040
+    , dR1_021, dR1_023, dR1_025, dR1_027 : double;
+
+  var aR2_001
+    , aR2_020_3, aR2_030_3, aR2_040_3, aR2_050_3, aR2_060_3, aR2_070_3, aR2_080_3, aR2_090_3, aR2_100_3, aR2_110_3, aR2_120_3, aR2_130_3, aR2_140_3
+    , aR2_020_4, aR2_030_4, aR2_040_4, aR2_050_4, aR2_060_4, aR2_070_4, aR2_080_4, aR2_090_4, aR2_100_4, aR2_110_4, aR2_120_4, aR2_130_4, aR2_140_4
+    , aR2_150  , aR2_160  , aR2_170  , aR2_180  , aR2_190  , aR2_200  , aR2_210  , aR2_215  , aR2_220  , aR2_230  , aR2_240  , aR2_250  , aR2_260
+    , sR2_001  , sR2_160  , sR2_200  , sR2_230  : string;
+  var dR2_020_3, dR2_030_3, dR2_040_3, dR2_050_3, dR2_060_3, dR2_070_3, dR2_080_3, dR2_090_3, dR2_100_3, dR2_110_3, dR2_120_3, dR2_130_3, dR2_140_3
+    , dR2_020_4, dR2_030_4, dR2_040_4, dR2_050_4, dR2_060_4, dR2_070_4, dR2_080_4, dR2_090_4, dR2_100_4, dR2_110_4, dR2_120_4, dR2_130_4, dR2_140_4
+    , dR2_150  , dR2_170  , dR2_180  , dR2_190  , dR2_210  , dR2_215  , dR2_220  , dR2_240  , dR2_250  , dR2_260  : double;
+
+  var aR21_050 : string;
+  var dR21_050 : double;
+
+  var aR3_014, aR3_015, aR3_020, aR3_025, aR3_030, aR3_040, aR3_050, aR3_060, aR3_070, aR3_080, aR3_090, aR3_095, aR3_100, aR3_110, aR3_120, aR3_130
+    , sR3_014, sR3_015, sR3_040, sR3_070, sR3_110 : string;
+  var bufRes
+    , dR3_020, dR3_025, dR3_030, dR3_050, dR3_060, dR3_080, dR3_090, dR3_095, dR3_100, dR3_120, dR3_130, sumR3_130 : double;
+
+  var  flR21_050 : boolean;
+  var sumR21_050, sumR2_1_140 : double ;
+
+  flPredPer :=    (String(pFH.Func('pathSelectionImuD_3mes')) <> '')
+               or (String(pFH.Func('pathSelectionImuD_6mes')) <> '')
+               or (String(pFH.Func('pathSelectionImuD_9mes')) <> '');
+
+  // #endregion Объявление переменных
+
+  // #region Сообщения с информацией о КС
+
+  // Раздел 1
+  mKSr1_1_01 := 'КС 1.01 :: Если отс. Раздел 2 с отм. "04" по строке "код вида имущества" и по соответствующим кодам ОКТМО и КБК р. 2 ст. 220 - р. 2 ст. 240 + р. 3 ст. 100 - р. 3 ст. 120 > 0, то...'                ;
+  mKSr1_1_03 := 'КС 1.03 :: Если отс. Раздел 2 с отм. "04" по строке "код вида имущества" и по соответствующим кодам ОКТМО и КБК р. 2 ст. 220 - р. 2 ст. 240 + р. 3 ст. 100 - р. 3 ст. 120 < 0, то...'                ;
+  mKSr1_1_02 := 'КС 1.02 :: Если прис. Раздел 2 с отм. "04" по строке "код вида имущества" и [р. 2 ст. 220 - р. 2 ст. 240] всех разделов 2 с отметками "01", "02", "03", "05", "07", "08", "09", "10" в строке "код вида имущества"...';
+  mKSr1_1_04 := 'КС 1.04 :: Если прис. Раздел 2 с отм. "04" по строке "код вида имущества" и [р. 2 ст. 220 - р. 2 ст. 240] всех разделов 2 с отметками "01", "02", "03", "05", "07", "08", "09", "10" в строке "код вида имущества"...';
+
+  // Раздел 2
+  mKSr2_1_05 := 'КС 1.05 :: р. 2 ст. 150 = р. 2 гр. 3 (ст. 020 + ст. 030 + ст. 040 + ст. 050 + ст. 060 + ст. 070 + ст. 080 + ст. 090 + ст. 100 + ст. 110 + ст. 120 + ст. 130 + ст. 140) : 13';
+  mKSr2_1_06 := 'КС 1.06 :: р. 2 ст. 170 = р. 2 гр. 4 (ст. 020 + ст. 030 + ст. 040 + ст. 050 + ст. 060 + ст. 070 + ст. 080 + ст. 090 + ст. 100 + ст. 110 + ст. 120 + ст. 130 + ст. 140) : 13';
+  mKSr2_1_07 := 'КС 1.07 :: Если р. 2. ст. 160 <> 0, то р. 2. ст. 170 <> 0; если р. 2. ст. 160 = 0, то р. 2. ст. 170 = 0'                                                                    ;
+  mKSr2_1_08 := 'КС 1.08 :: Если код вида имущества = "02", то р. 2. ст. 190. = (р. 2. ст. 150 - р. 2. ст. 170) x р. 2. ст. 180'                                                             ;
+  mKSr2_1_09 := 'КС 1.09 :: Если код вида имущества = "01", "03", "04", "05", "07", "08", "09" или "10", то р. 2. ст. 190. = р. 2. ст. 150 - р. 2. ст. 170'                                  ;
+  mKSr2_1_10 := 'КС 1.10 :: Если код вида имущества = "09", то р. 2. ст. 220. = р. 2. стр. 190 x р. 2. стр. 210 x р. 2. стр. 215 : 100'                                                      ;
+  mKSr2_1_11 := 'КС 1.11 :: Если код вида имущества <> "09", то р. 2 ст. 220 = р. 2 ст. 190 x р. 2 ст. 210 : 100'                                                                            ;
+
+  mKSr2_1_13 := 'КС 1.13 :: Если р. 2. ст. 230 = "2012500", то р. 2. ст. 240 <> 0';
+  mKSr2_1_14 := 'КС 1.14 :: Р2. ст. 160 = 0'                                      ;
+  mKSr2_1_15 := 'КС 1.15 :: Р2. ст. 170 = 0'                                      ;
+  mKSr2_1_16 := 'КС 1.16 :: Р2. ст. 200 = 0'                                      ;
+  mKSr2_1_17 := 'КС 1.17 :: Р2. ст. 230 = 0'                                      ;
+  mKSr2_1_18 := 'КС 1.18 :: Р2. ст. 240 = 0'                                      ;
+
+   // Раздел 2.1
+  mKSr21_19_1 := 'КС 1.19 :: Если 0 > [сумма р. 2.1 ст. 050 - Р.2 ст. 050 или 080 или 110 гр. 3 (в рНИО  соот. за 1, 2, 3 квартал)] , то возможно неполное указание ин-и об объектах недвижимого имущ. в разделе 2.1';
+  mKSr21_19_2 := 'КС 1.19 :: Если [сумма р. 2.1 ст. 050 - Р.2 ст. 050 или 080 или 110 гр. 3 (в рНИО  соот. за 1, 2, 3 квартал)] > 0,49 x кол. блоков стр.050, то возможно неправильное указание ин-и об объектах недвижимого имущ. в разделе 2.1';
+  mKSr21_20   := 'КС 1.20 :: Если в отсутствует р. 3, то хотя бы один показатель р. 2.1 ст. 050   0'
+
+  // Раздел 3
+  mKSr3_1_21 := 'КС 1.21 :: Если р. 3 ст. 030 <> "-", то р. 3 ст. 60 = (р. 3 ст. 020 - р. 3. ст. 025) x р. 3 ст. 50 x р. 3 ст. 030'                                                                                                                         ;
+  mKSr3_1_22 := 'КС 1.22 :: Если р. 3 ст. 030 = "-", то р. 3 ст. 60 = (р. 3 ст. 020 - р. 3. ст. 025) x р. 3 ст. 50 (РАСХОДИТСЯ С ФОРМУЛОЙ ИЗ УКАЗАНИЙ ПО ЗАПОЛНЕНИЮ)'                                                                                       ;
+  mKSr3_1_23 := 'КС 1.23 :: Если р. 3. ст. 90 <> "-" и р. 3. ст. 90  = "1" и р. 3. ст. 95 <> "-", то р. 3. ст. 95 < 1'
+  mKSr3_1_24 := 'КС 1.24 :: Если р. 3. ст. 90 <> "-" и р. 3. ст. 90 <> "1" и р. 3. ст. 95  = "-" или р. 3. ст. 95  = "1", то р. 3 ст. 100 = р. 3 ст. 060 х р. 3 ст. 080 x р. 3 ст. 090 / 100'                                                               ;
+  mKSr3_1_25 := 'КС 1.25 :: Если р. 3. ст. 90 <> "-" и р. 3. ст. 90 <> "1" и р. 3. ст. 95 <> "-"   и р. 3. ст. 95 <> "1", то р. 3 ст. 100 = р. 3 ст. 060 х р. 3 ст. 080 x р. 3 ст. 090 x р. 3 ст. 095 / 100'                                                ;
+  mKSr3_1_26 := 'КС 1.26 :: Если р. 3. ст. 90 = "-" или р. 3. ст. 90 = "1" и р. 3. ст. 95 <> "-"   и р. 3. ст. 95 <> "1", то р. 3 ст. 100 = р. 3 ст. 060 x р. 3 ст. 080 x р. 3 ст. 095 / 100'                                                               ;
+  mKSr3_1_27 := 'КС 1.27 :: Если р. 3. ст. 90 = "-" или р. 3. ст. 90 = "1" и р. 3. ст. 95  = "-" или р. 3. ст. 95  = "1", то р. 3 ст. 100 = р. 3 ст. 060 x р. 3 ст. 080 / 100'                                                                              ;
+
+  mKSr3_1_28 := 'КС 1.28 :: Если р. 3. ст. 110 = "2012500", то р. 3. ст. 120 <> 0'                                                                                                                                                                          ;
+  mKSr3_1_29 := 'КС 1.29 :: Если р. 3 ст. 015 <> 0, то р. 3 ст. 015 не сод. символы . , ; " / ! @ # $ %   & * ( ) _ + | \ - '' ] [ } { ` ~ N ? < >, буквы О, З и р. 3 ст. 014 = текст. поле, сод. 1 - 100 зн. дес. чис. с 3 разд. ":", посл. фас. кот. <> 0';
+  mKSr3_1_30 := 'КС 1.30 :: Если р. 3 ст. 040 <> 0 и заполнена вторая часть показателя р. 3 ст. 040, то первые 7 знаков р. 3 ст. 040 = "2012000"'                                                                                                           ;
+  mKSr3_1_31 := 'КС 1.31 :: Если р. 3 ст. 070 <> 0, то р. 3 ст. 070 первые 7 знаков = "2012400"'                                                                                                                                                            ;
+  mKSr3_1_32 := 'КС 1.32 :: Если р. 3 ст. 110 <> 0, то р. 3 ст. 110 первые 7 знаков = "2012500"'                                                                                                                                                            ;
+
+  // #endregion Сообщения с информацией о КС
+  var  Lc_2, Lc_3 : boolean; Lc_2 := Lc_3 := False;
+  //----------------------------------------------------------------------------------------------------------
+  // #region РАЗДЕЛ 1
+  //----------------------------------------------------------------------------------------------------------
+  CountI := XMLMap.GetNodeCountByName('Файл/Документ/ИмущНД/СумНалПУ');
+  for (i := 0; i < CountI; i++)
+  {
+    XMLAdrI := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i);
+
+    if (not GetFldVis(XMLAdrI)) Continue;
+
+    //----------------------------------------------------------------------------------------------------
+    // #region ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+    //----------------------------------------------------------------------------------------------------
+
+    flR2_04 := flR21_050 := False;
+    dR1_030 := dR1_040 := dR1_021 := dR1_023 := dR1_025 := dR1_027 :=
+    sumR21_050 := sumR2_220_240 := sumR2_04_220_240_250 := sumR3_100_120 := sumR2_1_140 := 0;
+    sumR2_260  := sumR3_130     := 0;
+
+    aR1_021     := XMLAdrI + '/НалИсчислПер'; dR1_021     := GetDblVal(aR1_021);
+    aR1_023     := XMLAdrI + '/НалИсчисл1кв'; dR1_023     := GetDblVal(aR1_023);
+    aR1_025     := XMLAdrI + '/НалИсчисл2кв'; dR1_025     := GetDblVal(aR1_025);
+    aR1_027     := XMLAdrI + '/НалИсчисл3кв'; dR1_027     := GetDblVal(aR1_027);
+
+    aR1_030_040 := XMLAdrI + '/НалПУ';
+    if (GetDblVal(aR1_030_040) >= 0)
+    then dR1_030 :=        GetDblVal(aR1_030_040);
+    else dR1_040 := (-1) * GetDblVal(aR1_030_040);
+
+    //----------------------------------------------------------------------------------------------------
+    // #endregion ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+    //----------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 2.1
+    //--------------------------------------------------------------------------------------------------------
+
+    kol_R := 0;
+    sumR21_050 := 0;
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/ОбъектОблНал/ИнфОбъект');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/ОбъектОблНал/ИнфОбъект' + getIter(j);
+
+      if (not GetFldVis(XMLAdrJ)) Continue;
+
+      //----------------------------------------------------------------------------------------------------
+      // #region ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+
+      aR21_050 := '';
+      dR21_050 := 0;
+
+      flR21_050 := True;
+
+      aR21_050 := XMLAdrJ + '/СтОст3112';  dR21_050 := GetStrVal(aR21_050);  sumR21_050 += dR21_050;
+      kol_R++;
+      if dR21_050 <>0
+        Lc_2 := true;
+      //----------------------------------------------------------------------------------------------------
+      // #endregion ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+    }
+    // #endregion РАЗДЕЛ 2.1
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 2
+    //--------------------------------------------------------------------------------------------------------
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/РасОбДеятРФ/РасОб');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/РасОбДеятРФ/РасОб' + getIter(j);
+
+      if (not GetFldVis(XMLAdrJ)) Continue;
+
+      //----------------------------------------------------------------------------------------------------
+      // #region ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+
+      aR2_001   := aR2_020_3 := aR2_030_3 := aR2_040_3 := aR2_050_3 := aR2_060_3 := aR2_070_3 := aR2_080_3 := aR2_090_3 := aR2_100_3 :=
+      aR2_120_3 := aR2_130_3 := aR2_140_3 := aR2_020_4 := aR2_030_4 := aR2_040_4 := aR2_050_4 := aR2_060_4 := aR2_070_4 := aR2_080_4 := aR2_090_4 :=
+      aR2_100_4 := aR2_110_4 := aR2_120_4 := aR2_130_4 := aR2_140_4 := aR2_150   := aR2_160   := aR2_170   := aR2_180   := aR2_190   := aR2_200   :=
+      aR2_210   := aR2_215   := aR2_220   := aR2_230   := aR2_240   := aR2_250   := aR2_260   := sR2_001   := sR2_160   := sR2_200   := sR2_230   := '';
+
+      buf3mes   := buf6mes   := buf9mes   :=
+      dR2_020_3 := dR2_030_3 := dR2_040_3 := dR2_050_3 := dR2_060_3 := dR2_070_3 := dR2_080_3 := dR2_090_3 := dR2_100_3 := dR2_110_3 := dR2_120_3 :=
+      dR2_130_3 := dR2_140_3 := dR2_020_4 := dR2_030_4 := dR2_040_4 := dR2_050_4 := dR2_060_4 := dR2_070_4 := dR2_080_4 := dR2_090_4 := dR2_100_4 :=
+      dR2_110_4 := dR2_120_4 := dR2_130_4 := dR2_140_4 := dR2_150   := dR2_170   := dR2_180   := dR2_190   := dR2_210   := dR2_215   := dR2_220   :=
+      dR2_240   := dR2_250   := dR2_260   := 0;
+
+      aR2_001   := XMLAdrJ + '/ВидИмущ'                          ;                           sR2_001   := GetStrVal(aR2_001  );
+      aR2_020_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0101/СтОстОН'  ;   if GetFldVis(aR2_020_3) dR2_020_3 := GetDblVal(aR2_020_3);
+      aR2_030_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0102/СтОстОН'  ;   if GetFldVis(aR2_030_3) dR2_030_3 := GetDblVal(aR2_030_3);
+      aR2_040_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0103/СтОстОН'  ;   if GetFldVis(aR2_040_3) dR2_040_3 := GetDblVal(aR2_040_3);
+      aR2_050_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0104/СтОстОН'  ;   if GetFldVis(aR2_050_3) dR2_050_3 := GetDblVal(aR2_050_3);
+      aR2_060_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0105/СтОстОН'  ;   if GetFldVis(aR2_060_3) dR2_060_3 := GetDblVal(aR2_060_3);
+      aR2_070_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0106/СтОстОН'  ;   if GetFldVis(aR2_070_3) dR2_070_3 := GetDblVal(aR2_070_3);
+      aR2_080_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0107/СтОстОН'  ;   if GetFldVis(aR2_080_3) dR2_080_3 := GetDblVal(aR2_080_3);
+      aR2_090_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0108/СтОстОН'  ;   if GetFldVis(aR2_090_3) dR2_090_3 := GetDblVal(aR2_090_3);
+      aR2_100_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0109/СтОстОН'  ;   if GetFldVis(aR2_100_3) dR2_100_3 := GetDblVal(aR2_100_3);
+      aR2_110_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0110/СтОстОН'  ;   if GetFldVis(aR2_110_3) dR2_110_3 := GetDblVal(aR2_110_3);
+      aR2_120_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0111/СтОстОН'  ;   if GetFldVis(aR2_120_3) dR2_120_3 := GetDblVal(aR2_120_3);
+      aR2_130_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0112/СтОстОН'  ;   if GetFldVis(aR2_130_3) dR2_130_3 := GetDblVal(aR2_130_3);
+      aR2_140_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом3112/СтОстОН'  ;   if GetFldVis(aR2_140_3) dR2_140_3 := GetDblVal(aR2_140_3);
+      aR2_020_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0101/СтЛьгИмущ';   if GetFldVis(aR2_020_4) dR2_020_4 := GetDblVal(aR2_020_4);
+      aR2_030_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0102/СтЛьгИмущ';   if GetFldVis(aR2_030_4) dR2_030_4 := GetDblVal(aR2_030_4);
+      aR2_040_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0103/СтЛьгИмущ';   if GetFldVis(aR2_040_4) dR2_040_4 := GetDblVal(aR2_040_4);
+      aR2_050_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0104/СтЛьгИмущ';   if GetFldVis(aR2_050_4) dR2_050_4 := GetDblVal(aR2_050_4);
+      aR2_060_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0105/СтЛьгИмущ';   if GetFldVis(aR2_060_4) dR2_060_4 := GetDblVal(aR2_060_4);
+      aR2_070_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0106/СтЛьгИмущ';   if GetFldVis(aR2_070_4) dR2_070_4 := GetDblVal(aR2_070_4);
+      aR2_080_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0107/СтЛьгИмущ';   if GetFldVis(aR2_080_4) dR2_080_4 := GetDblVal(aR2_080_4);
+      aR2_090_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0108/СтЛьгИмущ';   if GetFldVis(aR2_090_4) dR2_090_4 := GetDblVal(aR2_090_4);
+      aR2_100_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0109/СтЛьгИмущ';   if GetFldVis(aR2_100_4) dR2_100_4 := GetDblVal(aR2_100_4);
+      aR2_110_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0110/СтЛьгИмущ';   if GetFldVis(aR2_110_4) dR2_110_4 := GetDblVal(aR2_110_4);
+      aR2_120_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0111/СтЛьгИмущ';   if GetFldVis(aR2_120_4) dR2_120_4 := GetDblVal(aR2_120_4);
+      aR2_130_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0112/СтЛьгИмущ';   if GetFldVis(aR2_130_4) dR2_130_4 := GetDblVal(aR2_130_4);
+      aR2_140_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом3112/СтЛьгИмущ';   if GetFldVis(aR2_140_4) dR2_140_4 := GetDblVal(aR2_140_4);
+      aR2_150   := XMLAdrJ + '/РасчНал/СтИмущ'                   ;                           dR2_150   := GetDblVal(aR2_150  );
+      aR2_160   := XMLAdrJ + '/РасчНал/КодНалЛьг'                ;                           sR2_160   := GetStrVal(aR2_160  );
+      aR2_170   := XMLAdrJ + '/РасчНал/СтИмущНеобл'              ;                           dR2_170   := GetDblVal(aR2_170  );
+      aR2_180   := XMLAdrJ + '/РасчНал/ДолСт'                    ;   if GetFldVis(aR2_180  ) dR2_180   := GetDolVal(aR2_180  );
+      aR2_190   := XMLAdrJ + '/РасчНал/НалБаза'                  ;                           dR2_190   := GetDblVal(aR2_190  );
+      aR2_200   := XMLAdrJ + '/РасчНал/КодЛгПНС'                 ;   if GetFldVis(aR2_200  ) sR2_200   := GetStrVal(aR2_200  );
+      aR2_210   := XMLAdrJ + '/РасчНал/НалСтав'                  ;                           dR2_210   := GetDblVal(aR2_210  );
+      aR2_215   := XMLAdrJ + '/РасчНал/Кжд'                      ;   if GetFldVis(aR2_215  ) dR2_215   := GetDblVal(aR2_215  );
+      aR2_220   := XMLAdrJ + '/РасчНал/СумНалИсчисл'             ;                           dR2_220   := GetDblVal(aR2_220  );
+      aR2_230   := XMLAdrJ + '/РасчНал/КодЛгУмен'                ;   if GetFldVis(aR2_230  ) sR2_230   := GetStrVal(aR2_230  );
+      aR2_240   := XMLAdrJ + '/РасчНал/СумЛгУмен'                ;   if GetFldVis(aR2_240  ) dR2_240   := GetDblVal(aR2_240  );
+      aR2_250   := XMLAdrJ + '/РасчНал/СумНалПред'               ;   if GetFldVis(aR2_250  ) dR2_250   := GetDblVal(aR2_250  );
+      aR2_260   := XMLAdrJ + '/РасчНал/НалИсчислПер'             ;                           dR2_260   := GetDblVal(aR2_260  );
+
+      case sR2_001 of
+        '01'
+      , '02'
+      , '03'
+      , '05'
+      , '07'
+      , '08'
+      , '09'
+      , '10': {
+                sumR2_220_240 += dR2_220 - dR2_240;
+              }
+        '04': {
+                flR2_04 := True;
+                if GetFldVis(aR2_250)
+                {
+                  sumR2_04_220_240_250 += GetMin(dR2_220 - dR2_240, dR2_250);
+                }
+                else
+                {
+                  sumR2_04_220_240_250 +=        dR2_220 - dR2_240          ;
+                }
+              }
+      end;
+
+      //----------------------------------------------------------------------------------------------------
+      // #endregion ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+
+      // КС 1.05 :: р. 2 ст. 150 = р. 2 гр. 3 (ст. 020 + ст. 030 + ст. 040 + ст. 050 + ст. 060 + ст. 070 + ст. 080 + ст. 090 + ст. 100 + ст. 110 + ст. 120 + ст. 130 + ст. 140) : 13
+
+      bufRes := Round((dR2_020_3 + dR2_030_3 + dR2_040_3 + dR2_050_3 + dR2_060_3 + dR2_070_3 + dR2_080_3 + dR2_090_3 + dR2_100_3 + dR2_110_3 + dR2_120_3 + dR2_130_3 + dR2_140_3) / 13);
+      #KS((dR2_150 = bufRes), aR2_150, 'Стр. 150', mKSr2_1_05 + ' (расч. ' + GD0(bufRes) + ')')
+      sumR2_1_140 += dR2_140_3;
+
+      // КС 1.06 :: р. 2 ст. 170 = р. 2 гр. 4 (ст. 020 + ст. 030 + ст. 040 + ст. 050 + ст. 060 + ст. 070 + ст. 080 + ст. 090 + ст. 100 + ст. 110 + ст. 120 + ст. 130 + ст. 140) : 13
+      bufRes := Round((dR2_020_4 + dR2_030_4 + dR2_040_4 + dR2_050_4 + dR2_060_4 + dR2_070_4 + dR2_080_4 + dR2_090_4 + dR2_100_4 + dR2_110_4 + dR2_120_4 + dR2_130_4 + dR2_140_4) / 13);
+      #KS((dR2_170 = bufRes), aR2_170, 'Стр. 170', mKSr2_1_06 + ' (расч. ' + GD0(bufRes) + ')')
+
+      // КС 1.07 :: Если р. 2. ст. 160 <> 0, то р. 2. ст. 170 <> 0; если р. 2. ст. 160 = 0, то р. 2. ст. 170 = 0
+      if GetFldVis(aR2_160) and (sR2_160 <> '')
+      { #KS((dR2_170 <> 0), aR2_170, 'Стр. 170', mKSr2_1_07) }
+
+      if not GetFldVis(aR2_160) or (sR2_160 = '')
+      { #KS((dR2_170 = 0), aR2_170, 'Стр. 170', mKSr2_1_07) }
+
+      // #region КС 1.08 - 1.09
+      case sR2_001 of
+        '02': { // КС 1.08 :: Если код вида имущества = "02", то р. 2. ст. 190. = (р. 2. ст. 150 - р. 2. ст. 170) x р. 2. ст. 180
+                bufRes := Round((dR2_150 - dR2_170) * dR2_180);
+                #KS((dR2_190 = bufRes), aR2_190, 'Стр. 190', mKSr2_1_08 + ' (расч. ' + GD0(bufRes) + ')')
+              }
+        '01'
+      , '03'
+      , '04'
+      , '05'
+      , '07'
+      , '08'
+      , '09'
+      , '10': { // КС 1.09 :: Если код вида имущества = "01", "03", "04", "05", "07", "08", "09" или "10",
+                //            то р. 2. ст. 190. = р. 2. ст. 150 - р. 2. ст. 170
+                bufRes := Round(dR2_150 - dR2_170);
+                #KS((dR2_190 = bufRes), aR2_190, 'Стр. 190', mKSr2_1_09 + ' (расч. ' + GD0(bufRes) + ')')
+              }
+      end;
+      // #endregion КС 1.08 - 1.09
+
+      // #region КС 1.10 - 1.11
+
+      if (sR2_001 = '09')
+      {
+        // КС 1.10 :: Если код вида имущества = "09",
+        //            то р. 2. ст. 220. = р. 2. стр. 190 x р. 2. стр. 210 x р. 2. стр. 215 : 100
+        bufRes := Round(dR2_190 * dR2_210 * dR2_215 / 100);
+        #KS((dR2_220 = bufRes), aR2_220, 'Стр. 220', mKSr2_1_10 + ' (расч. '+GD0(bufRes)+')')
+      }
+      else
+      {
+        // КС 1.11 :: Если код вида имущества <> "09",
+        //            то р. 2 ст. 220 = р. 2 ст. 190 x р. 2 ст. 210 : 100
+        bufRes := Round(dR2_190 * dR2_210 / 100);
+        #KS((dR2_220 = bufRes), aR2_220, 'Стр. 220', mKSr2_1_11 + ' (расч. '+GD0(bufRes)+')')
+      }
+
+      // #endregion КС 1.10 - 1.11
+
+      // КС 1.13 :: Если р. 2. ст. 230 = "2012500", то р. 2. ст. 240 <> 0
+      if GetFldVis(aR2_230)
+        if (SubStr(sR2_230, 1, 7) = '2012500')
+        { #KS((dR2_240 <> 0), aR2_240, 'Стр. 240', mKSr2_1_13) }
+
+      // КС 1.14 :: Р2. ст. 160 = 0
+      if GetFldVis(aR2_160)
+      { #KS((sR2_160 = ''), aR2_160, 'Стр. 160', mKSr2_1_14) }
+
+      // КС 1.15 :: Р2. ст. 170 = 0
+      if GetFldVis(aR2_170)
+      { #KS((dR2_170 = 0), aR2_170, 'Стр. 170', mKSr2_1_15) }
+
+      // КС 1.16 :: Р2. ст. 200 = 0
+      if GetFldVis(aR2_200)
+      { #KS((sR2_200 = ''), aR2_200, 'Стр. 200', mKSr2_1_16) }
+
+      // КС 1.17 :: Р2. ст. 230 = 0
+      if GetFldVis(aR2_230)
+      { #KS((sR2_230 = ''), aR2_230, 'Стр. 230', mKSr2_1_17) }
+
+      // КС 1.18 :: Р2. ст. 240 = 0
+      if GetFldVis(aR2_240)
+      { #KS((dR2_240 = 0), aR2_240, 'Стр. 240', mKSr2_1_18) }
+
+      //КС 5.3.15 :: по строке с кодом 260 отражается исчисленная сумма налога, подлежащая уплате в бюджет за налоговый период.
+      //В случае заполнения Раздела 2 с отметкой 04 по строке "Код вида имущества (код строки 001)":
+      //по строке с кодом 260 указывается нулевое значение в случае, если значение строки с кодом 250 больше или равно разности строк с кодами 220 и 240;
+      //по строке с кодом 260 указывается разность значений строк с кодами 220 и 240 за минусом значения строки с кодом 250, если значение строки с кодом 250 меньше разности строк с кодами 220 и 240.
+      //В случае заполнения Раздела 2 отметками 01, 02, 03, 05, 07, 08, 09 и 10 по строке "Код вида имущества (код строки 001)" по строке с кодом 260 указывается разность значений строк с кодами 220 и 240.
+      bufRes := 0;
+      If(flR2_04)
+      {
+        If(dR2_250 >= (dR2_220 - dR2_240))
+        {
+          bufRes := 0;
+          #KS((dR2_260 = bufRes), aR2_260, 'Стр. 260', 'КС 5.3.15 :: Указывается нулевое значение в случае, если значение строки с кодом 250 больше или равно разности строк с кодами 220 и 240') 
+        }
+        Else
+        {
+          bufRes := (dR2_220 - dR2_240) - dR2_250;
+          #KS((dR2_260 = bufRes), aR2_260, 'Стр. 260', 'КС 5.3.15 :: Указывается разность значений строк с кодами 220 и 240 за минусом значения строки с кодом 250, если значение строки с кодом 250 меньше разности строк с кодами 220 и 240') 
+        }
+      }
+      else
+      {
+        bufRes := dR2_220 - dR2_240;
+        #KS((dR2_260 = bufRes), aR2_260, 'Стр. 260', 'КС 5.3.15 :: По строке с кодом 260 указывается разность значений строк с кодами 220 и 240') 
+      }      
+      sumR2_260 += bufRes;
+    }
+    // #endregion РАЗДЕЛ 2
+    //--------------------------------------------------------------------------------------------------------
+
+    kol_R := kol_R*0.49;
+    var raz: double;
+    raz := sumR21_050 - sumR2_1_140;
+    #KS((raz >= 0), aR21_050, 'Стр. 050', mKSr21_19_1+ '('+ string(sumR21_050)+'-'+string(sumR2_1_140)+')')
+    if raz > 0
+      #KS((raz <= kol_R), aR21_050, 'Стр. 050', mKSr21_19_2+ '('+ string(sumR21_050)+'-'+string(sumR2_1_140)+')')
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 3
+    //--------------------------------------------------------------------------------------------------------
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/РасОБНедИО/РасОб');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/РасОБНедИО/РасОб' + getIter(j);
+
+      if (not GetFldVis(XMLAdrJ)) Continue;
+      Lc_3:= true;
+      //----------------------------------------------------------------------------------------------------
+      // #region ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+
+      aR3_014 := aR3_015 := aR3_020 := aR3_025 := aR3_030 := aR3_040 := aR3_050 := aR3_060 := aR3_070 := aR3_080 := aR3_090 := aR3_095 := aR3_100 :=
+      aR3_110 := aR3_120 := aR3_130 :=
+      sR3_014 := sR3_015 := sR3_040 := sR3_070 := sR3_110 := '';
+      dR3_020 := dR3_025 := dR3_030 := dR3_050 := dR3_060 := dR3_080 := dR3_090 := dR3_095 := dR3_100 := dR3_120 := dR3_130 := 0;
+
+      aR3_014 := XMLAdrJ + '/ВидИмущ'       ;                         sR3_014 := GetStrVal(aR3_014);
+      aR3_015 := XMLAdrJ + '/НомКад'        ;   if GetFldVis(aR3_015) sR3_015 := GetStrVal(aR3_015);
+      aR3_020 := XMLAdrJ + '/СтКадастр'     ;                         dR3_020 := GetDblVal(aR3_020);
+      aR3_025 := XMLAdrJ + '/СтКадастрНеобл';   if GetFldVis(aR3_025) dR3_025 := GetDblVal(aR3_025);
+      aR3_030 := XMLAdrJ + '/ДоляПравСоб'   ;   if GetFldVis(aR3_030) dR3_030 := GetDolVal(aR3_030) else dR3_030 := 1;
+      aR3_040 := XMLAdrJ + '/КодНалЛьг'     ;   if GetFldVis(aR3_040) sR3_040 := GetStrVal(aR3_040);
+      aR3_050 := XMLAdrJ + '/ДолСт'         ;   if GetFldVis(aR3_050) dR3_050 := GetDolVal(aR3_050);
+      aR3_060 := XMLAdrJ + '/НалБаза'       ;                         dR3_060 := GetDblVal(aR3_060);
+      aR3_070 := XMLAdrJ + '/КодЛгПНС'      ;   if GetFldVis(aR3_070) sR3_070 := GetStrVal(aR3_070);
+      aR3_080 := XMLAdrJ + '/НалСтав'       ;                         dR3_080 := GetDblVal(aR3_080);
+      aR3_090 := XMLAdrJ + '/КоэфКв'        ;                         dR3_090 := GetDblVal(aR3_090);
+      aR3_095 := XMLAdrJ + '/КоэфКи'        ;   if GetFldVis(aR3_095) dR3_095 := GetDblVal(aR3_095);
+      aR3_100 := XMLAdrJ + '/СумНалИсчисл'  ;                         dR3_100 := GetDblVal(aR3_100);
+      aR3_110 := XMLAdrJ + '/КодЛгУмен'     ;   if GetFldVis(aR3_110) sR3_110 := GetStrVal(aR3_110);
+      aR3_120 := XMLAdrJ + '/СумЛгУмен'     ;   if GetFldVis(aR3_120) dR3_120 := GetDblVal(aR3_120);
+      aR3_130 := XMLAdrJ + '/НалИсчислПер'  ;                         dR3_130 := GetDblVal(aR3_130);
+
+      sumR3_100_120 += dR3_100 - dR3_120;
+
+      //----------------------------------------------------------------------------------------------------
+      // #endregion ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+
+      // #region КС 1.21 - 1.22
+
+      if GetFldVis(aR3_030)
+      {
+        // КС 1.21 :: Если р. 3 ст. 030 <> "-",
+        //            то р. 3 ст. 60 = (р. 3 ст. 020 - р. 3. ст. 025) x р. 3 ст. 50 x р. 3 ст. 030
+        bufRes := Round((dR3_020 - dR3_025) * dR3_050 * dR3_030);
+        #KS((dR3_060 = bufRes), aR3_060, 'Стр. 060', mKSr3_1_21 + ' (расч. ' + GD0(bufRes) + ')')
+      }
+      else
+      {
+        // КС 1.22 :: Если р. 3 ст. 030 = "-",
+        //            то р. 3 ст. 60 = (р. 3 ст. 020 - р. 3. ст. 025) x р. 3 ст. 50
+        bufRes := Round((dR3_020 - dR3_025) * dR3_050);
+        #KS((dR3_060 = bufRes), aR3_060, 'Стр. 060', mKSr3_1_22 + ' (расч. '+GD0(bufRes)+')')
+      }
+
+      // #endregion КС 1.23
+
+      // #region КС 1.23
+      if GetFldVis(aR3_090)and (dR3_090 = 1) and GetFldVis(aR3_095)
+        #KS((dR3_095<1), aR3_095, 'Стр. 095', mKSr3_1_23)
+      // #endregion КС 1.23
+
+      // #region КС 1.24 - 1.27
+                                                                                                                                       ;
+      if GetFldVis(aR3_090)
+      {
+        if GetFldVis(aR3_095)
+        {
+          // КС 1.25 :: Если р. 3. ст. 90 <> "-" и р. 3. ст. 90 <> "1" и р. 3. ст. 95 <> "-"   и р. 3. ст. 95 <> "1",
+          //     то р. 3 ст. 100 = р. 3 ст. 060 х р. 3 ст. 080 x р. 3 ст. 090 x р. 3 ст. 095 / 100
+          bufRes := Round((dR3_060 * dR3_080 * dR3_090* dR3_095) / 100);
+          #KS((dR3_100 = bufRes), aR3_100, 'Стр. 100', mKSr3_1_25 + 'при наличии коэф. Ки (расч. '+GD0(bufRes)+')')
+        }
+        else
+        {
+          // КС 1.24 :: Если р. 3. ст. 90 <> "-" и р. 3. ст. 90 <> "1" и р. 3. ст. 95  = "-" или р. 3. ст. 95  = "1"
+          //            то р. 3 ст. 100 = р. 3 ст. 060 х р. 3 ст. 080 x р. 3 ст. 090 / 100
+          bufRes := Round((dR3_060 * dR3_080 * dR3_090) / 100);
+          #KS((dR3_100 = bufRes), aR3_100, 'Стр. 100', mKSr3_1_24 + ' (расч. '+GD0(bufRes)+')')
+        }
+      }
+      else
+      {
+        if GetFldVis(aR3_095)
+        {
+          // КС 1.26 :: Если р. 3. ст. 90 = "-" или р. 3. ст. 90 = "1" и р. 3. ст. 95 <> "-"   и р. 3. ст. 95 <> "1",
+          //      то р. 3 ст. 100 = р. 3 ст. 060 x р. 3 ст. 080 x р. 3 ст. 095 / 100
+          bufRes := Round(dR3_060 * dR3_080* dR3_095 / 100);
+          #KS((dR3_100 = bufRes), aR3_100, 'Стр. 100', mKSr3_1_26 + 'при наличии коэф. Ки (расч. '+GD0(bufRes)+')')
+        }
+        else
+        {
+          // КС 1.27 :: Если р. 3. ст. 90 = "-" или р. 3. ст. 90 = "1" и р. 3. ст. 95  = "-" или р. 3. ст. 95  = "1",
+          //        то р. 3 ст. 100 = р. 3 ст. 060 x р. 3 ст. 080 / 100
+          bufRes := Round(dR3_060 * dR3_080 / 100);
+          #KS((dR3_100 = bufRes), aR3_100, 'Стр. 100', mKSr3_1_27 + ' (расч. '+GD0(bufRes)+')')
+        }
+      }
+
+      // #endregion КС 1.28 - 1.29
+
+      // КС 1.28 :: Если р. 3. ст. 110 = "2012500", то р. 3. ст. 120 <> 0
+      if GetFldVis(aR3_110)
+        if (SubStr(sR3_110, 1, 7) = '2012500')
+        { #KS((dR3_120 <> 0), aR3_120, 'Стр. 120', mKSr3_1_28) }
+
+      // КС 1.29 :: Если р. 3 ст. 015 <> 0, то р. 3 ст. 015 не сод. символы ..., буквы О, З
+      //            и р. 3 ст. 014 = текст. поле, сод. 1 - 100 зн. дес. чис. с 3 разд. ":", посл. фас. кот. <> 0
+      if GetFldVis(aR3_015)
+      { #KS((NeSodSimv(sR3_015) and CheckStrKad(sR3_014)), aR3_015, 'Стр. 015', mKSr3_1_29) }
+
+      // КС 1.30 :: Если р. 3 ст. 040 <> 0 и заполнена вторая часть показателя р. 3 ст. 040, то первые 7 знаков р. 3 ст. 040 = "2012000"
+      if GetFldVis(aR3_040)
+        if (sR3_040 <> '') and (Length(sR3_040) > 7)
+        { #KS((SubStr(sR3_040, 1, 7) = '2012000'), aR3_040, 'Стр. 040', mKSr3_1_30) }
+
+      // КС 1.31 :: Если р. 3 ст. 070 <> 0, то р. 3 ст. 070 первые 7 знаков = "2012400"
+      if GetFldVis(aR3_070)
+        if (sR3_070 <> '')
+        { #KS((SubStr(sR3_070, 1, 7) = '2012400'), aR3_070, 'Стр. 070', mKSr3_1_31) }
+
+      // КС 1.32 :: Если р. 3 ст. 110 <> 0, то р. 3 ст. 110 первые 7 знаков = "2012500"
+      if GetFldVis(aR3_110)
+        if (sR3_110 <> '')
+        { #KS((SubStr(sR3_110, 1, 7) = '2012500'), aR3_110, 'Стр. 110', mKSr3_1_32) }
+
+      //КС 7.2.16 :: по строке с кодом 130 отражается исчисленная сумма налога, подлежащая уплате в бюджет за налоговый период, определяемая как разность значений строк с кодами 100 и 120.
+      bufRes := dR3_100 - dR3_120;
+      #KS((dR3_130 = bufRes), aR3_130, 'Стр. 130', 'КС 7.2.16 :: Определяемая как разность значений строк с кодами 100 и 120') 
+      sumR3_130 += bufRes;    
+    }
+    // #endregion РАЗДЕЛ 3
+    //--------------------------------------------------------------------------------------------------------
+
+    // #region РАЗДЕЛ 1
+    //КС 4.2.3 :: Значение по строке с кодом 021 с соответствующими кодами по ОКТМО и КБК определяется путем суммирования исчисленных сумм налога, подлежащих уплате в бюджет, 
+    //указанных по строке с кодом 260 всех представленных Разделов 2 Декларации с соответствующими кодами по ОКТМО и КБК, и указанных по строке с кодом 130 всех представленных Разделов 3 Декларации 
+    //с соответствующими кодами по ОКТМО и КБК;
+    bufRes := Round(sumR2_260 + sumR3_130);
+    #KS((dR1_021 = Round(bufRes)), aR1_021, 'Стр. 021', 'КС 4.2.3 :: Сумма строки с кодом 260 Раздела 2 и строки с кодом 130 Раздела 3' + ' (расч. '+GD0(bufRes)+')')
+
+    //КС 4.2.5 :: Значение строки с кодом 030 определяется как разность значения строки с кодом 021 и суммы строк с кодами 023, 025, 027 данного блока строк 010 - 040.
+    //В случае если подсчитанное таким образом значение меньше нуля, то по строке с кодом 030 ставится прочерк;    
+    //КС 4.2.6 :: В случае если значение, подсчитанное по алгоритму, указанному в подпункте 5 пункта 4.2 настоящего Порядка, отрицательно, то сумма налога, исчисленная к уменьшению, проставляется по строке с кодом 040.
+    //В случае если значение, подсчитанное по алгоритму, указанному в подпункте 5 пункта 4.2 настоящего Порядка, положительно, то по строке с кодом 040 ставится прочерк.
+    bufRes := Round(dR1_021 - dR1_023 - dR1_025 - dR1_027);
+    If(bufRes >= 0)
+    {
+      #KS((dR1_030 = bufRes), aR1_030_040, 'Стр. 030', 'КС 4.2.5 :: Разность значения строки с кодом 021 и суммы строк с кодами 023, 025, 027' + ' (расч. '+GD0(bufRes)+')')
+    }
+    Else
+    {
+      #KS((dR1_040 = bufRes), aR1_030_040, 'Стр. 040', 'КС 4.2.6 :: Разность значения суммы строк с кодами 023, 025, 027 и строки с кодом 021' + ' (расч. '+GD0(bufRes)+')')
+    }
+
+    // #endregion РАЗДЕЛ 1
+    //----------------------------------------------------------------------------------------------------------
+  }
+
+  if not Lc_2
+    #KS( Lc_2, aR21_050, 'Стр. 050', mKSr21_20 )
+@end.
+//#endregion On_CheckKS ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ПРОВЕРКЕ КОНТРОЛЬНЫХ СООТНОШЕНИЙ
+//************************************************************************************************************
+
+
+//============================================================================================================
+// #region On_Recalc ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ РАСЧЕТЕ
+//------------------------------------------------------------------------------------------------------------
+@Script On_Recalc : boolean;
+  //==========================================================================================================
+  // #region СЕРВИС On_Recalc
+  procedure LogInfo(_strAdr, _strMes, _strVal : string);
+  {
+    MesError.InsertRasch('', _strAdr, _strMes, _strVal, 0);
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  procedure SetFldGV(_fld : string; var _val : double);
+  {
+    SetFldVal(_fld, _val);
+    _val := GetDblVal(_fld);
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  function GetMin(_adr1, _adr2, _adr3 : string) : double;
+  {
+    var val1, val2, val3 : double;
+
+    val1 := GetDblVal(_adr1);
+    val2 := GetDblVal(_adr2);
+    val3 := GetDblVal(_adr3);
+
+         if (GetStrNull(_adr1) and GetStrNull(_adr2)) Result := val3;
+    else if (GetStrNull(_adr3)                      ) Result := val1 - val2;
+    else                                              Result := IF(val1 - val2 < val3, val1 - val2, val3);
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  // #region GD
+  //----------------------------------------------------------------------------------------------------------
+  function GD1(_val : double) : string;
+  {
+    Result := IF(_val < 0
+                , '('+DoubleToStr(Round(_val, 1), '[|-]36666666666666666666666666~9')+')'
+                ,     DoubleToStr(Round(_val, 1), '[|-]36666666666666666666666666~9')    );
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  function GD2(_val : double) : string;
+  {
+    Result := IF(_val < 0
+                , '('+DoubleToStr(Round(_val, 2), '[|-]36666666666666666666666666~99')+')'
+                ,     DoubleToStr(Round(_val, 2), '[|-]36666666666666666666666666~99')    );
+  }
+
+  //----------------------------------------------------------------------------------------------------------
+  function GD4(_val : double) : string;
+  {
+    Result := IF(_val < 0
+                , '('+DoubleToStr(Round(_val, 4), '[|-]36666666666666666666666666~9999')+')'
+                ,     DoubleToStr(Round(_val, 4), '[|-]36666666666666666666666666~9999')    );
+  }
+  //----------------------------------------------------------------------------------------------------------
+  // #endregion GD
+  //----------------------------------------------------------------------------------------------------------
+
+  // #endregion СЕРВИС On_Recalc
+  //**********************************************************************************************************
+@begin
+  Result := False;
+
+  #define _LogInfo(_Name) LogInfo(a#_Name, m#_Name, v#_Name);
+  #define _SetFldGV(_Name) SetFldGV(a#_Name, d#_Name);
+
+  //----------------------------------------------------------------------------------------------------------
+  // #region ОБЪЯВЛЕНИЕ ПЕРЕМЕННЫХ
+  //----------------------------------------------------------------------------------------------------------
+
+  var i, j, CountI, CountJ : longint = 0;
+  var flJ, flR2_04, flPredPer : boolean;
+  var XMLAdrI  , XMLAdrJ
+    , aR1_030_040         , mR1_030_040  , vR1_030_040
+    , aR1_021  , aR1_023  , aR1_025  , aR1_027
+    , mR1_021  
+    , vR1_021  
+    , aR2_001  , aR2_020_3, aR2_030_3, aR2_040_3, aR2_050_3, aR2_060_3, aR2_070_3, aR2_080_3, aR2_090_3, aR2_100_3, aR2_110_3, aR2_120_3, aR2_130_3, aR2_140_3
+    , aR2_020_4, aR2_030_4, aR2_040_4, aR2_050_4, aR2_060_4, aR2_070_4, aR2_080_4, aR2_090_4, aR2_100_4, aR2_110_4, aR2_120_4, aR2_130_4, aR2_140_4, aR2_150
+    , aR2_170  , aR2_180  , aR2_190  , aR2_210  , aR2_215  , aR2_220  , aR2_240  , aR2_240pr, aR2_250  , aR2_260  , sR2_001  , vR2_150  , vR2_170  , vR2_190
+    , vR2_220  , vR2_240  , vR2_260 
+    , mR2_150  , mR2_170  , mR2_190  , mR2_220  , mR2_240  , mR2_260
+    , aR3_020  , aR3_025  , aR3_030  , aR3_050  , aR3_060  , aR3_080  , aR3_090  , aR3_095  , aR3_100  , aR3_120  , aR3_130  , vR3_060  , vR3_100  , mR3_060
+    , mR3_100  , mR3_130  , vR3_130
+    , valR2_220_240, valR3_100_120, valR2_260: String;
+  var dR1_030_040
+    , dR1_021  , dR1_023  , dR1_025  , dR1_027
+    , dR2_020_3, dR2_030_3, dR2_040_3, dR2_050_3, dR2_060_3, dR2_070_3, dR2_080_3, dR2_090_3, dR2_100_3, dR2_110_3, dR2_120_3, dR2_130_3, dR2_140_3, dR2_020_4
+    , dR2_030_4, dR2_040_4, dR2_050_4, dR2_060_4, dR2_070_4, dR2_080_4, dR2_090_4, dR2_100_4, dR2_110_4, dR2_120_4, dR2_130_4, dR2_140_4, dR2_150  , dR2_170
+    , dR2_180  , dR2_190  , dR2_210  , dR2_215  , dR2_220  , dR2_240  , dR2_240pr, dR2_250  , dR2_260
+    , dR3_020  , dR3_025  , dR3_030  , dR3_050  , dR3_060  , dR3_080  , dR3_090  , dR3_095  , dR3_100  , dR3_120  , dR3_130
+    , buf
+    , buf3mes  , buf6mes  , buf9mes
+    , sumR2_220_240, sumR2_260, sumR3_100_120, sumR3_130 : Double;
+
+  //----------------------------------------------------------------------------------------------------------
+  // #endregion ОБЪЯВЛЕНИЕ ПЕРЕМЕННЫХ
+  //----------------------------------------------------------------------------------------------------------
+
+  //----------------------------------------------------------------------------------------------------------
+  // #region ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+  //----------------------------------------------------------------------------------------------------------
+
+  flPredPer :=    (String(pFH.Func('pathSelectionImuD_3mes')) <> '')
+               or (String(pFH.Func('pathSelectionImuD_6mes')) <> '')
+               or (String(pFH.Func('pathSelectionImuD_9mes')) <> '');
+
+  mR2_150 := '1) Стр. 150 = гр. 3 (стр. 020 + стр. 030 + стр. 040 + стр. 050 + стр. 060 + стр. 070 + стр. 080 + стр. 090 + стр. 100 + стр. 110 + стр. 120 + стр. 130 + стр. 140) / 13';
+  mR2_170 := '2) Стр. 170 = гр. 4 (стр. 020 + стр. 030 + стр. 040 + стр. 050 + стр. 060 + стр. 070 + стр. 080 + стр. 090 + стр. 100 + стр. 110 + стр. 120 + стр. 130 + стр. 140) / 13';
+
+  //--------------------------------------------------------------------------------------------------------
+  // #endregion ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+  //--------------------------------------------------------------------------------------------------------
+
+  //----------------------------------------------------------------------------------------------------------
+  // #region ТИТУЛЬНЫЙ ЛИСТ
+  //----------------------------------------------------------------------------------------------------------
+
+  if ((GetStrVal('Файл/Документ/ДатаДок') = '') or (GetStrVal('Файл/Документ/ДатаДок') = 'ДД.ММ.ГГГГ'))
+   SetFldVal('Файл/Документ/ДатаДок', DateToStr(Cur_Date, XMLMap.GetAttrVFormatByName('Файл/Документ/ДатаДок')));
+
+  // #endregion ТИТУЛЬНЫЙ ЛИСТ
+  //----------------------------------------------------------------------------------------------------------
+
+  //----------------------------------------------------------------------------------------------------------
+  // #region РАЗДЕЛ 1
+  //----------------------------------------------------------------------------------------------------------
+  CountI := XMLMap.GetNodeCountByName('Файл/Документ/ИмущНД/СумНалПУ');
+  for (i := 0; i < CountI; i++)
+  {
+    XMLAdrI := 'Файл/Документ/ИмущНД/СумНалПУ' + getIter(i);
+
+    if (    GetStrNull(XMLAdrI + '/ОКТМО')
+         or GetStrNull(XMLAdrI + '/КБК'  ) )
+    { Continue; }
+
+    //----------------------------------------------------------------------------------------------------
+    // #region ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+    //----------------------------------------------------------------------------------------------------
+
+    flJ := True;
+    flR2_04 := False;
+
+    sumR2_260 := sumR2_220_240 := sumR3_100_120 := 0 ;
+    valR2_260 := valR2_220_240 := valR3_100_120 := '';   
+    sumR3_130 :=  0;
+   
+    mR1_030_040 := vR1_030_040 := '';
+    aR1_030_040 := XMLAdrI + '/НалПУ';
+
+    aR1_021     := XMLAdrI + '/НалИсчислПер'; dR1_021     := GetDblVal(aR1_021);
+    aR1_023     := XMLAdrI + '/НалИсчисл1кв'; dR1_023     := GetDblVal(aR1_023);
+    aR1_025     := XMLAdrI + '/НалИсчисл2кв'; dR1_025     := GetDblVal(aR1_025);
+    aR1_027     := XMLAdrI + '/НалИсчисл3кв'; dR1_027     := GetDblVal(aR1_027);        
+
+    //----------------------------------------------------------------------------------------------------
+    // #endregion ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+    //----------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 2
+    //--------------------------------------------------------------------------------------------------------
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/РасОбДеятРФ/РасОб');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/РасОбДеятРФ/РасОб' + getIter(j);
+
+      if (    GetStrNull(XMLAdrJ + '/ВидИмущ'            )
+           or GetStrNull(XMLAdrJ + '/РасчНал/НалСтав'    )
+             // Если у расчитываемых полей установлено "Не использовать алгоритм" - проверить их заполнение
+           or IF (GetFldProt(XMLAdrJ + '/РасчНал/СтИмущ'      ), GetStrNull(XMLAdrJ + '/РасчНал/СтИмущ'      ), False)
+           or IF (GetFldProt(XMLAdrJ + '/РасчНал/НалБаза'     ), GetStrNull(XMLAdrJ + '/РасчНал/НалБаза'     ), False)
+           or IF (GetFldProt(XMLAdrJ + '/РасчНал/СумНалИсчисл'), GetStrNull(XMLAdrJ + '/РасчНал/СумНалИсчисл'), False)
+              // ДолСт :: Элемент обязателен при <ВидИмущ>=2
+           or ( IsVidImuch_2(XMLAdrJ) and (GetStrVal(XMLAdrJ + '/РасчНал/ДолСт') = '') ) )
+      then Continue;
+
+      flJ := False;
+
+      //----------------------------------------------------------------------------------------------------
+      // #region ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+
+      aR2_001   := aR2_020_3 := aR2_030_3 := aR2_040_3 := aR2_050_3 := aR2_060_3 := aR2_070_3 := aR2_080_3 := aR2_090_3 := aR2_100_3 := aR2_110_3 := aR2_120_3 :=
+      aR2_130_3 := aR2_140_3 := aR2_020_4 := aR2_030_4 := aR2_040_4 := aR2_050_4 := aR2_060_4 := aR2_070_4 := aR2_080_4 := aR2_090_4 := aR2_100_4 := aR2_110_4 :=
+      aR2_120_4 := aR2_130_4 := aR2_140_4 := aR2_150   := aR2_170   := aR2_180   := aR2_190   := aR2_210   := aR2_215   := aR2_220   := aR2_240   :=
+      aR2_240pr := aR2_250   := aR2_260   :=
+      sR2_001   :=
+      vR2_150   := vR2_170   := vR2_190   := vR2_220   :=
+      mR2_190   := mR2_220   := '';
+
+      dR2_020_3 := dR2_030_3 := dR2_040_3 := dR2_050_3 := dR2_060_3 := dR2_070_3 := dR2_080_3 := dR2_090_3 := dR2_100_3 := dR2_110_3 := dR2_120_3 := dR2_130_3 :=
+      dR2_140_3 := dR2_020_4 := dR2_030_4 := dR2_040_4 := dR2_050_4 := dR2_060_4 := dR2_070_4 := dR2_080_4 := dR2_090_4 := dR2_100_4 := dR2_110_4 := dR2_120_4 :=
+      dR2_130_4 := dR2_140_4 := dR2_150   := dR2_170   := dR2_180   := dR2_190   := dR2_210   := dR2_215   := dR2_220   := dR2_240   := dR2_240pr :=
+      dR2_250   := dR2_260   := 0;
+
+      aR2_001   := XMLAdrJ + '/ВидИмущ'                          ;                                sR2_001   := GetStrVal(aR2_001  );
+      aR2_020_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0101/СтОстОН'  ;   if not GetStrNull(aR2_020_3) dR2_020_3 := GetDblVal(aR2_020_3);
+      aR2_030_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0102/СтОстОН'  ;   if not GetStrNull(aR2_030_3) dR2_030_3 := GetDblVal(aR2_030_3);
+      aR2_040_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0103/СтОстОН'  ;   if not GetStrNull(aR2_040_3) dR2_040_3 := GetDblVal(aR2_040_3);
+      aR2_050_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0104/СтОстОН'  ;   if not GetStrNull(aR2_050_3) dR2_050_3 := GetDblVal(aR2_050_3);
+      aR2_060_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0105/СтОстОН'  ;   if not GetStrNull(aR2_060_3) dR2_060_3 := GetDblVal(aR2_060_3);
+      aR2_070_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0106/СтОстОН'  ;   if not GetStrNull(aR2_070_3) dR2_070_3 := GetDblVal(aR2_070_3);
+      aR2_080_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0107/СтОстОН'  ;   if not GetStrNull(aR2_080_3) dR2_080_3 := GetDblVal(aR2_080_3);
+      aR2_090_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0108/СтОстОН'  ;   if not GetStrNull(aR2_090_3) dR2_090_3 := GetDblVal(aR2_090_3);
+      aR2_100_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0109/СтОстОН'  ;   if not GetStrNull(aR2_100_3) dR2_100_3 := GetDblVal(aR2_100_3);
+      aR2_110_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0110/СтОстОН'  ;   if not GetStrNull(aR2_110_3) dR2_110_3 := GetDblVal(aR2_110_3);
+      aR2_120_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0111/СтОстОН'  ;   if not GetStrNull(aR2_120_3) dR2_120_3 := GetDblVal(aR2_120_3);
+      aR2_130_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0112/СтОстОН'  ;   if not GetStrNull(aR2_130_3) dR2_130_3 := GetDblVal(aR2_130_3);
+      aR2_140_3 := XMLAdrJ + '/ДанРасСтПер/ОстСтом3112/СтОстОН'  ;   if not GetStrNull(aR2_140_3) dR2_140_3 := GetDblVal(aR2_140_3);
+      aR2_020_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0101/СтЛьгИмущ';   if not GetStrNull(aR2_020_4) dR2_020_4 := GetDblVal(aR2_020_4);
+      aR2_030_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0102/СтЛьгИмущ';   if not GetStrNull(aR2_030_4) dR2_030_4 := GetDblVal(aR2_030_4);
+      aR2_040_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0103/СтЛьгИмущ';   if not GetStrNull(aR2_040_4) dR2_040_4 := GetDblVal(aR2_040_4);
+      aR2_050_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0104/СтЛьгИмущ';   if not GetStrNull(aR2_050_4) dR2_050_4 := GetDblVal(aR2_050_4);
+      aR2_060_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0105/СтЛьгИмущ';   if not GetStrNull(aR2_060_4) dR2_060_4 := GetDblVal(aR2_060_4);
+      aR2_070_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0106/СтЛьгИмущ';   if not GetStrNull(aR2_070_4) dR2_070_4 := GetDblVal(aR2_070_4);
+      aR2_080_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0107/СтЛьгИмущ';   if not GetStrNull(aR2_080_4) dR2_080_4 := GetDblVal(aR2_080_4);
+      aR2_090_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0108/СтЛьгИмущ';   if not GetStrNull(aR2_090_4) dR2_090_4 := GetDblVal(aR2_090_4);
+      aR2_100_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0109/СтЛьгИмущ';   if not GetStrNull(aR2_100_4) dR2_100_4 := GetDblVal(aR2_100_4);
+      aR2_110_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0110/СтЛьгИмущ';   if not GetStrNull(aR2_110_4) dR2_110_4 := GetDblVal(aR2_110_4);
+      aR2_120_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0111/СтЛьгИмущ';   if not GetStrNull(aR2_120_4) dR2_120_4 := GetDblVal(aR2_120_4);
+      aR2_130_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом0112/СтЛьгИмущ';   if not GetStrNull(aR2_130_4) dR2_130_4 := GetDblVal(aR2_130_4);
+      aR2_140_4 := XMLAdrJ + '/ДанРасСтПер/ОстСтом3112/СтЛьгИмущ';   if not GetStrNull(aR2_140_4) dR2_140_4 := GetDblVal(aR2_140_4);
+      aR2_150   := XMLAdrJ + '/РасчНал/СтИмущ'                   ;
+      aR2_170   := XMLAdrJ + '/РасчНал/СтИмущНеобл'              ;
+      aR2_180   := XMLAdrJ + '/РасчНал/ДолСт'                    ;   if not GetStrNull(aR2_180  ) dR2_180   := GetDolVal(aR2_180  );
+      aR2_190   := XMLAdrJ + '/РасчНал/НалБаза'                  ;
+      aR2_210   := XMLAdrJ + '/РасчНал/НалСтав'                  ;                                dR2_210   := GetDblVal(aR2_210  );
+      aR2_215   := XMLAdrJ + '/РасчНал/Кжд'                      ;   if not GetStrNull(aR2_215  ) dR2_215   := GetDblVal(aR2_215  );
+      aR2_220   := XMLAdrJ + '/РасчНал/СумНалИсчисл'             ;
+      aR2_240   := XMLAdrJ + '/РасчНал/СумЛгУмен'                ;   if not GetStrNull(aR2_240  ) dR2_240   := GetDblVal(aR2_240  );
+      aR2_240pr := XMLAdrJ + '/РасчНал/LowSLgProc'               ;   if not GetStrNull(aR2_240pr) dR2_240pr := GetDblVal(aR2_240pr);
+      aR2_250   := XMLAdrJ + '/РасчНал/СумНалПред'               ;   if not GetStrNull(aR2_250  ) dR2_250   := GetDblVal(aR2_250  );
+      aR2_260   := XMLAdrJ + '/РасчНал/НалИсчислПер'             ;                                dR2_260   := GetDblVal(aR2_260  );
+
+      //----------------------------------------------------------------------------------------------------
+      // #endregion ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+
+      //----------------------------------------------------------------------------------------------------
+      // #region п.5.3. пп.4 :: По строке с кодом 150 указывается среднегодовая стоимость имущества за налоговый период, исчисленная как частное от деления на 13
+      // суммы значений по графе 3 строк с кодами 020 - 140
+      //----------------------------------------------------------------------------------------------------
+
+      dR2_150 := (dR2_020_3 + dR2_030_3 + dR2_040_3 + dR2_050_3 + dR2_060_3 + dR2_070_3 + dR2_080_3 + dR2_090_3 + dR2_100_3 + dR2_110_3 + dR2_120_3 + dR2_130_3 +
+                  dR2_140_3) / 13;
+
+      #_SetFldGV(R2_150)
+
+      vR2_150 := GD0(dR2_150)+' = ('+GD0(dR2_020_3)+' + '+GD0(dR2_030_3)+' + '+GD0(dR2_040_3)+' + '+GD0(dR2_050_3)+' + '+GD0(dR2_060_3)+' + '+GD0(dR2_070_3)
+                             +' + ' +GD0(dR2_080_3)+' + '+GD0(dR2_090_3)+' + '+GD0(dR2_100_3)+' + '+GD0(dR2_110_3)+' + '+GD0(dR2_120_3)+' + '+GD0(dR2_130_3)
+                             +' + ' +GD0(dR2_140_3)+') / 13';
+      #_LogInfo(R2_150)
+
+      //----------------------------------------------------------------------------------------------------
+      // #endregion п.5.3. пп.4
+      //----------------------------------------------------------------------------------------------------
+
+      //----------------------------------------------------------------------------------------------------
+      // #region п.5.3. пп.6 :: По строке с кодом 170 указывается среднегодовая стоимость не облагаемого налогом имущества за налоговый период
+      // частное от деления на 13 суммы значений по графе 4 строк с кодами 020 - 140
+      //----------------------------------------------------------------------------------------------------
+
+      dR2_170 := (dR2_020_4 + dR2_030_4 + dR2_040_4 + dR2_050_4 + dR2_060_4 + dR2_070_4 + dR2_080_4 + dR2_090_4 + dR2_100_4 + dR2_110_4 + dR2_120_4 + dR2_130_4 +
+                  dR2_140_4) / 13;
+
+      #_SetFldGV(R2_170)
+
+      vR2_170 := GD0(dR2_170)+' = ('+GD0(dR2_020_4)+' + '+GD0(dR2_030_4)+' + '+GD0(dR2_040_4)+' + '+GD0(dR2_050_4)+' + '+GD0(dR2_060_4)+' + '+GD0(dR2_070_4)
+                             +' + ' +GD0(dR2_080_4)+' + '+GD0(dR2_090_4)+' + '+GD0(dR2_100_4)+' + '+GD0(dR2_110_4)+' + '+GD0(dR2_120_4)+' + '+GD0(dR2_130_4)
+                             +' + ' +GD0(dR2_140_4)+') / 13';
+      #_LogInfo(R2_170)
+
+      //----------------------------------------------------------------------------------------------------
+      // #endregion п.5.3. пп.6
+      //----------------------------------------------------------------------------------------------------
+
+      //----------------------------------------------------------------------------------------------------
+      // #region п.5.3. пп.8 :: По строке с кодом 190 указывается налоговая база
+      //----------------------------------------------------------------------------------------------------
+      // #region при заполнении Раздела 2 Декларации с кодом 02 по строке "Код вида имущества (код строки 001)" - как произведение разницы значений строк с
+      //         кодами 150 и 170 на значение строки с кодом 180
+      if IsVidImuch_2(XMLAdrJ)
+      {
+        dR2_190 := (dR2_150 - dR2_170) * dR2_180;  #_SetFldGV(R2_190)
+
+        mR2_190 := '3) Стр. 190 = (стр. 150 - стр. 170) * стр. 180';
+        vR2_190 := GD0(dR2_190)+' = ('+GD0(dR2_150)+' - '+GD0(dR2_170)+') * '+GD4(dR2_180);
+        #_LogInfo(R2_190)
+      }
+      // #endregion
+      //----------------------------------------------------------------------------------------------------
+      // #region при заполнении Раздела 2 Декларации с прочими кодами по строке "Код вида имущества (код строки 001)" - как разница значений строк с кодами 150 и 170
+      //         данного Раздела
+      else
+      {
+        dR2_190 := dR2_150 - dR2_170;  #_SetFldGV(R2_190)
+
+        mR2_190 := '3) Стр. 190 = стр. 150 - стр. 170';
+        vR2_190 := GD0(dR2_190)+' = '+GD0(dR2_150)+' - '+GD0(dR2_170);
+        #_LogInfo(R2_190)
+      }
+      // #endregion
+      //----------------------------------------------------------------------------------------------------
+      // #endregion п.5.3. пп.8
+      //----------------------------------------------------------------------------------------------------
+
+      //----------------------------------------------------------------------------------------------------
+      // #region п.5.3. пп.12 :: По строке с кодом 220 отражается сумма налога за налоговый период
+      //----------------------------------------------------------------------------------------------------
+      // #region произведение значений строк с кодами 190, 210 и 215, деленное на 100, в случае заполнения Раздела 2 Декларации с кодом 09 по строке "Код вида имущества
+      //         (код строки 001)"
+      if (sR2_001 = '09')
+      {
+        dR2_220 := (dR2_190 * dR2_210 * dR2_215) / 100;  #_SetFldGV(R2_220)
+
+        mR2_220 := '4) Стр. 220 = (стр. 190 * стр. 210 * стр. 215) / 100';
+        vR2_220 := GD0(dR2_220)+' = ('+GD0(dR2_190)+' * '+GD2(dR2_210)+' * '+GD1(dR2_215)+') / 100';
+        #_LogInfo(R2_220)
+      }
+      // #endregion
+      //----------------------------------------------------------------------------------------------------
+      // #region произведение значений строк с кодами 190 и 210, деленное на 100, в случае заполнения Раздела 2 Декларации с прочими кодами вида имущества, указанными по
+      //         строке "Код вида имущества (код строки 001)";
+      else
+      {
+        dR2_220 := (dR2_190 * dR2_210) / 100;  #_SetFldGV(R2_220)
+
+        mR2_220 := '4) Стр. 220 = (стр. 190 * стр. 210) / 100';
+        vR2_220 := GD0(dR2_220)+' = ('+GD0(dR2_190)+' * '+GD2(dR2_210)+') / 100';
+        #_LogInfo(R2_220)
+      }
+      // #endregion
+      //----------------------------------------------------------------------------------------------------
+      // #endregion п.5.3. пп.12
+      //----------------------------------------------------------------------------------------------------
+
+
+      if (dR2_240pr <> 0)
+      {
+        dR2_240 := dR2_220 * (100 - dR2_240pr) / 100;  #_SetFldGV(R2_240)
+
+        mR2_240 := '5) Стр. 240 = стр. 220 * (100 - ' + GD2(dR2_240pr) + ') / 100';
+        vR2_240 := GD0(dR2_240)+' = '+GD0(dR2_220)+' * (100 - '+GD2(dR2_240pr)+') / 100';
+        #_LogInfo(R2_240)
+      }
+
+      if (sR2_001 = '04')
+      {
+        flR2_04 := True;
+
+        buf := GetMin(aR2_220, aR2_240, aR2_250);
+
+        sumR2_220_240 -= buf;
+        valR2_220_240 += '-'+GD0(buf);
+
+        LogInfo(aR2_220, '6) Расчет раздела 1: - МИНИМУМ(стр. 220 - стр. 240, стр. 250)', GD0(buf)+' = МИНИМУМ('+GD0(dR2_220)+' - '+GD0(dR2_240)+', '+GD0(dR2_250)+')');
+      }
+      else
+      {
+        buf := dR2_220 - dR2_240;
+
+        sumR2_220_240 += buf;
+        valR2_220_240 += '+'+GD0(buf);
+
+        LogInfo(aR2_220, '6) Расчет раздела 1: + (стр. 220 - стр. 240)', GD0(buf)+' = '+GD0(dR2_220)+' - '+GD0(dR2_240));
+      }
+      
+
+      //КС 5.3.15 :: по строке с кодом 260 отражается исчисленная сумма налога, подлежащая уплате в бюджет за налоговый период.
+      //В случае заполнения Раздела 2 с отметкой 04 по строке "Код вида имущества (код строки 001)":
+      //по строке с кодом 260 указывается нулевое значение в случае, если значение строки с кодом 250 больше или равно разности строк с кодами 220 и 240;
+      //по строке с кодом 260 указывается разность значений строк с кодами 220 и 240 за минусом значения строки с кодом 250, если значение строки с кодом 250 меньше разности строк с кодами 220 и 240.
+      //В случае заполнения Раздела 2 отметками 01, 02, 03, 05, 07, 08, 09 и 10 по строке "Код вида имущества (код строки 001)" по строке с кодом 260 указывается разность значений строк с кодами 220 и 240.      
+      If(flR2_04)
+      {
+        If(dR2_250 >= (dR2_220 - dR2_240))
+        {
+          dR2_260 := 0;
+          mR2_260 := 'Стр. 260 = 0, т.к.значение строки с кодом 250 больше или равно разности строк с кодами 220 и 240';
+          vR2_260 := GD0(dR2_250)+' >= ('+GD0(dR2_220)+' - '+GD0(dR2_240)+')';
+        }
+        Else
+        {
+          dR2_260 := (dR2_220 - dR2_240) - dR2_250;
+          mR2_260 := 'Стр. 260 = (стр. 220 - стр. 240) - стр. 250';
+          vR2_260 := GD0(dR2_260)+' = ('+GD0(dR2_220)+' - '+GD2(dR2_240)+') - '+GD2(dR2_250);
+        }
+      }
+      else
+      {
+        dR2_260 := (dR2_220 - dR2_240);
+        mR2_260 := 'Стр. 260 = (стр. 220 - стр. 240)';
+        vR2_260 := GD0(dR2_260)+' = ('+GD0(dR2_220)+' - '+GD2(dR2_240)+')';
+      }      
+      sumR2_260 += dR2_260;
+      #_SetFldGV(R2_260)
+      #_LogInfo(R2_260)
+    }
+    // #endregion РАЗДЕЛ 2
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region РАЗДЕЛ 3
+    //--------------------------------------------------------------------------------------------------------
+    CountJ := XMLMap.GetNodeCountByName(XMLAdrI + '/РасОБНедИО/РасОб');
+    for (j := 0; j < CountJ; j++)
+    {
+      XMLAdrJ := XMLAdrI + '/РасОБНедИО/РасОб' + getIter(j);
+
+      if (    GetStrNull(XMLAdrJ + '/ВидИмущ'   )
+           or GetStrNull(XMLAdrJ + '/НомКад')
+           or GetStrNull(XMLAdrJ + '/СтКадастр' )
+           or GetStrNull(XMLAdrJ + '/НалСтав'   )
+              // Если у расчитываемых полей установлено "Не использовать алгоритм" - проверить их заполнение
+           or IF (GetFldProt(XMLAdrJ + '/НалБаза'     ), GetStrNull(XMLAdrJ + '/НалБаза'     ), False)
+           or IF (GetFldProt(XMLAdrJ + '/СумНалИсчисл'), GetStrNull(XMLAdrJ + '/СумНалИсчисл'), False) )
+      then Continue;
+
+      //----------------------------------------------------------------------------------------------------
+      // #region ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+
+      aR3_020 := aR3_025 := aR3_030 := aR3_050 := aR3_060 := aR3_080 := aR3_090 := aR3_095 := aR3_100 := aR3_120 := aR3_130 := vR3_060 := vR3_100 := mR3_060 := mR3_100 := '';
+      dR3_020 := dR3_025 := dR3_030 := dR3_050 := dR3_060 := dR3_080 := dR3_090 := dR3_095 := dR3_100 := dR3_120 := dR3_130 := 0;
+
+      aR3_020 := XMLAdrJ + '/СтКадастр'     ;                              dR3_020 := GetDblVal(aR3_020);
+      aR3_025 := XMLAdrJ + '/СтКадастрНеобл';   if not GetStrNull(aR3_025) dR3_025 := GetDblVal(aR3_025);
+      aR3_030 := XMLAdrJ + '/ДоляПравСоб'   ;   if not GetStrNull(aR3_030) dR3_030 := GetDolVal(aR3_030)  else dR3_030 := 1;
+      aR3_050 := XMLAdrJ + '/ДолСт'         ;   if not GetStrNull(aR3_050) dR3_050 := GetDolVal(aR3_050) ;
+      aR3_060 := XMLAdrJ + '/НалБаза'       ;
+      aR3_080 := XMLAdrJ + '/НалСтав'       ;                              dR3_080 := GetDblVal(aR3_080);
+      aR3_090 := XMLAdrJ + '/КоэфКв'        ;                              dR3_090 := GetDblVal(aR3_090);
+      aR3_095 := XMLAdrJ + '/КоэфКи'        ;   if not GetStrNull(aR3_095) dR3_095 := GetDblVal(aR3_095);
+      aR3_100 := XMLAdrJ + '/СумНалИсчисл'  ;
+      aR3_120 := XMLAdrJ + '/СумЛгУмен'     ;   if not GetStrNull(aR3_120) dR3_120 := GetDblVal(aR3_120);
+      aR3_130 := XMLAdrJ + '/НалИсчислПер'  ;                              dR3_130 := GetDblVal(aR3_130);
+
+      //----------------------------------------------------------------------------------------------------
+      // #endregion ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ
+      //----------------------------------------------------------------------------------------------------
+
+      //----------------------------------------------------------------------------------------------------
+      // #region п.7.2. пп.9 :: По строке с кодом 060 указывается налоговая база по объекту недвижимого имущества
+      //----------------------------------------------------------------------------------------------------
+      // #region произведение (с округлением до целых единиц) разности значений строк с кодами 020 и 025 и значений строк с кодами 030 и 050 в случае заполнения
+      //         Раздела 3 Декларации по объекту недвижимого имущества, имеющему фактическое место нахождения на территориях разных субъектов РФ либо на территории
+      //         субъекта РФ и в территориальном море РФ (на континентальном шельфе РФ или в исключительной экономической зоне РФ)
+      if (not GetStrNull(aR3_050))
+      {
+        dR3_060 := (dR3_020 - dR3_025) * dR3_030 * dR3_050;  #_SetFldGV(R3_060)
+
+        mR3_060 := '1) Стр. 060 = (стр. 020 - стр. 025) * стр. 030 * стр. 050';
+        vR3_060 := GD0(dR3_060)+' = ('+GD0(dR3_020)+' - '+GD0(dR3_025)+') * '+GD4(dR3_030)+' * '+GD4(dR3_050);
+        #_LogInfo(R3_060)
+      }
+      // #endregion
+      //----------------------------------------------------------------------------------------------------
+      // #region произведение (с округлением до целых единиц) разности значений строк с кодами 020 и 025 и значения строки с кодом 030 в случае заполнения Раздела 3
+      //         Декларации по другим объектам недвижимого имущества
+      else
+      {
+        dR3_060 := (dR3_020 - dR3_025) * dR3_030;  #_SetFldGV(R3_060)
+        mR3_060 := '1) Стр. 060 = (стр. 020 - стр. 025) * стр. 030';
+        vR3_060 := GD0(dR3_060)+' = ('+GD0(dR3_020)+' - '+GD0(dR3_025)+') * '+GD4(dR3_030);
+        #_LogInfo(R3_060)
+      }
+      // #endregion
+      //----------------------------------------------------------------------------------------------------
+      // #endregion п.7.2. пп.9
+      //----------------------------------------------------------------------------------------------------
+
+      //----------------------------------------------------------------------------------------------------
+      // #region п.7.2. пп.13 :: По строке с кодом 100 отражается сумма налога за налоговый период
+      //----------------------------------------------------------------------------------------------------
+      // #region как произведение значений строк с кодами 060, 080 и 090, деленное на 100, - в случае возникновения (прекращения) у налогоплательщика в течение
+      //         налогового периода права собственности на объект недвижимого имущества, в отношении которого заполняется Раздел 3 Декларации
+      if (not GetStrNull(aR3_090)) and (dR3_090 <> 0)
+      {
+        if (not GetStrNull(aR3_095)) and (dR3_095 <>0) //при наличии коэффициента Ки
+        {
+          dR3_100 := (dR3_060 * dR3_080 * dR3_090* dR3_095) / 100;  #_SetFldGV(R3_100)
+
+          mR3_100 := '2) Стр. 100 = (стр. 060 * стр. 080 * стр. 090 * стр. 095) / 100';
+          vR3_100 := GD0(dR3_100)+' = ('+GD0(dR3_060)+' * '+GD2(dR3_080)+' * '+GD4(dR3_090)+' * '+GD4(dR3_095)+') / 100';
+          #_LogInfo(R3_100)
+        }
+        else
+        {
+          dR3_100 := (dR3_060 * dR3_080 * dR3_090) / 100;  #_SetFldGV(R3_100)
+
+          mR3_100 := '2) Стр. 100 = (стр. 060 * стр. 080 * стр. 090) / 100';
+          vR3_100 := GD0(dR3_100)+' = ('+GD0(dR3_060)+' * '+GD2(dR3_080)+' * '+GD4(dR3_090)+') / 100';
+          #_LogInfo(R3_100)
+        }
+      }
+      // #endregion
+      //----------------------------------------------------------------------------------------------------
+      // #region как произведение значений строк с кодами 060 и 080, деленное на 100, - в остальных случаях
+      else
+      {
+        if (not GetStrNull(aR3_095)) and (dR3_095 <>0) //при наличии коэффициента Ки
+        {
+          dR3_100 := (dR3_060 * dR3_080 * dR3_095) / 100;  #_SetFldGV(R3_100)
+
+          mR3_100 := '2) Стр. 100 = (стр. 060 * стр. 080 * стр. 095) / 100';
+          vR3_100 := GD0(dR3_100)+' = ('+GD0(dR3_060)+' * '+GD2(dR3_080)+' * '+GD4(dR3_095)+') / 100';
+          #_LogInfo(R3_100)
+        }
+        else
+        {
+          dR3_100 := (dR3_060 * dR3_080) / 100;  #_SetFldGV(R3_100)
+
+          mR3_100 := '2) Стр. 100 = (стр. 060 * стр. 080) / 100';
+          vR3_100 := GD0(dR3_100)+' = ('+GD0(dR3_060)+' * '+GD2(dR3_080)+') / 100';
+          #_LogInfo(R3_100)
+        }
+      }
+      // #endregion
+      //----------------------------------------------------------------------------------------------------
+      // #endregion п.7.2. пп.13
+      //----------------------------------------------------------------------------------------------------
+
+      buf := dR3_100 - dR3_120;
+
+      sumR3_100_120 += buf;
+      valR3_100_120 += '+'+GD0(buf);
+
+      LogInfo(aR3_100, '3) Расчет раздела 1: + (стр. 100 - стр. 120)', GD0(buf)+' = '+GD0(dR3_100)+' - '+GD0(dR3_120));
+
+      dR3_130   := (dR3_100 - dR3_120);
+      mR3_130   := 'Стр. 130 = (стр. 100 - стр. 120)';
+      vR3_130   := GD0(dR3_130)+' = '+GD0(dR3_100)+' - '+GD2(dR3_120);
+      sumR3_130 += dR3_130;
+      #_SetFldGV(R3_130)
+      #_LogInfo(R3_130)
+    }
+    // #endregion РАЗДЕЛ 3
+    //--------------------------------------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------------------------------------
+    // #region п.4.2. пп.3,4 :: Значение строки с кодом 030
+    //--------------------------------------------------------------------------------------------------------
+
+    valR2_220_240 := LTrim(LTrim(valR2_220_240, '+'), '-');  if (valR2_220_240 = '') valR2_220_240 := '0';
+    valR3_100_120 := LTrim(LTrim(valR3_100_120, '+'), '-');  if (valR3_100_120 = '') valR3_100_120 := '0';
+
+    //КС 4.2.3 :: Значение по строке с кодом 021 с соответствующими кодами по ОКТМО и КБК определяется путем суммирования исчисленных сумм налога, подлежащих уплате в бюджет, 
+    //указанных по строке с кодом 260 всех представленных Разделов 2 Декларации с соответствующими кодами по ОКТМО и КБК, и указанных по строке с кодом 130 всех представленных Разделов 3 Декларации 
+    //с соответствующими кодами по ОКТМО и КБК;
+    dR1_021 := sumR2_260 + sumR3_130; 
+    mR1_021 := 'Стр. 021 = (стр. 260 из Раздела 2) + (стр. 130 из Раздела 3)';
+    vR1_021 := GD0(dR1_021)+' = '+GD0(sumR2_260)+' + '+GD2(sumR3_130);
+    #_SetFldGV(R1_021)
+    #_LogInfo(R1_021)
+    
+    //КС 4.2.5 :: Значение строки с кодом 030 определяется как разность значения строки с кодом 021 и суммы строк с кодами 023, 025, 027 данного блока строк 010 - 040.
+    //В случае если подсчитанное таким образом значение меньше нуля, то по строке с кодом 030 ставится прочерк;    
+    //КС 4.2.6 :: В случае если значение, подсчитанное по алгоритму, указанному в подпункте 5 пункта 4.2 настоящего Порядка, отрицательно, то сумма налога, исчисленная к уменьшению, проставляется по строке с кодом 040.
+    //В случае если значение, подсчитанное по алгоритму, указанному в подпункте 5 пункта 4.2 настоящего Порядка, положительно, то по строке с кодом 040 ставится прочерк.
+    dR1_030_040 := dR1_021 - dR1_023 - dR1_025 - dR1_027;
+    mR1_030_040 := 'Стр. 030/040 = стр. 021 - стр. 023 - стр. 025 - стр. 027';
+    vR1_030_040 := GD0(dR1_030_040)+' = '+GD0(dR1_021)+' - '+GD0(dR1_023)+' - '+GD0(dR1_025)+' - '+GD0(dR1_027);
+    #_SetFldGV(R1_030_040)
+    #_LogInfo(R1_030_040)
+  }
+  // #endregion РАЗДЕЛ 1
+  //----------------------------------------------------------------------------------------------------------
+
+  Result := True;
+@end.
+// #endregion On_Recalc ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ РАСЧЕТЕ
+//************************************************************************************************************
+
+
+//============================================================================================================
+// #region On_ExportXML ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ЭКСПОРТЕ В XML
+//------------------------------------------------------------------------------------------------------------
+@Script On_ExportXML : boolean;
+@begin
+  SetFldVal('Файл/ИдФайл', Replace(_IdFail_, '.xml', ''));
+
+  if (not XMLMap.ExpToXml(_XmlFileName_)) {
+    Message('On_ExportXML: '+ XMLMap.GetStLastError, cancelButton+Warning);
+    Exit;
+  }
+
+  Message('Выгружен в файл ' + _XmlFileName_);
+@end.
+// #endregion On_ExportXML ДЕЙСТВИЯ ВЫПОЛНЯЕМЫЕ ПРИ ЭКСПОРТЕ В XML
+//************************************************************************************************************

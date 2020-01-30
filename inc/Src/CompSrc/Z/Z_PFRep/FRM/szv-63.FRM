@@ -107,8 +107,8 @@ end.
  pach_nmb := PachNumBegin;
 end.
 .begin
-  sNmPred      := Replace( Upcase( Trim( НаимПред ) ), '"', '&quot;' )
-  sNmPredShort := Replace( Upcase( Trim( НаимПредКраткое ) ), '"', '&quot;' )
+  sNmPred      := Replace( Upcase( Trim( НаимПред ) ), '"', '&quot;' );
+  sNmPredShort := Replace( Upcase( Trim( НаимПредКраткое ) ), '"', '&quot;' );
   case ВидФормы of
   0: sTipSved := 'ИСХОДНАЯ';
   1: sTipSved := 'КОРРЕКТИРУЮЩАЯ';

@@ -56,8 +56,8 @@ nextch:
 End Sub
 
 Private Sub CommandButton1_Click()
-Options.Hide
-Unload Options
+fOptions.Hide
+Unload fOptions
 End Sub
 
 Private Sub CommandButton2_Click()
@@ -73,7 +73,7 @@ Private Sub CommandButton2_Click()
     HideAllGroupHeaders (sStrGroup)
   End If
   WriteOptions
-  Options.Label2.Caption = Options.ListBox2.Text
+  fOptions.Label2.Caption = fOptions.ListBox2.Text
 End Sub
 
 Private Sub ListBox1_Change()

@@ -1,0 +1,819 @@
+//********************************************************************************
+//                                                        (c) корпорация Галактика
+// Галактика 7.12 - логистика
+// Отчет "Исполняемые ДО по периодам", процедуры расчета итоговых сумм
+//
+//********************************************************************************
+
+Procedure ClearDog;
+{
+  d11 := 0;
+  d12 := 0;
+  d13 := 0;
+  d14 := 0;
+  d15 := 0;
+  d16 := 0;
+  d17 := 0;
+  d18 := 0;
+  d19 := 0;
+  d1a := 0;
+  d1b := 0;
+  d1c := 0;
+  d1z := 0;
+
+  if (TypeRep = cw_FR)
+    {
+      ClearBuffer(#TblStepDocPer);
+
+      if ( GetFirst TblPeriods = tsOk )
+        do
+          {
+            TblStepDocPer.cStepDoc := StepDoc.NRec;
+            TblStepDocPer.cKatOrg  := KatOrg.NRec;
+            TblStepDocPer.cPeriods := TblPeriods.NRec;
+            TblStepDocPer.fName1   := TblPeriods.fName1;
+            TblStepDocPer.fName2   := TblPeriods.fName2;
+
+            insert current TblStepDocPer;
+          }
+        While ( GetNext TblPeriods = tsOk )
+    }
+
+  
+  if (TypeRep = cw_Text) 
+    if ( TblGetFirst(TblPeriods) )
+      do
+        {
+          TblSfDouble(TblPeriods, fdp3z, 0.0);
+          TblSfDouble(TblPeriods, fdp4z, 0.0);
+          TblUpDateCurrent(TblPeriods);
+        }
+      While ( TblGetNext(TblPeriods) )
+}
+ 
+//******************************************************************************
+
+Procedure NextKatSoprText;
+Var
+  tmpd: double;
+{
+  if (   ( (not NaklOnlyWas) OR LongInt(KatSopr.dOpr) <> 0 ) AND ( (not VNak) OR UchVozvr2 ) )
+    {
+//11. Отгружено  товара   = сумма расходной накладной в продажах для дог.продажи
+//13. Принято товара      = сумма приходной накладной в закупках для дог.закупки
+//19. Оплачено нам товаром = сумма приходной накладной для дог.продажи
+//1b. Оплачено нами товаром = сумма расходной накладной для дог.закупки
+      if ( NaklDat )
+         TblSfDate(TblPeriods, fdPer1, KatSopr.dSopr);
+      else
+         TblSfDate(TblPeriods, fdPer1, KatSopr.dOpr);
+
+      if ( TblGetLeOrEq(TblPeriods) )
+        {
+          Calc_Tovar;
+
+          if (  ( (TblGfDate(TblPeriods, fdPer2) >= KatSopr.dSopr) AND NaklDat)
+             OR ( (TblGfDate(TblPeriods, fdPer2) >= KatSopr.dOpr) AND (not NaklDat) )
+             )
+            {
+              d11 := d11 + e11;
+              d13 := d13 + e13;
+              d19 := d19 + e19;
+              d1b := d1b + e1b;
+              d12 := d12 + e12;
+              d14 := d14 + e14;
+              d1a := d1a + e1a;
+              d1c := d1c + e1c;
+
+              tmpd := dp3z + e11 - e13 - e19 + e1b - e12 + e14 + e1a - e1c;
+
+              TblSfDouble(TblPeriods, fdp3z, tmpd);
+              TblSfDouble(TblPeriods, fdp4z, tmpd);
+              TblUpdateCurrent(TblPeriods);
+            }
+          else
+            d1z := d1z + e11 - e13 - e19 + e1b - e12 + e14 + e1a - e1c;
+        }
+
+      if ( UchVozvr )
+        {
+          PushBounds(tbStepDocRzDoc);
+
+          if ( modifier GetFirst RzDoc = tsOk )
+            {
+              tmpd := 0;
+
+              _LOOP RzDoc
+                {
+                  PushBounds(tbRzDocRzSpDoc);
+
+                  _LOOP RzSpDoc
+                    tmpd := tmpd + RzSpDoc.Price * RzSpDoc.Kol;
+
+                  PopBounds(tbRzDocRzSpDoc);
+                }
+
+              d14 := d14 + tmpd;
+              tmpd := dp3z + tmpd;
+
+              TblSfDouble(TblPeriods, fdp3z, tmpd);
+              TblSfDouble(TblPeriods, fdp4z, tmpd);
+
+              TblUpdateCurrent(TblPeriods);
+            }
+
+          PopBounds(tbStepDocRzDoc);
+        }
+
+      if ( UchVozvr )
+        {
+          PushBounds(tbKatSoprSklOrder);
+
+          if ( modifier GetFirst SklOrder = tsOk )
+            _LOOP SklOrder
+              if ( (not NextVisual) OR badprint )
+                {
+                  badprint := TRUE;
+                  Break;
+                }
+              else
+                {
+                  PushBounds(tbSklOrderSpOrder);
+
+                  if ( modifier GetFirst SpOrder = tsOk )
+                    _LOOP SpOrder
+                      if ( (not NextVisual) OR badprint )
+                        {
+                          badprint := TRUE;
+                          Break;
+                        }
+                      else
+                        {
+                          PushBounds(tbSpOrderSpSopr);
+
+                          if ( modifier GetFirst SpSopr = tsOk )
+                            _LOOP SpSopr
+                              if ( (not NextVisual) OR badprint )
+                                {
+                                  badprint := TRUE;
+                                  Break;
+                                }
+                              else
+                                {
+//d12.-Возвращено товара   = сумма возвратной накл. в продажах для дог.продажи
+//     (отгруженного)
+//d14.+Возвращено товара   = сумма возвратной накл. в закупках для дог.закупки
+//       (принятого)
+//d1a.+Возврат d19.        = сумма возвратной накл. в закупках для дог.продажи
+//d1c.-Возврат d1b.        = сумма возвратной накл. в продажах для дог.закупки
+
+                                  if ( NaklDat )
+                                    TblSfDate(TblPeriods, fdPer1, SpSopr.dSopr);
+                                  else
+                                    TblSfDate(TblPeriods, fdPer1, SpSopr.dOprTTN);
+
+                                  if ( TblGetLeOrEq(TblPeriods) )
+                                    {
+                                      Calc_Vozvrat;
+
+                                      if (  ( (TblGfDate(TblPeriods, fdPer2) >= SpSopr.dSopr) AND NaklDat)
+                                         OR ( (TblGfDate(TblPeriods, fdPer2) >= SpSopr.dOprTTN) AND (Not NaklDat) )
+                                         )
+                                        {
+                                          Calc_Vozvrat;
+
+                                          d12 := d12 + e12;
+                                          d14 := d14 + e14;
+                                          d1a := d1a + e1a;
+                                          d1c := d1c + e1c;
+
+                                          tmpd := dp3z - e12 + e14 + e1a - e1c;
+
+                                          TblSfDouble(TblPeriods, fdp3z, tmpd);
+                                          TblSfDouble(TblPeriods, fdp4z, tmpd);
+
+                                          TblUpdateCurrent(TblPeriods);
+                                        }
+                                      else
+                                        d1z := d1z - e12 + e14 + e1a - e1c;
+                                    }
+                                }
+
+                            PopBounds(tbSpOrderSpSopr);
+                        }
+
+                    PopBounds(tbSklOrderSpOrder);
+                }
+
+            PopBounds(tbKatSoprSklOrder);
+        }// if ( UchVozvr )
+    }
+}
+   
+//******************************************************************************
+
+Procedure NextKatSoprFR;
+Var
+  tmpd     : double;
+  datePer1 : date;
+{
+  if (   ( (not NaklOnlyWas) OR LongInt(KatSopr.dOpr) <> 0 ) AND ( (not VNak) OR UchVozvr2 ) )
+    {
+//11. Отгружено  товара   = сумма расходной накладной в продажах для дог.продажи
+//13. Принято товара      = сумма приходной накладной в закупках для дог.закупки
+//19. Оплачено нам товаром = сумма приходной накладной для дог.продажи
+//1b. Оплачено нами товаром = сумма расходной накладной для дог.закупки
+      if ( NaklDat )
+         TblPeriods.fdPer1 := KatSopr.dSopr;
+      else
+         TblPeriods.fdPer1 := KatSopr.dOpr;
+
+      if ( GetLeOrEq(tnTblPeriods, 1) )
+        {
+          if ( GetFirst TblStepDocPer where ((StepDoc.NRec    == TblStepDocPer.cStepDoc
+                                          and TblPeriods.NRec == TblStepDocPer.cPeriods)) <> tsOk )
+            Exit;
+
+          Calc_Tovar;
+
+          if ( ( (TblPeriods.fdPer2 >= KatSopr.dSopr) AND NaklDat)
+             OR ( (TblPeriods.fdPer2 >= KatSopr.dOpr) AND (not NaklDat) )
+             )
+            {
+              d11 := d11 + e11;
+              d13 := d13 + e13;
+              d19 := d19 + e19;
+              d1b := d1b + e1b;
+              d12 := d12 + e12;
+              d14 := d14 + e14;
+              d1a := d1a + e1a;
+              d1c := d1c + e1c;
+
+              tmpd := TblStepDocPer.fdp3z + e11 - e13 - e19 + e1b - e12 + e14 + e1a - e1c;
+
+              TblStepDocPer.fdp3z := tmpd;
+              TblStepDocPer.fdp4z := tmpd;
+
+              update current TblStepDocPer;
+            }
+          else
+            d1z := d1z + e11 - e13 - e19 + e1b - e12 + e14 + e1a - e1c;
+        }
+
+      if ( UchVozvr )
+        {
+          PushBounds(tbStepDocRzDoc);
+
+          if ( modifier GetFirst RzDoc = tsOk )
+            {
+              tmpd := 0;
+
+              _LOOP RzDoc
+                {
+                  PushBounds(tbRzDocRzSpDoc);
+
+                  _LOOP RzSpDoc
+                    tmpd := tmpd + RzSpDoc.Price * RzSpDoc.Kol;
+
+                  PopBounds(tbRzDocRzSpDoc);
+                }
+
+              d14 := d14 + tmpd;
+              tmpd := TblStepDocPer.fdp3z + tmpd;
+
+              TblStepDocPer.fdp3z := tmpd;
+              TblStepDocPer.fdp4z := tmpd;
+
+
+              update current TblStepDocPer;
+            }
+
+          PopBounds(tbStepDocRzDoc);
+        }
+
+      if ( UchVozvr )
+        {
+          PushBounds(tbKatSoprSklOrder);
+
+          if ( modifier GetFirst SklOrder = tsOk )
+            _LOOP SklOrder
+              if ( (not NextVisual) OR badprint )
+                {
+                  badprint := TRUE;
+                  Break;
+                }
+              else
+                {
+                  PushBounds(tbSklOrderSpOrder);
+
+                  if ( modifier GetFirst SpOrder = tsOk )
+                    _LOOP SpOrder
+                      if ( (not NextVisual) OR badprint )
+                        {
+                          badprint := TRUE;
+                          Break;
+                        }
+                      else
+                        {
+                          PushBounds(tbSpOrderSpSopr);
+
+                          if ( modifier GetFirst SpSopr = tsOk )
+                            _LOOP SpSopr
+                              if ( (not NextVisual) OR badprint )
+                                {
+                                  badprint := TRUE;
+                                  Break;
+                                }
+                              else
+                                {
+//d12.-Возвращено товара   = сумма возвратной накл. в продажах для дог.продажи
+//     (отгруженного)
+//d14.+Возвращено товара   = сумма возвратной накл. в закупках для дог.закупки
+//       (принятого)
+//d1a.+Возврат d19.        = сумма возвратной накл. в закупках для дог.продажи
+//d1c.-Возврат d1b.        = сумма возвратной накл. в продажах для дог.закупки
+
+                                  if ( NaklDat )
+                                    TblPeriods.fdPer1 := SpSopr.dSopr;
+                                  else
+                                    TblPeriods.fdPer1 := SpSopr.dOprTTN;
+
+                                  if ( GetLeOrEq(tnTblPeriods, 1) )
+                                    {
+                                      if ( GetFirst TblStepDocPer where ((StepDoc.NRec    == TblStepDocPer.cStepDoc
+                                                                      and TblPeriods.NRec == TblStepDocPer.cPeriods)) <> tsOk )
+                                        Exit;
+
+                                      Calc_Vozvrat;
+
+                                      if ( ( (TblPeriods.fdPer2 >= SpSopr.dSopr) AND NaklDat)
+                                         OR ( (TblPeriods.fdPer2 >= SpSopr.dOprTTN) AND (Not NaklDat) )
+                                         )
+                                        {
+                                          Calc_Vozvrat;
+
+                                          d12 := d12 + e12;
+                                          d14 := d14 + e14;
+                                          d1a := d1a + e1a;
+                                          d1c := d1c + e1c;
+
+                                          tmpd := TblStepDocPer.fdp3z - e12 + e14 + e1a - e1c;
+
+                                          TblStepDocPer.fdp3z := tmpd;
+                                          TblStepDocPer.fdp4z := tmpd;
+
+                                          update current TblStepDocPer;
+                                        }
+                                      else
+                                        d1z := d1z - e12 + e14 + e1a - e1c;
+                                    }
+                                }
+
+                            PopBounds(tbSpOrderSpSopr);
+                        }
+
+                    PopBounds(tbSklOrderSpOrder);
+                }
+
+            PopBounds(tbKatSoprSklOrder);
+        }// if ( UchVozvr )
+    }
+}
+
+//******************************************************************************
+
+Procedure NextKatSopr;
+{
+  if (TypeRep = cw_FR)
+    NextKatSoprFR;
+
+  if (TypeRep = cw_Text)
+    NextKatSoprText;
+}
+
+//******************************************************************************
+
+Procedure NextBaseFinText;
+Var
+  tmpd: double;
+{
+  if ( LongInt(BaseFin.DDoc) <> 0 )
+    {
+      TblSfDate(TblPeriods, fdPer1, BaseFin.dDoc);
+
+      if ( TblGetLeOrEq(TblPeriods) )
+        {
+          Calc_Fin;
+
+          if ( TblGfDate(TblPeriods, fdPer2) >= BaseFin.dDoc )
+            {
+//e15. Оплачено нам денег  = сумма платежного документа от контрагента
+//                           для договора продажи
+//e16. Возвращено денег    = сумма платежного документа от нас
+// контрагенту(по продаже)   для договора продажи
+//e17. Оплачено нами денег = сумма платежного документа от нас
+//                           для договора закупки
+//e18. Возвращено денег    = сумма платежного документа от контрагента
+// нам (по закупке)          для договора закупки
+              d15 := d15 + e15;
+              d16 := d16 + e16;
+              d17 := d17 + e17;
+              d18 := d18 + e18;
+
+              tmpd := dp3z - e15 + e16 + e17 - e18;
+
+              TblSfDouble(TblPeriods, fdp3z, tmpd);
+              TblSfDouble(TblPeriods, fdp4z, tmpd);
+              TblUpdateCurrent(TblPeriods);
+            }
+          else
+            d1z := d1z - e15 + e16 + e17 - e18;
+        }
+    }
+}
+
+//******************************************************************************
+
+Procedure NextBaseFinFR;
+Var
+  tmpd     : double;
+{
+  if ( LongInt(BaseFin.DDoc) <> 0 )
+    {
+      TblPeriods.fdPer1 := BaseFin.dDoc;
+
+      if ( GetLeOrEq(tnTblPeriods, 1) )
+        {
+          if ( GetFirst TblStepDocPer where ((StepDoc.NRec    == TblStepDocPer.cStepDoc
+                                          and TblPeriods.NRec == TblStepDocPer.cPeriods)) <> tsOk )
+            Exit;
+
+          Calc_Fin;
+
+          if ( TblPeriods.fdPer2 >= BaseFin.dDoc )
+            {
+//e15. Оплачено нам денег  = сумма платежного документа от контрагента
+//                           для договора продажи
+//e16. Возвращено денег    = сумма платежного документа от нас
+// контрагенту(по продаже)   для договора продажи
+//e17. Оплачено нами денег = сумма платежного документа от нас
+//                           для договора закупки
+//e18. Возвращено денег    = сумма платежного документа от контрагента
+// нам (по закупке)          для договора закупки
+              d15 := d15 + e15;
+              d16 := d16 + e16;
+              d17 := d17 + e17;
+              d18 := d18 + e18;
+
+              tmpd := TblStepDocPer.fdp3z - e15 + e16 + e17 - e18;
+
+              TblStepDocPer.fdp3z := tmpd;
+              TblStepDocPer.fdp4z := tmpd;
+
+              update current TblStepDocPer;
+            }
+          else
+            d1z := d1z - e15 + e16 + e17 - e18;
+        }
+    }
+}
+
+//******************************************************************************
+
+Procedure NextBaseFin;
+{
+  if (TypeRep = cw_FR)
+    NextBaseFinFR;
+
+  if (TypeRep = cw_Text)
+    NextBaseFinText;
+}
+
+//******************************************************************************
+
+Procedure ClearOrg;
+{
+  k01  := 0;
+  k02  := 0;
+
+  k11  := 0;
+  k12  := 0;
+  k13  := 0;
+  k14  := 0;
+  k15  := 0;
+  k16  := 0;
+  k17  := 0;
+  k18  := 0;
+  k19  := 0;
+  k1a  := 0;
+  k1b  := 0;
+  k1c  := 0;
+  k1zP := 0;
+  k1zZ := 0;
+
+  k31  := 0;
+  k32  := 0;
+  k33  := 0;
+  k34  := 0;
+
+  k41  := 0;
+  k42  := 0;
+  k43  := 0;
+  k44  := 0;
+  k45  := 0;
+  k46  := 0;
+  k4z  := 0;
+  
+  if (TypeRep = cw_FR)
+    {
+      ClearBuffer(#TblKatOrgPer);
+
+      if ( GetFirst TblPeriods = tsOk )
+        do
+          {
+            TblKatOrgPer.cKatOrg  := KatOrg.NRec;
+            TblKatOrgPer.cPeriods := TblPeriods.NRec;
+
+            insert current TblKatOrgPer;
+          }
+        While ( GetNext TblPeriods = tsOk )
+    }
+  if (TypeRep = cw_Text)
+    if ( TblGetFirst(TblPeriods) )
+    do
+      {
+        TblSfDouble(TblPeriods, fkp31,  0.0);
+        TblSfDouble(TblPeriods, fkp32,  0.0);
+        TblSfDouble(TblPeriods, fkp33,  0.0);
+        TblSfDouble(TblPeriods, fkp34,  0.0);
+        TblSfDouble(TblPeriods, fkp3z,  0.0);
+        TblSfDouble(TblPeriods, fkp3zs, 0.0);
+        TblSfDouble(TblPeriods, fkp41,  0.0);
+        TblSfDouble(TblPeriods, fkp42,  0.0);
+        TblSfDouble(TblPeriods, fkp43,  0.0);
+        TblSfDouble(TblPeriods, fkp44,  0.0);
+        TblSfDouble(TblPeriods, fkp4z,  0.0);
+        TblSfDouble(TblPeriods, fkp4zs, 0.0);
+
+        TblUpDateCurrent(TblPeriods);
+      }
+    While (TblGetNext(TblPeriods))
+}
+
+//******************************************************************************
+
+Procedure NextStepDoc;
+{
+  k01  := k01  + if(DProd, Dog2Ot(d01), 0);
+  k02  := k02  + if(DZak, Dog2Ot(d01), 0);
+
+  k11  := k11  + Dog2Ot(d11);
+  k12  := k12  + Dog2Ot(d12);
+  k13  := k13  + Dog2Ot(d13);
+  k14  := k14  + Dog2Ot(d14);
+  k15  := k15  + Dog2Ot(d15);
+  k16  := k16  + Dog2Ot(d16);
+  k17  := k17  + Dog2Ot(d17);
+  k18  := k18  + Dog2Ot(d18);
+  k19  := k19  + Dog2Ot(d19);
+  k1a  := k1a  + Dog2Ot(d1a);
+  k1b  := k1b  + Dog2Ot(d1b);
+  k1c  := k1c  + Dog2Ot(d1c);
+  k1zP := k1zP + if(DProd, Dog2Ot(d1z), 0);
+  k1zZ := k1zZ + if(DZak, Dog2Ot(d1z), 0);
+
+  k31  := k31  + Dog2Ot(d31);
+  k32  := k32  + Dog2Ot(d32);
+  k33  := k33  + Dog2Ot(d33);
+  k34  := k34  + Dog2Ot(d34);
+
+  k41  := k41  + Dog2Ot(d41);
+  k42  := k42  + Dog2Ot(d42);
+  k43  := k43  + Dog2Ot(d43);
+  k44  := k44  + Dog2Ot(d44);
+  k45  := k45  + Dog2Ot(d45);
+  k46  := k46  + Dog2Ot(d46);
+  k4z  := k4z  + Dog2Ot(d4z);
+
+  if (TypeRep = cw_FR)
+    if ( GetFirst TblPeriods = tsOk )
+      do
+        {
+          if ( GetFirst TblStepDocPer where ((StepDoc.NRec    == TblStepDocPer.cStepDoc
+                                          and TblPeriods.NRec == TblStepDocPer.cPeriods)) <> tsOk )
+            Exit;
+
+          if ( GetFirst TblKatOrgPer where ((KatOrg.NRec     == TblKatOrgPer.cKatOrg
+                                         and TblPeriods.NRec == TblKatOrgPer.cPeriods)) <> tsOk )
+            Exit;
+
+          TblKatOrgPer.fkp31 := TblKatOrgPer.fkp31 + TblStepDocPer.fdp31o;
+          TblKatOrgPer.fkp32 := TblKatOrgPer.fkp32 + TblStepDocPer.fdp32o;
+          TblKatOrgPer.fkp33 := TblKatOrgPer.fkp33 + TblStepDocPer.fdp33o;
+          TblKatOrgPer.fkp34 := TblKatOrgPer.fkp34 + TblStepDocPer.fdp34o;
+          TblKatOrgPer.fkp3z := TblKatOrgPer.fkp3z + TblStepDocPer.fdp3zo;
+          TblKatOrgPer.fkp41 := TblKatOrgPer.fkp41 + TblStepDocPer.fdp41o;
+          TblKatOrgPer.fkp42 := TblKatOrgPer.fkp42 + TblStepDocPer.fdp42o;
+          TblKatOrgPer.fkp43 := TblKatOrgPer.fkp43 + TblStepDocPer.fdp43o;
+          TblKatOrgPer.fkp44 := TblKatOrgPer.fkp44 + TblStepDocPer.fdp44o;
+          TblKatOrgPer.fkp4z := TblKatOrgPer.fkp4z + TblStepDocPer.fdp4zo;
+
+          update current TblKatOrgPer;
+        }
+      While ( GetNext TblPeriods = tsOk )
+
+  if (TypeRep = cw_Text)
+    if ( TblGetFirst(TblPeriods) )
+      do
+        {
+          TblSfDouble(TblPeriods, fkp31, kp31 + TblGfDouble(TblPeriods, fdp31o));
+          TblSfDouble(TblPeriods, fkp32, kp32 + TblGfDouble(TblPeriods, fdp32o));
+          TblSfDouble(TblPeriods, fkp33, kp33 + TblGfDouble(TblPeriods, fdp33o));
+          TblSfDouble(TblPeriods, fkp34, kp34 + TblGfDouble(TblPeriods, fdp34o));
+          TblSfDouble(TblPeriods, fkp3z, kp3z + TblGfDouble(TblPeriods, fdp3zo));
+          TblSfDouble(TblPeriods, fkp41, kp41 + TblGfDouble(TblPeriods, fdp41o));
+          TblSfDouble(TblPeriods, fkp42, kp42 + TblGfDouble(TblPeriods, fdp42o));
+          TblSfDouble(TblPeriods, fkp43, kp43 + TblGfDouble(TblPeriods, fdp43o));
+          TblSfDouble(TblPeriods, fkp44, kp44 + TblGfDouble(TblPeriods, fdp44o));
+          TblSfDouble(TblPeriods, fkp4z, kp4z + TblGfDouble(TblPeriods, fdp4zo));
+
+          TblUpDateCurrent(TblPeriods);
+        }
+      While ( TblGetNext(TblPeriods) )
+}
+
+//******************************************************************************
+
+Procedure ClearAll;
+{
+  a01  := 0;
+  a02  := 0;
+
+  a11  := 0;
+  a12  := 0;
+  a13  := 0;
+  a14  := 0;
+  a15  := 0;
+  a16  := 0;
+  a17  := 0;
+  a18  := 0;
+  a19  := 0;
+  a1a  := 0;
+  a1b  := 0;
+  a1c  := 0;
+  a1zP := 0;
+  a1zZ := 0;
+
+  a31  := 0;
+  a32  := 0;
+  a33  := 0;
+  a34  := 0;
+
+  a41  := 0;
+  a42  := 0;
+  a43  := 0;
+  a44  := 0;
+  a45  := 0;
+  a46  := 0;
+  a4z  := 0;
+
+  if (TypeRep = cw_FR)
+    {
+      ClearBuffer(#TblAllPer);
+
+      if ( GetFirst TblPeriods = tsOk )
+        do
+          {
+            TblAllPer.cPeriods := TblPeriods.NRec;
+
+            insert current TblAllPer;
+          }
+        While ( GetNext TblPeriods = tsOk )
+    }
+
+  if (TypeRep = cw_Text)
+    if ( TblGetFirst(TblPeriods) )
+      do
+        {
+          TblSfDouble(TblPeriods, fap31,   0.0);
+          TblSfDouble(TblPeriods, fap32,   0.0);
+          TblSfDouble(TblPeriods, fap33,   0.0);
+          TblSfDouble(TblPeriods, fap34,   0.0);
+          TblSfDouble(TblPeriods, fap3z,   0.0);
+          TblSfDouble(TblPeriods, fap3zs,  0.0);
+          TblSfDouble(TblPeriods, fap41,   0.0);
+          TblSfDouble(TblPeriods, fap42,   0.0);
+          TblSfDouble(TblPeriods, fap43,   0.0);
+          TblSfDouble(TblPeriods, fap44,   0.0);
+          TblSfDouble(TblPeriods, fap4z,   0.0);
+          TblSfDouble(TblPeriods, fap4zs,  0.0);
+          TblSfDouble(TblPeriods, fap4zss, 0.0);
+
+          TblUpDateCurrent(TblPeriods);
+        }
+      While ( TblGetNext(TblPeriods) )
+}
+
+//******************************************************************************
+
+Procedure NextKatOrg;
+{
+  a01  := a01  + k01;
+  a02  := a02  + k02;
+
+  a11  := a11  + k11;
+  a12  := a12  + k12;
+  a13  := a13  + k13;
+  a14  := a14  + k14;
+  a15  := a15  + k15;
+  a16  := a16  + k16;
+  a17  := a17  + k17;
+  a18  := a18  + k18;
+  a19  := a19  + k19;
+  a1a  := a1a  + k1a;
+  a1b  := a1b  + k1b;
+  a1c  := a1c  + k1c;
+  a1zP := a1zP + k1zP;
+  a1zZ := a1zZ + k1zZ;
+
+  a31  := a31  + k31;
+  a32  := a32  + k32;
+  a33  := a33  + k33;
+  a34  := a34  + k34;
+
+  a41  := a41  + k41;
+  a42  := a42  + k42;
+  a43  := a43  + k43;
+  a44  := a44  + k44;
+  a45  := a45  + k45;
+  a46  := a46  + k46;
+  a4z  := a4z  + k4z;
+
+  if (TypeRep = cw_FR)
+    if ( GetFirst TblPeriods = tsOk )
+      do
+        {
+          if ( GetFirst TblKatOrgPer where ((KatOrg.NRec     == TblKatOrgPer.cKatOrg
+                                         and TblPeriods.NRec == TblKatOrgPer.cPeriods)) <> tsOk )
+            Exit;
+
+          if ( GetFirst TblAllPer where ((TblPeriods.NRec == TblAllPer.cPeriods)) <> tsOk )
+            Exit;
+
+          TblAllPer.fap31  := TblAllPer.fap31  + TblKatOrgPer.fkp31;
+          TblAllPer.fap32  := TblAllPer.fap32  + TblKatOrgPer.fkp32;
+          TblAllPer.fap33  := TblAllPer.fap33  + TblKatOrgPer.fkp33;
+          TblAllPer.fap34  := TblAllPer.fap34  + TblKatOrgPer.fkp34;
+          TblAllPer.fap3z  := TblAllPer.fap3z  + TblKatOrgPer.fkp3z;
+          TblAllPer.fap3zs := TblAllPer.fap3zs + TblKatOrgPer.fkp3zs;
+          TblAllPer.fap41  := TblAllPer.fap41  + TblKatOrgPer.fkp41;
+          TblAllPer.fap42  := TblAllPer.fap42  + TblKatOrgPer.fkp42;
+          TblAllPer.fap43  := TblAllPer.fap43  + TblKatOrgPer.fkp43;
+          TblAllPer.fap44  := TblAllPer.fap44  + TblKatOrgPer.fkp44;
+          TblAllPer.fap4z  := TblAllPer.fap4z  + TblKatOrgPer.fkp4z;
+          TblAllPer.fap4zs := TblAllPer.fap4zs + TblKatOrgPer.fkp4zs;
+
+          update current TblAllPer;
+
+          if ( GetLast TblStepDocPer where ((KatOrg.NRec     == TblStepDocPer.cKatOrg
+                                         and TblPeriods.NRec == TblStepDocPer.cPeriods)) <> tsOk )
+            Exit;
+
+          TblStepDocPer.fkp31  := TblKatOrgPer.fkp31;
+          TblStepDocPer.fkp32  := TblKatOrgPer.fkp32;
+          TblStepDocPer.fkp33  := TblKatOrgPer.fkp33;
+          TblStepDocPer.fkp34  := TblKatOrgPer.fkp34;
+          TblStepDocPer.fkp3z  := TblKatOrgPer.fkp3z;
+          TblStepDocPer.fkp3zs := TblKatOrgPer.fkp3zs;
+          TblStepDocPer.fkp41  := TblKatOrgPer.fkp41;
+          TblStepDocPer.fkp42  := TblKatOrgPer.fkp42;
+          TblStepDocPer.fkp43  := TblKatOrgPer.fkp43;
+          TblStepDocPer.fkp44  := TblKatOrgPer.fkp44;
+          TblStepDocPer.fkp4z  := TblKatOrgPer.fkp4z;
+          TblStepDocPer.fkp4zs := TblKatOrgPer.fkp4zs;
+
+          update current TblStepDocPer;
+        }
+      While ( GetNext TblPeriods = tsOk )
+
+  if (TypeRep = cw_Text)
+    if ( TblGetFirst(TblPeriods) )
+      do
+        {
+          TblSfDouble(TblPeriods, fap31,  ap31  + kp31);
+          TblSfDouble(TblPeriods, fap32,  ap32  + kp32);
+          TblSfDouble(TblPeriods, fap33,  ap33  + kp33);
+          TblSfDouble(TblPeriods, fap34,  ap34  + kp34);
+          TblSfDouble(TblPeriods, fap3z,  ap3z  + kp3z);
+          TblSfDouble(TblPeriods, fap3zs, ap3zs + kp3zs);
+          TblSfDouble(TblPeriods, fap41,  ap41  + kp41);
+          TblSfDouble(TblPeriods, fap42,  ap42  + kp42);
+          TblSfDouble(TblPeriods, fap43,  ap43  + kp43);
+          TblSfDouble(TblPeriods, fap44,  ap44  + kp44);
+          TblSfDouble(TblPeriods, fap4z,  ap4z  + kp4z);
+          TblSfDouble(TblPeriods, fap4zs, ap4zs + kp4zs);
+
+          TblUpDateCurrent(TblPeriods);
+        }
+      While ( TblGetNext(TblPeriods) )
+}

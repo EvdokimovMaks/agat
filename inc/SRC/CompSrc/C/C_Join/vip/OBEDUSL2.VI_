@@ -1,0 +1,1057 @@
+/*
+ ╔═══════════════════════════════════════════════════════════════════════════╗
+ ║                     (c) 1994,97 корпорация ГАЛАКТИКА                      ║
+ ║ Проект        : ГАЛАКТИКА                                                 ║
+ ║ Система       : Основные средства                                         ║
+ ║ Версия        : 6.00                                                      ║
+ ║ Назначение    : Объединение услуг                                         ║
+ ║ Ответственный : Лебедев Виктор Владимирович (VITAS)                       ║
+ ║ Параметры     : нет                                                       ║
+ ╚═══════════════════════════════════════════════════════════════════════════╝
+*/
+
+
+Interface KatUslOb 'Объединение услуг' EscClose, cyan;
+Create View
+From
+ Pick
+;
+
+HandleEvent
+cmInit:
+{
+  delete Pick where ((word(12) == Pick.wlist));
+  RunInterface('KatUslOb1');
+  Abort;
+  Exit;
+}
+end; // HandleEvent
+end.
+
+Interface KatUslOb1 'Объединение услуг' EscClose, cyan;
+Show At (,,80,23);
+Create View
+var
+  ErrorJoi     : longint;     // Временная для определения ошибок объединения
+  ErrorSp      : longint;     // Временная для определения ошибок объединения
+  prSp         : boolean;
+  count_vis    : longint;
+  tempNrec     : comp;        // Временная для nRec
+  bBreak       : boolean;     // Прерывание объединения
+  wParamObUsl : word;        // Параметр запуска объединения:
+                              // 0 - все склады (новые и завершенные с ошибками),
+                              // 1 - только незавершенные, 2 - только без ошибок
+  bCorpo       : boolean;     // Признак Corpo
+  FilterObUsl : word;
+  MyMarker,lCycle,CountMarker : LongInt;     // Для работы с маркерами
+  (sObName,
+   sOb1Name,
+  strJoiStatus,
+  strSpJoiStatus,
+  cSpJoiDel,
+  strJoiCorpo)
+As select
+  if(not(isValid(tnKatUsl)) and JoiHead.cRec <> comp(0),'Удаленная услуга',KatUsl.Name),
+  if(not(isValid(tnKatUsl1)) and SpJoi.cRec <> comp(0),SpJoi.Name,KatUsl1.Name),
+  if(JoiHead.Status = byte(1),'Начато',
+             if(JoiHead.Status = byte(2),'Прервано',
+                if(JoiHead.Status = byte(3),'Завершено',
+                  if(JoiHead.Status = byte(4),'Заверш. с ошиб.','')))),
+
+  if(SpJoi.Status = byte(1),'Начато',
+             if(SpJoi.Status = byte(2),'Прервано',
+                if(SpJoi.Status = byte(3),'Завершено',
+                  if(SpJoi.Status = byte(4),'Заверш. с ошиб.','')))),
+  if(SpJoi.IsDel = byte(1),'+',''),
+  if(JoiHead.prCorpo <> byte(0),string(JoiHead.prCorpo),'')
+From
+  KatUsl,
+  JoiHead,
+  SpJoi,
+  Pick,
+  EvJoiHead,
+  synonym JoiHead  tmpJoiHead,
+  synonym SpJoi    tmpSpJoi,
+  synonym EvJoiHead EvJoiHead1,
+  synonym KatUsl    KatUsl1,
+  synonym KatUsl    KatUslTmp // ,
+// synonym KatOtpEd KatOtpEdSyn,
+// synonym KatMBP   KatMBP1
+Where
+((
+  word(6) == JoiHead.TypeEvent and    // услуга
+  JoiHead.cRec == KatUsl.nRec and    // Объединение - услуги
+  JoiHead.nRec == SpJoi.cJoiHead and  // Объединение - спецификация
+  SpJoi.cRec == KatUsl1.nRec         // Спецификация - услуги
+))
+
+Bounds OnlyUser =
+      word(6) == JoiHead.TypeEvent and UserName() == JoiHead.UserName
+;
+File MemoFile;
+
+Procedure ObBreak;  // Прерывание объединения
+{ Var count_out : longint;
+
+  count_out := VisualCount ();
+  Message(chr(3)+'Для прекращения объединения придется'+chr(13)+
+          chr(3)+'подождать до окончания замены на'+chr(13)+
+          chr(3)+'"' +trim (KatUslTmp.Name)+'"',Information + OkButton);
+
+  ReStartVisual('Идет замещение услуг на'#13''+'"'+ trim(KatUslTmp.Name)+'"' +
+                ''#13'',Count_vis);
+  NNextVisual (count_out);
+
+  bBreak := True;
+}
+
+form ErrObUsl ('ErrObUsl.OUT','ErrObUsl') with NoVisual;
+#include ErrObUsl.vpp    // Пакет ошибок
+#include Cor_Kau.vpp   // KAU
+
+Function FindExistUsl (NewUsl : comp) : boolean;  // Проверка не участвует ли уже
+                                                  // услуга в объединении
+{ Var strUsl : string[80];  // Временная для получения имени услуги
+  Var strUsl1 : string[80]; // Временная для получения имени услуги
+
+  FindExistUsl := False;
+
+  IF (GetFirst tmpJoiHead where
+      (( word(6) == tmpJoiHead.TypeEvent)) = tsOk)   // если есть рез-т об-я услуг
+    do
+      { IF tmpJoiHead.cRec = NewUsl
+          { IF ( GetFirst KatUslTmp where ((NewUsl == KatUslTmp.nrec)) = tsOk ) {};
+            strUsl := trim(KatUslTmp.Name);
+            FindExistUsl := True;
+            Message(chr(3)+'Услуга '+'"'+strUsl+'"'+chr(13)+chr(3)+
+                      'уже выбрана как результирующая');
+            Exit;
+          }
+        IF (GetFirst tmpSpJoi where ((tmpJoiHead.nRec == tmpSpJoi.cJoiHead and
+                                            NewUsl == tmpSpJoi.cRec)) = tsOk)
+          { IF (GetFirst KatUslTmp where ((NewUsl == KatUslTmp.nrec)) = tsOk ) {};
+            strUsl := trim(KatUslTmp.Name);
+            IF (GetFirst KatUslTmp where ((tmpJoiHead.cRec == KatUslTmp.nrec)) = tsOk ) {};
+            strUsl1 := trim(KatUslTmp.Name);
+            FindExistUsl := True;
+            Message(chr(3)+'Услуга '+'"'+strUsl+'"'+chr(13)+
+               chr(3)+'уже выбрана для объединения в'+chr(13)+chr(3)+'"'+strUsl1+'"');
+            Exit;
+          }
+      } WHILE (GetNext tmpJoiHead where ((word(6) == tmpJoiHead.TypeEvent)) = tsOk);
+}
+
+Function CheckUsl : boolean;
+{ CheckUsl := False;
+  IF (GetFirst KatUslTmp where ((JoiHead.cRec == KatUslTmp.nRec)) <> tsOk)
+    CheckUsl := True;
+}
+
+Procedure FinishStage (stage : word);
+{ IF _nMsgFrm = ErrorSp       // Если этап завершен без ошибок для одной об. МЦ
+    { SpJoi.Step := word(stage);
+      Update current SpJoi;
+    }
+}
+
+Function UpdateUsl : boolean;
+{ Var MyMarker1 : LongInt;
+
+  bBreak    := False;
+  UpdateUsl:= False;
+  _nMsgFrm  := 0;          // Общее число ошибок
+  ErrorJoi  := 0;
+  ErrorSp   := 0;
+  Count_vis := 0;
+
+  If (GetFirst JoiHead Where ((word(6) == JoiHead.TypeEvent AND
+      UserName() == JoiHead.UserName )) = tsOk )
+    do
+      { case JoiHead.Status of
+          Word(0) : If wParamObUsl = Word(1) continue;
+          Word(1) : {};
+          Word(3) :  Continue;
+          Word(4) : IF wParamObUsl <> Word(0) continue;
+        end;
+        IF JoiHead.prCorpo = byte(1)
+          IF CheckUsl() = True
+            { Message (chr(3)+'Одно из объединений, присланное по Corpo обмену'+chr(13)+
+                 chr(3)+'будет отложено, поскольку не существует склада,'+chr(13)+
+                 chr(3)+'в который необходимо производить объединение!');
+              continue;
+            }
+        If (GetFirst SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead and (word(3)<>SpJoi.Status))) = tsOk)
+          do
+            { Count_vis := Count_vis+166;
+            } While (GetNext SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead and
+                    (word(3)<>SpJoi.Status))) = tsOk);
+      } while (GetNext JoiHead where ((word(6) == JoiHead.TypeEvent AND
+               UserName() == JoiHead.UserName )) = tsOk );
+  if (Count_vis<>0)
+    { IF (Message(''#3'Если Вы не сохранили данные, еще раз рекомендуем это сделать.'+
+          ''#13#13#3'Запустить объединение услуг?'#13,YesNo+mfSwapButtons) = cmNo)
+      EXIT;
+      StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak + vfConfirm,''#13#13#13'',count_vis);
+    }
+  else
+    { Message(chr(3)+'Нет заданий на объединение'+chr(13));
+      wParamObUsl := 0;
+      Exit;
+    }
+
+  MyMarker:=InitMarker('',8,50,50,False);
+              // Цикл по результирующей услуге
+  If (GetFirst JoiHead Where ((word(6) == JoiHead.TypeEvent AND
+      UserName() == JoiHead.UserName )) = tsOk )
+    do
+      { case JoiHead.Status of
+          Word(0) : If wParamObUsl = Word(1) continue;
+          Word(1) : {};
+          Word(3) :  Continue;
+          Word(4) : IF wParamObUsl <> Word(0) continue;
+        end;
+
+        IF JoiHead.prCorpo = byte(1)
+          IF CheckUsl() = True
+            Continue;
+                       // Пересылка если Corpo
+        IF bCorpo and JoiHead.prCorpo = byte(0) and JoiHead.Status = word(0)
+          { ClearBuffer (#EvJoiHead);
+            EvJoiHead.FilialNo := OfficeNo();
+            EvJoiHead.TypeEvent := word(6);
+            EvJoiHead.cRec := JoiHead.cRec;
+            EvJoiHead.dDate := Cur_date();
+            MemoFile.OpenMemo (EvJoiHead.EvSp);
+            IF (GetFirst SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead)) = tsOk)
+              do
+                { MemoFile.Write (SpJoi.cRec);
+                  MemoFile.Write (SpJoi.Num);
+                  MemoFile.Write (SpJoi.isDel);
+                  if (GetFirst KatUsltmp where ((SpJoi.cRec == KatUsltmp.nRec)) = tsOk)
+                    MemoFile.Write (KatUsltmp.Name);
+                  else
+                    MemoFile.Write ('Удаленная услуга');
+
+                } while (GetNext SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead)) = tsOk);
+              MemoFile.Close;
+              insert current EvJoiHead;
+          }
+
+        JoiHead.Status := word(1);  // Делаем статус "Начата"
+        Update Current JoiHead;
+
+        IF ( GetFirst KatUslTmp where ((JoiHead.cRec == KatUslTmp.nrec)) = tsOk ) {};
+        iNextVisual('Идет замещение услуг на'#13''+'"'+ trim(KatUslTmp.Name)+'"'+
+                    ''#13'');
+        prSp := True;
+
+                 //  Цикл по объединяемым услугам
+        If (GetFirst SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead and (word(3)<>SpJoi.Status))) = tsOk)
+          do
+            { SpJoi.Status := word(1);
+              Update current SpJoi;
+
+              IF SpJoi.Step < word(1) // Первый этап объединения
+                {
+
+  // TblNum = 1 : SpStep
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SpStep = tsOk)
+    do
+      { if (SpJoi.cRec = SpStep.cMcUsl and SpStep.PrMc = 0)
+          InsertMarker(MyMarker,SpStep.nRec);
+      } while (GetNext SpStep = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SpStep where ((GetMarkerMy(MyMarker,lCycle) == SpStep.nRec))= tsOk)
+      { SpStep.cMcUsl := JoiHead.cRec;
+        if (Update current SpStep)<>tsOk then MSGForm('SpStep',SpStep.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 2 : SpSopr
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SpSopr = tsOk)
+    do
+      { if (SpJoi.cRec = SpSopr.cMcUsl and SpSopr.PrMc = 0)
+          InsertMarker(MyMarker,SpSopr.nRec);
+      } while (GetNext SpSopr = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SpSopr where ((GetMarkerMy(MyMarker,lCycle) == SpSopr.nRec))= tsOk)
+      { SpSopr.cMcUsl := JoiHead.cRec;
+        if (Update current SpSopr)<>tsOk then MSGForm('SpSopr',SpSopr.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 3 : Prices
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst Prices = tsOk)
+    do
+      { if (SpJoi.cRec = Prices.cThing and Prices.Tip = 1)
+          InsertMarker(MyMarker,Prices.nRec);
+      } while (GetNext Prices = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst Prices where ((GetMarkerMy(MyMarker,lCycle) == Prices.nRec))= tsOk)
+      { Prices.cThing := JoiHead.cRec;
+        if (Update current Prices)<>tsOk then MSGForm('Prices',Prices.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 4 : SpDover
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SpDover = tsOk)
+    do
+      { if (SpJoi.cRec = SpDover.cMcUsl and SpDover.PrMc = 0)
+          InsertMarker(MyMarker,SpDover.nRec);
+      } while (GetNext SpDover = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SpDover where ((GetMarkerMy(MyMarker,lCycle) == SpDover.nRec))= tsOk)
+      { SpDover.cMcUsl := JoiHead.cRec;
+        if (Update current SpDover)<>tsOk then MSGForm('SpDover',SpDover.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 5 : SpDocs
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SpDocs = tsOk)
+    do
+      { if (SpJoi.cRec = SpDocs.cMcUsl and SpDocs.PrMc = 0)
+          InsertMarker(MyMarker,SpDocs.nRec);
+      } while (GetNext SpDocs = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SpDocs where ((GetMarkerMy(MyMarker,lCycle) == SpDocs.nRec))= tsOk)
+      { SpDocs.cMcUsl := JoiHead.cRec;
+        if (Update current SpDocs)<>tsOk then MSGForm('SpDocs',SpDocs.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 6 : Transp
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst Transp = tsOk)
+    do
+      { if (SpJoi.cRec = Transp.cKatUsl)
+          InsertMarker(MyMarker,Transp.nRec);
+      } while (GetNext Transp = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst Transp where ((GetMarkerMy(MyMarker,lCycle) == Transp.nRec))= tsOk)
+      { Transp.cKatUsl := JoiHead.cRec;
+        if (Update current Transp)<>tsOk then MSGForm('Transp',Transp.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 7 : SpZakaz
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SpZakaz = tsOk)
+    do
+      { if (SpJoi.cRec = SpZakaz.cKatUsl)
+          InsertMarker(MyMarker,SpZakaz.nRec);
+      } while (GetNext SpZakaz = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SpZakaz where ((GetMarkerMy(MyMarker,lCycle) == SpZakaz.nRec))= tsOk)
+      { SpZakaz.cKatUsl := JoiHead.cRec;
+        if (Update current SpZakaz)<>tsOk then MSGForm('SpZakaz',SpZakaz.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 8 : KatZak
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst KatZak = tsOk)
+    do
+      { if (SpJoi.cRec = KatZak.cKatUsl)
+          InsertMarker(MyMarker,KatZak.nRec);
+      } while (GetNext KatZak = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst KatZak where ((GetMarkerMy(MyMarker,lCycle) == KatZak.nRec))= tsOk)
+      { KatZak.cKatUsl := JoiHead.cRec;
+        if (Update current KatZak)<>tsOk then MSGForm('KatZak',KatZak.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 9 : SoprDop
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SoprDop = tsOk)
+    do
+      { if (SpJoi.cRec = SoprDop.cMcUsl and SoprDop.PrMc = 0)
+          InsertMarker(MyMarker,SoprDop.nRec);
+      } while (GetNext SoprDop = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SoprDop where ((GetMarkerMy(MyMarker,lCycle) == SoprDop.nRec))= tsOk)
+      { SoprDop.cMcUsl := JoiHead.cRec;
+        if (Update current SoprDop)<>tsOk then MSGForm('SoprDop',SoprDop.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 10 : SpCUsl
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SpCUsl where ((SpJoi.cRec == SpCUsl.cUsl)) = tsOk)
+    do
+      { InsertMarker(MyMarker,SpCUsl.nRec);
+      } while (GetNext SpCUsl where ((SpJoi.cRec == SpCUsl.cUsl)) = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SpCUsl where ((GetMarkerMy(MyMarker,lCycle) == SpCUsl.nRec))= tsOk)
+      { SpCUsl.cUsl := JoiHead.cRec;
+        if (Update current SpCUsl)<>tsOk then MSGForm('SpCUsl',SpCUsl.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 11 : KatNalog
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst KatNalog = tsOk)
+    do
+      { if (SpJoi.cRec = KatNalog.cUsl)
+          InsertMarker(MyMarker,KatNalog.nRec);
+      } while (GetNext KatNalog = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst KatNalog where ((GetMarkerMy(MyMarker,lCycle) == KatNalog.nRec))= tsOk)
+      { KatNalog.cUsl := JoiHead.cRec;
+        if (Update current KatNalog)<>tsOk then MSGForm('KatNalog',KatNalog.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 12 : KatOtpEd
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst KatOtpEd = tsOk)
+    do
+      { if (SpJoi.cRec = KatOtpEd.cMcUsl and KatOtpEd.PrMc = 0)
+          InsertMarker(MyMarker,KatOtpEd.nRec);
+      } while (GetNext KatOtpEd = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst KatOtpEd where ((GetMarkerMy(MyMarker,lCycle) == KatOtpEd.nRec))= tsOk)
+      { KatOtpEd.cMcUsl := JoiHead.cRec;
+        if (Update current KatOtpEd)<>tsOk then MSGForm('KatOtpEd',KatOtpEd.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+                  FinishStage (1);
+                }                       // Конец первого этапа объединения
+              else
+                NNextVisual (12);
+
+              IF SpJoi.Step < word(2)   // Второй этап объединения
+                {
+
+  // TblNum = 13 : SpUsl
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SpUsl = tsOk)
+    do
+      { if (SpJoi.cRec = SpUsl.cUsl)
+          InsertMarker(MyMarker,SpUsl.nRec);
+      } while (GetNext SpUsl = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SpUsl where ((GetMarkerMy(MyMarker,lCycle) == SpUsl.nRec))= tsOk)
+      { SpUsl.cUsl := JoiHead.cRec;
+        if (Update current SpUsl)<>tsOk then MSGForm('SpUsl',SpUsl.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 14 : ValNac
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst ValNac = tsOk)
+    do
+      { if (SpJoi.cRec = ValNac.cUsl)
+          InsertMarker(MyMarker,ValNac.nRec);
+      } while (GetNext ValNac = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst ValNac where ((GetMarkerMy(MyMarker,lCycle) == ValNac.nRec))= tsOk)
+      { ValNac.cUsl := JoiHead.cRec;
+        if (Update current ValNac)<>tsOk then MSGForm('ValNac',ValNac.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 15 : SpMnPlan
+/*
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SpMnPlan = tsOk)
+    do
+      { if (SpJoi.cRec = SpMnPlan.cIzd and SpMnPlan.TypeIzd = 2)
+          InsertMarker(MyMarker,SpMnPlan.nRec);
+      } while (GetNext SpMnPlan = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SpMnPlan where ((GetMarkerMy(MyMarker,lCycle) == SpMnPlan.nRec))= tsOk)
+      { SpMnPlan.cIzd := JoiHead.cRec;
+        if (Update current SpMnPlan)<>tsOk then MSGForm('SpMnPlan',SpMnPlan.nRec,1);
+      }
+  ClearMarker(MyMarker);
+*/
+
+  // TblNum = 16 : PlanItem
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst PlanItem = tsOk)
+    do
+      { if (SpJoi.cRec = PlanItem.cItem and PlanItem.Tip = 2)
+          InsertMarker(MyMarker,PlanItem.nRec);
+      } while (GetNext PlanItem = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst PlanItem where ((GetMarkerMy(MyMarker,lCycle) == PlanItem.nRec))= tsOk)
+      { PlanItem.cItem := JoiHead.cRec;
+        if (Update current PlanItem)<>tsOk then MSGForm('PlanItem',PlanItem.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 17 : RabDef
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst RabDef where ((SpJoi.cRec == RabDef.cKatUsl)) = tsOk)
+    do
+      { InsertMarker(MyMarker,RabDef.nRec);
+      } while (GetNext RabDef where ((SpJoi.cRec == RabDef.cKatUsl)) = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst RabDef where ((GetMarkerMy(MyMarker,lCycle) == RabDef.nRec))= tsOk)
+      { RabDef.cKatUsl := JoiHead.cRec;
+        if (Update current RabDef)<>tsOk then MSGForm('RabDef',RabDef.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 18 : TRabRem
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst TRabRem where ((SpJoi.cRec == TRabRem.cKatUsl)) = tsOk)
+    do
+      { InsertMarker(MyMarker,TRabRem.nRec);
+      } while (GetNext TRabRem where ((SpJoi.cRec == TRabRem.cKatUsl)) = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst TRabRem where ((GetMarkerMy(MyMarker,lCycle) == TRabRem.nRec))= tsOk)
+      { TRabRem.cKatUsl := JoiHead.cRec;
+        if (Update current TRabRem)<>tsOk then MSGForm('TRabRem',TRabRem.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+#ifndef GAL5_80
+  // TblNum = 19 : FRabRem
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst FRabRem where ((SpJoi.cRec == FRabRem.cKatUsl)) = tsOk)
+    do
+      { InsertMarker(MyMarker,FRabRem.nRec);
+      } while (GetNext FRabRem where ((SpJoi.cRec == FRabRem.cKatUsl)) = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst FRabRem where ((GetMarkerMy(MyMarker,lCycle) == FRabRem.nRec))= tsOk)
+      { FRabRem.cKatUsl := JoiHead.cRec;
+        if (Update current FRabRem)<>tsOk then MSGForm('FRabRem',FRabRem.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 20 : JourDef
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst JourDef where ((SpJoi.cRec == JourDef.cKatUsl)) = tsOk)
+    do
+      { InsertMarker(MyMarker,JourDef.nRec);
+      } while (GetNext JourDef where ((SpJoi.cRec == JourDef.cKatUsl)) = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst JourDef where ((GetMarkerMy(MyMarker,lCycle) == JourDef.nRec))= tsOk)
+      { JourDef.cKatUsl := JoiHead.cRec;
+        if (Update current JourDef)<>tsOk then MSGForm('JourDef',JourDef.nRec,1);
+      }
+  ClearMarker(MyMarker);
+#end
+
+  // TblNum = 21 : JourDefR
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst JourDefR where ((SpJoi.cRec == JourDefR.cKatUsl)) = tsOk)
+    do
+      { InsertMarker(MyMarker,JourDefR.nRec);
+      } while (GetNext JourDefR where ((SpJoi.cRec == JourDefR.cKatUsl)) = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst JourDefR where ((GetMarkerMy(MyMarker,lCycle) == JourDefR.nRec))= tsOk)
+      { JourDefR.cKatUsl := JoiHead.cRec;
+        if (Update current JourDefR)<>tsOk then MSGForm('JourDefR',JourDefR.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 22 : SpSchF
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst SpSchF = tsOk)
+    do
+      { if (SpJoi.cRec = SpSchF.cMcUsl and SpSchF.PrMc = 0)
+          InsertMarker(MyMarker,SpSchF.nRec);
+      } while (GetNext SpSchF = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst SpSchF where ((GetMarkerMy(MyMarker,lCycle) == SpSchF.nRec))= tsOk)
+      { SpSchF.cMcUsl := JoiHead.cRec;
+        if (Update current SpSchF)<>tsOk then MSGForm('SpSchF',SpSchF.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+  // TblNum = 23 : NormGrup
+  IF Not(NextVisual) ObBreak;
+  if (GetFirst NormGrup = tsOk)
+    do
+      { if (SpJoi.cRec = NormGrup.cKatUsl)
+          InsertMarker(MyMarker,NormGrup.nRec);
+      } while (GetNext NormGrup = tsOk );
+  CountMarker := GetMarkerCount(MyMarker);
+  For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+    if (GetFirst NormGrup where ((GetMarkerMy(MyMarker,lCycle) == NormGrup.nRec))= tsOk)
+      { NormGrup.cKatUsl := JoiHead.cRec;
+        if (Update current NormGrup)<>tsOk then MSGForm('NormGrup',NormGrup.nRec,1);
+      }
+  ClearMarker(MyMarker);
+
+                  FinishStage (2);
+                }                       // Конец второго этапа объединения
+              else
+                NNextVisual (12);
+
+              IF SpJoi.Step < word(3)   // Третий этап объединения
+                {
+            //      KAU
+
+#ifdef GAL6_0
+  UpdateKau(SpJoi.cRec,JoiHead.cRec,coKatUsl);
+#end
+                  FinishStage (3);
+                }                         // Конец третьего этапа объединения
+              else
+                NNextVisual(134);
+
+              IF _nMsgFrm = ErrorSp       // Если этап завершен без ошибок для одной рез. услуги
+                SpJoi.Status := word(3);
+              else
+                SpJoi.Status := word(4);
+              Update current SpJoi;
+
+              if (ErrorSp <> _nMsgFrm)
+                { ErrObUsl.PutEventById(feBreak, fcCycleOfErrorUsl);
+                  ErrObUsl.write(_nMsgFrm-ErrorSp);
+                }
+
+              ErrorSp := _nMsgFrm;
+            } While (GetNext SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead and (word(3)<>SpJoi.Status))) = tsOk);
+          prSp := False;
+
+
+             // ... удаление остатков
+/*
+          IF Not(NextVisual) ObBreak;
+          if (GetFirst SaldoMC where (( JoiHead.cRec == SaldoMC.cMc )) = tsOk )
+            do
+              { InsertMarker(MyMarker,SaldoMC.nRec);
+              } while (GetNext SaldoMC where (( JoiHead.cRec == SaldoMC.cMc )) = tsOk );
+          CountMarker := GetMarkerCount(MyMarker);
+          For (lCycle:=0; lCycle<>CountMarker; lCycle:=lCycle+1)
+            if (GetFirst SaldoMC where ((GetMarkerMy(MyMarker,lCycle)==SaldoMC.nRec))= tsOk)
+              { if (Delete current SaldoMC) <> tsOk then MsgForm('SaldoMC',SaldoMC.nRec,2);
+              }
+          ClearMarker(MyMarker);
+*/
+
+          if (ErrorSp <> _nMsgFrm)
+            { ErrObUsl.PutEventById (feBreak, fcCycleOfErrorUsl);
+              ErrObUsl.write(_nMsgFrm-ErrorSp);
+            }
+          if (ErrorJoi <> _nMsgFrm)
+            { ErrObUsl.PutEventById (feBreak, fcCycleOfObUsl);
+              ErrObUsl.write(_nMsgFrm-ErrorJoi);
+            }
+
+          IF _nMsgFrm = ErrorJoi       // Если объединение без ошибок
+            JoiHead.Status := word(3); // статус "Завершено"
+          ELSE
+            JoiHead.Status := word(4);
+          Update Current JoiHead;      // статус "Завершено с ошибками"
+
+
+          ErrorJoi := _nMsgFrm;
+          ErrorSp := ErrorJoi;
+
+      } While (GetNext JoiHead where ((word(6) == JoiHead.TypeEvent AND
+         UserName() == JoiHead.UserName )) = tsOk and bBreak = False);
+
+    if (_nMsgFrm>0)
+      { ErrObUsl.PutEventById (feBreak, fcCycleOfResUsl);
+        ErrObUsl.write(_nMsgFrm);
+      }
+
+    wParamObUsl := 0;
+    DoneMarker (MyMarker,'');
+    if (Count_vis<>0)
+      { StopVisual('',0);
+        IF _nMsgFrm > 0  // Если были ошибки во время объединения
+          { Message(chr(3)+'Во время объединения произошли ошибки !'+chr(13)+
+                    chr(3)+'Просмотрите протокол ошибок и если необходимо,'+chr(13)+
+                    chr(3)+'запустите процедуру объединения услуг еще раз.'+chr(13));
+            ErrObUsl.ShowFile;
+          }
+/*
+        Message(''#3'Объединение завершено.' +
+                ''#13#3'Вам необходимо рассчитать остатки на начало периода и' +
+                ''#13#3'произвести расчет текущих остатков в модуле Складской учет.');*/
+      }
+}
+
+Procedure DelOutCorpo;
+{ delete EvJoiHead where ((word(6) == EvJoiHead.TypeEvent and
+     OfficeNo() == EvJoiHead.FilialNo and
+     Sub_Months(Cur_date(),1) >> EvJoiHead.dDate ));
+}
+
+Function InCorpo : boolean;
+{ Var bUpdat : boolean;
+
+  InCorpo := False;
+  bUpdat := False;
+
+  IF (GetFirst X$RegisterTables where ((word(coKatUsl) == X$RegisterTables.TableCode AND
+      (X$RegisterTables.ForCorpo = word(1)) )) = tsOk)
+    { InCorpo := True;
+      if (GetFirst EvJoiHead where ((word(6) == EvJoiHead.TypeEvent and
+          (EvJoiHead.FilialNo<>OfficeNo()) )) = tsOk)
+        do
+          { if (bUpdat)
+              { delete current EvJoiHead1;
+                bUpdat := False;
+              }
+            ClearBuffer (#JoiHead);
+            JoiHead.TypeEvent := word(6);
+            JoiHead.cRec := EvJoiHead.cRec;
+            JoiHead.dDate := Cur_date();
+            JoiHead.prCorpo := byte(EvJoiHead.FilialNo);
+            insert current JoiHead;
+
+            MemoFile.OpenMemo (EvJoiHead.EvSp);
+            while (not(MemoFile.Eof))
+              { ClearBuffer (#SpJoi);
+                SpJoi.cJoiHead := JoiHead.nRec;
+                MemoFile.Read (SpJoi.cRec);
+                MemoFile.Read (SpJoi.Num);
+                MemoFile.Read (SpJoi.isDel);
+                MemoFile.Read (SpJoi.Name);
+                insert current SpJoi;
+              }
+            MemoFile.Close;
+            GetFirst EvJoiHead1 where ((EvJoiHead.nRec == EvJoiHead1.nRec));
+            bUpdat := True;
+          } while (GetNext EvJoiHead where ((word(6) == EvJoiHead.TypeEvent and
+                   (EvJoiHead.FilialNo<>OfficeNo()) )) = tsOk);
+
+      if (bUpdat)
+        { delete current EvJoiHead1;
+          bUpdat := False;
+        }
+    }
+}
+
+Procedure CorpoForUser;
+{ IF (GetFirst JoiHead where ((word(6) == JoiHead.TypeEvent AND
+      '' == JoiHead.UserName and (byte(0) <> JoiHead.prCorpo))) = tsOk)
+    IF (Message (chr(3)+'Из другого офиса пришли данные на объединение !'+chr(13)+
+         chr(13)+chr(3)+'Вы будете производить эти объединения ?',yesno) = cmYes)
+      WHILE (GetFirst JoiHead where ((word(6) == JoiHead.TypeEvent AND
+             '' == JoiHead.UserName and (byte(0) <> JoiHead.prCorpo))) = tsOk)
+        { JoiHead.UserName := UserName();
+          Update current JoiHead;
+        }
+}
+
+Panel pJoi
+show at (,,,6);
+Table JoiHead;
+browse UslJoi;
+fields
+  sObName   'Наим.услуги (результат объединения)','─────────────────────────────────'('',hcNastrIAdmServLinkUsl,sci1378Esc): [33], protect;
+  KatUsl.Kod 'код услуги','─────────────────'('',hcNastrIAdmServLinkUsl,sci1Esc) : [20], protect;
+  strJoiStatus 'Статус','───────────────'('',hcNastrIAdmServLinkUsl,sci1Esc) : [15], Protect;
+  JoiHead.UserName 'Пользователь','────────────'('',hcNastrIAdmServLinkUsl,sci1Esc) : [12], Protect;
+  strJoiCorpo '№ офиса','───────'('',hcNastrIAdmServLinkUsl,sci1Esc) : [7], Protect;
+end;
+
+handleevent
+cmPick :
+{ IF JoiHead.UserName <> UserName() and JoiHead.cRec <> comp(0)
+    { Message (chr(3)+'Этим объединением занимается другой пользователь !');
+      Exit;
+    }
+  case CurField of #sObName :
+    IF JoiHead.Status = 0
+      { IF (RunInterface('GetUsl',tempNrec) <> cmCancel)
+            { IF not(FindExistUsl(tempNrec))
+                { if (delete current JoiHead) <> tsOk {};
+                  clearBuffer (#JoiHead);
+                  JoiHead.TypeEvent := word(6);
+                  JoiHead.cRec := tempNrec;
+                  JoiHead.Status := word(0);
+                  JoiHead.UserName := UserName();
+                  JoiHead.dDate := Cur_Date;
+                  insert current JoiHead;
+                  ReReadRecord(#JoiHead);
+                  ReDrawPanel(#JoiHead);
+                }
+            }
+      }
+  end;
+}
+
+cmInsert :
+  case CurField of #sObName :
+      IF (RunInterface('GetUsl',tempNrec) <> cmCancel)
+        { IF not(FindExistUsl(tempNrec))
+            { clearBuffer (#JoiHead);
+              JoiHead.TypeEvent := word(6);
+              JoiHead.cRec := tempNrec;
+              JoiHead.Status := word(0);
+              JoiHead.UserName := UserName();
+              JoiHead.dDate := Cur_Date;
+              insert current JoiHead;
+              ReReadRecord(#JoiHead);
+              ReDrawPanel(#JoiHead);
+            }
+        }
+  end;
+
+cmDeleteRecord :
+{ IF JoiHead.UserName <> UserName()
+    { Message (chr(3)+'Этим объединением занимается другой пользователь !');
+      Exit;
+    }
+  IF (Message(chr(3)+'Удалить запись ?'#13,yesno+mfSwapButtons ) = cmYes)
+    { IF JoiHead.Status = word(3) or JoiHead.Status = word(4)
+        { If (GetFirst SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead
+              and byte(1) == SpJoi.isDel and byte(4) == SpJoi.Status )) = tsOk)
+            IF (Message(chr(3)+'Удалять из каталога услуги, объединение'+chr(13)+
+                    chr(3)+'которых завершено с ошибками ?'+
+                    chr(13),yesno+mfSwapButtons) = cmYes)
+              update SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead and
+                  byte(1) == SpJoi.isDel and byte(4) == SpJoi.Status)) set Status := 3;
+
+          if (GetFirst SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead and
+              byte(1) == SpJoi.isDel and byte(3) == SpJoi.Status)) = tsOk)
+            { do
+                { if (GetFirst ExClassVal where (( word(coKatUsl) == ExClassVal.wTable and
+                          SpJoi.cRec  == ExClassVal.cRec )) = tsOk)
+                    do
+                      { delete ExClassIer where ((ExClassVal.cClassSeg == ExClassIer.cGroup));
+                      } WHILE (GetNext ExClassVal where (( word(coKatUsl) == ExClassVal.wTable and
+                           SpJoi.cRec  == ExClassVal.cRec )) = tsOk );
+
+                  delete ExClassVal where ((word(coKatUsl) == ExClassVal.wTable and
+                          SpJoi.cRec  == ExClassVal.cRec ));
+/*
+          delete KatOtpEd   where (( word(1) == KatOtpEd.PrMC and
+                            SpJoi.cRec  ==  KatOtpEd.cMcUsl ));
+*/
+                  delete KatUslTmp where ((SpJoi.cRec == KatUslTmp.nrec));
+
+                } while (GetNext SpJoi where ((JoiHead.nRec == SpJoi.cJoiHead and
+                   byte(1) == SpJoi.isDel and byte(3) == SpJoi.Status)) = tsOk);
+              Message(''#3'Удаление из каталога услуг произведено.',Information + OkButton);
+            }
+        }
+      Delete SpJoi Where ((JoiHead.nRec == SpJoi.cJoiHead));
+      Delete current JoiHead;
+    }
+  }
+
+end;  // handleevent pJoi
+end;  // Panel pJoi
+
+panel pSpJoi
+show at (,7,,17);
+Table SpJoi;
+browse UslSpJoi;
+fields
+  sOb1Name   'Наим.услуг, подлежащих объединению','─────────────────────────────────'('',hcNastrIAdmServLinkUsl,sci1378Esc): [33], protect;
+  KatUsl1.Kod 'код услуги','─────────────────'('',hcNastrIAdmServLinkUsl,sci1Esc) : [20], protect;
+  strSpJoiStatus 'Статус','───────────────'('',hcNastrIAdmServLinkUsl,sci1Esc) : [15], Protect;
+  cSpJoiDel 'Удалять','───────'('Изменяется при нажатии на <F3>',hcNastrIAdmServLinkUsl,sci13Esc): [7], protect;
+end;
+
+handleevent
+cmPick :
+{ IF JoiHead.UserName <> UserName()
+    { Message (chr(3)+'Этим объединением занимается другой пользователь !');
+      Exit;
+    }
+
+  case CurField of
+    #sOb1Name :
+      IF JoiHead.Status = 0
+        { delete Pick where ((word(12) == Pick.wList));
+          if (RunInterface('GetSomeUsl',comp(-12347))) <> Cancel
+            { If (delete current SpJoi) <> tsOk {};
+              If GetFirst Pick where ((Word(12) == Pick.wList)) = tsOk
+              do
+                { IF not(FindExistUsl(Pick.cRec))
+                    { ClearBuffer(#SpJoi);
+                      SpJoi.cJoiHead := JoiHead.nRec;
+                      SpJoi.cRec := Pick.cRec;
+                      SpJoi.Status := Word(0);
+                      SpJoi.IsDel := word(1);
+                      Insert current SpJoi;
+                    }
+                } while GetNext Pick where ((Word(12) == Pick.wList)) = tsOk;
+              ReReadRecord(#SpJoi);
+              ReDrawPanel(#SpJoi);
+            }
+        }
+    #cSpJoiDel :
+      if (SpJoi.cRec <> comp(0))
+        { If (SpJoi.IsDel = word(1))
+            SpJoi.IsDel := word(0);
+          Else
+            SpJoi.IsDel := word(1);
+          Update current SpJoi;
+          RedrawPanel (#SpJoi);
+        }
+  end;
+}
+
+cmInsert:
+{ IF JoiHead.UserName <> UserName()
+    { Message (chr(3)+'Этим объединением занимается другой пользователь !');
+      Exit;
+    }
+
+  IF JoiHead.Status = 0
+    { delete Pick where ((word(12) == Pick.wList));
+      if (RunInterface('GetSomeUsl',comp(-12347))) <> Cancel
+        { If GetFirst Pick where ((Word(12) == Pick.wList)) = tsOk
+            do
+              { IF not(FindExistUsl(Pick.cRec))
+                  { ClearBuffer (#SpJoi);
+                    SpJoi.cJoiHead := JoiHead.nRec;
+                    SpJoi.cRec := Pick.cRec;
+                    SpJoi.Status := Word(0);
+                    SpJoi.IsDel := word(1);
+                    Insert current SpJoi;
+                  }
+              } while GetNext Pick where ((Word(12) == Pick.wList)) = tsOk;
+            ReReadRecord(#SpJoi);
+            ReDrawPanel(#SpJoi);
+        }
+    }
+}
+
+cmDeleteRecord :
+{ IF JoiHead.UserName <> UserName()
+    { Message (chr(3)+'Этим объединением занимается другой пользователь !');
+      Exit;
+    }
+
+ IF JoiHead.Status = 0
+   IF (Message(chr(3)+'Удалить запись ?'#13,yesno+mfSwapButtons ) = cmYes)
+      Delete current SpJoi;
+}
+
+end;  // handleevent pSpJoi
+end;  // Panel pSpJoi
+
+// Экран с кнопками
+screen ButtonsList
+  show at (,18,,22);
+  Fields
+    FilterObUsl ('Изменяется при нажатии на <Пробел>',hcNastrIAdmServLinkUsl,sci1Esc) :, noprotect;
+Buttons
+  cmObed,Default,,,hcNastrIAdmServLinkUsl,sci1Esc;
+  cmCancel,,,,hcNastrIAdmServLinkUsl,sci1Esc;
+
+<<
+  Показывать объединения
+  (.) всех пользователей`      <.~О~бъединить .>         <. О~т~мена .>
+  (.) только свои       `
+
+>>
+end; // screen
+
+HandleEvent
+cmCheckField:
+{ case CurField of
+    #FilterObUsl :
+      { if (FilterObUsl=0)
+          if (BoundActive(tbOnlyUser))
+            PopBounds (tbOnlyUser);
+        if (FilterObUsl=1)
+          if (not(BoundActive(tbOnlyUser)))
+            PushBounds (tbOnlyUser);
+        if (GetFirst JoiHead = tsOk) {};
+        ReReadRecord(#JoiHead);
+        RescanPanel (#JoiHead);
+        RescanPanel (#SpJoi);
+        SelectPanel (#JoiHead);
+        SaveMyDsk (string(FilterObUsl),'FilterObUsl');
+      }
+  end; // case
+}
+
+cmInit:
+{ Var forDsk : boolean;
+  Var bufDsk : string;
+
+  if (ReadMyDsk (bufDsk,'FilterObUsl',forDsk) = true)
+    FilterObUsl := word(bufDsk);
+  if (FilterObUsl=1)
+    PushBounds (tbOnlyUser);
+
+  wParamObUsl := 0;
+
+  bCorpo := InCorpo();
+
+  IF bCorpo
+    { DelOutCorpo();
+      CorpoForUser();
+    }
+
+  IF (GetFirst tmpJoiHead where (( word(6) == tmpJoiHead.TypeEvent and
+      UserName() == tmpJoiHead.UserName and (Word(1)=tmpJoiHead.Status))) = tsOk )
+    { wParamObUsl := Word(1);
+      IF (Message(chr(3)+'Обнаружено незавершенное объединение услуг'+chr(13)+
+             chr(3)+'рекомендуется немедленно продолжить это объединение.'+chr(13)+
+             chr(13)+chr(3)+'Запустить незавершенное объединение ?',yesno) = cmYes)
+        PutCommand(cmObed);
+      ELSE
+        CloseInterface (cmCancel);
+   }
+}
+
+cmInsert:
+  Abort;
+
+cmDefault:
+  Abort;
+
+cmObed:
+{ IF wParamObUsl <> 1
+    { IF (GetFirst tmpJoiHead where (( word(6) == tmpJoiHead.TypeEvent AND
+          UserName() == tmpJoiHead.UserName)) = tsOk)
+        do
+          { IF (GetFirst tmpSpJoi where ((tmpJoiHead.nRec == tmpSpJoi.cJoiHead)) <> tsOk)
+              { IF (GetFirst KatUslTmp where (( tmpJoiHead.cRec == KatUslTmp.nrec)) = tsOk ) {};
+                Message (chr(3)+'Для результата объединения'+chr(13)+
+                  chr(3)+'"'+trim(KatUslTmp.Name)+'"'+chr(13)+
+                  chr(3)+'не выбраны услуги, которые необходимо объединять',CancelButton);
+                EXIT;
+              }
+          } WHILE (GetNext tmpJoiHead where ((word(6) == tmpJoiHead.TypeEvent AND
+                                  UserName() == tmpJoiHead.UserName)) = tsOk);
+        IF (GetFirst tmpJoiHead where (( word(6) == tmpJoiHead.TypeEvent and
+            UserName() == tmpJoiHead.UserName and
+            (Word(4)=tmpJoiHead.Status) )) = tsOk )
+          IF (Message(''#3'Хотите повторять объединение для' +
+              ''#13#3'завершенных с ошибками услуг?'#13,YesNo) = cmNo)
+            wParamObUsl := 2;
+    }
+  UpdateUsl;
+  ReReadRecord(#JoiHead);
+  ReDrawPanel(#JoiHead);
+  ReReadRecord(#SpJoi);
+  ReDrawPanel(#SpJoi);
+}
+end;  // HandleEvent
+end.  // Interface

@@ -63,6 +63,7 @@ cgRole_ProvLico    = 15;
 cgRole_UtvLico     = 16;
 cgRole_Sostavitel  = 17;
 cgRole_Razdatel    = 18;
+cgRole_ZamPredCom  = 19;
 
 cgDopInfo_AddDov = 1;
 

@@ -227,6 +227,7 @@ With Index
 , SpDocNalMemTTN06  =  cNalog                             // Ссылочная целостность - не дополнять
 );
 
+Table Struct SpSoprMemTTNGR = SpSoprMemTTN;
 
 //******************************************************************************
 Table Struct TTNDocMemTTN "ТТИ"
@@ -366,6 +367,22 @@ With index
 , ExClassValMemTTN02 = ClassCode + wTable + cRec
 , ExClassValMemTTN03 = ClassCode + cClassSeg
 , ExClassValMemTTN04 = cRec + ClassCode + cClassSeg
+);
+
+
+//******************************************************************************
+//  Для сбора какой нибудь информации
+Table Struct tmpSoprAgr "Для сбора какой нибудь информации"
+(
+  NmForm   : string[100]  "Наименование формы"
+, NmGroup  : string[100]  "Наименование сбора"
+, SortName : string   "Ключ сортировки"
+, sFld1    : Array [1..20] of string   "строчные значения"
+, fFld1    : Array [1..20] of double   "числовые значения"
+)
+With index
+(
+  tmpSoprAgr00 = NmForm + NmGroup + SortName
 );
 
 

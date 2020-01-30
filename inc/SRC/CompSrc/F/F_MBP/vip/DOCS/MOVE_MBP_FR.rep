@@ -1,0 +1,494 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Спецоснастка
+// Печать документа на внутреннее перемещение спецоснастки
+//------------------------------------------------------------------------------
+
+//-------------------------------------------------------------------------
+var sReqPers, sReqPersSh, sReqPersPost, sLetPers, sLetPersSh, sLetPersPost : string;
+var sComFormat0, sComFormat1 : string;
+
+Procedure LoadSigners;
+{
+  sReqPers := sReqPersSh := sReqPersPost := '';
+  sLetPers := sLetPersSh := sLetPersPost := '';
+
+  var bPickPerson : boolean = False;
+  bPickPerson := ((pTypeDoc = mbpMoveDoc) and boGetTune('SKLAD.AKT_MOVE.ZAPRWIND'));
+
+  if (pTypeDoc = mbpNewPDoc)
+    Exit;
+
+  // Затребовал
+  if (bPickPerson and (cReqPers <> 0))
+  {
+    sReqPers := GetPersName(cReqPers);
+    sReqPersSh := GetShortName(GetPersName(cReqPers));
+    sReqPersPost := GetPersPost(cReqPers);
+  }
+  else
+    if (iFeeSigners.FeeSignersIsValid)
+    {
+      if (iFeeSigners.RestrictFeeByRole(2, 'Requested'))
+      {
+        sReqPers := iFeeSigners.GetSignerFIO(1);
+        sReqPersSh := iFeeSigners.GetSignerFIO(7);
+        sReqPersPost := iFeeSigners.GetSignerPosition(1);
+      }
+
+      iFeeSigners.ClearRestriction;
+    }
+
+  // Разрешил
+  if (bPickPerson and (cLetPers <> 0))
+  {
+    sLetPers := GetPersName(cLetPers);
+    sLetPersSh := GetShortName(GetPersName(cLetPers));
+    sLetPersPost := GetPersPost(cLetPers);
+  }
+  else
+    if (iFeeSigners.FeeSignersIsValid)
+    {
+      if (iFeeSigners.RestrictFeeByRole(2, 'Allowed'))
+      {
+        sLetPers := iFeeSigners.GetSignerFIO(1);
+        sLetPersSh := iFeeSigners.GetSignerFIO(7);
+        sLetPersPost := iFeeSigners.GetSignerPosition(1);
+      }
+
+      iFeeSigners.ClearRestriction;
+    }
+
+  sComFormat0 := sComFormat1 := '';
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    sComFormat0 := iFeeSigners.GetSignersList(0);
+    sComFormat1 := iFeeSigners.GetSignersList(1);
+  }
+}
+
+Procedure LoadMoveSpec;
+{
+  Npp := Npp + 1;
+  ItogSum := ItogSum + InDocSum;
+
+  ClearBuffer(#Move_MBPFR);
+  Move_MBPFR.WokerFIO  := Persons.FIO;
+  Move_MBPFR.WokerTabN := STabN;
+  Move_MBPFR.NRec    := MBPIn.nRec;
+  Move_MBPFR.NPP     := NPP;
+  Move_MBPFR.NameMBP := KatMBP.Name;
+  Move_MBPFR.NNumber := KatMBP.NNumber;
+  Move_MBPFR.KatEd_Name := KatEd.Name;
+  Move_MBPFR.KatEd_Kod := piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код');
+
+  Move_MBPFR.MbpGrKod  := KatMBP.KodGr;     // 08
+  Move_MBPFR.MbpGrName := GroupMC.Name;     // 09
+  Move_MBPFR.SklNum    := GetMBPSklNum(KatMBP.DopInfo, MBPIn.DopInfo);
+  Move_MBPFR.InvNum    := GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo);
+  Move_MBPFR.PasNum    := GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo);
+  Move_MBPFR.Kol       := MBPIn.KolDoc;
+  Move_MBPFR.StOld     := Round(OutBalSum, 2);
+  Move_MBPFR.StNew     := Round(InDocSum, 2);
+  Move_MBPFR.StRaz     := Round(InDocSum - OutBalSum, 2);
+  Move_MBPFR.price     := MBPIn.Price;
+  Move_MBPFR.sumpr     := InDocSum;
+  Move_MBPFR.oldSumPr  := OutBalSum;
+  Move_MBPFR.SrokExp   := SrokExpl;
+  Move_MBPFR.SrokSl    := if ((UpCase(Move_MBPFR.SrokExp) = 'ДО ИЗНОСА') or (UpCase(Move_MBPFR.SrokExp) = 'РАЗОВАЯ') or
+                              (Move_MBPFR.SrokExp = ''), Move_MBPFR.SrokExp,  Move_MBPFR.SrokExp + ' мес.');
+
+  // Ввод в эксплуатацию
+  if (MBPMove.Status = mbpInExDoc)
+  {
+    // Направление расхода
+    Move_MBPFR.DirectExp := piExtAttr.sGetAttr(coMBPIn, MBPIn.nRec, 'Направление расхода');
+
+    if (Move_MBPFR.DirectExp = '')
+      Move_MBPFR.DirectExp := piExtAttr.sGetAttr(coMBPMove, MBPMove.nRec, 'Направление расхода');
+
+    // Статья затрат
+    Move_MBPFR.ItemCosts := piExtAttr.sGetAttr(coMBPIn, MBPIn.nRec, 'Статья затрат');
+
+    if (Move_MBPFR.ItemCosts = '')
+      Move_MBPFR.ItemCosts := piExtAttr.sGetAttr(coMBPMove, MBPMove.nRec, 'Статья затрат');
+
+    // Элемент затрат
+    Move_MBPFR.ElemCosts := piExtAttr.sGetAttr(coMBPIn, MBPIn.nRec, 'Элемент затрат');
+
+    if (Move_MBPFR.ElemCosts = '')
+      Move_MBPFR.ElemCosts := piExtAttr.sGetAttr(coMBPMove, MBPMove.nRec, 'Элемент затрат');
+  }
+
+  Insert Current Move_MBPFR;
+
+  TotStNew := TotStNew + Round(InDocSum, 2);
+  TotStOld := TotStOld + Round(OutBalSum, 2);
+}
+
+procedure LoadMoveDoc;
+{
+  FrToMol := '';
+  FrToMolPost := '';
+
+  // Ввод в эксплуатацию на конкретного работника
+  if (MBPMove.Status = mbpInExDoc) and (isValid(tnDocPerson))
+  {
+    FrToMol := DocPerson.FIO;
+
+    if (GetFirst Catalogs where (( PersCard.cPost == Catalogs.nRec )) = tsOk)
+      FrToMolPost := Catalogs.Name;
+  }
+  else
+    if (MBPMove.Status <> mbpNewPDoc) // Не переоценка
+    {
+      FrToMol := toKatMol.Name;
+      FrToMolPost := oSDfuns.Get_MOL_Post(toKatMol.nRec);
+    }
+
+  Npp := 0;
+  ItogSum := 0.0;
+  TotStOld := 0.00;
+  TotStNew := 0.00;
+
+  delete all Move_MBPFR;
+
+  _LOOP MBPIn
+    LoadMoveSpec;
+
+  ItogSumFr := ItogSum;
+  NppFr     := Npp;
+
+  ItogNumStr    := DoubleToStr(Npp, '\m4');
+  ItogSumStr    := DoubleToStr(ItogSum,'\2p\m4');
+  ItogSumKopStr := if (Pos('ноль', DoubleToStr(ItogSum, '\2p5')) <> 0, ' ', DoubleToStr(ItogSum, '\2p88'));
+  ItogSumRubKop := DoubleToString(0, ItogSum);
+}
+
+//-------------------------------------------------------------------------
+
+var lMarkCount, lIndex, lSign, lDrag : longint;
+
+function IsFindMoveDoc : boolean;
+var _cNRec : comp;
+{
+  IsFindMoveDoc := False;
+
+  if (lIndex = 0)
+  {
+    if bPrintCurDoc // печатаем текущий документ
+      lMarkCount := 0;
+    else            // печатаем помеченные документы
+      lMarkCount := GetMarkerCount(DocMarker);
+
+    if (lMarkCount = 0) // печатаем текущий документ
+    {
+      lMarkCount := 1;
+      bPrintCurDoc := True;
+    }
+  }
+
+  while (lIndex < lMarkCount)
+  {
+    if (not bPrintCurDoc)
+    {
+      if (not GetMarker(DocMarker, lIndex, _cNRec))
+      {
+        lIndex++;
+        Continue;
+      }
+
+      if (GetFirst FastFirstRow MBPMove where (( _cNRec == MBPMove.nRec )) <> tsOk)
+      {
+        lIndex++;
+        Continue;
+      }
+    }
+
+    IsFindMoveDoc := True;
+    lIndex++;
+    Break;
+  }
+}
+
+//-------------------------------------------------------------------------
+
+DataStream DTSMove_MBP
+(
+  [CFH]           CommonFormHeader;
+  [pTypeDoc]      pTypeDoc;
+  [NDE_Rub]       if (sGetTune('NDE.ShortRub') <> '', sGetTune('NDE.ShortRub'), 'руб.');
+  [NDE_Kop]       if (sGetTune('NDE.ShortKop') <> '', sGetTune('NDE.ShortKop'), 'коп.');
+  [PredComInForm] sComFormat0;
+  [ListComInForm] sComFormat1;
+
+  DataSet MoveDoc
+  (
+    [FrTipOrg]      iOrgInfo.MyOrgType;
+    [FrName]        iOrgInfo.GetMyOrgNameT(MBPMove.dMove);
+    [FrOKPO]        iOrgInfo.MyOrgOKPO;
+    [FrUNN]         iOrgInfo.MyOrgUNN;
+    [FrAdress]      iOrgInfo.MyOrgAdress;
+    [MBPMove_BarCode] GenerateBarCode(GetDocTiDkGal(pTypeDoc), MBPMove.nRec);
+    [MBPMove_Nom]   MBPMove.Nom;
+    [MBPMove_dMove] DatetoStr(MBPMove.dMove, 'DD/MM/YYYY');
+    [DateMoveD]     DateToStr(MBPMove.dMove, 'DD');
+    [DateMoveM]     DateToStr(MBPMove.dMove, 'Month');
+    [DateMoveMon]   DateToStr(MBPMove.dMove, 'mon');
+    [DateMoveY]     DateToStr(MBPMove.dMove, 'YYYY');
+    [DateMoveMY]    DatetoStr(MBPMove.dMove, 'MM/YYYY');
+    [FrOrgName]     iKatOrg.GetKatOrgName_History(KatPodr.cOrg, koOnTune, MBPMove.dMove);
+    [FrOrgUNN]      oHistory.sGetField(coKatOrg, KatPodr.cOrg, 'UNN', MBPMove.dMove);
+    [FrOrgAdress]   oHistory.sGetField(coKatOrg, KatPodr.cOrg, 'ADDR', MBPMove.dMove);
+    [KatPodr_Name]  GetFullPodrName(KatPodr.Name, KatPodr.cPodr);
+    [KatMol_Name]   KatMOL.Name;
+    [KatMolShort]   GetShortName(KatMol.Name);
+    [KatMol_Post]   oSDfuns.Get_MOL_Post(KatMol.nRec);
+    [ToOrgName]     iKatOrg.GetKatOrgName_History(toKatPodr.cOrg, koOnTune, MBPMove.dMove);
+    [ToOrgUNN]      oHistory.sGetField(coKatOrg, toKatPodr.cOrg, 'UNN', MBPMove.dMove);
+    [ToOrgAdress]   oHistory.sGetField(coKatOrg, toKatPodr.cOrg, 'ADDR', MBPMove.dMove);
+    [FrToPodr]      if (MBPMove.Status = mbpNewPDoc, '', GetFullPodrName(toKatPodr.Name, toKatPodr.cPodr));
+    [FrToMol]       FrToMol;
+    [FrToMolShort]  GetShortName(FrToMol);
+    [FrToMolPost]   FrToMolPost;
+    [ToMolName]     if (MBPMove.Status = mbpNewPDoc, '', toKatMol.Name);
+    [ToMolShort]    if (MBPMove.Status = mbpNewPDoc, '', GetShortName(toKatMol.Name));
+    [ToMolPost]     if (MBPMove.Status = mbpNewPDoc, '', oSDfuns.Get_MOL_Post(toKatMol.nRec));
+    [MainBoss]      GetShortName(sGetTune('Boss'));
+    [FrMainBuh]     GetShortName(sGetTune('MainBuh'));
+    [ReqPersFIO]    sReqPers;
+    [ReqPersShort]  sReqPersSh;
+    [ReqPersPost]   sReqPersPost;
+    [LetPersFIO]    sLetPers;
+    [LetPersShort]  sLetPersSh;
+    [LetPersPost]   sLetPersPost;
+
+    [TotStOld]      TotStOld;
+    [TotStNew]      TotStNew;
+    [TotStRaz]      TotStNew - TotStOld;
+    [ItogSumFr]     ItogSumFr;
+    [NppFr]         NppFr;
+    [ItogNumStr]    ItogNumStr;
+    [ItogSumStr]    ItogSumStr;
+    [ItogSumKopStr] ItogSumKopStr;
+    [ItogSumRubKop] ItogSumRubKop;
+
+    Table Move_MBPFR
+    (
+      [NRec]       Move_MBPFR.NRec;
+      [NPP]        Move_MBPFR.NPP;
+      [WokerFIO ]  Move_MBPFR.WokerFIO;
+      [WokerTabN]  Move_MBPFR.WokerTabN;
+      [NameMBP]    Move_MBPFR.NameMBP;
+      [NNumber]    Move_MBPFR.NNumber;
+      [KatEd_Name] Move_MBPFR.KatEd_Name;
+      [KatEd_Kod]  Move_MBPFR.KatEd_Kod;
+      [MbpGrKod]   Move_MBPFR.MbpGrKod;
+      [MbpGrName]  Move_MBPFR.MbpGrName;
+      [SklNum]     Move_MBPFR.SklNum;
+      [InvNum]     Move_MBPFR.InvNum;
+      [PasNum]     Move_MBPFR.PasNum;
+      [Kol]        Move_MBPFR.Kol;
+      [StOld]      Move_MBPFR.StOld;
+      [StNew]      Move_MBPFR.StNew;
+      [StRaz]      Move_MBPFR.StRaz;
+      [price]      Move_MBPFR.Price;
+      [sumpr]      Move_MBPFR.SumPr;
+      [oldSumPr]   Move_MBPFR.oldSumPr;
+      [SrokExp]    Move_MBPFR.SrokExp;
+      [SrokSl]     Move_MBPFR.SrokSl;
+      [DirectExp]  Move_MBPFR.DirectExp;
+      [ItemCosts]  Move_MBPFR.ItemCosts;
+      [ElemCosts]  Move_MBPFR.ElemCosts;
+
+      DataSet dsDragNal
+      (
+        [DragKod]  iDragRep.DragNal_Kod;
+        [DragName] iDragRep.DragNal_Name;
+        [VidDrag]  iDragRep.DragNal_Vid;
+        [EdAbbr]   iDragRep.DragNal_EdAbbr;
+        [KolOld]   iDragRep.DragNal_KolOld;
+        [KolNew]   iDragRep.DragNal_KolNew;
+      );
+    );
+  );
+
+  DataSet Signers
+  (
+    [FIO]   iFeeSigners.GetSignerFIO(1);
+    [TabN]  iFeeSigners.GetSignerTabN;
+    [Post]  iFeeSigners.GetSignerPosition(1);
+    [Role]  iFeeSigners.GetSignerRole;
+  );
+)
+
+HandleEvent DataSet Signers
+//-------------------------
+  cmPreProcess:
+  {
+    lSign := 0;
+
+    if (not iFeeSigners.FeeSignersIsValid)
+      AbortProcess;
+  }
+//-------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    lSign++;
+
+    if (lSign = 1)
+    {
+      if (iFeeSigners.GetSignerFirst)
+        ContinueDataSet;
+    }
+    else
+    {
+      if (iFeeSigners.GetSignerNext)
+        ContinueDataSet;
+    }
+  }
+//-------------------------
+End; // HandleEvent Table tblFeeSigners
+
+HandleEvent DataSet dsDragNal
+//-------------------------
+  cmPreProcess:
+  {
+    lDrag := 0;
+    iDragRep.LoadDragChg(Move_MBPFR.NRec);
+  }
+//-------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    lDrag++;
+
+    if (lDrag = 1)
+    {
+      if (iDragRep.FirstDragChg)
+        ContinueDataSet;
+    }
+    else
+    {
+      if (iDragRep.NextDragChg)
+        ContinueDataSet;
+    }
+  }
+//-------------------------
+End; // HandleEvent DataSet dsDragNal
+
+HandleEvent Table Move_MBPFR
+//-------------
+  cmOnProcess:
+    if (not NextVisual)
+      BreakProcess;
+//-------------
+end; // HandleEvent Table Move_MBPFR
+
+HandleEvent DataSet MoveDoc
+//----------------------
+  cmPreProcess:
+    lIndex := 0;
+//----------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    if (IsFindMoveDoc)
+    {
+      LoadMoveDoc;
+      ContinueDataSet;
+    }
+  }
+//----------------------
+End; // HandleEvent DataSet MoveDoc
+
+HandleEvent // DataStream DTSMove_MBP
+//-------------
+  cmPreProcess:
+  {
+    StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak + vfConfirm, 'Идет формирование отчета...', 1);
+    LoadSigners;
+  }
+//-------------
+  cmPostProcess:
+  {
+    delete all Move_MBPFR;
+    StopVisual('', 0);
+  }
+//-------------
+end; // HandleEvent DataStream DTSMove_MBP
+end; // DataStream DTSMove_MBP
+
+//-------------------------------------------------------------------------
+
+Procedure PrintMBPMove_FR;
+{
+  PushPos(#MBPMove);
+  PushPos(#MBPIn);
+
+  case (MBPMove.Status) of
+  //----------------------
+    mbpChgPDoc:  RunFReportByGroup(DTSMove_MBP, 'ChgParam');
+  //----------------------  
+    mbpNewPDoc:  RunFReportByGroup(DTSMove_MBP, 'AktPereoc');
+  //----------------------
+    mbpInExDoc:  // Ввод в эксплуатацию
+      case (wGetTune('Country')) of
+      //----------------
+        ccRus:
+          if (not GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0))
+            RunFReportByGroup(DTSMove_MBP, 'VvodVExRussia');
+          else
+            RunFReportByGroup(DTSMove_MBP, 'VvodVExVSMN');
+      //----------------
+        ccBel:
+          RunFReportByGroup(DTSMove_MBP, 'VvodVEx,VvodVExBel');
+      //----------------
+        ccKaz:  // Приложение 11 и МБ-7 для Казахстана + формы для других стран
+          RunFReportByGroup(DTSMove_MBP, 'VvodVEx,VozvrExKaz');
+      //----------------
+      else
+        RunFReportByGroup(DTSMove_MBP, 'VvodVEx');
+      //----------------
+      end;
+  //----------------------
+    mbpMoveDoc,  // Внутреннее перемещение
+    mbpFrExDoc:  // Возврат из эксплуатации
+      case (wGetTune('Country')) of
+      //----------------
+        ccRus:
+          if (not GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0))
+            RunFReportByGroup(DTSMove_MBP, 'MoveRussia');
+          else
+            RunFReportByGroup(DTSMove_MBP, 'MoveVSMN');
+      //----------------
+        ccBel:
+          if (MBPMove.Status = mbpMoveDoc)
+            RunFReportByGroup(DTSMove_MBP, 'MoveAll,MoveBel');
+          else
+            RunFReportByGroup(DTSMove_MBP, 'MoveAll');
+      //----------------
+        ccKaz:
+          RunFReportByGroup(DTSMove_MBP, 'MoveKaz');  // Только приложение 11
+      //----------------
+      else
+        RunFReportByGroup(DTSMove_MBP, 'MoveAll');
+      //----------------
+      end;
+  //----------------------
+  end;
+
+  PopPos(#MBPIn);
+  PopPos(#MBPMove);
+  ReReadRecord(#MBPMove);
+}
+
+//-------------------------------------------------------------------------

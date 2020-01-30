@@ -1,0 +1,897 @@
+//--------------------------------------------------------------------------------
+//                                                        (c) корпорация Галактика
+// Галактика 7.12 - Спецоснастка
+// Печать Акта на списание спецоснастки
+//--------------------------------------------------------------------------------
+
+function GetSrokExplStr : string;
+{
+  GetSrokExplStr := GetSrokStr(MBPIn.DateEksp, Srok);
+}
+
+function GetSrokFactStr : string;
+var tmpSrok : longint;
+{
+  GetSrokFactStr := '';
+
+  if (Longint(MBPIn.DateEksp) = 0)
+    Exit;
+
+  if (Longint(MBPIn.DateEnd) = 0) OR (MBPOut.dOut < MBPIn.DateEnd)
+    tmpSrok := DiffMonths(MBPOut.dOut, MBPIn.DateEksp);
+  else
+    tmpSrok := DiffMonths(MBPIn.DateEnd, MBPIn.DateEksp);
+
+  if (tmpSrok <= 0)
+    Exit;
+
+  GetSrokFactStr := String(tmpSrok);
+}
+
+//------------------------------------------------------------------------
+
+var UtilDocFR : TUtilDocInfo;
+var UtilSpecFR : TUtilSpcInfo;
+var lMarkCount, lIndex : longint;
+var bFirst : boolean;
+var ZeroCond : boolean;
+var cUDNRecFR : comp;
+
+function IsFindSpisDoc : boolean;
+var _cNRec : comp;
+{
+  IsFindSpisDoc := False;
+
+  if (lIndex = 0)
+  {
+    if bPrintCurDoc // печатаем текущий документ
+      lMarkCount := 0;
+    else            // печатаем помеченные документы
+      lMarkCount := GetMarkerCount(DocMarker);
+
+    if (lMarkCount = 0) // печатаем текущий документ
+    {
+      lMarkCount := 1;
+      bPrintCurDoc := True;
+    }
+  }
+
+  while (lIndex < lMarkCount)
+  {
+    if (not bPrintCurDoc)
+    {
+      if (not GetMarker(DocMarker, lIndex, _cNRec))
+      {
+        lIndex++;
+        Continue;
+      }
+
+      if (GetFirst FastFirstRow MBPMove where (( _cNRec == MBPMove.nRec )) <> tsOk)
+      {
+        lIndex++;
+        Continue;
+      }
+    }
+
+    IsFindSpisDoc := True;
+    lIndex++;
+    Break;
+  }
+}
+
+function IsFindUtilInfo : boolean;
+var cUSNRec : comp;
+{
+  IsFindUtilInfo := False;
+
+  if (bFirst)
+  {
+    bFirst := False;
+
+    if (GetFirst MBPOut <> tsOk)
+      Exit;
+  }
+  else
+  {
+    if (GetNext MBPOut <> tsOk)
+      Exit;
+  }
+
+  do
+  {
+    cUSNRec := piUtilDoc.GetUtilSpcNRec(MBPOut.nRec);
+
+    if (cUSNRec <> 0)
+      if (piUtilDoc.GetUtilSpcInfo(cUSNRec, UtilSpecFR))
+      {
+        IsFindUtilInfo := True;
+        Exit;
+      }
+  }
+  while (GetNext MBPOut = tsOk);
+}
+
+//------------------------------------------------------------------------
+
+DataStream DTS
+(
+  [CFH]            CommonFormHeader;
+  [MainBuh]        GetShortName(sGetTune('MainBuh'));
+  [BossComName]    BossFR.BossFIO;
+  [BossComDlg]     BossFR.BossPosition;
+  [UtvLico_Name]   UtvLico_Name;
+  [UtvLico_NameSh] UtvLico_NameSh;
+  [UtvLico_Post]   UtvLico_Post;
+  [ShortNDE]       sGetTune('NDE.ShortRub') + ' ' + sGetTune('NDE.ShortKop');
+  [NDE_Rub]        if (sGetTune('NDE.ShortRub') <> '', sGetTune('NDE.ShortRub'), 'руб.');
+  [Rub_Str]        sGetTune('NDE.NameRubl')+';'+sGetTune('NDE.NameRubla')+';'+sGetTune('NDE.NameRublei');
+  [Kop_Str]        sGetTune('NDE.NameKop')+';'+sGetTune('NDE.NameKopki')+';'+sGetTune('NDE.NameKopek');
+
+  DataSet SpisMBPHead
+  (
+    [MBPMove_NRec]        MBPMove.nRec;
+    [MBPMove_BarCode]     GenerateBarCode(GetDocTiDkGal(pTypeDoc), MBPMove.nRec);
+    [MBPMove_Nom]         MBPMove.Nom;
+    [MBPMove_dMove]       DateToStr(MBPMove.dMove, 'DD/MM/YYYY');
+    [MBPMove_dMoveStr]    DateToStr(MBPMove.dMove, 'DD mon YYYY');
+    [KatPodr_Name]        KatPodr.Name;
+    [KatMol_Name]         KatMol.Name;
+    [KatMol_Name_shrt]    GetShortName(KatMol.Name);
+    [KatMol_Post]         oSDfuns.Get_MOL_Post(KatMol.nRec);
+    [myOrg_Name]          iOrgInfo.GetMyOrgNameT(MBPMove.dMove);
+    [myOrg_OKPO]          iOrgInfo.MyOrgOKPO;
+    // информация об Акте инвентаризации
+    [InvDoc_NRec]         ParentDoc.nRec;
+    [InvDoc_Nom]          ParentDoc.Nom;
+    [InvDoc_Date]         ParentDoc.dMove;
+    // информация об Акте перевода в утиль
+    [UDNRec]              cUDNRecFR;
+    [UDPodrF]             UtilDocFR.PodrFrName;
+    [UDEdName]            UtilDocFR.EdIzmName;
+    [UDEdKod]             UtilDocFR.EdIzmKod;
+    [UDKol]               UtilDocFR.DocKol;
+    [UDSum]               UtilDocFR.DocSumma;
+
+    DataSet Predmety
+    (
+      [NRec]          MBPOut.nRec;
+      [Name]          KatMBP.Name;
+      [NNumber]       KatMBP.NNumber;
+      [KatEd_Kod]     piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код');
+      [KatEd_Name]    KatEd.Name;
+      [KatEd_Abbr]    KatEd.Abbr;
+      [DatePost]      f_DateToStrZ(GetExplBegDate(MBPIn.nRec, MBPIn.dExplBeg, MBPIn.cSpSopr));
+      [DateExp]       f_DateToStrZ(MBPIn.DateEksp);
+      [Price]         MBPIn.Price;
+      [MonthExp]      GetSrokExplStr;
+      [SrokF]         GetSrokFactStr;
+      [InvNum]        GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo);
+      [PasNum]        GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo);
+      [Party_Kod]     KatParty.Kod;
+      [Party_Name]    KatParty.Name;
+      [tKol]          if (MBPMove.Status = mbpIznoDoc, MBPOut.tKol, MBPOut.Kol);
+      [tSumma]        if (MBPMove.Status = mbpIznoDoc, if (wGetTune('Fin.MBP.OstStoim') = 0, MBPOut.tSumma, MBPOut.tSumma - MBPOut.tSummaIsn),
+                        if (ZeroCond, 0, if (wGetTune('Fin.MBP.OstStoim') = 0, MBPOut.Summa, MBPOut.Summa - MBPOut.SummaIsn)));
+      [tPercent]      MBPOut.tPercent;
+      [tSummaIsn]     MBPOut.tSummaIsn;
+      [Percent]       MBPOut.Percent;
+      [SummaIsn]      if (ZeroCond, Double(0), MBPOut.SummaIsn);
+      [Ost]           MBPOut.Summa - MBPOut.SummaIsn;
+      [Kode]          if (MBPMove.Status = mbpSpisDoc, MBPSpis.Kod, '');
+      [Name2]         if (MBPMove.Status = mbpSpisDoc, MBPSpis.Name, '');
+      [Fio]           if (isValid(#Persons), Persons.FIO, '');
+      [TabN]          STabN;
+    );
+
+    DataSet UtilFR
+    (
+      [MBPName]     KatMBP.Name;
+      [MBPNum]      KatMBP.NNumber;
+      [USWeight]    UtilSpecFR.UtilWeight;
+      [USNormP]     UtilSpecFR.NormPrice;
+      [USStoim]     UtilSpecFR.UtilStoim;
+    );
+  );
+
+  Table ComisFR
+  (
+    [ComName]    ComisFR.MemberFIO;
+    [ComDlg]     ComisFR.MemberPosition;
+  );
+
+  DataSet Signers
+  (
+    [FIO]   iFeeSigners.GetSignerFIO(1);
+    [TabN]  iFeeSigners.GetSignerTabN;
+    [Post]  iFeeSigners.GetSignerPosition(1);
+    [Role]  iFeeSigners.GetSignerRole;
+  );
+)
+
+HandleEvent DataSet Signers
+//-------------------------
+  cmPreProcess:
+  {
+    lSign := 0;
+
+    if (not iFeeSigners.FeeSignersIsValid)
+      AbortProcess;
+  }
+//-------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    lSign++;
+
+    if (lSign = 1)
+    {
+      if (iFeeSigners.GetSignerFirst)
+        ContinueDataSet;
+    }
+    else
+    {
+      if (iFeeSigners.GetSignerNext)
+        ContinueDataSet;
+    }
+  }
+//-------------------------
+End; // HandleEvent DataSet Signers
+
+HandleEvent DataSet UtilFR
+//------------------
+  cmPreProcess:
+  {
+    bFirst := True;
+
+    if (MBPMove.Status <> mbpSpisDoc)
+      BreakProcess;
+  }
+//------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    if (IsFindUtilInfo)
+      ContinueDataset;
+  }
+//------------------
+End; // HandleEvent DataSet UtilFR
+
+HandleEvent DataSet Predmety
+//------------------
+  cmPreProcess:
+    bFirst := True;
+//------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    if (bFirst)
+    {
+      if (GetFirst MBPOut = tsOk)
+      {
+        ZeroCond := if (ZeroStoim > 0, isZeroCondition(MBPOut.tPercent), false);
+        ContinueDataset;
+      }
+    }
+    else
+    {
+      if (GetNext MBPOut = tsOk)
+      {
+        ZeroCond := if (ZeroStoim > 0, isZeroCondition(MBPOut.tPercent), false);
+        ContinueDataset;
+      }
+    }
+
+    bFirst := False;
+  }
+//------------------
+End; // HandleEvent DataSet Predmety
+
+HandleEvent DataSet SpisMBPHead
+//------------------
+  cmPreProcess:
+    lIndex := 0;
+//------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    if (IsFindSpisDoc)
+    {
+      // Вывод информации об Акте перевода в утиль
+      cUDNRecFR := if (MBPMove.Status = mbpSpisDoc, piUtilDoc.GetUtilDocNRec(MBPMove.nRec), 0);
+      ClearAdvRecord(UtilDocFR);
+
+      if (cUDNRecFR <> 0)
+        piUtilDoc.GetUtilDocInfo(cUDNRecFR, UtilDocFR);
+
+      ContinueDataSet;
+    }
+  }
+//------------------
+End; // HandleEvent DataSet SpisMBPHead
+
+HandleEvent // DataStream DTS
+//------------------
+  cmPreProcess:
+  {
+    StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, 'Формирование ведомости...', 1);
+    PushPos(#MBPMove);
+    PushPos(#MBPOut);
+  }
+//------------------
+  cmPostProcess:
+  {
+    PopPos(#MBPOut);
+    PopPos(#MBPMove);
+    StopVisual('', 0);
+  }
+//------------------
+End; // HandleEvent DataStream DTS
+End; // DataStream DTS
+
+//-------------------------------------------------------------------------
+
+Procedure PrintSpisMBP_FR;
+{
+  Delete All BossFR;
+  Delete All ComisFR;
+
+  // Вывод комиссии
+  #WriteFRFeeSignersChairMan(iFeeSigners,BossFR);
+  #WriteFRFeeSignersOS(iFeeSigners,ComisFR);
+
+  if (GetFirst ComisFR <> tsOk)
+  {
+    ClearBuffer(#ComisFR);
+    insert current ComisFR;
+    insert current ComisFR;
+    insert current ComisFR;
+  }
+
+  // Вывод утверждающего лица
+  UtvLico_Name := UtvLico_NameSh := UtvLico_Post := '';
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(2, 'UtvLico'))
+    {
+      UtvLico_Name := iFeeSigners.GetSignerFIO(1);
+      UtvLico_NameSh := iFeeSigners.GetSignerFIO(7);
+      UtvLico_Post := iFeeSigners.GetSignerPosition(1);
+    }
+
+    iFeeSigners.ClearRestriction;
+  }
+
+  case (MBPMove.Status) of
+  //----------------------
+    mbpSpisDoc:
+    {
+      case (wGetTune('Country')) of
+      //----------------
+        ccRus:
+          if (not GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0))
+            RunFReportByGroup(DTS, 'AktSpis');
+          else
+            RunFReportByGroup(DTS, 'AktSpis,AktSpisVSMN');
+      //----------------
+        ccKaz:
+          RunFReportByGroup(DTS, 'AktSpisKaz');
+      //----------------
+      else
+        RunFReportByGroup(DTS, 'AktSpis');
+      //----------------
+      end;
+    }
+  //----------------------
+    mbpIznoDoc: RunFReportByGroup(DTS, 'IznoDoc');
+  //----------------------
+    mbpLostDoc: RunFReportByGroup(DTS, 'AktLost');
+  //----------------------
+  end;
+
+  ReReadRecord(#MBPMove);
+}
+
+//---------------------------------------------------------------------------------
+
+Procedure PrintSpis_MBP_Head;
+Var cUDNRec : comp;
+    UtilDocInfo : TUtilDocInfo;
+{
+  frmSpis_MBP.Write(GetDocTiDkGal(MBPMove.Status));
+  frmSpis_MBP.Write(MBPMove.nRec);
+  frmSpis_MBP.Write(MBPMove.Nom);
+  frmSpis_MBP.Write(MBPMove.dMove);
+  frmSpis_MBP.Write(if (isValid(tnKatPodr), KatPodr.Name, ''));
+  frmSpis_MBP.Write(if (isValid(tnKatMol), KatMol.Name, ''));
+  frmSpis_MBP.Write(GetShortName(if (isValid(tnKatMol), KatMol.Name, '')));
+  frmSpis_MBP.Write(GetShortName(sGetTune('MainBuh')));
+  frmSpis_MBP.Write(iOrgInfo.GetMyOrgNameT(MBPMove.dMove));
+  frmSpis_MBP.Write(iOrgInfo.MyOrgOKPO);
+  frmSpis_MBP.write('');  // SchMain
+  frmSpis_MBP.write('');  // KodMain
+  frmSpis_MBP.write('__________');  // nPrikaz
+  frmSpis_MBP.write('"___" ____________ 20__г.'); // dPrikaz
+
+  #WriteCommission_FeeSigners(iFeeSigners,frmSpis_MBP,SpisMBPProt);
+
+  frmSpis_MBP.write(sGetTune('NDE.ShortRub')); // НДЕ
+
+  // Вывод информации об Акте перевода в утиль
+  if (MBPMove.Status <> mbpSpisDoc)
+    cUDNRec := Comp(0);
+  else
+    cUDNRec := piUtilDoc.GetUtilDocNRec(MBPMove.nRec);
+
+  if (cUDNRec = 0)
+    frmSpis_MBP.SkipFormat(14);
+  else
+  {
+    piUtilDoc.GetUtilDocInfo(cUDNRec, UtilDocInfo);
+
+    frmSpis_MBP.write(cUDNRec);
+    frmSpis_MBP.write(UtilDocInfo.Nom);
+    frmSpis_MBP.write(UtilDocInfo.DocDate);
+    frmSpis_MBP.write(UtilDocInfo.PodrFrName);
+    frmSpis_MBP.write(UtilDocInfo.MolFrName);
+    frmSpis_MBP.write(UtilDocInfo.PodrToName);
+    frmSpis_MBP.write(UtilDocInfo.MolToName);
+    frmSpis_MBP.write(UtilDocInfo.MCUName);
+    frmSpis_MBP.write(UtilDocInfo.MCUNumber);
+    frmSpis_MBP.write(UtilDocInfo.EdIzmName);
+    frmSpis_MBP.write(UtilDocInfo.EdIzmShNm);
+    frmSpis_MBP.write(UtilDocInfo.EdIzmKod);
+    frmSpis_MBP.write(UtilDocInfo.DocKol);
+    frmSpis_MBP.write(UtilDocInfo.DocSumma);
+  }
+
+  frmSpis_MBP.write(ParentDoc.nRec);
+  frmSpis_MBP.write(ParentDoc.Nom);
+  frmSpis_MBP.write(ParentDoc.dMove);
+}
+
+Procedure PrintSpis_MBP_Sp;
+Var cUSNRec : comp;
+    ZeroCond : boolean;
+    UtilSpcInfo : TUtilSpcInfo;
+{
+  frmSpis_MBP.PutEventById(feDoLoop, fcSpSpis);
+  frmSpis_MBP.Write(MBPOut.nRec);
+  frmSpis_MBP.Write(KatMBP.Name);
+  frmSpis_MBP.Write(KatMBP.NNumber);
+  frmSpis_MBP.Write(piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код'));
+  frmSpis_MBP.Write(KatEd.Name);
+  frmSpis_MBP.Write(MBPIn.DateEksp);
+  frmSpis_MBP.Write(MBPIn.Price);
+  frmSpis_MBP.Write(GetSrokExplStr);
+  frmSpis_MBP.Write(GetSrokFactStr);
+  frmSpis_MBP.Write(GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo));
+  frmSpis_MBP.Write(GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo));
+
+  ZeroCond := if (ZeroStoim > 0, isZeroCondition(MBPOut.tPercent), false);
+
+  case (MBPMove.Status) of // поля 10, 11
+  //----------------------
+    mbpSpisDoc,
+    mbpLostDoc: // Списание
+    {
+      frmSpis_MBP.Write(MBPOut.Kol);
+      frmSpis_MBP.Write(if (ZeroCond, Double(0), MBPOut.Summa));
+    }
+  //----------------------
+    mbpIznoDoc: // Износ
+    {
+      frmSpis_MBP.Write(MBPOut.tKol);
+      frmSpis_MBP.Write(MBPOut.tSumma);
+    }
+  //----------------------
+    else
+      frmSpis_MBP.SkipFormat(2);
+  //----------------------
+  end;
+
+  frmSpis_MBP.Write(MBPOut.tPercent);  // 12
+  frmSpis_MBP.Write(MBPOut.tSummaIsn); // if ZeroCond then = 0
+  frmSpis_MBP.Write(MBPOut.Percent);
+  frmSpis_MBP.Write(if (ZeroCond, Double(0), MBPOut.SummaIsn));
+
+/*
+  1. После количества последовательно выводятся:
+
+  стоимость предметов,
+  процент износа к моменту операции
+  сумма износа к моменту операции
+  начисленный в операции износ
+  начисленная в операции сумма износа (ушедшая в операции с данным количеством)
+
+  2. Случаи зануления стоимости интерпретируем следующим образом:
+
+  При списании: предметы должны были быть списаны при вводе в эксплуатацию,
+  значит стоимость предметов на балансе к моменту данной операции должна была
+  быть нулевой и списывать было вообще нечего.
+
+  При начислении 100% износа: до момента выполнения операции предметы имели
+  балансовую стоимость, но вместо начисления должны были быть списаны.
+*/
+
+  case (MBPMove.Status) of
+  //----------------------
+     mbpSpisDoc: // Акт на списание
+     {
+       if (isValid(#MBPSpis))
+       {
+         frmSpis_MBP.Write(MBPSpis.Kod);
+         frmSpis_MBP.Write(MBPSpis.Name);
+       }
+       else
+         frmSpis_MBP.SkipFormat(2);
+     }
+  //----------------------
+     mbpIznoDoc, mbpLostDoc:
+       frmSpis_MBP.SkipFormat(2); // Ведомость начисления износа и недостача
+  //----------------------
+   else
+     frmSpis_MBP.SkipFormat(2);
+  //----------------------
+  end; // case
+
+  frmSpis_MBP.Write(Persons.FIO);
+  frmSpis_MBP.Write(STabN);  // табельный номер
+
+  frmSpis_MBP.Write(MBPOut.Summa - MBPOut.SummaIsn); // стоимость без амортизации на момент операции
+  frmSpis_MBP.Write(GetExplBegDate(MBPIn.nRec, MBPIn.dExplBeg, MBPIn.cSpSopr));
+
+  // Вывод данных о спецификации Акта перевода в утиль
+  if (MBPMove.Status <> mbpSpisDoc)
+    cUSNRec := Comp(0);
+  else
+    cUSNRec := piUtilDoc.GetUtilSpcNRec(MBPOut.nRec);
+
+  if (cUSNRec = 0)
+    frmSpis_MBP.SkipFormat(5);
+  else
+  {
+    piUtilDoc.GetUtilSpcInfo(cUSNRec, UtilSpcInfo);
+
+    frmSpis_MBP.write(cUSNRec);
+    frmSpis_MBP.write(UtilSpcInfo.NormWeight);
+    frmSpis_MBP.write(UtilSpcInfo.UtilWeight);
+    frmSpis_MBP.write(UtilSpcInfo.NormPrice);
+    frmSpis_MBP.write(UtilSpcInfo.UtilStoim);
+  }
+}
+
+Procedure PrintSpis_MBP_Foot;
+{
+}
+
+Procedure PrintSpisMBP;
+{
+  case (MBPMove.Status) of
+  //----------------------
+    mbpSpisDoc:
+      case (wGetTune('Country')) of
+      //---------------------------
+        ccRus: frmSpis_MBP.SetGroup('Акт на списание МБП (Россия)');
+      //---------------------------
+        ccBel: frmSpis_MBP.SetGroup('Акт на списание МБП'+ ''#1+
+                                    'Акт на списание МБП (Беларусь)');
+      //---------------------------
+        else
+          frmSpis_MBP.SetGroup('Акт на списание МБП');
+      //---------------------------
+      end;
+  //----------------------
+    mbpIznoDoc: frmSpis_MBP.SetGroup('Ведомость начисления износа');
+  //----------------------
+    mbpLostDoc: frmSpis_MBP.SetGroup('Недостача');
+  //----------------------
+  end;
+
+  var lCount, i : longint;
+  var _cNRec : comp;
+
+  if bPrintCurDoc // печатаем текущий документ
+    lCount := 0;
+  else            // печатаем помеченные документы
+    lCount := GetMarkerCount(DocMarker);
+
+  if (lCount = 0) // печатаем текущий документ
+  {
+    lCount := 1;
+    bPrintCurDoc := True;
+  }
+
+  PushPos(#MBPMove);
+  PushPos(#MBPOut);
+
+  for (i := 0; i < lCount; i := i + 1)
+  {
+    if (not bPrintCurDoc)
+    {
+      if (not GetMarker(DocMarker, i, _cNRec))
+        Continue;
+
+      if (GetFirst FastFirstRow MBPMove where (( _cNRec == MBPMove.nRec )) <> tsOk)
+        Continue;
+    }
+
+    PrintSpis_MBP_Head;
+
+    if (GetFirst MBPOut <> tsOk)
+    {
+      frmSpis_MBP.PutEventById(feDoLoop, fcSpSpis);
+      frmSpis_MBP.SkipFormat(28);
+    }
+    else
+    {
+      _LOOP MBPOut
+        PrintSpis_MBP_Sp;
+    }
+
+    frmSpis_MBP.write(i + 1 < lCount);
+    PrintSpis_MBP_Foot;
+  }
+
+  frmSpis_MBP.PutEvent(feBreak);
+
+  PopPos(#MBPOut);
+  PopPos(#MBPMove);
+  ReReadRecord(#MBPMove);
+
+  if (not frmSpis_MBP.Error)
+    frmSpis_MBP.ShowFile('');
+  else
+    frmSpis_MBP.AbortForm;
+}
+
+//-------------------------------------------------------------------------
+
+Create View ctPrnDoc
+From
+  Appointments,
+  Catalogs;
+
+function GetPersPost(pPer : comp) : string;
+{
+  GetPersPost := '';
+
+  if (ctPrnDoc.GetLast Appointments where (( pPer       == Appointments.Person and
+                                             Integer(0) == Appointments.lPrizn )) = tsOk)
+    if (ctPrnDoc.GetFirst Catalogs where (( ctPrnDoc.Appointments.Post == Catalogs.nRec )) = tsOk)
+      GetPersPost := ctPrnDoc.Catalogs.Name;
+}
+
+//------------------------------------------------------------------------
+
+procedure PrintMBPXLT;
+var Kol, Stoim, Sum, SumIzn : double;
+var Npp : longint;
+var dPost : date;
+var bVSMN : boolean;
+{
+  if (not pXlRepSetup.CheckParam(0, ID, sXLTFileName))
+  {
+    RunInterface('XlRepSetup', 1, ID, sXLTFileName);
+    ReadMyDsk(sXLTFileName, ID, true);
+  }
+
+  Set sXLSFileName := pXL.CreateReport(sXLTFileName, True);
+  // Set sXLSFileName := pXL.CreateXLT(sXLTFileName, True);
+
+  // Определение таблицы отчета (DBTbl Constructor)
+  pXL.CreateTbls(sXLSFileName);
+  // Вывод комиссии
+  #WriteXltFeeSignersTableOS(iFeeSigners,pXL);
+  // Спецификации документа
+  pXL.CreateTbl('TableA');
+  pXL.CreateTblFld('Nom');
+  pXL.CreateTblFld('MBPName');
+  pXL.CreateTblFld('MBPNNum');
+  pXL.CreateTblFld('MBPInvNum');
+  pXL.CreateTblFld('MBPPaspNum');
+  pXL.CreateTblFld('EdKod');
+  pXL.CreateTblFld('EdName');
+  pXL.CreateTblFld('PostDate');
+  pXL.CreateTblFld('ExplDate');
+  pXL.CreateTblFld('Kol');
+  pXL.CreateTblFld('Price');
+  pXL.CreateTblFld('Perc');
+  pXL.CreateTblFld('Stoim');
+  pXL.CreateTblFld('Summa');
+  pXL.CreateTblFld('SumIzn');
+  pXL.CreateTblFld('Srok');
+  pXL.CreateTblFld('SrokF');
+  pXL.CreateTblFld('SrNorm');
+  pXL.CreateTblFld('SpisPr');
+  pXL.CreateTblFld('SpisPrKod');
+  pXL.CreateTblFld('PersFIO');
+  pXL.CreateTblFld('MBPInfo');
+
+  // Строки спецификации
+  Npp := 0;
+  Kol := 0;
+  Sum := 0;
+  Stoim := 0;
+  SumIzn := 0;
+  bVSMN := (GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0) and (TypeRep = 1));
+
+  Delete All UtilFR;
+  PushPos(#MBPOut);
+
+  _LOOP MBPOut
+  {
+    Npp := Npp + 1;
+    Kol := Kol + MBPOut.Kol;
+    Stoim := Stoim + MBPOut.Summa;
+    SumIzn := SumIzn + MBPOut.SummaIsn;
+
+    if (not bVSMN)
+      Sum := Sum + if (wGetTune('Fin.MBP.OstStoim') = 0, MBPOut.Summa, MBPOut.Summa - MBPOut.SummaIsn);
+    else
+      Sum := Sum + if ((Srok <= 12) or (Srok = MaxWord), MBPOut.Summa, MBPOut.Summa - MBPOut.SummaIsn);
+
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('Nom', String(Npp));
+    pXL.SetTblStringFldValue('MBPName', KatMBP.Name);
+    pXL.SetTblStringFldValue('MBPNNum', KatMBP.NNumber);
+    pXL.SetTblStringFldValue('MBPInvNum', GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo));
+    pXL.SetTblStringFldValue('MBPPaspNum', GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo));
+    pXL.SetTblStringFldValue('EdKod', piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код'));
+    pXL.SetTblStringFldValue('EdName', KatEd.Name);
+    dPost := GetExplBegDate(MBPIn.nRec, MBPIn.dExplBeg, MBPIn.cSpSopr);
+    pXL.SetTblStringFldValue('PostDate', if (Longint(MBPIn.DateEksp) > 0, DateToStr(MBPIn.DateEksp, 'DD/MM/YYYY'), if (Longint(dPost) > 0, DateToStr(dPost, 'DD/MM/YYYY'), '')));
+    pXL.SetTblStringFldValue('ExplDate', if (Longint(MBPIn.DateEksp) > 0, DateToStr(MBPIn.DateEksp, 'DD/MM/YYYY'), ''));
+    pXL.SetTblNumberFldValue('Kol', MBPOut.Kol);
+
+    if (not bVSMN)
+      pXL.SetTblNumberFldValue('Price', MBPIn.Price);
+    else
+      pXL.SetTblNumberFldValue('Price', if ((Srok <= 12) or (Srok = MaxWord), MBPIn.Price, (MBPOut.Summa - MBPOut.SummaIsn) / MBPOut.Kol));
+
+    pXL.SetTblNumberFldValue('Perc', MBPOut.tPercent);
+    pXL.SetTblNumberFldValue('Stoim', MBPOut.Summa);
+    pXL.SetTblNumberFldValue('SumIzn', MBPOut.SummaIsn);
+
+    if (not bVSMN)
+      pXL.SetTblNumberFldValue('Summa', if (wGetTune('Fin.MBP.OstStoim') = 0, MBPOut.Summa, MBPOut.Summa - MBPOut.SummaIsn));
+    else
+      pXL.SetTblNumberFldValue('Summa', if ((Srok <= 12) or (Srok = MaxWord), MBPOut.Summa, MBPOut.Summa - MBPOut.SummaIsn));
+
+    pXL.SetTblStringFldValue('Srok',  GetSrokExplStr);
+    pXL.SetTblStringFldValue('SrokF', GetSrokFactStr);
+    pXL.SetTblStringFldValue('SrNorm', '');
+    pXL.SetTblStringFldValue('SpisPr', if (isValid(#MBPSpis), MBPSpis.Name, ''));
+    pXL.SetTblStringFldValue('SpisPrKod', if (isValid(#MBPSpis), MBPSpis.Kod, ''));
+    pXL.SetTblStringFldValue('PersFIO', if (isValid(#Persons), GetShortName(Persons.FIO), ''));
+    pXL.SetTblStringFldValue('MBPInfo', KatMBP.Name + if (isValid(#Persons), ' (' + GetShortName(Persons.FIO) + ')', ''));
+    pXL.InsTblRow;
+
+    // Информация об спецификациях Акта перевода в утиль
+    var cUSNRec : comp;
+    cUSNRec := if (MBPMove.Status = mbpSpisDoc, piUtilDoc.GetUtilSpcNRec(MBPOut.nRec), Comp(0));
+
+    if (cUSNRec <> 0)
+    {
+      var UtilSpcInfo : TUtilSpcInfo;
+      piUtilDoc.GetUtilSpcInfo(cUSNRec, UtilSpcInfo);
+
+      ClearBuffer(#UtilFR);
+      UtilFR.nRec     := Comp(Npp);
+      UtilFR.MBPName  := KatMBP.Name;
+      UtilFR.MBPNum   := KatMBP.NNumber;
+      UtilFR.USWeight := UtilSpcInfo.UtilWeight;
+      UtilFR.USNormP  := UtilSpcInfo.NormPrice;
+      UtilFR.USStoim  := UtilSpcInfo.UtilStoim;
+      insert current UtilFR;
+    }
+  }
+
+  pXL.PublishTbl('TableA');
+  PopPos(#MBPOut);
+
+  // Информация об спецификациях Акта перевода в утиль
+  pXL.CreateTbl('TableB');
+  pXL.CreateTblFld('USName');
+  pXL.CreateTblFld('USNum');
+  pXL.CreateTblFld('USKol');
+  pXL.CreateTblFld('USPrice');
+  pXL.CreateTblFld('USStoim');
+
+  _LOOP UtilFR
+  {
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('USName', UtilFR.MBPName);
+    pXL.SetTblStringFldValue('USNum', UtilFR.MBPNum);
+    pXL.SetTblNumberFldValue('USKol', UtilFR.USWeight);
+    pXL.SetTblNumberFldValue('USPrice', UtilFR.USNormP);
+    pXL.SetTblNumberFldValue('USStoim', UtilFR.USStoim);
+    pXL.InsTblRow;
+  }
+
+  pXL.PublishTbl('TableB');
+
+  // Инициализация переменных Excel-БД (DBVar Constructor)
+  pXL.CreateVar(sXLSFileName);
+
+  // Выгрузка значений переменных
+  pXL.SetStringVar('CFH', CommonFormHeader);
+  pXL.SetNumberVar('RepType', TypeRep + if (GetBooleanParameter('FINPARAMS', 'USEVSMNFORMS', 0), 1000, 0));
+  pXL.SetStringVar('BarCode', Ean13ToEanGnivcTTF(GenerateBarCode(GetDocTiDkGal(pTypeDoc), MBPMove.nRec)));
+  pXL.SetStringVar('DocDate', if(MBPMove.dMove > 0, DateToStr(MBPMove.dMove,'DD/MM/YYYY'), ''));
+  pXL.SetStringVar('DocDateStr', if(MBPMove.dMove > 0, DateToStr(MBPMove.dMove,'от DD mon YYYY года'), ''));
+  pXL.SetStringVar('DocNom', MBPMove.Nom);
+  pXL.SetStringVar('Podr', if(isValid(#KatPodr), KatPodr.Name, ''));
+  pXL.SetStringVar('Mol', if(isValid(#KatMol), KatMol.Name, ''));
+  pXL.SetStringVar('MolPost', if(isValid(tnKatMol), oSDfuns.Get_MOL_Post(KatMol.nRec), ''));
+  pXL.SetStringVar('OrgName', iOrgInfo.GetMyOrgNameT(MBPMove.dMove));
+  pXL.SetStringVar('OKPO', iOrgInfo.MyOrgOKPO);
+  pXL.SetStringVar('MainBoss', if (coGetTune('Boss') = 0, '', GetShortName(sGetTune('Boss'))));
+  pXL.SetStringVar('MainBossPost',  if (coGetTune('Boss') = 0, '', GetPersPost(coGetTune('Boss'))));
+
+  // Вывод утверждающего лица
+  UtvLico_Name := UtvLico_NameSh := UtvLico_Post := '';
+
+  if (iFeeSigners.FeeSignersIsValid)
+  {
+    if (iFeeSigners.RestrictFeeByRole(2, 'UtvLico'))
+    {
+      UtvLico_Name := iFeeSigners.GetSignerFIO(1);
+      UtvLico_NameSh := iFeeSigners.GetSignerFIO(7);
+      UtvLico_Post := iFeeSigners.GetSignerPosition(1);
+    }
+
+    iFeeSigners.ClearRestriction;
+  }
+
+  pXL.SetStringVar('UtvLico', if (UtvLico_Name = '', '', UtvLico_NameSh));
+  pXL.SetStringVar('UtvLicoPost',  if (UtvLico_Name = '', '', UtvLico_Post));
+
+  // Итоговые значения
+  pXL.SetNumberVar('KolAll', Kol);
+  pXL.SetNumberVar('StoimAll', Stoim);
+  pXL.SetNumberVar('SumAll', Sum);
+  pXL.SetNumberVar('SumIznAll', SumIzn);
+
+  // Итоговые значения прописью
+  pXL.SetStringVar('KolAllPr', DoubleToStr(Kol, '\2p\m4') +
+               if (Pos('ноль', DoubleToStr(Kol, '\f\2p5')) <> 0, '',
+                               DoubleToStr(Kol, 'целых \f\2p5')));
+  pXL.SetStringVar('StoimAllPr', DoubleToString(0, Stoim));
+  pXL.SetStringVar('SumAllPr', DoubleToString(0, Sum));
+  pXL.SetStringVar('SumIznAllPr', DoubleToString(0, SumIzn));
+
+  // Список членов комиссии
+  #WriteXltFeeSignersVarOS(iFeeSigners,pXL);
+
+  // Информация об Акте перевода в утиль
+  var UtilDocInfo : TUtilDocInfo;
+  var cUDNRec : comp;
+  cUDNRec := if (MBPMove.Status = mbpSpisDoc, piUtilDoc.GetUtilDocNRec(MBPMove.nRec), Comp(0));
+
+  if (cUDNRec = 0)
+    ClearAdvRecord(UtilDocInfo);
+  else
+    piUtilDoc.GetUtilDocInfo(cUDNRec, UtilDocInfo);
+
+  pXL.SetNumberVar('UDNRec', if (cUDNRec = 0, 0, 1));
+  pXL.SetStringVar('UDPodrF', UtilDocInfo.PodrFrName);
+  pXL.SetStringVar('UDEdName', UtilDocInfo.EdIzmName);
+  pXL.SetStringVar('UDEdKod', UtilDocInfo.EdIzmKod);
+  pXL.SetNumberVar('UDKol', UtilDocInfo.DocKol);
+  pXL.SetNumberVar('UDSum', UtilDocInfo.DocSumma);
+
+  pXL.PublishVar;
+
+  // формирование отчета по заданному шаблону
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}

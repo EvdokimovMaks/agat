@@ -1,0 +1,876 @@
+//------------------------------------------------------------------------------
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Спецоснастка
+// Печать карточки учета спецоснастки
+//------------------------------------------------------------------------------
+
+// Переменные для печати карточки
+var MbpInKolD, MbpInSumD, MbpInPrIsnD, MbpInSumIsnD,
+    MbpInKolD2, MbpInSumD2, MbpInPrIsnD2, MbpInSumIsnD2 : double;
+var rPanelNum, rEksplMask, rHeadPrih : word;
+var rd1, rd2 : date;
+var VidRep : byte;       // формат отчета: 0 - текст, 1 - FastReport
+var lMarkCount, lSign, NRec1, NRec2, NRec3 : longint;
+var OutPodr, OutMol, OutPers, InOperTxt, OutOperTxt : string;
+
+//-------------------------------------------------------------------------
+
+Function IsExistDrag(_wTiDk : word; _cNRec : comp) : boolean;
+{
+  IsExistDrag := (GetFirst NalDragS where (( _wTiDk == NalDragS.TiDk and
+                                             _cNRec == NalDragS.cKatOs )) = tsOk);
+}  
+
+Function GetDragKol(_wTiDk : word; _cNRec : comp) : tSumma;
+{
+  GetDragKol := 0;
+
+  _LOOP NalDragS where (( _wTiDk == NalDragS.TiDk and
+                          _cNRec == NalDragS.cKatOs ))
+    GetDragKol := GetDragKol + NalDragS.Kol;
+}
+
+Function GetNalDragStr(_wTiDk : word; _cNRec : comp) : string;
+{
+  GetNalDragStr := if (IsExistDrag(_wTiDk, _cNRec), 'есть', 'нет');
+
+  if (wGetTune('Country') = ccBel) and (GetNalDragStr = 'есть')
+    if (GetDragKol(_wTiDk, _cNRec) = 0)
+      GetNalDragStr := 'Находятся драгоценные металлы, содержание которых будет определено после списания';
+}
+
+//-------------------------------------------------------------------------
+
+Procedure CalcInForDate(Dat : date);
+{
+  PushPos(#MBPOut);
+
+  if (MBPIn.dIn >= Dat) // Если пришло позже даты - все по нулям
+  {
+    MbpInKolD    := 0.0;
+    MbpInSumD    := 0.0;
+    MbpInPrIsnD  := 0.0;
+    MbpInSumIsnD := 0.0;
+  }
+  // Если дата последней операции списания меньше даты расчета, взять текущие значения
+  else
+  if (MBPIn.DateSpis < Dat)
+  {
+    MBPInKolD    := MBPIn.KolFact;
+    MBPInSumD    := MBPIn.SumFact;
+    MBPInPrIsnD  := MBPIn.TPercent;
+    MBPInSumIsnD := MBPIn.SumIsnF;
+  }
+  // Взять состояние на заданную дату из первой операции списания после этой даты,
+  // Плановая операция списания также подходит!
+  else
+  if (GetFirst MBPOut where (( MBPIn.nRec == MBPOut.cMBPIn and
+                                     Dat <<= MBPOut.dOut )) = tsOk)
+  {
+    MBPInKolD    := MBPOut.tKol;
+    MBPInSumD    := MBPOut.tSumma;
+    MBPInPrIsnD  := MBPOut.tPercent;
+    MBPInSumIsnD := MBPOut.tSummaIsn;
+  }
+  else // Опять текущие значения
+  {
+    MBPInKolD    := MBPIn.KolFact;
+    MBPInSumD    := MBPIn.SumFact;
+    MBPInPrIsnD  := MBPIn.TPercent;
+    MBPInSumIsnD := MBPIn.SumIsnF;
+  }
+
+  PopPos(#MBPOut);
+}
+
+//-------------------------------------------------------------------------
+
+Procedure FindInInfo;
+{
+  // Если в форме не отображается текущий разрез (работник),
+  // эту информацию неплохо добавить в InOperTxt
+  var FromRazr, ToRazr : String;
+  FromRazr := if (isValid(#FromPodr), FromPodr.Name, '...')+ '-'+
+              if (isValid(#FromMol), FromMol.Name, 'Без МОЛ');
+  ToRazr :=   if (isValid(#KatPodr), KatPodr.Name, '...')+ '-'+
+              if (isValid(#KatMol), KatMol.Name, 'Без МОЛ');
+
+  case (MBPIn.InState) of
+  //---------------------
+    mbpPostOp:
+      InOperTxt := 'Приход '+
+        if (MBPIn.InEkspl = 0, 'на склад ', 'в эксплуатацию ')+
+        if (isValid(#KatOrg), 'от "'+ KatOrg.Name+ '" ', '')+
+        if (isValid(#PersCard), 'на '+ Persons.FIO+ ' ('+ STabN + ')', '');
+  //---------------------
+    mbpMoveOp:
+      InOperTxt := 'Приход от '+ FromRazr;
+  //---------------------
+    mbpFrMCOp,
+    mbpNaklOp:
+      InOperTxt := 'Приход с товарного склада ' + FromRazr+
+                    if (isValid(#KatOrg), 'от "'+ KatOrg.Name+ '" ', '');
+  //---------------------
+    mbpInExOp:
+      InOperTxt := if (isValid(#PersCard), 'Получил '+ Persons.FIO+ ' ('+ STabN + ')',
+                        'Приход в эксплуатацию');
+  //---------------------
+    mbpSortOp:
+      InOperTxt := 'Пересортица ';
+  //---------------------
+    mbpNewPOp:
+      InOperTxt := 'Переоценка ';
+  //---------------------
+    mbpFrExOp:
+      InOperTxt := 'Возврат из эксплуатации c '+ FromRazr;
+  //---------------------
+    mbpOverOp:
+      InOperTxt := 'Оприходование излишков ';
+  //---------------------
+    mbpChgPOp:
+      InOperTxt := 'Изменение параметров ';
+  //---------------------
+    mbpInSald:
+      InOperTxt := 'Остаток после удаления старой информации ';
+  //---------------------
+    mbpBackOp:
+      InOperTxt := 'Возврат из использования ';
+  //---------------------
+   else
+      InOperTxt := 'Неизвестный тип прихода ';
+  //---------------------
+  end;
+
+  CalcInForDate(Add_Day(rd2, 1));
+  MbpInKolD2    := MbpInKolD;
+  MbpInSumD2    := MbpInSumD;
+  MbpInPrIsnD2  := MbpInPrIsnD;
+  MbpInSumIsnD2 := MbpInSumIsnD;
+  CalcInForDate(rd1);
+}
+
+//-------------------------------------------------------------------------
+Procedure FindOutInfo;
+{
+  OutPodr := OutMol := OutPers := '';
+
+  PushPos(#FromPodr);
+  PushPos(#FromMol);
+  PushPos(#PersCard);
+
+  if (GetFirst FromPodr where (( MBPIn1.cPodr  == FromPodr.nRec )) = tsOk)
+    OutPodr := FromPodr.Name;
+
+  if (GetFirst FromMol where (( MBPIn1.cMol  == FromMol.nRec )) = tsOk)
+    OutMol  := FromMol.Name;
+
+  if (GetFirst PersCard where (( MBPIn1.cPers == PersCard.nRec )) = tsOk)
+    OutPers := Persons.FIO + ' (' + STabN + ')';
+
+  var ToRazr : String;
+  ToRazr := if (isValid(#FromPodr), FromPodr.Name, '...')+ '-'+
+            if (isValid(#FromMol), FromMol.Name, 'Без МОЛ');
+
+  case (MBPOut.Status) of
+  //---------------------
+    mbpIznoOp:
+      OutOperTxt := 'Начисление износа '+ String(MBPOut.Percent, 0, 0)+ '% на '+
+                     String(MBPOut.tKol, 0, 0)+ ' ед.';
+  //---------------------
+    mbpOutsOp:
+      OutOperTxt :=
+        if (MBPOut.dopStat = mbpDpStInMC, 'Передача в МЦ',
+          if (MBPOut.dopStat = mbpDpStInOS, 'Передача в ОС',
+            if (MBPOut.dopStat = mbpDpStSort, 'Пересортица',
+              if (MBPOut.dopStat = mbpDpStRetU, 'Возврат из использования',
+                if (not isValid(tnMBPIn1), 'Неизвестная операция расхода',
+                  if (MBPIn1.InState = mbpChgPOp, 'Изменение параметров',
+                    if (MBPIn1.InState = mbpNewPOp, 'Переоценка',
+                      if (MBPIn1.InState = mbpMoveOp, 'Передача на разрез '+ ToRazr,
+                        if (MBPIn1.InState = mbpFrExOp, 'Возврат из эксплуатации',
+                          if (MBPIn1.InState = mbpInExOp,
+                            if (isValid(#PersCard), 'Выдача '+ OutPers,
+                              'Передано в эксплуатацию на '+ ToRazr),
+        'Неизвестная операция расхода'))))))))));
+  //---------------------
+    mbpLostOp: OutOperTxt := 'Недостача';
+  //---------------------
+    mbpSpisOp: OutOperTxt := 'Списание';
+  //---------------------
+  else
+    OutOperTxt := 'Неизвестная операция расхода';
+  //---------------------
+  end; // case
+
+  if (Pos('Неизвестный', StateByOut) > 0)
+    if (MBPOut.ExtMod > 0)
+      OutOperTxt := 'Запланировано ' + OutOperTxt;
+
+  PopPos(#FromPodr);
+  PopPos(#FromMol);
+  PopPos(#PersCard);
+}
+
+//-------------------------------------------------------------------------
+
+DataStream FRCart_MBP
+(
+  [cfh]              CommonFormHeader;
+  [KatOrg_Namefr]    iOrgInfo.MyOrgNameT;
+  [KatOrg_OKPOfr]    iOrgInfo.MyOrgOKPO;
+  [rPanelNumfr]      rPanelNum;    // 01
+  [rd1fr]            rd1;          // 02
+  [rd2fr]            rd2;          // 03
+  [rEksplMaskfr]     rEksplMask;   // 04
+  [rHeadPrihfr]      rHeadPrih;    // 05
+  [Fin_MBP_OstStoim] wGetTune('Fin.MBP.OstStoim');
+
+  DataSet FRKatMBP
+  (
+    [KatMBP_NRec]        KatMBP.NRec;
+    [KatMbp_Name]        KatMBP.Name;     // 01
+    [KatMbp_NNumber]     KatMBP.NNumber;  // 02
+    [KatEd_Name]         KatEd.Name;      // 03
+    [KatMbp_KodGr]       KatMBP.KodGr;    // 04
+    [GroupMC_Name]       GroupMC.Name;    // 05
+    [KatMbp_DopInfo]     KatMBP.DopInfo;  // 06
+    [KatMbp_Dgr]         GetNalDragStr(Word(2), KatMBP.nRec);// 07
+
+    DataSet FRMbpIn
+    (
+      [MBPIn_NRec_Key]     MBPIn.NRec;
+      [MBPIn_NRec]         MBPIn.cMBP;
+      [MbpIn_dIn]          MBPIn.dIn;        // 01
+      [MbpIn_InState]      MBPIn.InState;    // 02
+      [MbpIn_Price]        MBPIn.Price;      // 03
+      [KatPodr_Name]       KatPodr.Name;     // 04
+      [KatMol_Name]        KatMol.Name;      // 05
+      [ShortKatMolName]    GetShortName(KatMol.Name);
+      [Persons_FIO]        if (isValid(#PersCard), Persons.FIO+ ' ('+ STabN + ')', '');
+      [KatOrg_Name]        KatOrg.Name;      // 06
+      [FromPodr_Name]      FromPodr.Name;    // 07
+      [FromMol_Name]       FromMol.Name;     // 08
+      [MbpIn_NOM]          MBPIn.NOM;        // 09
+      [MbpIn_KolDoc]       MBPIn.KolDoc;     // 10
+      [MbpIn_Summa]        MBPIn.Summa;      // 11
+      [MbpIn_PercNach]     MBPIn.PercNach;   // 12
+      [MbpIn_PercDoc]      MBPIn.PercDoc;    // 13
+      [MbpIn_SummaIsnN]    MBPIn.SummaIsnN;  // 14
+      [MbpIn_SummaIsnP]    MBPIn.SummaIsnP;  // 15
+      [MbpInKolD1]         MBPInKolD;       // 16
+      [MbpInSumD1]         MBPInSumD;       // 17
+      [MbpInPrIsnD1]       MBPInPrIsnD;     // 18
+      [MbpInSumIsnD1]      MBPInSumIsnD;    // 19
+      [MbpIn_DopInfo]      MBPIn.DopInfo;    // 20
+      [Skl_DopInfo]        GetMBPSklNum(KatMBP.DopInfo, MBPIn.DopInfo);
+      [Inv_DopInfo]        GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo);
+      [Pas_DopInfo]        GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo);
+      [MbpIn_InEkspl]      MBPIn.InEkspl;    // 21
+      [MbpIn_DateEksp]     MBPIn.DateEksp;   // ??
+      [MbpInKolD2]         MBPInKolD2;       // 22
+      [MbpInSumD2]         MBPInSumD2;       // 23
+      [MbpInPrIsnD2]       MBPInPrIsnD2;     // 24
+      [MbpInSumIsnD2]      MBPInSumIsnD2;    // 25
+      [InOperTxt]          InOperTxt;        // 26
+      [MbpIn_Srok]         SrokExpl;         // 27
+      [MbpIn_Dgr]          if (IsExistDrag(Word(5), MBPIn.nRec), GetNalDragStr(Word(5), MBPIn.nRec),
+                           if (IsExistDrag(Word(4), MBPIn.cPartyF), GetNalDragStr(Word(4), MBPIn.cPartyF), GetNalDragStr(Word(2), MBPIn.cMBP)));
+      [MbpIn_DrgNal]       if (IsExistDrag(Word(5), MBPIn.nRec), 1, 0) +
+                           if (IsExistDrag(Word(4), MBPIn.cPartyF), 2, 0) +
+                           if (IsExistDrag(Word(2), MBPIn.cMBP), 4, 0);
+
+      DataSet FRMbpOut
+      (
+        [MBPOut_NRec_Key]    MBPOut.NRec;
+        [MBPOut_NRec]        MBPOut.cMBPIn;
+        [MbpOut_dOut]        MBPOut.dOut;      // 01
+        [MbpOut_Status]      MBPOut.Status;    // 02
+        [MbpOut_NOM]         MBPOut.NOM;       // 03
+        [MbpOut_Kol]         MBPOut.Kol;       // 04
+        [MbpOut_Summa]       MBPOut.Summa;     // 05
+        [MbpOut_Percent]     MBPOut.Percent;   // 06
+        [MbpOut_SummaIsn]    MBPOut.SummaIsn;  // 07
+        [MbpOut_tKOL]        MBPOut.tKOL;      // 08
+        [MbpOut_tSumma]      MBPOut.tSumma;    // 09
+        [MbpOut_tPercent]    MBPOut.tPercent;  // 10
+        [MbpOut_tSummaIsn]   MBPOut.tSummaIsn; // 11
+        [FromPodr_Name]      OutPodr;          // 14
+        [FromMol_Name]       OutMol;           // 15
+        [Persons_FIO]        OutPers;
+        [OutOperTxt]         OutOperTxt;       // 16
+        [MBPSpis_Kod]        MBPSpis.Kod;
+        [MBPSpis_Name]       MBPSpis.Name;
+      );
+    );
+  );
+
+  DataSet Signers
+  (
+    [FIO]   iFeeSigners.GetSignerFIO(1);
+    [TabN]  iFeeSigners.GetSignerTabN;
+    [Post]  iFeeSigners.GetSignerPosition(1);
+    [Role]  iFeeSigners.GetSignerRole;
+  );
+)
+
+HandleEvent DataSet Signers
+//-------------------------
+  cmPreProcess:
+  {
+    lSign := 0;
+
+    if (not iFeeSigners.FeeSignersIsValid)
+      AbortProcess;
+  }
+//-------------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    lSign++;
+
+    if (lSign = 1)
+    {
+      if (iFeeSigners.GetSignerFirst)
+        ContinueDataSet;
+    }
+    else
+    {
+      if (iFeeSigners.GetSignerNext)
+        ContinueDataSet;
+    }
+  }
+//-------------------------
+End; // HandleEvent Table tblFeeSigners
+
+HandleEvent DataSet FRMbpOut
+//----------------------
+  cmPreProcess:
+    NRec3 := 0;
+//----------------------
+  cmOnProcess:
+  {
+    var bNext : boolean;
+    bNext := False;
+
+    if (rPanelNum = 3)
+      bNext := (NRec3 = 0);
+    else
+    {
+      if (NRec3 = 0)
+        bNext := (GetFirst MBPOut where (( MBPIn.NRec == MBPOut.cMBPIn and
+                                                 rd1 <<= MBPOut.dOut and
+                                                 rd2 >>= MBPOut.dOut and
+                                              Word(0) == MBPOut.ExtMod (NoIndex) )) = tsOk);
+      else
+        bNext :=  (GetNext MBPOut where (( MBPIn.NRec == MBPOut.cMBPIn and
+                                                 rd1 <<= MBPOut.dOut and
+                                                 rd2 >>= MBPOut.dOut and
+                                              Word(0) == MBPOut.ExtMod (NoIndex) )) = tsOk);
+    }
+
+    NRec3++;
+
+    if (bNext)
+    {
+      FindOutInfo;
+      ContinueDataSet;
+    }
+  }
+//----------------------
+End; // HandleEvent DataSet FRMbpOut
+
+HandleEvent DataSet FRMbpIn
+//----------------------
+  cmPreProcess:
+    NRec2 := 0;
+//----------------------
+  cmOnProcess:
+  {
+    var bNext : boolean;
+    bNext := False;
+
+    if (rPanelNum <> 1)
+      bNext := (NRec2 = 0);
+    else
+    {
+      if (NRec2 = 0)
+        bNext := (GetFirst MBPIn where (( Word(0) == MBPIn.ExtMod and
+                                      KatMBP.NRec == MBPIn.cMBP and
+                                             rd2 >>= MBPIn.dIn and
+                              ((rd1 <= MBPIn.DateZero) and // Есть текущие остатки или списалось в пределах заданного периода
+                               ((rEksplMask = 2) or (rEksplMask = MBPIn.InEkspl))) )) = tsOk);
+      else
+        bNext := (GetNext MBPIn where (( Word(0) == MBPIn.ExtMod and
+                                     KatMBP.NRec == MBPIn.cMBP and
+                                            rd2 >>= MBPIn.dIn and
+                             ((rd1 <= MBPIn.DateZero) and // Есть текущие остатки или списалось в пределах заданного периода
+                              ((rEksplMask = 2) or (rEksplMask = MBPIn.InEkspl))) )) = tsOk);
+    }
+
+    NRec2++;
+
+    if (bNext)
+    {
+      FindInInfo;
+      ContinueDataSet;
+    }
+  }
+//----------------------
+End; // HandleEvent DataSet FRMbpIn
+
+HandleEvent DataSet FRKatMBP
+//----------------------
+  cmPreProcess:
+    NRec1 := 0;
+//----------------------
+  cmOnProcess:
+  {
+    if (not NextVisual)
+      BreakProcess;
+
+    var bNext : boolean;
+    bNext := False;
+
+    if (bPrintCurDoc)
+      bNext := (NRec1 = 0);
+    else
+    {
+      var _cNRec : comp;
+
+      do
+      {
+        if (GetMarker(CardMarker, NRec1, _cNRec))
+          if (GetFirst KatMBP where (( _cNRec == KatMBP.nRec )) = tsOk)
+          {
+            bNext := True;
+            Break;
+          }
+
+        NRec1++;
+      }
+      while (NRec1 < lMarkCount);
+    }
+
+    NRec1++;
+
+    if (bNext)
+      ContinueDataSet;
+  }
+//----------------------
+End; // HandleEvent DataSet FRKatMBP
+
+HandleEvent // DataStream FRCart_MBP
+//-------------
+  cmPreProcess:
+    StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, 'Идет формирование отчета...', 1);
+//-------------
+  cmPostProcess:
+    StopVisual('', 0);
+//-------------
+End; // HandleEvent DataStream DataStream FRCart_MBP
+End; // DataStream FRCart_MBP
+
+//-------------------------------------------------------------------------
+
+Procedure PrintCart_MBP_Head;
+{
+  frmCart_MBP.Write(iOrgInfo.MyOrgNameT);
+  frmCart_MBP.Write(iOrgInfo.MyOrgOKPO);
+  frmCart_MBP.Write(rPanelNum);             // 01
+  frmCart_MBP.Write(rd1);                   // 02
+  frmCart_MBP.Write(rd2);                   // 03
+  frmCart_MBP.Write(rEksplMask);            // 04
+  frmCart_MBP.Write(rHeadPrih);             // 05
+  frmCart_MBP.Write(iFeeSigners.GetFeeSigners);
+}
+
+Procedure PrintCart_MBP_MBP;
+{
+  frmCart_MBP.PutEventById(feDoLoop,fcfKatMBP);
+  frmCart_MBP.Write(KatMBP.nRec);           //
+  frmCart_MBP.Write(KatMBP.Name);           // 01
+  frmCart_MBP.Write(KatMBP.NNumber);        // 02
+  frmCart_MBP.Write(KatEd.Name);            // 03
+  frmCart_MBP.Write(piExtAttr.sGetAttr(coKatEd, KatEd.nRec, 'Код'));
+  frmCart_MBP.Write(KatMBP.KodGr);          // 04
+  frmCart_MBP.Write(GroupMC.Name);          // 05
+  frmCart_MBP.Write(KatMBP.DopInfo);        // 06
+  frmCart_MBP.Write(GetNalDragStr(Word(2), KatMBP.nRec));         // 07
+}
+
+Procedure PrintCart_MBP_In;
+{
+  FindInInfo;
+  frmCart_MBP.PutEventById(feDoLoop,fcfMBPIn);
+  frmCart_MBP.Write(MBPIn.nRec);            //
+  frmCart_MBP.Write(MBPIn.dIn);             // 01
+  frmCart_MBP.Write(MBPIn.InState);         // 02
+  frmCart_MBP.Write(MBPIn.Price);           // 03
+  frmCart_MBP.Write(KatPodr.Name);          // 04
+  frmCart_MBP.Write(KatMol.Name);           // 05
+  frmCart_MBP.Write(GetShortName(KatMol.Name));
+
+  if (isValid(#PersCard))
+    frmCart_MBP.Write(Persons.FIO+ ' ('+ STabN + ')');
+  else
+    frmCart_MBP.SkipFormat(1);
+
+  frmCart_MBP.Write(KatOrg.Name);           // 06
+  frmCart_MBP.Write(FromPodr.Name);         // 04
+  frmCart_MBP.Write(FromMol.Name);          // 05
+  frmCart_MBP.Write(MBPIn.NOM);             // 09
+  frmCart_MBP.Write(MBPIn.KolDoc);          // 10
+  frmCart_MBP.Write(MBPIn.Summa);           // 11
+  frmCart_MBP.Write(MBPIn.PercNach);        // 12
+  frmCart_MBP.Write(MBPIn.PercDoc);         // 13
+  frmCart_MBP.Write(MBPIn.SummaIsnN);       // 14
+  frmCart_MBP.Write(MBPIn.SummaIsnP);       // 15
+
+  frmCart_MBP.Write(MBPInKolD);             // 16
+  frmCart_MBP.Write(MBPInSumD);             // 17
+  frmCart_MBP.Write(MBPInPrIsnD);           // 18
+  frmCart_MBP.Write(MBPInSumIsnD);          // 19
+  frmCart_MBP.Write(MBPIn.DopInfo);         // 20
+  frmCart_MBP.Write(GetMBPSklNum(KatMBP.DopInfo, MBPIn.DopInfo));
+  frmCart_MBP.Write(GetMBPInvNum(KatMBP.DopInfo, MBPIn.DopInfo));
+  frmCart_MBP.Write(GetMBPPasNum(KatMBP.DopInfo, MBPIn.DopInfo));
+  frmCart_MBP.Write(MBPIn.InEkspl);         // 21
+  frmCart_MBP.Write(MBPIn.DateEksp);        // ??
+
+  frmCart_MBP.Write(MBPInKolD2);            // 22
+  frmCart_MBP.Write(MBPInSumD2);            // 23
+  frmCart_MBP.Write(MBPInPrIsnD2);          // 24
+  frmCart_MBP.Write(MBPInSumIsnD2);         // 25
+  frmCart_MBP.Write(InOperTxt);             // 26
+  frmCart_MBP.Write(SrokExpl);              // 27
+  frmCart_MBP.Write(GetExplBegDate(MBPIn.nRec, MBPIn.dExplBeg, MBPIn.cSpSopr)); // 28
+  frmCart_MBP.Write(if (IsExistDrag(Word(5), MBPIn.nRec), GetNalDragStr(Word(5), MBPIn.nRec), // 29
+                      if (IsExistDrag(Word(4), MBPIn.cPartyF), GetNalDragStr(Word(4), MBPIn.cPartyF), GetNalDragStr(Word(2), MBPIn.cMBP))));
+  frmCart_MBP.Write(iOrgInfo.GetMyOrgNameT(MBPIn.dIn));
+}
+
+Procedure PrintCart_MBP_Out;
+{
+  FindOutInfo;
+  frmCart_MBP.PutEventById(feDoLoop,fcfMBPOut);
+  frmCart_MBP.Write(MBPOut.nRec);           //
+  frmCart_MBP.Write(MBPOut.dOut);           // 01
+  frmCart_MBP.Write(MBPOut.Status);         // 02
+  frmCart_MBP.Write(MBPOut.NOM);            // 03
+  frmCart_MBP.Write(MBPOut.Kol);            // 04
+  frmCart_MBP.Write(MBPOut.Summa);          // 05
+  frmCart_MBP.Write(MBPOut.Percent);        // 06
+  frmCart_MBP.Write(MBPOut.SummaIsn);       // 07
+  frmCart_MBP.Write(MBPOut.tKOL);           // 08
+  frmCart_MBP.Write(MBPOut.tSumma);         // 09
+  frmCart_MBP.Write(MBPOut.tPercent);       // 10
+  frmCart_MBP.Write(MBPOut.tSummaIsn);      // 11
+!  frmCart_MBP.Write(MBPOut.DopInfo);       // 12
+!  frmCart_MBP.Write('MBPOut.Why');         // 13
+  frmCart_MBP.Write(OutPodr);               // 14
+  frmCart_MBP.Write(OutMol);                // 15
+  frmCart_MBP.Write(OutPers);
+  frmCart_MBP.Write(OutOperTxt);        // 16
+  frmCart_MBP.Write(MBPSpis.Kod);       // ??
+  frmCart_MBP.Write(MBPSpis.Name);      // ??
+  frmCart_MBP.Write(iOrgInfo.GetMyOrgNameT(MBPOut.dOut));
+
+  // Вывод данных о переводе в утиль
+  Var cUDNRec,cUSNRec : comp;
+  Var UtilDocInfo : TUtilDocInfo;
+  Var UtilSpcInfo : TUtilSpcInfo;
+
+  if (MBPOut.Status <> mbpSpisOp)
+    cUSNRec := Comp(0);
+  else
+    cUSNRec := piUtilDoc.GetUtilSpcNRec(MBPOut.nRec);
+
+  if (cUSNRec = 0)
+    frmCart_MBP.SkipFormat(8);
+  else
+  {
+    cUDNRec := piUtilDoc.GetUtilDocNRec(MBPOut.cMove);
+
+    if (cUDNRec = 0)
+      frmCart_MBP.SkipFormat(8);
+    else
+    {
+      piUtilDoc.GetUtilDocInfo(cUDNRec, UtilDocInfo);
+      piUtilDoc.GetUtilSpcInfo(cUSNRec, UtilSpcInfo);
+
+      frmCart_MBP.write(cUSNRec);
+      frmCart_MBP.write(UtilDocInfo.PodrFrName);
+      frmCart_MBP.write(UtilDocInfo.EdIzmName);
+      frmCart_MBP.write(UtilDocInfo.EdIzmKod);
+      frmCart_MBP.write(UtilSpcInfo.NormWeight);
+      frmCart_MBP.write(UtilSpcInfo.UtilWeight);
+      frmCart_MBP.write(UtilSpcInfo.NormPrice);
+      frmCart_MBP.write(UtilSpcInfo.UtilStoim);
+    }
+  }
+}
+
+Procedure PrintMBPIn;
+{
+  PrintCart_MBP_In;
+
+  if (rPanelNum = 3)
+  {
+    PrintCart_MBP_Out;
+    Exit;
+  }
+
+  _LOOP MBPOut Where (( MBPIn.NRec == MBPOut.cMBPIn and
+                        rd1 <<= MBPOut.dOut and
+                        rd2 >>= MBPOut.dOut and
+                        Word(0) == MBPOut.ExtMod (NoIndex)
+                     ))
+    PrintCart_MBP_Out;
+}
+
+Procedure PrintKatMBP;
+{
+  PrintCart_MBP_MBP;
+
+  if (rPanelNum <> 1)
+  {
+    PrintMBPIn;
+    Exit;
+  }
+
+  ResetBounds(#MBPIn);
+
+  _LOOP MBPIn Where
+    (( Word(0) == MBPIn.ExtMod and
+       KatMBP.NRec == MBPIn.cMBP and
+       rd2 >>= MBPIn.dIn and // Ordered by MBPIn.dIn
+       (
+         // Есть текущие остатки или списалось в пределах заданного периода
+         // было ((1 = MBPIn.Status) or (rd1 <= MBPIn.DateSpis))
+         (rd1 <= MBPIn.DateZero) and
+         ((rEksplMask = 2) or (rEksplMask = MBPIn.InEkspl))
+       )
+    ))
+    PrintMBPIn;
+
+  SetBounds(#MBPIn);
+}
+
+Procedure PrintCatalog_MBP;
+{
+  PushPos(#KatMBP);
+  PushPos(#MBPOut);
+  PushPos(#MBPIn);
+
+  lMarkCount := GetMarkerCount(CardMarker);
+
+  if (lMarkCount = 0)
+    bPrintCurDoc := True;
+
+  if (VidRep = 1)
+  {
+    if (wGetTune('Country') = 0)
+      RunFReportByGroup(FRCart_MBP, 'Kartochki,DocsPoPrihRus,DocsPoRashRus');
+    else
+      RunFReportByGroup(FRCart_MBP, 'Kartochki,DocsPoPrih,DocsPoRash');
+  }
+  else
+  {
+    if (wGetTune('Country') = 0)
+      frmCart_MBP.SetGroup('Карточки'#1'Документы по приходам. Россия.'#1'Документы по расходам. Россия.');
+    else
+      frmCart_MBP.SetGroup('Карточки'#1'Документы по приходам'#1'Документы по расходам');
+
+    PrintCart_MBP_Head;
+
+    if (bPrintCurDoc)
+      PrintKatMBP;
+    else
+    {
+      var _cNRec : comp;
+
+      for (NRec1 := 0; NRec1 < lMarkCount; NRec1++)
+      {
+        if (GetMarker(CardMarker, NRec1, _cNRec))
+          if (GetFirst KatMBP where (( _cNRec == KatMBP.nRec )) = tsOk)
+            PrintKatMBP;
+      }
+    }
+
+    if (not frmCart_MBP.Error)
+      frmCart_MBP.ShowFile('');
+    else
+      frmCart_MBP.AbortForm;
+  }
+
+  PopPos(#MBPIn);
+  PopPos(#MBPOut);
+  PopPos(#KatMBP);
+  ReReadRecord;
+}
+
+//-------------------------------------------------------------------------
+
+procedure ReadFrDsk;
+{
+  if (rPanelNum = 1)
+  {
+    if (not ReadMyDsk(rd1, 'RepCardMBP_rd1', true))
+      rd1 := Date(1, Month(Cur_Date), Year(Cur_Date));
+
+    if (not ReadMyDsk(rd2, 'RepCardMBP_rd2', true))
+      rd2 := Sub_Day(Add_Months(Date(1, Month(Cur_Date), Year(Cur_Date)), 1), 1);
+
+    if (not ReadMyDsk(rEksplMask, 'RepCardMBP_rEksplMask', true))
+      rEksplMask := 2;
+
+    if (not ReadMyDsk(rHeadPrih, 'RepCardMBP_rHeadPrih', true))
+      rHeadPrih := 0;
+  }
+  else
+  {
+    rHeadPrih := 1;
+    rEksplMask := 2;
+
+    if (rPanelNum = 2)
+    {
+      rd1 := MBPIn.dIn;
+      rd2 := MBPIn.dIn;
+
+      if (isValid(#MBPOut))
+        rd2 := if (Longint(MBPIn.DateSpis) = 0, rd2, MBPIn.DateSpis);
+    }
+
+    if (rPanelNum = 3)
+    {
+      rd1 := MBPOut.dOut;
+      rd2 := MBPOut.dOut;
+    }
+  }
+
+  if (not ReadMyDsk(VidRep, 'RepCardMBP_VidRep', true))
+    VidRep := 0;
+
+  if (not ReadMyDsk(cSigners, 'RepCardMBP_cSigners', true))
+    cSigners := 0;
+}
+
+procedure SaveToDsk;
+{
+  if (rPanelNum = 1)
+  {
+    SaveMyDsk(rd1, 'RepCardMBP_rd1');
+    SaveMyDsk(rd2, 'RepCardMBP_rd2');
+    SaveMyDsk(rEksplMask, 'RepCardMBP_rEksplMask');
+    SaveMyDsk(rHeadPrih, 'RepCardMBP_rHeadPrih');
+  }
+
+  SaveMyDsk(VidRep, 'RepCardMBP_RepFormat');
+  SaveMyDsk(cSigners, 'RepCardMBP_cSigners');
+}
+
+//-------------------------------------------------------------------------
+
+// Окно настройки печати
+Window wiCartParams 'Настройка параметров печати' (,, sci1Esc) EscClose, Gray;
+  Show at (10, 10, 70, 18);
+
+Screen scPrihParams;
+  NoTableNavigation;
+Fields
+  sFeeSigners ('Подписанты. (F3 - Выбор, Ctrl+F3 - Выбор с параметрами)',, sci13Esc) : Protect;
+  VidRep      ('Формат отчета') : [List 'Текст', 'FastReport'], Protect;
+  rd1         ('Фильтр по дате операции') : ['DD/MM/YYYY'], NoProtect;
+  rd2         ('Фильтр по дате операции') : ['DD/MM/YYYY'], NoProtect;
+  rEksplMask  ('Фильтр по состоянию приходов') : [List 'на складе', 'в эксплуатации', 'на складе и в эксплуатации'];
+  rHeadPrih   ('Формирование карточки на каждый приход без итогов по номенклатуре') : NoProtect;
+Buttons
+ cmOk, Default,, 'Сформировать отчет';
+ cmCancel,,, 'Отмена';
+<<
+ `Подписанты:`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ `Формат отчета:`.@@@@@@@@@@@
+ `За период с`   .@@@@@@@@@@@ `по` .@@@@@@@@@@@
+ `По предметам, находящимся:`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+      [.] - для каждого прихода своя карточка`
+
+         <.~C~формировать.>       <.   Отмена   .>
+>>
+end; // Screen scPrihParams
+
+Screen scPrihParams2;
+  NoTableNavigation;
+Fields
+  sFeeSigners ('Подписанты. (F3 - Выбор, Ctrl+F3 - Выбор с параметрами)',, sci13Esc) : Protect;
+  VidRep      ('Формат отчета') : [List 'Текст', 'FastReport'], Protect;
+  rd1         ('Фильтр по дате расходной операции') : ['DD/MM/YYYY'], NoProtect;
+  rd2         ('Фильтр по дате расходной операции') : ['DD/MM/YYYY'], NoProtect;
+Buttons
+ cmOk, Default,, 'Сформировать отчет';
+ cmCancel,,, 'Отмена';
+<<
+
+ `Подписанты:`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ `Формат отчета:`.@@@@@@@@@@@
+ `За период с`   .@@@@@@@@@@@ `по` .@@@@@@@@@@@
+
+
+         <.~C~формировать.>       <.   Отмена   .>
+>>
+end; // Screen scPrihParams2
+
+HandleEvent // Window wiPrihParams
+//--------------------------------
+cmInit:
+{
+  ReadFrDsk;
+
+  // Подписанты
+  iFeeSigners.SetFeeSigners(cSigners);
+  Set sFeeSigners := iFeeSigners.GetFeeSignersName;
+
+  if (rPanelNum = 1)
+    SetFormat(scPrihParams);
+  else
+    SetFormat(scPrihParams2);
+
+  if (rPanelNum = 1) or ((rPanelNum = 2) and isValid(#MBPOut))
+  {
+    SetFieldState(#rd1, sfVisible);
+    SetFieldState(#rd2, sfVisible);
+    ShowLabel4Field(#rd1);
+    ShowLabel4Field(#rd2);
+  }
+  else
+  {
+    HideLabel4Field(#rd1);
+    HideLabel4Field(#rd2);
+    ClearFieldState(#rd1, sfVisible);
+    ClearFieldState(#rd2, sfVisible);
+  }
+}
+//-------------------------------
+cmRestoreDoc:
+{
+  case (CurField) of
+  //----------------
+    #sFeeSigners:
+    {
+      iFeeSigners.RunWindowFeeSigners(0);
+      cSigners := iFeeSigners.GetFeeSigners;
+      Set sFeeSigners := iFeeSigners.GetFeeSignersName;
+    }
+  //----------------
+  end;
+}
+//--------------------------------
+cmOk:
+{
+  SaveToDsk;
+  PrintCatalog_MBP;
+}
+//--------------------------------
+end; // HandleEvent Window wiCartParams
+end; // Window wiCartParams
