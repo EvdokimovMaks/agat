@@ -61,6 +61,32 @@ const
   cn_Status_LN_070 = 7; //ЭЛН заполнен Страхователем (реестр ПВСО)
   cn_Status_LN_080 = 8; //ЭЛН Пособие выплачено
   cn_Status_LN_090 = 9; //ЭЛН Действия прекращены
+
+//статусы для реестров ФСС
+  cn_Status_Not_Sent   = 0; //не отправлен
+  cn_Status_Sent       = 1; //отправлен
+
+//тип фильтрации
+  cn_UndefFilterValue  = 0;
+  cn_FilterDay         = 1;
+  cn_FilterMonth       = 2;
+  cn_FilterYear        = 3;
+
+//функции для работы с сервисом ФСС
+  cn_FUNC_SendFile         = 0;
+  cn_FUNC_UploadsGet       = 1;
+  cn_FUNC_UploadGetByExtID = 2;
+
+//константа для сервиса ФСС
+  cn_GatewayService_FSS = 100;
+
+//состояние обработки
+  cn_StateFSS_Mess_Received        = 0;  //Получен
+  cn_StateFSS_Err_Mess_Received    = 10; //Ошибка получения
+  cn_StateFSS_Sign_Check           = 1;  //ЭЦП проверено
+  cn_StateFSS_Err_Sign_Check       = 11; //Ошибка проверки ЭЦП
+  cn_StateFSS_SubmittedforCons     = 2;  //Передано на рассмотрение
+  cn_StateFSS_Err_SubmittedforCons = 21; //ФЛК не пройден
 end;
 
 #endif

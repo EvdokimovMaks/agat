@@ -28,11 +28,12 @@ const
   cnPay_American_Express    = 3;
   cnPay_Visa                = 4;
   cnPay_MasterCard          = 5;
-  cnPay_MasterCard_Business = 54;
+  cnPay_JCB                 = 54;
   cnPay_Maestro             = 6;
   cnPay_MIR                 = 7;
   cnPay_Other               = 0;
   cnPay_No                  = 100;
+  cnPay_MasterCard_Business = 55; //для совместимости
 
   cnCard_NoExistence        = 0; //наличие карты - нет
   cnCard_Existence          = 1; //наличие карты - да

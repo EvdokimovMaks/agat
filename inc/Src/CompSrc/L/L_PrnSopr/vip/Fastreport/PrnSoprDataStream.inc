@@ -19,6 +19,7 @@ Datastream fr_prndata
   [NDSStZero     ]  sGetTune('Doc.SD.AbbrField.NDSStZero');
   [NDSSummZero   ]  sGetTune('Doc.SD.AbbrField.NDSSummZero');
   [IsKorrSF      ]  oPrnSoprFun.IsKorr(fr_dochead.KatSoprNRec);
+  [LineNullEI    ]  boGetTune('Doc.SD.Prn.UPD.LineNullEI');
 
   //округления
   Table fr_rounds
@@ -1705,6 +1706,13 @@ Datastream fr_prndata
                     sFIO3  := if(boolean(InStr(sFIO3, sFIO2)), iFeeSigners.GetSignerFIOEx(if(oGetPersSign.Params = 0, 1, 7), false), sFIO3);
                     sPost3 := iFeeSigners.GetSignerPosition(1);
                   }
+
+                  if iFeeSigners.FindFeeSignersSubByName(cGrPodp, 'Предлагающий изменить стоимость') //ERP-1679
+                  {
+                    sFIO5  := iFeeSigners.GetSignerFIO(if(oGetPersSign.Params = 0, 1, 7));
+                    sPost5 := iFeeSigners.GetSignerPosition(1);
+                  }
+
                 }
               }
             end;

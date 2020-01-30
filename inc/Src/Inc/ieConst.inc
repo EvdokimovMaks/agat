@@ -179,7 +179,7 @@
   clDocumentSignature  = 1;
 
   // Версия справочника полей
-  ieVersionOfFields = '8.0.94';
+  ieVersionOfFields = '8.0.95';
 
   // флаги поля IEHEad.Reestr
   mskReestr             =  1;//01h;    // маска флага реестра

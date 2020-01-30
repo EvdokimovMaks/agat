@@ -36,19 +36,19 @@ wPodrazdel_1 : word // номер подраздела
 DopParamNum
 s1 : string  //наименование
 s2 : string  //код
-s3  s4  s5  s6  s7  s8  s9  s10 s11 s12 s13 s14 s15 s16 s17 s18 s19 s20 s21 s22 s23 s24 s25
+s3  s4  s5  s6  s7  s8  s9  s10 s11 s12 s13 s14 s15 s16 s17 s18 s19 s20 s21 s22 s23 s24 s25 s26
 
 wPodrazdel_2 : word // номер подраздела
 DopParamNuma
 sa : string
 sb : string
-sc  sd  se  sf  sg  sh  si  sj  sk  sl  sm  sn  so  sp  sr  ss  st  su  sv  sw  sx  sy  sz
+sc  sd  se  sf  sg  sh  si  sj  sk  sl  sm  sn  so  sp  sr  ss  st  su  sv  sw  sx  sy  sz  sa26
 
 wPodrazdel_3 : word // номер подраздела
 DopParamNuma2
 sa2: string
 sb2: string
-sc2 sd2 se2 sf2 sg2 sh2 si2 sj2 sk2 sl2 sm2 sn2 so2 sp2 sr2 ss2 st2 su2 sv2 sw2 sx2 sy2 sz2
+sc2 sd2 se2 sf2 sg2 sh2 si2 sj2 sk2 sl2 sm2 sn2 so2 sp2 sr2 ss2 st2 su2 sv2 sw2 sx2 sy2 sz2 sz26
 
 .EndFields
 .{
@@ -57,17 +57,17 @@ sc2 sd2 se2 sf2 sg2 sh2 si2 sj2 sk2 sl2 sm2 sn2 so2 sp2 sr2 ss2 st2 su2 sv2 sw2 
 .{
 ^
 ^
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 .}
 .{
 ^
 ^
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 .}
 .{
 ^
 ^
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 .}
 .}
 .endForm

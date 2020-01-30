@@ -29,6 +29,7 @@ const
     lc_TRAlg_TranD_Alg_G2013_GUID = 'D6CB269E-4AB7-4ECF-A1F7-01B1DF93917D'; //2013 г.
     lc_TRAlg_TranD_Alg_G2014_GUID = 'DDCACA9F-0C76-4EA1-8BD5-D7335C0BDB1C'; //2014 г.
     lc_TRAlg_TranD_Alg_G2017_GUID = 'EAB8662A-743B-4A89-9F77-D429EFD83EBE'; //2017 г.
+    lc_TRAlg_TranD_Alg_G2018_GUID = 'F3229DE0-401B-4720-8575-460D162BDBE2'; //2018 г.
 
   // группа и алгоритм по транспортному налогу (авансы)
   lc_TRAlg_TranDAv_Grp_GUID = '554E2B24-D952-4187-8192-6B2C694ECA9F';
@@ -53,6 +54,8 @@ const
     lc_TRAlg_Prib_Alg_G2015_GUID    = '5965E705-59D2-4456-85E0-870E9340B211';
     lc_TRAlg_Prib_Alg_G2017_GUID    = '0A0DD470-67C1-4189-9AE4-C1A491C7FD25';
     lc_TRAlg_Prib_Alg_G2017Add_GUID = '455E06A6-FA6D-4F30-90DD-896341338EE6';
+    lc_TRAlg_Prib_Alg_G2020_GUID    = '69EF438F-9C7D-4C5B-9CB6-994C4F01C20D';
+    lc_TRAlg_Prib_Alg_G2020Add_GUID = '200C941D-FD97-40B8-B38C-45862466E60C';
 
   // группа и алгоритм по налоговому расчету о суммах выплаченных иностр. орг.
   lc_TRAlg_DohInOrg_Grp_GUID = '405B9750-E9F9-4464-A916-D28074C357A8';
@@ -172,6 +175,7 @@ const
   // группа и алгоритм заявления о возврате суммы излишне уплаченного налога (1150058)
   lc_TRAlg_ZVIUN_Grp_GUID = '98394672-63F0-4E3B-AA37-6FF609835D35';
     lc_TRAlg_ZVIUN_Alg_G2017_GUID = '1BAC29A7-6AC0-4BAC-9D09-CBF88A6AF439';
+    lc_TRAlg_ZVIUN_Alg_G2018_GUID = '5E5E6E2F-6503-463E-B420-0EA6BC2D73A9';
 
   // группа и алгоритм заявления о зачете суммы излишне уплаченного налога (1150057)
   lc_TRAlg_ZZIUN_Grp_GUID = '8C498F36-C6EA-47F8-B98E-9AE592515AA6';
@@ -181,6 +185,11 @@ const
   // группа и алгоритм документа обеспечивающего эл. документооборот в отношениях, регулируемых законодательством о налогах и сборах (1184002)
   lc_TRAlg_DocNpNo_Grp_GUID = '725E6963-5A04-4E74-B847-FCED47E16048';
     lc_TRAlg_DocNpNo_Alg_G2017_guid = '55CF3DF3-AE1C-450E-BBA3-9F9B8BB46283';
+
+// Заявление налогоплательщика - организации о предоставлении налоговой льготы по транспортному налогу и (или) земельному налогу 1150064 (2019)
+  lc_TRAlg_PRORGLZTR_Grp_GUID = 'CD28F9F2-B59B-4426-95BA-ECF545BF266A';
+    lc_TRAlg_PRORGLZTR_Alg_G2019_guid = '811F9B17-148A-426D-A0F8-32EEC6214163';
+
   //#endregion НАЛОГОВАЯ ОТЧЕТНОСТЬ
   //****************************************************************************
 

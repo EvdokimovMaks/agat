@@ -20,6 +20,7 @@ bsktKPSChanged = 512; // Меняются ли условия труда на рабочем месте
 bsktRateOfWageChanged = 1024; // Меняется ли количество ставок
 bsktRegionalCoefChanged = 2048; // Меняется ли районный коэффициент
 bsktNothernChanged = 4096; // Меняется ли северное что-то, северная категория может
+bsktNorthernCategoryFixed = 8192; // Фиксация северной категории
 
 // типы сигналов [b]a[s][k]e[t]
 bsktPass = 0; // ничего не делать
@@ -46,5 +47,8 @@ bsktRecallFromVacation = 66; // Отзыв из отпуска
 shManualHandling = 0;// обрабатывать вручную
 shAutoWithSignal = 1;// обрабатывать автоматически
 shAutoWithoutSignal = 2;// обрабатывать автоматически и удалять сигнал в РК
+
+// признак фиксации северной категории в РПД
+rpdNorthernCategoryFixed = 1; 
 
 End;

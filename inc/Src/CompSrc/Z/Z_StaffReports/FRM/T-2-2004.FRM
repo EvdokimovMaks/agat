@@ -193,6 +193,8 @@ PersonsNRec
 
 .endFields
 
+.{t2_2004_PSN  CheckEnter
+
 KatOrg_Name               ^
 KatOrg_Okpo               ^
 Date_Create               ^
@@ -386,6 +388,8 @@ End6                      ^
 End7                      ^
 End8                      ^
 PersonsNRec               ^
+
+.}
 
 .begin
  t_2_2004.fExit;

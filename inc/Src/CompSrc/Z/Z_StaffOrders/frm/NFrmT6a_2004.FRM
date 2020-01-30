@@ -23,7 +23,7 @@ AppointNrec         : comp
 FIO
 FIO_VP
 TabN
-подразделение : WideString
+подразделение : String
 должность
 OtpTypeOS
 OtpTypeDOP
@@ -45,7 +45,7 @@ TabN_Req
 FIO_
 FIO_VP_
 TabN_
-подразделение_ : WideString
+подразделение_ : String
 должность_
 OtpType_OS
 OtpType_DOP
@@ -79,7 +79,7 @@ AppointNrec               ^
 FIO                       ^
 FIO_VP                    ^
 TabN                      ^
-подразделение : WideString ^
+подразделение : String    ^
 должность                 ^
 OtpTypeOS                 ^
 OtpTypeDOP                ^
@@ -101,7 +101,7 @@ TabN_Req                  ^
 FIO_                      ^
 FIO_VP_                   ^
 TabN_                     ^
-подразделение_  : WideString ^
+подразделение_  : String  ^
 должность_                ^
 OtpType_OS                ^
 OtpType_DOP               ^

@@ -241,9 +241,9 @@ end.
  Mes God //13
  Level
 .endfields
-.begin  KolList:=0
-        SumList:=0
-        SumListv:=0
+.begin  KolList:=0;
+        SumList:=0;
+        SumListv:=0;
         rasRub:= 0;
         rasVal:= 0;
         OstRub:= 0;
@@ -296,10 +296,10 @@ rasrub:= 0;  rasval:= 0; end.
  ^
  ^ Ш
 .begin
- Itoglistv:=Itoglistv+Sumlistv
- Itogsummai:=ItogSummai+SumList
- SumList:=0
- Sumlistv:=0
+ Itoglistv:=Itoglistv+Sumlistv;
+ Itogsummai:=ItogSummai+SumList;
+ SumList:=0;
+ Sumlistv:=0;
  CurPosition:= 0;
  ostrub:= 0;
  ostval:= 0;
@@ -325,8 +325,8 @@ end.
 .end
 .[f OverWrite
 .begin
- Itoglistv:=Itoglistv+Sumlistv
- Itogsummai:=ItogSummai+SumList
+ Itoglistv:=Itoglistv+Sumlistv;
+ Itogsummai:=ItogSummai+SumList;
 end.
 .]f
 .}
@@ -409,8 +409,8 @@ end.
  Ш.if newP
 ^
 .end
-.begin  KolList:=1
-        SumList:=0  end.
+.begin  KolList:=1;
+        SumList:=0;  end.
 
 Организация  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
 ^
@@ -476,7 +476,7 @@ end.
  sTmpSummavruk PrizDep Fio2
 .endfields
 .[h overWrite
-.begin KolList:=KolList+1  SumList:=0; end.
+.begin KolList:=KolList+1;  SumList:=0; end.
  Ш┌───┬────────────────────┬────────────────────┬──────────────────────────────┬──────────────┬────────────┐
 │ № │    Подразделение   │  Табельный номер   │      Фамилия, инициалы       │    Сумма     │ Расписка в │
 │п/п│                    │                    │                              │              │  получении │
@@ -489,7 +489,7 @@ end.
  Итого по листу &&&:                                                          &'&&&&&&&&&&&&
  ^ Р
  И.begin
- Itogsummai:=ItogSummai+SumList
+ Itogsummai:=ItogSummai+SumList;
  SumList:=0;
 end.
 .{while (cp<= 52+ if(firstheader, 0, 1))
@@ -499,7 +499,7 @@ end.
 .begin firstheader:= false; end.
 .}
  Ш│   │                    │                    │                              │              │            │ Р
- И.begin SumList := SumList + Summavruk        CurPosition:= CurPosition+ 2
+ И.begin SumList := SumList + Summavruk;        CurPosition:= CurPosition+ 2;
 if (not ReadMyDsk(wRound,'PlVed_wRound', false))
     wRound:= 0;
 if wRound > 0
@@ -513,8 +513,8 @@ else
  И.end
 .[f OverWrite
 .begin
- Itogsummai:=ItogSummai+SumList
- CurPosition:= 0
+ Itogsummai:=ItogSummai+SumList;
+ CurPosition:= 0;
  end.
 .]f
 .}
@@ -579,8 +579,8 @@ end.
  НачДень_ДатаВед КончДень_ДатаВед
  'true':'s'
 .endfields
-.begin  KolList:=1
-        SumList:=0   end.
+.begin  KolList:=1;
+        SumList:=0;   end.
 .if newP
 ^
 .end
@@ -646,7 +646,7 @@ end.
  Fio2
 .endfields
 .[h OverWrite
-.begin KolList:=KolList+1 SumList:=0 end.
+.begin KolList:=KolList+1; SumList:=0; end.
 
  Ш  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@     ^-я страница формы № Т-53
  ┌──────┬────────────────────┬──────────────────────────────┬──────────────┬─────────────┬──────────┐
@@ -666,7 +666,7 @@ end.
   Итого по листу &&&:                                        &'&&&&&&&&&&&&
   ^ Р
  И.begin
- Itogsummai:=ItogSummai+SumList
+ Itogsummai:=ItogSummai+SumList;
  SumList:=0 end.
 .{while  (CP<= 44+ if(firstheader, 0, 1))
 .begin inc(cp) end.
@@ -675,7 +675,7 @@ end.
 .begin firstheader:= false; end.
 .}
  Ш │      │                    │                              │              │             │          │ Ш
-.begin SumList:=SumList+Summavruk CurPosition:= CurPosition+ 2 end.
+.begin SumList:=SumList+Summavruk; CurPosition:= CurPosition+ 2; end.
  Ш │&&&&&&│&&&&&&&&&&&&&&&&&&&&│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│&'&&&&&&&&&&&&│@~@@@@@@@@@@@│. . . . . │ Ш
 .if secondstrv
 .begin inc(CurPosition); end.
@@ -683,8 +683,8 @@ end.
  И.end
 .[f OverWrite
 .begin
- Itogsummai:=ItogSummai+SumList
- CurPosition:= 0 end.
+ Itogsummai:=ItogSummai+SumList;
+ CurPosition:= 0; end.
 .]f
 .} // PlVedP CheckEnter
 .fields
@@ -708,8 +708,8 @@ end.
                                                                               Количество листов  Д&&& Д
 .begin
  // выплачено
-   RItogSum := ItogSummai - ItogSumdepVal // выплачено по ведомости Р
- Р   RItogSumdepVal := ItogSumdepVal + (Double( Рsummaval Р) - ItogSummai)
+   RItogSum := ItogSummai - ItogSumdepVal; // выплачено по ведомости Р
+ Р   RItogSumdepVal := ItogSumdepVal + (Double( Рsummaval Р) - ItogSummai);
 end. Р
  Р По настоящей платежной ведомости
  выплачена сумма  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -768,9 +768,9 @@ end. Р
 .if newP
 ^
 .end
-.begin  KolList:=1
-        SumList:=0
-        CurPosition:= 0
+.begin  KolList:=1;
+        SumList:=0;
+        CurPosition:= 0;
        end.
 
  Ш Организация  Д@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Д
@@ -856,7 +856,7 @@ end. Р
 .begin firstheader:= false; sumlist:= 0; end.
 .}
  Ш│   │                    │                    │                              │              │             │ Р
- И.begin SumList:=SumList+Summa    CurPosition:= CurPosition+ 2 end.
+ И.begin SumList:=SumList+Summa;    CurPosition:= CurPosition+ 2; end.
  Ш│&&&│@@@@@@@@@@@@@@@@@@@@│&&&&&&&&&&&&&&&&&&&&│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│&'&&&&&&&&&.&&│@@@@@@@@@@@@@│ Р
  И.if secondstrv
 .begin inc(CurPosition); end.
@@ -925,9 +925,9 @@ GlavBuh_SignDoc
  НачДень_ДатаВед КончДень_ДатаВед
  'true':'s'
 .endfields
-.begin  KolList :=1
-        SumList :=0
-        CurPosition := 0
+.begin  KolList :=1;
+        SumList :=0;
+        CurPosition := 0;
         end.
 .if newP
 ^
@@ -995,7 +995,7 @@ GlavBuh_SignDoc
  Fio2
 .endfields
 .[h OverWrite
-.begin KolList := KolList + 1 SumList := 0; end.
+.begin KolList := KolList + 1; SumList := 0; end.
 
  Р @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@     ^-я страница формы № Т-53
  ┌───────┬────────────────────┬──────────────────────────────┬──────────────────────────┬────────────────────────┬────────────────────┐
@@ -1025,8 +1025,8 @@ GlavBuh_SignDoc
 .}
  Р │       │                    │                              │                          │                        │                    │ Р
 .begin
-  SumList := SumList + Summa
-  CurPosition := CurPosition + 2
+  SumList := SumList + Summa;
+  CurPosition := CurPosition + 2;
 end.
  Р │&&&&&& │&&&&&&&&&&&&&&&&&&&&│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│&'&&&&&&&&&&&&&&&&&&&&&.&&│@~@@@@@@@@@@@@@@@@@@@@@@│  . . . . . . . .   │ Р
 .if secondstrv
@@ -1065,9 +1065,9 @@ end.
   if (PechItog > 0)     // заполнять поля с итогами по суммам (выплачена/депонирована)
   begin
     // выплачено
-    RItogSum := ItogSum - ItogSumdep // выплачено по ведомости
+    RItogSum := ItogSum - ItogSumdep; // выплачено по ведомости
     var tmpSumItog: string;
-    Tmpsumitog := getstrsummaext2(false, false, false, ritogsum)
+    Tmpsumitog := getstrsummaext2(false, false, false, ritogsum);
     var tmpCharItog: string;
     if (trim(sGetTune('NDE.NameKOP')) = '')
       tmpCharItog := '='
@@ -1084,10 +1084,10 @@ end.
       end;
    var Position: byte;
    Position := pos(tmpCharItog, tmpsumItog);
-   RSumRub := Trim(substr(tmpsumItog, 1, position - 1))  //sumrub
-   RSumRub := if(RSumRub = '', '0', RSumRub)             //sumrub
+   RSumRub := Trim(substr(tmpsumItog, 1, position - 1));  //sumrub
+   RSumRub := if(RSumRub = '', '0', RSumRub);             //sumrub
    tmpcharItog := trim(substr(tmpsumItog, position + 1, length(tmpsumItog)));
-   RSumkop :=  if(tmpcharItog = '' , '00', tmpcharItog)  //sumkop
+   RSumkop :=  if(tmpcharItog = '' , '00', tmpcharItog);  //sumkop
    PechItogStr := DoubleToString(0, RItogSum);
    // задепонировано
    tmpSumItog := GetStrSummaExt2(false, false, false, ItogSumdep);
@@ -1105,10 +1105,10 @@ end.
             tmpCharItog := '.';
       end;
    Position := pos(tmpCharItog, tmpsumItog);
-   RSumRubDep := Trim(substr(tmpsumItog, 1, position - 1))
-   RSumRubDep := if(RSumRubDep = '', 0, RSumRubDep)
+   RSumRubDep := Trim(substr(tmpsumItog, 1, position - 1));
+   RSumRubDep := if(RSumRubDep = '', 0, RSumRubDep);
    tmpcharItog := trim(substr(tmpsumItog, position + 1, length(tmpsumItog)));
-   RSumkopDep :=  if(tmpcharItog = '' , '00', tmpcharItog)  //sumkop
+   RSumkopDep :=  if(tmpcharItog = '' , '00', tmpcharItog);  //sumkop
    PechItogDep := DoubleToString(0, ItogSumdep);
    end;
    if (PechItog = 0)     // не заполнять поля с итогами по суммам (выплачена/депонирована)
@@ -1291,8 +1291,8 @@ end.
  Mes God
  lEVEL
 .endfields
-.begin  KolList:=0
-        SumList:=0
+.begin  KolList:=0;
+        SumList:=0;
         end.
  Ш.if NewP
 ^
@@ -1338,7 +1338,7 @@ end.
 .}
 .}
  Ш│    │                    │                              │          │              │               │ Р
- И.begin SumList:=SumList+Summa curPosition:= curPosition+ 2 end.
+ И.begin SumList:=SumList+Summa; curPosition:= curPosition+ 2; end.
  Ш│&&&&│&&&&&&&&&&&&&&&&&&&&│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@│&'&&&&&&&&&.&&│@@@@@@@@@@@@@@@│ Р
  И.if secondstrv
 .begin inc(curPosition); end.
@@ -1414,9 +1414,9 @@ end.
  ДеньВед  МесВед God
  'true':'s'
 .endfields
-.begin  KolList:=1
-        SumList:=0
-        CurPosition:= 0 end.
+.begin  KolList:=1;
+        SumList:=0;
+        CurPosition:= 0; end.
  Ш.if NewP
 ^
 .end
@@ -1486,7 +1486,7 @@ end.
 .begin firstheader:= false; end.
 .}
  Ш│        │                    │                              │          │              │             │          │ Р
- И.begin SumList:=SumList+Summa Curposition:= Curposition+ 2 end.
+ И.begin SumList:=SumList+Summa; Curposition:= Curposition+ 2; end.
  Ш│&&&&&&  │&&&&&&&&&&&&&&&&&&&&│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│@@@@@@@@@@│&'&&&&&&&&&.&&│@~@@@@@@@@@@@│. . . . . │ Ш
 .if secondstrv
 .begin inc(Curposition) end.
@@ -1515,7 +1515,7 @@ end.
                                                                                            Количество листов  Д&&& Д
 .begin
  // выплачено
-   RItogSum := ItogSum - ItogSumdep // выплачено по ведомости
+   RItogSum := ItogSum - ItogSumdep; // выплачено по ведомости
 
    var tmpSumItog: string;
    tmpSumItog := GetStrSummaExt2(false, false, false, RItogSum);
@@ -1542,12 +1542,12 @@ end.
 
    Position := pos(tmpCharItog, tmpsumItog);
 
-   И И RSumRub := Trim(substr(tmpsumItog, 1, position - 1))  //sumrub
-   И И RSumRub := if(RSumRub = '', '0', RSumRub)             //sumrub
+   И И RSumRub := Trim(substr(tmpsumItog, 1, position - 1));  //sumrub
+   И И RSumRub := if(RSumRub = '', '0', RSumRub);             //sumrub
 
    tmpcharItog := trim(substr(tmpsumItog, position + 1, length(tmpsumItog)));
 
-   RSumkop :=  if(tmpcharItog = '' , '00', tmpcharItog)  //sumkop
+   RSumkop :=  if(tmpcharItog = '' , '00', tmpcharItog);  //sumkop
 
  // задепонировано
 
@@ -1572,8 +1572,8 @@ end.
 
    Position := pos(tmpCharItog, tmpsumItog);
 
-   RSumRubDep := Trim(substr(tmpsumItog, 1, position - 1))  //sumrub
-   И И RSumRubDep := if(RSumRubDep = '', '0', RSumRubDep)       //sumrub
+   RSumRubDep := Trim(substr(tmpsumItog, 1, position - 1));  //sumrub
+   И И RSumRubDep := if(RSumRubDep = '', '0', RSumRubDep);       //sumrub
 
    tmpcharItog := trim(substr(tmpsumItog, position + 1, length(tmpsumItog)));
 
@@ -1626,8 +1626,8 @@ end.
  Mes God //13
  Level
 .endfields
-.begin  KolList:=0
-        SumList:=0
+.begin  KolList:=0;
+        SumList:=0;
         end.
  Ш.if NewP
 ^
@@ -1655,7 +1655,7 @@ end.
  GetStrSummaExt(true, true, Summa) PrizDep Fio2
 .endfields
 .[h overWrite
-.begin KolList :=KolList + 1 firstHeader := false; end.
+.begin KolList :=KolList + 1; firstHeader := false; end.
  Ш────┬────────────────────┬────────────────────┬──────────────────────────────┬──────────────┬────────────
   № │   Подразделение    │  Табельный номер   │      Фамилия, инициалы       │    Сумма     │Расписка в
  п/п│                    │                    │                              │              │получении
@@ -1673,7 +1673,7 @@ end.
 .}
 .}
  Ш    │                    │                    │                              │              │ Р
- И.begin SumList:=SumList+Summa CurPosition:= CurPosition+ 2 end.
+ И.begin SumList:=SumList+Summa; CurPosition:= CurPosition+ 2; end.
  Ш&&&&│@@@@@@@@@@@@@@@@@@@@│&&&&&&&&&&&&&&&&&&&&│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│&'&&&&&&&&&.&&│@@@@@@@@@@@@ Р
  И.if secondstrv
 .begin inc(CurPosition) end.
@@ -1739,8 +1739,8 @@ end.
  Mes God //13
  Level
 .endfields
-.begin  KolList:=0
-        SumList:=0
+.begin  KolList:=0;
+        SumList:=0;
         end.
  Р.if NewP
 ^
@@ -1785,7 +1785,7 @@ end.
 .}
 .}
  Р    │                    │                    │            │                      │                              │              │ Ш
- И.begin SumList:=SumList+Summa CurPosition:= CurPosition+ 2 end.
+ И.begin SumList:=SumList+Summa; CurPosition:= CurPosition+ 2; end.
  Р&&&&│@@@@@@@@@@@@@@@@@@@@│&&&&&&&&&&&&&&&&&&&&│&&&&&&&&&&&&│@@@@@@@@@@ @@@@@@@@@@@│@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@│&'&&&&&&&&&.&&│@@@@@@@@@@@@ Ш
  И.if secondstrv
 .begin inc(CurPosition) end.
@@ -1858,9 +1858,9 @@ end.
  level
 .endfields
 .begin
-        KolList:=0
-        SumList:=0
-        ValSumList:=0
+        KolList:=0;
+        SumList:=0;
+        ValSumList:=0;
 end.
  Р.if NewP
 ^
@@ -1891,7 +1891,7 @@ end.
  GetStrSummaExt(true, true, Summa) PrizDep Fio2
 .endfields
 .[h overWrite
-.begin KolList:=KolList+1 SumList:= 0; ValSumList:=0; end.
+.begin KolList:=KolList+1; SumList:= 0; ValSumList:=0; end.
  Р────┬────────────────────┬────────────────────┬──────────────────────────────┬─────────┬──────────────┬──────────────┬──────────────┬────────────
   № │   Подразделение    │  Табельный номер   │      Фамилия, инициалы       │   Код   │  Сумма в ин. │   Курс НБРБ  │   Сумма рубл.│Расписка в
  п/п│                    │                    │                              │  валюты │    валюте    │   ин.валюты  │   экв.ин.вал.│ получении
@@ -1903,8 +1903,8 @@ end.
  Итого по листу &&&                                                                      &'&&&&&&&&&.&&                &'&&&&&&&&&.&&
  ^ Р
 .begin
-       SumList:=0
-       ValSumList:=0
+       SumList:=0;
+       ValSumList:=0;
        Curposition:= 0;
 end.
 .{while (cp<=53)
@@ -1914,9 +1914,9 @@ end.
 .}
  Р    │                    │                    │                              │         │              │              │              │
 .begin
-   SumList:=SumList+Summa
-   ValSumList:=ValSumList+Summavr
-   CurPosition:= CurPosition+ 2
+   SumList:=SumList+Summa;
+   ValSumList:=ValSumList+Summavr;
+   CurPosition:= CurPosition+ 2;
    if (not ReadMyDsk(wRound,'PlVed_wRound', false))
      wRound:= 0;
    if wRound > 0

@@ -13,13 +13,16 @@
 .fields
 Nomer_LST Marka_TC Nomer_Tc
 KolEz Dat_Beg Dat_obr
+// ERP-1780 >>>>>>>>>>>
+Time_Beg Time_End
+// ERP-1780 <<<<<<<<<<<
 Kg_gruz Marka_Gruz Minus_Gruz
 Lst_volume Marka_volume Minus_volume
 
 Nomzak KatOrg_Name KatPodrFrom_Name KatPodrTo_Name
 MassaGr VolumeGR NomerDoc Vid_doc
 .endfields
-^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
 .{
 ^ ^ ^ ^ ^ ^ ^ ^
 .}

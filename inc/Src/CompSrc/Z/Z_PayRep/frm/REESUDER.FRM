@@ -86,8 +86,8 @@ ItogSumma
     God2        : string
 .endvar
 .begin
-  SumList := 0
-  KolList := 1
+  SumList := 0;
+  KolList := 1;
 end.
 
  И
@@ -95,15 +95,15 @@ end.
 .{
 .[h OverWrite
 .begin
-    Pred2       := Pred1
-    NameReestr2 := NameReestr1
-    Получатель2 := Получатель1
-    Расч_счет2  := Расч_счет1
-    Код2        := Код1
-    Банк2       := Банк1
-    Код_МФО2    := Код_МФО1
-    Mes2        := Mes1
-    God2        := God1
+    Pred2       := Pred1;
+    NameReestr2 := NameReestr1;
+    Получатель2 := Получатель1;
+    Расч_счет2  := Расч_счет1;
+    Код2        := Код1;
+    Банк2       := Банк1;
+    Код_МФО2    := Код_МФО1;
+    Mes2        := Mes1;
+    God2        := God1;
 end.
 .fields
 Pred2
@@ -143,14 +143,14 @@ end.
 ─────┴─────────┴───────────────────────────────────────────┴───────────────────
  Б Итого по листу  &'&&:                                     &'&&&&&&&&&&&&&&&.&& Б
 .begin
-  SumList := 0
-  KolList := KolList +1
+  SumList := 0;
+  KolList := KolList +1;
 end.
 
 .]f
 .}
 .begin
-  KolList := KolList - 1
+  KolList := KolList - 1;
 end.
 .fields
 ItogSumma_Reestr
@@ -206,8 +206,8 @@ Pole
 .endvar
 
 .begin
-  SumList := 0
-  KolList := 1
+  SumList := 0;
+  KolList := 1;
 end.
 
  И
@@ -215,15 +215,15 @@ end.
 .{
 .[h OverWrite
 .begin
-    Pred2       := Pred1
-    NameReestr2 := NameReestr1
-    Получатель2 := Получатель1
-    Расч_счет2  := Расч_счет1
-    Код2        := Код1
-    Банк2       := Банк1
-    Код_МФО2    := Код_МФО1
-    Mes2        := Mes1
-    God2        := God1
+    Pred2       := Pred1;
+    NameReestr2 := NameReestr1;
+    Получатель2 := Получатель1;
+    Расч_счет2  := Расч_счет1;
+    Код2        := Код1;
+    Банк2       := Банк1;
+    Код_МФО2    := Код_МФО1;
+    Mes2        := Mes1;
+    God2        := God1;
 end.
 .fields
 Pred2
@@ -268,8 +268,8 @@ end.
      @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
                                   (сумма по листу прописью) Ш
  И.begin
-  SumList := 0
-  KolList := KolList +1
+  SumList := 0;
+  KolList := KolList +1;
 end.
 
 .]f
@@ -330,8 +330,8 @@ Pole
 .endvar
 
 .begin
-  SumList := 0
-  KolList := 1
+  SumList := 0;
+  KolList := 1;
 end.
 
  И
@@ -339,15 +339,15 @@ end.
 .{
 .[h OverWrite
 .begin
-    Pred2       := Pred1
-    NameReestr2 := NameReestr1
-    Получатель2 := Получатель1
-    Расч_счет2  := Расч_счет1
-    Код2        := Код1
-    Банк2       := Банк1
-    Код_МФО2    := Код_МФО1
-    Mes2        := Mes1
-    God2        := God1
+    Pred2       := Pred1;
+    NameReestr2 := NameReestr1;
+    Получатель2 := Получатель1;
+    Расч_счет2  := Расч_счет1;
+    Код2        := Код1;
+    Банк2       := Банк1;
+    Код_МФО2    := Код_МФО1;
+    Mes2        := Mes1;
+    God2        := God1;
 end.
 .fields
 Pred2
@@ -392,8 +392,8 @@ end.
      @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
                                   (сумма по листу прописью)
 .begin
-  SumList := 0
-  KolList := KolList +1
+  SumList := 0;
+  KolList := KolList +1;
 end.
 
 .]f

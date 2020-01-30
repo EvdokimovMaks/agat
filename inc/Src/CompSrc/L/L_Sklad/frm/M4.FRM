@@ -6,6 +6,8 @@
   _MC_Name
 , _MC_Kod
    : string;
+ _NameForm
+   : string;
 
   KolInRowName
 , KolInRowKod
@@ -119,7 +121,8 @@
 #doc
 Форма М-4
 #end
-.linkform 'М-4' prototype is 'FormM4'
+.linkform 'М-4_txt' prototype is 'FormM4'
+.NameInList 'М-4 текст'
 .group 'Country' subGroup 'Russia'
 .DEFP PA4
 .P 40

@@ -666,7 +666,7 @@ end.
     <ACCOUNT>^</ACCOUNT>
 .}
 !
-.{?INTERNAL; ( SubStr(PayCardNum,1,1) = '2' )
+.{?INTERNAL; ( PaymentType = 2 )
     <PAYCARD_NUM>^</PAYCARD_NUM>
 .}
 .}
@@ -1546,7 +1546,7 @@ end.
     <ACCOUNT_NAME>^</ACCOUNT_NAME>
     <ACCOUNT>^</ACCOUNT>
 .}
-.{?INTERNAL; ( SubStr(PayCardNum,1,1) = '2' )
+.{?INTERNAL; ( PaymentType = 2 )
     <PAYCARD_NUM>^</PAYCARD_NUM>
 .}
 .}

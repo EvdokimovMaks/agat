@@ -54,6 +54,7 @@ const
   lc_TaxRepID_SvOGruzTrIDor      : word = cg_EOTaxRepID_MinValue+37;  // Сведения о грузовом автотранспорте и протяженности автодорог общего пользования (1-ТР (автотранспорт))
   lc_TaxRepID_TranDAv            : word = cg_EOTaxRepID_MinValue+38;  // Декларация по транспортному налогу (авансы)
   lc_TaxRepID_NDDUgl             : word = cg_EOTaxRepID_MinValue+39;  // Декларация на дополнительный доход от добычи углеводородного сырья (1151029)
+  lc_TaxRepID_PRORGLZTR          : word = cg_EOTaxRepID_MinValue+40;  // Заявление налогоплательщика - организации о предоставлении налоговой льготы по транспортному налогу и (или) земельному налогу 1150064
   // !!!диапазон типов для F_TaxReport: cg_EOTaxRepID_MinValue..cg_EOTaxRepID_MaxValue (см. EletronOtch.Inc)
   // типы электронных отчетов
   //----------------------------------------------------------------------------

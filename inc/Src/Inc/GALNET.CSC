@@ -298,6 +298,8 @@ sci1478EscTreePlus = 9045;
 sci1378EscExTreeA =  9046;
 sci178EscExTreeA1 =  9047;
 
+sci148EnEsc       =  9048;
+
 sct1347           =  7000;
 sct1347Esc        =  7001;
 sct13478          =  7002;

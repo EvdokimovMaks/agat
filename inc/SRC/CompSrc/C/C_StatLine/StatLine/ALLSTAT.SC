@@ -488,6 +488,16 @@
 #Std_Stat
 }
 
+(sci148EnEsc..sci148EnEsc)
+{
+#F1
+  '~F4~ Изменить',              cmEdit,                 kbF4;
+  '~F8~ Удалить',               cmDelete,               kbF8;
+  '~Enter~ Выбор',              cmDefault,              kbEnter;
+  '~Esc~ Выход',                cmClose,                kbAltF3;
+#Std_Stat
+}
+
 (sci178EnEscA..sci178EnEscA)
 {
 #F1
@@ -850,6 +860,7 @@
 #Ins
 #PlusMinus
   '',                           cmDefault,              kbF2;
+  '',                           cmShiftF1,              kbAltE;
 #Std_Stat
 }
 

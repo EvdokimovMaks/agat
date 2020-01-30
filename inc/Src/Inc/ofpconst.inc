@@ -141,6 +141,7 @@
   ctCONVERT        =   3; // конвертация
   ctVZAIM_SLAVE    =   4; // взаимозачет
   ctTRANSFER_PS    =   5; // перевод средств
+  ctAccred         =   6; // аккредитив
   // тип Фоп для конвертации
   ctOWN_SECURITY   =  31; // гашение соб.цен.бумаг
   ctOWN_VEKSL      =  32; // гашение соб.векселя
@@ -594,6 +595,7 @@
   cgOfpMT_LicvHigh = 4; // ПС высокой ликвидности
   cgOfpMT_LicvLow  = 5; // ПС низкой ликвидности
   cgOfpMT_All      = 6; // все ПС - для фильтра
+  cgOfpMT_FopAccred   = 7; // все ПС - для фильтра
 
   // вид платежа ФО
   cgOfpTP_Reglament = 0; //'регламентный'
@@ -601,6 +603,7 @@
   cgOfpTP_Shtraf    = 2; //'штрафные санкции'
   cgOfpTP_Convert   = 3; //'конвертация'
   cgOfpTP_Transfer  = 4; //'перевод средств'
+  cgOfpTP_Accredit  = 5; //'Аккредитив'
 
   OFP_Prefix  =
 !  #ifdef ComponentVersion
@@ -1144,4 +1147,3 @@
   cgLim_MaxDayBalance = 2;  // лимит остатка (максимальное значение)
   cgLim_EqDayBalance  = 3;  // лимит остатка (строгое соответствие)
   cgLim_MonthRashod   = 4;  // лимит расхода на месяц
-
