@@ -13,6 +13,8 @@ const
   KODGRKAU_CATEG                                : word = 10036; //Категории (руководители/специалисты/...)
   KODGRKAU_DDS                                  : word = 10009; //Классификатор ДДС
   KODGRKAU_PRINADLEJNOST_AVANSU                 : word = 10008; //Платежи: принадлежность к авансу
+  KODGRKAU_RBP                                  : word = 163;   //2005. Расходы будущих периодов
+  KODGRKAU_SROCHNAYA_LICENSIYA                  : word = 10753; //2016 Срочная/бессрочная лицензия
 
   //внешние атрибуты для Партий
   ATTRNAM_NREC_KATPARTY_GOD_VIPUSKA               : comp = 0001000000001E99h;
@@ -48,6 +50,9 @@ const
   ATTRNAM_NREC_SPSTEP_REJIM_ISPOLZOVANIYA_SCHETA  : comp = 000100000000079Eh; //Режим использования счета - ссылка на пользовательскую аналитику KODGRKAU_REJIM_ISPOLZOVANIYA_SCHETA
   ATTRNAM_NREC_SPSTEP_STATIA_VIBITIYA             : comp = 0001000000000A88h; //Статья структуры цены по заказу выбытия - ссылка на системную аналитику 73 - Статьи затрат объектов строительства
   ATTRNAM_NREC_SPSTEP_RASHDOC_NREC                : comp = 0001000000000F1Fh; //яяяRashdoc.nrec - строка, nrec на позицию расшифровки приказа, связанную с позицией ДО
+  ATTRNAM_NREC_SPSTEP_VID_LICENSII                : comp = 00010000000003E3h; //_Вид лицензии - ссылка на пользовательскую аналитику 2005. Расходы будущих периодов
+  ATTRNAM_NREC_SPSTEP_SROCHNAYA_LICENSIYA         : comp = 0001000000000ADAh; //2016 Срочная/бессрочная лицензия - ссылка на пользовательскую аналитику 2016 Срочная/бессрочная лицензия
+  ATTRNAM_NREC_SPSTEP_RASHIFROVKA_STZATR          : comp = 0001000000001FABh; //Расшифровка статьи затрат - ссылка на пользовательскую аналитику Расшифровка статьи затрат
 
   //внешние атрибуты платежных документов
   ATTRNAM_NREC_PLPOR_NOMER_V_BANKE                : comp = 00010000000014D2h; //яНомерДокументаВБанке - при импорте исходящих платежек из клиент-банка им присваивается свой номер.
