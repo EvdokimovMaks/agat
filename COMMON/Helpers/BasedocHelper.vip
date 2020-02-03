@@ -1,4 +1,4 @@
-#include BasedocHelper.vih
+#include BaseDocHelper.vih
 #include PD_ChangeStatusTxo.vih
 #include AccessRightsHelper.vih
 #include Query.vih
@@ -14,21 +14,23 @@
 #component "AGAT"
 
 
-interface BasedocHelper;
+interface BaseDocHelper;
 
 const
-  BASEDOC_CNOTE_FULLPAID = 0001000000000077h;
-  BASEDOC_CNOTE_ISPOLN = 400056A46A9AD669h;
+  BaseDoc_CNOTE_FULLPAID = 0001000000000077h;
+  BaseDoc_CNOTE_ISPOLN = 400056A46A9AD669h;
 end;
 
 sql query qSelectSumOplNoExcludes =
   select sum(basefin.summa)
   from basefin
   join plpor on plpor.nrec = basefin.cplpor and plpor.datob > 0
-  where ( basefin.cbasedoc=:BasedocNrec or basefin.cpredopldo=:BasedocNrec )
+  where ( basefin.cBaseDoc=:BaseDocNrec or basefin.cpredopldo=:BaseDocNrec )
 ;
 
 var
+  _cBaseDoc: comp;
+  _cKatNotes: comp;
   _qSumOplNoExcludes: IQuery;
   _sGroupSch: string;
   _changeStatusTxo: PD_ChangeStatusTxo;
@@ -41,12 +43,32 @@ var
   #include SpDocs.var
 
 create view
-as select BaseDoc.nrec
-from BaseDoc, Dogovor, StepDoc, KatSopr, KatNotes, StatLog, GroupSch, IerGrSch, SpGrSch, SpStep;
+as select
+  BaseDoc.nrec
+from
+  BaseDoc
+ ,Dogovor
+ ,StepDoc
+ ,KatSopr
+ ,KatNotes
+ ,StatLog
+ ,GroupSch
+ ,IerGrSch
+ ,SpGrSch
+ ,SpStep
+where ((
+      _cBaseDoc    == BaseDoc.Nrec
+  and _cKatNotes   == KatNotes.Nrec
+  and BaseDoc.Nrec == StepDoc.cBaseDoc
+  and Stepdoc.Nrec == SpStep.cStepDoc
+  and Stepdoc.Nrec == KatSopr.cStepDoc
+  and 40           == StatLog.DocType
+  and BaseDoc.nrec == StatLog.cDoc
+));
 
-function sBaseDoc: string;
+function sBaseDoc(sNoDoc: string; dDDoc: date): string;
 {
-  result := 'ДО №' + BaseDoc.NoDoc + ' от ' + BaseDoc.DDoc;
+  result := 'ДО №' + sNoDoc + ' от ' + dDDoc;
 }
 
 constructor Init;
@@ -55,7 +77,7 @@ constructor Init;
   result := true;
 }
 
-function RecalcBasedocStatusPrepareQuery(aExcludeBasefin: TCompArray): IQuery;
+function RecalcBaseDocStatusPrepareQuery(aExcludeBasefin: TCompArray): IQuery;
 {
   var cnt: longint; cnt := count(aExcludeBasefin);
   if cnt = 0
@@ -78,78 +100,75 @@ function RecalcBasedocStatusPrepareQuery(aExcludeBasefin: TCompArray): IQuery;
   }
 }
 
-procedure IBasedocHelper.RecalcBasedocStatus(aBasedocNrec: comp; aExcludeBasefin: TCompArray);
+procedure IBaseDocHelper.RecalcBaseDocStatus(aBaseDocNrec: comp; aExcludeBasefin: TCompArray);
 {
-  if getfirst fastfirstrow basedoc where ((aBasedocNrec == basedoc.nrec)) = tsOk
+  _cBaseDoc := aBaseDocNrec;
+  if getfirst fastfirstrow BaseDoc != tsOk exit;
+
+  var q: IQuery = RecalcBaseDocStatusPrepareQuery(aExcludeBasefin);
+  q.setParam('BaseDocNrec', aBaseDocNrec);
+  var sumOpl: double = q.getResultValue;
+
+  var fullPaid: boolean = (sumOpl-BaseDoc.total) > -1;
+
+  if fullPaid and BaseDoc.cNote != BaseDoc_CNOTE_FULLPAID
   {
-    var q: IQuery;
-    q := RecalcBasedocStatusPrepareQuery(aExcludeBasefin);
-    q.setParam('BasedocNrec', aBasedocNrec);
-    var sumOpl: double;
-    sumOpl := q.getResultValue;
-    var fullPaid: boolean;
-    fullPaid := (sumOpl-basedoc.total) > -1;
-    if fullPaid and basedoc.cnote != BASEDOC_CNOTE_FULLPAID
+    _changeStatusTxo.process(40, BaseDoc.nrec, BaseDoc.cNote, BASEDOC_CNOTE_FULLPAID);
+    BaseDoc.cNote := BASEDOC_CNOTE_FULLPAID;
+    update current BaseDoc;
+  }
+  else if (not fullPaid) and BaseDoc.cNote = BASEDOC_CNOTE_FULLPAID
+  {
+    if getlast StatLog where ((40 == StatLog.DocType and BaseDoc.nrec == StatLog.cDoc)) = tsOk
     {
-      _changeStatusTxo.process(40, basedoc.nrec, basedoc.cnote, BASEDOC_CNOTE_FULLPAID);
-      basedoc.cnote := BASEDOC_CNOTE_FULLPAID;
-      update current basedoc;
+      _changeStatusTxo.process(40, BaseDoc.nrec, BaseDoc.cNote, StatLog.cNewNote);
+      BaseDoc.cNote := StatLog.cNewNote;
     }
-    else if (not fullPaid) and basedoc.cnote = BASEDOC_CNOTE_FULLPAID
+    else
     {
-      if getlast StatLog where ((40 == StatLog.DocType and basedoc.nrec == StatLog.cDoc)) = tsOk
-      {
-        _changeStatusTxo.process(40, basedoc.nrec, basedoc.cnote, StatLog.cNewNote);
-        basedoc.cnote := StatLog.cNewNote;
-      }
-      else
-      {
-        _changeStatusTxo.process(40, basedoc.nrec, basedoc.cnote, BASEDOC_CNOTE_ISPOLN);
-        basedoc.cnote := BASEDOC_CNOTE_ISPOLN;
-      }
-      update current basedoc;
+      _changeStatusTxo.process(40, BaseDoc.nrec, BaseDoc.cNote, BaseDoc_CNOTE_ISPOLN);
+      BaseDoc.cNote := BaseDoc_CNOTE_ISPOLN;
     }
+    update current BaseDoc;
   }
 }
 
-function IBasedocHelper.GetBasedocViza(aBasedocNrec: comp; aBasedocVizaAttrnamNrec: comp): IBasedocViza;
+function IBaseDocHelper.GetBaseDocViza(aBaseDocNrec: comp; aBaseDocVizaAttrnamNrec: comp): IBaseDocViza;
 {
-  result := IBasedocViza(new(BasedocVizaBase, BasedocVizaBase(aBasedocNrec, aBasedocVizaAttrnamNrec)));
+  result := IBaseDocViza(new(BaseDocVizaBase, BaseDocVizaBase(aBaseDocNrec, aBaseDocVizaAttrnamNrec)));
 }
 
-function IBasedocHelper.GetBasedocVizas(aBasedocNrec: comp): IBasedocVizas;
+function IBaseDocHelper.GetBaseDocVizas(aBaseDocNrec: comp): IBaseDocVizas;
 {
-  result := IBasedocVizas(new(BasedocVizasBase, BasedocVizasBase(aBasedocNrec)));
+  result := IBaseDocVizas(new(BaseDocVizasBase, BaseDocVizasBase(aBaseDocNrec)));
 }
 
-function IBasedocHelper.GetDeferredDaysCount(aBasedocNrec: comp): word;
+function IBaseDocHelper.GetDeferredDaysCount(aBaseDocNrec: comp): word;
 {
   result := 0;
 
-  if getfirst fastfirstrow basedoc where ((aBasedocNrec == basedoc.nrec)) = tsOk
+  _cBaseDoc := aBaseDocNrec;
+  if getfirst fastfirstrow BaseDoc != tsOk exit;
+
+  if  BaseDoc.cnote != 000100000000007Eh //когда статус ДО не "включен в реестр"
+  and BaseDoc.cnote != 0001000000000077h //и не "оплачено"
   {
-    if  basedoc.cnote != 000100000000007Eh //когда статус ДО не "включен в реестр"
-    and basedoc.cnote != 0001000000000077h //и не "оплачено"
+    var vizas: IBaseDocVizas = GetBaseDocVizas(aBaseDocNrec);
+    if vizas.Soglasovany
     {
-      var vizas: IBasedocVizas;
-      vizas := GetBasedocVizas(aBasedocNrec);
-      if vizas.Soglasovany
-      {
-        var d: date; d := 0;
+      var d: date; d := 0;
 
-        //if (d < vizas.BUH.LastDate) d := vizas.BUH.LastDate;
-        //if (d < vizas.KAZ.LastDate) d := vizas.KAZ.LastDate;
-        //if (d < vizas.PEU.LastDate) d := vizas.PEU.LastDate;
-        //if (d < vizas.DIR.LastDate) d := vizas.DIR.LastDate;
+      //if (d < vizas.BUH.LastDate) d := vizas.BUH.LastDate;
+      //if (d < vizas.KAZ.LastDate) d := vizas.KAZ.LastDate;
+      //if (d < vizas.PEU.LastDate) d := vizas.PEU.LastDate;
+      //if (d < vizas.DIR.LastDate) d := vizas.DIR.LastDate;
 
-        d := vizas.PEU.LastDate;
+      d := vizas.PEU.LastDate;
 
-        if d > 0
-          result := calcdaysbetweendates(d, cur_date, true);
-      }
+      if d > 0
+        result := CalcDaysBetweenDates(d, cur_date, true);
     }
   }
-
 }
 
 function RunPostStatusChangeAlg(ccNote: comp; isBefore: boolean): boolean;
@@ -180,10 +199,11 @@ function IBaseDocHelper.SetStatus(aBaseDocNrec: comp; aKatnotesNrec: comp; aCrea
 
   result := false;
 
-  if getfirst BaseDoc where ((aBaseDocNrec == BaseDoc.nrec)) != tsOk
-    exit;
+  _cBaseDoc := aBaseDocNrec;
+  if getfirst BaseDoc != tsOk exit;
 
-  var wNewStatus: word = if(getfirst katnotes where ((aKatnotesNrec == katnotes.nrec)) = tsOk, katnotes.status, 0);
+  _cKatNotes := aKatnotesNrec;
+  var wNewStatus: word = if(getfirst KatNotes = tsOk, KatNotes.Status, 0);
 
   var oldKatnotesNrec: comp = BaseDoc.cnote;
   var wOldStatus: word = BaseDoc.status;
@@ -206,8 +226,8 @@ function IBaseDocHelper.SetStatus(aBaseDocNrec: comp; aKatnotesNrec: comp; aCrea
 
   if oNotes.Notes_InUseStatus(BaseDoc.cNote) <> oNotes.Notes_InUseStatus(oldKatnotesNrec)
   {
-    if getfirst StepDoc where ((BaseDoc.Nrec == StepDoc.cBaseDoc)) = tsOk
-      _loop SpStep where ((StepDoc.Nrec == SpStep.cStepDoc))
+    if getfirst StepDoc = tsOk
+      _loop SpStep
         if SpStep.cSpDocs <> 0
           oSpDocs.ReCalcOstatok(SpStep.cSpDocs);
   }
@@ -218,7 +238,7 @@ function IBaseDocHelper.SetStatus(aBaseDocNrec: comp; aKatnotesNrec: comp; aCrea
   result := rslt = tsOk;
 }
 
-function IBasedocHelper.SetStatusValidate(aBasedocBuffer: type$basedoc; aKatnotesNrec: comp; protocol: IAtlProtocol = nullref): boolean;
+function IBaseDocHelper.SetStatusValidate(aBaseDocBuffer: type$BaseDoc; aKatnotesNrec: comp; protocol: IAtlProtocol = nullref): boolean;
 {
 
   result := true;
@@ -231,7 +251,8 @@ function IBasedocHelper.SetStatusValidate(aBasedocBuffer: type$basedoc; aKatnote
     protocol := IAtlProtocol(new(AtlProtocol));
 
   //Проверяем корректность ссылки на статус
-  if (getfirst katnotes where ((aKatnotesNrec == katnotes.nrec)) != tsOk) and aKatnotesNrec != 0
+  _cKatNotes := aKatnotesNrec;
+  if (getfirst katnotes != tsOk) and aKatnotesNrec != 0
   {
     result := false;
     protocol.LogLine(APE_ERROR, 'Установка несуществующего статуса');
@@ -242,8 +263,7 @@ function IBasedocHelper.SetStatusValidate(aBasedocBuffer: type$basedoc; aKatnote
     {
       if not _accessRights.isUserInGroup(_accessRights.GroupByName('s_реестр'))
       {
-        var vizas: IBasedocVizas;
-        vizas := GetBasedocVizas(aBasedocBuffer.nrec);
+        var vizas: IBaseDocVizas = GetBaseDocVizas(aBaseDocBuffer.nrec);
 
         if not (vizas.BUH.Soglasovana and vizas.DIR.Soglasovana and vizas.KAZ.Soglasovana)
           result := false;
@@ -260,35 +280,36 @@ function IBasedocHelper.SetStatusValidate(aBasedocBuffer: type$basedoc; aKatnote
     }
   end;
 
-  if (BaseDoc.Status = 1) // оформляемый
+  if (aBaseDocBuffer.Status = 1) // оформляемый
   {
-    if not oSDfuns.ControlDogovorRef(BaseDoc.nRec, 3)
+    if not oSDfuns.ControlDogovorRef(aBaseDocBuffer.Nrec, 3)
     {
-      protocol.logLine(APE_ERROR, sBaseDoc + ': ошибка контроля наличия договора');
+      protocol.logLine(APE_ERROR, sBaseDoc(aBaseDocBuffer.NoDoc, aBaseDocBuffer.DDoc) + ': ошибка контроля наличия договора');
       result := false;
     }
 
-    if not oCF.CtrlBaseDocUnderDog(BaseDoc.Buffer, TRUE, TRUE)
+    if not oCF.CtrlBaseDocUnderDog(aBaseDocBuffer, TRUE, TRUE)
     {
-      protocol.logLine(APE_ERROR, sBaseDoc + ': ошибка контроля превышения суммы по договору');
+      protocol.logLine(APE_ERROR, sBaseDoc(aBaseDocBuffer.NoDoc, aBaseDocBuffer.DDoc) + ': ошибка контроля превышения суммы по договору');
       result := false;
     }
   }
 
-  if not RunPostStatusChangeAlg(BaseDoc.cNote, True)
+  if not RunPostStatusChangeAlg(aBaseDocBuffer.cNote, True)
   {
-    protocol.logLine(APE_WARNING, sBaseDoc + ': Изменение статуса запрещено по результатам выполнения алгоритма.');
+    protocol.logLine(APE_WARNING, sBaseDoc(aBaseDocBuffer.NoDoc, aBaseDocBuffer.DDoc) + ': Изменение статуса запрещено по результатам выполнения алгоритма.');
     result := false;
   }
 }
 
-function IBasedocHelper.GetBuffer(aNrec: comp): type$basedoc;
+function IBaseDocHelper.GetBuffer(aNrec: comp): type$BaseDoc;
 {
 
-  var buf: type$basedoc;
+  var buf: type$BaseDoc;
 
-  if getfirst basedoc where ((aNrec == basedoc.nrec)) = tsOk
-    buf := type$basedoc(basedoc.buffer);
+  _cBaseDoc := aNrec;
+  if getfirst BaseDoc = tsOk
+    buf := type$BaseDoc(BaseDoc.buffer);
   else
     clearadvrecord(buf);
 
@@ -296,20 +317,20 @@ function IBasedocHelper.GetBuffer(aNrec: comp): type$basedoc;
 
 }
 
-procedure IBasedocHelper.SetNaznPl(aBasedocNrec: comp);
+procedure IBaseDocHelper.SetNaznPl(aBaseDocNrec: comp);
 {
-  if getfirst BaseDoc where ((aBasedocNrec == BaseDoc.nrec)) != tsOk
-    exit;
+  _cBaseDoc := aBaseDocNrec;
+  if getfirst BaseDoc != tsOk exit;
 
   var s1,s2,s3: string = '';
 
-  var cDDS: comp = oExtAttr.coGetAttrID(coBaseDoc, basedoc.nrec, ATTRNAM_NREC_BASEDOC_DDS);
+  var cDDS: comp = oExtAttr.coGetAttrID(coBaseDoc, BaseDoc.nrec, ATTRNAM_NREC_BASEDOC_DDS);
   var DDS: string = trim(if(getanykau(cgAkSimple, KODGRKAU_DDS, cDDS), givenanname(cgAnStrKod), ''));
 
-  var cIsp: comp = oExtAttr.coGetAttrID(coBaseDoc, basedoc.nrec, ATTRNAM_NREC_BASEDOC_ISPOLNITEL_DOGOVORA);
+  var cIsp: comp = oExtAttr.coGetAttrID(coBaseDoc, BaseDoc.nrec, ATTRNAM_NREC_BASEDOC_ISPOLNITEL_DOGOVORA);
   var Isp: string = trim(if(getanykau(cgAkSimple, cgKau_KatPodr, cIsp), givenanname(cgAnAbbr), ''));
 
-  var cAvans: comp = oExtAttr.coGetAttrID(coBaseDoc, basedoc.nrec, ATTRNAM_NREC_BASEDOC_AVANS);
+  var cAvans: comp = oExtAttr.coGetAttrID(coBaseDoc, BaseDoc.nrec, ATTRNAM_NREC_BASEDOC_AVANS);
   var Avans: boolean = upcase(trim(if(getanykau(cgAkSimple, KODGRKAU_PRINADLEJNOST_AVANSU, cAvans), givenanname(cgAnStrKod),''))) = 'А';
 
   var Predopl: boolean = BaseDoc.VidDoc = 111;
@@ -322,13 +343,13 @@ procedure IBasedocHelper.SetNaznPl(aBasedocNrec: comp);
                        'договор ' + Dogovor.NoDoc + ' от ' + DateToStr(Dogovor.DDoc, 'DD/MM/YY'),
                        '');
 
-  var Schet: string = 'По счету №' + Basedoc.Nodoc + ' от ' + DateToStr(Basedoc.DDoc,'DD/MM/YY');
+  var Schet: string = 'По счету №' + BaseDoc.Nodoc + ' от ' + DateToStr(BaseDoc.DDoc,'DD/MM/YY');
 
   var Etap: string = '';
 
   var Akt: string = '';
-  if getfirst StepDoc where ((aBasedocNrec == StepDoc.cBaseDoc)) = tsOk
-    _loop KatSopr where ((StepDoc.Nrec == KatSopr.cStepDoc))
+  if getfirst StepDoc = tsOk
+    _loop KatSopr
       Akt += if(Akt = '', '', ', ') +
              if(KatSopr.VidSopr = 101, 'накладная', 'акт') +
              ' №' + KatSopr.NSopr +
@@ -471,11 +492,11 @@ procedure IBasedocHelper.SetNaznPl(aBasedocNrec: comp);
   }
 
   if (BaseDoc.Nds > 0)
-    s3 += if(s3<>'',' ','') + 'НДС ' + doubletostr(round(basedoc.nds,2),'[|-]3666 666 666 666.88')
+    s3 += if(s3<>'',' ','') + 'НДС ' + doubletostr(round(BaseDoc.nds,2),'[|-]3666 666 666 666.88')
   else
     s3 += if(s3<>'',' ','') + 'НДС не облагается';
 
-  oExtAttr.sSetAttrID(coBaseDoc, aBasedocNrec, ATTRNAM_NREC_BASEDOC_NAZNPL,
+  oExtAttr.sSetAttrID(coBaseDoc, aBaseDocNrec, ATTRNAM_NREC_BASEDOC_NAZNPL,
                       s1+if(s2<>'', ' '+s2,'')+if(s3<>'',' '+s3,''));
 }
 
@@ -515,7 +536,7 @@ end;
 
 end;
 
-procedure AddBasedocToGroupUI(sGroupSch: string; basedocMarker: TPtr);
+procedure AddBaseDocToGroupUI(sGroupSch: string; BaseDocMarker: TPtr);
 { #__UNUSED__(sGroupSch)
   if RunWindowModal(wAddToGroup) = cmDefault
   {
@@ -539,7 +560,7 @@ procedure AddBasedocToGroupUI(sGroupSch: string; basedocMarker: TPtr);
 
     var i: longint = 0;
     var c: comp = 0;
-    for(i := 0; GetMarker(basedocMarker, i, c); i++)
+    for(i := 0; GetMarker(BaseDocMarker, i, c); i++)
     {
       if getfirst SpGrSch where ((GroupSch.Nrec == SpGrSch.cGroupSch and
                                   0             == SpGrSch.wList and

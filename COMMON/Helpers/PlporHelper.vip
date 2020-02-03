@@ -1,4 +1,4 @@
-#include PlporHelper.vih
+#include PlPorHelper.vih
 #include BasedocHelper.vih
 #include ContractId.vih
 #include RSHelper.vih
@@ -6,13 +6,13 @@
 
 #component "AGAT"
 
-interface PlporHelper;
+interface PlPorHelper;
 
 sql query qSelectLinkedBasedoc =
   select distinct basedoc.nrec
   from basefin
   join basedoc on basedoc.nrec = basefin.cbasedoc or basedoc.nrec = basefin.cpredopldo
-  where basefin.cplpor=:PlporNrec
+  where basefin.cPlPor=:PlPorNrec
 ;
 
 var
@@ -20,26 +20,23 @@ var
   _qLinkedBasedoc: IQuery;
   _contractIdHelper: ContractIDHelper;
   _rsHelper: RSHelper;
+  _plporNrec: comp;
 
 create view
-as select *
+as select
+  PlPor.Nrec
 from
-  plpor
- ,katbank;
-
-create view vSetUIN
-var
-  _plporNrec: comp;
-as select *
-from plpor
+  PlPor
+ ,KatBank KatBankPol
 where ((
-  _plporNrec == plpor.nrec
+      _plporNrec     == PlPor.Nrec
+  and PlPor.cBankPol == KatBankPol.Nrec
 ));
 
-procedure IPlporHelper.RecalcLinkedBasedocStatuses(aPlporNrec: comp; aExcludeBasefin: TCompArray);
+procedure IPlPorHelper.RecalcLinkedBasedocStatuses(aPlPorNrec: comp; aExcludeBasefin: TCompArray);
 {
   var rs: IResultSet;
-  rs := _qLinkedBasedoc.setParam('PlporNrec', aPlporNrec).getResultSet;
+  rs := _qLinkedBasedoc.setParam('PlPorNrec', aPlPorNrec).getResultSet;
   if _qLinkedBasedoc.errorCode = tsOk and rs != nullref
   {
 
@@ -80,78 +77,73 @@ function GetTaxString(a: ttaxArray): string;
   result := s;
 }
 
-procedure IPlporHelper.SetPlporUIN(aPlporNrec: comp);
+procedure IPlPorHelper.SetPlPorUIN(aPlPorNrec: comp);
 {
-  vSetUIN._plporNrec := aPlporNrec;
-  if vSetUIN.getfirst plpor = tsOk
+  _plporNrec := aPlPorNrec;
+  if getfirst PlPor = tsOk
   {
     var cid: string;
-    cid := _contractIdHelper.GetContractID(GetContractIDKey_ByPlpor, aPlporNrec);
+    cid := _contractIdHelper.GetContractID(GetContractIDKey_ByPlPor, aPlPorNrec);
     var a: ttaxArray;
-    a := GetTaxArray(vSetUIN.plpor.tax);
+    a := GetTaxArray(PlPor.tax);
     if a[9] != cid
     {
       a[9] := cid;
-      vSetUIN.plpor.tax := GetTaxString(a);
-      vSetUIN.update current plpor;
+      PlPor.tax := GetTaxString(a);
+      update current PlPor;
     }
   }
 }
 
 sql query qGetBasedocNrec =
   select top 1 bd.nrec
-  from plpor
-  join plpor plp on plp.tidk = plpor.tidk and plp.cplat = plpor.cplat and plp.namepl1 like '%проценты за период%'
+  from PlPor
+  join PlPor plp on plp.tidk = PlPor.tidk and plp.cplat = PlPor.cplat and plp.NamePl1 like '%проценты за период%'
   join soprhoz sh on sh.tipdoc = plp.tidk and sh.csoprdoc = plp.nrec
   join stepdoc sd on sd.nrec = sh.cstepdoc
   join basedoc bd on bd.nrec = sd.cbasedoc
-  where plpor.nrec = :plporNrec
+  where PlPor.nrec = :PlPorNrec
   order by plp.datvip desc
 ;
 
-function IPlporHelper.DefineIncomePlporBasedocNrec(incomePlporNrec: comp): comp;
+function IPlPorHelper.DefineIncomePlPorBasedocNrec(incomePlPorNrec: comp): comp;
 {
+  result := comp(0);
 
-  result := 0;
+  _plporNrec := incomePlPorNrec;
+  if getfirst PlPor != tsOk exit;
 
-  if getfirst plpor where (( incomePlporNrec == plpor.nrec )) = tsOk
+  if pos('проценты за период', PlPor.NamePl1) > 0 and PlPor.TiDkGal = 2
   {
 
-    if pos('проценты за период', plpor.namepl1) > 0 and plpor.tidkgal = 2
-    {
+    if getfirst KatBankPol = tsOk
+      if substr(KatBankPol.Mfo1, 1, 5) = '40702'
+      {
+        result := comp(0001000000009841h); //ДО №01689008 от 12/01/2012
+        exit;
+      }
 
-      if getfirst katbank where (( plpor.cbankpol == katbank.nrec )) = tsOk
-        if substr(katbank.mfo1, 1, 5) = '40702'
-        {
-          result := comp(0001000000009841h); //ДО №01689008 от 12/01/2012
-          exit;
-        }
+    var rs: IResultSet;
+    rs := queryManager.createQuery(qGetBasedocNrec).setParam('PlPorNrec', incomePlPorNrec).getResultSet;
 
-      var rs: IResultSet;
-      rs := queryManager.createQuery(qGetBasedocNrec).setParam('plporNrec', incomePlporNrec).getResultSet;
-
-      if rs.getFirst = tsOk
-        result := comp(rs.row.valAt(1));
-
-    }
-
+    if rs.getFirst = tsOk
+      result := comp(rs.row.valAt(1));
   }
-
 }
 
-sql query qLastPlporNumber =
+sql query qLastPlPorNumber =
   select max(nodok) as nodok
-  from plpor
-  where tidkgal = :tidkgal and datvip between :dbeg and :dend
+  from PlPor
+  where TiDkGal = :TiDkGal and datvip between :dbeg and :dend
 ;
 
-sql query qPlporsCountWithNumber =
+sql query qPlPorsCountWithNumber =
   select count(nrec)
-  from plpor
-  where tidkgal = 1 and and datvip between :dbeg and :dend and nodok = :nodok
+  from PlPor
+  where TiDkGal = 1 and and datvip between :dbeg and :dend and nodok = :nodok
 ;
 
-function IPlporHelper.GetNewPlporNumber(aTidkGal: word; aYear: word): string;
+function IPlPorHelper.GetNewPlPorNumber(aTiDkGal: word; aYear: word): string;
 {
   var periodDate1: date;
   periodDate1 := date(1,1,aYear);
@@ -160,33 +152,33 @@ function IPlporHelper.GetNewPlporNumber(aTidkGal: word; aYear: word): string;
   periodDate2 := date(31,12,aYear);
 
   var rs: IResultSet;
-  rs := queryManager.createQuery(qLastPlporNumber)
-                    .setParam('tidkgal', aTidkGal)
+  rs := queryManager.createQuery(qLastPlPorNumber)
+                    .setParam('TiDkGal', aTiDkGal)
                     .setParam('dbeg', periodDate1)
                     .setParam('dend', periodDate2)
                     .getResultSet;
 
-  var newPlporNumber: string;
+  var newPlPorNumber: string;
   if rs.getFirst = tsOk
-    newPlporNumber := NextNumStr(rs.row.valat(1));
+    newPlPorNumber := NextNumStr(rs.row.valat(1));
   else
-    newPlporNumber := '000001';
+    newPlPorNumber := '000001';
 
   var q: IQuery;
-  q := queryManager.createQuery(qPlporsCountWithNumber);
+  q := queryManager.createQuery(qPlPorsCountWithNumber);
 
   var triesCount: integer = 0;
-  while integer(q.setParam('tidkgal', aTidkGal)
+  while integer(q.setParam('TiDkGal', aTiDkGal)
                  .setParam('dbeg', periodDate1)
                  .setParam('dend', periodDate2)
-                 .setParam('nodok', newPlporNumber)
+                 .setParam('nodok', newPlPorNumber)
                  .getResultValue) > 0 and triesCount < 100
   {
     triesCount++;
-    newPlporNumber := NextNumStr(newPlporNumber);
+    newPlPorNumber := NextNumStr(newPlPorNumber);
   }
 
-  result := newPlporNumber;
+  result := newPlPorNumber;
 
 }
 
