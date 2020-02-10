@@ -31,31 +31,37 @@ end; // screen scParams
 
 sql query qData =
 select
-  KatPodr.Name            as Podr
- ,Persons.FIO             as Person
- ,KatStroy.Name           as Zakaz
- ,t.SumPrem               as SumPrem: double
- ,coalesce(t.SumOklad, 0) as SumOklad: double
- ,coalesce(t.SumHours, 0) as SumHours: double
+  KatPodr.Name                as Podr
+ ,Persons.FIO                 as Person
+ ,KatStroy.Name               as Zakaz
+ ,t.SumPrem                   as SumPrem: double
+ ,coalesce(t.SumOklad, 0)     as SumOklad: double
+ ,coalesce(t.SumHours, 0)     as SumHours: double
+ ,coalesce(t.SumOkladPrev, 0) as SumOkladPrev: double
+ ,coalesce(t.SumHoursPrev, 0) as SumHoursPrev: double
 
 from (
   select
     cPodr
    ,cPerson
    ,cKatstroy
-   ,sum(SumPrem)  as SumPrem
-   ,sum(SumOklad) as SumOklad
-   ,sum(SumHours) as SumHours
+   ,sum(SumPrem)      as SumPrem
+   ,sum(SumOklad)     as SumOklad
+   ,sum(SumHours)     as SumHours
+   ,sum(SumOkladPrev) as SumOkladPrev
+   ,sum(SumHoursPrev) as SumHoursPrev
   from (
 
-    //Данные из текущего месяца: премии
+    //Данные из текущего месяца: премии, оклад, часы
     select
-      MnPlan.cAnVal2    as cPodr
-     ,SpMnPlan.cIzd     as cPerson
-     ,SpMnPlan.cAnVal1  as cKatStroy
-     ,ValSpMnP.Kol      as SumPrem
-     ,0                 as SumOklad
-     ,0                 as SumHours
+      MnPlan.cAnVal2                 as cPodr
+     ,SpMnPlan.cIzd                  as cPerson
+     ,SpMnPlan.cAnVal1               as cKatStroy
+     ,ValSpMnP.Kol                   as SumPrem
+     ,coalesce(ValSpMnPOklad.Kol, 0) as SumOklad
+     ,coalesce(ValSpMnPHours.Kol, 0) as SumHours
+     ,0                              as SumOkladPrev
+     ,0                              as SumHoursPrev
 
     from MnPlan
 
@@ -70,14 +76,31 @@ from (
     and SpMnPl.cAnVal4   = FpPeriod.Nrec
     and SpMnPl.wKodGr5   = 10029
     and SpMnPl.cAnVal5   = #comp(0001000000000903h) //статья "Премия|ежемесячная"
-
     join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+
+    left join SpMnPl SpMnPlOklad on
+        SpMnPlOklad.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPlOklad.wKolAn    = 22
+    and SpMnPlOklad.wKodGr4   = 21
+    and SpMnPlOklad.cAnVal4   = FpPeriod.Nrec
+    and SpMnPlOklad.wKodGr5   = 10029
+    and SpMnPlOklad.cAnVal5   = #comp(00010000000008FBh) //статья "По должностному|окладу"
+    left join ValSpMnP ValSpMnPOklad on ValSpMnPOklad.cSpMnPl = SpMnPlOklad.Nrec
+
+    left join SpMnPl SpMnPlHours on
+        SpMnPlHours.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPlHours.wKolAn    = 22
+    and SpMnPlHours.wKodGr4   = 21
+    and SpMnPlHours.cAnVal4   = FpPeriod.Nrec
+    and SpMnPlHours.wKodGr5   = 10029
+    and SpMnPlHours.cAnVal5   = #comp(00010000000008AEh) //статья "Отработано часов по заказу и виду работ за месяц"
+    left join ValSpMnP ValSpMnPHours on ValSpMnPHours.cSpMnPl = SpMnPlHours.Nrec
 
     where
       MnPlan.cWayAccou = #comp(0001000000000088h)  //шаблон "Сводный наряд"
     and D_Year(FpPeriod.dEnd) = :Year
     and D_Month(FpPeriod.dEnd) = :Month
-    //Данные из текущего месяца: премии
+    //Данные из текущего месяца: премии, оклад, часы
 
     union all
 
@@ -87,8 +110,10 @@ from (
      ,SpMnPlan.cIzd                 as cPerson
      ,SpMnPlan.cAnVal1              as cKatStroy
      ,0                             as SumPrem: double
-     ,coalesce(tPrevOklad.Summa, 0) as SumOklad: double
-     ,coalesce(tPrevHours.Qty, 0)   as SumHours: double
+     ,0                             as SumOklad: double
+     ,0                             as SumHours: double
+     ,coalesce(tPrevOklad.Summa, 0) as SumOkladPrev: double
+     ,coalesce(tPrevHours.Qty, 0)   as SumHoursPrev: double
 
     from MnPlan
 
@@ -176,24 +201,31 @@ procedure XlsAddMainTableFields;
   pXL.CreateTblFld('Сотрудник');
   pXL.CreateTblFld('Заказ');
   pXL.CreateTblFld('Премия');
+  pXL.CreateTblFld('Оклад');
+  pXL.CreateTblFld('Часы');
+  pXL.CreateTblFld('Процент');
   pXL.CreateTblFld('Оклад_Пред');
   pXL.CreateTblFld('Часы_Пред');
-  pXL.CreateTblFld('Процент');
+  pXL.CreateTblFld('Процент_Пред');
 }
 
 procedure XlsFillMainTableRec;
 {
   var sZakaz: string = _query.row.val('Zakaz');
-  var okladPrev: double = _query.row.val('SumOklad');
+  var okladPrev: double = _query.row.val('SumOkladPrev');
+  var oklad: double = _query.row.val('SumOklad');
   var prem: double = _query.row.val('SumPrem');
 
   pXL.SetTblStringFldValue('Подразделение', _query.row.val('Podr'));
   pXL.SetTblStringFldValue('Сотрудник'    , _query.row.val('Person'));
   pXL.SetTblStringFldValue('Заказ'        , SubStr(sZakaz, 1, pos(' ', sZakaz+' ')));
   pXL.SetTblNumberFldValue('Премия'       , prem);
+  pXL.SetTblNumberFldValue('Оклад'        , oklad);
+  pXL.SetTblNumberFldValue('Часы'         , _query.row.val('SumHours'));
+  pXL.SetTblNumberFldValue('Процент'      , if(oklad = 0, 0, prem / oklad * 100));
   pXL.SetTblNumberFldValue('Оклад_Пред'   , okladPrev);
-  pXL.SetTblNumberFldValue('Часы_Пред'    , _query.row.val('SumHours'));
-  pXL.SetTblNumberFldValue('Процент'      , if(okladPrev = 0, 0, prem / okladPrev * 100));
+  pXL.SetTblNumberFldValue('Часы_Пред'    , _query.row.val('SumHoursPrev'));
+  pXL.SetTblNumberFldValue('Процент_Пред' , if(okladPrev = 0, 0, prem / okladPrev * 100));
 }
 
 procedure XlsAddMainTableRecs;
