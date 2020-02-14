@@ -16,6 +16,7 @@ table struct TmpSF
  ,cOrg      : comp
  ,Num       : string[100]
  ,DFact     : date
+ ,DReg      : date
  ,SumNoNDS  : double
  ,SumNDS    : double
  ,SumWithNDS: double
@@ -23,7 +24,7 @@ table struct TmpSF
  ,SumOpl    : double
 ) with index (
   i01 = Nrec (unique, surrogate)
- ,i02 = DFact + Num
+ ,i02 = DReg + DFact + Num
  ,i03 = cOrg + Num + DFact
 );
 
@@ -90,10 +91,12 @@ var
   pXL: XLSRepBuilder;
 
 create view vRep
+var
+  _dBeg: date;
 as select
   TmpSF.Nrec
 from
-  TmpSF (i02)
+  TmpSF
  ,TmpLinkPlSf
  ,TmpPlat
  ,KatOrg
@@ -101,7 +104,8 @@ from
  ,UsersDoc
  ,CashBank
 where ((
-    TmpSF.Nrec           == TmpLinkPlSf.cTmpSF
+    vRep._dBeg          <<= TmpSF.DReg
+and TmpSF.Nrec           == TmpLinkPlSf.cTmpSF
 and TmpLinkPlSf.cTmpPlat == TmpPlat.Nrec
 and TmpSF.cOrg           == KatOrg.Nrec
 and TmpPlat.cPlPor       == PlPor.Nrec
@@ -130,6 +134,7 @@ procedure XlsAddMainTableFields;
 
 procedure XlsAddMainTableRecs;
 {
+  vRep._dBeg := UserDeskRep.ResDate[1];
   vRep._loop TmpSF
   {
     pXL.ClearTblBuffer;
@@ -154,10 +159,14 @@ procedure XlsAddMainTableRecs;
         pXL.SetTblNumberFldValue('‘ã¬¬ « â¥¦ ', vRep.TmpLinkPlSf.Summa);
       }
     pXL.InsTblRow;
+
     while vRep.getnext TmpLinkPlSf = tsOk
       if vRep.getfirst TmpPlat = tsOk
       {
         pXL.ClearTblBuffer;
+
+        pXL.SetTblStringFldValue('Š®­âà £¥­â', vRep.KatOrg.Name);
+        pXL.SetTblStringFldValue('ˆŠ'    , vRep.KatOrg.UNN + '/' + vRep.KatOrg.KodPlatNDS);
         if vRep.getfirst PlPor = tsOk
         {
           pXL.SetTblStringFldValue('« â¥¦', ShowKau(cgKau_PlPor, vRep.PlPor.Nrec));
@@ -252,19 +261,21 @@ select
   sf.cOrg
  ,sf.Num
  ,sf.DFact
+ ,tSF.dReg
  ,sum(sf.Sum[1] + sf.Sum[4] + sf.Sum[23] + sf.Sum[7]) as SumNoNds
  ,sum(sf.Sum[2] + sf.Sum[5] + sf.Sum[8]) as SumNDS
  ,sum(sf.Sum[3] + sf.Sum[6] + sf.Sum[9] + sf.Sum[7]) as SumWithNDS
  ,sum(sf.Summa) as Summa
 from (
-  select distinct b.cSchFact
+  select b.cSchFact, max(b.dReg) as dReg: date
   from BookPrZk b
   where
-      b.dReg between :dBeg and :dEnd
+      b.dReg between 1 and :dEnd
   and b.TipUser in ( %macroTipUser )
+  group by b.cSchFact
 ) tSF
 join SchFact sf on sf.Nrec = tSF.cSchFact
-group by sf.cOrg, sf.Num, sf.DFact
+group by sf.cOrg, sf.Num, sf.DFact, tSF.dReg
 ;
 
 sql query qBaseDoc =
@@ -276,11 +287,9 @@ select distinct
  ,bd.DDoc as DDoc
 from BookPrZk b
 join SchFact sf on sf.Nrec = b.cSchFact
-join KatSopr ks on ks.cSchFact = sf.Nrec
-join StepDoc sd on sd.Nrec = ks.cStepDoc
-join BaseDoc bd on bd.Nrec = sd.cBaseDoc
+join BaseDoc bd on bd.Nrec = sf.cBaseDoc
 where
-    b.dReg between :dBeg and :dEnd
+    b.dReg between 1 and :dEnd
 and b.TipUser in ( %macroTipUser )
 ;
 
@@ -292,18 +301,17 @@ select
  ,plp.Nrec      as cPlPor
  ,sum(bf.Summa) as Summa
 from (
-  select distinct sd.cBaseDoc
+  select distinct sf.cBaseDoc
   from BookPrZk b
   join SchFact sf on sf.Nrec = b.cSchFact
-  join KatSopr ks on ks.cSchFact = sf.Nrec
-  join StepDoc sd on sd.Nrec = ks.cStepDoc
   where
-      b.dReg between :dBeg and :dEnd
+      b.dReg between 1 and :dEnd
   and b.TipUser in ( %macroTipUser )
 ) tBaseDoc
 join BaseDoc bd on bd.Nrec = tBaseDoc.cBaseDoc
 join BaseFin bf on bf.cBaseDoc = bd.Nrec and bf.Direct = 2
 join PlPor plp on plp.Nrec = bf.cPlPor
+where plp.DatOb between 1 and :dEnd
 group by bf.DDoc, bf.Nrec, bf.cBaseDoc, plp.Nrec
 ;
 
