@@ -1,0 +1,521 @@
+#include xlReport.vih
+#include Query.vih
+
+#component "AGAT"
+
+interface AG_RepNDS 'Процент оплаченных/неоплаченных СФ';
+show(,,80, 21);
+
+const
+  PickRepWList_UsersDoc: word = 1;
+end;
+
+table struct TmpSF
+(
+  Nrec      : comp
+ ,cOrg      : comp
+ ,Num       : string[100]
+ ,DFact     : date
+ ,SumNoNDS  : double
+ ,SumNDS    : double
+ ,SumWithNDS: double
+ ,Summa     : double
+ ,SumOpl    : double
+) with index (
+  i01 = Nrec (unique, surrogate)
+ ,i02 = DFact + Num
+ ,i03 = cOrg + Num + DFact
+);
+
+table struct TmpSFBaseDoc (
+  cOrg      : comp
+ ,Num       : string[100]
+ ,DFact     : date
+ ,cBaseDoc  : comp
+ ,DDoc      : date
+) with index (
+  i01 = cOrg + Num + DFact + DDoc
+);
+
+table struct TmpPlat (
+  Nrec    : comp
+ ,DDoc    : date
+ ,cBaseFin: comp
+ ,cBaseDoc: comp
+ ,cPlPor  : comp
+ ,Summa   : double
+) with index (
+  i01 = Nrec (unique, surrogate)
+ ,i02 = cBaseDoc + DDoc
+);
+
+table struct TmpLinkPlSf (
+  cTmpSF  : comp
+ ,cTmpPlat: comp
+ ,Summa   : double
+) with index (
+  i01 = cTmpSF
+ ,i02 = cTmpPlat
+);
+
+create view
+var
+  _sUserName: string;
+as select
+  if(IsValid(tnUsersDoc), UsersDoc.Name, '')(fieldname=UsersDocFld)
+from
+  UserDeskRep
+ ,PickRep
+ ,UsersDoc
+ ,TmpSF
+ ,TmpSFBaseDoc
+ ,TmpPlat
+ ,TmpLinkPlSf
+where ((
+      _sUserName            == UserDeskRep.OwnName
+  and cgAG_Report_50501     == UserDeskRep.NRep
+  and _sUserName            == PickRep.OwnName
+  and UserDeskRep.Nrec      == PickRep.cUserDeskRep
+  and PickRepWList_UsersDoc == PickRep.wList
+  and 10                    == UsersDoc.Razdel
+  and word(PickRep.cRec)    == UsersDoc.TipUsers
+))
+;
+
+
+//==============================================================================
+//#region Report
+
+var
+  pXL: XLSRepBuilder;
+
+create view vRep
+as select
+  TmpSF.Nrec
+from
+  TmpSF (i02)
+ ,TmpLinkPlSf
+ ,TmpPlat
+ ,KatOrg
+ ,PlPor
+ ,UsersDoc
+ ,CashBank
+where ((
+    TmpSF.Nrec           == TmpLinkPlSf.cTmpSF
+and TmpLinkPlSf.cTmpPlat == TmpPlat.Nrec
+and TmpSF.cOrg           == KatOrg.Nrec
+and TmpPlat.cPlPor       == PlPor.Nrec
+and PlPor.TiDk           == UsersDoc.TipUsers
+and UsersDoc.cCashBank   == CashBank.Nrec
+));
+
+procedure XlsAddVars;
+{
+  pXL.SetDateVar('dRepBeg', UserDeskRep.ResDate[1]);
+  pXL.SetDateVar('dRepEnd', UserDeskRep.ResDate[2]);
+}
+
+procedure XlsAddMainTableFields;
+{
+  pXL.CreateTblFld('СФНомер');
+  pXL.CreateTblFld('СФДата');
+  pXL.CreateTblFld('Контрагент');
+  pXL.CreateTblFld('ИННКПП');
+  pXL.CreateTblFld('Платеж');
+  pXL.CreateTblFld('РассчетныйСчет');
+  pXL.CreateTblFld('ДО');
+  pXL.CreateTblFld('СуммаСФ');
+  pXL.CreateTblFld('СуммаПлатежа');
+}
+
+procedure XlsAddMainTableRecs;
+{
+  vRep._loop TmpSF
+  {
+    pXL.ClearTblBuffer;
+    pXL.SetTblStringFldValue('СФНомер', vRep.TmpSF.Num);
+    pXL.SetTblDateFldValue  ('СФДата' , vRep.TmpSF.DFact);
+    pXL.SetTblNumberFldValue('СуммаСФ', vRep.TmpSF.Summa);
+    if vRep.getfirst KatOrg = tsOk
+    {
+      pXL.SetTblStringFldValue('Контрагент', vRep.KatOrg.Name);
+      pXL.SetTblStringFldValue('ИННКПП'    , vRep.KatOrg.UNN + '/' + vRep.KatOrg.KodPlatNDS);
+    }
+    if vRep.getfirst TmpLinkPlSf = tsOk
+      if vRep.getfirst TmpPlat = tsOk
+      {
+        if vRep.getfirst PlPor = tsOk
+        {
+          pXL.SetTblStringFldValue('Платеж', ShowKau(cgKau_PlPor, vRep.PlPor.Nrec));
+          if vRep.getfirst UsersDoc = tsOk
+            pXL.SetTblStringFldValue('РассчетныйСчет', if(vRep.getfirst CashBank = tsOk, vRep.CashBank.Name, vRep.UsersDoc.Name));
+        }
+        pXL.SetTblStringFldValue('ДО', ShowKau(cgKau_BaseDoc, vRep.TmpPlat.cBaseDoc));
+        pXL.SetTblNumberFldValue('СуммаПлатежа', vRep.TmpLinkPlSf.Summa);
+      }
+    pXL.InsTblRow;
+    while vRep.getnext TmpLinkPlSf = tsOk
+      if vRep.getfirst TmpPlat = tsOk
+      {
+        pXL.ClearTblBuffer;
+        if vRep.getfirst PlPor = tsOk
+        {
+          pXL.SetTblStringFldValue('Платеж', ShowKau(cgKau_PlPor, vRep.PlPor.Nrec));
+          if vRep.getfirst UsersDoc = tsOk
+            pXL.SetTblStringFldValue('РассчетныйСчет', if(vRep.getfirst CashBank = tsOk, vRep.CashBank.Name, vRep.UsersDoc.Name));
+        }
+        pXL.SetTblStringFldValue('ДО', ShowKau(cgKau_BaseDoc, vRep.TmpPlat.cBaseDoc));
+        pXL.SetTblNumberFldValue('СуммаПлатежа', vRep.TmpLinkPlSf.Summa);
+        pXL.InsTblRow;
+      }
+  }
+}
+
+procedure XlsAddTables(isCreateXlt: boolean);
+{
+  pXL.CreateTbl('Main');
+  XlsAddMainTableFields;
+  if not isCreateXlt
+    XlsAddMainTableRecs;
+  pXL.PublishTbl('Main');
+}
+
+procedure PrintXlsReport(sXltFileName: string; isCreateXlt: boolean);
+{
+  var sXlsFileName: string = if(isCreateXlt,
+                                pXL.CreateXLT(sXLTFileName, True),
+                                pXL.CreateReport(sXLTFileName, True));
+
+  pXL.CreateVar(sXLSFileName);
+  XlsAddVars;
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXLSFileName);
+  XlsAddTables(isCreateXlt);
+
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
+
+//#endregion Report
+//==============================================================================
+
+
+//==============================================================================
+//#region PrepareData
+
+create view vl
+as select
+  TmpSF.Nrec
+from
+  TmpSFBaseDoc
+ ,TmpSF
+ ,TmpPlat
+where ((
+    TmpSFBaseDoc.cOrg     == TmpSF.cOrg
+and TmpSFBaseDoc.Num      == TmpSF.Num
+and TmpSFBaseDoc.DFact    == TmpSF.DFact
+and TmpSFBaseDoc.cBaseDoc == TmpPlat.cBaseDoc
+and (TmpPlat.Summa > 0)
+));
+procedure CreateLink(ccTmpSF: comp; ccTmpPlat: comp; doSum: double);
+{
+  ClearBuffer(#TmpLinkPlSf);
+  TmpLinkPlSf.cTmpSF   := ccTmpSF;
+  TmpLinkPlSf.cTmpPlat := ccTmpPlat;
+  TmpLinkPlSf.Summa    := doSum;
+  insert current TmpLinkPlSf;
+}
+
+procedure CreateLinks;
+{
+  MtClear(#TmpLinkPlSf, mfNormal);
+  vl._loop TmpSFBaseDoc
+  {
+    if vl.getfirst TmpSF != tsOk continue;
+    var d: double = vl.TmpSF.Summa - vl.TmpSF.SumOpl;
+    while d > 0 and vl.getfirst TmpPlat = tsOk
+    {
+      var curSumPlat: double = if(vl.TmpPlat.Summa > d, d, vl.TmpPlat.Summa);
+      CreateLink(vl.TmpSF.Nrec, vl.TmpPlat.Nrec, curSumPlat);
+      vl.TmpPlat.Summa -= curSumPlat;
+      vl.update current TmpPlat;
+      vl.TmpSF.SumOpl += curSumPlat;
+      d -= curSumPlat;
+    }
+    vl.update current TmpSF;
+  }
+}
+
+sql query qSF =
+select
+  sf.cOrg
+ ,sf.Num
+ ,sf.DFact
+ ,sum(sf.Sum[1] + sf.Sum[4] + sf.Sum[23] + sf.Sum[7]) as SumNoNds
+ ,sum(sf.Sum[2] + sf.Sum[5] + sf.Sum[8]) as SumNDS
+ ,sum(sf.Sum[3] + sf.Sum[6] + sf.Sum[9] + sf.Sum[7]) as SumWithNDS
+ ,sum(sf.Summa) as Summa
+from (
+  select distinct b.cSchFact
+  from BookPrZk b
+  where
+      b.dReg between :dBeg and :dEnd
+  and b.TipUser in ( %macroTipUser )
+) tSF
+join SchFact sf on sf.Nrec = tSF.cSchFact
+group by sf.cOrg, sf.Num, sf.DFact
+;
+
+sql query qBaseDoc =
+select distinct
+  sf.cOrg
+ ,sf.Num
+ ,sf.DFact
+ ,bd.Nrec as cBaseDoc
+ ,bd.DDoc as DDoc
+from BookPrZk b
+join SchFact sf on sf.Nrec = b.cSchFact
+join KatSopr ks on ks.cSchFact = sf.Nrec
+join StepDoc sd on sd.Nrec = ks.cStepDoc
+join BaseDoc bd on bd.Nrec = sd.cBaseDoc
+where
+    b.dReg between :dBeg and :dEnd
+and b.TipUser in ( %macroTipUser )
+;
+
+sql query qPlat =
+select
+  bf.DDoc       as DDoc
+ ,bf.Nrec       as cBaseFin
+ ,bf.cBaseDoc   as cBaseDoc
+ ,plp.Nrec      as cPlPor
+ ,sum(bf.Summa) as Summa
+from (
+  select distinct sd.cBaseDoc
+  from BookPrZk b
+  join SchFact sf on sf.Nrec = b.cSchFact
+  join KatSopr ks on ks.cSchFact = sf.Nrec
+  join StepDoc sd on sd.Nrec = ks.cStepDoc
+  where
+      b.dReg between :dBeg and :dEnd
+  and b.TipUser in ( %macroTipUser )
+) tBaseDoc
+join BaseDoc bd on bd.Nrec = tBaseDoc.cBaseDoc
+join BaseFin bf on bf.cBaseDoc = bd.Nrec and bf.Direct = 2
+join PlPor plp on plp.Nrec = bf.cPlPor
+group by bf.DDoc, bf.Nrec, bf.cBaseDoc, plp.Nrec
+;
+
+procedure GetSqlStrMacroTipUser(var l: longint);
+{
+  _loop PickRep
+    sqlAddStr(l, if(l = 0, '', ',') + word(PickRep.cRec));
+}
+
+procedure PrepareData;
+{
+  var dBeg: date = UserDeskRep.ResDate[1];
+  var dEnd: date = UserDeskRep.ResDate[2];
+
+  var q: IQuery = queryManager.createQuery(qSF);
+  q.setParam('dBeg', dBeg);
+  q.setParam('dEnd', dEnd);
+  var lMacroTipUser: longint = 0;
+  GetSqlStrMacroTipUser(lMacroTipUser);
+  q.setMacro('macroTipUser', lMacroTipUser);
+  MtClear(#TmpSF, mfNormal);
+  sqlCopyInto(q, #TmpSF, true);
+
+  q := queryManager.createQuery(qBaseDoc);
+  q.setParam('dBeg', dBeg);
+  q.setParam('dEnd', dEnd);
+  lMacroTipUser := 0;
+  GetSqlStrMacroTipUser(lMacroTipUser);
+  q.setMacro('macroTipUser', lMacroTipUser);
+  MtClear(#TmpSFBaseDoc, mfNormal);
+  sqlCopyInto(q, #TmpSFBaseDoc, true);
+
+  q := queryManager.createQuery(qPlat);
+  q.setParam('dBeg', dBeg);
+  q.setParam('dEnd', dEnd);
+  lMacroTipUser := 0;
+  GetSqlStrMacroTipUser(lMacroTipUser);
+  q.setMacro('macroTipUser', lMacroTipUser);
+  MtClear(#TmpPlat, mfNormal);
+  sqlCopyInto(q, #TmpPlat, true);
+
+  CreateLinks;
+}
+
+//#endregion PrepareData
+//==============================================================================
+
+
+//==============================================================================
+//#region Visual elements
+
+screen scParams (,,sci1Esc);
+  show (,,,3) fixed_y;
+  table UserDeskRep;
+  fields
+    UserDeskRep.ResDate[1]: NoProtect;
+    UserDeskRep.ResDate[2]: NoProtect;
+<<
+
+  `Период с`.@@@@@@@@@@ `по`.@@@@@@@@@@
+>>
+end; //screen scParams
+
+browse brPickRep (,,sci1378Esc);
+  show(,4,,18);
+  table PickRep;
+  fields
+    UsersDocFld 'Тип записи книги покупок для отбора': [50], protect, pickbutton;
+end; //browse brPickRep
+
+screen scBottom (,,sci1Esc);
+  show(,19,,) fixed_y;
+  buttons
+    cmOk, default;
+    cmCancel;
+<<
+                                                   <. Продолжить .> <. Отмена .>
+>>
+end; // screen scBottom
+
+//#EndRegion Visual elements
+//==============================================================================
+
+
+//==============================================================================
+//#region Handleevent methods
+
+procedure FindOrCreateUserDeskRep;
+{
+  if getfirst UserDeskRep != tsOk
+  {
+    ClearBuffer(#UserDeskRep);
+    UserDeskRep.OwnName := _sUserName;
+    UserDeskRep.NRep := cgAG_Report_50501;
+    UserDeskRep.ResDate[1] := Date(1, Month(Cur_Date), Year(Cur_Date));
+    UserDeskRep.ResDate[2] := Date(Last_Day(Cur_Date), Month(Cur_Date), Year(Cur_Date));
+    insert current UserDeskRep;
+  }
+}
+
+procedure AddPickRepUsersDoc(wTipUser: word);
+{
+  ClearBuffer(#PickRep);
+  PickRep.OwnName      := _sUserName;
+  PickRep.cUserDeskRep := UserDeskRep.Nrec;
+  PickRep.wList        := PickRepWList_UsersDoc;
+  PickRep.cRec         := comp(wTipUser);
+  insert current PickRep;
+}
+
+procedure FillEmptyPickRep;
+{
+  if getfirst PickRep != tsOk
+  {
+    AddPickRepUsersDoc(10588);
+    AddPickRepUsersDoc(10570);
+    AddPickRepUsersDoc(10555);
+    AddPickRepUsersDoc(10473);
+    AddPickRepUsersDoc(10879);
+    AddPickRepUsersDoc(11103);
+    AddPickRepUsersDoc(10876);
+    AddPickRepUsersDoc(10875);
+    AddPickRepUsersDoc(10582);
+    AddPickRepUsersDoc(10581);
+    AddPickRepUsersDoc(10607);
+    AddPickRepUsersDoc(13215);
+    AddPickRepUsersDoc(10584);
+    AddPickRepUsersDoc(10585);
+    AddPickRepUsersDoc(13214);
+    AddPickRepUsersDoc(10878);
+    AddPickRepUsersDoc(10864);
+    AddPickRepUsersDoc(10863);
+    AddPickRepUsersDoc(7528);
+    AddPickRepUsersDoc(7529);
+  }
+}
+
+//#endregion Handleevent methods
+//==============================================================================
+
+
+tableevent table PickRep;
+  cmPick:
+  {
+    if RunInterface(L_SF::GetSchfTipDocTmp, PickRep.cRec, 75, 0) = cmDefault
+    {
+      SetModified(true);
+      UpdateTable;
+      RescanPanel(#PickRep);
+    }
+  }
+  cmUpdateRecord: update current PickRep;
+  cmInsertRecord: insert current PickRep;
+  cmDeleteRecord: delete current PickRep;
+end; //tableevent table PickRep;
+
+tableevent table UserDeskRep;
+  cmCheckField: update current UserDeskRep;
+end; //tableevent table UserDeskRep;
+
+handleevent
+
+  cmOk:
+  {
+    StartNewVisual(vtRotateVisual, vfTimer, 'Формирование отчета', 0);
+    PrepareData;
+    PrintXlsReport(TranslatePath('%StartPath%Xls\AG_RepNDS.xltm'), false);
+    StopVisual;
+  }
+
+  cmInit:
+  {
+    _sUserName := UserName;
+    FindOrCreateUserDeskRep;
+    FillEmptyPickRep;
+  }
+
+end;
+
+end.
+
+
+VipInterface UserReport_AG_RepNDS Implements IUserReport licensed(free);
+Interface UserReport_AG_RepNDS;
+  create view dummy;
+  procedure Run;
+  {
+    runinterfacenomodal(AGAT::AG_RepNDS);
+  }
+
+  function GetReportName: String;
+  {
+    GetReportName := 'Агат. Процент оплаченных/неоплаченных СФ';
+  }
+
+  function GetGroupName (Level : Word) : String;
+  {
+    Level := 0;
+    GetGroupName := '';
+  }
+
+  function GetPriority : Integer;
+  {
+    GetPriority := 0;
+  }
+
+  function VisibleInModule(Ind : Byte) : String;
+  {
+    VisibleInModule := '';
+    case Ind of
+      1 : VisibleInModule := 'B_FINANS';
+      2 : VisibleInModule := 'BUY';
+    end;
+  }
+end.

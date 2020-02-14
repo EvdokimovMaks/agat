@@ -115,6 +115,7 @@ const
   cgKau_TipOper     : word = 11273; //тип операции
   cgKau_PrinadlAvans: word = 10008; //Платежи: принадлежность к авансу
   cgKau_RashStZatr  : word = 11309; //Расшифровка статьи затрат
+  cgKau_CWSCostItem : word = 10029;
 
   //Настройки подписантов
   FEESIGNERS_CONSTREP_FINDIR_SLZAP                : word = 9091; //Настройка подписантов в отчете к ДО "Финансовая дирекция. Служебная записка"
@@ -151,4 +152,9 @@ const
   DOCREF_STAFFSTRUCT_TYPE_PEREDANO: word = 1; //тип связи в штатке - единица передана из другого подразделения
   DOCREF_STAFFSTRUCT_TYPE_PEREMESH_REPR: string = 'Перемещение';
   DOCREF_STAFFSTRUCT_TYPE_PEREDANO_REPR: string = 'Передача из другого подразделения';
+
+  WAYACCOU_CWS: comp = 0001000000000088h;
+
+
+  cgAG_Report_50501: word = 50501;
 end;
