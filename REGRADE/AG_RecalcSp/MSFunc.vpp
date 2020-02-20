@@ -1,0 +1,394 @@
+//******************************************************************************
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Логистика - склад
+// функции для методики списания по фактической цене прихода
+//******************************************************************************
+
+/*
+  Функции:
+    ModifyRestComing    - модификация остатка прихода, возвращает ссылку
+                          на приход
+
+    CheckKatSoprMS      - проверка KatSopr на корректность задания приходов
+                          в спецификации для поразделения с атрибутом
+                          "Методика списания" = по фактической цене прихода
+
+    CalcPricesPosByPrih - Расчет цены спецификации по приходу
+                          (SpSopr.cSpOrder)
+
+    SetFaktCenaPrih     - Выбор цены прихода
+*/
+
+#ifNdef _MSFUNC_VPP_
+#define _MSFUNC_VPP_
+
+#include F_GetP.Vih
+
+Create view MSFUNC
+from
+  PickRep
+, SpSopr
+
+;
+
+//******************************************************************************
+  property IGetPrihPar.cOtpEdIzm   : comp    read  SpSopr.cOtpEd;
+//******************************************************************************
+
+Function ModifyRestComing: comp; // модификация остатка прихода
+{                                // возвращает ссылку на приход
+  ModifyRestComing := comp(0);
+
+  // проверка вида документа для которого работает функция
+  if ( NOT oMSview.CheckVidSopr(KatSopr.VidSopr) )
+    Exit;
+
+  if( oMSview.GetTuneMSForPodr(KatSopr.cPodrFrom) = 1 ) // для методики списания по фактической цене прихода
+    {
+      ModifyRestComing := oMSview.GetMSSpOpderNRec(SpSopr.NRec);
+                                // ссылку на приход сохранить в спецификации расходного ордера
+      SpSopr.cSpOrder := 0;     // отвязать приход от сп-ции документа
+      update current SpSopr;    // при удалении расходного ордера ссылку на приход надо восстановить
+    }
+}
+
+//******************************************************************************
+// проверка KatSopr на корректность задания приходов в спецификации для подразделения
+// с атрибутом "Методика списания" = "по фактической цене прихода"
+Function CheckKatSoprMS( bShowMess: boolean ): boolean;
+{
+  CheckKatSoprMS := TRUE;
+
+  // проверка вида документа для которого работает функция
+  if ( NOT oMSview.CheckVidSopr(KatSopr.VidSopr) )
+    Exit;
+
+  // проверка значения настройки "Методика списания"
+  if( oMSview.GetTuneMSForPodr(KatSopr.cPodrFrom) = 0 )
+    Exit; // значение = "по настройке"
+
+  PushPos(#SpSopr);
+
+  _LOOP SpSopr
+    if NOT oMSview.CheckRazrSpis(SpSopr.NRec)
+      {
+        CheckKatSoprMS := FALSE;
+        Break;
+      }
+
+  PopPos(#SpSopr);
+}
+
+//******************************************************************************
+// Расчет цены спецификации по приходу(SpSopr.cSpOrder)
+//
+Function CalcPricesPosByPrih: boolean;
+{
+  CalcPricesPosByPrih := TRUE;
+
+  // проверка вида документа для которого работает функция
+  if ( NOT oMSview.CheckVidSopr(KatSopr.VidSopr) )
+    Exit;
+
+  var kursVal: double;  kursVal := oMSview.GetValKurs(SpSopr.cVal, SpSopr.dSopr);
+
+// проверка значения настройки "Методика списания"
+  if( oMSview.GetTuneMSForPodr(KatSopr.cPodrFrom) = 0 )
+    {
+      CalcPricesPosByPrih := FALSE;
+      Exit;
+    }
+
+  oMSview.PosToSpSopr(SpSopr.NRec);
+
+  // проверка задания прихода
+  var s1: double;
+  var s2: double;
+  if NOT oMSview.FoundSpOrderPrices(s1, s2)
+    {
+      CalcPricesPosByPrih := FALSE;
+      Exit;
+    }
+
+  case KatSopr.VidSopr of
+  //---------------------
+    630, 632: // для пересортицы
+      { }  // сумму по док-ту не считать
+  //---------------------
+    else
+      {
+        KatSopr.Summa := KatSopr.Summa - SpSopr.KolFact * SpSopr.Price;
+        KatSopr.SumVal := KatSopr.SumVal - SpSopr.KolFact * SpSopr.VPrice;
+      }
+  //---------------------
+  end;
+
+  SpSopr.Price      := s1 * fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd);
+  set SpSopr.VPrice := SpSopr.Price / kursVal;
+
+  SpSopr.rPrice  := s2 * fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd);
+  SpSopr.rVPrice := SpSopr.rPrice / kursVal;
+
+  #ifdef SOPINMOV_VIP
+  SpSopr.Price  := FRoundRubSklDoc(1, SpSopr.rPrice * SpSopr.KolFact)/SpSopr.KolFact;
+  SpSopr.VPrice := FRoundValSklDoc(1, SpSopr.rVPrice * SpSopr.KolFact)/SpSopr.KolFact;
+  #end
+
+  update current SpSopr;
+
+  case KatSopr.VidSopr of
+  //---------------------
+    630, 632: // для пересортицы
+      { }  // сумму по док-ту не считать
+  //---------------------
+    else
+      {
+        KatSopr.Summa      := KatSopr.Summa + SpSopr.KolFact * SpSopr.Price;
+        set KatSopr.SumVal := KatSopr.SumVal + SpSopr.KolFact * SpSopr.VPrice;
+      }
+  //---------------------
+  end;
+}
+
+//******************************************************************************
+// Получение цен из прихода для позиции документа
+// bSelectPrihod = TRUE - выбор прихода
+
+Function CalcPriceFromPrihod( bSelectPrihod: boolean ): boolean;
+{
+  CalcPriceFromPrihod := FALSE;
+  var MarkerPick  : TPtr;
+  var MarkerCount : longint;
+  var d: double;
+
+  // проверка вида документа для которого работает функция
+  if ( NOT oMSview.CheckVidSopr(KatSopr.VidSopr) )
+    Exit;
+
+  if( oMSview.GetTuneMSForPodr(KatSopr.cPodrFrom) = 0 )
+    Exit;
+
+  var kursVal: double;
+  var _cParty : comp;
+  kursVal := oMSview.GetValKurs(SpSopr.cVal, SpSopr.dSopr);
+  _cParty   := SpSopr.cParty;
+  var RecSpSopr: type$SpSopr;
+  RecSpSopr := SpSopr.Buffer;
+
+  // проверка привязанного прихода
+  if ( NOT oMSview.CheckPrihodRazrez(KatSopr.NRec, SpSopr.NRec) )
+    {
+      if ( bSelectPrihod )
+        {
+          var cSpPrihOrd: comp;  cSpPrihOrd := 0;
+
+          set SpSopr.Price    := 0;
+          set SpSopr.VPrice   := 0;
+          set SpSopr.cSpOrder := 0;
+
+//          SaveMyDsk(SpSopr.cOtpEd, 'KoefOtpEd_F_GetPrih');
+
+          if( RunInterface( 'F_GetPrih'
+                           , KatSopr.DSopr
+                           , SpSopr.cMCUsl
+                           , KatSopr.cPodrFrom
+                           , KatSopr.cMOLFrom
+                           , _cParty
+                           , SpSopr.KolFact*fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd)
+                           , cSpPrihOrd
+                           , if(KatSopr.VidSopr = 632, KatSopr.TypeDoc, if(KatSopr.VidSopr = 630, KatSopr.TypeDoc, if(KatSopr.VidSopr = 602, KatSopr.TypeDoc, 0)))
+                           , IGetPrihPar(Self)
+                          ) <> cmCancel)
+          {
+            MarkerPick := InitMarker('MarkerGetPrih', 8, 100, 10, False);
+            MarkerCount := GetMarkerCount(MarkerPick);
+            if (MarkerCount > 1)
+            {
+              var FirstRec : boolean;
+              FirstRec := TRUE;
+
+              MSFUNC._loop PickRep where (( 300 == PickRep.wlist))
+              {
+                if (FirstRec)
+                {
+                  SET SpSopr.cParty   := MSFUNC.PickRep.cUserDeskRep;
+                  SET SpSopr.cSpOrder := MSFUNC.PickRep.cRec;
+                  SET SpSopr.KolFact  := MSFUNC.PickRep.PickKol;
+                  SET SpSopr.KolOpl   := MSFUNC.PickRep.PickKol;
+                  SET SpSopr.Kol      := MSFUNC.PickRep.PickKol;
+                  FirstRec := FALSE;
+                }
+                else
+                {
+                  MsFunc.SpSopr.Buffer       := SpSopr.Buffer;
+                  SET MSFUNC.SpSopr.nRec     := 0;
+                  SET MSFUNC.SpSopr.cParty   := MSFUNC.PickRep.cUserDeskRep;
+                  SET MSFUNC.SpSopr.cSpOrder := MSFUNC.PickRep.cRec;
+                  SET MSFUNC.SpSopr.KolFact  := MSFUNC.PickRep.PickKol;
+                  SET MSFUNC.SpSopr.KolOpl   := MSFUNC.PickRep.PickKol;
+                  SET MSFUNC.SpSopr.Kol      := MSFUNC.PickRep.PickKol;
+                  SET MSFUNC.SpSopr.Npp      := oSpNext.GetSpNppNext(KatSopr.NRec, coSpSopr);
+                  if oMSview.FoundSpOrderP(MSFUNC.PickRep.cRec, d)
+                  {
+                    MSFUNC.SpSopr.Price := d * fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd);
+                    MSFUNC.SpSopr.rPrice := MSFUNC.SpSopr.Price;
+
+                    MSFUNC.SpSopr.VPrice := MSFUNC.SpSopr.Price / kursVal;
+                    set MSFUNC.SpSopr.rvPrice := MSFUNC.SpSopr.VPrice;
+                  }
+
+                  MSFUNC.insert current SpSopr;
+                }
+
+                 if (cSpPrihOrd <> 0) and (MSFUNC.SpSopr.nRec <> 0)
+                   oMTRFun.CopySpecMTR(coSpOrder, cSpPrihOrd, coSpSopr, MSFUNC.SpSopr.NRec);
+              }
+            }
+            else
+            {
+              SET SpSopr.cParty   :=  _cParty;
+              SET SpSopr.cSpOrder := cSpPrihOrd;
+
+              if (cSpPrihOrd <> 0) and (SpSopr.nRec <> 0)
+              oMTRFun.CopySpecMTR(coSpOrder, cSpPrihOrd, coSpSopr, SpSopr.NRec);
+            }
+          }
+        }
+    }
+
+  if oMSview.FoundSpOrderP(SpSopr.cSpOrder, d)
+    {
+      SpSopr.Price := d * fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd);
+      SpSopr.rPrice := SpSopr.Price;
+
+      SpSopr.VPrice := SpSopr.Price / kursVal;
+      set SpSopr.rvPrice := SpSopr.VPrice;
+    }
+
+  CalcPriceFromPrihod := TRUE;
+}
+
+//******************************************************************************
+// Выбор цены прихода
+//
+Function SetFaktCenaPrih: boolean;
+{
+  SetFaktCenaPrih := FALSE;
+
+  // проверка вида документа для которого работает функция
+  if ( NOT oMSview.CheckVidSopr(KatSopr.VidSopr) )
+    Exit;
+
+  var _cSpOrder, _cParty : comp;
+  var _UchKol: double; // количество в учетных единицах
+  var MarkerPick  : TPtr;
+  var MarkerCount : longint;
+
+  if( oMSview.GetTuneMSForPodr(KatSopr.cPodrFrom) = 1 )
+    {
+      oMSview.PosToSpSopr(SpSopr.NRec);
+
+      _cSpOrder := SpSopr.cSpOrder;
+      _UchKol   := SpSopr.KolFact*fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd);
+      _cParty   := SpSopr.cParty;
+
+//      SaveMyDsk(SpSopr.cOtpEd, 'KoefOtpEd_F_GetPrih');
+
+      if( RunInterface( 'F_GetPrih'
+                      , KatSopr.DSopr
+                      , SpSopr.cMCUsl
+                      , KatSopr.cPodrFrom
+                      , KatSopr.cMOLFrom
+                      , _cParty
+                      , _UchKol
+                      , _cSpOrder
+                      , if(KatSopr.VidSopr = 632, KatSopr.TypeDoc, if(KatSopr.VidSopr = 630, KatSopr.TypeDoc,if(KatSopr.VidSopr = 602, KatSopr.TypeDoc, 0)))
+                      , IGetPrihPar(Self)
+                      ) <> cmCancel )
+        {
+          MarkerPick := InitMarker('MarkerGetPrih', 8, 100, 10, False);
+          MarkerCount := GetMarkerCount(MarkerPick);
+          if (MarkerCount > 1)
+          {
+            var FirstRec : boolean;
+            FirstRec := TRUE;
+
+            MSFUNC._loop PickRep where (( 300 == PickRep.wlist))
+            {
+              if (FirstRec)
+              {
+                SET SpSopr.cParty   := MSFUNC.PickRep.cUserDeskRep;
+                SET SpSopr.cSpOrder := MSFUNC.PickRep.cRec;
+                SET SpSopr.KolFact  := MSFUNC.PickRep.PickKol;
+                SET SpSopr.KolOpl   := MSFUNC.PickRep.PickKol;
+                SET SpSopr.Kol      := MSFUNC.PickRep.PickKol;
+                update current SpSopr;
+                FirstRec := FALSE;
+                if (KatSopr.vidSopr <> 201) AND (KatSopr.vidSopr <> 1421) AND (KatSopr.vidSopr <> 551)
+                  CalcPricesPosByPrih;
+              }
+              else
+              {
+                SET SpSopr.nRec     := 0;
+                SET SpSopr.cParty   := MSFUNC.PickRep.cUserDeskRep;
+                SET SpSopr.cSpOrder := MSFUNC.PickRep.cRec;
+                SET SpSopr.KolFact  := MSFUNC.PickRep.PickKol;
+                SET SpSopr.KolOpl   := MSFUNC.PickRep.PickKol;
+                SET SpSopr.Kol      := MSFUNC.PickRep.PickKol;
+                SET SpSopr.Npp      := oSpNext.GetSpNppNext(KatSopr.NRec, coSpSopr);
+                insert current SpSopr;
+                if (KatSopr.vidSopr <> 201) AND (KatSopr.vidSopr <> 1421) AND (KatSopr.vidSopr <> 551)
+                  CalcPricesPosByPrih;
+              }
+
+              if (_cSpOrder <> 0)
+                oMTRFun.CopySpecMTR(coSpOrder, _cSpOrder, coSpSopr, SpSopr.NRec);
+            }
+
+            ReReadRecord(#SpSopr);
+          }
+          else
+          {
+            SET SpSopr.cParty   :=  _cParty;
+            SET SpSopr.cSpOrder := _cSpOrder;
+
+            if (_cSpOrder <> 0)
+              oMTRFun.CopySpecMTR(coSpOrder, _cSpOrder, coSpSopr, SpSopr.NRec);
+
+            update current SpSopr;
+
+            if (KatSopr.vidSopr <> 201) AND (KatSopr.vidSopr <> 1421) AND (KatSopr.vidSopr <> 551)
+              CalcPricesPosByPrih;
+          }
+
+          Update_Current_KatSopr;
+
+          SetFaktCenaPrih := TRUE;
+        }
+        else
+         ReReadRecord(#SpSopr);
+    }
+}
+
+//******************************************************************************
+// блокировка полей цен в окне Specifinfo
+//
+Procedure SetFOSpecifinfo;
+{
+  if (CurTable <> #SpSopr)
+    Exit;
+
+  // проверка вида документа для которого работает функция
+  if ( NOT oMSview.CheckVidSopr(KatSopr.VidSopr) )
+    Exit;
+
+  ToggleFieldProtected(#SpSopr.rPrice,  oMSview.GetTuneMSForPodr(KatSopr.cPodrFrom) = 1);
+  ToggleFieldProtected(#SpSopr.rVPrice, oMSview.GetTuneMSForPodr(KatSopr.cPodrFrom) = 1);
+}
+
+//******************************************************************************
+
+
+#end // _MSFUNC_VPP_
+
+//******************************************************************************

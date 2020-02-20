@@ -1,0 +1,144 @@
+// ╔═════════════════════════════════════════════════════════════════════╗
+// ║              Проект Галактика   (с) 1996-2003, TOP SOFT Ltd.        ║
+// ║      Версия :    7.1x                                               ║
+// ║      Разработал: Александр Крахотко/Лебедев С.В                     ║
+// ║      Назначение: пересчет LIFO/FIFO цен в расходных ордерах         ║
+// ║                  - обработка возвратов-приходов                     ║
+// ║      Изменения:                                                     ║
+// ╚═════════════════════════════════════════════════════════════════════╝
+/* ОБРАБОТКА ПРИХОДА-ВОЗВРАТА
+   описание самой сложной ситуации которая может возникнуть
+      ┌───────────────────╥─────────────────────────────┐
+      │  до пересчета     ║ после пересчета             │
+      ├─────────┬─────────╫─────────────┬───────────────┤
+      │  расход │ возврат ║ расход      │ возврат       │
+      ├─────────┴─────────╫─────────────┴───────────────┤
+      │  р 10     п 4     ║       ┌ р 3    п 4 ─┬ п 3   │
+      │           п 5     ║ р 10 ─┤ р 2         └ п 1   │
+      │                   ║       └ р 5                 │
+      │                   ║                п 5 ─┬ п 1   │
+      │                   ║                     └ п 4   │
+      └───────────────────╨─────────────────────────────┘
+*/
+
+var wasVozv_LF: boolean;
+
+
+//заносим все возвраты(приходы) в Pick557
+procedure VozvPrih_AddAllVozv; //должна выполнится только 1 раз для 1 специф.до разбиения
+{
+wasVozv_LF:= false;
+if GetFirst pSpOrder where ((SpOrder.nRec == pSpOrder.cSpOrdV)) <> tsOk  Exit;
+
+if delete Pick556 where ((556==Pick556.wList)) <> tsOk  {};
+if delete Pick557 where ((557==Pick557.wList)) <> tsOk  {};
+
+_LOOP pSpOrder where ((SpOrder.nRec == pSpOrder.cSpOrdV))
+ { if not NextVisual  break;
+   ClearBuffer(#Pick557);
+   Pick557.wList := 557;
+   Pick557.cRec  := pSpOrder.nRec;
+   insert current Pick557;
+ }//_L
+
+wasVozv_LF:= true;
+}
+
+
+//заносим SpOrder.nRec для которых были возвраты в таблицу Pick556
+procedure VozvPrih_AddRashod;
+{
+  if not wasVozv_LF  Exit;
+
+  ClearBuffer(#Pick556);
+  Pick556.wList   := 556;
+  Pick556.cRec    := SpOrder.nRec;
+  Pick556.pickKol := SpOrder.kol;
+  insert current Pick556;
+}
+
+
+
+//после всего этого  бежим по этим возвратам-приходам и корректирует их
+procedure VozvPrih_HandleVozv;
+var pFirst : boolean;
+    vozv_kol : double;
+begin
+if not wasVozv_LF  Exit;
+
+PushPos(#SpOrder);
+_LOOP Pick557 where ((557 == Pick557.wList))  //по возвратам(приходам)
+ {
+   if not NextVisual  Break;
+   if GetFirst pSpOrder where ((Pick557.cRec == pSpOrder.nRec )) <> tsOk
+     Continue;
+
+   pFirst  := true;
+   vozv_kol:= pSpOrder.Kol;
+   _LOOP Pick556 where ((556 == Pick556.wList)) ordered by index Pick01  //по расходам
+    {
+      if not NextVisual  break;
+      if Pick556.pickKol < presision  continue;
+      if abs(vozv_kol) < presision  break;
+
+      //ищем расходный ордер
+      if GetFirst SpOrder where ((Pick556.cRec == SpOrder.nRec))<>tsOk
+        continue;
+
+      if Pick556.pickKol >= (vozv_kol - presision)  //Ок,  расход >= возврату
+       { pSpOrder.kol    := vozv_kol;
+         Pick556.pickKol := Pick556.pickKol - vozv_kol;
+         vozv_kol        := 0;  // больше ничего не надо  - будет выход
+       }
+      else    //возврат > расхода
+       { pSpOrder.kol    := Pick556.pickKol;
+         vozv_kol        := vozv_kol - Pick556.pickKol;
+         Pick556.pickKol := 0;
+       }
+      update current Pick556;
+
+      //привязываем расход к возврату
+      pSpOrder.cSpOrdV  := SpOrder.nRec;
+      pSpOrder.cSpOrder := 0;//для старых возвратов
+      pSpOrder.priceN   := SpOrder.priceN; //для НУ
+      pSpOrder.SummN    := SpOrder.SummN; //для НУ
+      if pFirst
+       { pFirst := false;
+         update current pSpOrder;
+       }
+      else
+       { pSpOrder.nRec := 0;
+         insert current pSpOrder;
+       }
+
+      if InsertParnTbl(pSpOrder.cSklOrder, SpOrder.cSklOrder)
+        InsertSpOrderTmp(pSpOrder.nRec, SpOrder.nRec, SpOrder.rSrPrice, SpOrder.rVPrice, SpOrder.cVal, SpOrder.kol);
+    } //_L  Pick556
+
+
+   if vozv_kol >= presision  //придется отвязать возврат от расхода
+    { pSpOrder.cSpOrdV := 0;
+      pSpOrder.cSpOrder:= 0;//для старых возвратов
+      pSpOrder.kol     := vozv_kol;    pSpOrder.priceN := 0;
+      pSpOrder.nRec    := 0;
+      insert current pSpOrder;
+
+      if InsertParnTbl(pSpOrder.cSklOrder, 0)
+        InsertSpOrderTmp(pSpOrder.nRec, SpOrder.nRec, 0, 0, 0, SpOrder.kol);
+
+      PushPos(#SklOrder);
+      frmErr_LF.write('Ошибка: возвращено было больше чем было продано!');
+      KatMC.name:= if(GetFirst KatMC where ((pSpOrder.cMC == KatMC.nRec))=tsOk,
+                      KatMC.name +', ном.номер: '+KatMC.barKod,  'nRec='+string(pSpOrder.cMC) );
+      frmErr_LF.write('Приходный ордер на возврат №'+ if(GetFirst SklOrder where ((pSpOrder.cSklOrder == SklOrder.nRec))=tsOk,
+                       SklOrder.nOrder+' от '+string(SklOrder.dOrd),'????') + ', МЦ: '+KatMC.name);
+      frmErr_LF.write('Возвращено на '+string(SpOrder.kol) +' ' +if(GetFirst KatEd where ((KatMC.cEd == KatEd.nRec))=tsOk, KatEd.abbr, '')+' больше чем продано');
+      frmErr_LF.write('Данную позицию ордера пришлось "отвязать" от расхода и установить в ней нулевые цены');
+      frmErr_LF.write('');
+      wasError_LF:= true;
+      PopPos(#SklOrder);
+    }
+ } //_L  Pick557
+
+PopPos(#SpOrder);
+end;

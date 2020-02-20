@@ -1,0 +1,113 @@
+//******************************************************************************
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Логистика - сопроводительные документы
+// Пересчет средних цен по внутренним накладным
+//******************************************************************************
+
+#ifNdef _SrPSopr_vpp_
+#define _SrPSopr_vpp_
+
+
+Create view SrSp
+var
+  _cSpSopr : comp;
+
+As select
+  *
+
+From
+  SpecMTR
+;
+
+
+//******************************************************************************
+#include MSfunc.vpp
+
+//******************************************************************************
+// Перерасчет средних цен в накладной
+Procedure CalcSrPrice;
+{
+  UpdateTable;
+
+  oMakeOrder.CalcSrPriceInNakl(KatSopr.NRec);
+
+  ReReadRecord(#KatSopr);
+}
+
+//******************************************************************************
+// Пересчет средней цены в позиции накладной
+Procedure CalcSrPricePos;
+var _wSkPr : word;
+{
+  if ( NOT CalcPriceFromPrihod(FALSE) )
+    {
+      if (not InitMCInfo(KatSopr.dSopr))
+        Exit;
+
+      LockValOt(TRUE);
+      _wSkPr := 0;
+
+      if ( (TypeSopr > 501) and (TypeSopr < 510) )
+       //для всех производственных кроме отпускной
+        _wSkPr := 1;
+
+      if (TypeSopr = 552) OR (TypeSopr = 553) OR (TypeSopr = 554) OR (TypeSopr = 557) OR (TypeSopr = 559)// из ремонтов
+        _wSkPr := 2;
+
+      SkladProizv(_wSkPr);
+
+      if (  ((boGetTune('Oper.RazrezCU')) and (_wSkPr <> cgVidUchO_UPL))
+         or ((boGetTune('Manuf.RazrezCU')) and (_wSkPr = cgVidUchO_UPL))
+         )
+      {
+        var dSrPrice, dvPrice, dKol : double;
+        SrSp._cSpSopr := SpSopr.nrec;
+
+        if (SrSp.GetFirst SpecMTR where (( coSpSopr ==  SpecMTR.coTable and
+                                           _cSpSopr ==  SpecMTR.cSpec ))= tsOk )
+          oSald.CountPriceCU(KatSopr.dSopr, _wSkPr, SrSp.SpecMTR.cSaldTune, SrSp.SpecMTR.cObj, SrSp.SpecMTR.cKau[1],
+                         SrSp.SpecMTR.cKau[2], SrSp.SpecMTR.cKau[3], SrSp.SpecMTR.cKau[4], SrSp.SpecMTR.cKau[5],
+                         SrSp.SpecMTR.cKau[6], SrSp.SpecMTR.cKau[7], SrSp.SpecMTR.cKau[8], SrSp.SpecMTR.cKau[9],
+                         SpSopr.cMCUsl, KatSopr.cPodrFrom, KatSopr.cMolFrom, SpSopr.cParty,
+                         dSrPrice, dvPrice, dKol, SpSopr.cVal);
+        else
+          oSald.CountPriceCU(KatSopr.dSopr, _wSkPr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                         SpSopr.cMCUsl, KatSopr.cPodrFrom, KatSopr.cMolFrom, SpSopr.cParty,
+                         dSrPrice, dvPrice, dKol, SpSopr.cVal);
+
+        SpSopr.Price := dSrPrice * fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd);
+        set SpSopr.VPrice := dvPrice * fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd);
+      }
+      else
+      {
+        SpSopr.cVal := StepMCInfo(SpSopr.cMCUsl, SpSopr.cVal,
+                          if (KatSopr.cPodrFrom = 0, comp(-1), KatSopr.cPodrFrom),
+                          if (KatSopr.cMolFrom = 0, comp(-1), KatSopr.cMolFrom),
+                          if (SpSopr.cParty = 0, comp(-1), SpSopr.cParty));
+
+        SpSopr.Price := AveragePrice * fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd);
+        set SpSopr.VPrice := AverageVPrice * fEdIzm.GetKoefOtpEd(SpSopr.cOtpEd);
+      }
+
+      DoneMCInfo;
+    }
+
+  SpSopr.rPrice  := SpSopr.Price;
+  SpSopr.rVPrice := SpSopr.VPrice;
+
+  #ifdef SOPINMOV_VIP
+  SpSopr.Price  := oSaldo_K.RoundRubOrd(SpSopr.rPrice, SpSopr.KolFact);
+  SpSopr.VPrice := oSaldo_K.RoundValOrd(SpSopr.rVPrice, SpSopr.KolFact);
+  #end
+
+  if (TypeSopr = 552) OR (TypeSopr = 553) OR (TypeSopr = 554) OR (TypeSopr = 557) OR (TypeSopr = 559)// из ремонтов
+    if update current SpSopr = tsOk
+    {}
+
+  //KatSopr.Summa := oSDFuns.FSRoundRub(KatSopr.VidSopr, KatSopr.Summa + SpSopr.KolOpl * SpSopr.Price);
+  //set KatSopr.SumVal := oSDFuns.FSRoundVal(KatSopr.VidSopr, KatSopr.SumVal + SpSopr.KolOpl * SpSopr.VPrice);
+}
+
+//******************************************************************************
+
+#end

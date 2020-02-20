@@ -1,0 +1,206 @@
+/*
+ ╔═══════════════════════════════════════════════════════════════════════════╗
+ ║                     (c) 2004 корпорация ГАЛАКТИКА                         ║
+ ║ Проект        : ГАЛАКТИКА                                                 ║
+ ║ Система       : Оперативный контур                                        ║
+ ║ Версия        : 7.1x                                                      ║
+ ║ Назначение    : Расчёт средних цен для расходного ордера для LIFO/FIFO    ║
+ ║ Ответственный : Лебедев С.В                                               ║
+ ║ Параметры     : нет                                                       ║
+ ╚═══════════════════════════════════════════════════════════════════════════╝
+*/
+
+//для обработки возвратов
+#include recalcsv.vpp
+
+function PrepareSpOrders: boolean;
+{
+  Result := false;
+
+  StartNewVisual(vtRotateVisual,vfTimer+vfConfirm+vfBreak,'Подготовка ордеров к пересчету', 1);
+
+  var d1_: date;  d1_:= ZeroDate;
+
+  _LOOP SklOrder where (( SkPr     == SklOrder.SP  and
+                          begDate <<= SklOrder.dOrd ))
+  {
+    if d1_ <> SklOrder.dOrd
+      {
+        SetVisualHeader('Подготовка ордеров к пересчету'#13 +string(SklOrder.dOrd) );
+        d1_ := SklOrder.dOrd;
+      }
+
+    _LOOP SpOrder where (( SklOrder.nRec == SpOrder.cSklOrder ))
+    {
+      if not NextVisual
+        {
+          StopVisual('', 0);
+          Exit;
+        }
+
+      if not WasSelectedMC(SpOrder.cMC)
+        Continue;
+
+      //if abs(SpOrder.kol) < presision   Continue;
+
+      if SpOrder.vidOrder = 0  //приход
+       {
+         SpOrder.cSpOrder := 0; //из-за старых возвратов
+         SpOrder.ostatok  := if(SpOrder.tipOrd <> 3, SpOrder.kol, 0);
+         SpOrder.ostatokN := SpOrder.kol;
+         SpOrder.empty    := if(SpOrder.tipOrd <> 3, 1, 3);
+
+         if SpOrder.kol < presision
+           SpOrder.empty := 0;
+
+         update current SpOrder;
+
+         Continue;
+       }
+
+      //расход
+      //для соотв. приходного перед датой пересчёта
+      if GetFirst pSpOrder where ((SpOrder.cSpOrder == pSpOrder.nRec))=tsOk
+        if pSpOrder.dOrd < begDate
+         {
+           pSpOrder.ostatok += SpOrder.kol;
+
+           if (pSpOrder.ostatok - pSpOrder.kol) >= presision
+             pSpOrder.ostatok:= pSpOrder.kol;
+
+           pSpOrder.empty := 1; //не списаный
+
+           update current pSpOrder;
+         }
+
+      SpOrder.ostatok  := 0;
+      SpOrder.ostatokN := 0;
+      SpOrder.empty    := if(SpOrder.tipOrd<>3, 0, 3);
+      SpOrder.cSpOrder := 0; //только после корректировки прихода !
+
+      update current SpOrder;
+    }//_L  SpOrder
+  }//_L  SklOrder
+
+  StopVisual('',0);
+
+  Result := true;
+}
+
+//--------------------------------------------------------------------------
+//                            нахождение цен из прихода(ов)
+function GetPrice_LF (var newSrPrice_, newVPrice_: TSumma; var newcVal_: comp;
+                      var wasDivision_: boolean): boolean;
+var wasFoundPrih: boolean;
+    spisKol: double;
+{
+  Result := false;
+
+  wasDivision_ := false;
+
+  if SpOrder.kol < presision
+    Exit;  //отрицательный расход не списываем
+
+  newSrPrice_:= 0;  newVPrice_:= 0;  newcVal_:= 0;
+  
+  SpOrder.cSpOrder := 0;
+
+  //поиск свободных внешних приходов (по empty)
+  wasFoundPrih := false;
+
+  While (if( GetMethodSpis = 1,
+                    ( GetLast pSpOrder where ((   //LIFO
+                          SkPr          == pSpOrder.SP       and
+                          0             == pSpOrder.vidOrder and
+                          SpOrder.cMC   == pSpOrder.cMC      and
+                          1             == pSpOrder.empty    and
+                          SpOrder.dOrd >>= pSpOrder.dOrd ))
+                    ),
+                    ( GetFirst pSpOrder where ((  //FIFO
+                          SkPr          == pSpOrder.SP       and
+                          0             == pSpOrder.vidOrder and
+                          SpOrder.cMC   == pSpOrder.cMC      and
+                          1             == pSpOrder.empty    and
+                          SpOrder.dOrd >>= pSpOrder.dOrd ))
+                    )
+           ) = tsOk)
+  {
+    //приход найден
+    if pSpOrder.kol < presision  or  pSpOrder.ostatok < presision
+      { pSpOrder.empty := 0;  update current pSpOrder;  Continue; } //отрицательный приход не списывается
+
+    if pSpOrder.tipOrd = 3
+      { pSpOrder.empty := 3;  update current pSpOrder;  Continue; }
+
+    wasFoundPrih := true;
+
+    Break;
+  }//W
+
+  if not wasFoundPrih  //свободный приход не найден
+   {
+     KatMC.name := if(GetFirst KatMC where ((SpOrder.cMC == KatMC.nRec))=tsOk,
+                      KatMC.name +if(KatMC.barKod<>'', ', ном.номер: '+KatMC.barKod,''),
+                      'nRec='+string(pSpOrder.cMC) );
+     frmErr_LF.write('Для расходного ордера № '+SklOrder.nOrder+ ' от '+string(SpOrder.dOrd) +',  МЦ: '+KatMC.Name);
+     frmErr_LF.write('не хватило ПРИХОДНЫХ ордеров, дополнительно требуется '+string(SpOrder.kol) +' ' +if(GetFirst KatEd where ((KatMC.cEd == KatEd.nRec))=tsOk, KatEd.abbr, '') );
+
+     if SpOrder.npp >= 30000
+       frmErr_LF.write('В расходный ордер добавлена спецификация с нулевой ценой.');
+
+     frmErr_LF.write('');
+
+     wasError_LF:= true;
+
+     Exit;
+   }
+
+  newSrPrice_:= pSpOrder.rSrPrice;
+  newVPrice_ := pSpOrder.rVPrice;
+  newcVal_   := pSpOrder.cVal;
+
+  SpOrder.cSpOrder := pSpOrder.nRec;
+
+  if (SpOrder.kol - pSpOrder.ostatok) > -presision   //остатка мало
+    {
+      spisKol := SpOrder.kol - pSpOrder.ostatok;
+
+      SpOrder.kol := pSpOrder.ostatok;  //списываем весь остаток, внизу добавим спец.
+
+      pSpOrder.ostatok := 0;
+      pSpOrder.empty   := 0; //пуст
+    }
+  else //остатка достаточно
+    {
+      spisKol := 0;
+
+      pSpOrder.ostatok -= SpOrder.kol;
+      pSpOrder.empty   := 1; //в приходе еще осталось
+    }
+
+  update current pSpOrder; //обновляем поле ostatok
+
+  //не все списано - добавляем расх.спецификацию с 0-ми ценами на несписанное кол-ва для дальнейшей доработки
+  if spisKol >= presision
+    {
+      PushPos(#SpOrder);
+
+      SpOrder.cSpOrder := SpOrder.nRec; //для поиска
+      SpOrder.kol      := spisKol;
+
+      if SpOrder.npp < 30000
+        SpOrder.npp := 30000 + SpOrder.npp //в конец его чтобы не сбить ключ
+      else
+        SpOrder.npp++;  //в конец его чтобы не сбить ключ
+
+      SpOrder.nRec := 0;
+
+      insert current SpOrder; //!
+
+      PopPos(#SpOrder);
+
+      wasDivision_:= True; //!
+    }
+
+  Result := true;
+}

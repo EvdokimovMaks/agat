@@ -1,0 +1,334 @@
+//******************************************************************************
+//                                                      (c) корпорация Галактика
+// Галактика 7.12 - Логистика
+// Пересчет средних цен в расходных ордерах
+//******************************************************************************
+
+#include MSview.var
+
+//******************************************************************************
+
+Function if0(dbl_: double): double;
+{
+  if0 := if(abs(dbl_) < presision, 1, dbl_);
+}
+
+//******************************************************************************
+
+Function IsSrPricesTbl(
+                cRec    : comp;
+                SP_     : word;
+                Date_   : date;
+                cMC_    : comp;
+                cPodr_  : comp;
+                cMOL_   : comp;
+                cParty_ : comp
+         ): boolean;
+{
+  var razrez_: word;
+  razrez_ := if((SP_ = cgVidUchO_Sklad) OR (SP_ = cgVidUchO_UKS), razrez,
+                if(SP_ = cgVidUchO_UPL, razrezP, razrezR)); // УКС
+
+  if (razrez_ AND 2) = 0
+    cPodr_ := 0;
+
+  if (razrez_ AND 4) = 0
+    cMOL_  := 0;
+
+  if (razrez_ AND 8) = 0
+    cParty_ := 0;
+
+  // данные по ЦУ
+  var vcPtr: array [0..10] of comp;
+  if ((useTransaction and 256) > 0)
+  {
+    vSpecMTR.cSpOrder := cRec;
+    if (vSpecMTR.GetFirst SpecMTR = tsOk)
+    {
+      vcPtr[10] := vSpecMTR.SpecMTR.cSaldTune;
+      vcPtr[0] := vSpecMTR.SpecMTR.cObj;
+
+      var i: integer = 0;
+      for (i := 1; i <= 9; i++)
+        vcPtr[i] := vSpecMTR.SpecMTR.cKau[i];
+    }
+  }
+
+  IsSrPricesTbl := (GetFirst SrPricesTbl where ((
+                                                 SP_     == SrPricesTbl.SP
+                                             and cMC_    == SrPricesTbl.cMC
+                                             and cPodr_  == SrPricesTbl.cPodr
+                                             and cMOL_   == SrPricesTbl.cMOL
+                                             and cParty_ == SrPricesTbl.cParty
+                                             and Date_   == SrPricesTbl.dPrice
+                                             // ЦУ
+                                             and vcPtr[10]    == SrPricesTbl.cSaldTune
+                                             and vcPtr[0]     == SrPricesTbl.cObj
+                                             and vcPtr[1]     == SrPricesTbl.cKau[1]
+                                             and vcPtr[2]     == SrPricesTbl.cKau[2]
+                                             and vcPtr[3]     == SrPricesTbl.cKau[3]
+                                             and vcPtr[4]     == SrPricesTbl.cKau[4]
+                                             and vcPtr[5]     == SrPricesTbl.cKau[5]
+                                             and vcPtr[6]     == SrPricesTbl.cKau[6]
+                                             and vcPtr[7]     == SrPricesTbl.cKau[7]
+                                             and vcPtr[8]     == SrPricesTbl.cKau[8]
+                                             and vcPtr[9]     == SrPricesTbl.cKau[9]
+                                                 )) = tsOk);
+}
+
+//******************************************************************************
+
+Procedure UpdateSrPricesTbl(
+                cRec: comp;
+                sortOrdFound_ : boolean;
+                SP_        : word;
+                Date_      : Date;
+                cMC_       : comp;
+                cPodr_     : comp;
+                cMOL_      : comp;
+                cParty_    : comp;
+                pr_        : double;
+                vPr_       : double;
+                cVal_      : comp
+          );
+{
+  if sortOrdFound_
+    Exit;
+
+  if roundOrd = TRUE
+    Exit;
+
+  if oper_LF AND (SP_ = cgVidUchO_Sklad)
+    Exit;
+
+  if IsSrPricesTbl(cRec, SP_, Date_, cMC_, cPodr_, cMOL_, cParty_)
+    {
+      SrPricesTbl.rSrPrice := pr_;
+      SrPricesTbl.rVPrice  := vPr_;
+      SrPricesTbl.cVal     := cVal_;
+
+      update current SrPricesTbl;
+
+      Exit;
+    }
+
+  var razrez_: word;
+  razrez_ := if((SP_ = cgVidUchO_Sklad) OR (SP_ = cgVidUchO_UKS), razrez,
+                if(SP_ = cgVidUchO_UPL, razrezP, razrezR)); // УКС
+
+  if (razrez_ AND 2) = 0
+    cPodr_ := 0;
+
+  if (razrez_ AND 4) = 0
+    cMOL_  := 0;
+
+  if (razrez_ AND 8) = 0
+    cParty_ := 0;
+
+  ClearBuffer(#SrPricesTbl);
+
+  SrPricesTbl.SP       := SP_;
+  SrPricesTbl.cMC      := cMC_;
+  SrPricesTbl.cPodr    := cPodr_;
+  SrPricesTbl.cMOL     := cMOL_;
+  SrPricesTbl.cParty   := cParty_;
+  SrPricesTbl.dPrice   := Date_;
+  SrPricesTbl.rSrPrice := pr_;
+  SrPricesTbl.rVPrice  := vPr_;
+  SrPricesTbl.cVal     := cVal_;
+
+  // данные по ЦУ
+  if ((useTransaction and 256) > 0)
+  {
+    vSpecMTR.cSpOrder := cRec;
+    if (vSpecMTR.GetFirst SpecMTR = tsOk)
+    {
+      SrPricesTbl.cSaldTune := vSpecMTR.SpecMTR.cSaldTune;
+      SrPricesTbl.cObj := vSpecMTR.SpecMTR.cObj;
+
+      var i: integer = 0;
+      for (i := 1; i <= 9; i++)
+        SrPricesTbl.cKau[i] := vSpecMTR.SpecMTR.cKau[i];
+    }
+  }
+
+  insert current SrPricesTbl;
+}
+
+Procedure CountSrPrices(
+                var newSrPrice_  : TSumma;
+                var newVPrice_   : TSumma;
+                var newcVal_     : comp;
+                var wasDivision_ : boolean;
+                var needSaveSrPr_: boolean
+          );
+{
+
+  wasDivision_  := FALSE;
+  needSaveSrPr_ := TRUE;
+
+  //------------------------------------------------------------------------------
+  if(     (SpOrder.SP = cgVidUchO_Sklad)
+      AND (SpOrder.vidOrder = cgVidOrder_Discharge)
+      AND (oMSview.GetTuneMSForPodr(SpOrder.ccPodr) = 1 ))
+    {
+      oMSview.GetPrices_MSPrih2(newSrPrice_, newVPrice_, newcVal_, SpOrder.cSpOrder);
+      Exit;
+    }
+  //------------------------------------------------------------------------------
+  if ((oper_LF)
+  AND (SpOrder.SP = cgVidUchO_Sklad)
+  AND (SpOrder.tipOrd <> 3)
+  AND (SpOrder.vidOrder = cgVidOrder_Discharge))
+    {
+      GetPrice_LF(newSrPrice_, newVPrice_, newcVal_, wasDivision_);
+      Exit;
+    }
+  //------------------------------------------------------------------------------
+
+  if (NOT roundOrd)
+    if IsSrPricesTbl( SpOrder.NRec
+                    , SpOrder.SP
+                    , SpOrder.dOrd
+                    , SpOrder.cMC
+                    , SpOrder.ccPodr
+                    , SpOrder.ccMOL
+                    , SpOrder.cParty
+                    )
+      {
+        newSrPrice_ := SrPricesTbl.rSrPrice;
+        newVPrice_  := SrPricesTbl.rVPrice;
+        newcVal_    := SrPricesTbl.cVal;
+        Exit;
+      }
+
+  var wMRazrez : word;
+  if wGetTune('Oper.L_F') = 0
+    wMRazrez := wGetTune('Oper.Razrez');
+  else
+    wMRazrez := 0;
+
+  if bdsql
+  {
+    var rcPrice: AllPrice;
+    rcPrice  := getRazrezPriceDsql(spOrder.buffer);
+    newSrPrice_ := rcPrice.srPrice;
+    newVPrice_  := rcPrice.vPrice;
+    newcVal_    := rcPrice.cVal;
+  }
+  else
+  {
+    ReInitMCinfo(SpOrder.dOrd);
+    SkladProizv(SpOrder.SP);
+
+    newcVal_ := StepMCInfo(SpOrder.cMC
+                         , 0
+                         , if ((wMRazrez and 2) <> 0, if(SpOrder.ccPodr = 0, comp(-1), SpOrder.ccPodr), 0)
+                         , if ((wMRazrez and 4) <> 0, if(SpOrder.ccMOL  = 0, comp(-1), SpOrder.ccMOL),  0)
+                         , if ((wMRazrez and 8) <> 0, if(SpOrder.cParty = 0, comp(-1), SpOrder.cParty), 0)
+                         );
+
+    if ((useTransaction and 256) = 0)
+    {
+      newSrPrice_ := AveragePrice;
+      newVPrice_  := AverageVPrice;
+    }
+    else
+    {
+      var sumR, sumV: double = 0;
+      var kolvo: double = 0;
+      var i: integer = 0;
+
+      var vcPtr: array [0..10] of comp;
+      vSpecMTR.cSpOrder := SpOrder.NRec;
+
+      if (vSpecMTR.GetFirst SpecMTR = tsOk)
+      {
+        vcPtr[10] := vSpecMTR.SpecMTR.cSaldTune;
+        vcPtr[0] := vSpecMTR.SpecMTR.cObj;
+
+        var i: integer = 0;
+        for (i := 1; i <= 9; i++)
+          vcPtr[i] := vSpecMTR.SpecMTR.cKau[i];
+      }
+
+      vPrih.pMC := SpOrder.cMC;
+      vPrih.DateOrd := Add_Day(SpOrder.dOrd, 1);
+
+      for(vPrih.wSP := cgVidUchO_Sklad; vPrih.wSP <= cgVidUchO_UKS; vPrih.wSP++)
+      {
+        vPrih._loop nocache SPORDER
+        {
+          if ((wMRazrez and 2) <> 0)
+            if (SpOrder.ccPodr <> vPrih.SPORDER.ccPodr)
+              continue;
+
+          if ((wMRazrez and 4) <> 0)
+            if (SpOrder.ccMOL <> vPrih.SPORDER.ccMOL)
+              continue;
+
+          if ((wMRazrez and 8) <> 0)
+            if (SpOrder.cParty <> vPrih.SPORDER.cParty)
+              continue;
+
+          vSpecMTR.cSpOrder := vPrih.SPORDER.NRec;
+
+          if (vSpecMTR.GetFirst SpecMTR <> tsOk)
+            continue;
+
+          if (vcPtr[10] <> vSpecMTR.SpecMTR.cSaldTune)
+            continue;
+
+          if (vcPtr[0] <> vSpecMTR.SpecMTR.cObj)
+            continue;
+
+          for (i := 1; i <= 9; i++)
+            if (vcPtr[i] <> vSpecMTR.SpecMTR.cKau[i])
+              continue;
+
+          sumR += vPrih.SPORDER.RSrPrice * vPrih.SPORDER.kol;
+          sumV += vPrih.SPORDER.RVPrice * vPrih.SPORDER.kol;
+          kolvo += vPrih.SPORDER.kol;
+        }
+      }
+
+      newSrPrice_ := sumR / kolvo;
+      newVPrice_  := sumV / kolvo;
+    }
+  }
+
+  if GetFirst SpSopr1 where ((SpOrder.cSpSopr  == SpSopr1.Nrec)) = tsOk
+    if GetFirst KatSopr where (( SpSopr1.cSopr == KatSopr.NRec )) = tsOk
+      if (KatSopr.VidSopr = 630)
+         if (((wMRazrez and 2) <> 0) and (KatSopr.cPodrFrom = KatSopr.cPodrTo)) or
+             ((wMRazrez and 2) = 0)
+           if (((wMRazrez and 4) <> 0) and (KatSopr.cMOLFrom = KatSopr.cMOLTo)) or
+               ((wMRazrez and 4) = 0)
+           {
+             var _KolMC, _PriceMC, _PriceMCV : double;
+             _KolMC := _PriceMC := _PriceMCV := 0;
+
+             _Loop SpSopr2 where ((KatSopr.NRec == SpSopr2.cSopr  and
+                                   SpOrder.cMC  == SpSopr2.cMCUsl and
+                                   word(1)      == SpSopr2.PrMC))
+             {
+               if GetFirst SpOrder1 where ((SpSopr2.nRec == SpOrder1.cSpSopr)) = tsOk
+                 if (((wMRazrez and 8) <> 0) and (SpOrder.cParty = SpOrder1.cParty)) or
+                    ((wMRazrez and 8) = 0)
+                 {
+//                   needSaveSrPr_ := False; // нельзя сохранять среднюю цену, потому что цена рассчитана только для Акта на пересортицу
+//                   _PriceMC  := ((_PriceMC*_KolMC) + (SpOrder1.Kol*SpOrder1.rSrPrice))/(_KolMC+SpOrder1.Kol);
+//                   _PriceMCV := ((_PriceMCV*_KolMC) + (SpOrder1.Kol*SpOrder1.rVPrice))/(_KolMC+SpOrder1.Kol);
+//                   _KolMC    += SpOrder1.Kol;
+                 }
+             }
+
+             if ((SpOrder.rSrPrice <> _PriceMC) or (SpOrder.rVPrice <> _PriceMCV)) and (_KolMC <> 0)
+             {
+               newSrPrice_ := ((newSrPrice_*CountMC) - (_PriceMC*_KolMC))/(CountMC-_KolMC);
+
+               if (newcVal_ = SpOrder.cVal)
+                newVPrice_ := ((newVPrice_*CountMC) - (_PriceMCV*_KolMC))/(CountMC-_KolMC);
+             }
+           }
+}
