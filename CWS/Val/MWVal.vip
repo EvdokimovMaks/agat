@@ -25,14 +25,9 @@ where ((
 create view v
 var _kodgr: word;
 as select *
-from spkau, attrnam, attrval
+from spkau
 where ((
-  _kodgr       /== spkau.kodgrkau and
-  8512         /== attrnam.wtable and
-  'Виды оплат' /== attrnam.name   and
-  8512         /== attrval.wtable and
-  spkau.nrec   /== attrval.crec   and
-  attrnam.nrec /== attrval.cattrnam
+  _kodgr == spkau.kodgrkau
 ));
 
 procedure SetActiveGroup(_GroupIndex: byte);
@@ -89,126 +84,105 @@ function GetShowedFieldFontBackColor(_ShowedFieldIndex: byte; Row: oMWRow): inte
     result := 0;
 }
 
+function mySqlAddStr(var l: longint; s: string): longint;
+{
+  LogStrToFile('d:\q.txt', s);
+  result := sqlAddStr(l, s);
+}
+
+procedure PrepareSqlStrCostItems(var ls: longint);
+{
+  var y : word = year(PeriodDBeg);
+  var m : word = month(PeriodDBeg);
+  var i : integer = 0;
+
+  //отработано часов всего - по табелю
+  mySqlAddStr(ls, '  select #comp(-1) as cCostItem, lstab.chasf as Summa');
+  mySqlAddStr(ls, '  from LsTab');
+  mySqlAddStr(ls, '  where LsTab.cLSchet = ls.Nrec and LsTab.YearN = '+y+' and LsTab.MesN = '+m);
+
+  //отработано часов всего - по отклонениям табеля
+  mySqlAddStr(ls, '  union all');
+  mySqlAddStr(ls, '  select #comp(-1), variance.WorkingHours * (variance.ending - variance.beginning + 1)');
+  mySqlAddStr(ls, '  from LsTab');
+  mySqlAddStr(ls, '  join variance on variance.clstab = lstab.nrec');
+  mySqlAddStr(ls, '  join UOWRKTABEL on UOWRKTABEL.nrec = variance.cuo');
+  mySqlAddStr(ls, '  where LsTab.cLSchet = ls.Nrec and LsTab.YearN = '+y+' and LsTab.MesN = '+m);
+  mySqlAddStr(ls, '    and UOWRKTABEL.num in (''ВЧ'', ''Н'', ''ОБЩ'', ''ОВ'', ''РП'', ''С'', ''Я'')');
+
+  //отработано часов всего - ОВ по начислениям
+  mySqlAddStr(ls, '  union all');
+  mySqlAddStr(ls, '  select #comp(-1), so.ChasF');
+  mySqlAddStr(ls, '  from sumvidop so');
+  mySqlAddStr(ls, '  where so.cLSch = ls.Nrec and so.YearK = '+y+' and so.Mes = '+m+' and so.VidOpl = 204'); //518 Оплат доп. дней уход за реб. инвалид.тек
+
+  mySqlAddStr(ls, '  union all');
+  mySqlAddStr(ls, '  select #comp(-1), n.ChasF');
+  mySqlAddStr(ls, '  from nachisl n');
+  mySqlAddStr(ls, '  where n.cLSch = ls.Nrec and n.YearK ='+y+' and n.Mes = '+m+' and n.VidOpl = 518'); //518 Оплат доп. дней уход за реб. инвалид.тек
+
+  //часы в командировке
+  mySqlAddStr(ls, '  union all');
+  mySqlAddStr(ls, '  select #comp(-2) as cCostItem, n.chasf as Summa');
+  mySqlAddStr(ls, '  from nachisl n');
+  mySqlAddStr(ls, '  where n.clsch = ls.Nrec and n.yearn = '+y+' and n.mesn = '+m+' and n.vidopl in (106,130) and n.cschetd=''20''');
+
+  mySqlAddStr(ls, '  union all');
+  mySqlAddStr(ls, '  select #comp(-2), so.chasf');
+  mySqlAddStr(ls, '  from sumvidop so');
+  mySqlAddStr(ls, '  where so.clsch = ls.Nrec and so.yearn = '+y+' and so.mesn = '+m+' and so.vidoplp in (106,130) and so.cschetd=''20''');
+
+  //начисления по статьям наряда
+  v._kodgr := CostItemKodGr;
+  v._loop spkau
+  {
+    var sVidOpl: string = sGetAttrId(coSpKau, v.spkau.Nrec, 0001000000000115h);
+    if (sVidOpl='') continue;
+    mySqlAddStr(ls, '  union all');
+    mySqlAddStr(ls, '  select #comp('+v.spkau.nrec+'), n.summa');
+    mySqlAddStr(ls, '  from nachisl n');
+    mySqlAddStr(ls, '  where n.clsch = ls.Nrec and n.yearn = '+y+' and n.mesn = '+m+' and n.vidopl in ('+sVidOpl+') and n.cschetd=''20''');
+
+    mySqlAddStr(ls, '  union all');
+    mySqlAddStr(ls, '  select #comp('+v.spkau.nrec+'), so.summa');
+    mySqlAddStr(ls, '  from sumvidop so');
+    mySqlAddStr(ls, '  where so.clsch = ls.Nrec and so.yearn = '+y+' and so.mesn = '+m+' and so.vidoplp in ('+sVidOpl+') and so.cschetd=''20''');
+  }
+
+  //зарплата всего
+  if count(AllVidOpl) > 0
+  {
+    mySqlAddStr(ls, '  union all');
+    mySqlAddStr(ls, '  select #comp(0), n.summa');
+    mySqlAddStr(ls, '  from nachisl n');
+    mySqlAddStr(ls, '  where n.clsch = ls.Nrec and n.yearn = '+y+' and n.mesn = '+m+' and n.vidopl in (');
+    for (i:=1;i<=count(AllVidOpl);i++)
+      mySqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
+    mySqlAddStr(ls, '  ) and n.cschetd=''20''');
+
+    mySqlAddStr(ls, '  union all');
+    mySqlAddStr(ls, '  select #comp(0), so.summa');
+    mySqlAddStr(ls, '  from sumvidop so');
+    mySqlAddStr(ls, '  where so.clsch = ls.Nrec and so.yearn = '+y+' and so.mesn = '+m+' and so.vidoplp in (');
+    for (i:=1;i<=count(AllVidOpl);i++)
+      mySqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
+    mySqlAddStr(ls, '  ) and so.cschetd=''20''');
+  }
+}
+
 procedure LoadRowValues(Row:  oMWRow);
 {
   if (getfirst td where ((Row.cPerson == td.cPerson)) <> tsOk)
   {
-    var ls: longint;
-    var i: integer;
-    if dgettune('UP.DATOTCH') = fpperiod.dbeg   //если наряд по текущему периоду - берем данные из результатов расчета зп
-    {
-      //начисления по статьям наряда
-      v._kodgr := CostItemKodGr;
-      v._loop viewtable
-      {
-        if (trim(v.attrval.vstring)='') continue;
-        sqlAddStr(ls, 'select #comp('+v.spkau.nrec+'), #comp('+Row.cPerson+'), t.summa');
-        sqlAddStr(ls, 'from lschet ls');
-        sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.summa) as summa');
-        sqlAddStr(ls, '      from nachisl n');
-        sqlAddStr(ls, '      where n.yearn = '+year(PeriodDBeg)+' and n.mesn = '+month(PeriodDBeg)+' and n.vidopl in ('+v.attrval.vstring+') and n.cschetd=''20''');
-        //sqlAddStr(ls, '            (vidopl not in (106,133) or (vidopl in (106,133) and cschetd=''20'') )');
-        sqlAddStr(ls, '      group by n.clsch');
-        sqlAddStr(ls, '     ) t');
-        sqlAddStr(ls, 'on t.clsch = ls.nrec');
-        sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+') and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
-        sqlSelectInto(ls, #td);
-        sqlFreeStr(ls);
-      }
-      //зарплата всего
-      sqlAddStr(ls, 'select #comp(0), #comp('+Row.cPerson+'), t.summa');
-      sqlAddStr(ls, 'from lschet ls');
-      sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.summa) as summa');
-      sqlAddStr(ls, '      from nachisl n');
-      sqlAddStr(ls, '      where n.yearn = '+year(PeriodDBeg)+' and n.mesn = '+month(PeriodDBeg)+' and n.vidopl in (');
-      for (i:=1;i<=count(AllVidOpl);i++)
-      {
-        sqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
-      }
-      sqlAddStr(ls, '      ) and n.cschetd=''20''');
-      //sqlAddStr(ls, '      (vidopl not in (106,133) or (vidopl in (106,133) and cschetd=''20'') )');
-      sqlAddStr(ls, '      group by n.clsch');
-      sqlAddStr(ls, '     ) t');
-      sqlAddStr(ls, 'on t.clsch = ls.nrec');
-      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+') and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
-      sqlSelectInto(ls, #td);
-      sqlFreeStr(ls);
-      //часы по доплатам за командировки прошлых периодов
-      sqlAddStr(ls, 'select #comp('+comp(-1)+'), #comp('+Row.cPerson+'), t.summa');
-      sqlAddStr(ls, 'from lschet ls');
-      sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.chasf / 2) as summa');
-      sqlAddStr(ls, '      from nachisl n');
-      sqlAddStr(ls, '      where n.yearn = '+year(PeriodDBeg)+' and n.mesn = '+month(PeriodDBeg)+' and n.vidopl in (135)'); // and n.datok < #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+')');
-      sqlAddStr(ls, '      group by n.clsch');
-      sqlAddStr(ls, '     ) t');
-      sqlAddStr(ls, 'on t.clsch = ls.nrec');
-      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+') and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
-      sqlSelectInto(ls, #td);
-      //часы командировки с накладными расходами
-      sqlAddStr(ls, 'select #comp('+comp(-2)+'), #comp('+Row.cPerson+'), t.summa');
-      sqlAddStr(ls, 'from lschet ls');
-      sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.chasf) as summa');
-      sqlAddStr(ls, '      from nachisl n');
-      sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in (106) and n.cschetd<>''20''');
-      sqlAddStr(ls, '      group by n.clsch');
-      sqlAddStr(ls, '     ) t');
-      sqlAddStr(ls, 'on t.clsch = ls.nrec');
-      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+') and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
-      sqlSelectInto(ls, #td);
-    }
-    else    //если наряд по предыдущему периоду - берем данные из архива начислений
-    {
-      //начисления по статьям наряда
-      v._kodgr := CostItemKodGr;
-      v._loop viewtable
-      {
-        if (trim(v.attrval.vstring)='') continue;
-        sqlAddStr(ls, 'select #comp('+v.spkau.nrec+'), #comp('+Row.cPerson+'), sum(so.summa)');
-        sqlAddStr(ls, 'from lschet ls');
-        sqlAddStr(ls, 'join sumvidop so on ls.nrec = so.clsch and');
-        sqlAddStr(ls, '                    so.yearn = '+year(PeriodDBeg)+' and');
-        sqlAddStr(ls, '                    so.mesn = '+month(PeriodDBeg)+' and');
-        sqlAddStr(ls, '                    so.vidoplp in ('+v.attrval.vstring+') and so.cschetd=''20''');
-        //sqlAddStr(ls, '                    (vidoplp not in (106,133) or (vidoplp in (106,133) and cschetd=''20'') )');
-        sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+')');
-        sqlSelectInto(ls, #td);
-        sqlFreeStr(ls);
-      }
-      //зарплата всего
-      sqlAddStr(ls, 'select #comp(0), #comp('+Row.cPerson+'), sum(so.summa)');
-      sqlAddStr(ls, 'from lschet ls');
-      sqlAddStr(ls, 'join sumvidop so on ls.nrec = so.clsch and');
-      sqlAddStr(ls, '                    so.yearn = '+year(PeriodDBeg)+' and');
-      sqlAddStr(ls, '                    so.mesn = '+month(PeriodDBeg)+' and');
-      sqlAddStr(ls, '                    so.vidoplp in (');
-      for (i:=1;i<=count(AllVidOpl);i++)
-      {
-        sqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
-      }
-      sqlAddStr(ls, '                    ) and so.cschetd=''20''');
-      //sqlAddStr(ls, '                    (vidoplp not in (106,133) or (vidoplp in (106,133) and so.cschetd=''20'') )');
-      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+')');
-      sqlSelectInto(ls, #td);
-      //часы по доплатам за командировки прошлых периодов
-      sqlAddStr(ls, 'select #comp('+comp(-1)+'), #comp('+Row.cPerson+'), sum(so.chasf / 2)');
-      sqlAddStr(ls, 'from lschet ls');
-      sqlAddStr(ls, 'join sumvidop so on ls.nrec = so.clsch and');
-      sqlAddStr(ls, '                    so.yearn = '+year(PeriodDBeg)+' and');
-      sqlAddStr(ls, '                    so.mesn = '+month(PeriodDBeg)+' and');
-      sqlAddStr(ls, '                    so.vidoplp in (135)');
-      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+')');
-      sqlSelectInto(ls, #td);
-      //часы командировки с накладными расходами
-      sqlAddStr(ls, 'select #comp(-2), #comp('+Row.cPerson+'), sum(so.chasf)');
-      sqlAddStr(ls, 'from lschet ls');
-      sqlAddStr(ls, 'join sumvidop so on ls.nrec = so.clsch and');
-      sqlAddStr(ls, '                    so.yearn = '+year(fpperiod.dbeg)+' and');
-      sqlAddStr(ls, '                    so.mesn = '+month(fpperiod.dbeg)+' and');
-      sqlAddStr(ls, '                    so.vidoplp in (106) and');
-      sqlAddStr(ls, '                    so.cschetd<>''20''');
-      sqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+')');
-      sqlSelectInto(ls, #td);
-    }
+    var ls: longint = 0;
+    mySqlAddStr(ls, 'select t.cCostItem, #comp('+Row.cPerson+'), sum(t.Summa)');
+    mySqlAddStr(ls, 'from LSchet ls');
+    mySqlAddStr(ls, 'outer apply (');
+    PrepareSqlStrCostItems(ls);
+    mySqlAddStr(ls, ') t');
+    mySqlAddStr(ls, 'where ls.tperson=#comp('+Row.cPerson+') and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
+    mySqlAddStr(ls, 'group by t.cCostItem');
+    sqlSelectInto(ls, #td);
   }
 
   MWValFieldsManager.LoadRowValues(Row);
@@ -319,7 +293,7 @@ procedure InitFields(_FormPl: TFormPl; _cMnPlan: comp);
     MWValFieldsManager.CreateMWValFieldAccrual(_c, SpKAU.nRec, _cMnPlan);
   }
 
-  var s, stmt: longint;
+  var s: longint;
   var s1: string;
   var _ccostitem: comp;
   var _vidoplp: word;
@@ -335,149 +309,28 @@ procedure InitFields(_FormPl: TFormPl; _cMnPlan: comp);
       PeriodDEnd    := fpperiod.dend;
       CostItemKodGr := _FormPl.ResWord[10];
 
-      var ls, stmt: longint;
       setlimit(AllVidOpl, 0);
-      if dgettune('UP.DATOTCH') = fpperiod.dbeg
+      v._kodgr := CostItemKodGr;
+      v._loop spkau
       {
-        v._kodgr := CostItemKodGr;
-        v._loop viewtable
+        var sVidOpl: string = sGetAttrId(coSpKau, v.spkau.Nrec, 0001000000000115h);
+        if (v.spkau.cnode=_formpl.rescomp[4] or v.spkau.cnode=_formpl.rescomp[5] or v.spkau.cnode=_formpl.rescomp[6]) and trim(sVidOpl) != ''
         {
-          if (trim(v.attrval.vstring)='') continue;
-          sqlAddStr(ls, 'select #comp('+v.spkau.nrec+'), pers.cperson, t.summa');
-          sqlAddStr(ls, 'from mnplan mp');
-          sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
-          sqlAddStr(ls, 'join lschet ls on ls.tperson=pers.cperson'); // and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+') )
-          sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.summa) as summa');
-          sqlAddStr(ls, '      from nachisl n');
-          sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in ('+v.attrval.vstring+') and n.cschetd=''20''');
-          //sqlAddStr(ls, '            (vidopl not in (106,133) or (vidopl in (106,133) and cschetd=''20'') )');
-          sqlAddStr(ls, '      group by n.clsch');
-          sqlAddStr(ls, '     ) t');
-          sqlAddStr(ls, 'on t.clsch = ls.nrec');
-          sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
-          sqlSelectInto(ls, #td);
-          sqlFreeStr(ls);
-          if (v.spkau.cnode=_formpl.rescomp[4] or v.spkau.cnode=_formpl.rescomp[5] or v.spkau.cnode=_formpl.rescomp[6])
-          {
-            SetLimit(AllVidOpl, Count(AllVidOpl)+1);
-            AllVidOpl[Count(AllVidOpl)] := v.attrval.vstring;
-          }
+          SetLimit(AllVidOpl, Count(AllVidOpl)+1);
+          AllVidOpl[Count(AllVidOpl)] := sVidOpl;
         }
-        sqlAddStr(ls, 'select #comp(0), pers.cperson, t.summa');
-        sqlAddStr(ls, 'from mnplan mp');
-        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
-        sqlAddStr(ls, 'join lschet ls on ls.tperson=pers.cperson'); // and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+') )
-        sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.summa) as summa');
-        sqlAddStr(ls, '      from nachisl n');
-        sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in (');
-        for (i:=1;i<=count(AllVidOpl);i++)
-        {
-          sqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
-        }
-        sqlAddStr(ls, '      ) and n.cschetd=''20''');
-        //sqlAddStr(ls, '      (vidopl not in (106,133) or (vidopl in (106,133) and cschetd=''20'') )');
-        sqlAddStr(ls, '      group by n.clsch');
-        sqlAddStr(ls, '     ) t');
-        sqlAddStr(ls, 'on t.clsch = ls.nrec');
-        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
-        sqlSelectInto(ls, #td);
-        sqlFreeStr(ls);
-
-        sqlAddStr(ls, 'select #comp(-1), pers.cperson, t.summa');
-        sqlAddStr(ls, 'from mnplan mp');
-        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
-        sqlAddStr(ls, 'join lschet ls on ls.tperson=pers.cperson'); // and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+') )
-        sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.chasf / 2) as summa');
-        sqlAddStr(ls, '      from nachisl n');
-        sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in (135) and n.cschetd=''20''''); // and n.datok < #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+')');
-        sqlAddStr(ls, '      group by n.clsch');
-        sqlAddStr(ls, '     ) t');
-        sqlAddStr(ls, 'on t.clsch = ls.nrec');
-        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
-        sqlSelectInto(ls, #td);
-
-        sqlAddStr(ls, 'select #comp(-2), pers.cperson, t.summa');  //часы командировки с накладными расходами
-        sqlAddStr(ls, 'from mnplan mp');
-        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
-        sqlAddStr(ls, 'join lschet ls on ls.tperson=pers.cperson'); // and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+') )
-        sqlAddStr(ls, 'join (select n.clsch as clsch, sum(n.chasf) as summa');
-        sqlAddStr(ls, '      from nachisl n');
-        sqlAddStr(ls, '      where n.yearn = '+year(fpperiod.dbeg)+' and n.mesn = '+month(fpperiod.dbeg)+' and n.vidopl in (106) and n.cschetd<>''20''');
-        sqlAddStr(ls, '      group by n.clsch');
-        sqlAddStr(ls, '     ) t');
-        sqlAddStr(ls, 'on t.clsch = ls.nrec');
-        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
-        sqlSelectInto(ls, #td);
       }
-      else
-      {
-        v._kodgr := _FormPl.ResWord[10];
-        v._loop viewtable
-        {
-          if (trim(v.attrval.vstring)='') continue;
-          sqlAddStr(ls, 'select #comp('+v.spkau.nrec+'), pers.cperson, t.summa');
-          sqlAddStr(ls, 'from mnplan mp');
-          sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
-          sqlAddStr(ls, 'join (select ls.tperson as cperson, sum(so.summa) as summa');
-          sqlAddStr(ls, '      from sumvidop so');
-          sqlAddStr(ls, '      join lschet ls on so.clsch = ls.nrec');
-          sqlAddStr(ls, '      where so.yearn = '+year(fpperiod.dbeg)+' and so.mesn = '+month(fpperiod.dbeg)+' and so.vidoplp in ('+v.attrval.vstring+') and so.cschetd=''20''');
-          //sqlAddStr(ls, '            (vidoplp not in (106,133) or (vidoplp in (106,133) and so.cschetd=''20'') )');
-          sqlAddStr(ls, '      group by ls.tperson');
-          sqlAddStr(ls, '     ) t on pers.cperson = t.cperson');
-          sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
-          sqlSelectInto(ls, #td);
-          sqlFreeStr(ls);
-          if (v.spkau.cnode=_formpl.rescomp[4] or v.spkau.cnode=_formpl.rescomp[5] or v.spkau.cnode=_formpl.rescomp[6])
-          {
-            SetLimit(AllVidOpl, Count(AllVidOpl)+1);
-            AllVidOpl[Count(AllVidOpl)] := v.attrval.vstring;
-          }
-        }
-        sqlAddStr(ls, 'select #comp(0), pers.cperson, t.summa');
-        sqlAddStr(ls, 'from mnplan mp');
-        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
-        sqlAddStr(ls, 'join (select ls.tperson as cperson, sum(so.summa) as summa');
-        sqlAddStr(ls, '      from sumvidop so');
-        sqlAddStr(ls, '      join lschet ls on so.clsch = ls.nrec');
-        sqlAddStr(ls, '      where so.yearn = '+year(fpperiod.dbeg)+' and so.mesn = '+month(fpperiod.dbeg)+' and so.vidoplp in (');
-        for (i:=1;i<=count(AllVidOpl);i++)
-        {
-          sqlAddStr(ls, if(i>1,',','')+AllVidOpl[i]);
-        }
-        sqlAddStr(ls, '      ) and so.cschetd=''20''');
-        //sqlAddStr(ls, '      (vidoplp not in (106,133) or (vidoplp in (106,133) and so.cschetd=''20'') )');
-        sqlAddStr(ls, '      group by ls.tperson');
-        sqlAddStr(ls, '     ) t on pers.cperson = t.cperson');
-        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
-        sqlSelectInto(ls, #td);
 
-        sqlAddStr(ls, 'select #comp(-1), pers.cperson, t.summa');  //часы командировки за прошлые периоды (их нет в табеле)
-        sqlAddStr(ls, 'from mnplan mp');
-        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
-        sqlAddStr(ls, 'join (select ls.tperson as cperson, sum(so.chasf / 2) as summa');
-        sqlAddStr(ls, '      from sumvidop so');
-        sqlAddStr(ls, '      join lschet ls on so.clsch = ls.nrec');
-        sqlAddStr(ls, '      where so.yearn = '+year(fpperiod.dbeg)+' and so.mesn = '+month(fpperiod.dbeg)+' and so.vidoplp in (135) and so.cschetd=''20'''); //and so.datok < #date('+datetostr(fpperiod.dbeg,'DD,MM,YYYY')+')');
-        sqlAddStr(ls, '      group by ls.tperson');
-        sqlAddStr(ls, '     ) t on pers.cperson = t.cperson');
-        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
-        sqlSelectInto(ls, #td);
-
-        sqlAddStr(ls, 'select #comp(-2), pers.cperson, t.summa');  //часы командировки с накладными расходами
-        sqlAddStr(ls, 'from mnplan mp');
-        sqlAddStr(ls, 'join (select distinct spmnplan.cmnplan as cmnplan, spmnplan.cizd as cperson from spmnplan) pers on pers.cmnplan = mp.nrec');
-        sqlAddStr(ls, 'join (select ls.tperson as cperson, sum(so.chasf) as summa');
-        sqlAddStr(ls, '      from sumvidop so');
-        sqlAddStr(ls, '      join lschet ls on so.clsch = ls.nrec');
-        sqlAddStr(ls, '      where so.yearn = '+year(fpperiod.dbeg)+' and so.mesn = '+month(fpperiod.dbeg)+' and so.vidoplp in (106) and so.cschetd<>''20''');
-        sqlAddStr(ls, '      group by ls.tperson');
-        sqlAddStr(ls, '     ) t on pers.cperson = t.cperson');
-        sqlAddStr(ls, 'where mp.nrec = #comp('+_cMnPlan+')');
-        sqlSelectInto(ls, #td);
-      }
+      var ls: longint = 0;
+      mySqlAddStr(ls, 'select t.cCostItem, pers.cPerson, sum(t.Summa)');
+      mySqlAddStr(ls, 'from (select distinct spmnplan.cizd as cperson from spmnplan where spmnplan.cMnPlan = #comp('+mnplan.Nrec+')) pers');
+      mySqlAddStr(ls, 'join LSchet ls on ls.tperson=pers.cperson and (ls.datuv=#date(0,0,0) or ls.datuv >= #date('+datetostr(PeriodDBeg,'DD,MM,YYYY')+') )');
+      mySqlAddStr(ls, 'outer apply (');
+      PrepareSqlStrCostItems(ls);
+      mySqlAddStr(ls, ') t');
+      mySqlAddStr(ls, 'group by t.cCostItem, pers.cPerson');
+      sqlSelectInto(ls, #td);
     }
-
   //runwindowmodal(winfo);
 }
 
