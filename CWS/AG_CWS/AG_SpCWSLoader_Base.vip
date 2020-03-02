@@ -1,0 +1,431 @@
+#include Query.vih
+#include AG_CWS.vih
+
+#component "AGAT"
+
+interface AG_SpCWSLoader_Base;
+
+var
+  _query: IQuery;
+  _cAllMemo: comp;
+
+create view
+as select
+  AllMemo.Nrec
+from
+  AllMemo
+where ((
+  _cAllMemo == AllMemo.Nrec
+));
+
+file f;
+
+sql query qSpCWS =
+  select
+    MnPlan.Nrec                       as cMnPlan
+   ,SpMnPlan.Nrec                     as cSpMnPlan
+   ,SpMnPlan.cIzd                     as cPerson
+   ,SpMnPlan.cAnVal1                  as cKatStroy
+   ,SpMnPlan.cAnVal2                  as cKatMarsh
+   ,SpMnPlan.cAnVal3                  as cMarshSp
+   ,SpMnPlan.cAnVal4                  as cPost
+   ,coalesce(AllMemo.Nrec, #comp(0))  as cAllMemo
+   ,coalesce(TmpTrudPlan.Value   , 0) as TrudPlan
+   ,coalesce(TmpProcVip.Value    , 0) as ProcVip
+   ,coalesce(TmpChasRab.Value    , 0) as ChasRab
+   ,coalesce(TmpZarplata.Value   , 0) as Zarplata
+   ,coalesce(TmpOklad.Value      , 0) as Oklad
+   ,coalesce(TmpProchDopl.Value  , 0) as ProchDopl
+   ,coalesce(TmpChasKom.Value    , 0) as ChasKom
+   ,coalesce(TmpKom.Value        , 0) as Kom
+   ,coalesce(TmpKomVih.Value     , 0) as KomVih
+   ,coalesce(TmpNadvod.Value     , 0) as Nadvod
+   ,coalesce(TmpPodvod.Value     , 0) as Podvod
+   ,coalesce(TmpKomDoplVih .Value, 0) as KomDoplVih
+   ,coalesce(TmpKomDoplProc.Value, 0) as KomDoplProc
+   ,coalesce(TmpChasPutRab.Value , 0) as ChasPutRab
+   ,coalesce(TmpPutRab.Value     , 0) as PutRab
+   ,coalesce(TmpChasPutVih.Value , 0) as ChasPutVih
+   ,coalesce(TmpPutVih.Value     , 0) as PutVih
+   ,coalesce(TmpPremMes.Value    , 0) as PremMes
+   ,coalesce(TmpPremKvart.Value  , 0) as PremKvart
+   ,coalesce(TmpPremGod.Value    , 0) as PremGod
+   ,coalesce(TmpPremRazov.Value  , 0) as PremRazov
+  from MnPlan
+
+  join SpMnPlan on SpMnPlan.cMnPlan = MnPlan.Nrec
+
+  left join AllMemo on AllMemo.wTable = 11038 and AllMemo.cRec = SpMnPlan.Nrec
+
+  //1.1 Плановая трудоемкость
+  outer apply (
+    select sum(cast(ParamVol.Value[2] as double) / case when Normas.dNormEd = 0 then 1 else Normas.dNormEd end) as Value: double
+    from Normas
+    join ParamVol on ParamVol.TObject = 11000 and ParamVol.cObject = Normas.Nrec
+    where
+        Normas.tMaster   = 11005
+    and Normas.cMaster   = SpMnPlan.cAnVal3
+    and Normas.tResource = 36
+    and Normas.cResource = SpMnPlan.cAnVal4
+    and Normas.NormSort  = 102
+  ) TmpTrudPlan
+
+  //1.2 Процент выполнения
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(00010000000008ADh) //% выполнения сотрудником работы по РКМ
+  ) TmpProcVip
+
+  //2.1 Отработано часов
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(00010000000008AEh) //Отработано часов по заказу и виду работ за месяц
+  ) TmpChasRab
+
+  //2.2 Заработная плата
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(00010000000008F6h) //Заработная плата
+  ) TmpZarplata
+
+  //2.3 По должностному окладу
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(00010000000008FBh) //По должностному|окладу
+  ) TmpOklad
+
+  //2.4 Прочие надбавки, доплаты, оплата выходных и сверхурочных
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(00010000000008FCh) //Прочие надбавки, доплаты|оплата выходных и сверхурочных
+  ) TmpProchDopl
+
+  //3.1 Часов в командировке
+  outer apply (
+    select sum(ValSpMnP.Price) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(00010000000008AEh) //Отработано часов по заказу и виду работ за месяц
+  ) TmpChasKom
+
+  //3.2 Начислено за время нахождения на объекте
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(00010000000008FDh)  //Начислено за время|нахождения на объекте
+  ) TmpKom
+
+  //3.3 Оплата работы в выходные и праздничные дни на объекте
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(00010000000008FEh) //Оплата работы в выходные|и праздничные дни на объекте
+  ) TmpKomVih
+
+  //3.4 Доплата за участие в испытаниях (надвод.кор.)
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(00010000000008FFh) //Доплата за участие в испытаниях при нахождении объектов в море|(надвод.кор.)
+  ) TmpNadvod
+
+  //3.5 Доплата за участие в испытаниях (подвод.кор.)
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000000900h) //Доплата за участие в испытаниях при нахождении объектов в море|(подвод.кор.)
+  ) TmpPodvod
+
+  //3.6 Доплата за работу в выходные дни на объекте
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000000901h) //Доплата за работу в|выходные дни на объекте
+  ) TmpKomDoplVih
+
+  //3.7 Доплата % к окладу за время работы на объекте
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000000902h) //Доплата % к окладу|за время работы на объекте
+  ) TmpKomDoplProc
+
+  //3.8 Часов в пути в рабочий день (командировка)
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000001AB1h) //Часов в пути в|рабочий день (командировка)
+  ) TmpChasPutRab
+
+  //3.9 Оплата за время в пути в рабочий день (командировка)
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000001AB2h) //Оплата за время в пути|в рабочий день (командировка)
+  ) TmpPutRab
+
+  //3.10 Часов в пути в выходной день (командировка)
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000001AB3h) //Часов в пути в|выходной день (командировка)
+  ) TmpChasPutVih
+
+  //3.11 Оплата за время в пути в выходной день (командировка)
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000000F58h) //Оплата за время в пути|в выходной день (командировка)
+  ) TmpPutVih
+
+  //4.1 Премия ежемесячная
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000000903h) //Премия|ежемесячная
+  ) TmpPremMes
+
+  //4.2 Премия ежеквартальная
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000000904h) //Премия|ежеквартальная
+  ) TmpPremKvart
+
+  //4.3 Премия годовая
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000000905h) //Премия|годовая
+  ) TmpPremGod
+
+  //4.4 Премия разовая
+  outer apply (
+    select sum(ValSpMnP.Kol) as Value
+    from SpMnPl
+    join ValSpMnP on ValSpMnP.cSpMnPl = SpMnPl.Nrec
+    where
+        SpMnPl.cSpMnPlan = SpMnPlan.Nrec
+    and SpMnPl.wKolAn    = 22
+    and SpMnPl.wKodGr4   = 21
+    and SpMnPl.cAnVal4   = MnPlan.cAnVal1
+    and SpMnPl.wKodGr5   = 10029
+    and SpMnPl.cAnVal5   = #comp(0001000000000906h) //Премия|разовая
+  ) TmpPremRazov
+;
+
+function GetComment(cAllMemo: comp): string;
+{
+  result := '';
+  _cAllMemo := cAllMemo;
+  if getfirst AllMemo != tsOk exit;
+  if f.OpenMemo(AllMemo.Mem)
+  {
+    f.ReadLn(result);
+    f.Close;
+  }
+}
+
+procedure InitQueryStr(var lSqlStr: longint);
+{
+  sqlAddStr(lSqlStr, qSpCWS);
+}
+
+function InitQuery: IQuery;
+{
+  var lSqlStr: longint = 0;
+  InitQueryStr(lSqlStr);
+  result := queryManager.createQuery(lSqlStr);
+}
+
+procedure SetOneSpCWSFields(SpCWS: AG_ISpCWS; qRow: IResultRow);
+{
+  SpCWS.cMnPlan     := qRow.val('cMnPlan');
+  SpCWS.cSpMnPlan   := qRow.val('cSpMnPlan');
+  SpCWS.cPerson     := qRow.val('cPerson');
+  SpCWS.cKatStroy   := qRow.val('cKatStroy');
+  SpCWS.cKatMarsh   := qRow.val('cKatMarsh');
+  SpCWS.cMarshSp    := qRow.val('cMarshSp');
+  SpCWS.cPost       := qRow.val('cPost');
+  SpCWS.TrudPlan    := qRow.val('TrudPlan');
+  SpCWS.ProcVip     := qRow.val('ProcVip');
+  SpCWS.ChasRab     := qRow.val('ChasRab');
+  SpCWS.Zarplata    := qRow.val('Zarplata');
+  SpCWS.Oklad       := qRow.val('Oklad');
+  SpCWS.ProchDopl   := qRow.val('ProchDopl');
+  SpCWS.ChasKom     := qRow.val('ChasKom');
+  SpCWS.Kom         := qRow.val('Kom');
+  SpCWS.KomVih      := qRow.val('KomVih');
+  SpCWS.Nadvod      := qRow.val('Nadvod');
+  SpCWS.Podvod      := qRow.val('Podvod');
+  SpCWS.KomDoplVih  := qRow.val('KomDoplVih');
+  SpCWS.KomDoplProc := qRow.val('KomDoplProc');
+  SpCWS.ChasPutRab  := qRow.val('ChasPutRab');
+  SpCWS.PutRab      := qRow.val('PutRab');
+  SpCWS.ChasPutVih  := qRow.val('ChasPutVih');
+  SpCWS.PutVih      := qRow.val('PutVih');
+  SpCWS.PremMes     := qRow.val('PremMes');
+  SpCWS.PremKvart   := qRow.val('PremKvart');
+  SpCWS.PremGod     := qRow.val('PremGod');
+  SpCWS.PremRazov   := qRow.val('PremRazov');
+  if qRow.val('cAllMemo') != 0
+    SpCWS.sComment  := GetComment(qRow.val('cAllMemo'));
+}
+
+procedure Load(SpCWS: AG_ISpCWS);
+{
+  _query := InitQuery;
+
+  if _query.execute.errorCode != tsOk
+  {
+    Message('AG_SpCWSLoader: Ошибка выполнения запроса ' + _query.errorCode);
+    exit;
+  }
+
+  var qRow: IResultRow = _query.row;
+  while _query.fetch.errorCode = tsOk
+  {
+    SpCWS.CreateNew;
+    SetOneSpCWSFields(SpCWS, qRow);
+    SpCWS.SaveCurrent;
+  }
+}
+
+end.
