@@ -1,4 +1,3 @@
-#include ContractId.vih
 #include SpstepHelper.vih
 #include BasedocHelper.vih
 #include AG_LinkMtrToSpec.vih
@@ -10,12 +9,19 @@
 alter interface VSCHETP;
 
   var
-    _cidHelper: AGAT::ContractIDHelper;
     _spstepHelper: AGAT::SpstepHelper;
 
   create view
-  as select _cidHelper.GetContractID(GetContractIDKey_ByKatstroy, specmtr.cobj) (fieldname=ContractID)
-  ;
+  as select
+    if(IsValid(#avContractId), avContractId.vString, '') (fieldname = ContractID)
+  from
+    attrval avContractId
+  where ((
+        coSpecMtr                 == avContractId.wTable
+    and SpecMtr.cObj              == avContractId.cRec
+    and ATTRNAM_NREC_KATSTROY_IGK == avContractId.cAttrNam
+  ));
+
 end.
 
 alter interface VSCHETPB;
@@ -33,10 +39,10 @@ alter interface VSCHETPB;
   extendformats brvschet;
 
   var
-    _cidHelper: AGAT::ContractIDHelper;
     _spstepHelper: AGAT::SpstepHelper;
     _basedocHelper: AGAT::BasedocHelper;
     _changeStatusTXO: PD_ChangeStatusTxo;
+    _daysDeferredPay: longint;
     _cOldDogovor: comp;
     _cOldAppDog : comp;
     _cOldCalPlan: comp;
@@ -48,8 +54,9 @@ alter interface VSCHETPB;
   #end
 
   create view
-  as select _cidHelper.GetContractID(GetContractIDKey_ByKatstroy, specmtr.cobj) (fieldname=ContractID),
-            _basedocHelper.GetDeferredDaysCount(basedoc.nrec) (fieldname=DaysDeferredPay)
+  as select
+    _daysDeferredPay (fieldname=DaysDeferredPay)
+   ,if(IsValid(#avContractId), avContractId.vString, '') (fieldname = ContractID)
   from attrval avNaznpl,
        attrval avIspoln,
        attrval avDDS,
@@ -60,6 +67,7 @@ alter interface VSCHETPB;
        attrval avDir,
        attrval avSMP,
        attrval avISK
+      ,attrval avContractId
   where ((
     #JoinBasedocAttrval(ATTRNAM_NAZNPL, avNaznpl) and
     #JoinBasedocAttrval(ATTRNAM_ISPOLN, avIspoln) and
@@ -71,6 +79,10 @@ alter interface VSCHETPB;
     #JoinBasedocAttrval(ATTRNAM_DIR   , avDir   ) and
     #JoinBasedocAttrval(ATTRNAM_SMP   , avSmp   ) and
     #JoinBasedocAttrval(ATTRNAM_ISK   , avIsk   )
+
+    and coKatStroy                == avContractId.wTable
+    and SpecMtr.cObj              == avContractId.cRec
+    and ATTRNAM_NREC_KATSTROY_IGK == avContractId.cAttrNam
   ))
   condition KatSoprNrec0 = KatSopr.Nrec = comp(0)
   condition BaseFinNrec0 = BaseFin.Nrec = comp(0)
@@ -280,6 +292,11 @@ alter interface VSCHETPB;
         else
           #InheritedHandleevent(cmDelOnProtect)
       end;
+    }
+    cmPositionChanged:
+    {
+      #InheritedHandleevent(cmPositionChanged);
+      _daysDeferredPay := _basedocHelper.GetDeferredDaysCount(basedoc.nrec);
     }
   end;  //tableevent table BaseDoc
 
