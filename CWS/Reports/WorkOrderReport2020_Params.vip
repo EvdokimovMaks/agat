@@ -1,0 +1,451 @@
+#include Marker.vih
+#include Commission.vih
+#include GetKau.vih
+#include WorkOrderReport2020_Params.vih
+
+#component "AGAT"
+
+interface WorkOrderReport2020_Params;
+
+table struct TmpPersons (
+  Nrec: comp
+ ,FIO: string[80]
+ ,TabNmb: longint
+) with index (
+  i01 = FIO
+);
+
+table struct TmpZakaz (
+  Nrec: comp
+ ,Code: string[200]
+ ,Name: string
+) with index (
+  i01 = Name
+);
+
+var
+  _cMnPlan     : comp;
+  _mrkZakaz    : TPtr;
+  _mrkPersons  : TPtr;
+  _mZakaz      : IMarker(marker) new;
+  _mPersons    : IMarker(marker) new;
+  _commission  : Commission;
+  _cUserDeskRep: comp;
+  _getKau      : GetKau;
+
+function GetZakazFld: string; forward;
+function GetPersonsFld: string; forward;
+
+create view
+as select
+  GetZakazFld()(fieldname=ZakazFld)
+ ,GetPersonsFld()(fieldname=PersonsFld)
+ ,_commission.GetSelectionName()(fieldname=CommissionNameFld)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[6]) (fieldname=ColFld6)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[7]) (fieldname=ColFld7)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[8]) (fieldname=ColFld8)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[9]) (fieldname=ColFld9)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[10])(fieldname=ColFld10)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[11])(fieldname=ColFld11)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[12])(fieldname=ColFld12)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[13])(fieldname=ColFld13)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[14])(fieldname=ColFld14)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[15])(fieldname=ColFld15)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[16])(fieldname=ColFld16)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[17])(fieldname=ColFld17)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[18])(fieldname=ColFld18)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[19])(fieldname=ColFld19)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[20])(fieldname=ColFld20)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[21])(fieldname=ColFld21)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[22])(fieldname=ColFld22)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[23])(fieldname=ColFld23)
+ ,ShowKau(KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[24])(fieldname=ColFld24)
+from
+  TmpPersons
+ ,TmpZakaz
+ ,UserDeskRep
+ ,UserDeskRep CurUserDeskRep
+ ,UserDeskRep UserDeskRepDefault (UserDeskRep04)
+where ((
+      USERDESKREP_NREP_COLUMNS   == UserDeskRep.NRep
+  and _cUserDeskRep              == CurUserDeskRep.Nrec
+  and USERDESKREP_NREP_COLUMNS   == UserDeskRepDefault.NRep
+  and (UserDeskRepDefault.RepName = COLUMN_CONFIG_NAME_DEFAULT)
+))
+;
+
+function GetZakazFld: string;
+{
+  var cnt: longint = GetMarkerCount(_mrkZakaz);
+  var c: comp;
+  result := case(cnt;
+                 0: 'Все заказы',
+                 1: if(GetMarker(_mrkZakaz, 0, c), ShowKau(cgKau_ObjBuild, c), '');
+                 'Выбрано заказов: ' + cnt);
+}
+
+function GetPersonsFld: string;
+{
+  var cnt: longint = GetMarkerCount(_mrkPersons);
+  var c: comp;
+  result := case(cnt;
+                 0: 'Все сотрудники',
+                 1: if(GetMarker(_mrkPersons, 0, c), ShowKau(cgKau_Persons, c), '');
+                 'Выбрано сотрудников: ' + cnt);
+}
+
+window wPersons 'Выбор сотрудников' escClose doAccept;
+  browse brPersons (,,sci1Esc);
+    table TmpPersons;
+    recmarker = _mPersons {TmpPersons.Nrec};
+    fields
+      TmpPersons.TabNmb 'Табельный номер': [10], protect;
+      TmpPersons.FIO 'ФИО': [50], protect;
+  end;
+end; //window wPersons
+
+window wZakaz 'Выбор заказов' escClose doAccept;
+  browse brZakaz (,,sci1Esc);
+    table TmpZakaz;
+    recmarker = _mZakaz {TmpZakaz.Nrec};
+    fields
+      TmpZakaz.Code 'Код': [10], protect;
+      TmpZakaz.Name 'Наименование': [50], protect;
+  end;
+end; //window wZakaz
+
+procedure PickReportColumn(idx: byte);
+{
+  if _getKau.GetCodeKau(cgiPick, KODGRKAU_WORKORDER_COLUMNS, UserDeskRep.ResComp[idx]) > 0
+    RescanPanel(#UserDeskRep);
+  SetModified(True);
+}
+
+function IsDefaultColumnConfig: boolean;
+{
+  result := UserDeskRep.RepName = COLUMN_CONFIG_NAME_DEFAULT;
+}
+
+window wConfigColumns 'Настройка колонок' escClose doAccept;
+  show(,,,24);
+  screen scConfigColumns (,,sci1Esc);
+    table UserDeskRep;
+    fields
+      UserDeskRep.RepName: NoProtect;
+      UserDeskRep.ResName[1]: NoProtect;
+
+      ColFld6 : protect, pickbutton;
+      ColFld7 : protect, pickbutton;
+      ColFld8 : protect, pickbutton;
+      ColFld9 : protect, pickbutton;
+      ColFld10: protect, pickbutton;
+      ColFld11: protect, pickbutton;
+      ColFld12: protect, pickbutton;
+      ColFld13: protect, pickbutton;
+      ColFld14: protect, pickbutton;
+      ColFld15: protect, pickbutton;
+      ColFld16: protect, pickbutton;
+      ColFld17: protect, pickbutton;
+      ColFld18: protect, pickbutton;
+      ColFld19: protect, pickbutton;
+      ColFld20: protect, pickbutton;
+      ColFld21: protect, pickbutton;
+      ColFld22: protect, pickbutton;
+      ColFld23: protect, pickbutton;
+      ColFld24: protect, pickbutton;
+<<
+
+    `Наименование настройки` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Путь к шаблону отчета`  .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+     Колонки сводного наряда                                  Колонки отчета
+    `Отработано часов`                                        .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Заработная плата`                                        .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `По должностному окладу`                                  .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Прочие надбавки, доплаты, оплата выходных и сверхурочных`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Часов в командировке`                                    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Начислено за время нахождения на объекте`                .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Оплата работы в выходные и праздничные дни на объекте`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Доплата за участие в испытаниях (надвод. кор.)`          .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Доплата за участие в испытаниях (подвод. кор.)`          .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Доплата за работу в выходные дни на объекте`             .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Доплата % к окладу за время работы на объекте`           .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Часов в пути в рабочий день (командировка)`              .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Оплата за время в пути в рабочий день (командировка)`    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Часов в пути в выходной день (командировка)`             .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Оплата за время в пути в выходной день (командировка)`   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Премия ежемесячная`                                      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Премия ежеквартальная`                                   .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Премия годовая`                                          .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Премия разовая`                                          .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+>>
+  end;
+
+  handleevent
+    cmInit:
+    {
+      ToggleFieldProtected(#UserDeskRep.RepName, IsDefaultColumnConfig);
+    }
+    cmPick:
+    {
+      case CurField of
+        #ColFld6 : PickReportColumn(6);
+        #ColFld7 : PickReportColumn(7);
+        #ColFld8 : PickReportColumn(8);
+        #ColFld9 : PickReportColumn(9);
+        #ColFld10: PickReportColumn(10);
+        #ColFld11: PickReportColumn(11);
+        #ColFld12: PickReportColumn(12);
+        #ColFld13: PickReportColumn(13);
+        #ColFld14: PickReportColumn(14);
+        #ColFld15: PickReportColumn(15);
+        #ColFld16: PickReportColumn(16);
+        #ColFld17: PickReportColumn(17);
+        #ColFld18: PickReportColumn(18);
+        #ColFld19: PickReportColumn(19);
+        #ColFld20: PickReportColumn(20);
+        #ColFld21: PickReportColumn(21);
+        #ColFld22: PickReportColumn(22);
+        #ColFld23: PickReportColumn(23);
+        #ColFld24: PickReportColumn(24);
+      end;
+    }
+  end;
+end; //window wConfigColumns
+
+window wConfigColumnsTbl 'Настройки колонок отчета' escClose doAccept;
+  browse brUserDeskRep (,,sci1478EnEsc);
+    table UserDeskRep;
+    fields
+      UserDeskRep.RepName 'Наименование настройки': [50], Protect;
+  end;
+  handleevent
+    cmInsert:
+    {
+      ClearBuffer(#UserDeskRep);
+      UserDeskRep.NRep    := USERDESKREP_NREP_COLUMNS;
+      UserDeskRep.RepName := 'Новая настройка';
+      insert current UserDeskRep;
+      RereadRecord(#UserDeskRep);
+      Stop;
+      RunWindowModal(wConfigColumns);
+    }
+    cmEdit:
+    {
+      RunWindowModal(wConfigColumns);
+    }
+  end;
+end; //window wConfigColumns
+
+tableevent table UserDeskRep;
+  cmUpdateRecord:
+  {
+    update current UserDeskRep;
+  }
+  cmPositionChanged:
+  {
+    ToggleFieldProtected(#UserDeskRep.RepName, IsDefaultColumnConfig);
+  }
+  cmDeleteRecord:
+  {
+    if IsDefaultColumnConfig
+      Message('Запрет на удаление настройки по умолчанию', warning);
+    else
+      delete current UserDeskRep;
+  }
+  cmSetDefault:
+  {
+    UserDeskRep.NRep := USERDESKREP_NREP_COLUMNS;
+  }
+end;
+
+window wParams 'Параметры отчетной формы' escClose doAccept;
+  show(, , 80, 9);
+  screen scMain;
+    fields
+      PersonsFld             : protect, pickbutton;
+      ZakazFld               : protect, pickbutton;
+      CurUserDeskRep.RepName : protect, pickbutton;
+      CommissionNameFld      : protect, pickbutton;
+    buttons
+      cmOk, default;
+      cmCancel;
+<<
+
+    `Фильтр по сотрудникам` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Фильтр по заказу`      .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    `Настройка колонок`     .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+    `Подписанты`            .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                                                   <. Продолжить .> <. Отмена .>
+>>
+  end;
+
+  handleevent
+
+    cmOk:
+    {
+      PutCommand(cmDefault);
+    }
+
+    cmPick:
+    {
+      case CurField of
+        #PersonsFld:
+        {
+          //_mPersons.ImportFrom(_mrkPersons);
+          _mPersons.UnselectAll;
+          if RunWindowModal(wPersons) = cmDefault
+          {
+            _mPersons.ExportTo(_mrkPersons);
+            if GetMarkerCount(_mrkPersons) = 0
+              InsertMarker(_mrkPersons, TmpPersons.Nrec);
+            RereadRecord;
+          }
+        }
+        #ZakazFld:
+        {
+          //_mZakaz.ImportFrom(_mrkZakaz);
+          _mZakaz.UnselectAll;
+          if RunWindowModal(wZakaz) = cmDefault
+          {
+            _mZakaz.ExportTo(_mrkZakaz);
+            if GetMarkerCount(_mrkZakaz) = 0
+              InsertMarker(_mrkZakaz, TmpZakaz.Nrec);
+            RereadRecord;
+          }
+        }
+        #CurUserDeskRep.RepName:
+        {
+          if RunWindowModal(wConfigColumnsTbl) = cmDefault
+          {
+            _cUserDeskRep := UserDeskRep.Nrec;
+            if getfirst CurUserDeskRep = tsOk {}
+            RereadRecord;
+          }
+        }
+        #CommissionNameFld:
+        {
+          _commission.RunWindowSelection(1);
+          rereadrecord;
+        }
+      end;
+    }
+  end; //handleevent
+
+end; //window wParams
+
+handleevent
+  cmDelOnProtect:
+  {
+    case CurField of
+      #PersonsFld:
+      {
+        ClearMarker(_mrkPersons);
+        RereadRecord;
+      }
+      #ZakazFld:
+      {
+        ClearMarker(_mrkZakaz);
+        RereadRecord;
+      }
+      #CommissionNameFld:
+      {
+        _commission.ClearSelection;
+        rereadrecord;
+      }
+      #ColFld6 : set UserDeskRep.ResComp[6]  := 0;
+      #ColFld7 : set UserDeskRep.ResComp[7]  := 0;
+      #ColFld8 : set UserDeskRep.ResComp[8]  := 0;
+      #ColFld9 : set UserDeskRep.ResComp[9]  := 0;
+      #ColFld10: set UserDeskRep.ResComp[10] := 0;
+      #ColFld11: set UserDeskRep.ResComp[11] := 0;
+      #ColFld12: set UserDeskRep.ResComp[12] := 0;
+      #ColFld13: set UserDeskRep.ResComp[13] := 0;
+      #ColFld14: set UserDeskRep.ResComp[14] := 0;
+      #ColFld15: set UserDeskRep.ResComp[15] := 0;
+      #ColFld16: set UserDeskRep.ResComp[16] := 0;
+      #ColFld17: set UserDeskRep.ResComp[17] := 0;
+      #ColFld18: set UserDeskRep.ResComp[18] := 0;
+      #ColFld19: set UserDeskRep.ResComp[19] := 0;
+      #ColFld20: set UserDeskRep.ResComp[20] := 0;
+      #ColFld21: set UserDeskRep.ResComp[21] := 0;
+      #ColFld22: set UserDeskRep.ResComp[22] := 0;
+      #ColFld23: set UserDeskRep.ResComp[23] := 0;
+      #ColFld24: set UserDeskRep.ResComp[24] := 0;
+    end;
+  }
+end;
+
+function ShowUI: word;
+{
+  result := RunWindowModal(wParams);
+}
+
+function GetReportColumnNrec(colIdx: byte): comp;
+{
+  result := if(colIdx >= MinColIdx and colIdx <= MaxColIdx,
+               CurUserDeskRep.ResComp[colIdx], comp(0));
+}
+
+constructor Create(cMnPlan: comp);
+{
+  _cMnPlan := cMnPlan;
+  _mrkZakaz := InitMarker('WorkOrderReport2020_Params_mrkZakaz_' + String(_cMnPlan, 0, 0), 8, 100, 100, true);
+  _mZakaz.ImportFrom(_mrkZakaz);
+  _mrkPersons := InitMarker('WorkOrderReport2020_Params_mrkPersons_' + String(_cMnPlan, 0, 0), 8, 100, 100, true);
+  _mPersons.ImportFrom(_mrkPersons);
+  _commission.InitCommission(1881);
+
+  if getfirst UserDeskRepDefault != tsOk
+  {
+    ClearBuffer(#UserDeskRepDefault);
+    UserDeskRepDefault.NRep    := USERDESKREP_NREP_COLUMNS;
+    UserDeskRepDefault.RepName := COLUMN_CONFIG_NAME_DEFAULT;
+    insert current UserDeskRepDefault;
+  }
+
+  if not ReadMyDSK(_cUserDeskRep, 'WorkOrderReport2020_Params_cUserDeskRep', false)
+    _cUserDeskRep := UserDeskRepDefault.Nrec;
+
+  if getfirst CurUserDeskRep = tsOk {}
+
+  MtClear(#TmpZakaz, mfNormal);
+  sql select distinct
+    KatStroy.Nrec
+  , KatStroy.Code
+  , KatStroy.Name
+  from SpMnPlan
+  join KatStroy on KatStroy.Nrec = SpMnPlan.cAnVal1
+  where SpMnPlan.cMnPlan = :(_cMnPlan)
+  into TmpZakaz byName;
+
+  MtClear(#TmpPersons, mfNormal);
+  sql select distinct
+    Persons.Nrec
+  , Persons.TabNmb
+  , Persons.FIO
+  from SpMnPlan
+  join Persons on Persons.Nrec = SpMnPlan.cIzd
+  where SpMnPlan.cMnPlan = :(_cMnPlan)
+  into TmpPersons byName;
+
+  result := true;
+}
+
+destructor Done;
+{
+  DoneMarker(_mrkZakaz, 'WorkOrderReport2020_Params_mrkZakaz_' + String(_cMnPlan, 0, 0));
+  DoneMarker(_mrkPersons, 'WorkOrderReport2020_Params_mrkPersons_' + String(_cMnPlan, 0, 0));
+  SaveMyDSK(_cUserDeskRep, 'WorkOrderReport2020_Params_cUserDeskRep')
+}
+
+property mrkZakaz    : TPtr read _mrkZakaz;
+property mrkPersons  : TPtr read _mrkPersons;
+property Commission  : Commission read _commission;
+property cUserDeskRep: comp absolute _cUserDeskRep;
+property MinColIdx   : byte read 6;
+property MaxColIdx   : byte read 24;
+property sXltFileName: string read CurUserDeskRep.ResName[1];
+end.

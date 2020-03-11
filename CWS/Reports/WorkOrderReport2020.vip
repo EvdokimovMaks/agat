@@ -1,41 +1,364 @@
+#include AppFuncs.vih
+#include XlReport.vih
 #include AG_CWS.vih
+#include WorkOrderReport2020_Params.vih
 
 #component "AGAT"
 
 interface WorkOrderReport2020;
 
+table struct TmpData (
+  cPerson      : comp
+ ,sPerson      : string
+ ,cMarshSp     : comp
+ ,sMarshSp     : string
+ ,cPost        : comp
+ ,sPost        : string
+ ,sComment     : string
+ ,Oklad        : double
+ ,value        : array[1..60] of double
+ ,total        : double
+) with index (
+  i01 = sPerson
+);
+
+table struct TmpZakaz (
+  Nrec: comp
+ ,Name: string
+) with index (
+  i01 = Name
+ ,i02 = Nrec
+);
+
 var
-  _cMnPlan: comp;
-  _sessionId: comp;
-  _cws: AG_ICWS;
-  _sp: AG_ISpCWS;
-  _spLoader: AG_ISpCWSLoader;
+  _cMnPlan   : comp;
+  _sessionId : comp;
+  _cws       : AG_ICWS;
+  _sp        : AG_ISpCWS;
+  _spLoader  : AG_ISpCWSLoader;
+  _params    : IWorkOrderReport2020_Params;
+  _arrColNrec: array[0..0] of comp;
+  _arrColName: array[0..0] of string;
+  _colCnt    : byte;
+  _total     : double;
+  _appFuncs  : AppointmentsFunctions;
+  pXL        : XLSRepBuilder;
+
+create view
+as select
+  MnPlan.Nrec
+from
+  MnPlan
+ ,FpPeriod
+ ,SpKau SpKauColumns (SPKAU04) //Index = KodGrKau + Code
+ ,TmpData
+ ,TmpZakaz
+ ,Persons
+ ,Catalogs CatPost
+ ,Marsh_Sp
+ ,MnfOper
+ ,LSchet
+ ,LSchet LSchet1
+where ((
+      _cMnPlan                   == MnPlan.Nrec
+  and MnPlan.cAnVal1             == FpPeriod.Nrec
+  and KODGRKAU_WORKORDER_COLUMNS == SpKauColumns.KodGrKau
+  and TmpData.cPerson            == Persons.Nrec
+  and TmpData.cPost              == CatPost.Nrec
+  and TmpData.cMarshSp           == Marsh_Sp.Nrec
+  and Marsh_Sp.NOpe              == MnfOper.Nrec
+  and TmpData.cPerson            == LSchet.TPerson
+  and (LSchet.DatUv = 0 or LSchet.DatUv >= FpPeriod.DBeg)
+  and TmpData.cPerson            == LSchet1.TPerson
+));
 
 parameters _cMnPlan;
+
+function AddTmpDataValue(cwsColIdx: byte; v: double): boolean;
+{
+  result := false;
+
+  var colNrec: comp = _params.GetReportColumnNrec(cwsColIdx);
+  if colNrec = 0 exit;
+
+  var repColIdx: longint = FindItem(_arrColNrec, colNrec);
+  if repColIdx = -1 exit;
+
+  TmpData.value[repColIdx+1] += v;
+
+  result := true;
+}
+
+procedure PrepareData;
+{
+  _spLoader.Load(_sp);
+
+  MtClear(#TmpData, mfNormal);
+  MtClear(#TmpZakaz, mfNormal);
+
+  var arrUsedRepColumns: array[0..0] of comp;
+  var i, cnt: byte = 0;
+  for(i := _params.MinColIdx; i <= _params.MaxColIdx; ++i)
+    if _params.GetReportColumnNrec(i) != 0
+      arrUsedRepColumns[cnt++] := _params.GetReportColumnNrec(i);
+
+  _colCnt := 0;
+  _loop SpKauColumns
+  {
+    if FindItem(arrUsedRepColumns, SpKauColumns.Nrec) = -1 continue;
+    _arrColNrec[_colCnt] := SpKauColumns.Nrec;
+    _arrColName[_colCnt] := SpKauColumns.Name;
+    ++_colCnt;
+  }
+
+  var isZakazFilterSet: boolean = GetMarkerCount(_params.mrkZakaz) > 0;
+  var isPersonsFilterSet: boolean = GetMarkerCount(_params.mrkPersons) > 0;
+
+  _total := 0;
+
+  if _sp.first = tsOk do
+  {
+
+    if isZakazFilterSet
+      if not FoundMarker(_params.mrkZakaz, _sp.cKatStroy) continue;
+
+    if isPersonsFilterSet
+      if not FoundMarker(_params.mrkPersons, _sp.cPerson) continue;
+
+    if getfirst TmpZakaz where ((_sp.cKatStroy == TmpZakaz.Nrec)) != tsOk
+    {
+      ClearBuffer(#TmpZakaz);
+      TmpZakaz.Nrec := _sp.cKatStroy;
+      TmpZakaz.Name := if(GetAnyKau(cgAkSimple, cgKau_ObjBuild, _sp.cKatStroy), GivenAnName(cgAnName), '');
+      insert current TmpZakaz;
+    }
+
+    ClearBuffer(#TmpData);
+
+    TmpData.cPerson  := _sp.cPerson;
+    TmpData.sPerson     := if(getfirst Persons = tsOk, Persons.FIO, '');
+
+    TmpData.cMarshSp := _sp.cMarshSp;
+    TmpData.sMarshSp := if(getfirst Marsh_Sp = tsOk, if(getfirst MnfOper = tsOk, MnfOper.Name, ''), '');
+
+    TmpData.cPost    := _sp.cPost;
+    TmpData.sPost    := if(getfirst CatPost = tsOk, CatPost.Name, '');
+
+    TmpData.sComment := _sp.sComment;
+
+    TmpData.Oklad    := _appFuncs.GetTaxRateAppHist(_appFuncs.GetAppNrec_OnDate(TmpData.cPerson, FpPeriod.DEnd), FpPeriod.DEnd);
+    if TmpData.Oklad = 0
+    {
+      if getfirst LSchet = tsOk
+        TmpData.Oklad := LSchet.Tarif;
+      else if getlast LSchet1 = tsOk
+        TmpData.Oklad := LSchet1.Tarif;
+    }
+
+       AddTmpDataValue(6 , _sp.ChasRab    );
+       AddTmpDataValue(7 , _sp.Zarplata   );
+    if AddTmpDataValue(8 , _sp.Oklad      ) TmpData.Total += _sp.Oklad;
+    if AddTmpDataValue(9 , _sp.ProchDopl  ) TmpData.Total += _sp.ProchDopl;
+       AddTmpDataValue(10, _sp.ChasKom    );
+    if AddTmpDataValue(11, _sp.Kom        ) TmpData.Total += _sp.Kom;
+    if AddTmpDataValue(12, _sp.KomVih     ) TmpData.Total += _sp.KomVih;
+    if AddTmpDataValue(13, _sp.Nadvod     ) TmpData.Total += _sp.Nadvod;
+    if AddTmpDataValue(14, _sp.Podvod     ) TmpData.Total += _sp.Podvod;
+    if AddTmpDataValue(15, _sp.KomDoplVih ) TmpData.Total += _sp.KomDoplVih;
+    if AddTmpDataValue(16, _sp.KomDoplProc) TmpData.Total += _sp.KomDoplProc;
+       AddTmpDataValue(17, _sp.ChasPutRab );
+    if AddTmpDataValue(18, _sp.PutRab     ) TmpData.Total += _sp.PutRab;
+       AddTmpDataValue(19, _sp.ChasPutVih );
+    if AddTmpDataValue(20, _sp.PutVih     ) TmpData.Total += _sp.PutVih;
+    if AddTmpDataValue(21, _sp.PremMes    ) TmpData.Total += _sp.PremMes;
+    if AddTmpDataValue(22, _sp.PremKvart  ) TmpData.Total += _sp.PremKvart;
+    if AddTmpDataValue(23, _sp.PremGod    ) TmpData.Total += _sp.PremGod;
+    if AddTmpDataValue(24, _sp.PremRazov  ) TmpData.Total += _sp.PremRazov;
+
+    insert current TmpData;
+
+    _total += TmpData.Total;
+
+  } while _sp.next = tsOk;
+}
+
+procedure AddXlsVars;
+{
+  pXL.SetDateVar('dBeg', FpPeriod.dBeg);
+  pXL.SetDateVar('dEnd', FpPeriod.dEnd);
+  pXL.SetStringVar('Period', FpPeriod.Name);
+  pXL.SetStringVar('Podr'  , if(GetAnyKau(cgAkSimple, cgKau_KatPodr, MnPlan.cAnVal2), GivenAnName(cgAnName), ''));
+
+  var sZakaz: string = '';
+  _loop TmpZakaz
+    sZakaz += if(sZakaz = '', '', ', ') + SubStr(TmpZakaz.Name, 1, Pos(' ', TmpZakaz.Name+' ') - 1);
+  pXL.SetStringVar('Zakaz' , sZakaz);
+
+  pXL.SetStringVar('ChairmanPost', _params.Commission.GetComponentPost(0));
+  pXL.SetStringVar('ChairmanFIO' , _params.Commission.GetComponentFIO(0));
+  pXL.SetNumberVar('BalHours', BalBwDates(11, FpPeriod.DBeg, FpPeriod.DEnd, 1));
+  pXL.SetNumberVar('Total', _total);
+
+  var i: longint = 0;
+  for(i := 0; i < _colCnt; ++i)
+    pXL.SetStringVar('ColName_' + String(i+1), _arrColName[i]);
+}
+
+procedure AddXlsMainTableFields;
+{
+  pXL.CreateTblFld('cPerson');
+  pXL.CreateTblFld('sPerson');
+  pXL.CreateTblFld('cMarshSp');
+  pXL.CreateTblFld('sMarshSp');
+  pXL.CreateTblFld('cPost');
+  pXL.CreateTblFld('sPost');
+  pXL.CreateTblFld('sComment');
+  pXL.CreateTblFld('Oklad');
+  pXL.CreateTblFld('Total');
+  var i: longint = 0;
+  for(i := 1; i <= _colCnt; ++i)
+    pXL.CreateTblFld('Value_' + i);
+}
+
+procedure SetXlsMainTableRecord;
+{
+  pXL.SetTblNumberFldValue('cPerson' , TmpData.cPerson);
+  pXL.SetTblStringFldValue('sPerson' , TmpData.sPerson);
+  pXL.SetTblNumberFldValue('cMarshSp', TmpData.cMarshSp);
+  pXL.SetTblStringFldValue('sMarshSp', TmpData.sMarshSp);
+  pXL.SetTblNumberFldValue('cPost'   , TmpData.cPost);
+  pXL.SetTblStringFldValue('sPost'   , TmpData.sPost);
+  pXL.SetTblStringFldValue('sComment', TmpData.sComment);
+  pXL.SetTblNumberFldValue('Oklad'   , TmpData.Oklad);
+  pXL.SetTblNumberFldValue('Total'   , TmpData.Total);
+  var i: longint = 0;
+  for(i := 1; i <= _colCnt; ++i)
+    pXL.SetTblNumberFldValue('Value_' + i, TmpData.value[i]);
+}
+
+procedure AddXlsSignersTableFields;
+{
+  pXL.CreateTblFld('SignerPost');
+  pXL.CreateTblFld('SignerFIO');
+}
+
+procedure SetXlsSignersTableRecord(i: integer);
+{
+  pXL.SetTblStringFldValue('SignerPost', _params.Commission.GetComponentPost(i));
+  pXL.SetTblStringFldValue('SignerFIO' , _params.Commission.GetComponentFIO(i));
+}
+
+procedure AddXlsTables(isCreateXlt: boolean);
+{
+  pXL.CreateTbl('Main');
+  AddXlsMainTableFields;
+  if not isCreateXlt
+    _loop TmpData
+    {
+      pXL.ClearTblBuffer;
+      SetXlsMainTableRecord;
+      pXL.InsTblRow;
+    }
+  pXL.PublishTbl('Main');
+
+  pXL.CreateTbl('Signers');
+  AddXlsSignersTableFields;
+  if not isCreateXlt
+  {
+    var i, cnt: integer;
+    cnt := _params.Commission.GetComponentsCount;
+    for(i := 1; i <= cnt; ++i)
+    {
+      pXL.ClearTblBuffer;
+      SetXlsSignersTableRecord(i);
+      pXL.InsTblRow;
+    }
+  }
+  pXL.PublishTbl('Signers');
+}
+
+procedure PrintXlsReport(sXltFileName: string; isCreateXlt: boolean);
+{
+  var sXlsFileName: string = if(isCreateXlt,
+                                pXL.CreateXLT(sXltFileName, true),
+                                pXL.CreateReport(sXltFileName, true));
+
+  pXL.CreateVar(sXLSFileName);
+  AddXlsVars;
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXLSFileName);
+  AddXlsTables(isCreateXlt);
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+}
 
 handleevent
 
   cmInit:
   {
-    _cws := AG_CWSUtils::NewCWS;
-    if not _cws.find(_cMnPlan)
+    if getfirst MnPlan != tsOk
     {
       Message('Не найден сводный наряд Nrec=' + string(_cMnPlan), error);
       Abort;
       Exit;
     }
 
+    if getfirst FpPeriod != tsOk
+    {
+      Message('Не определен период сводного наряда', error);
+      Abort;
+      Exit;
+    }
+
+    _cws := AG_CWSUtils::NewCWS;
+    _cws.find(_cMnPlan);
+
     _sessionId := AG_CWSUtils::NewSession;
     _sp := AG_CWSUtils::NewSpCWS(_sessionId);
-    _spLoader := AG_CWSUtils::SpCWSLoaderByCWS(_cws);
-    _spLoader.Load(_sp);
+    _spLoader := AG_CWSUtils::SpCWSLoaderByCWSWithCorr(_cws);
+    _params := IWorkOrderReport2020_Params(new(WorkOrderReport2020_Params, Create(_cMnPlan)));
+    if _params.ShowUI != cmDefault
+    {
+      abort;
+      exit;
+    }
+
+    PrepareData;
+    PrintXlsReport(TranslatePath(_params.sXltFileName), false);
   }
 
   cmDone:
   {
     AG_CWSUtils::CloseSession(_sessionId);
+    FreeVipInterface(_params);
   }
 
 end;
 
 end.
+
+.LinkForm 'WorkOrder2020' Prototype is 'MNPLAN'
+.NameInList 'Сводный наряд 2020'
+.f "NUL"
+.{CheckEnter MNPLAN_LOOP1
+.begin
+  runinterface(AGAT::WorkOrderReport2020, comp(_MNREC));
+  WorkOrder2020.fExit;
+end.
+.{CheckEnter SPMNPL_LOOP1
+.}
+.{CheckEnter OBJACCT_IN_LOOP
+.{CheckEnter SPOBJACC_IN_LOOP
+.{CheckEnter SPOBJACC_CURIN_LOOP
+.}
+.}
+.}
+.{CheckEnter OBJACCT_OUT_LOOP
+.{CheckEnter SPOBJACC_CUROUT_LOOP
+.{CheckEnter SPOBJACC_OUT_LOOP
+.}
+.}
+.}
+.}
+.endform
