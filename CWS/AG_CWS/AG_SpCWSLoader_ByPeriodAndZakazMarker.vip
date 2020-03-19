@@ -1,0 +1,69 @@
+#include Query.vih
+#include AG_CWS.vih
+
+#component "AGAT"
+
+interface AG_SpCWSLoader_ByPeriodAndZakazMarker;
+
+var
+  _dBeg: date;
+  _dEnd: date;
+  _mZakaz: TPtr;
+  _tableNameZakaz: string;
+
+function isFilterByZakaz: boolean;
+{
+  result := _mZakaz != 0;
+  if result
+    result := GetMarkerCount(_mZakaz) > 0;
+}
+
+procedure InitQueryStr(var lSqlStr: longint);
+{
+  inherited::InitQueryStr(lSqlStr);
+  sqlAddStr(lSqlStr, 'join FpPeriod on FpPeriod.Nrec = MnPlan.cAnVal1');
+  sqlAddStr(lSqlStr, 'where');
+  sqlAddStr(lSqlStr, '    MnPlan.cWayAccou = #comp(0001000000000088h)');
+  sqlAddStr(lSqlStr, 'and FpPeriod.dEnd >= :dBeg');
+  sqlAddStr(lSqlStr, 'and FpPeriod.dBeg <= :dEnd');
+  if isFilterByZakaz
+    sqlAddStr(lSqlStr, 'and SpMnPlan.cAnVal1 in (select ' + _tableNameZakaz + '.Nrec from ' + _tableNameZakaz + ')');
+}
+
+procedure PrepareTmpZakaz;
+{
+  if not isFilterByZakaz exit;
+  sqlExecDirect('Delete From ' + _tableNameZakaz);
+  var i: longint = 0;
+  var c: comp = 0;
+  var q: IQuery = queryManager.createQuery('insert into ' + _tableNameZakaz + ' ( Nrec ) values ( :Nrec )');
+  for(i := 0; GetMarker(_mZakaz, i, c); ++i)
+    q.setParam('Nrec', c).execute;
+}
+
+function  InitQuery: IQuery;
+{
+  PrepareTmpZakaz;
+  var q: IQuery = inherited::InitQuery;
+  q.setParam('dBeg', _dBeg);
+  q.setParam('dEnd', _dEnd);
+  result := q;
+}
+
+constructor Create(dBeg: date; dEnd: date; mZakaz: TPtr);
+{
+  _dBeg := dBeg;
+  _dEnd := dEnd;
+  _mZakaz := mZakaz;
+  _tableNameZakaz := 'TmpZakaz' + TimeToStr(Cur_Time,'HHMMSS_SSS');
+  var rslt: integer;
+  rslt := sqlCreateTmpTable('Table ' + _tableNameZakaz + ' (Nrec: comp) with index (i01 = Nrec);', ctmNormal);
+  result := rslt = tsOk;
+}
+
+destructor Done;
+{
+  sqlDropTmpTable(_tableNameZakaz);
+}
+
+end.

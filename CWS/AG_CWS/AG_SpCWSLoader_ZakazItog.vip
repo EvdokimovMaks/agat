@@ -1,0 +1,96 @@
+#include Query.vih
+#include AG_CWS.vih
+
+#component "AGAT"
+
+interface AG_SpCWSLoader_ZakazItog;
+
+var
+  _dBeg: date;
+  _dEnd: date;
+  _mZakaz: TPtr;
+  _tableNameZakaz: string;
+
+function isFilterByZakaz: boolean;
+{
+  result := _mZakaz != 0;
+  if result
+    result := GetMarkerCount(_mZakaz) > 0;
+}
+
+procedure InitQueryStr(var lSqlStr: longint);
+{
+  sqlAddStr(lSqlStr, 'select');
+  sqlAddStr(lSqlStr, '  t.cKatStroy        as cKatStroy');
+  sqlAddStr(lSqlStr, ' ,sum(t.TrudPlan)    as TrudPlan');
+  sqlAddStr(lSqlStr, ' ,sum(t.TrudMes)     as TrudMes');
+  sqlAddStr(lSqlStr, ' ,sum(t.ProcVip)     as ProcVip');
+  sqlAddStr(lSqlStr, ' ,sum(t.ChasRab)     as ChasRab');
+  sqlAddStr(lSqlStr, ' ,sum(t.Zarplata)    as Zarplata');
+  sqlAddStr(lSqlStr, ' ,sum(t.Oklad)       as Oklad');
+  sqlAddStr(lSqlStr, ' ,sum(t.ProchDopl)   as ProchDopl');
+  sqlAddStr(lSqlStr, ' ,sum(t.ChasKom)     as ChasKom');
+  sqlAddStr(lSqlStr, ' ,sum(t.Kom)         as Kom');
+  sqlAddStr(lSqlStr, ' ,sum(t.KomVih)      as KomVih');
+  sqlAddStr(lSqlStr, ' ,sum(t.Nadvod)      as Nadvod');
+  sqlAddStr(lSqlStr, ' ,sum(t.Podvod)      as Podvod');
+  sqlAddStr(lSqlStr, ' ,sum(t.KomDoplVih)  as KomDoplVih');
+  sqlAddStr(lSqlStr, ' ,sum(t.KomDoplProc) as KomDoplProc');
+  sqlAddStr(lSqlStr, ' ,sum(t.ChasPutRab)  as ChasPutRab');
+  sqlAddStr(lSqlStr, ' ,sum(t.PutRab)      as PutRab');
+  sqlAddStr(lSqlStr, ' ,sum(t.ChasPutVih)  as ChasPutVih');
+  sqlAddStr(lSqlStr, ' ,sum(t.PutVih)      as PutVih');
+  sqlAddStr(lSqlStr, ' ,sum(t.PremMes)     as PremMes');
+  sqlAddStr(lSqlStr, ' ,sum(t.PremKvart)   as PremKvart');
+  sqlAddStr(lSqlStr, ' ,sum(t.PremGod)     as PremGod');
+  sqlAddStr(lSqlStr, ' ,sum(t.PremRazov)   as PremRazov');
+  sqlAddStr(lSqlStr, 'from (');
+  inherited::InitQueryStr(lSqlStr);
+  sqlAddStr(lSqlStr, 'join FpPeriod on FpPeriod.Nrec = MnPlan.cAnVal1');
+  sqlAddStr(lSqlStr, 'where');
+  sqlAddStr(lSqlStr, '    MnPlan.cWayAccou = #comp(0001000000000088h)');
+  sqlAddStr(lSqlStr, 'and FpPeriod.dEnd >= :dBeg');
+  sqlAddStr(lSqlStr, 'and FpPeriod.dBeg <= :dEnd');
+  if isFilterByZakaz
+    sqlAddStr(lSqlStr, 'and SpMnPlan.cAnVal1 in (select ' + _tableNameZakaz + '.Nrec from ' + _tableNameZakaz + ')');
+  sqlAddStr(lSqlStr, ') t');
+  sqlAddStr(lSqlStr, 'group by t.cKatStroy');
+}
+
+procedure PrepareTmpZakaz;
+{
+  if not isFilterByZakaz exit;
+  sqlExecDirect('Delete From ' + _tableNameZakaz);
+  var i: longint = 0;
+  var c: comp = 0;
+  var q: IQuery = queryManager.createQuery('insert into ' + _tableNameZakaz + ' ( Nrec ) values ( :Nrec )');
+  for(i := 0; GetMarker(_mZakaz, i, c); ++i)
+    q.setParam('Nrec', c).execute;
+}
+
+function  InitQuery: IQuery;
+{
+  PrepareTmpZakaz;
+  var q: IQuery = inherited::InitQuery;
+  q.setParam('dBeg', _dBeg);
+  q.setParam('dEnd', _dEnd);
+  result := q;
+}
+
+constructor Create(dBeg: date; dEnd: date; mZakaz: TPtr);
+{
+  _dBeg   := dBeg;
+  _dEnd   := dEnd;
+  _mZakaz := mZakaz;
+  _tableNameZakaz := 'TmpZakaz' + TimeToStr(Cur_Time,'HHMMSS_SSS');
+  var rslt: integer;
+  rslt := sqlCreateTmpTable('Table ' + _tableNameZakaz + ' (Nrec: comp) with index (i01 = Nrec);', ctmNormal);
+  result := rslt = tsOk;
+}
+
+destructor Done;
+{
+  sqlDropTmpTable(_tableNameZakaz);
+}
+
+end.

@@ -1,0 +1,502 @@
+#include GetKau.vih
+#include XlReport.vih
+#include AG_CWS.vih
+
+#component "AGAT"
+
+interface WorkOrderReportPivotTable 'Сводная таблица по сводным нарядам' escClose doAccept;
+show(,,50, 7);
+
+const
+  KATPODR_NIO = 4000D861ACC3D875h;
+end;
+
+table struct TmpZakaz (
+  Nrec     : comp
+, Name     : string[30]
+, NTK      : string[100]
+, dFrom    : date
+, dTo      : date
+, PriceKind: string[50]
+, PlanTrud : double
+, FactTrud : double
+, PlanOZP  : double
+, FactOZP  : double
+) with index (
+  i01 = Nrec
+);
+
+var
+  _dBeg     : date;
+  _dEnd     : date;
+  _mZakaz   : TPtr;
+
+  _cKatStroy: comp;
+
+  _qZakaz   : IQuery;
+  _sp       : AG_ISpCWS(AG_SpCWS);
+  pXL       : XLSRepBuilder;
+  #include GetKau.var
+
+function GetZakazFld: string; forward;
+
+create view
+as select
+  GetZakazFld()(fieldname=ZakazFld)
+from
+  KatStroy
+ ,TmpZakaz
+ ,_sp
+ ,MnPlan
+ ,FpPeriod
+ ,KatPodr
+ ,Persons
+ ,Catalogs CatPost
+ ,TmpZakaz TmpZakazCur
+where ((
+    _cKatStroy     == KatStroy.Nrec
+and _sp.cMnPlan    == MnPlan.Nrec
+and MnPlan.cAnVal1 == FpPeriod.Nrec
+and MnPlan.cAnVal2 == KatPodr.Nrec
+and _sp.cPerson    == Persons.Nrec
+and _sp.cPost      == CatPost.Nrec
+and _sp.cKatStroy  == TmpZakazCur.Nrec
+))
+;
+
+screen scParams(,,sci1Esc);
+  fields
+    _dBeg: NoProtect;
+    _dEnd: NoProtect;
+    ZakazFld: Protect, PickButton;
+  buttons
+    cmOk, default;
+    cmCancel;
+
+<<
+
+  `Период с` .@@@@@@@@@@ `по`.@@@@@@@@@@
+
+  `Заказ`    .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+              <.Продолжить.>      <.   Отмена   .>
+>>
+end; // screen scParams
+
+create view vNTK
+var
+  _cKatPodr: comp;
+as select KatPodr.Nrec
+from KatPodr
+where ((
+  vNTK._cKatPodr == KatPodr.Nrec
+));
+function GetNTKName(cCurPodr: comp): string; cacheable;
+{
+  result := '';
+  vNTK._cKatPodr := cCurPodr;
+  while if(vNTK.getfirst KatPodr = tsOk,
+           vNTK.KatPodr.Nrec  != KATPODR_NIO and
+           vNTK.KatPodr.cPodr != KATPODR_NIO and
+           vNTK.KatPodr.cPodr != 0,
+           false)
+  {
+    vNTK._cKatPodr := vNTK.KatPodr.cPodr;
+  }
+  result := vNTK.KatPodr.Name;
+}
+
+sql query qZakaz =
+  select
+    ks.Nrec
+  , Substring(ks.Name, 1, InStr(' ', ks.Name + ' ', 1))  as Name
+  , coalesce(ntk.Name, '')                               as NTK
+  , coalesce(cp.dTo, 0)                                  as dTo: date
+  , coalesce(cp.dFrom, 0)                                as dFrom: date
+  , coalesce(avtrud.vdouble, 0)                          as PlanTrud: double
+  , coalesce(AddSumObj.sumcur, 0)                        as PlanOZP: double
+  , coalesce(esPriceKind.Name, '')                       as PriceKind
+
+  from katstroy ks
+
+  left join kaureff
+    on kaureff.cotable = 2101
+   and kaureff.crec    = ks.nrec
+   and kaureff.wkau    = 2
+
+  left join katpodr ntk on ntk.nrec = kaureff.ckau
+
+  outer apply (
+    select
+      max(cp.nrec)  as cCalPlan
+     ,max(spd.Nrec) as cSpDocs
+
+    from Dogovor d
+
+    join CalPlan cp
+      on cp.cDogovor = d.Nrec
+     and cp.DirectMc = 1
+     and cp.Status  <> 3
+
+    join SpDocs spd
+      on spd.cDoc = cp.Nrec
+     and spd.TiDk = 403
+
+    join SpecMtr sm
+      on sm.cSaldTune = #comp(0001000000000001h)
+     and sm.coTable   = 1723
+     and sm.cSpec     = spd.Nrec
+     and sm.cObj      = ks.Nrec
+
+    where
+        d.Direct = 1
+    and d.Status <> 3
+  ) tCalPlan
+
+  left join CalPlan cp on cp.nrec = tCalPlan.cCalPlan
+
+  left join SpDocs on SpDocs.Nrec = tCalPlan.cSpDocs
+
+  left join exclassval evPriceKind
+    on evPriceKind.wTable    = 1723
+   and evPriceKind.ClassCode = 124
+   and evPriceKind.cRec      = SpDocs.Nrec
+
+  left join exclassseg esPriceKind on esPriceKind.Nrec = evPriceKind.cClassSeg
+
+  //трудоемкость по объекту строительства
+  left join attrval avtrud
+    on avtrud.wtable   = 2101
+   and avtrud.cattrnam = #comp(0001000000000113h)  //трудоемкость
+   and avtrud.crec     = ks.nrec
+
+  //сумма по структуре цены
+  left join AddSumObj
+    on AddSumObj.cAddSumTune = #comp(40015542D9B27825h) //ОЗП
+   and AddSumObj.coTable     = 2101
+   and AddSumObj.cKatStroy   = ks.nrec
+
+  where ks.Nrec = :cKatStroy
+;
+
+
+function GetZakazFld: string;
+{
+  result := '';
+  var cnt: longint = GetMarkerCount(_mZakaz);
+  case cnt of
+    0: result := 'По всем заказам'
+    1..10:
+    {
+      var i: longint = 0;
+      var c: comp = 0;
+      var s: string = '';
+      for(i := 0; GetMarker(_mZakaz, i, c); ++i)
+      {
+        s := if(GetAnyKau(cgAkSimple, cgKau_ObjBuild, c), GivenAnName(cgAnName), '');
+        result += if(result = '', '', ', ') + SubStr(s, 1, Pos(' ', s + ' ') - 1);
+      }
+    }
+    else
+      result := 'Выбрано заказов: ' + cnt;
+  end;
+}
+
+function isZakazFilterSet: boolean;
+{
+  result := GetMarkerCount(_mZakaz) > 0;
+}
+
+function GetBalHours(d1: date; d2: date): double; cacheable;
+{
+  result := BalBwDates(11, d1, d2, 1);
+}
+
+procedure AddXlsVars;
+{
+  pXL.SetDateVar('dBeg', _dBeg);
+  pXL.SetDateVar('dEnd', _dEnd);
+  pXL.SetNumberVar('BalHours', GetBalHours(_dBeg, _dEnd));
+}
+
+procedure AddXlsTableFields_Main;
+{
+  pXL.CreateTblFld('НарядНомер');
+  pXL.CreateTblFld('НарядПериод');
+  pXL.CreateTblFld('НарядДескриптор');
+  pXL.CreateTblFld('НарядНачДата');
+  pXL.CreateTblFld('НарядКонДата');
+  pXL.CreateTblFld('НарядПодразделениеИмя');
+  pXL.CreateTblFld('НарядПодразделениеКод');
+  pXL.CreateTblFld('НарядНТК');
+  pXL.CreateTblFld('СотрудникФИО');
+  pXL.CreateTblFld('СотрудникТабНомер');
+  pXL.CreateTblFld('СотрудникДолжность');
+  pXL.CreateTblFld('Заказ');
+  pXL.CreateTblFld('ЗаказДатаЗакрытия');
+  pXL.CreateTblFld('ЗаказСрокДействия');
+  pXL.CreateTblFld('ЗаказТрудоемкостьПлан');
+  pXL.CreateTblFld('ЗаказТрудоемкостьФакт');
+  pXL.CreateTblFld('ЗаказОЗППлан');
+  pXL.CreateTblFld('ЗаказОЗПФакт');
+  pXL.CreateTblFld('ЗаказВидЦены');
+  pXL.CreateTblFld('ЗаказНТК');
+  pXL.CreateTblFld('Операция');
+  pXL.CreateTblFld('Основание');
+  pXL.CreateTblFld('ЧасБалансовые'                    );
+  pXL.CreateTblFld('Трудоемкость'                     );
+  pXL.CreateTblFld('ЧасОтработано'                    );
+  pXL.CreateTblFld('ОплЗарплата'                      );
+  pXL.CreateTblFld('ОплОклад'                         );
+  pXL.CreateTblFld('ОплПрочиеНадбавки'                );
+  pXL.CreateTblFld('ЧасВКомандировке'                 );
+  pXL.CreateTblFld('ОплЗаВремяНаОбъекте'              );
+  pXL.CreateTblFld('ОплВыхПрНаОбъекте'                );
+  pXL.CreateTblFld('ОплНадводныеИспытанияНаОбъекте'   );
+  pXL.CreateTblFld('ОплПодводныеИспытанияНаОбъекте'   );
+  pXL.CreateTblFld('ОплДоплатаВыхПрНаОбъекте'         );
+  pXL.CreateTblFld('ОплДоплатаПроцентКОкладуНаОбъекте');
+  pXL.CreateTblFld('ЧасВПутиВРабДень'                 );
+  pXL.CreateTblFld('ОплВПутиВРабДень'                 );
+  pXL.CreateTblFld('ЧасВПутиВВыхДень'                 );
+  pXL.CreateTblFld('ОплВПутиВВыхДень'                 );
+  pXL.CreateTblFld('ОплПремМес'                       );
+  pXL.CreateTblFld('ОплПремКварт'                     );
+  pXL.CreateTblFld('ОплПремГод'                       );
+  pXL.CreateTblFld('ОплПремРазовая'                   );
+}
+
+procedure AddXlsTableRecField_Main;
+{
+  if getfirst fastfirstrow MnPlan = tsOk
+  {
+    pXL.SetTblStringFldValue('НарядНомер'     , MnPlan.Number);
+    pXL.SetTblStringFldValue('НарядДескриптор', MnPlan.Descr);
+
+    if getfirst fastfirstrow FpPeriod = tsOk
+    {
+      pXL.SetTblStringFldValue('НарядПериод' , FpPeriod.Name);
+      pXL.SetTblDateFldValue  ('НарядНачДата', FpPeriod.dBeg);
+      pXL.SetTblDateFldValue  ('НарядКонДата', FpPeriod.dEnd);
+    }
+
+    if getfirst fastfirstrow KatPodr = tsOk
+    {
+      pXL.SetTblStringFldValue('НарядПодразделениеКод', KatPodr.Kod);
+      pXL.SetTblStringFldValue('НарядПодразделениеИмя', KatPodr.Name);
+      pXL.SetTblStringFldValue('НарядНТК', GetNTKName(KatPodr.Nrec));
+    }
+
+    if getfirst fastfirstrow Persons = tsOk
+    {
+      pXL.SetTblStringFldValue('СотрудникФИО', Persons.FIO);
+      pXL.SetTblStringFldValue('СотрудникТабНомер', Persons.TabNmb);
+    }
+  }
+
+  if getfirst fastfirstrow CatPost = tsOk
+    pXL.SetTblStringFldValue('СотрудникДолжность', CatPost.Name);
+
+  if getfirst fastfirstrow TmpZakazCur = tsOk
+  {
+    pXL.SetTblStringFldValue('Заказ', TmpZakazCur.Name);
+    pXL.SetTblDateFldValue  ('ЗаказДатаЗакрытия', TmpZakazCur.dTo);
+    pXL.SetTblStringFldValue('ЗаказСрокДействия', DateToStr(TmpZakazCur.dFrom,'ДД.ММ.ГГГГ') + ' - ' + DateToStr(TmpZakazCur.dTo,'ДД.ММ.ГГГГ'));
+    pXL.SetTblNumberFldValue('ЗаказТрудоемкостьПлан', TmpZakazCur.PlanTrud);
+    pXL.SetTblNumberFldValue('ЗаказТрудоемкостьФакт', TmpZakazCur.FactTrud);
+    pXL.SetTblNumberFldValue('ЗаказОЗППлан', TmpZakazCur.PlanOZP);
+    pXL.SetTblNumberFldValue('ЗаказОЗПФакт', TmpZakazCur.FactOZP);
+    pXL.SetTblStringFldValue('ЗаказВидЦены', TmpZakazCur.PriceKind);
+    pXL.SetTblStringFldValue('ЗаказНТК', TmpZakazCur.NTK);
+  }
+
+  pXL.SetTblStringFldValue('Операция', if(GetAnyKau(cgAkSimple, cgKau_Marsh_Sp, _sp.cMarshSp), GivenAnName(cgAnName), ''));
+  pXL.SetTblStringFldValue('Основание', _sp.sComment);
+
+  pXL.SetTblNumberFldValue('ЧасБалансовые'                     , _sp.ChasBal    );
+  pXL.SetTblNumberFldValue('Трудоемкость'                      , _sp.TrudMes    );
+  pXL.SetTblNumberFldValue('ЧасОтработано'                     , _sp.ChasRab    );
+  pXL.SetTblNumberFldValue('ОплЗарплата'                       , _sp.Zarplata   );
+  pXL.SetTblNumberFldValue('ОплОклад'                          , _sp.Oklad      );
+  pXL.SetTblNumberFldValue('ОплПрочиеНадбавки'                 , _sp.ProchDopl  );
+  pXL.SetTblNumberFldValue('ЧасВКомандировке'                  , _sp.ChasKom    );
+  pXL.SetTblNumberFldValue('ОплЗаВремяНаОбъекте'               , _sp.Kom        );
+  pXL.SetTblNumberFldValue('ОплВыхПрНаОбъекте'                 , _sp.KomVih     );
+  pXL.SetTblNumberFldValue('ОплНадводныеИспытанияНаОбъекте'    , _sp.Nadvod     );
+  pXL.SetTblNumberFldValue('ОплПодводныеИспытанияНаОбъекте'    , _sp.Podvod     );
+  pXL.SetTblNumberFldValue('ОплДоплатаВыхПрНаОбъекте'          , _sp.KomDoplVih );
+  pXL.SetTblNumberFldValue('ОплДоплатаПроцентКОкладуНаОбъекте' , _sp.KomDoplProc);
+  pXL.SetTblNumberFldValue('ЧасВПутиВРабДень'                  , _sp.ChasPutRab );
+  pXL.SetTblNumberFldValue('ОплВПутиВРабДень'                  , _sp.PutRab     );
+  pXL.SetTblNumberFldValue('ЧасВПутиВВыхДень'                  , _sp.ChasPutVih );
+  pXL.SetTblNumberFldValue('ОплВПутиВВыхДень'                  , _sp.PutVih     );
+  pXL.SetTblNumberFldValue('ОплПремМес'                        , _sp.PremMes    );
+  pXL.SetTblNumberFldValue('ОплПремКварт'                      , _sp.PremKvart  );
+  pXL.SetTblNumberFldValue('ОплПремГод'                        , _sp.PremGod    );
+  pXL.SetTblNumberFldValue('ОплПремРазовая'                    , _sp.PremRazov  );
+}
+
+procedure AddXlsTableRecs_Main;
+{
+  _loop _sp
+  {
+    if not NextVisual break;
+    pXL.ClearTblBuffer;
+    AddXlsTableRecField_Main;
+    pXL.InsTblRow;
+  }
+}
+
+procedure AddXLSTables(isCreateXLT: boolean);
+{
+  pXL.CreateTbl('Main');
+  AddXlsTableFields_Main;
+  if not isCreateXLT AddXlsTableRecs_Main;
+  pXL.PublishTbl('Main');
+}
+
+procedure PrintXlsReport(sXLTFileName: string; isCreateXLT: boolean);
+{
+  var cnt: longint = 0;
+  _loop _sp ++cnt;
+
+  StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak, 'Выгрузка в Excel', cnt);
+
+  var sXLSFileName: string = if(isCreateXLT,
+                                pXL.CreateXLT(sXLTFileName, True),
+                                pXL.CreateReport(sXLTFileName, True));
+  pXL.CreateVar(sXLSFileName);
+  AddXlsVars;
+  pXL.PublishVar;
+
+  pXL.CreateTbls(sXLSFileName);
+  AddXlsTables(isCreateXLT);
+
+  pXL.LoadReport(sXLSFileName);
+  pXL.DisConnectExcel;
+
+  StopVisual;
+}
+
+function PrepareSp: boolean;
+{
+  var spLoader: AG_ISpCWSLoader = AG_CWSUtils::SpCWSLoaderByPeriodAndZakazMarker(_dBeg, _dEnd, _mZakaz);
+  spLoader.Load(_sp);
+  result := true;
+}
+
+function PrepareTmpZakaz(mZakaz: TPtr): boolean;
+{
+  MtClear(#TmpZakaz, mfNormal);
+
+  var sessionIdZakazItog: comp            = AG_CWSUtils::NewSession;
+  var spZakazItog       : AG_ISpCWS       = AG_CWSUtils::NewSpCWS(sessionIdZakazItog);
+  var spLoaderZakazItog : AG_ISpCWSLoader = AG_CWSUtils::SpCWSLoaderZakazItog(date(1,1,2014), _dEnd, mZakaz);
+  spLoaderZakazItog.Load(spZakazItog);
+
+  if spZakazItog.first = tsOk do
+  {
+    ClearBuffer(#TmpZakaz);
+    TmpZakaz.Nrec := spZakazItog.cKatStroy;
+    _qZakaz.setParam('cKatStroy', TmpZakaz.Nrec);
+    if _qZakaz.execute.errorCode = tsOk
+      if _qZakaz.fetch.errorCode = tsOk
+      {
+        TmpZakaz.Name     := _qZakaz.row.val('Name');
+        TmpZakaz.NTK      := _qZakaz.row.val('NTK');
+        TmpZakaz.dFrom    := _qZakaz.row.val('dFrom');
+        TmpZakaz.dTo      := _qZakaz.row.val('dTo');
+        TmpZakaz.PlanTrud := _qZakaz.row.val('PlanTrud');
+        TmpZakaz.PlanOZP  := _qZakaz.row.val('PlanOZP');
+      }
+    TmpZakaz.FactTrud := spZakazItog.TrudMes;
+    TmpZakaz.FactOZP := spZakazItog.Zarplata;
+    insert current TmpZakaz;
+  } while spZakazItog.next = tsOk;
+  AG_CWSUtils::CloseSession(sessionIdZakazItog);
+  result := true;
+}
+
+function PrepareData: boolean;
+{
+  result := true;
+  StartNewVisual(vtIndicatorVisual, vfTimer + vfBreak, 'Выборка данных', 2);
+
+  do
+  {
+    if not NextVisual { result := false; break; }
+    SetVisualHeader('Выборка данных. Сводные наряды.');
+    PrepareSp;
+
+    if not NextVisual { result := false; break; }
+    SetVisualHeader('Выборка данных. Заказы.');
+    var mZakaz: TPtr = InitMarker('', 8, 100, 100, true);
+    if isZakazFilterSet
+      CopyMarker(mZakaz, _mZakaz);
+    else
+      _loop _sp InsertMarker(mZakaz, _sp.cKatStroy);
+    PrepareTmpZakaz(mZakaz);
+    DoneMarker(mZakaz, '');
+
+  } while false;
+
+  StopVisual;
+}
+
+handleevent
+
+  cmOk:
+  {
+    var sessionId: comp = AG_CWSUtils::NewSession;
+    _sp := AG_CWSUtils::NewSpCWS(sessionId);
+
+    if PrepareData
+      PrintXlsReport(TranslatePath('%StartPath%Xls\WorkOrderReportPivotTable.xltm'), false);
+
+    AG_CWSUtils::CloseSession(sessionId);
+  }
+
+  cmInit:
+  {
+    if not ReadMyDSK(_dBeg, '_dBeg_WorkOrderReportPivotTable', true) _dBeg := date(1, Month(Cur_Date), Year(Cur_Date));
+    if not ReadMyDSK(_dEnd, '_dEnd_WorkOrderReportPivotTable', true) _dEnd := date(Last_Day(_dBeg), Month(_dBeg), Year(_dBeg));
+    _mZakaz := InitMarker('_mZakaz_WorkOrderReportPivotTable', 8, 10, 10, true);
+    _qZakaz := queryManager.createQuery(qZakaz);
+  }
+
+  cmDone:
+  {
+    SaveMyDSK(_dBeg, '_dBeg_WorkOrderReportPivotTable');
+    SaveMyDSK(_dEnd, '_dEnd_WorkOrderReportPivotTable');
+    DoneMarker(_mZakaz, '_mZakaz_WorkOrderReportPivotTable');
+  }
+
+  cmPick:
+  {
+    case CurField of
+      #ZakazFld:
+      {
+        if iGetKau.GetCodeKau(cgiMulti, cgKau_ObjBuild, 0) > 0
+        {
+          DoneMarker(_mZakaz, '');
+          _mZakaz := InitMarker(iGetKau.GetMarkerName(cgKau_ObjBuild), 8, 10, 10, true);
+          RereadRecord;
+        }
+      }
+    end;
+  }
+
+  cmDelOnProtect:
+  {
+    case CurField of
+      #ZakazFld:
+      {
+        ClearMarker(_mZakaz);
+        RereadRecord;
+      }
+    end;
+  }
+
+end; //handleevent
+
+end.
