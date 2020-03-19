@@ -215,7 +215,6 @@ end;
 //------------------------------------------------------------------------------
 var
 //------------------------------------------------------------------------------
-  oCursorOrder: iResultSet;
   oDsql: DSQL;
   oStore: Store;
   boFpLog : boolean;
@@ -352,7 +351,6 @@ From
 , SoprHoz
 , SaldoMC
 , SaldoMC SaldoMCDel
-, x$ActiveUsers
 , SpOrderTmp
 , ParnTbl
 , SortTbl
@@ -362,12 +360,6 @@ From
 , Pick Pick557
 , Pick PickOrd
 , KatMC
-  #ifdef NUTICIA_PERIOD
-, KatMC KatMCAttr
-, GroupMC GroupMCAttr
-, AttrNam AttrNam_1
-, AttrVal AttrVal_1
-  #end
 , Hidetbl
 , KatEd
 , KatMol
@@ -392,16 +384,6 @@ AND  dCurr                == SklOrder.dOrd
 
 AND  SklOrder.nRec        == SpOrder.cSklOrder
 AND  SklOrder.nRec        == SpOrderAktComp.cSklOrder
-
-#ifdef NUTICIA_PERIOD
-AND  KatMCAttr.cGroupMC   == GroupMCAttr.nRec
-AND  coGroupMC            == AttrNam_1.wTable
-AND  'Методика средних цен периода'
-                          == AttrNam_1.Name
-AND  coGroupMC            == AttrVal_1.wTable
-AND  GroupMCAttr.nRec     == AttrVal_1.cRec
-AND  AttrNam_1.nRec       == AttrVal_1.cAttrNam
-#end
 
 AND  _i                   == SaldoMCDel.SP
 AND  KatMC.nRec           == SaldoMCDel.cMC
@@ -476,26 +458,19 @@ var objRecPar: oiRecalcPar;
 //внш.выгрузка внутренних
 // 600, 506 - внт склад и производство; 501, 503 - в и из производства
 Create view Parn
-
 Var
   p_vidSopr: word;
   p_begDate: Date;
-
-As select
-  *
-
+As select SklOrder.Nrec
 From
   SklOrder(readOnly)
 , KatSopr(readOnly)
-
 Where
 ((
   p_vidSopr       == KatSopr.vidSopr  AND
   p_begDate      <<= KatSopr.dOpr     AND
   KatSopr.nRec   /== SklOrder.cSopr
-))
-Order ord1 external by
-  KatSopr.dOpr, KatSopr.nSopr, KatSopr.nRec, SklOrder.vidOrder(desc); //чтобы сперва шел расходный по этой накладной
+));
 
 //******************************************************************************
 // внш.выгрузка возвратов
@@ -690,19 +665,6 @@ Function GetKolPick : word;
     inc(GetKolPick);
 }
 
-#ifdef NUTICIA_PERIOD
-//******************************************************************************
-
-Function GetGroupMCAttr(_lcMC: comp): word;
-{
-  GetGroupMCAttr := 0;
-
-  if( GetFirst KatMCAttr where((_lcMC == KatMCAttr.nRec)) = tsOk )
-    if( IsValid(#AttrVal_1) )
-      GetGroupMCAttr := word(AttrVal_1.vDouble);
-}
-#end
-
 //******************************************************************************
 
 Procedure AbortMyTransaction;
@@ -741,25 +703,9 @@ Procedure EndMyTransaction;
 
 Function WasSelectedMC(nr_: comp): boolean;
 {
-#ifdef NUTICIA_PERIOD
-// для Нутриции пересчет средних цен производится только для МЦ,
-// у которых внешний атрибут группы МЦ "Методика средних цен периода" = 0
-   if( GetGroupMCAttr(nr_) <> 0)
-     {
-       WasSelectedMC := FALSE;
-       Exit;
-     }
-#end
-
-  if (NOT wasPickedMC)
-    {
-      result := TRUE;
-      Exit;
-    }
-
-  WasSelectedMC := (GetFirst Pick3 where
-                        ((word(7) == Pick3.wList AND
-                          nr_     == Pick3.cRec)) = tsOk);
+  result := if(NOT wasPickedMC,
+               true,
+               GetFirst Pick3 where ((word(7) == Pick3.wList AND nr_ == Pick3.cRec)) = tsOk);
 }
 
 //******************************************************************************
@@ -852,13 +798,17 @@ procedure setBufferSummPriceDayData(_spOrder: type$SpOrder);
     }
   }
   //#endregion
+
+  var ag_srPrice: double = _spOrder.srPrice;
+  var ag_vPrice: double = _spOrder.vPrice;
+
   // расчет средних цен
   summPriceDayData.srPrice := avrPriceByOrder(summPriceDayData.kol, summPriceDayData.srPrice
-    , if(_spOrder.vidOrder = 0, _spOrder.kol, -_spOrder.kol), _spOrder.srPrice
+    , if(_spOrder.vidOrder = 0, _spOrder.kol, -_spOrder.kol), ag_srPrice //_spOrder.srPrice
     , _spOrder.vidOrder, _spOrder.tipOrd);
 
   summPriceDayData.vPrice := avrPriceByOrder(summPriceDayData.kol, summPriceDayData.vPrice
-    , if(_spOrder.vidOrder = 0, _spOrder.kol, -_spOrder.kol), _spOrder.vPrice
+    , if(_spOrder.vidOrder = 0, _spOrder.kol, -_spOrder.kol), ag_vPrice //_spOrder.vPrice
     , _spOrder.vidOrder, _spOrder.tipOrd);
 
   summPriceDayData.kol += if(_spOrder.vidOrder = 0, _spOrder.kol, -_spOrder.kol);
@@ -1021,7 +971,6 @@ function getRazrezKolDsql(_spOrder: type$SpOrder): double;
   }
 }
 
-//#region getRazrezKol (dsql/vip)
 function getRazrezPriceDsql(_spOrder: type$SpOrder): AllPrice;
 {
   var rcPrice: AllPrice;
@@ -1071,14 +1020,14 @@ function getRazrezPriceDsql(_spOrder: type$SpOrder): AllPrice;
   }
   else
   {
-      //#region получение цен которые были до даты ордера
-    ReInitMCinfo(sub_day(_spOrder.dOrd,1));
-    SkladProizv(_spOrder.SP);
     summPriceDayData.SP     := _spOrder.SP;
     summPriceDayData.cMC    := _spOrder.cMC;
     summPriceDayData.cPodr  := razrezPodr;
     summPriceDayData.cMOL   := razrezMol;
     summPriceDayData.cParty := razrezParty;
+    //#region получение цен которые были до даты ордера
+    ReInitMCinfo(sub_day(_spOrder.dOrd,1));
+    SkladProizv(_spOrder.SP);
 
     summPriceDayData.cVal := StepMCInfo(_spOrder.cMC
                            , 0
@@ -1093,6 +1042,18 @@ function getRazrezPriceDsql(_spOrder: type$SpOrder): AllPrice;
     rcPrice.cVal    := summPriceDayData.cVal;
     rcPrice.srPrice := summPriceDayData.srPrice;
     rcPrice.vPrice  := summPriceDayData.vPrice;
+  }
+
+  //АГАТ--------------------------------------------------------------------------
+  //Если текущая позиция спецификации ордера - по накладной на возврат из производства,
+  //устанавливаем цену ордера = цене из позиции накладной
+  var is503: boolean = if(getfirst SpSopr1 where ((_spOrder.cSpSopr  == SpSopr1.Nrec)) = tsOk,
+                          SpSopr1.VidSopr = cgDoc_0503, false);
+  if is503
+  {
+    rcPrice.srPrice := SpSopr1.Price;
+    rcPrice.vPrice  := if(SpSopr1.cVal = 0, 0, SpSopr1.vPrice);
+    rcPrice.cVal    := SpSopr1.cVal;
   }
 
   result := rcPrice;
@@ -1161,9 +1122,6 @@ function getRazrezKol(_spOrder: type$SpOrder; _sortOrdFound: boolean): double;
   }
   result:= razrezKol;
 }
-//#endregion
-
-
 
 procedure OneSpOrder_UpdateMC(bNeedUpd : boolean; _spOrder: type$SpOrder);
 {
@@ -1223,7 +1181,7 @@ Function VozvrPrih(cSklOrder_: comp) : boolean; // определяем приход по накладно
   VozvrPrih := false;
 
   if (GetFirst HideTbl where ((cSklOrder_ == HideTbl.cSklOrder)) = tsOk)
-    if ( HideTbl.tip = cgTip_Vozvrat )
+    if ( HideTbl.tip = cgTip_Vozvrat ) //or  HideTbl.tip = 3 АГАТ
       VozvrPrih := True;
 
 }
@@ -1260,8 +1218,6 @@ Procedure RestoreSaldo_byOrders(date_: Date);
     }//_LOOP SpOrder
   }
 }
-
-
 
 //******************************************************************************
 
@@ -1561,8 +1517,13 @@ Function Prepare_Parn(sortOrdFound_: boolean): boolean;
 {
   Prepare_Parn := TRUE;
 
-  if NOT sortOrdFound_
+  //АГАТ Если это расходный ордер по возврату из производства - его нет в SortOrd. Находим для него парный ордер
+//  var is503: boolean = if(getfirst SpSopr where ((SpOrder.cSpSopr == SpSopr.Nrec)) = tsOk,
+//                          SpSopr.VidSopr = 503 and SpOrder.VidOrder = 1, false);
+  if (NOT sortOrdFound_) //and (not is503)
+  {
     Exit;
+  }
 
   //внт.перемещ.
   if (tipSortOrd = 0) OR (tipSortOrd = 2) OR // внтреннее перемещение
@@ -1572,6 +1533,8 @@ Function Prepare_Parn(sortOrdFound_: boolean): boolean;
      (tipSortOrd = 10) OR (tipSortOrd = 11) OR (tipSortOrd = 12) OR (tipSortOrd = 1000) // возврат из УКСа / Акт на комплектование
     if (getfirst SpSopr where ((SpOrder.cSpSopr == SpSopr.Nrec)) = tsOk) // находим парный приход
     {
+      //АГАТ Для актов на пересортицу находим парный ордер подругому, для накл.на возврат из пр-ва добавляем запись в ParnTbl
+      //в остальных случаях стандартно
       case SpSopr.VidSopr of
         630:
         {
@@ -1585,6 +1548,18 @@ Function Prepare_Parn(sortOrdFound_: boolean): boolean;
               InsertSpOrderTmp(SpOrder2.nRec, SpOrder.nRec, SpOrder.rSrPrice, SpOrder.rVPrice, SpOrder.cVal, SpOrder.kol);
           }
         }
+//        503:
+//        {
+//          if GetFirst SpOrder2 where (( SpOrder.cSpSopr == SpOrder2.cSpSopr AND
+//                                     (cgVidOrder_Receipt = SpOrder2.vidOrder) )) = tsOk
+//          {
+//            ClearBuffer(#ParnTbl);
+//            ParnTbl.cSklOrder := SpOrder2.cSklOrder;// приходный
+//            ParnTbl.cRasxOrd  := SpOrder.cSklOrder; // расходный
+//            insert current ParnTbl;
+//            InsertSpOrderTmp(SpOrder2.nRec, SpOrder.nRec, SpOrder.rSrPrice, SpOrder.rVPrice, SpOrder.cVal, SpOrder.kol);
+//          }
+//        }
         else
         {
           if GetFirst SpOrder2 where (( SpOrder.cSpSopr == SpOrder2.cSpSopr AND
@@ -1632,15 +1607,13 @@ Function UpdateParnPrih: boolean;
     }
 
     if NOT WasSelectedMC(SpOrder.cMC)
-      Continue;// к следующей позиции спецификации
+      Continue; // к следующей позиции спецификации
 
     if WasProhibitedMC(SpOrder.cMC)
     {
       WriteForm_SkippedMC(SpOrder.cMC); // -> was_print := TRUE;
-
       OneSpOrder_UpdateMC(False, SpOrder.buffer); //! необходимо т.к. была выбрана, а затем запрещена
-
-      Continue;// к следующей позиции спецификации
+      Continue; // к следующей позиции спецификации
     }
 
     if GetFirst SaveSpOrder where ((SpOrder.nRec == saveSpOrder.cRec)) = tsOk
@@ -1902,7 +1875,6 @@ function dSqlDate(adOper: date): string;
   result := '#date(' + string(Day(adOper)) + ', ' + string(Month(adOper)) + ', ' + string(Year(adOper)) + ')';
 }
 
-
 function createPickTable(_pickConst: word): boolean;
 {
   result := false;
@@ -2039,6 +2011,7 @@ function haveOldSaldoMcRows: boolean;
   result := if(bDsql, haveOldSaldoMcRowsDSQL, haveOldSaldoMcRowsVIP);
 }
 
+//АГАТ
 //------------------------------------------------------------------------------------------------------------
 sql query qParnViewPeresort =
   select
@@ -2094,8 +2067,8 @@ function GetParnView_Peresort(_begDate: date): iResultSet;
 // получаем курсор записей по определенному vidSopr
 function GetParnView(_begDate: date; _vidSopr: word): iResultSet;
 {
-  //Если возврат из производства, то возвращаем
-  if _vidSopr = cgDoc_0503
+  //АГАТ Если акт на пересортицу, то возвращаем парные ордера по акту на пересортицу, иначе - обычный алгоритм
+  if _vidSopr = cgDoc_0630
   {
     result := GetParnView_Peresort(_vidSopr);
     exit;
@@ -2158,517 +2131,11 @@ function GetParnView(_begDate: date; _vidSopr: word): iResultSet;
 #include recalcs3.vpp
 #include recalcs2.vpp
 
-//******************************************************************************
-Function CountOrderOldAlg : boolean;
-{
-  Result := False;
-  var razrezKol: double;
-
-  var firstRashOrd: boolean;  wasOrders    := FALSE; firstRashOrd := TRUE;
-  var sortOrdFound, rashOrdFound: boolean;  sortOrdFound := FALSE; rashOrdFound := FALSE;
-
-  needShowForm := FALSE;
-  nDid := 0; // при печати инкремент
-
-  var doneRash: comp;
-  doneRash := 0; // при проходу по ордерам инкремент
-
-  var dSort: Date;
-  dSort := ZeroDate;
-
-  var divSpOrd, needSaveSrPrice: boolean;
-
-  RestoreSaldo_byOrders(dCurr);
-
-  StartNewVisual(vtRotateVisual, vfTimer + vfBreak + vfConfirm, 'Пересчет цен в расходных ордерах', 1);
-  SetVisualTitle('Пересчет цен');
-
-  DO // ГЛАВНЫЙ ЦИКЛ
-  {
-    if NOT NextVisual
-      {
-        StopVisual('', 0);
-
-        MessageAboutExit_AbortTrans(0, 0);
-
-        if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-          if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-        Exit;
-      }
-
-    //поиск за день сначала сортированных(парных), затем всех остальных расходных
-// вот тут непонятно зачем сначала парные, а потом все остальные
-    sortOrdFound := FALSE;    rashOrdFound := FALSE;
-
-    if dSort <= dCurr
-      if GetFirst SortTbl ordered by index SortTbl01 = tsOk  //dOrd + nOrd + sortNum
-        {
-          sortOrdFound := TRUE;
-          dSort        := SortTbl.dOrd;
-          tipSortOrd   := SortTbl.tip;
-        }
-
-    if sortOrdFound
-      sortOrdFound := (dSort <= dCurr);//для надежности <= , а не =
-
-    //находим нужный ордер
-    if sortOrdFound
-      {
-        if (GetFirst SklOrder where ((SortTbl.cRec == SklOrder.nRec)) <> tsOk)
-          {
-            if ((useTransaction and 8) <> 0)
-            {
-              delete current SortTbl;
-              Continue;
-            }
-            else
-            {
-              StopVisual('', 0);
-
-              MessageAboutExit_AbortTrans(1, SortTbl.cRec);
-
-              if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-                if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-              Exit;
-            }
-          }
-
-        //находим парный приходный ордер для типа внут., для возвратов уже найден и сохранен
-        if (tipSortOrd =  0) OR (tipSortOrd =  2) OR // внтреннее перемещение
-           (tipSortOrd =  1) OR (tipSortOrd =  3) OR // из производства
-           (tipSortOrd =  4) OR (tipSortOrd =  5) OR // из ремонтов
-           (tipSortOrd =  6) OR (tipSortOrd =  7) OR // в УКС
-           (tipSortOrd = 10) OR (tipSortOrd = 11) OR (tipSortOrd = 12) OR (tipSortOrd = 1000) // возврат из УКСа / Акт на комплектование
-          if SklOrder.cSopr <> 0 // находим парный приход
-            if GetFirst SklOrder2 where (( SklOrder.cSopr == SklOrder2.cSopr AND
-                                       (cgVidOrder_Receipt = SklOrder2.vidOrder) )) = tsOk
-              if NOT InsertParnTbl(SklOrder2.nRec, SklOrder.nRec)
-                {
-                  if ((useTransaction and 8) = 0)
-                  {
-                    StopVisual('', 0);
-
-                    MessageAboutExit_AbortTrans(1, SklOrder2.nRec);
-
-                    if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-                      if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-                    Exit;
-                  }
-                }
-
-        delete current SortTbl;
-
-        firstRashOrd := TRUE;
-      }
-    else
-      {
-        if firstRashOrd
-          rashOrdFound := (GetFirst SklOrder = tsOk);
-        else
-          rashOrdFound := (GetNext SklOrder = tsOk);
-        // расходный ордер найден если по ограничению вида учета был найден расходный ордер и дата равна текущей обрабатываемой
-        rashOrdFound := rashOrdFound AND (SklOrder.dOrd = dCurr);
-        // первый расход или нет определяется тем, был ли найден расходный ордер. Если не найден, то первая операция
-        firstRashOrd := (not rashOrdFound);
-      }
-
-    // если не был найден не сортированный ордер на эти ограничения ни sklOrder, то перекидываем вид учета на следующий
-    if (not sortOrdFound) AND (not rashOrdFound)
-    {
-      // !!! выход из главного цикла !!!
-      if (dCurr >= endDate) AND (SkPr = cgVidUchO_UKS)
-        Break;
-
-      if (SkPr = cgVidUchO_Sklad)
-      {
-        SkPr := cgVidUchO_UPL;
-        firstRashOrd := TRUE;
-        Continue;
-      } // производство
-
-      if (SkPr = cgVidUchO_UPL)
-      {
-        SkPr := cgVidUchO_TORO;
-        firstRashOrd := TRUE;
-        Continue;
-      } // ремонты
-
-      if (SkPr = cgVidUchO_TORO)
-      {
-        SkPr := cgVidUchO_UKS;
-        firstRashOrd := TRUE;
-        Continue;
-      } // УКС
-
-      //переход на новую дату !!!
-      dCurr := Add_Day(dCurr, 1);
-
-      //if bdsql
-      //  delete all novisual summKolDayData;
-
-      SetVisualHeader('Пересчет цен в расходных ордерах'#13 + string(dCurr));
-
-      SkPr := cgVidUchO_Sklad;
-
-      firstRashOrd := TRUE;
-
-      RestoreSaldo_byOrders(dCurr);    // восстанавливаем сальдовые по ордерам за день
-
-      SetBounds(#SklOrder);
-
-      delete all novisual SrPricesTbl; // удаляем цены за старый день
-
-      Continue;
-    }
-
-    rashDate := SklOrder.dOrd;
-    rashNOrd := SklOrder.nOrder;
-
-    doneRash++;
-
-    //для пропуска уже обработанных ордеров
-    if rashOrdFound
-      {
-        if GetFirst HideTbl where ((SklOrder.nRec == HideTbl.cSklOrder)) = tsOk
-          Continue; //циклить не должно т.к. идет  GetNext SklOrder
-
-        if StornoOrder(SklOrder.nRec) //это сторно ордер - не меняем цену
-          Continue;
-      }
-
-    //для методики "средние за период в складском учете" пропускать складские ордера
-    if (SklOrder.SP <> cgVidUchO_UPL) AND Oper_Period
-      Continue;
-
-    //---------------------------------------------------------------------
-    //        установка цен в спецификации расходного ордера:
-    firstRec := TRUE;//чтобы напечаталась шапка ордера
-
-    ord_deltaR := ord_deltaV := ord_newVal := 0;
-
-    was_print := FALSE;
-    wasOrders := TRUE;
-    wasDiv_LF := FALSE;
-
-    delete all novisual SpOrderTmp;
-
-    _LOOP SpOrder where ((SklOrder.nRec == SpOrder.cSklOrder)) ordered by index SpOrder14  // cSklOrder + npp
-    {
-      if NOT NextVisual
-      {
-        StopVisual('', 0);
-        MessageAboutExit_AbortTrans(0, 0);
-
-        if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-          if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-        Exit;
-      }
-
-      /// а тут идет охринительный континюе, если выбрана 1 мц, т.к. выбираются все доки, вся спецификация, и потом 100500 раз идет континуе.
-      if NOT WasSelectedMC(SpOrder.cMC)
-        Continue;// к следующей позиции спецификации
-
-      if WasProhibitedMC(SpOrder.cMC)//если были запрещены МЦ
-      {
-        WriteForm_SkippedMC(SpOrder.cMC);// -> was_print := TRUE;
-        OneSpOrder_UpdateMC(False, SpOrder.buffer); //необходимо т.к. была выбрана, а затем запрещена
-        Continue;// к следующей позиции спецификации
-      }
-
-      if GetFirst SaveSpOrder where ((SpOrder.nRec == saveSpOrder.cRec)) = tsOk
-        Continue;
-
-      //--- вычисляем новые цены и количество МЦ в разрезе ---------------
-      if ( ( SpOrder.SP <> cgVidUchO_Sklad) OR ( (NOT oper_LF) AND (SpOrder.SP = cgVidUchO_Sklad)))
-         razrezKol := GetRazrezKol(spOrder.buffer, sortOrdFound); //старые остатки
-
-      if ((NOT oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)) OR (SpOrder.SP <> cgVidUchO_Sklad)) AND
-          (razrezKol < SpOrder.kol) AND
-           (abs(razrezKol - SpOrder.kol) >= GetPresision_forKol)
-        if (vidOtkat <> 3)
-        {
-          if (GetFirst KatMC where ((SpOrder.cMC == KatMC.nRec)) = tsOk)
-            KatMC.Name := '"' + Upcase(KatMC.Name) + '"'+'('+Katmc.barKod+')';
-          else
-            KatMC.Name := if(SpOrder.cMC = 0, '', 'МЦ NRec = '+string(SpOrder.cMC));
-
-          if GetFirst KatPodr where ((SpOrder.ccPodr == KatPodr.nRec))<>tsOk
-            KatPodr.Name := if(SpOrder.ccPodr = 0, '', 'Склад NRec = '+string(SpOrder.ccPodr));
-
-          if GetFirst KatMOL where ((SpOrder.ccMOL == KatMOL.nRec))<>tsOk
-            KatMOL.Name := if(SpOrder.ccMOL = 0, '', 'МОЛ NRec = '+string(SpOrder.ccMOL));
-
-          if GetFirst KatParty where ((SpOrder.cParty == KatParty.nRec))<>tsOk
-            KatParty.Name := if(SpOrder.cParty = 0, '', 'Партия NRec = '+string(SpOrder.cParty));
-
-          ClearBuffer(#SpOrdError);
-
-          SpOrdError.nOrder    := SklOrder.nOrder;
-          SpOrdError.dOrd      := DateToStr(SklOrder.dOrd, 'DD/MM/YYYY');
-          SpOrdError.nRecOrd   := SklOrder.nRec;
-          SpOrdError.nRecMC    := KatMC.nRec;
-          SpOrdError.MCName    := KatMC.Name;
-          SpOrdError.MCBarKod  := KatMC.BarKod;
-          SpOrdError.PodrName  := KatPodr.Name;
-          SpOrdError.MOLName   := KatMOL.Name;
-          SpOrdError.PartyName := KatParty.Name;
-          SpOrdError.SpOrdKol  := SpOrder.Kol;
-          SpOrdError.RazrezKol := RazrezKol;
-
-          insert current SpOrdError;
-
-          KolBad := KolBad +1;
-          if (KolBad = 1)  DateBad := SklOrder.dOrd;
-
-          case vidOtkat of
-          //--------------
-            0: // полный откат (вывалиться)
-              {
-                Message(DateToStr(SklOrder.dOrd, 'DD/MM/YYYY ') + ' количество матценности ' +
-                    KatMC.Name+ '('+KatMC.barKod+')'+ ' в разрезе хранения "'+
-                    if(IsValid(#KatPodr) ,       KatPodr.Name, '')+
-                    if(IsValid(#KatMOL)  , ' - '+KatMOL.Name, '')+
-                    if(IsValid(#KatParty), ' - '+KatParty.Name, '')+
-                    '" меньше ноля ('+string(razrezKol, 0, dlinaDrob)+
-                    ' ' + if(GetFirst KatEd where ((KatMC.cEd == KatEd.nRec)) = tsOk, KatEd.abbr, '')+
-                                  ')...', Warning);
-                Message('...это может привести к ошибочному расчету средних цен.'#13+
-                        'Данные будут возвращены в исходное состояние. '+
-                        'Исправьте ситуацию и перезапустите процесс пересчета.', Warning);
-
-                if (wDefault = 0 )
-                  if (KolBad > 0)
-                    RunFReport(DTS_SpOrderErr, 'Ошибки при пересчете цен', False);
-
-                StopVisual('', 0);
-
-                MessageAboutExit_AbortTrans(0, 0);
-
-                if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-                  if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-                Exit;
-              }
-          //--------------
-            1
-          , 2: //сохранить старое, выдать сообщение
-              {
-                OneSpOrder_UpdateMC(False, SpOrder.buffer); // сохранить непересчитанное
-                // Порой поражает то, как можно в case в котором VidOtkat = 2, писать еще и if,
-                // дабы лишний раз убедиться, что VidOtkat все-таки равен двум.
-                // Исправил много подобных мест, но это решил оставить для наглядности.
-                if VidOtkat = 2 //продолжить пересчет средних цен без данной матценности
-                  { //добавление в "запрещенные" к пересчету
-                    ClearBuffer(#Pick3);
-                    Pick3.wList := 70;      Pick3.cRec := SpOrder.cMC;
-                    insert current Pick3;
-                  }
-                WriteForm_SkippedMC(SpOrder.cMC); // -> was_Print := TRUE
-
-                Prepare_Parn(sortOrdFound);
-
-                Continue; //OneSpOrder_UpdateMC - выше
-              }//1, 2
-          //--------------
-          end;//case
-        }//Количество < 0 AND (VidOtkat <> 3)
-
-      if ((useTransaction and 8) = 0)
-      {
-        //--Расчет новых цен: --------------------------------
-        if oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)
-        {
-          PushPos(#SpOrder);
-          VozvPrih_AddAllVozv; //возвраты
-        }
-
-        Do
-        { //цикл - для Лифо/Фифо, иначе только 1 раз
-          CountSrPrices(newSrPrice, newVPrice, newcVal, divSpOrd, needSaveSrPrice);//получение новых цен
-          if bofplog // ERP-164 - а вдруг есть приход
-            if newSrPrice=0 //ERP-164
-            { fplog('CountOrderOldAlg newSrPrice=0, SpOrder.Nrec= '+string(SpOrder.Nrec,0,0)+', '+DateToStr(SpOrder.DOrd,'DD.MM.YYYY')  );
-              if getFirst summKolDayData where (( spOrder.SP   == summKolDayData.SP
-                              AND spOrder.cMc    == summKolDayData.cMC
-                              AND spOrder.ccPodr == summKolDayData.cPodr
-                              AND spOrder.ccMol  == summKolDayData.cMOL
-                              AND spOrder.cParty == summKolDayData.cParty)) = tsOk
-                if summKolDayData.rsrPrice>0
-                { newSrPrice := summKolDayData.rsrPrice ;
-                  newVPrice  := summKolDayData.rvPrice  ;
-                  newcVal    := summKolDayData.cVal    ;
-                }
-            }
-          if (needSaveSrPrice)
-            UpdateSrPricesTbl(SpOrder.NRec, sortOrdFound, SpOrder.SP, SpOrder.dOrd, SpOrder.cMC, SpOrder.ccPodr, SpOrder.ccMOL, SpOrder.cParty,
-                              newSrPrice, newVPrice, newcVal); //сохр.новых цен - быстродействие
-
-          var boFlagChange : boolean;
-          boFlagChange := (SpOrder.rSrPrice <> newSrPrice) or (SpOrder.rVPrice <> newVPrice) or (SpOrder.cVal <> newcVal);
-          if (Abs(SpOrder.rSrPrice - newSrPrice) < dSum) and (Abs(SpOrder.rVPrice - newVPrice) < dSum)
-            boFlagChange := False;
-
-          if (boFlagChange)
-          {
-            if GetFirst PickOrd where (( 7000        == PickOrd.wList and
-                                         SpOrder.cMC == PickOrd.cRec )) <> tsOk
-            {
-              ClearBuffer(#PickOrd);
-              PickOrd.wList := 7000;
-              PickOrd.cRec  := SpOrder.cMC;
-              insert current PickOrd;
-            }
-
-            SpOrder.rSrPrice := newSrPrice; //т.к. RoundxxxOrd меняет параметр newSrPrice
-            SpOrder.rVPrice  := newVPrice;
-          }
-
-          deltaR := deltaV := 0;
-
-          CountDeltas(SpOrder.srPrice, oSaldo_K.RoundRubOrd(newSrPrice, SpOrder.kol),  //old, new
-                      SpOrder.vPrice,  oSaldo_K.RoundValOrd(newVPrice,  SpOrder.kol),
-                      SpOrder.cVal,    newcVal);
-
-          //установка новых учетных цен и обновление спецификации расходного:
-          oldVPrice := SpOrder.vPrice;//сохраняем для печати
-          oldV      := SpOrder.cVal;  //сохраняем для печати
-
-          SpOrder.srPrice := oSaldo_K.RoundRubOrd(SpOrder.rSrPrice, SpOrder.kol);
-          SpOrder.vPrice  := oSaldo_K.RoundValOrd(SpOrder.rVPrice, SpOrder.kol);
-          SpOrder.cVal    := newcVal;
-
-          OneSpOrder_UpdateMC(boFlagChange, SpOrder.buffer);
-
-          if (not oper_LF) and ((useTransaction and 4) <> 0)
-          {
-            if ( boFlagChange )
-              if GetFirst SpSopr1 where ((SpOrder.cSpSopr == SpSopr1.nRec)) = tsOk
-                  CalcSrPriceInSpSopr(SpOrder.cSpSopr);
-          }
-
-          Prepare_Parn(sortOrdFound);
-
-          if oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)
-            VozvPrih_AddRashod; //для возвратов
-
-          //печать
-          PrintSpOrderInfo; //использует SpOrder.*, oldV, deltaR, deltaV, firstRec, nDid, was_print
-
-          if divSpOrd  //переходим на добавленную спецификацию
-            {
-              var cSp_: comp;  cSp_ := SpOrder.nRec;
-              if GetFirst SpOrder where ((cSp_ == SpOrder.cSpOrder)) <>tsOk
-                divSpOrd := FALSE;
-            }
-
-          wasDiv_LF := (wasDiv_LF OR divSpOrd);
-
-        }
-        While (oper_LF AND divSpOrd); //обрабатываем добавленную спец. если было разбиение
-
-        if oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)
-        {
-          PopPos(#SpOrder);
-          VozvPrih_HandleVozv; //для дальнейшей обработки возвратов
-        }
-      }
-      else
-      {
-        if WasSelectedMC(SpOrder.cMC)
-        {
-          OneSpOrder_UpdateMC(False, SpOrder.buffer);
-          Prepare_Parn(sortOrdFound);
-        }
-
-        if GetFirst ParnTbl where (( SklOrder.nrec == ParnTbl.cRasxOrd )) = tsOk
-          if GetFirst SklOrderUpd where ((ParnTbl.cSklOrder == SklOrderUpd.nRec)) = tsOk
-            _Loop SpOrderUpd where ((SklOrderUpd.nRec == SpOrderUpd.cSklOrder))
-           {
-             if WasSelectedMC(SpOrderUpd.cMC)
-               setRazrezSummDsql(SpOrderUpd.buffer);
-           }
-
-        delete all novisual ParnTbl;
-      }
-    }
-
-    if ((useTransaction and 8) = 0)
-    {
-      if oper_LF AND wasDiv_LF //восстанавливаем SpOrder.npp для добавленных спецификаций
-        While GetFirst SpOrder where ((SklOrder.nRec == SpOrder.cSklOrder AND
-                                            30000 <<= SpOrder.npp)) = tsOk
-        {
-          SpOrder.npp := SpOrder.npp-30000;
-          update current SpOrder;
-        }
-
-      UpdateSoprHozs(ord_deltaR, ord_deltaV, ord_newVal);
-
-      //-----------------------------------------------------------------------
-      // корректировка парных приходных ордеров (внт., возвраты, произв.):
-      PushPos(#SklOrder);
-
-      While GetFirst ParnTbl = tsOk DO
-      {
-        if (GetFirst SklOrder where ((ParnTbl.cSklOrder == SklOrder.nRec)) <> tsOk)
-        {
-          PopPos(#SklOrder);
-          StopVisual('', 0);//main
-          MessageAboutExit_AbortTrans(1, ParnTbl.cSklOrder);
-
-          if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-            if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-          Exit;
-        }
-
-        //переустановить цены в спецификациях, а также - в soprhoz`е
-        if NOT UpdateParnPrih
-        {
-          PopPos(#SklOrder);
-
-          StopVisual('', 0);//main
-
-          MessageAboutExit_AbortTrans(3, 0);
-
-          if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-            if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-          Exit;
-        }
-
-        if GetFirst ParnTbl where (( SklOrder.nrec == ParnTbl.cRasxOrd )) = tsOk
-          if GetFirst SklOrderUpd where ((ParnTbl.cSklOrder == SklOrderUpd.nRec)) = tsOk
-            _Loop SpOrderUpd where ((SklOrderUpd.nRec == SpOrderUpd.cSklOrder))
-            {
-              if WasSelectedMC(SpOrderUpd.cMC)
-                setRazrezSummDsql(SpOrderUpd.buffer);
-            }
-
-        delete current ParnTbl;
-      }
-
-      PopPos(#SklOrder);
-    }
-
-    delete all novisual SpOrderTmp;//нужно хотя и удаляется в цикле в UpdateParnPrih
-  }
-  While (TRUE); //переход к следующему ордеру
-
-  Result := True;
-}
-
 //== == == == == сортировка возвратов == == == == == == == == == == == == == == == == == == ==
 Procedure SortVozvr(__VidSopr: word);
-var
-  lCount, ii: longint;
-  cRec_ : comp;
 {
-  ii := lCount := 0;
+  var lCount, ii: longint = 0;
+  var cRec_ : comp = 0;
 
   StartNewVisual(vtRotateVisual, 0, 'Подсчет итераций', 1);
 
@@ -2817,7 +2284,7 @@ function GetCursorSklOder(_SkPr : word; _begDate : date): iResultSet;
 
 //************************************
 Function DoRecalc : boolean;
-         {
+{
   Result := False;
   var razrezKol: double;
 
@@ -2833,381 +2300,375 @@ Function DoRecalc : boolean;
   var dSort: Date; dSort := ZeroDate;
   var divSpOrd, needSaveSrPrice: boolean;
 
-        if (GetFirst SortTbl where ((SklOrder.nRec == SortTbl.cRec)) <> tsOk)
-          rashOrdFound := True;
-        else
-        {
-          sortOrdFound := TRUE;
-          dSort        := SortTbl.dOrd;
-          tipSortOrd   := SortTbl.tip;
+  if (GetFirst SortTbl where ((SklOrder.nRec == SortTbl.cRec)) <> tsOk)
+    rashOrdFound := True;
+  else
+  {
+    sortOrdFound := TRUE;
+    dSort        := SortTbl.dOrd;
+    tipSortOrd   := SortTbl.tip;
 
-          //находим парный приходный ордер для типа внут., для возвратов уже найден и сохранен
-          if (tipSortOrd =  0) OR (tipSortOrd =  2) OR // внтреннее перемещение
-             (tipSortOrd =  1) OR (tipSortOrd =  3) OR // из производства
-             (tipSortOrd =  4) OR (tipSortOrd =  5) OR // из ремонтов
-             (tipSortOrd =  6) OR (tipSortOrd =  7) OR // в УКС
-             (tipSortOrd = 10) OR (tipSortOrd = 11) OR (tipSortOrd = 12) OR (tipSortOrd = 1000) // возврат из УКСа / Акт на комплектование
-            if SklOrder.cSopr <> 0 // находим парный приход
-              if GetFirst SklOrder2 where (( SklOrder.cSopr == SklOrder2.cSopr AND
-                                         (cgVidOrder_Receipt = SklOrder2.vidOrder) )) = tsOk
-                if NOT InsertParnTbl(SklOrder2.nRec, SklOrder.nRec)
-                  {
-                    if ((useTransaction and 8) = 0)
-                    {
-                      StopVisual('', 0);
+    //находим парный приходный ордер для типа внут., для возвратов уже найден и сохранен
+    if (tipSortOrd =  0) OR (tipSortOrd =  2) OR // внтреннее перемещение
+       (tipSortOrd =  1) OR (tipSortOrd =  3) OR // из производства
+       (tipSortOrd =  4) OR (tipSortOrd =  5) OR // из ремонтов
+       (tipSortOrd =  6) OR (tipSortOrd =  7) OR // в УКС
+       (tipSortOrd = 10) OR (tipSortOrd = 11) OR (tipSortOrd = 12) OR (tipSortOrd = 1000) // возврат из УКСа / Акт на комплектование
+      if SklOrder.cSopr <> 0 // находим парный приход
+        if GetFirst SklOrder2 where (( SklOrder.cSopr == SklOrder2.cSopr AND
+                                   (cgVidOrder_Receipt = SklOrder2.vidOrder) )) = tsOk
+          if NOT InsertParnTbl(SklOrder2.nRec, SklOrder.nRec)
+            {
+              if ((useTransaction and 8) = 0)
+              {
+                StopVisual('', 0);
 
-                  MessageAboutExit_AbortTrans(1, SklOrder2.nRec);
+            MessageAboutExit_AbortTrans(1, SklOrder2.nRec);
 
-                      if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-                        if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+                if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
+                  if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
 
-                      Exit;
-                    }
-                  }
+                Exit;
+              }
+            }
 
-          delete current SortTbl;
-        }
+    delete current SortTbl;
+  }
 
-      rashDate := SklOrder.dOrd;
-      rashNOrd := SklOrder.nOrder;
+  rashDate := SklOrder.dOrd;
+  rashNOrd := SklOrder.nOrder;
 
-      doneRash++;
+  doneRash++;
 
-      //для пропуска уже обработанных ордеров
-      if rashOrdFound
-        {
-          if GetFirst HideTbl where ((SklOrder.nRec == HideTbl.cSklOrder)) = tsOk
-      {
-        Result := True;
-        Exit; //циклить не должно т.к. идет  GetNext SklOrder
-      }
-
-          if StornoOrder(SklOrder.nRec) //это сторно ордер - не меняем цену
-      {
-        Result := True;
-        Exit;
-        }
+  //для пропуска уже обработанных ордеров
+  if rashOrdFound
+  {
+    if GetFirst HideTbl where ((SklOrder.nRec == HideTbl.cSklOrder)) = tsOk
+    {
+      Result := True;
+      Exit; //циклить не должно т.к. идет  GetNext SklOrder
     }
 
-      //для методики "средние за период в складском учете" пропускать складские ордера
-      if (SklOrder.SP <> cgVidUchO_UPL) AND Oper_Period
+    if StornoOrder(SklOrder.nRec) //это сторно ордер - не меняем цену
+    {
+      Result := True;
+      Exit;
+    }
+  }
+
+  //для методики "средние за период в складском учете" пропускать складские ордера
+  if (SklOrder.SP <> cgVidUchO_UPL) AND Oper_Period
   {
     Result := True;
     Exit;
   }
 
-      //---------------------------------------------------------------------
-      //        установка цен в спецификации расходного ордера:
-      firstRec := TRUE;//чтобы напечаталась шапка ордера
+  //---------------------------------------------------------------------
+  //        установка цен в спецификации расходного ордера:
+  firstRec := TRUE;//чтобы напечаталась шапка ордера
 
-      ord_deltaR := ord_deltaV := ord_newVal := 0;
+  ord_deltaR := ord_deltaV := ord_newVal := 0;
 
-      was_print := FALSE;
-      wasOrders := TRUE;
-      wasDiv_LF := FALSE;
+  was_print := FALSE;
+  wasOrders := TRUE;
+  wasDiv_LF := FALSE;
 
-      delete all novisual SpOrderTmp;
+  delete all novisual SpOrderTmp;
 
-      _LOOP SpOrder where ((SklOrder.nRec == SpOrder.cSklOrder)) ordered by index SpOrder14  // cSklOrder + npp
-      {
-        if NOT NextVisual
-        {
-          StopVisual('', 0);
+  _LOOP SpOrder where ((SklOrder.nRec == SpOrder.cSklOrder)) ordered by index SpOrder14  // cSklOrder + npp
+  {
+    if NOT NextVisual
+    {
+      StopVisual('', 0);
       MessageAboutExit_AbortTrans(0, 0);
 
-          if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-            if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+      if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
+        if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
 
-          Exit;
-        }
+      Exit;
+    }
 
-        /// а тут идет охринительный континюе, если выбрана 1 мц, т.к. выбираются все доки, вся спецификация, и потом 100500 раз идет континуе.
-        if NOT WasSelectedMC(SpOrder.cMC)
-          Continue;// к следующей позиции спецификации
+    /// а тут идет охринительный континюе, если выбрана 1 мц, т.к. выбираются все доки, вся спецификация, и потом 100500 раз идет континуе.
+    if NOT WasSelectedMC(SpOrder.cMC)
+      Continue;// к следующей позиции спецификации
 
-        if WasProhibitedMC(SpOrder.cMC)//если были запрещены МЦ
-        {
-          WriteForm_SkippedMC(SpOrder.cMC);// -> was_print := TRUE;
-          OneSpOrder_UpdateMC(False, SpOrder.buffer); //необходимо т.к. была выбрана, а затем запрещена
-          Continue;// к следующей позиции спецификации
-        }
+    if WasProhibitedMC(SpOrder.cMC)//если были запрещены МЦ
+    {
+      WriteForm_SkippedMC(SpOrder.cMC);// -> was_print := TRUE;
+      OneSpOrder_UpdateMC(False, SpOrder.buffer); //необходимо т.к. была выбрана, а затем запрещена
+      Continue;// к следующей позиции спецификации
+    }
 
-        if GetFirst SaveSpOrder where ((SpOrder.nRec == saveSpOrder.cRec)) = tsOk
-          Continue;
+    if GetFirst SaveSpOrder where ((SpOrder.nRec == saveSpOrder.cRec)) = tsOk
+      Continue;
 
-        //--- вычисляем новые цены и количество МЦ в разрезе ---------------
-        if ( ( SpOrder.SP <> cgVidUchO_Sklad) OR ( (NOT oper_LF) AND (SpOrder.SP = cgVidUchO_Sklad)))
-           razrezKol := GetRazrezKol(spOrder.buffer, sortOrdFound); //старые остатки
+    //--- вычисляем новые цены и количество МЦ в разрезе ---------------
+    if ( ( SpOrder.SP <> cgVidUchO_Sklad) OR ( (NOT oper_LF) AND (SpOrder.SP = cgVidUchO_Sklad)))
+       razrezKol := GetRazrezKol(spOrder.buffer, sortOrdFound); //старые остатки
 
-        if ((NOT oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)) OR (SpOrder.SP <> cgVidUchO_Sklad)) AND
-            (razrezKol < SpOrder.kol) AND
-             (abs(razrezKol - SpOrder.kol) >= GetPresision_forKol)
-          if (vidOtkat <> 3)
-          {
-            if (GetFirst KatMC where ((SpOrder.cMC == KatMC.nRec)) = tsOk)
-              KatMC.Name := '"' + Upcase(KatMC.Name) + '"'+'('+Katmc.barKod+')';
-            else
-              KatMC.Name := if(SpOrder.cMC = 0, '', 'МЦ NRec = '+string(SpOrder.cMC));
-
-            if GetFirst KatPodr where ((SpOrder.ccPodr == KatPodr.nRec))<>tsOk
-              KatPodr.Name := if(SpOrder.ccPodr = 0, '', 'Склад NRec = '+string(SpOrder.ccPodr));
-
-            if GetFirst KatMOL where ((SpOrder.ccMOL == KatMOL.nRec))<>tsOk
-              KatMOL.Name := if(SpOrder.ccMOL = 0, '', 'МОЛ NRec = '+string(SpOrder.ccMOL));
-
-            if GetFirst KatParty where ((SpOrder.cParty == KatParty.nRec))<>tsOk
-              KatParty.Name := if(SpOrder.cParty = 0, '', 'Партия NRec = '+string(SpOrder.cParty));
-
-            ClearBuffer(#SpOrdError);
-
-            SpOrdError.nOrder    := SklOrder.nOrder;
-            SpOrdError.dOrd      := DateToStr(SklOrder.dOrd, 'DD/MM/YYYY');
-            SpOrdError.nRecOrd   := SklOrder.nRec;
-            SpOrdError.nRecMC    := KatMC.nRec;
-            SpOrdError.MCName    := KatMC.Name;
-            SpOrdError.MCBarKod  := KatMC.BarKod;
-            SpOrdError.PodrName  := KatPodr.Name;
-            SpOrdError.MOLName   := KatMOL.Name;
-            SpOrdError.PartyName := KatParty.Name;
-            SpOrdError.SpOrdKol  := SpOrder.Kol;
-            SpOrdError.RazrezKol := RazrezKol;
-
-            insert current SpOrdError;
-
-            KolBad := KolBad +1;
-            if (KolBad = 1)  DateBad := SklOrder.dOrd;
-
-            case vidOtkat of
-            //--------------
-              0: // полный откат (вывалиться)
-                {
-                  Message(DateToStr(SklOrder.dOrd, 'DD/MM/YYYY ') + ' количество матценности ' +
-                      KatMC.Name+ '('+KatMC.barKod+')'+ ' в разрезе хранения "'+
-                      if(IsValid(#KatPodr) ,       KatPodr.Name, '')+
-                      if(IsValid(#KatMOL)  , ' - '+KatMOL.Name, '')+
-                      if(IsValid(#KatParty), ' - '+KatParty.Name, '')+
-                      '" меньше ноля ('+string(razrezKol, 0, dlinaDrob)+
-                      ' ' + if(GetFirst KatEd where ((KatMC.cEd == KatEd.nRec)) = tsOk, KatEd.abbr, '')+
-                                    ')...', Warning);
-                  Message('...это может привести к ошибочному расчету средних цен.'#13+
-                          'Данные будут возвращены в исходное состояние. '+
-                          'Исправьте ситуацию и перезапустите процесс пересчета.', Warning);
-
-                  if (wDefault = 0 )
-                    if (KolBad > 0)
-                      RunFReport(DTS_SpOrderErr, 'Ошибки при пересчете цен', False);
-
-                  StopVisual('', 0);
-
-              MessageAboutExit_AbortTrans(0, 0);
-
-                  if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-                    if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-                  Exit;
-                }
-            //--------------
-              1
-            , 2: //сохранить старое, выдать сообщение
-                {
-                  OneSpOrder_UpdateMC(False, SpOrder.buffer); // сохранить непересчитанное
-                  if VidOtkat = 2 //продолжить пересчет средних цен без данной матценности
-                  { //добавление в "запрещенные" к пересчету
-                    ClearBuffer(#Pick3);
-                    Pick3.wList := 70;      Pick3.cRec := SpOrder.cMC;
-                    insert current Pick3;
-                  }
-
-                  WriteForm_SkippedMC(SpOrder.cMC); // -> was_Print := TRUE
-
-                  Prepare_Parn(sortOrdFound);
-
-                  Continue; //OneSpOrder_UpdateMC - выше
-                }//1, 2
-            //--------------
-            end;//case
-          }//Количество < 0 AND (VidOtkat <> 3)
-
-        if ((useTransaction and 8) = 0)
-        {
-          //--Расчет новых цен: --------------------------------
-          if oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)
-          {
-            PushPos(#SpOrder);
-            VozvPrih_AddAllVozv; //возвраты
-          }
-
-          Do
-          { //цикл - для Лифо/Фифо, иначе только 1 раз
-            CountSrPrices(newSrPrice, newVPrice, newcVal, divSpOrd, needSaveSrPrice);//получение новых цен
-            if bofplog //ERP-164 - а вдруг есть приход
-              if newSrPrice=0
-              { fplog('DoRecalc newSrPrice=0, SpOrder.Nrec= '+string(SpOrder.Nrec,0,0)+', '+DateToStr(SpOrder.DOrd,'DD.MM.YYYY')  );
-                if getFirst summKolDayData where ((spOrder.SP   == summKolDayData.SP
-                                AND spOrder.cMc    == summKolDayData.cMC
-                                AND spOrder.ccPodr == summKolDayData.cPodr
-                                AND spOrder.ccMol  == summKolDayData.cMOL
-                                AND spOrder.cParty == summKolDayData.cParty)) = tsOk
-                  if summKolDayData.rsrPrice>0
-                  { newSrPrice := summKolDayData.rsrPrice ;
-                    newVPrice  := summKolDayData.rvPrice  ;
-                    newcVal    := summKolDayData.cVal    ;
-                    //needSaveSrPrice:=true;
-                  }
-              }
-            if (needSaveSrPrice)
-              UpdateSrPricesTbl(SpOrder.NRec, sortOrdFound, SpOrder.SP, SpOrder.dOrd, SpOrder.cMC, SpOrder.ccPodr, SpOrder.ccMOL, SpOrder.cParty,
-                                newSrPrice, newVPrice, newcVal); //сохр.новых цен - быстродействие
-
-            var boFlagChange : boolean;
-            boFlagChange := (SpOrder.rSrPrice <> newSrPrice) or (SpOrder.rVPrice <> newVPrice) or (SpOrder.cVal <> newcVal);
-            if (Abs(SpOrder.rSrPrice - newSrPrice) < dSum) and (Abs(SpOrder.rVPrice - newVPrice) < dSum)
-              boFlagChange := False;
-
-            if (boFlagChange)
-            {
-              if GetFirst PickOrd where (( 7000        == PickOrd.wList and
-                                           SpOrder.cMC == PickOrd.cRec )) <> tsOk
-              {
-                ClearBuffer(#PickOrd);
-                PickOrd.wList := 7000;
-                PickOrd.cRec  := SpOrder.cMC;
-                insert current PickOrd;
-              }
-
-              SpOrder.rSrPrice := newSrPrice; //т.к. RoundxxxOrd меняет параметр newSrPrice
-              SpOrder.rVPrice  := newVPrice;
-            }
-
-            deltaR := deltaV := 0;
-
-            CountDeltas(SpOrder.srPrice, oSaldo_K.RoundRubOrd(newSrPrice, SpOrder.kol),  //old, new
-                        SpOrder.vPrice,  oSaldo_K.RoundValOrd(newVPrice,  SpOrder.kol),
-                        SpOrder.cVal,    newcVal);
-
-            //установка новых учетных цен и обновление спецификации расходного:
-            oldVPrice := SpOrder.vPrice;//сохраняем для печати
-            oldV      := SpOrder.cVal;  //сохраняем для печати
-
-            SpOrder.srPrice := oSaldo_K.RoundRubOrd(SpOrder.rSrPrice, SpOrder.kol);
-            SpOrder.vPrice  := oSaldo_K.RoundValOrd(SpOrder.rVPrice, SpOrder.kol);
-            SpOrder.cVal    := newcVal;
-
-            OneSpOrder_UpdateMC(boFlagChange, SpOrder.buffer);
-
-            if (not oper_LF) and ((useTransaction and 4) <> 0)
-            {
-              if ( boFlagChange )
-                if GetFirst SpSopr1 where ((SpOrder.cSpSopr == SpSopr1.nRec)) = tsOk
-                    CalcSrPriceInSpSopr(SpOrder.cSpSopr);
-            }
-
-            Prepare_Parn(sortOrdFound);
-
-            if oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)
-              VozvPrih_AddRashod; //для возвратов
-
-            //печать
-            PrintSpOrderInfo; //использует SpOrder.*, oldV, deltaR, deltaV, firstRec, nDid, was_print
-
-            if divSpOrd  //переходим на добавленную спецификацию
-              {
-                var cSp_: comp;  cSp_ := SpOrder.nRec;
-                if GetFirst SpOrder where ((cSp_ == SpOrder.cSpOrder)) <>tsOk
-                  divSpOrd := FALSE;
-              }
-
-            wasDiv_LF := (wasDiv_LF OR divSpOrd);
-
-          }
-          While (oper_LF AND divSpOrd); //обрабатываем добавленную спец. если было разбиение
-
-          if oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)
-          {
-            PopPos(#SpOrder);
-            VozvPrih_HandleVozv; //для дальнейшей обработки возвратов
-          }
-        }
-        else
-        {
-          if WasSelectedMC(SpOrder.cMC)
-          {
-            OneSpOrder_UpdateMC(False, SpOrder.buffer);
-            Prepare_Parn(sortOrdFound);
-          }
-
-          if GetFirst ParnTbl where (( SklOrder.nrec == ParnTbl.cRasxOrd )) = tsOk
-            if GetFirst SklOrderUpd where ((ParnTbl.cSklOrder == SklOrderUpd.nRec)) = tsOk
-              _Loop SpOrderUpd where ((SklOrderUpd.nRec == SpOrderUpd.cSklOrder))
-             {
-               if WasSelectedMC(SpOrderUpd.cMC)
-                 setRazrezSummDsql(SpOrderUpd.buffer);
-             }
-
-          delete all novisual ParnTbl;
-        }
-      }
-
-      if ((useTransaction and 8) = 0)
+    if ((NOT oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)) OR (SpOrder.SP <> cgVidUchO_Sklad)) AND
+        (razrezKol < SpOrder.kol) AND
+         (abs(razrezKol - SpOrder.kol) >= GetPresision_forKol)
+      if (vidOtkat <> 3)
       {
-        if oper_LF AND wasDiv_LF //восстанавливаем SpOrder.npp для добавленных спецификаций
-          While GetFirst SpOrder where ((SklOrder.nRec == SpOrder.cSklOrder AND
-                                              30000 <<= SpOrder.npp)) = tsOk
-          {
-            SpOrder.npp := SpOrder.npp-30000;
-            update current SpOrder;
-          }
+        if (GetFirst KatMC where ((SpOrder.cMC == KatMC.nRec)) = tsOk)
+          KatMC.Name := '"' + Upcase(KatMC.Name) + '"'+'('+Katmc.barKod+')';
+        else
+          KatMC.Name := if(SpOrder.cMC = 0, '', 'МЦ NRec = '+string(SpOrder.cMC));
 
-        UpdateSoprHozs(ord_deltaR, ord_deltaV, ord_newVal);
+        if GetFirst KatPodr where ((SpOrder.ccPodr == KatPodr.nRec))<>tsOk
+          KatPodr.Name := if(SpOrder.ccPodr = 0, '', 'Склад NRec = '+string(SpOrder.ccPodr));
 
-        //-----------------------------------------------------------------------
-        // корректировка парных приходных ордеров (внт., возвраты, произв.):
-        PushPos(#SklOrder);
+        if GetFirst KatMOL where ((SpOrder.ccMOL == KatMOL.nRec))<>tsOk
+          KatMOL.Name := if(SpOrder.ccMOL = 0, '', 'МОЛ NRec = '+string(SpOrder.ccMOL));
 
-        While GetFirst ParnTbl = tsOk DO
-        {
-          if (GetFirst SklOrder where ((ParnTbl.cSklOrder == SklOrder.nRec)) <> tsOk)
-          {
-            PopPos(#SklOrder);
-            StopVisual('', 0);//main
-        MessageAboutExit_AbortTrans(1, ParnTbl.cSklOrder);
+        if GetFirst KatParty where ((SpOrder.cParty == KatParty.nRec))<>tsOk
+          KatParty.Name := if(SpOrder.cParty = 0, '', 'Партия NRec = '+string(SpOrder.cParty));
 
-            if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-              if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+        ClearBuffer(#SpOrdError);
 
-            Exit;
-          }
+        SpOrdError.nOrder    := SklOrder.nOrder;
+        SpOrdError.dOrd      := DateToStr(SklOrder.dOrd, 'DD/MM/YYYY');
+        SpOrdError.nRecOrd   := SklOrder.nRec;
+        SpOrdError.nRecMC    := KatMC.nRec;
+        SpOrdError.MCName    := KatMC.Name;
+        SpOrdError.MCBarKod  := KatMC.BarKod;
+        SpOrdError.PodrName  := KatPodr.Name;
+        SpOrdError.MOLName   := KatMOL.Name;
+        SpOrdError.PartyName := KatParty.Name;
+        SpOrdError.SpOrdKol  := SpOrder.Kol;
+        SpOrdError.RazrezKol := RazrezKol;
 
-          //переустановить цены в спецификациях, а также - в soprhoz`е
-          if NOT UpdateParnPrih
-          {
-            PopPos(#SklOrder);
+        insert current SpOrdError;
 
-            StopVisual('', 0);//main
+        KolBad := KolBad +1;
+        if (KolBad = 1)  DateBad := SklOrder.dOrd;
 
-        MessageAboutExit_AbortTrans(3, 0);
+        case vidOtkat of
+        //--------------
+          0: // полный откат (вывалиться)
+            {
+              Message(DateToStr(SklOrder.dOrd, 'DD/MM/YYYY ') + ' количество матценности ' +
+                  KatMC.Name+ '('+KatMC.barKod+')'+ ' в разрезе хранения "'+
+                  if(IsValid(#KatPodr) ,       KatPodr.Name, '')+
+                  if(IsValid(#KatMOL)  , ' - '+KatMOL.Name, '')+
+                  if(IsValid(#KatParty), ' - '+KatParty.Name, '')+
+                  '" меньше ноля ('+string(razrezKol, 0, dlinaDrob)+
+                  ' ' + if(GetFirst KatEd where ((KatMC.cEd == KatEd.nRec)) = tsOk, KatEd.abbr, '')+
+                                ')...', Warning);
+              Message('...это может привести к ошибочному расчету средних цен.'#13+
+                      'Данные будут возвращены в исходное состояние. '+
+                      'Исправьте ситуацию и перезапустите процесс пересчета.', Warning);
 
-            if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-              if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+              if (wDefault = 0 )
+                if (KolBad > 0)
+                  RunFReport(DTS_SpOrderErr, 'Ошибки при пересчете цен', False);
 
-            Exit;
-          }
+              StopVisual('', 0);
 
-          if GetFirst ParnTbl where (( SklOrder.nrec == ParnTbl.cRasxOrd )) = tsOk
-            if GetFirst SklOrderUpd where ((ParnTbl.cSklOrder == SklOrderUpd.nRec)) = tsOk
-              _Loop SpOrderUpd where ((SklOrderUpd.nRec == SpOrderUpd.cSklOrder))
-              {
-                if WasSelectedMC(SpOrderUpd.cMC)
-                  setRazrezSummDsql(SpOrderUpd.buffer);
+          MessageAboutExit_AbortTrans(0, 0);
+
+              if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
+                if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+
+              Exit;
+            }
+        //--------------
+          1
+        , 2: //сохранить старое, выдать сообщение
+            {
+              OneSpOrder_UpdateMC(False, SpOrder.buffer); // сохранить непересчитанное
+              if VidOtkat = 2 //продолжить пересчет средних цен без данной матценности
+              { //добавление в "запрещенные" к пересчету
+                ClearBuffer(#Pick3);
+                Pick3.wList := 70;      Pick3.cRec := SpOrder.cMC;
+                insert current Pick3;
               }
 
-          delete current ParnTbl;
-        }
+              WriteForm_SkippedMC(SpOrder.cMC); // -> was_Print := TRUE
 
-        PopPos(#SklOrder);
+              Prepare_Parn(sortOrdFound);
+
+              Continue; //OneSpOrder_UpdateMC - выше
+            }//1, 2
+        //--------------
+        end;//case
+      }//Количество < 0 AND (VidOtkat <> 3)
+
+    if ((useTransaction and 8) = 0)
+    {
+      //--Расчет новых цен: --------------------------------
+      if oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)
+      {
+        PushPos(#SpOrder);
+        VozvPrih_AddAllVozv; //возвраты
       }
 
-      delete all novisual SpOrderTmp;//нужно хотя и удаляется в цикле в UpdateParnPrih
+      Do
+      { //цикл - для Лифо/Фифо, иначе только 1 раз
+        CountSrPrices(newSrPrice, newVPrice, newcVal, divSpOrd, needSaveSrPrice);//получение новых цен
+        if bofplog //ERP-164 - а вдруг есть приход
+          if newSrPrice=0
+          { fplog('DoRecalc newSrPrice=0, SpOrder.Nrec= '+string(SpOrder.Nrec,0,0)+', '+DateToStr(SpOrder.DOrd,'DD.MM.YYYY')  );
+            if getFirst summKolDayData where ((spOrder.SP   == summKolDayData.SP
+                            AND spOrder.cMc    == summKolDayData.cMC
+                            AND spOrder.ccPodr == summKolDayData.cPodr
+                            AND spOrder.ccMol  == summKolDayData.cMOL
+                            AND spOrder.cParty == summKolDayData.cParty)) = tsOk
+              if summKolDayData.rsrPrice>0
+              { newSrPrice := summKolDayData.rsrPrice ;
+                newVPrice  := summKolDayData.rvPrice  ;
+                newcVal    := summKolDayData.cVal    ;
+                //needSaveSrPrice:=true;
+              }
+          }
+        if (needSaveSrPrice)
+          UpdateSrPricesTbl(SpOrder.NRec, sortOrdFound, SpOrder.SP, SpOrder.dOrd, SpOrder.cMC, SpOrder.ccPodr, SpOrder.ccMOL, SpOrder.cParty,
+                            newSrPrice, newVPrice, newcVal); //сохр.новых цен - быстродействие
+
+        var boFlagChange : boolean;
+        boFlagChange := (SpOrder.rSrPrice <> newSrPrice) or (SpOrder.rVPrice <> newVPrice) or (SpOrder.cVal <> newcVal);
+        if (Abs(SpOrder.rSrPrice - newSrPrice) < dSum) and (Abs(SpOrder.rVPrice - newVPrice) < dSum)
+          boFlagChange := False;
+
+        if (boFlagChange)
+        {
+          if GetFirst PickOrd where (( 7000        == PickOrd.wList and
+                                       SpOrder.cMC == PickOrd.cRec )) <> tsOk
+          {
+            ClearBuffer(#PickOrd);
+            PickOrd.wList := 7000;
+            PickOrd.cRec  := SpOrder.cMC;
+            insert current PickOrd;
+          }
+
+          SpOrder.rSrPrice := newSrPrice; //т.к. RoundxxxOrd меняет параметр newSrPrice
+          SpOrder.rVPrice  := newVPrice;
+        }
+
+        deltaR := deltaV := 0;
+
+        CountDeltas(SpOrder.srPrice, oSaldo_K.RoundRubOrd(newSrPrice, SpOrder.kol),  //old, new
+                    SpOrder.vPrice,  oSaldo_K.RoundValOrd(newVPrice,  SpOrder.kol),
+                    SpOrder.cVal,    newcVal);
+
+        //установка новых учетных цен и обновление спецификации расходного:
+        oldVPrice := SpOrder.vPrice;//сохраняем для печати
+        oldV      := SpOrder.cVal;  //сохраняем для печати
+
+        SpOrder.srPrice := oSaldo_K.RoundRubOrd(SpOrder.rSrPrice, SpOrder.kol);
+        SpOrder.vPrice  := oSaldo_K.RoundValOrd(SpOrder.rVPrice, SpOrder.kol);
+        SpOrder.cVal    := newcVal;
+
+        OneSpOrder_UpdateMC(boFlagChange, SpOrder.buffer);
+
+        if (not oper_LF) and ((useTransaction and 4) <> 0)
+        {
+          if ( boFlagChange )
+            if GetFirst SpSopr1 where ((SpOrder.cSpSopr == SpSopr1.nRec)) = tsOk
+                CalcSrPriceInSpSopr(SpOrder.cSpSopr);
+        }
+
+        Prepare_Parn(sortOrdFound);
+
+        if oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)
+          VozvPrih_AddRashod; //для возвратов
+
+        //печать
+        PrintSpOrderInfo; //использует SpOrder.*, oldV, deltaR, deltaV, firstRec, nDid, was_print
+
+        if divSpOrd  //переходим на добавленную спецификацию
+          {
+            var cSp_: comp;  cSp_ := SpOrder.nRec;
+            if GetFirst SpOrder where ((cSp_ == SpOrder.cSpOrder)) <>tsOk
+              divSpOrd := FALSE;
+          }
+
+        wasDiv_LF := (wasDiv_LF OR divSpOrd);
+
+      }
+      While (oper_LF AND divSpOrd); //обрабатываем добавленную спец. если было разбиение
+
+      if oper_LF AND (SpOrder.SP = cgVidUchO_Sklad)
+      {
+        PopPos(#SpOrder);
+        VozvPrih_HandleVozv; //для дальнейшей обработки возвратов
+      }
+    }
+    else
+    {
+      if WasSelectedMC(SpOrder.cMC)
+      {
+        OneSpOrder_UpdateMC(False, SpOrder.buffer);
+        Prepare_Parn(sortOrdFound);
+      }
+
+      if GetFirst ParnTbl where (( SklOrder.nrec == ParnTbl.cRasxOrd )) = tsOk
+        if GetFirst SklOrderUpd where ((ParnTbl.cSklOrder == SklOrderUpd.nRec)) = tsOk
+          _Loop SpOrderUpd where ((SklOrderUpd.nRec == SpOrderUpd.cSklOrder))
+         {
+           if WasSelectedMC(SpOrderUpd.cMC)
+             setRazrezSummDsql(SpOrderUpd.buffer);
+         }
+
+      delete all novisual ParnTbl;
+    }
+  }
+
+  if ((useTransaction and 8) = 0)
+  {
+    if oper_LF AND wasDiv_LF //восстанавливаем SpOrder.npp для добавленных спецификаций
+      While GetFirst SpOrder where ((SklOrder.nRec == SpOrder.cSklOrder AND
+                                          30000 <<= SpOrder.npp)) = tsOk
+      {
+        SpOrder.npp := SpOrder.npp-30000;
+        update current SpOrder;
+      }
+
+    UpdateSoprHozs(ord_deltaR, ord_deltaV, ord_newVal);
+
+    //-----------------------------------------------------------------------
+    // корректировка парных приходных ордеров (внт., возвраты, произв.):
+    PushPos(#SklOrder);
+
+    While GetFirst ParnTbl = tsOk DO
+    {
+      if (GetFirst SklOrder where ((ParnTbl.cSklOrder == SklOrder.nRec)) <> tsOk)
+      {
+        PopPos(#SklOrder);
+        StopVisual('', 0);//main
+        MessageAboutExit_AbortTrans(1, ParnTbl.cSklOrder);
+        if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
+          if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+        Exit;
+      }
+
+      //переустановить цены в спецификациях, а также - в soprhoz`е
+      if NOT UpdateParnPrih
+      {
+        PopPos(#SklOrder);
+        StopVisual('', 0);//main
+        MessageAboutExit_AbortTrans(3, 0);
+        if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
+          if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+        Exit;
+      }
+
+      if GetFirst ParnTbl where (( SklOrder.nrec == ParnTbl.cRasxOrd )) = tsOk
+        if GetFirst SklOrderUpd where ((ParnTbl.cSklOrder == SklOrderUpd.nRec)) = tsOk
+          _Loop SpOrderUpd where ((SklOrderUpd.nRec == SpOrderUpd.cSklOrder))
+          {
+            if WasSelectedMC(SpOrderUpd.cMC)
+              setRazrezSummDsql(SpOrderUpd.buffer);
+          }
+
+      delete current ParnTbl;
+    }
+
+    PopPos(#SklOrder);
+  }
+
+  delete all novisual SpOrderTmp;//нужно хотя и удаляется в цикле в UpdateParnPrih
 
   Result := True;
 }
@@ -3226,7 +2687,8 @@ Function CountOrderNewAlg : boolean;
     delete all novisual SrPricesTbl; // удаляем цены за старый день
     SetVisualHeader('Пересчет цен в расходных ордерах'#13 + string(dCurr));
 
-    for (SkPr := 0; SkPr <= 3; SkPr ++)
+    //АГАТ цикл сначала по производственным ордерам, потом по складским, а не наоборот, как в стандартном фейсе
+    for (SkPr := 3; SkPr >=0; SkPr--)
     {
       if bDsql
       {
@@ -3274,6 +2736,7 @@ Function CountOrderNewAlg : boolean;
           if (Not DoRecalc)
             Exit;
         }
+      if SkPr = 0 break; //АГАТ
     }
 
     //переход на новую дату !!!
@@ -3284,20 +2747,40 @@ Function CountOrderNewAlg : boolean;
 }
 
 Procedure InitNastr;
-{ Oper_SaldoByOrder          := wGetTune('Oper.SaldoByOrder');
+{
+  Oper_SaldoByOrder          := wGetTune('Oper.SaldoByOrder');
   Doc_ReklNaklPrice          := boGetTune('Doc.ReklNaklPrice');
   Oper_MultiCurrReg          := boGetTune('Oper.MultiCurrReg');
   NDE_NameRubl               := sGetTune('NDE.NameRubl');
   Sklad_SoprDoc_PricePrihOrd := boGetTune('Sklad.SoprDoc.PricePrihOrd');
   Sklad_CanRecalcNakl        := wGetTune('Sklad.CanRecalcNakl');
   Oper_Period                := boGetTune('Oper.Period');
+}
 
+function GetVidSoprForParnOrder(idx: byte): word;
+{
+  result := case( idx;
+                  0: cgDoc_0600,   // внутреннее перемещение в складском учете
+                  1: cgDoc_0501,   // отпуск в производство
+                  2: cgDoc_0506,   // внутреннее перемещение в производстве
+                  3: cgDoc_0630,   // вместо cgDoc_0503 возврат из производства - ставим пересортицу
+                  4: cgDoc_0632,   // акт на перемещение между объектами
+                  5: cgDoc_0551,   // отпуск в ремонты RM_
+                  6: cgDoc_0552,   // возврат из ремонтов RM_
+                  7: cgDoc_0210,   // передача в УКС
+                  8: cgDoc_0229,   // передача в УКС
+                  9: cgDoc_0607,   // ТОРО
+                 10: cgDoc_0106,   // Возврат из УКСа
+                 11: cgDoc_0626,   // Возврат из УКСа и склада
+                 12: cgDoc_0621);  // Акт на комплектование
 }
 
 Function RunRecalc : boolean;
 {
-
   Result := False;
+
+  //------------------------------------------------------------------------------
+  //#region Инициализация, старт транзакции
 
   InitNastr;
 
@@ -3307,38 +2790,24 @@ Function RunRecalc : boolean;
                'Выполнить пересчет для ордеров в закрытом периоде?', Confirmation + YesNo) <> cmYes
       Exit;
 
-  dCurr := begDate;       //из-за Атлантиса  - не работала внш.выгрузка
+  dCurr := begDate; //из-за Атлантиса - не работала внш.выгрузка
 
-  ResetBounds(#SklOrder);//из-за Атлантиса
+  ResetBounds(#SklOrder); //из-за Атлантиса
 
   if GetFirst SklOrder <> tsOk {};
 
   delete Pick3 where (( word(70) == Pick3.wList )); //удаление "запрещенных" к пересчету:
 
-  #ifdef NUTICIA_PERIOD
-  //вызов пересчета для методики за период
-
-  if (SkPr <> cgVidUchO_UPL) AND Oper_Period
-  {
-    // передаем параметр "Дата пересчета цен с" через DSK
-    SaveMyDsk(begDate, 'recalcPeriod_begDate');
-    RunInterface('RecalcSrPrPeriod', word(SkPr), retKOD);
-    if( retKOD<>cmOk )
-      Exit;
-  }
-  #end
-
   if oper_LF
   {
-    var err_: word;
-
+    var err_: word = 0;
     RunInterface('Chk_LIFO', err_, word(0));
 
     if (err_ = 0) AND (SkPr = cgVidUchO_Sklad)
-      {
-        if Message('В складском учете ошибок в ценах списания не обнаружено. Отменить пересчет?', Confirmation + YesNo) <> cmNo
-          Exit;
-      }
+    {
+      if Message('В складском учете ошибок в ценах списания не обнаружено. Отменить пересчет?', Confirmation + YesNo) <> cmNo
+        Exit;
+    }
     else
       if Message('Произвести пересчет цен в расходных ордерах?', Confirmation + YesNo) <> cmYes
         Exit;
@@ -3381,292 +2850,144 @@ Function RunRecalc : boolean;
 
   if ((useTransaction and 1) > 0)
   {
-    var errTrans: integer;
-
-    errTrans := BeginConcurrentTransaction(0);//trNoLock);
-
+    var errTrans: integer = BeginConcurrentTransaction(0);
     if errTrans <> tsOk
-      {
-        Message('Произошла ошибка открытия транзакции №' + string(errTrans) + '.'#13+
-                'Возможно не закрылась предыдущая транзакция.', Warning);
-
-        AbortMyTransaction;
-
-        if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-          if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-        delete safe Pick;
-
-        Exit;
-      }
-  }
-  else
-    if Message('Во время пересчета не будет использоваться восстановление данных на случай сбоя.'#13+
-               'Необходимо сохранить данные в архив!'#13'Продолжить?', Confirmation + YesNo) <> cmYes
     {
+      Message('Произошла ошибка открытия транзакции №' + string(errTrans) + '.'#13+
+              'Возможно не закрылась предыдущая транзакция.', Warning);
       AbortMyTransaction;
-
       if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
         if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
       delete safe Pick;
-
       Exit;
     }
+  }
+  else if Message('Во время пересчета не будет использоваться восстановление данных на случай сбоя.'#13+
+                  'Необходимо сохранить данные в архив!'#13'Продолжить?', Confirmation + YesNo) <> cmYes
+  {
+    AbortMyTransaction;
+    if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
+      if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+    delete safe Pick;
+    Exit;
+  }
 
   wasUpdateFlag := comp(string(year(Cur_Date)) + string(month(Cur_Date)) + string(day(Cur_Date)) +
                         string(hour(Cur_Time)) + string(minute(Cur_Time)) +
                         string(second(Cur_Time)) + string(sec100(Cur_Time)) );
 
-  //== == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == ==
+  //#endregion Инициализация, старт транзакции
+  //------------------------------------------------------------------------------
+
+  //------------------------------------------------------------------------------
+  //#region Расчёт средних цен для расходного ордера для LIFO/FIFO
+
   if oper_LF
     if NOT PrepareSpOrders
-      {
-        MessageAboutExit_AbortTrans(0, 0);
+    {
+      MessageAboutExit_AbortTrans(0, 0);
+      if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
+        if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+      Exit;
+    }
 
-        if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-          if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+  //#endregion Расчёт средних цен для расходного ордера для LIFO/FIFO
+  //------------------------------------------------------------------------------
 
-        Exit;
-      }
-  //== == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == == ==
+  //------------------------------------------------------------------------------
+  //#region сортировка расходов внт.перемещения
 
   delete all novisual HideTbl;
   delete all novisual SortTbl;
 
-  //== == == == сортировка расходов внт.перемещения == == == == == == == == == == == == == ==
-  var ii, lCount: longint; ii := lCount := 0;
-
-  var cRec_: comp;
+  var ii, lCount: longint = 0;
+  var cRec_: comp = 0;
 
   ResetBounds(#SklOrder); // из-за Атлантиса
 
-  if bDsql
+  if wasPickedMC // если фильтр по МЦ установлен, то перекидываем данные из юзерской таблицы в сессионную
   {
-    if wasPickedMC // если фильтр по МЦ установлен, то перекидываем данные из юзерской таблицы в сессионную
-    {
-      if not(createPickTable(cgPick_MC)) // создаем сессионную таблицу Pick
-        exit;
+    if not(createPickTable(cgPick_MC)) // создаем сессионную таблицу Pick
+      exit;
 
-      if not(fillFiltFromPick(cgPick_MC)) // заполняем ее данными из юзерской
-        exit;
-    }
-  }
-  else
-  {
-    StartNewVisual(vtRotateVisual, 0, 'Подсчет итераций', 1);
-    for(_i := 0; _i <= 12; _i++)
-    {
-      Parn.p_begDate := begDate;
-      Parn.p_vidSopr := case( _i;
-                              0: cgDoc_0600,   // внутреннее перемещение в складском учете
-                              1: cgDoc_0501,   // отпуск в производство
-                              2: cgDoc_0506,   // внутреннее перемещение в производстве
-                              3: cgDoc_0503,   // возврат из производства
-                              4: cgDoc_0632,   // акт на перемещение между объектами
-                              5: cgDoc_0551,   // отпуск в ремонты RM_
-                              6: cgDoc_0552,   // возврат из ремонтов RM_
-                              7: cgDoc_0210,   // передача в УКС
-                              8: cgDoc_0229,   // передача в УКС
-                              9: cgDoc_0607,   // ТОРО
-                             10: cgDoc_0106,   // Возврат из УКСа
-                             11: cgDoc_0626,   // Возврат из УКСа и склада
-                             12: cgDoc_0621 ); // Акт на комплектование
-      Parn.setOrder(Parn.tiOrd1);
-
-      Parn._LOOP viewTable
-      {
-        NextVisual;
-        lCount++;
-      }
-    }
-    StopVisual('', 0);
+    if not(fillFiltFromPick(cgPick_MC)) // заполняем ее данными из юзерской
+      exit;
   }
 
-  if not(bDsql) // запускаем визуал для ВИП кода, т.к. для DSQL для каждой доки будет свой
-    StartNewVisual(vtIndicatorVisual, vfTimer + vfConfirm + vfBreak, 'Сортировка операций внутреннего перемещения', lCount);
+  var startTime: _datetime = _curDateTime;
 
-  var startTime: _datetime;
-  startTime := _curDateTime;
-
+  StartNewVisual(vtIndicatorVisual, vfTimer + vfConfirm + vfBreak, 'Сортировка документов', 13);
   for(_i := 0; _i <= 12; _i++)
   {
-    // при определении iVidSopr последовательность не менять, т.к. от этого могут измениться цены в расходных ордерах!
-    var iVidSopr: word;
-    iVidSopr := case(_i;
-                      0: cgDoc_0600,   // внутреннее перемещение в складском учете
-                      1: cgDoc_0501,   // отпуск в производство
-                      2: cgDoc_0506,   // внутреннее перемещение в производстве
-                      3: cgDoc_0503,   // возврат из производства
-                      4: cgDoc_0632,   // акт на перемещение между объектами
-                      5: cgDoc_0551,   // отпуск в ремонты RM_
-                      6: cgDoc_0552,   // возврат из ремонтов RM_
-                      7: cgDoc_0210,   // передача в УКС
-                      8: cgDoc_0229,   // передача в УКС
-                      9: cgDoc_0607,   // ТОРО
-                     10: cgDoc_0106,   // Возврат из УКСа
-                     11: cgDoc_0626,   // Возврат из УКСа и Склада
-                     12: cgDoc_0621 ); // Акт на комплектование
-
-
-    if bDsql
+    if NOT NextVisual
     {
-      var oParnSet: iResultSet;
-      oParnSet := GetParnView(begDate, iVidSopr);
-
-      if oParnSet.getFirst() = tsOk
-      {
-        StartNewVisual(vtIndicatorVisual, vfTimer + vfConfirm + vfBreak, 'Сортировка документов: ' + GetTiDkGalName(iVidSopr), oParnSet.Count);
-        do
-        {
-//#region notNextVisual
-          if NOT NextVisual
-          {
-            StopVisual('', 0);
-
-            MessageAboutExit_AbortTrans(0, 0);
-
-            if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-              if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
-            Exit;
-          }
-//#endregion
-          if (word(oParnSet.row.val('SklOrder_vidOrder')) = cgVidOrder_Discharge) // расход - идет первым (такой индекс)
-          {
-            ClearBuffer(#SortTbl);
-
-            SortTbl.SP   := word(oParnSet.row.valat(fldSklOrder_sp));
-            SortTbl.cRec := comp(oParnSet.row.valat(fldSklOrder_nRec));
-            SortTbl.dOrd := _getDate(oParnSet.row.valat(fldKatSopr_dOpr));
-
-            if ((useTransaction and 2) > 0)
-              SortTbl.NOrd  := DateToStr(_getDate(oParnSet.row.valat(fldSklOrder_Atl_LastDate)), 'DD/MM/YYYY') +
-                                TimeToStr(_getTime(oParnSet.row.valat(fldSklOrder_Atl_LastTime)), 'HH: MM: SS') +
-                                string(oParnSet.row.valat(fldSklOrder_nOrder));
-            else
-              SortTbl.NOrd  := DateToStr(_getDate(oParnSet.row.valat(fldSklOrder_dOrd)), 'DD/MM/YYYY');
-
-            SortTbl.cSopr   := comp(oParnSet.row.valat(fldKatSopr_nRec));
-            SortTbl.tip     := if(_i = 3, 0, _i);
-            SortTbl.sortNum := ii++;
-
-            insert current SortTbl;
-          }
-          else // приходный
-          {
-            cRec_ := comp(oParnSet.row.valat(fldKatSopr_nRec));
-            if GetFirst SklOrderS where (( cRec_                == SklOrderS.cSopr and
-                                           cgVidOrder_Discharge == SklOrderS.VidOrder)) <> tsOk
-               Continue; //если был удален парный расходный ордер, то
-
-           // if GetFirst SortTbl where ((cRec_ == SortTbl.cSopr)) <> tsOk
-           //   Continue;
-          }
-
-          //для повторной необработки ордера - расхода и прихода
-          HideTbl.cSklOrder := comp(oParnSet.row.valat(fldSklOrder_nRec));
-          HideTbl.dOrd      := _getDate(oParnSet.row.valat(fldSklOrder_dOrd));
-          HideTbl.SP        := word(oParnSet.row.valat(fldSklOrder_sp));
-          HideTbl.vidOrder  := word(oParnSet.row.valat(fldSklOrder_vidOrder));
-          HideTbl.cPodr     := comp(oParnSet.row.valat(fldSklOrder_cPodr));
-          HideTbl.cMOL      := comp(oParnSet.row.valat(fldSklOrder_cMol));
-          HideTbl.tip       := if(_i = 3, 0, _i);
-          insert current HideTbl;
-
-        } while (oParnSet.getNext() = tsOk)
-
-        StopVisual('', 0);
-      }
+      StopVisual('', 0);
+      MessageAboutExit_AbortTrans(0, 0);
+      if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
+        if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+      Exit;
     }
-    else
+    // при определении iVidSopr последовательность не менять, т.к. от этого могут измениться цены в расходных ордерах!
+    var iVidSopr: word       = GetVidSoprForParnOrder(_i);
+    var oParnSet: iResultSet = GetParnView(begDate, iVidSopr);
+
+    if oParnSet.getFirst() = tsOk
     {
-      Parn.p_begDate := begDate;
-      Parn.p_vidSopr := iVidSopr;
-      Parn.setOrder(Parn.tiOrd1);  // сортируем въюшку по внешнему ключу! (т.е. все данные подгружаются с сервера)
-
-      Parn._LOOP viewTable
+      SetVisualHeader('Сортировка документов: ' + GetTiDkGalName(iVidSopr));
+      do
       {
-//#region notNextVisual
-        if NOT NextVisual
-          {
-            StopVisual('', 0);
+        if (word(oParnSet.row.val('SklOrder_vidOrder')) = cgVidOrder_Discharge) // расход - идет первым (такой индекс)
+        {
+          ClearBuffer(#SortTbl);
 
-            MessageAboutExit_AbortTrans(0, 0);
+          SortTbl.SP   := word(oParnSet.row.valat(fldSklOrder_sp));
+          SortTbl.cRec := comp(oParnSet.row.valat(fldSklOrder_nRec));
+          SortTbl.dOrd := _getDate(oParnSet.row.valat(fldKatSopr_dOpr));
 
-            if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-              if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
+          if ((useTransaction and 2) > 0)
+            SortTbl.NOrd  := DateToStr(_getDate(oParnSet.row.valat(fldSklOrder_Atl_LastDate)), 'DD/MM/YYYY') +
+                              TimeToStr(_getTime(oParnSet.row.valat(fldSklOrder_Atl_LastTime)), 'HH: MM: SS') +
+                              string(oParnSet.row.valat(fldSklOrder_nOrder));
+          else
+            SortTbl.NOrd  := DateToStr(_getDate(oParnSet.row.valat(fldSklOrder_dOrd)), 'DD/MM/YYYY');
 
-            Exit;
-          }
-//#endregion
+          SortTbl.cSopr   := comp(oParnSet.row.valat(fldKatSopr_nRec));
+          SortTbl.tip     := if(_i = 3, 0, _i); //АГАТ Представляем парные ордера по актам на пересортицу как парные ордера по НВП, чтоб при расчете цена прих.орд. = цена расх. орд.
+          SortTbl.sortNum := ii++;
 
-        SetVisualHeader('Сортировка операций внутреннего перемещения'#13 + string(Parn.SklOrder.dOrd) );
-
-        //избыточная проверка для проверки внеш. выгрузки
-        if (not IsValid(Parn.tnSklOrder)) OR (Parn.SklOrder.nRec = 0)
-          Continue;
-
-        //не нужно, лишнее:---------------------------
-        if ((Parn.p_vidSopr = cgDoc_0600)  AND  (Parn.SklOrder.tipOrd <> 3)) or // типа если катсопр на внутреннее перемещение, а ордер создался не с таким типом. Такого быть не может (если конечно сам юзер не покоцал запись в саппорте), поэтому игнорим
-           ((Parn.p_vidSopr = cgDoc_0506)  AND  (Parn.SklOrder.tipOrd <> 2))    // читайте коммент выше, но это шило уже с производством
-          Continue;
-        //---------------------------------------------
-
-        if (Parn.SklOrder.vidOrder = cgVidOrder_Discharge) // расход - идет первым (такой индекс)
-          {
-            ClearBuffer(#SortTbl);
-
-            SortTbl.SP      := Parn.SklOrder.SP;
-            SortTbl.cRec    := Parn.SklOrder.nRec;
-            SortTbl.dOrd    := Parn.SklOrder.dOrd;
-
-            if ((useTransaction and 2) > 0)
-              SortTbl.NOrd  := DateToStr(Parn.SklOrder.Atl_LastDate, 'DD/MM/YYYY') +
-                               TimeToStr(Parn.SklOrder.Atl_LastTime, 'HH: MM: SS') +
-                               Parn.SklOrder.nOrder ;
-            else
-              SortTbl.NOrd  := DateToStr(Parn.SklOrder.dOrd, 'DD/MM/YYYY');
-
-            SortTbl.cSopr   := Parn.KatSopr.nRec;
-            SortTbl.tip     := _i;
-            SortTbl.sortNum := ii++;
-
-            insert current SortTbl;
-          }
+          insert current SortTbl;
+        }
         else // приходный
-          {
-            //если был удален парный расходный ордер, то
-            cRec_ := Parn.KatSopr.nRec;
-
-            if GetFirst SortTbl where ((cRec_ == SortTbl.cSopr)) <> tsOk
-              Continue;
-          }
+        {
+          //если был удален парный расходный ордер, то
+          cRec_ := comp(oParnSet.row.valat(fldKatSopr_nRec));
+          if GetFirst SklOrderS where (( cRec_                == SklOrderS.cSopr and
+                                         cgVidOrder_Discharge == SklOrderS.VidOrder)) <> tsOk
+             Continue;
+        }
 
         //для повторной необработки ордера - расхода и прихода
-        HideTbl.cSklOrder := Parn.SklOrder.nRec;
-        HideTbl.dOrd      := Parn.SklOrder.dOrd;
-        HideTbl.SP        := Parn.SklOrder.SP;
-        HideTbl.vidOrder  := Parn.SklOrder.vidOrder;
-        HideTbl.cPodr     := Parn.SklOrder.cPodr;
-        HideTbl.cMOL      := Parn.SklOrder.cMOL;
-        HideTbl.tip       := _i;
-
+        HideTbl.cSklOrder := comp(oParnSet.row.valat(fldSklOrder_nRec));
+        HideTbl.dOrd      := _getDate(oParnSet.row.valat(fldSklOrder_dOrd));
+        HideTbl.SP        := word(oParnSet.row.valat(fldSklOrder_sp));
+        HideTbl.vidOrder  := word(oParnSet.row.valat(fldSklOrder_vidOrder));
+        HideTbl.cPodr     := comp(oParnSet.row.valat(fldSklOrder_cPodr));
+        HideTbl.cMOL      := comp(oParnSet.row.valat(fldSklOrder_cMol));
+        HideTbl.tip       := if(_i = 3, 0, _i); //АГАТ Представляем парные ордера по актам на пересортицу как парные ордера по НВП, чтоб при расчете цена прих.орд. = цена расх. орд.
         insert current HideTbl;
-      }
-      delete novisual SortTbl where (( comp(0) == SortTbl.cRec ));
+
+      } while oParnSet.getNext() = tsOk;
     }
   }//for
-
-  if not(bDsql)
-    StopVisual('', 0);
-
-
+  StopVisual('', 0);
   SortVozvr(106);
   SortVozvr(626);
 
+  //#endregion сортировка расходов внт.перемещения
   //------------------------------------------------------------------------------
-  //возвраты в консигнации
+
+  //------------------------------------------------------------------------------
+  //#region возвраты в консигнации
   StartNewVisual(vtIndicatorVisual, vfTimer + vfConfirm + vfBreak, 'Сортировка операций по возвратам в консигнации', lCount);
 
   _LOOP SpSopr where ((  cgDoc_0102 == SpSopr.vidSopr // возврат от покупателя (консигнатора)
@@ -3718,18 +3039,6 @@ Function RunRecalc : boolean;
 
                                  ))
           {
-            /*
-            if GetFirst SpSoprR where (( KatSoprR.nRec    == SpSoprR.cSopr   AND //накладная на отпуск (расход)
-                                         ((SpOrder.cMC     = SpSoprR.cMCUsl) AND
-                                          (SpOrder.cParty  = SpSoprR.cParty)) )) <> tsOk
-
-              Continue;
-            if GetFirst SpOrderR where (( SpSoprR.nRec == SpOrderR.cSpSopr  AND  //отпуск
-                                  cgVidOrder_Discharge == SpOrderR.vidOrder      //расход - для индекса
-                                                                             )) <> tsOk
-              Continue;
-            */
-
             //избыточная проверка:           //возврат       //отпуск
             if (SpOrder.dOrd  < begDate) OR (SpOrderR.dOrd  < begDate) OR (SpOrder.dOrd  < SpOrderR.dOrd)
               Continue;
@@ -3790,12 +3099,7 @@ Function RunRecalc : boolean;
                           and  SpSoprR.nRec         /== SpOrderR.cSpSopr    //отпуск
                           and  cgVidOrder_Discharge /== SpOrderR.vidOrder      //расход - для индекса
                                ))
-          { /*
-            if GetFirst SpOrderR where (( SpSoprR.nRec == SpOrderR.cSpSopr  AND  //отпуск
-                                  cgVidOrder_Discharge == SpOrderR.vidOrder      //расход - для индекса
-                                                                              )) <> tsOk
-              Continue;
-            */
+          {
             //избыточная проверка:           //возврат       //отпуск
             if (SpOrder.dOrd < begDate) OR (SpOrderR.dOrd  < begDate) OR (SpOrder.dOrd  < SpOrderR.dOrd)
               Continue;
@@ -3849,8 +3153,13 @@ Function RunRecalc : boolean;
 
   //нужно т.к. не срабатывает Continue:
   delete novisual SortTbl where (( comp(0) == SortTbl.cRec ));
-
   StopVisual('', 0);
+
+  //#endregion возвраты в консигнации
+  //------------------------------------------------------------------------------
+
+  //------------------------------------------------------------------------------
+  //#region Подготовка остатков к пересчету
 
   StartNewVisual(vtIndicatorVisual, vfTimer + vfConfirm + vfBreak, 'Подготовка остатков к пересчету', RecordsInTable(#KatMC));
   if haveOldSaldoMcRows
@@ -3864,44 +3173,21 @@ Function RunRecalc : boolean;
 
     Exit;
   }
-
-  if not(bDsql)
-  {
-    _LOOP KatMC
-    {
-      if NOT NextVisual
-      {
-        StopVisual('', 0);
-        MessageAboutExit_AbortTrans(0, 0);
-        if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
-          if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-        Exit;
-      }
-
-      if NOT WasSelectedMC(KatMC.nRec)
-        Continue;
-
-      //проверка сальдовых
-      for(_i := cgVidUchO_Sklad; _i <= cgVidUchO_UKS; _i++)
-        delete novisual SaldoMCDel; //удаление  сальдовых
-    }
-  }
-
   StopVisual('', 0);
+
+  //#endregion Подготовка остатков к пересчету
   //------------------------------------------------------------------------------
-  // ОСНОВНОЙ ЦИКЛ ПЕРЕСЧЕТА
+
+  //------------------------------------------------------------------------------
+  //#region ОСНОВНОЙ ЦИКЛ ПЕРЕСЧЕТА
 
   if (not InitMCInfo(date(1, 1, 1970)))
   {
     Message('Не проинициализировался объект расчета сальдовых остатков', Warning);
-
     AbortMyTransaction;
-
     if boGetTune('Sklad.BlockModOrd') and ((useTransaction and 8) = 0)
       if BS.ClearBranchSemaphore(GetCurrentBranch, 'RecalcSp') <> tsOk  { }
-
     delete safe Pick;
-
     Exit;
   }
 
@@ -3924,17 +3210,11 @@ Function RunRecalc : boolean;
   if wasPickedMC
     AddBounds(tbPickedMC);
 
-  if ((useTransaction and 32) <> 0)
-  {
-    if (not CountOrderNewAlg)
-      Exit;
-  }
-  else
-    if (not CountOrderOldAlg)
-      Exit;
+  if (not CountOrderNewAlg)
+    Exit;
 
+  //#endregion ОСНОВНОЙ ЦИКЛ ПЕРЕСЧЕТА
   //------------------------------------------------------------------------------
-  // КОНЕЦ ГЛАВНОГО ЦИКЛА
 
   DoneMCInfo;
   wasInitMCinfo := FALSE;
@@ -3977,7 +3257,6 @@ Function RunRecalc : boolean;
       , cgVidUchRun_All
       , if(wasPickedMC, cgPick_Mc, 0)
       , cntStartFromRecalcSp);
-
     }
   }
 
@@ -3988,6 +3267,58 @@ Function RunRecalc : boolean;
 }
 //******************************************************************************
 
+function GetWasPickedMc: boolean;
+{
+  result := GetFirst FastFirstRow Pick where ((word(7) == Pick.wList)) = tsOk;
+}
+
+procedure RecalcPickMCFields;
+{
+  stPickedMC  := '';
+  needPickMC  := 0;
+  if GetFirst KatMC where ((word(7) == Pick.wList and Pick.cRec == KatMC.nRec)) = tsOk
+  {
+    Set stPickedMC := if(GetKolPick > 1, 'Множественный выбор (' + string(GetKolPick) + ')',
+                      if(GetKolPick = 1, KatMC.Name, ''));
+    needPickMC := 1;
+  }
+}
+
+procedure AddKomplektMCToPick;
+{
+  if not wasPickedMC exit;
+  _loop KatMC where ((word(7) == Pick.wList and Pick.cRec == KatMC.nRec))
+  {
+    if (KatMC.Komplekt <> 1)
+    {
+      if GetFirst SpMC where (( KatMC.nRec == SpMC.cMC)) = tsOk
+      {
+        ClearBuffer(#Pick3);
+        Pick3.wList := 7;
+        Pick3.cRec  := SpMC.cMCkompl;
+        insert Current Pick3;
+      }
+    }
+    else
+    {
+      delete novisual Pick3 where ((7 == Pick3.wList AND SpMC.cMCKompl == Pick3.cRec));
+
+      _Loop SpMC where (( KatMC.nRec == SpMC.cMCKompl))
+      {
+        ClearBuffer(#Pick3);
+        Pick3.wList := 7;
+        Pick3.cRec  := SpMC.cMC;
+        insert Current Pick3;
+      }
+
+      ClearBuffer(#Pick3);
+      Pick3.wList := 7;
+      Pick3.cRec  := SpMC.cMCKompl; //чтобы цены по комплекту корректировались позже, чем по составляющим комплекта
+      insert Current Pick3;
+    }
+  }
+}
+
 HandleEvent //основной
 
 cmDone:
@@ -3997,61 +3328,18 @@ cmCheckField:
 {
   case CurField of
     #needPickMC:
-      {
-        if (wDefault = 0)
-          delete Pick where (( word(7) == Pick.wList ));
+    {
+      if (wDefault = 0)
+        delete Pick where (( word(7) == Pick.wList ));
 
-        if (wDefault = 0)
-          if (needPickMC > 0)
-            if (RunInterface('L_MCU::GetSomeMC', comp(-12347), 0) = cmCancel)
-              Exit;
+      if (wDefault = 0)
+        if (needPickMC > 0)
+          if (RunInterface('L_MCU::GetSomeMC', comp(-12347), 0) = cmCancel)
+            Exit;
 
-        stPickedMC  := '';
-        wasPickedMC := (GetFirst Pick where ((word(7) == Pick.wList)) = tsOk);
-
-        if (GetFirst KatMC where ((word(7) == Pick.wList and Pick.cRec == KatMC.nRec)) = tsOk)
-          Set stPickedMC := if(GetKolPick > 1, 'Множественный выбор (' + string(GetKolPick) + ')',
-                            if(GetKolPick = 1, KatMC.Name, ''));
-
-        if ( wasPickedMC )
-          _loop KatMC where ((word(7)   == Pick.wList
-                          and Pick.cRec == KatMC.nRec))
-          {
-            if (KatMC.Komplekt <> 1)
-            {
-              if GetFirst SpMC where (( KatMC.nRec == SpMC.cMC)) = tsOk
-              {
-                ClearBuffer(#Pick3);
-
-                Pick3.wList := 7;
-                Pick3.cRec  := SpMC.cMCkompl;
-
-                insert Current Pick3;
-              }
-            }
-            else
-            {
-              delete novisual Pick3 where ((7             == Pick3.wList AND
-                                            SpMC.cMCKompl == Pick3.cRec));
-
-              _Loop SpMC where (( KatMC.nRec == SpMC.cMCKompl))
-              {
-                ClearBuffer(#Pick3);
-
-                Pick3.wList := 7;
-                Pick3.cRec  := SpMC.cMC;
-
-                insert Current Pick3;
-              }
-
-              ClearBuffer(#Pick3);
-
-              Pick3.wList := 7;
-              Pick3.cRec  := SpMC.cMCKompl; //чтобы цены по комплекту корректировались позже, чем по составляющим комплекта
-
-              insert Current Pick3;
-            }
-          }
+      wasPickedMC := GetWasPickedMc;
+      RecalcPickMCFields;
+      AddKomplektMCToPick;
     }
 
     #useTransaction:
@@ -4126,75 +3414,25 @@ cmCheckField:
       }
 
       if ((word(OldFieldValue) xor useTransaction) = 4)
-      {
         if ((useTransaction and 4) <> 0)
           RunWindowModal(wFltrKatSopr);
-      }
     }
-
-  end;
+  end; //case
 }
 
 cmPick:
 {
   case CurField of
     #stPickedMC:
+    {
+      if (wDefault = 0)
       {
-        if (wDefault = 0)
-          delete Pick where (( word(7) == Pick.wList ));
-
-        if (wDefault = 0)
-          if (RunInterface('L_MCU::GetSomeMC', comp(-12347), 0) = cmCancel)
-            Exit;
-
-        wasPickedMC := (GetFirst Pick where ((word(7) == Pick.wList)) = tsOk);
-
-        if (GetFirst KatMC where ((word(7) == Pick.wList and Pick.cRec == KatMC.nRec)) = tsOk)
-          Set stPickedMC := if(GetKolPick > 1, 'Множественный выбор (' + string(GetKolPick) + ')',
-                            if(GetKolPick = 1, KatMC.Name, ''));
-
-        if (needPickMC < 1)
-          needPickMC := 1;
-
-        if ( wasPickedMC )
-          _loop KatMC where ((word(7)   == Pick.wList
-                          and Pick.cRec == KatMC.nRec))
-          {
-            if (KatMC.Komplekt <> 1)
-            {
-              if GetFirst SpMC where (( KatMC.nRec == SpMC.cMC)) = tsOk
-              {
-                ClearBuffer(#Pick3);
-
-                Pick3.wList := 7;
-                Pick3.cRec  := SpMC.cMCkompl;
-
-                insert Current Pick3;
-              }
-            }
-            else
-            {
-              delete novisual Pick3 where ((7             == Pick3.wList AND
-                                            SpMC.cMCKompl == Pick3.cRec));
-
-              _Loop SpMC where (( KatMC.nRec == SpMC.cMCKompl))
-              {
-                ClearBuffer(#Pick3);
-
-                Pick3.wList := 7;
-                Pick3.cRec  := SpMC.cMC;
-
-                insert Current Pick3;
-              }
-
-              ClearBuffer(#Pick3);
-
-              Pick3.wList := 7;
-              Pick3.cRec  := SpMC.cMCKompl; //чтобы цены по комплекту корректировались позже, чем по составляющим комплекта
-
-              insert Current Pick3;
-            }
-          }
+        delete Pick where (( word(7) == Pick.wList ));
+        if RunInterface('L_MCU::GetSomeMC', comp(-12347), 0) = cmCancel Exit;
+      }
+      wasPickedMC := GetWasPickedMC;
+      RecalcPickMCFields;
+      AddKomplektMCToPick;
     }
   end;
 }
@@ -4206,16 +3444,14 @@ cmInit:
   boFpLog := GetStringParameter('Log','FP_DebugLog',0)<>'';
   if boFpLog FpLogInit;
 
-
-
   if (not boGetTune('Sklad.CanRecalcSaldo'))
   {
     ShowTune('Запрещен пересчет цен в расходных ордерах по настройке!', 'Sklad.CanRecalcSaldo');
     Exit;
   }
 
-  if (oDsql.getTypeDbDriver != dbBtrieve)
-    bDsql := true;
+  bDsql := oDsql.getTypeDbDriver != dbBtrieve;
+
   //----------------------------
   InitNastr;
   //----------------------------
@@ -4243,53 +3479,21 @@ cmInit:
   dlinaDrob := GetDlinaDrob_forKol;
   presision := GetPresision_forKol;
 
-  if (wDefault <> 0)
+  wasPickedMC := GetWasPickedMc;
+  RecalcPickMCFields;
+
+  if (wDefault = 0)
+  {
+    if (oMSview.GetMethodSpisPodr(0) = 3) // LF_
     {
-      wasPickedMC := (GetFirst Pick where ((word(7) == Pick.wList)) = tsOk);
+      delete novisual Pick where ((7 == Pick.wList));
+      if RunInterface('L_MCU::GetSomeMC', comp(-12347), 0) = cmCancel  Exit;
+      var wasErr_: boolean;
+      RunInterface('Chk_fifo_skl', wasErr_, word(0));
+      Exit;
     }
-  else
-    {
-      if (Message('Перед пересчетом средних цен необходимо сохранить '+
-                  'данные и проверить корректность ордеров ("Проверка КОУ").'#13+
-                  'При пересчете никто не должен находиться в системе, '+
-                  'также должны быть закрыты все интерфейсы на Вашей машине.'#13#13+
-                  'Продолжить?', YesNo + Confirmation + mfSwapButtons) <> cmYes)
-          Exit;
-
-      var nUsers: longint;
-      nUsers := (RecordsInTable(#x$ActiveUsers) - 1);
-
-      if (nUsers > 0)
-        if (Message('Во время выполнения пересчета никто не должен находиться в системе. '+
-                    'Сейчас количество работающих (кроме Вас): ' + string(nUsers) + '.'#13#13 +
-                    'Продолжить?', YesNo + Confirmation + mfSwapButtons) <> cmYes)
-          Exit;
-
-      if (oMSview.GetMethodSpisPodr(0) = 3) // LF_
-        {
-          delete novisual Pick where ((7 == Pick.wList));
-
-          if RunInterface('L_MCU::GetSomeMC', comp(-12347), 0) = cmCancel
-            Exit;
-
-          var wasErr_: boolean;
-
-          RunInterface('Chk_fifo_skl', wasErr_, word(0));
-
-          Exit;
-        }
-
-      #ifNdef NUTICIA_PERIOD
-      //вызов пересчета для методики за период
-      if (SkPr <> cgVidUchO_UPL) AND Oper_Period
-        {
-          RunInterface('RecalcSrPrPeriod', word(SkPr), retKOD);
-          Exit;
-        }
-      #end
-
-      SetHelpAndStatusContext(wPar, -1, sci1EnEsc, 'SklParPerZen')
-    }
+    SetHelpAndStatusContext(wPar, -1, sci1EnEsc, 'SklParPerZen')
+  }
 
   useTransaction |= 1 + 16 + 32;
 
@@ -4324,9 +3528,6 @@ cmInit:
   {
     if (not ReadMyDsk(begDate , 'RclcSpDf', Datechanged))   begDate := Cur_Date;
     if (not ReadMyDsk(VidOtkat, 'RclcSpVO', Datechanged))  vidotkat := 2;
-
-    needPickMC := 0;
-
     if (not ReadMyDsk(printOnlyIzm , 'RclcprintOnlyIzm' , Datechanged)) printOnlyIzm  := 1;
     if (not ReadMyDsk(wnedrecalcICN, 'RclcwnedrecalcICN', Datechanged)) wnedrecalcICN := 0;
     if (not ReadMyDsk(wResDlg      , 'RclcSpDlg'        , Datechanged)) wResDlg       := 0;
@@ -4414,8 +3615,8 @@ cmInit:
         Exit;
       }
 
-    if GetFirst SklOrder where ((SkPr     == SklOrder.SP AND
-                                 ZeroDate << SklOrder.dOrd )) = tsOk
+    if GetFirst SklOrder where ((SkPr      == SklOrder.SP AND
+                                 ZeroDate <<= SklOrder.dOrd )) = tsOk
       if (begDate < SklOrder.dOrd)
         begDate := SklOrder.dOrd;//чтобы старые остатки не тронуть
 
@@ -4491,9 +3692,6 @@ cmInit:
     if not bRes
       Exit;
   }
-
-  if (wDefault = 0)
-    delete Pick where ((word(7) == Pick.wList));
 
   if (wDefault <> 0)
     objRecPar.SetResults(nDid, KolBad, DateBad)
