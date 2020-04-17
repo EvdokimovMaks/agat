@@ -1,0 +1,207 @@
+#include query.vih
+#include AdrFunc.vih
+
+#component "AGAT"
+
+interface AG_PP402 'Реестр сотрудников на самоизоляции возраст >=65лет (ПП402)' escClose, doAccept;
+show(,,67,7);
+var
+  _dBeg : date;
+  _dEnd : date;
+  _dBorn: date;
+  _sOtp : string;
+
+#include AdrFunc.var
+
+create view
+var
+  _cPerson: comp;
+as select
+  Persons.Nrec
+from
+  Persons
+, Passports
+where ((
+    _cPerson == Persons.Nrec
+and _cPerson == Passports.Person
+and 501      == Passports.SysCode
+));
+
+screen scParams (,,sci1Esc);
+fields
+  _dBorn: NoProtect;
+  _dBeg : NoProtect;
+  _dEnd : NoProtect;
+  _sOtp : NoProtect;
+buttons
+  cmOk, default;
+  cmCancel;
+<<
+
+`По сотрудникам с датой рождения <=`  .@@@@@@@@@@
+`Период отбора отпусков и больничных с`.@@@@@@@@@@ `по`.@@@@@@@@@@
+`Виды отпусков`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+                                      <. Продолжить .> <. Отмена .>
+>>
+end;
+
+function GetXlsReportFileName: string;
+{
+  var s: string = GetFileParameter('Files','OutputFilesDirectory',ifFirstParameter) + 'AG_PP402_';
+  var sFName: string = '';
+  var fInd: integer = 0;
+  do
+  {
+    fInd++;
+    sFName := s + fInd + '.xlsx';
+    if not FileExist(sFName)
+      break
+    else if DeleteFile(sFName)
+      break;
+  } while true;
+  result := sFName;
+}
+
+sql query qData =
+  select
+    p.Nrec
+  , coalesce(tOtp.cnt, 0) as cntOtp
+  , coalesce(tBS.cnt, 0) as cntBS
+  from persons p
+  outer apply (
+    select count(*) as cnt
+    from vacations v
+    join klotpusk o on v.vactype = o.nrec
+    where
+        v.person = p.nrec
+    and v.factyearbeg <= :dEnd
+    and v.factyearend >= :dBeg
+    and o.days in (%macroOtp)
+  ) tOtp
+  outer apply (
+    select count(*) as cnt
+    from LSchet ls
+    join BlisNet bs on bs.clsch = ls.nrec and bs.choice in (0,3,10) and bs.DataN <= :dEnd and bs.DatOk >= :dBeg
+    where ls.tPerson = p.Nrec and (ls.DatUv = 0 or ls.DatUv >= :dBeg)
+  ) tBS
+  where
+      p.IsEmployee = 'С'
+  and p.BornDate between 1 and :dBorn
+;
+
+handleevent
+
+  cmOk:
+  {
+    var q: IQuery = queryManager.createQuery(qData)
+                                .setParam('dBeg', _dBeg)
+                                .setParam('dEnd', _dEnd)
+                                .setParam('dBorn', _dBorn)
+                                .setMacro('macroOtp', _sOtp);
+    var rs: IResultSet = q.getResultSet;
+    if rs = NullRef
+    {
+      Message('Ошибка выполнения запроса ' + q.errorCode, error);
+      exit;
+    }
+
+    if rs.getfirst != tsOk
+    {
+      Message('Нечего выводить');
+      exit;
+    }
+
+    var sXLSFileName: string = GetXlsReportFileName;
+    if not xlCreateExcel(sXLSFileName, true)
+    {
+      message('Ошибка инициализации работы с Excel', error);
+      exit;
+    }
+
+    xlSetActiveWorkBookByName(sXLSFileName);
+
+    //массив с таблицей
+    var y: longint = 1;
+    xlCreateMatrix(rs.Count + 1, 4);
+
+    xlStWriteToMatrix(y, 1 , 'ФИО');
+    xlStWriteToMatrix(y, 2 , 'Дата рождения');
+    xlStWriteToMatrix(y, 3 , 'Адрес места жительства');
+    xlStWriteToMatrix(y, 4 , 'СНИЛС');
+
+    do {
+
+      if double(rs.row.val('cntOtp')) > 0 or double(rs.row.val('cntBS')) > 0
+        continue;
+
+      _cPerson := rs.row.val('Nrec');
+      if getfirst Persons != tsOk continue;
+
+      y++;
+
+      xlStWriteToMatrix(y, 1 , Persons.FIO);
+      xlDtWriteToMatrix(y, 2 , Persons.BornDate);
+      var cAddr: comp = if(Persons.LiveAddr = comp(0), Persons.PasspAddr, Persons.LiveAddr);
+      xlStWriteToMatrix(y, 3 , #eTaxAddrShowFreeForm(cAddr));
+      if getfirst Passports = tsOk
+        xlStWriteToMatrix(y, 4 , Passports.Nmb);
+    } while rs.getnext = tsOk;
+
+    //формат ячеек
+    xlSetNumberFormat('@', 2, 1, y, 4);
+    xlSetNumberFormat('ДД.ММ.ГГГГ', 2, 2, y, 2);
+
+    //пишем значения массива в ячейки
+    xlWriteMatrixToExcel(1, 1);
+    xlFreeMatrix;
+
+    xlAutoFit(1, 1, y, 4); //Авторазмер по всем столбцам начиная с номера ДО до конца
+
+    xlSaveWorkBookByName(sXLSFileName);
+    xlKillExcel;
+  }
+
+  cmInit:
+  {
+    _dBorn := date(31,12,1955);
+    _dBeg  := date(1,4,2020);
+    _dEnd  := date(30,4,2020);
+    _sOtp  := '''ОД'',''ДО'',''ОТ''';
+  }
+
+end;
+
+end.
+
+#include UserReport.vih
+
+VipInterface UserReport_AG_PP402 Implements IUserReport;
+Interface UserReport_AG_PP402;
+Procedure Run;
+{
+  runinterfacenomodal(AGAT::AG_PP402);
+}
+Function GetReportName: String;
+{
+  result := 'Реестр сотрудников на самоизоляции возраст >=65лет (ПП402)';
+}
+Function GetGroupName (Level : Word) : String;
+{
+  result :='';
+}
+function GetPriority : Integer;
+{
+  result := 3;
+}
+function VisibleInModule(Ind : Byte) : String;
+{
+  VisibleInModule := '';
+  case Ind of
+    1 : VisibleInModule := 'STAFFMAINMENU';
+    2 : VisibleInModule := 'MENUZARP';
+    3 : VisibleInModule := 'STAFFMAINMENU2';
+    4 : VisibleInModule := 'MENUZARP2';
+  end;
+}
+End.

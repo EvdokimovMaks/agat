@@ -1,0 +1,145 @@
+/*
+ ╔═══════════════════════════════════════════════════════════════════════════╗
+ ║                     (c) 1994,99 корпорация ГАЛАКТИКА                      ║
+ ║ Проект        : ГАЛАКТИКА                                                 ║
+ ║ Система       : Заработная плата                                          ║
+ ║ Назначение    : Стандартные процедуры для обработки фильтров              ║
+ ║                 по сотрудникам и подразделениям                           ║
+ ║ Ответственный : Корзюк Виталий Францевич                                  ║
+ ╚═══════════════════════════════════════════════════════════════════════════╝
+*/
+
+#ifdef AdvancedDepartmentFilter
+var DepartmentFilterDate: date;
+#end
+
+
+#ifdef AdvancedDepartmentFilterExtOptions
+/*
+// обычный режим
+pafoCommon
+// пересканирование за прошлый период
+pafoLastPeriod
+// фильтр по цеху отнесения затрат
+pafoCexozFilter
+
+PAFExtOption = pafoCexozFilter и ReReadAccounts = true - режим работы фильтров
+по подразделению и лицевым счетам в котором происходит следующее: После
+выбора подразделений в текущие заносятся те лицевые счета у которых имеются
+суммы в таблицах SumVidOp, Nenach, Nachisl с цехом отнесения затрат который
+присутствует в только что помеченных подразделениях фильтра по подразделению,
+причем суммы рассматриваются начисленные в(/за - в зависимости от настройки)
+период, задаваемый датой date1 и date2.
+*/
+
+var PAFExtOption: longint;
+var cexozDate1: date;
+var cexozDate2: date;
+var DepartmentValidator: IDepartmentValidator;
+
+
+#end
+
+#include FillMarks.vpp
+#include ProcessCheck.vpp
+
+//------------------------------------------------------------------------------
+//  Обработка Checkbox - фильтр по работникам и сотрудникам
+//------------------------------------------------------------------------------
+procedure PodrPubCheck;
+{
+   case CurField of
+     #ZAR_USER.GRUPSTN:
+       ProcessCheck;
+   end;  //case
+}
+
+//------------------------------------------------------------------------------
+//  Выбор подразделения и работников
+//------------------------------------------------------------------------------
+procedure PodrPubPick;
+{
+ case CurField of
+    #FiltrPodr:
+    {
+
+#ifdef AdvancedDepartmentFilterExtOptions
+      IPAFilterExtOption(PAF).ChangeDepartmentFilterExtOptions(
+        true, DepartmentValidator,
+        cexozDate1, cexozDate2, PAFExtOption);
+#else //{
+#ifdef AdvancedDepartmentFilter
+      ITraditionalPersonalAccountFilterExt(PAF).ChangeDepartmentFilterExt(true, DepartmentFilterDate);
+#else
+      PAF.ChangeDepartmentFilter(true);
+#end
+#end //}
+      ReReadRecord(#ZAR_USER);
+    }
+
+    #FiltrPublic:
+    {
+      PAF.ChangePersonalAccountFilter(0);
+      ReReadRecord(#ZAR_USER);
+    }
+  end; // case
+}
+
+//------------------------------------------------------------------------------
+//   Инициализация Zar_User
+//------------------------------------------------------------------------------
+procedure InitUser(parm : word);
+{
+  // parm:
+  // <> 0 - пересканировать текущие л/с при необходимости,
+  // = 0 - не очищать FORMARKS, даже, если включена настройка пользователя
+  // "удалять пометки..."; нужно в случае, когда интерфейс запускается в режиме
+  // "для одного лицевого счета".
+
+#ifdef AdvancedDepartmentFilterExtOptions
+  if ( NullVipRef(PAF) )
+  {
+    LoadVipInterface(PAF);
+  }
+
+  /*
+  PAFExtOption = pafoCexozFilter и ReReadAccounts = true - режим работы фильтров
+  по подразделению и лицевым счетам в котором происходит следующее: После
+  выбора подразделений в текущие заносятся те лицевые счета у которых имеются
+  суммы в таблицах SumVidOp, Nenach, Nachisl с цехом отнесения затрат который
+  присутствует в только что помеченных подразделениях фильтра по
+  подразделению, причем суммы рассматриваются начисленные в(/за - в
+  зависимости от настройки) период, задаваемый датой date1 и date2.
+  */
+
+  IPAFilterExtOption(PAF).InitFilterExtOptions(
+    Parm <> 0, Parm = 0, DepartmentValidator,
+    cexozDate1, cexozDate2, PAFExtOption);
+
+#else //{
+#ifdef AdvancedDepartmentFilter
+  if NullVipRef(PAF)
+    LoadVipInterface(PAF);
+  ITraditionalPersonalAccountFilterExt(PAF).InitFilterExt(Parm <> 0, Parm = 0, DepartmentFilterDate);
+#else
+  PAF.InitFilter(Parm <> 0, Parm = 0);
+#end
+#end //}
+  ReReadRecord(#ZAR_USER);
+}
+
+//------------------------------------------------------------------------------
+// Заполнение Formarks
+//------------------------------------------------------------------------------
+function FillMarksCho(choiced:word) : boolean;
+begin
+  var Result: boolean;
+  Result := PAF.CheckPersonalAccountFilter(choiced);
+  FillMarksCho := Result;
+  if (not Result)
+  {
+    SelectField(#FiltrPublic);
+    Message('Не задан фильтр по работникам', Error + OkButton);
+  }
+  ReReadRecord(#ZAR_USER);
+end;
