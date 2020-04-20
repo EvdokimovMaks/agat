@@ -7,6 +7,7 @@
 #include "ExtAttr.vih"
 #include "CatFunc.vih" // Функции работы с каталогом
 #include PickPos.vih
+#include Query.vih
 
 procedure FillSpAllStaff(String, string, comp, LongInt, comp, word); external 'G_ZARPL.DLL';
 
@@ -23,6 +24,7 @@ interface AG_SickLeavesFormation 'Параметры формирования' escclose, doaccept, gr
 
 var iCatFunc: CatalogsFunctions;   // Переменная типа интерфейс CatalogsFunctions
 var iBlKontrl: BlControl; // Переменная типа "Интерфес контроля дат больничных"
+var _qDataN, _qDatOk: IQuery;
 
 Create view V
 var
@@ -186,6 +188,106 @@ function getYslNachByDismissed : boolean;
   }
 } // getYslNachByDismissed
 //------------------------------------------------------------------------------
+
+sql query qDataN =
+  select max(bs.DatOk) as dDate: date
+  from BlisNet bs
+  where
+      bs.clsch = :cLSchet
+  and bs.choice in (0,3,10)
+  and bs.DatOk between :DataN and :DatOk
+  union all
+  select max(fo.factyearend) as dDate: date
+  from LSchet ls
+  join factotpusk fo on fo.person = ls.tPerson
+  join klotpusk o on fo.vactype = o.KOtpus
+  where
+      ls.Nrec = :cLSchet
+  and fo.factyearend between :DataN and :DatOk
+  and o.days in ('ОД','ДО','ОТ')
+  union all
+  select ls.DatPos
+  from LSchet ls
+  where
+      ls.Nrec = :cLSchet
+  and ls.DatPos between :DataN and :DatOk
+;
+
+function GetBlisNetDataN(ccLSchet: comp; dDataN: date; dDatOk: date): date;
+{
+  if (_qDataN = NullRef) _qDataN := queryManager.createQuery(qDataN);
+
+  result := DataN;
+
+  _qDataN.setParam('cLSchet', ccLSchet);
+  _qDataN.setParam('DataN', dDataN);
+  _qDataN.setParam('DatOk', dDatOk);
+  if _qDataN.Execute.errorCode != tsOk
+  {
+    Message('Ошибка выполнения запроса qDataN ' + _qDataN.errorCode, error);
+    exit;
+  }
+
+  while _qDataN.fetch.errorCode = tsOk
+  {
+    var d: date = _qDataN.row.valAt(1);
+    if d = 0 continue;
+    d := Add_Day(d, 1);
+    if (d > result) result := d;
+  }
+}
+
+sql query qDatOk =
+  select min(bs.DataN) as dDate: date
+  from BlisNet bs
+  where
+      bs.clsch = :cLSchet
+  and bs.choice in (0,3,10)
+  and bs.DataN between :DataN and :DatOk
+
+  union all
+
+  select min(fo.factyearbeg) as dDate: date
+  from LSchet ls
+  join factotpusk fo on fo.person = ls.tPerson
+  join klotpusk o on fo.vactype = o.KOtpus
+  where
+      ls.Nrec = :cLSchet
+  and fo.factyearbeg between :DataN and :DatOk
+  and o.days in ('ОД','ДО','ОТ')
+
+  union all
+
+  select ls.DatUv
+  from LSchet ls
+  where
+      ls.Nrec = :cLSchet
+  and ls.DatUv between :DataN and :DatOk
+;
+function GetBlisNetDatOk(ccLSchet: comp; dDataN: date; dDatOk: date): date;
+{
+  if (_qDatOk = NullRef) _qDatOk := queryManager.createQuery(qDatOk);
+
+  result := DataOk;
+
+  _qDatOk.setParam('cLSchet', ccLSchet);
+  _qDatOk.setParam('DataN', dDataN);
+  _qDatOk.setParam('DatOk', dDatOk);
+  if _qDatOk.Execute.errorCode != tsOk
+  {
+    Message('Ошибка выполнения запроса qDatOk ' + _qDatOk.errorCode, error);
+    exit;
+  }
+
+  while _qDatOk.fetch.errorCode = tsOk
+  {
+    var d: date = _qDatOk.row.valAt(1);
+    if d = 0 continue;
+    d := Sub_Day(d, 1);
+    if (d < result) result := d;
+  }
+}
+
 Procedure FillBlisnet;
 {
   var ExceptionList: TPtr;
@@ -205,27 +307,27 @@ Procedure FillBlisnet;
 
   ExceptionList := InitMarker('', 8, 100, 50);
 
-  if ValidatePeriodByHireDate = 1
-  {
-    _loop FORMARKS
-    {
-      if getfirst fastfirstrow LSCHET <> tsOk
-        continue;
-
-      if (Day(Datan) <> 0) and (Datan < LSCHET.DATPOS)
-      {
-        Log(GetHireDateViolationStr(Datan, 'начала')
-          + '. ' + GetDenyCreationStr + Suffix, mfError);
-        InsertMarker(ExceptionList, LSCHET.NREC);
-      }
-      else if (Day(DataOk) <> 0) and (DataOk < LSCHET.DATPOS)
-      {
-        Log(GetHireDateViolationStr(DataOk, 'окончания')
-          + '. ' + GetDenyCreationStr + Suffix, mfError);
-        InsertMarker(ExceptionList, LSCHET.NREC);
-      }
-    }
-  }
+//  if ValidatePeriodByHireDate = 1
+//  {
+//    _loop FORMARKS
+//    {
+//      if getfirst fastfirstrow LSCHET <> tsOk
+//        continue;
+//
+//      if (Day(Datan) <> 0) and (Datan < LSCHET.DATPOS)
+//      {
+//        Log(GetHireDateViolationStr(Datan, 'начала')
+//          + '. ' + GetDenyCreationStr + Suffix, mfError);
+//        InsertMarker(ExceptionList, LSCHET.NREC);
+//      }
+//      else if (Day(DataOk) <> 0) and (DataOk < LSCHET.DATPOS)
+//      {
+//        Log(GetHireDateViolationStr(DataOk, 'окончания')
+//          + '. ' + GetDenyCreationStr + Suffix, mfError);
+//        InsertMarker(ExceptionList, LSCHET.NREC);
+//      }
+//    }
+//  }
 
   if modifier getfirst ForMarks = tsOk
   {
@@ -237,38 +339,38 @@ Procedure FillBlisnet;
       if FoundMarker(ExceptionList, LSCHET.NREC)
         continue;
 
-      //контролировать защиту табеля
-      if ProtectSVMod
-      {
-        if LoadWorkingTable(LSCHET.NREC, AD_Month(DataN), AD_Year(DataN)) = 0
-        {
-          if WT_IsProtectedBwDates(DataN, DataOk)
-          {
-            iBlKontrl.MsgWTIsChecked(DataN, DataOk, Lschet.nrec);
-            ShowErrors;
-            continue;        //приходится на период закрытого табеля - удалять нельзя
-          }
-        }
-      }
+//      //контролировать защиту табеля
+//      if ProtectSVMod
+//      {
+//        if LoadWorkingTable(LSCHET.NREC, AD_Month(DataN), AD_Year(DataN)) = 0
+//        {
+//          if WT_IsProtectedBwDates(DataN, DataOk)
+//          {
+//            iBlKontrl.MsgWTIsChecked(DataN, DataOk, Lschet.nrec);
+//            ShowErrors;
+//            continue;        //приходится на период закрытого табеля - удалять нельзя
+//          }
+//        }
+//      }
 
       ClearBuffer(#BlisNet);
 
-      if (ValidatePeriodByHireDate = 2) and (Day(DataOk) <> 0) and (DataOk < LSCHET.DATPOS)
-      {
-        Log(GetHireDateViolationStr(DataOk, 'окончания')
-          + '. ' + GetDenyCreationStr + Suffix, mfError);
-        continue;
-      }
-      else if (ValidatePeriodByHireDate = 2) and (Day(Datan) <> 0) and (Datan < LSCHET.DATPOS)
-      {
-        Log(GetHireDateViolationStr(Datan, 'начала')
-          + '. ' + GetDateTruncatedStr('начала') + Suffix, mfWarning);
-        BLISNET.DATAN := LSCHET.DATPOS;
-      }
-      else
-        BLISNET.DATAN := DataN;
-
-      BLISNET.DATOK := DataOk;
+//      if (ValidatePeriodByHireDate = 2) and (Day(DataOk) <> 0) and (DataOk < LSCHET.DATPOS)
+//      {
+//        Log(GetHireDateViolationStr(DataOk, 'окончания')
+//          + '. ' + GetDenyCreationStr + Suffix, mfError);
+//        continue;
+//      }
+//      else if (ValidatePeriodByHireDate = 2) and (Day(Datan) <> 0) and (Datan < LSCHET.DATPOS)
+//      {
+//        Log(GetHireDateViolationStr(Datan, 'начала')
+//          + '. ' + GetDateTruncatedStr('начала') + Suffix, mfWarning);
+//        BLISNET.DATAN := LSCHET.DATPOS;
+//      }
+//      else
+      BLISNET.DATAN := GetBlisNetDataN(LSchet.Nrec, DataN, DataOk);
+      BLISNET.DATOK := GetBlisNetDatOk(LSchet.Nrec, BLISNET.DATAN, DataOk);
+      if BLISNET.DATAN > BLISNET.DATOK continue;
 
       BlisNet.NoNList := BlisNetNoNList;
       BLISNET.Uchet   := '0';
