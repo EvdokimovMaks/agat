@@ -1,0 +1,176 @@
+//Синхронизация атрибутов партии с данными в приходной накладной
+
+#include ExtAttr.vih
+#include Query.vih
+#include AG_CheckPosParty.vih
+
+#component "AGAT"
+
+interface AG_CheckPosParty;
+
+var
+  _cParty : comp;  //нрек текущей партии
+  _cSpSopr: comp;  //нрек текущей позиции приходной накладной
+  _qTZR   : IQuery; //запрос для определения суммы ТЗР
+
+  //нреки внешних атрибутов партии (см cmOnVipLoad)
+  _cAN_KatParty_SummaTZR: comp;
+  _cAN_KatParty_GruzPol : comp;
+  _cAN_KatParty_ProcNDS : comp;
+
+  #include ExtAttr.var
+
+create view
+as select
+  SpSopr.Nrec
+from
+  SpSopr
+ ,KatSopr
+ ,KatParty
+where ((
+      _cSpSopr     == SpSopr.Nrec
+  and SpSopr.cSopr == KatSopr.Nrec
+  and _cParty      == KatParty.Nrec
+));
+
+parameters _cParty, _cSpSopr;
+
+//Запрос для вычисления доли сопутствующей услуги, относящейся на позицию приходной накладной
+sql query qTZR =
+  select
+    SpSopr.KolFact * SpSopr.Price + (case when :VhodNal = 2 then SpSopr.SumNDS else 0 end) as SumMC: double
+   ,coalesce(tAllMcSpSopr.Summa, 0) as SumMCAll: double
+   ,coalesce(tAllUslSpSopr.SumNoNDS, 0) as SumNoNdsUslAll: double
+   ,coalesce(tAllUslSpSopr.Nalog, 0) as NalogUslAll: double
+   ,SpSopr.KolFact * (case when coalesce(KatOtpEd.Koef, 0) = 0 then 1 else KatOtpEd.Koef end) as KolUchEd: double
+
+  from SpSopr
+
+  left join KatOtpEd on KatOtpEd.Nrec = SpSopr.cOtpEd
+
+  outer apply (
+    select sum(SpSopr1.KolFact * SpSopr1.Price + case when :VhodNal = 2 then SpSopr1.SumNDS else 0 end) as Summa: double
+    from SpSopr SpSopr1
+    where SpSopr1.cSopr = :cKatSopr and SpSopr1.PrMc = 1
+  ) as tAllMcSpSopr
+
+  outer apply (
+    select
+      sum(SpSopr2.KolFact * SpSopr2.Price - case when :VhodNal = 2 then 0 else SpSopr2.SumNDS end) as SumNoNDS: double
+     ,max(tSpDocNal.Nalog) as Nalog
+    from SpSopr SpSopr2
+    outer apply (
+      select max(SpDocNal.Nalog) as Nalog
+      from SpDocNal
+      where SpDocNal.cSpDoc = SpSopr2.Nrec and SpDocNal.TipDoc = SpSopr2.VidSopr
+    ) tSpDocNal
+    where SpSopr2.cSopr = :cKatSopr and SpSopr2.PrMc > 1
+  ) as tAllUslSpSopr
+
+  where SpSopr.Nrec = :cSpSopr
+;
+
+//станавливает внешний атрибут типа ссылка к партии.
+//Только в случае если значение атрибута отличается от устанавливаемого.
+//Если устанавливает пустое значение - AttrVal удаляется.
+procedure coSetPartyAttr(ccAttrNam: comp; cValue: comp; sValue: string);
+{
+  if cValue = oExtAttr.coGetAttrId(coKatParty, KatParty.Nrec, ccAttrNam) exit;
+  if cValue = 0
+    oExtAttr.DeleteValueID(coKatParty, KatParty.Nrec, ccAttrNam);
+  else
+    oExtAttr.coSetAttrId(coKatParty, KatParty.Nrec, ccAttrNam, cValue, sValue);
+}
+
+//станавливает внешний атрибут типа число к партии.
+//Только в случае если значение атрибута отличается от устанавливаемого.
+//Если устанавливает пустое значение - AttrVal удаляется.
+procedure doSetPartyAttr(ccAttrNam: comp; doValue: double);
+{
+  if doValue = oExtAttr.doGetAttrId(coKatParty, KatParty.Nrec, ccAttrNam) exit;
+  if doValue = 0
+    oExtAttr.DeleteValueID(coKatParty, KatParty.Nrec, ccAttrNam);
+  else
+    oExtAttr.doSetAttrId(coKatParty, KatParty.Nrec, ccAttrNam, doValue);
+}
+
+//Выполняет синхронизацию атрибутов партии с данными в приходной накладной
+//Должны быть выставлены глобальные переменные _cSpSopr и _cParty
+procedure doCheckPosParty;
+{
+  if getfirst SpSopr   != tsOk exit;
+  if SpSopr.VidSopr    != 101  exit;
+  if getfirst KatSopr  != tsOk exit;
+  if getfirst KatParty != tsOk exit;
+
+  //Устанавливаем значение в/а партии "Грузополучатель" = Грузополучатель из накладной
+  coSetPartyAttr(_cAN_KatParty_GruzPol, KatSopr.cGruzTo, ShowKau(cgKau_KatOrg, KatSopr.cGruzTo));
+
+  //Рассчитываем сумму ТЗР, относящуюся на учетную единицу текущей позиции накладной
+  var cKatSopr: comp = KatSopr.Nrec;
+  var wVhodNal: word = KatSopr.VhodNal;
+  _qTZR.setParam('cSpSopr', _cSpSopr);
+  _qTZR.setParam('cKatSopr', cKatSopr);
+  _qTZR.setParam('VhodNal', wVhodNal);
+
+  if _qTZR.execute.errorCode != tsOk
+  {
+    Message(#__InterfaceName__ + '. Ошибка выполнения запроса ' + _qTZR.execute.errorCode);
+    exit;
+  }
+
+  if _qTZR.fetch.errorCode != tsOk exit;
+
+  var SumMC         : double = _qTZR.row.Val('SumMC');
+  var SumMCAll      : double = _qTZR.row.Val('SumMCAll');
+  var SumNoNdsUslAll: double = _qTZR.row.Val('SumNoNdsUslAll');
+  var NalogUslAll   : double = _qTZR.row.Val('NalogUslAll');
+  var KolUchEd      : double = _qTZR.row.Val('KolUchEd');
+
+  var SumUsl: double = if(SumMCAll > 0, SumMC / SumMCAll, 0) * SumNoNdsUslAll / if(KolUchEd = 0, 1, KolUchEd);
+
+  //Устанавливаем значение в/а партии Сумма ТЗР на уч.ед
+  doSetPartyAttr(_cAN_KatParty_SummaTZR, SumUsl);
+
+  //Если сумма ТЗР не 0, отражаем это в названии партии
+  var sTZR: string = '[ТЗР: ' + DoubleToStr(SumUsl, '[|-]3666`666`666`666.9999') + ']';
+  if SumUsl != 0
+  {
+    var k: byte = pos('[ТЗР', KatParty.Name);
+    if k > 0
+    {
+      var j: byte = 0;
+      for (j := k + 4; j <= length(KatParty.Name) and KatParty.Name[j] <> ']'; ++j) {}
+      KatParty.Name := SubStr(KatParty.Name, 1, k - 1) + sTZR + SubStr(KatParty.Name, j + 1, 255);
+    }
+    else
+      KatParty.Name += sTZR;
+
+    update current KatParty;
+  }
+
+  //Устанавливаем значение в/а ТЗР процент НДС
+  doSetPartyAttr(_cAN_KatParty_ProcNDS, NalogUslAll);
+}
+
+//Устанавливает глобальные переменные _cSpSopr и _cParty
+//Выполняет синхронизацию атрибутов партии с данными в приходной накладной
+procedure CheckPosParty(ccParty: comp; ccSpSopr: comp);
+{
+  _cParty := ccParty;
+  _cSpSopr := ccSpSopr;
+  doCheckPosParty;
+}
+
+handleevent
+  cmInit: doCheckPosParty;
+  cmOnVipLoad:
+  {
+    _cAN_KatParty_SummaTZR := oExtAttr.AttrID(coKatParty, 'Сумма ТЗР на уч.ед');
+    _cAN_KatParty_GruzPol  := oExtAttr.AttrID(coKatParty, 'Грузополучатель');
+    _cAN_KatParty_ProcNDS  := oExtAttr.AttrID(coKatParty, 'Процент НДС ТЗР');
+    _qTZR := queryManager.createQuery(qTZR);
+  }
+end;
+
+end.

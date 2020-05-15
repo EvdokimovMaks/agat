@@ -1,0 +1,165 @@
+#include Query.vih
+#include Karantin65Validator.vih
+
+#component "Z_LSCHET"
+
+interface Karantin65Validator;
+
+var _m: TPtr;
+var _q: IQuery;
+
+public function Valid(B: #MarksTLschet): Boolean;
+{
+  Result := FoundMarker(_m, B.Nrec);
+}
+
+sql query qLs =
+  select ls.Nrec
+
+  from lschet ls
+
+  join persons p on p.Nrec = ls.tPerson
+
+  outer apply (
+    select count(*) as cnt
+    from vacations v
+    join klotpusk o on v.vactype = o.nrec
+    where
+        v.person = p.nrec
+    and v.factyearbeg <= :dBeg
+    and v.factyearend >= :dEnd
+    and o.days in ('ОД','ДО','ОТ')
+  ) tOtp
+
+  outer apply (
+    select count(*) as cnt
+    from BlisNet bs
+    where
+        bs.clsch = ls.nrec
+    and bs.choice in (0,3,10)
+    and bs.DataN <= :dBeg
+    and bs.DatOk >= :dEnd
+  ) tBS
+
+  where
+      (ls.DatUv = 0 or ls.DatUv > :dBeg )
+  and p.IsEmployee = 'С'
+  and p.BornDate between 1 and :dBorn
+  and coalesce(tBS.cnt,0) = 0
+  and coalesce(tOtp.cnt,0) = 0
+;
+
+procedure Setup(dBorn: date; dBeg: date; dEnd: date);
+{
+  _q.setParam('dBorn', dBorn);
+  _q.setParam('dBeg', dBeg);
+  _q.setParam('dEnd', dEnd);
+  var rs: IResultSet = _q.getResultSet;
+  if rs = NullRef
+  {
+    Message('Ошибка выполнения запроса ' + _q.errorCode, error);
+    exit;
+  }
+  if rs.getfirst = tsOk do
+  {
+    InsertMarker(_m, comp(rs.row.valat(1)));
+  }
+  while rs.getnext = tsOk;
+}
+
+HandleEvent
+  cmOnVipLoad:
+  {
+    _m := InitMarker('', 8, 100, 100, true);
+    _q := queryManager.createQuery(qLs);
+  }
+  cmOnVipUnload:
+  {
+    DoneMarker(_m, '');
+  }
+end; //handleevent
+end. //interface Karantin65Validator
+
+interface PersonalAccountValidatorBrowserPlugin_Karantin65 'Карантин. Возраст >= 65'
+  doaccept, escclose, gray;
+
+  var
+    _dBeg, _dEnd, _dBorn: date;
+
+  window wParams 'Параметры' escClose, doAccept;
+    show(,,60,10);
+    screen sc1 (,,sci1Esc);
+      NoTableNavigation;
+      fields
+        _dBorn: noprotect;
+        _dBeg: noprotect;
+        _dEnd: noprotect;
+<<
+
+ Отбор сотрудников с датой рождения <= .@@@@@@@@@@
+
+ Исключать сотрудников, находящихся в отпуске (тип отпуска ОТ, ОД, ДО)
+ или на больничном в период с .@@@@@@@@@@ по .@@@@@@@@@@
+
+ Исключаются только те сотрудники, у которых отпуск или больничный
+ полностью перекрывает указанный период
+
+>>
+    end;
+  end; //window wParams
+
+  public procedure ClearParameters;
+  {
+    _dBorn:= date(6,4,1955);
+    _dBeg := date(6,4,2020);
+    _dEnd := date(19,4,2020);
+  }
+
+  public function GetDescription: String;
+  {
+    Result := 'Карантин. Возраст >= 65';
+  }
+
+  public function HasParameters: Boolean;
+  {
+    Result := true;
+  }
+
+  public function SetupParameters: Boolean;
+  {
+    RunWindowModal(wParams);
+    Result := true;
+  }
+
+  public function GetParametersStr: String;
+  {
+    result := 'ДР<=' + DateToStr(_dBorn,'DD.MM.YYYY') +
+              '; П:' + DateToStr(_dBeg,'DD.MM.YYYY') +
+              ' - '  + DateToStr(_dEnd,'DD.MM.YYYY');
+  }
+
+  public function GetValidator: IPersonalAccountValidator;
+  {
+    var Validator: IPersonalAccountValidator = NullRef;
+    LoadVipRef(Validator, 'Karantin65Validator');
+    IKarantin65ValidatorOptions(Validator).Setup(_dBorn, _dBeg, _dEnd);
+    GetValidator := Validator;
+  }
+
+  procedure IResourceBased.Load(ResourcePrefix: string);
+  {
+    var prfx: string = ResourcePrefix + '_' + #__InterfaceName__ + '_';
+    if not ReadMyDSK(_dBeg, prfx + 'dBeg', false) _dBeg := date(6,4,2020);
+    if not ReadMyDSK(_dEnd, prfx + 'dEnd', false) _dEnd := date(19,4,2020);
+    if not ReadMyDSK(_dBorn, prfx + 'dBorn', false) _dBorn := date(6,4,1955);
+  }
+
+  procedure IResourceBased.Store(ResourcePrefix: string);
+  {
+    var prfx: string = ResourcePrefix + '_' + #__InterfaceName__ + '_';
+    SaveMyDSK(_dBeg, prfx + 'dBeg');
+    SaveMyDSK(_dEnd, prfx + 'dEnd');
+    SaveMyDSK(_dBorn, prfx + 'dBorn');
+  }
+
+end.

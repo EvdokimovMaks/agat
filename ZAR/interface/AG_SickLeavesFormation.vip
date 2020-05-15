@@ -1,0 +1,900 @@
+#include "SickLeavesFormation.vih"
+#include "macrosch.vpp" // макроопределения для обработки счетов, субсчетов и КАУ
+#include "PAFILTER.VIH"
+#include "StornFUNC.VIH" // для сторнирования зарплаты
+#include "BlControl.vih" // для контроля дат больничных
+#include "WorkWithPnStaj.VIH"
+#include "ExtAttr.vih"
+#include "CatFunc.vih" // Функции работы с каталогом
+#include PickPos.vih
+#include Query.vih
+
+procedure FillSpAllStaff(String, string, comp, LongInt, comp, word); external 'G_ZARPL.DLL';
+
+#doc
+Параметры формирования больничных
+#end
+
+#component "AGAT"
+
+interface AG_SickLeavesFormation 'Параметры формирования' escclose, doaccept, gray;
+ show at (2,2,69,23);
+
+#include XGetKau.var   // Переменная типа "Интерфес выбора многих КАУ"
+
+var iCatFunc: CatalogsFunctions;   // Переменная типа интерфейс CatalogsFunctions
+var iBlKontrl: BlControl; // Переменная типа "Интерфес контроля дат больничных"
+var _qDataN, _qDatOk: IQuery;
+
+Create view V
+var
+    DataType:   word;
+    prcLs      : comp;
+    saveotp    : word;
+    KodVidPos  : word;
+    DataN      : date;
+    DataOk     : date;
+    wKLBLDCH   :  word;
+    BlisNetNoNList: string[20]; //AGAT
+    cMedicalOffice: comp;
+    cDocPost      : comp;
+    DateCur    : date;
+    DataVydachi: date;
+    RejRasch   : word;
+    SumNaRuk   : word;
+    ProtectSVMod : boolean;   //запрет на ввод данных за период закрытого табеля
+    prvidudv   : word; //вид удержания для кассы больничного
+    prvidudb   : word; //вид удержания для банка больничного
+    XAR_BLOKD  : word; //Количество дней за счет работодателя
+    DirectPaymentsFSS : word;
+    ValidatePeriodByHireDate: word;
+    #include PAFILTER.VAR
+    SF         : StornZarFuncs; //сторнирование зарплаты
+ (
+ FiltrBoln,
+ FiltrPodr,
+ FiltrPublic
+ )
+as select
+ if(IsValid(tnKlVidPos), KlVidPos.NPOS, 'Не установлен'),
+  PAF.GetDepartmentFilterStr,
+  PAF.GetPersonalAccountFilterStr,
+  ZAR_USER.GRUPSTN, // вычисляемые поля для фильтров по сотрудн. и подразд.
+  KlVidPos.VIDPOS, KlVidPos.NPOS,
+  Disease.*
+
+from
+  KLVIDUD,
+  KLVIDPOS,
+  BLISNET,
+  BLANKBLN,
+  FSSINFO,
+  ZAR_USER,
+  KATPODR,
+  PERSONS,
+  LSCHET,
+  FORMARKS,
+  ARBL,
+  DISEASE,
+  MOVELSC,
+  LSTAB,
+  KLLISNET,
+  FONDOTP,
+  KLBLDCH,
+  Catalogs CatMedOffice,
+  Catalogs CatDocPost,
+  synonym LSCHET  LSCHETN ,
+  synonym PERSONS PERSONSN,
+  synonym CATALOGS CATYSLISCH,
+//_________ это для переформирования словаря ___________________
+  synonym KLVIDUD KLVIDUDV,
+  synonym KLVIDUD KLVIDUDB
+//________конец для переформирования словаря ___________________
+
+where
+ ((
+  UserName == Zar_User.OwnName
+  and _cLSchet == Formarks.Choice
+  and Zar_User.curcex == KatPodr.Nrec
+  and Zar_User.cNazna == LSchetN.TabN
+  and LSchetN.tPerson == PersonsN.nrec
+  and formarks.cLschet == LSchet.Nrec
+  and LSchet.tPerson  == Persons.nrec
+  and prvidudv        == KlVidudv.vidud
+  and prvidudb        == KlVidudb.vidud
+  and KodVidPos       == KlVidPos.VidPos
+  and BLisNet.Nrec    == ArBl.cBlisnet
+  and BLISNET.srcBlank  == BLANKBLN.Nrec
+  // Врачи
+  and BLANKBLN.MEDCOM_1 == FSSINFO.NREC
+
+  and wKLBLDCH == KLBLDCH.Kod
+  and cMedicalOffice == CatMedOffice.Nrec
+  and cDocPost == CatDocPost.Nrec
+ ));
+
+parameters
+  DataType, //за текущий период(0), вынужденные(2), архивные(3), будущих периодов(4)
+  prcLs;   // персона (кому формировать?)
+
+#include Wt_Kor.vpp     //корректировки рабочего табеля
+#include PAFILTER.VPP
+
+//------------------------------------------------------------------------------
+  function Suffix: string;
+  {
+    Suffix := ' (таб.н. ' +
+     GetStrTabn(Lschet.TabN,Lschet.StrTabN)
+     + ', ' + GetSurnameWithInitials(PERSONS.FIO) + ')';
+  }
+
+//------------------------------------------------------------------------------
+  function GetHireDateViolationStr(InvalidDate: date; Qualifier: string): string;
+  {
+    GetHireDateViolationStr :=
+      'Дата ' + Qualifier + ' больничного (' + string(InvalidDate)
+      + ') меньше даты приема на работу (' + string(LSCHET.DATPOS) + ')';
+  }
+
+  function GetDateTruncatedStr(Qualifier: string): string;
+  {
+    GetDateTruncatedStr := 'Дата ' + Qualifier + ' больничного усечена';
+  }
+
+  function GetDenyCreationStr: string;
+  {
+    GetDenyCreationStr := 'Больничный не будет сформирован';
+  }
+
+//------------------------------------------------------------------------------
+// добавление условия исчисления: 0- не добавлена (ограничена 3 шт) ), 1 - вставка удачна
+  function AddnRec_Ysl ( _nRec_Ysl : comp ) : byte;
+  {
+    var NownRec_Ysl : comp;
+    var iTmp : integer;
+    Result := 0;
+    for ( iTmp := 1; iTmp <=3; iTmp++)
+    {
+      case iTmp of
+      1: NownRec_Ysl := BlankBln.CalcCondition_1;
+      2: NownRec_Ysl := BlankBln.CalcCondition_2;
+      3: NownRec_Ysl := BlankBln.CalcCondition_3;
+      end;
+
+      if ((NownRec_Ysl = 0) and (Result = 0))
+      {
+        case iTmp of
+        1: BlankBln.CalcCondition_1 := _nRec_Ysl;
+        2: BlankBln.CalcCondition_2 := _nRec_Ysl;
+        3: BlankBln.CalcCondition_3 := _nRec_Ysl;
+        end;
+        Result := 1; // добавлена
+        exit;
+      }
+    }// for
+  } // AddnRec_Ysl
+//------------------------------------------------------------------------------
+function getYslNachByDismissed : boolean;
+{
+  Result := false;
+
+  if ( Lschet.DatUv = ZeroDate )
+    Exit;
+
+  if ( CalcDaysBetweenDates(Lschet.DatUv, DatRas, false) <= 30 ) and
+     ( DirectPaymentsFSS > 0 )
+  {
+    Result := true;
+  }
+} // getYslNachByDismissed
+//------------------------------------------------------------------------------
+
+sql query qDataN =
+  select max(bs.DatOk) as dDate: date
+  from BlisNet bs
+  where
+      bs.clsch = :cLSchet
+  and bs.choice in (0,3,10)
+  and bs.DatOk between :DataN and :DatOk
+  union all
+  select max(fo.factyearend) as dDate: date
+  from LSchet ls
+  join factotpusk fo on fo.person = ls.tPerson
+  join klotpusk o on fo.vactype = o.KOtpus
+  where
+      ls.Nrec = :cLSchet
+  and fo.factyearend between :DataN and :DatOk
+  and o.days in ('ОД','ДО','ОТ')
+  union all
+  select ls.DatPos
+  from LSchet ls
+  where
+      ls.Nrec = :cLSchet
+  and ls.DatPos between :DataN and :DatOk
+;
+
+function GetBlisNetDataN(ccLSchet: comp; dDataN: date; dDatOk: date): date;
+{
+  if (_qDataN = NullRef) _qDataN := queryManager.createQuery(qDataN);
+
+  result := DataN;
+
+  _qDataN.setParam('cLSchet', ccLSchet);
+  _qDataN.setParam('DataN', dDataN);
+  _qDataN.setParam('DatOk', dDatOk);
+  if _qDataN.Execute.errorCode != tsOk
+  {
+    Message('Ошибка выполнения запроса qDataN ' + _qDataN.errorCode, error);
+    exit;
+  }
+
+  while _qDataN.fetch.errorCode = tsOk
+  {
+    var d: date = _qDataN.row.valAt(1);
+    if d = 0 continue;
+    d := Add_Day(d, 1);
+    if (d > result) result := d;
+  }
+}
+
+sql query qDatOk =
+  select min(bs.DataN) as dDate: date
+  from BlisNet bs
+  where
+      bs.clsch = :cLSchet
+  and bs.choice in (0,3,10)
+  and bs.DataN between :DataN and :DatOk
+
+  union all
+
+  select min(fo.factyearbeg) as dDate: date
+  from LSchet ls
+  join factotpusk fo on fo.person = ls.tPerson
+  join klotpusk o on fo.vactype = o.KOtpus
+  where
+      ls.Nrec = :cLSchet
+  and fo.factyearbeg between :DataN and :DatOk
+  and o.days in ('ОД','ДО','ОТ')
+
+  union all
+
+  select ls.DatUv
+  from LSchet ls
+  where
+      ls.Nrec = :cLSchet
+  and ls.DatUv between :DataN and :DatOk
+;
+function GetBlisNetDatOk(ccLSchet: comp; dDataN: date; dDatOk: date): date;
+{
+  if (_qDatOk = NullRef) _qDatOk := queryManager.createQuery(qDatOk);
+
+  result := DataOk;
+
+  _qDatOk.setParam('cLSchet', ccLSchet);
+  _qDatOk.setParam('DataN', dDataN);
+  _qDatOk.setParam('DatOk', dDatOk);
+  if _qDatOk.Execute.errorCode != tsOk
+  {
+    Message('Ошибка выполнения запроса qDatOk ' + _qDatOk.errorCode, error);
+    exit;
+  }
+
+  while _qDatOk.fetch.errorCode = tsOk
+  {
+    var d: date = _qDatOk.row.valAt(1);
+    if d = 0 continue;
+    d := Sub_Day(d, 1);
+    if (d < result) result := d;
+  }
+}
+
+Procedure FillBlisnet;
+{
+  var ExceptionList: TPtr;
+  var Bl_KOLDNGR : double;
+  var WarningMes : string;
+
+  WarningMes := '';
+  if((minute(BLISNET.LASTTIME) = byte(1)) and (BLISNET.KOLDNGR=0))
+    Bl_KOLDNGR := -1;
+  else
+    Bl_KOLDNGR := BLISNET.KOLDNGR;
+
+  if wGetTune('Country') = ccBel
+    XAR_BLOKD := 0;
+  else
+    XAR_BLOKD := wGetTune('UP.ZAR.BLOKD');
+
+  ExceptionList := InitMarker('', 8, 100, 50);
+
+//  if ValidatePeriodByHireDate = 1
+//  {
+//    _loop FORMARKS
+//    {
+//      if getfirst fastfirstrow LSCHET <> tsOk
+//        continue;
+//
+//      if (Day(Datan) <> 0) and (Datan < LSCHET.DATPOS)
+//      {
+//        Log(GetHireDateViolationStr(Datan, 'начала')
+//          + '. ' + GetDenyCreationStr + Suffix, mfError);
+//        InsertMarker(ExceptionList, LSCHET.NREC);
+//      }
+//      else if (Day(DataOk) <> 0) and (DataOk < LSCHET.DATPOS)
+//      {
+//        Log(GetHireDateViolationStr(DataOk, 'окончания')
+//          + '. ' + GetDenyCreationStr + Suffix, mfError);
+//        InsertMarker(ExceptionList, LSCHET.NREC);
+//      }
+//    }
+//  }
+
+  if modifier getfirst ForMarks = tsOk
+  {
+    StartNewVisual(vtRotateVisual, vfTimer, 'Формируются данные'#13, 1);
+    do
+    {
+      // не формировать больничный для лицевого счета, ссылка на который упомянута
+      // в списке исключений
+      if FoundMarker(ExceptionList, LSCHET.NREC)
+        continue;
+
+//      //контролировать защиту табеля
+//      if ProtectSVMod
+//      {
+//        if LoadWorkingTable(LSCHET.NREC, AD_Month(DataN), AD_Year(DataN)) = 0
+//        {
+//          if WT_IsProtectedBwDates(DataN, DataOk)
+//          {
+//            iBlKontrl.MsgWTIsChecked(DataN, DataOk, Lschet.nrec);
+//            ShowErrors;
+//            continue;        //приходится на период закрытого табеля - удалять нельзя
+//          }
+//        }
+//      }
+
+      ClearBuffer(#BlisNet);
+
+//      if (ValidatePeriodByHireDate = 2) and (Day(DataOk) <> 0) and (DataOk < LSCHET.DATPOS)
+//      {
+//        Log(GetHireDateViolationStr(DataOk, 'окончания')
+//          + '. ' + GetDenyCreationStr + Suffix, mfError);
+//        continue;
+//      }
+//      else if (ValidatePeriodByHireDate = 2) and (Day(Datan) <> 0) and (Datan < LSCHET.DATPOS)
+//      {
+//        Log(GetHireDateViolationStr(Datan, 'начала')
+//          + '. ' + GetDateTruncatedStr('начала') + Suffix, mfWarning);
+//        BLISNET.DATAN := LSCHET.DATPOS;
+//      }
+//      else
+      BLISNET.DATAN := GetBlisNetDataN(LSchet.Nrec, DataN, DataOk);
+      BLISNET.DATOK := GetBlisNetDatOk(LSchet.Nrec, BLISNET.DATAN, DataOk);
+      if BLISNET.DATAN > BLISNET.DATOK continue;
+
+      BlisNet.NoNList := BlisNetNoNList;
+      BLISNET.Uchet   := '0';
+      BLISNET.CHOICE  := DataType;
+      BlisNet.TabN    := LSchet.TabN;
+      Blisnet.StrTabn := Lschet.StrTabn;
+      BlisNet.Cex     := LSchet.Cex;
+      BlisNet.cLsch   := LSchet.nrec;
+      BlisNet.tperson := LSchet.tperson;
+      BlisNet.PSZP    := word(LSchet.Summa19);//Льготный процент
+
+      //101.63753  по умолчанию не заполняем
+      BLisnet.LastDate := DataVydachi;  //Дата выплаты
+      Blisnet.PDCh    := RejRasch;
+      Blisnet.Summa1  := SumNaRuk;
+      if LSchet.Summa27 = 1 then  //Льготный процент
+        Blisnet.filialno:= prvidudb //вид удержания для кассы больничного
+      else
+        Blisnet.filialno:= prvidudv; //вид удержания для кассы больничного
+//    prvidudb   : word; //вид удержания для банка больничного
+      if BlisNet.datan < FirstDayRas  //предыдущий месяц
+         BlisNet.Vidopl:= 114
+      else
+        if BlisNet.datan > DatRas then //следующий месяц
+           BlisNet.Vidopl := 116
+        else    //текущий месяц
+          BlisNet.Vidopl := 115;
+      BLisNet.Mes      := month(BLisNet.DataN);//Mecяц начала заболевания
+      BlisNet.CHASGR   := day(BLisNet.DataN);
+      BLisNet.TypeViol := year(BLisNet.DataN);//год начала заболевния
+      BlisNet.KolDn    := SetKolDnPerexod(BLisNet.DataN,
+                                      DatOkSmen(Blisnet.DatOk,0),
+                                      GetStrTabn(BLisNet.TabN,BLisNet.StrTabN),
+                                      LSchet.Nrec,
+                                      KodVidPos, false);
+      if (RejRasch = 1) then
+      {
+        Blisnet.KoldnKon := Blisnet.Koldn; //Пересчитываем рабочие часы
+        Blisnet.Koldn    := ChGrD1D2;      //Пересчитываем рабочие часы
+      }
+      else
+        Blisnet.KoldnKon := ChGrD1D2; //Пересчитываем рабочие часы
+      #SetDef_Deb (BlisNet)
+      BlisNet.cHozOper := 0;
+      BlisNet.Param    := '';
+      BLisnet.VidPos   := KodVidPos;
+      // Установка кода непрерывного стажа
+
+      BLisNet.LisNet  := MoveToStag(BLisNet.Pszp,BLisNet.DataN,Lschet.DatNps,
+                                    GetStrTabn(LSchet.TabN,LSchet.StrTabN),
+                                    LSchet.tperson);
+      ClearBuffer(#Disease); // Вставка в историю больничных
+      Disease.Person      := Blisnet.tPerson;
+      Disease.MedicCertif := Blisnet.NonList;
+      Disease.DiseaseBeg  := Blisnet.DataN;
+      Disease.DiseaseEnd  := Blisnet.DatOk;
+      Disease.LastDate    := DateCur;
+      if (Blisnet.PDCh <> 1)
+        Disease.MissingDays := longint(BLisNet.KolDn);
+      else
+        Disease.MissingDays := longint(BLisNet.KOLDNKon);
+      Disease.Diagnosis   := Klvidpos.NRec;
+      if (modifier insert current Disease = tsok)
+        Blisnet.SrcRec := Disease.NRec;
+      if (insert current blisnet) <> tsOk
+        message('Ошибка при вставке в таблицу листков нетрудоспособности', Ok);
+
+      ClearBuffer(#BlankBln); // Вставка бланка больничных
+      BlankBln.DateBeg  := Disease.DiseaseBeg;
+      BlankBln.DateEnd  := BLISNET.DATOK;
+      BlankBln.DateDop_1:= Add_Day(BLISNET.DATOK, 1);
+      BlankBln.DateDop_2:= Add_Day(BLISNET.DATOK, 1);
+      BlankBln.tPerson  := BLISNET.tPerson;
+      BlankBln.NumList  := BLISNET.NONLIST;
+      BlankBln.Original := true;
+      BlankBln.dNZ      := BLisNet.DataN;
+      BlankBln.MedicalOfficeRef := cMedicalOffice;
+      BlankBln.DisabReasonRef   := if(isValidAll(tnKLBLDCH), comp(KLBLDCH.LastUser), 0);
+
+      var iEntry : integer = 1482; // системный код для условий исчислений больничных
+      var cParentEntry : comp = 0; // nRec группы условий исчислений
+
+      if getfirst CATYSLISCH where ((1482 == CATYSLISCH.SYSCODE)) = tsOk
+      {
+        cParentEntry := CATYSLISCH.nRec;
+        // - для инвалидов
+        if Persons.InvalidGrp != 0 then
+        {
+          if getfirst CATYSLISCH where ((cParentEntry == CATYSLISCH.CPARENT and '45' == CATYSLISCH.CODE)) = tsOk // 45, Имеет инвалидность;
+            AddnRec_Ysl(CATYSLISCH.nRec);
+        }
+        // - работы во время отпуска по уходу за ребёнком
+        // - больничного во время работы во время отпуска по уходу за ребёнком
+        if (WT_GetDaysBwDatesEx(dkWorkingWhileVacation, stActual, DataN, DataOk, 0) > 0)
+           or (WT_GetDaysBwDatesEx(dkSchrodingersDay, stActual, DataN, DataOk, 0) > 0) then
+        {
+          if getfirst CATYSLISCH where ((cParentEntry == CATYSLISCH.CPARENT and '51' == CATYSLISCH.CODE)) = tsOk // 51, Работает неполное рабочее время
+            AddnRec_Ysl(CATYSLISCH.nRec);
+        }
+      }
+
+      if ( getYslNachByDismissed )
+        AddnRec_Ysl(iCatFunc.GetCatalogsNrec(1488));
+
+      if( minute(BLISNET.LASTTIME) <> byte(1))
+      {
+        BlisNet.RasZarD := dni_i_shift(
+                       BLISNET.FMPOSB[12],
+                       BLISNET.DATAN,   //возвращает к-во дней или часов
+                       BlankBln.dNZ,
+                       BLISNET.PDCH,
+                       XAR_BLOKD, BLISNET.KOLDN,
+                       GetStrTabn(BLISNET.TABN,BLISNET.STRTABN),
+                       LSCHET.NREC,
+                       BLISNET.VIDPOS,
+                       BLISNET.KOLDN, 0, Bl_KOLDNGR,
+                       (KLVIDPOS.VIDOPLOP + KLVIDPOS.VIDOPLOO + KLVIDPOS.VIDOPLOB),
+                       (KLVIDPOS.VIDOPLDP + KLVIDPOS.VIDOPLOD + KLVIDPOS.VIDOPLDB)
+                       );
+      }
+
+      if (insert current BlankBln = tsok)
+      {
+        BLISNET.srcBlank := BlankBln.NREC;
+        update current BLISNET;
+      }
+      // вставка записи дополнительные данные для больничного
+      ClearBuffer(#FSSINFO);
+      FSSINFO.BLANKBLNREF := BlankBln.NREC; // это можем прописать только сейчас
+      FSSINFO.NREC := 0;
+      FSSINFO.DATECOMBEG := DISEASE.DISEASEBEG;
+      FSSINFO.DATECOMEND := BLISNET.DATOK;
+      FSSINFO.DOCPOSTREF := cDocPost;
+      FSSINFO.DOCPOST    := if(IsValidAll(#CatDocPost), CatDocPost.Name, '');
+      FSSINFO.DOCFIO     := 'УП.ВРАЧ';
+      insert current FSSINFO;
+      BlankBln.MEDCOM_1 := FSSINFO.NREC;
+      update current BlankBln;
+
+      ClearBuffer(#FondOtp);
+      FondOtp.KODFOND  := 1000;
+      FONDOTP.COTPUSK  := Blisnet.nrec;
+      FondOtp.lastdate := AD_lastDate(dGetTune('UP.DatOtch'));
+      FondOtp.datok    := Cur_Date;
+      FondOtp.KolDn    := 1;
+      insert current FondOtp;
+
+      if (iBlKontrl.CheckCrossDatesBlWithBl(Blisnet.NRec))
+      {
+        Message('Заполнено два больничных на даты ' + ' с '
+          + string(Blisnet.DataN) + ' по ' + string(Blisnet.DatOk) + ', количество оплачиваемых дней уменьшено!', mfWarning);
+        WarningMes := 'Заполнено два больничных на даты ' + ' с '
+          + string(Blisnet.DataN) + ' по ' + string(Blisnet.DatOk);
+        FillSpAllStaff(WarningMes,GetStrTabn(BlisNet.TabN,BlisNet.StrTabN),BlisNet.clsch,501, BlisNet.NRec, cgViewBolnMes);
+      }
+      iBlKontrl.CheckDates(Blisnet.NRec);   //контроль дат больничных
+      //определение даты начала учета больничного
+      iBlKontrl.DefineBegCalcDate(BLISNET.NREC);
+      ReReadRecord;
+
+      if boGetTune('UP.ZAR.WT.AutoReform')
+        Reform_Ot(Blisnet.cLsch,Blisnet.DataN,DatOkSmen(Blisnet.DatOk,0));
+
+
+      ClearBuffer(#ArBl);
+      ARBL.LASTDATE := //дата начала оплаты
+              D_O_ProcFSS(
+                  BlisNet.fmposb[12],
+                  BlisNet.DataN, BlisNet.DatOK,
+                  date(byte(BlisNet.CHASGR),
+                       byte(BlisNet.Mes),
+                       BLisNet.TypeViol),
+                  GetStrTabn(BlisNet.TabN,BlisNet.StrTabN),
+                  Lschet.Nrec,
+                  BlisNet.VIDPOS,
+                  BlisNet.pszp,KlVidPos.Procent,
+                  KlVidPos.VidOplO,KlLisNet.PsZp,KlVidPos.VidOplD,KlLisNet.Proc);
+      ARBL.FilialNo := wKLBLDCH;
+      insert current ArBl;
+      Delim_Po_M (Blisnet.Nrec,GetStrTabn(Blisnet.TabN,Blisnet.StrTabn),Lschet.Nrec, BLISNET.VIDPOS);
+
+      if ( BLisNet.DATAN < FirstDayRas and boGetTune('UP.ZAR.NEED_12'))
+      {//проводим сторнирование больничного
+        if not SF.SeachZarMes(BLisNet.DataN, BLisNet.DatOk, coBLisNet, BLisNet.Nrec)
+          Displ('Сторнирование больничного не проведено');
+      }
+    } while (modifier getnext Formarks = tsOK) and (NextVisual);
+    StopVisual('', 0);
+    ShowErrors; //Показать файл ошибок на экран
+  }
+  DoneMarker(ExceptionList, '');
+} // procedure fillblisnet
+
+panel zar_userpermnent;
+table zar_user;
+
+screen FormParBoln (,,sci1Esc);
+fields
+   DateCur    ('Дата ввода листа нетрудоспособности', hcFormOtpb, sci1Esc) : noprotect;
+   FiltrBoln  ('Вид пособия',hcFormOtpb,sci13Esc):protect, pickbutton,
+      {Font={BackColor=if((KodVidPos) = 0,ColorNeed,0)}};
+   DataN      ('Начало больничного',hcFormOtpb,sci1Esc):noprotect;
+   DataOk     ('Окончание больничного',hcFormOtpb,sci1Esc):noprotect;
+   SumNaRuk   ('Признак выплаты суммы на руки', hcFormOtpb) :
+      [LIST 'не выплачивать','выплачивать'], protect;
+   klvidudv.vidudp ('Код удержания для кассы',hcFormOtpb,sci13Esc):protect, pickbutton;
+   klvidudb.vidudp ('Код перечисления для банка',hcFormOtpb,sci13Esc):protect, pickbutton;
+   DataVydachi('Дата выдачи по кассе или перечисления',hcFormOtpb,sci1Esc):noprotect, pickbutton;
+   RejRasch   ('Укажите режим формирования листков нетрудоспособности',hcFormOtpb,sci13Esc) :
+      [LIST 'по дням','по часам'], protect;
+
+   BlisNetNoNList: noprotect;
+   KLBLDCH.NAMEPR (,hcFormOtpb,sci13Esc): protect, pickbutton;
+   CatMedOffice.Name (,,sci13Esc): protect, pickbutton;
+   CatDocPost.Name (,,sci13Esc): protect, pickbutton;
+
+   Zar_User.GrupStN ('Выберите фильтр для расчета',hcFormOtpb,sci1Esc):noprotect;
+   FiltrPodr  ('Заданный фильтр по подразделению',hcFormOtpb,sci13Esc) :protect, pickbutton;
+   FiltrPublic('Выберите работников для проведения расчета',hcFormOtpb,sci13Esc):protect, pickbutton;
+buttons
+   cmOk,default,,'~В~вод ',hcOkHelp,sci1Esc;
+   cmCancel,,,'~О~тмена',hcCancelHelp,sci1Esc;
+<<'Параметры формирования листков нетрудоспособности'
+
+ `Дата ввода листа`.@@@@@@@@@@@@@@@
+ `Вид пособия`     .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ `Листки нетрудоспособности с`.@@@@@@@@@@@  `по`.@@@@@@@@@@@@@@@
+
+   Значения по умолчанию для заполнения суммы на руки
+   .@@@@@@@@@@@@@@@@@@  `код для кассы`.@@@@@ `для банка`.@@@@@@
+                        `дата выплаты` .@@@@@@@@@@@@@@@@@@@@@@@@
+
+ `Режим расчета пособия по нетрудоспособности`  .@@@@@@@@@@@@@@@
+ ───────────────────────────────────────────────────────────────
+ `Номер`.@@@@@@@@@@@@@@ `Особенности`.@@@@@@@@@@@@@@
+ `Мед. учреждение`.@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ `Врач-должность` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+ ───────────────────────────────────────────────────────────────
+ `Фильтры по:`
+   [.] подразделению ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+   [.] работникам    ` .@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+         <.Сформировать.>                   <.  Отмена  .>
+>>
+end;
+
+Handleevent
+  cmUpdateRecord:
+  {
+    update current zar_user;
+  }
+
+  cmCheckField:
+  {
+    case CurField of
+      #DataN:
+      {
+        if (DataN > DataOk)
+          set DataOk := DataN;
+      }
+
+      #DataOk:
+      {
+        if (DataN > DataOk)
+        {
+          Set DataN  := DataOk;
+        }
+        if Ad_Year(DataOk) > (Ad_Year(DataN) + 3)  then
+        {
+          Set DataOk := Add_Months(DataN,36);
+          Message('Продолжительность пособия более 3-х лет! ' + 'Дата окончания ограничена ' + DateToStr(DataOk,'DD/MM/YYYY'),mfWarning);
+        }
+      }
+    end;  //case
+    PodrPubCheck;  // процедура для фильтров по подразд. и работн.
+  }
+
+  cmDelOnProtect:
+  {
+    case CurField of
+      #klvidudv.vidudp:
+      {
+        set prvidudv := 0;
+
+        if getfirst klvidudv = tsOk {};
+
+        if coSetTune ('UP.ZAR.bl.Vidudv', 0,'') = tsOk {};
+
+        RereadRecord(#Klvidudv);
+        RedRawPanel(#Zar_User);
+      }
+
+      #klvidudb.vidudp:
+      {
+        set prvidudb := 0;
+
+        if getfirst klvidudb = tsOk {};
+
+        if coSetTune ('UP.ZAR.bl.Vidudb', 0,'') = tsOk {};
+
+        RereadRecord(#Klvidudb);
+        RedRawPanel(#Zar_User);
+      }
+    end;
+  }
+end;  //handleevent
+end;  //panel
+
+Handleevent
+  cmInit:
+  {
+    ProtectSVMod := false;
+    if ExistTune('UP.ZAR.WT.ProtectSystemVarianceModification')  //есть настройка запрета ввода по периодам
+      ProtectSVMod := boGetTune('UP.ZAR.WT.ProtectSystemVarianceModification');
+
+    if (not Is_Exist_Table(coArchRates))
+    {
+      Abort;
+      Exit;
+    }
+
+    if not prVidInit(25,1)
+    {
+      message(''#3'Ошибка при открытии данных в prVidInit',OK);
+      StopVisual('', 0);
+      exit;
+    }
+
+    // при необходимости пересканировать текущие лицевые счета и очистить пометки
+    InitUser(if(prcLs = 0, 1, 0)); // Инициализация Zar_User, если для одного, то formarks не очищаем
+    ValidatePeriodByHireDate := wGetTune('UP.ZAR.ValidatePeriodByHireDate');
+
+    if (not ReadMyDsk(RejRasch, 'FormOtpB_RejRasch', false))
+      RejRasch := 0;
+
+    if (not ReadMyDsk(SumNaRuk, 'FormOtpB_SumNaRuk', false))
+      SumNaRuk := 0;
+
+    setFieldAndLabelVisible(#DataVydachi,  SumNaRuk = 1);
+
+    if not ReadMyDsk(DataN, 'DataN_AG_SickLeavesFormation', false) DataN := date(06,04,2020); //FirstDayRas;
+    DateCur := Cur_Date;
+    BlisNetNoNList := '999000000000';
+
+    SetTitle('Параметры формирования больничных');
+    prvidudv := word(coGetTune('UP.ZAR.bl.Vidudv'));
+    prvidudb := word(coGetTune('UP.ZAR.bl.Vidudb'));
+    if getfirst klvidudb = tsOk {};
+    if getfirst klvidudv = tsOk {};
+    if ExistTune('UP.ZAR.BL.VidPos')
+      KodVidPos := word(coGetTune('UP.ZAR.BL.VidPos'))
+    else
+      KodVidPos := 0;
+
+    if not ReadMyDSK(DataOk, 'DataOk_AG_SickLeavesFormation', true) DataOk := date(19,04,2020);
+    //DataOk := Add_Day(DataN,1);
+
+    SetFormat(FormParBoln);
+    setbounds(#KlVidPos);
+    DirectPaymentsFSS := wGetTune('UP.PAYMENTSFSS.DIRECTPAYMENTSFSS');
+
+    ReadMyDSK(wKLBLDCH, 'wKLBLDCH_AG_SickLeavesFormation', true);
+    ReadMyDSK(cMedicalOffice, 'cMedicalOffice_AG_SickLeavesFormation', true);
+    ReadMyDSK(cDocPost, 'cDocPost_AG_SickLeavesFormation', true);
+  }
+
+  cmSet_Hide:
+  {
+    ClearFieldOption(#Zar_User.GrupStN, ofSelectable);
+    ClearFieldOption(#FiltrPodr,   ofSelectable);
+    ClearFieldOption(#FiltrPublic, ofSelectable);
+  }
+
+  cmSetCurField:
+  {
+    case Target of
+      #FiltrBoln:
+      {
+        if KodVidPos = 0 PutCommand(cmPick);
+      }
+    end;
+  }
+
+  cmPick:
+  {
+    case CurField of
+      #klvidudv.vidudp:      // вид удержания для кассы
+      {
+        if (runinterface('Z_ZAR::PickUd', prvidUdv) <> cmcancel)
+          if coSetTune ('UP.ZAR.bl.Vidudv', comp(prvidudv),string(klvidudv.vidudp)+ ', '+klvidudv.NVidUd) = tsOk {};
+      }
+
+      #klvidudb.vidudp:      // вид удержания для банка
+      {
+        if (runinterface('Z_ZAR::PickUd', prvidUdb) <> cmcancel)
+          if coSetTune ('UP.ZAR.bl.Vidudb', comp(prvidudb),string(klvidudb.vidudp)+ ', '+klvidudb.NVidUd) = tsOk {};
+      }
+
+      #FiltrBoln:
+      {
+        if ExistTune('UP.ZAR.BL.VidPos')
+          KodVidPos := word(coGetTune('UP.ZAR.BL.VidPos'));
+
+        saveotp := KodVidPos;
+
+        if (runinterface('Z_SREDN::PickPos', saveotp) <> cmcancel)
+        {
+          KodVidPos := saveotp;
+          SaveMyDsk(KodVidPos,'Blisnet_VidPos');
+          if GetFirst KlVidPos = tsOk {};
+          ReDrawPanel(#Zar_User);
+        }
+      }
+
+      #KLBLDCH.NAMEPR:
+      {
+        if runinterface('Z_SREDN::SELECTORKINDOFDISEASEEVENT', 0, wKLBLDCH) = cmDefault
+          set wKLBLDCH;
+        ReDrawPanel(#Zar_User);
+      }
+      #CatMedOffice.Name:
+      {
+        if runinterface(Z_STAFFCAT::PICKCATALOG2, -37, cMedicalOffice, 0, 0) = cmDefault
+          set cMedicalOffice;
+        ReDrawPanel(#Zar_User);
+      }
+      #CatDocPost.Name:
+      {
+        if runinterface(Z_STAFFCAT::PICKCATALOG2, 1449, cDocPost, 0, 0) = cmDefault
+          set cDocPost;
+        ReDrawPanel(#Zar_User);
+      }
+    end; // case
+
+    PodrPubPick; // процедура для фильтров по подразд. и работн.
+  }
+
+  cmCheckField:
+  {
+    case CurField of
+      #SumNaRuk: // выплачивать
+      {
+        BLISNET.SUMMA1 := SumNaRuk;
+        updatetable;
+        // дата выплаты
+        if BLISNET.SUMMA1 = 0
+          DataVydachi := date(0,0,0);
+        SetFieldAndLabelVisible(#DataVydachi, SumNaRuk = 1);
+      }
+    end;
+  }
+
+  cmOk:
+  {
+    if (DataN > DataOk) then
+    {
+      message('Дата начала больше даты окончания!', Ok);
+      abort;
+      exit;
+    }
+    SaveMyDsk(RejRasch, 'FormOtpB_RejRasch');
+    SaveMyDsk(SumNaRuk, 'FormOtpB_SumNaRuk');
+
+    if(not isValid(tnKlVidPos))
+    {
+      message('Вы не выбрали вид пособия!',Ok);
+      selectfield(#FiltrBoln);
+      abort;
+      exit;
+    }
+
+    if not FillMarks then    // Выбор работников, если фильтры не заданы
+    {
+      abort;
+      exit;
+    }
+
+    FillBlisNet;
+    CloseInterface(cmDefault);
+  }
+
+  cmDone :
+  {
+    SaveMyDsk(KodVidPos,'Blisnet_VidPos');
+    SaveMyDSK(DataN, 'DataN_AG_SickLeavesFormation');
+    SaveMyDSK(DataOk, 'DataOk_AG_SickLeavesFormation');
+    SaveMyDSK(wKLBLDCH, 'wKLBLDCH_AG_SickLeavesFormation');
+    SaveMyDSK(cMedicalOffice, 'cMedicalOffice_AG_SickLeavesFormation');
+    SaveMyDSK(cDocPost, 'cDocPost_AG_SickLeavesFormation');
+    DoneVx(25);  // Done для prVidInit
+  }
+
+end;  //handleevent
+end.
+
+
+#include UserReport.vih
+
+VipInterface UserReport_AG_SickLeavesFormation Implements IUserReport;
+Interface UserReport_AG_SickLeavesFormation;
+Procedure Run;
+{
+  runinterfacenomodal(AGAT::AG_SickLeavesFormation, 0, 0);
+}
+Function GetReportName: String;
+{
+  result := 'Формирование больничных по сотрудникам на самоизоляции возраст >=65лет (ПП402)';
+}
+Function GetGroupName (Level : Word) : String;
+{
+  result :='';
+}
+function GetPriority : Integer;
+{
+  result := 3;
+}
+function VisibleInModule(Ind : Byte) : String;
+{
+  VisibleInModule := '';
+  case Ind of
+    1 : VisibleInModule := 'STAFFMAINMENU';
+    2 : VisibleInModule := 'MENUZARP';
+    3 : VisibleInModule := 'STAFFMAINMENU2';
+    4 : VisibleInModule := 'MENUZARP2';
+  end;
+}
+End.
