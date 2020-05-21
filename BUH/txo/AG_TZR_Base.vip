@@ -1,0 +1,160 @@
+#include ag_tzr_zp.vih
+
+#component "AGAT"
+
+interface AG_TZR_Base;
+
+table struct TmpBaseKatSopr (
+  DSopr    : date
+, NSopr    : string[100]
+, sZakaz   : string[40]
+, cKatSopr : comp
+, cZakaz   : comp
+, SumOb    : decimal[31,15]
+, OrdSum   : decimal[31,15]
+, OrdSumAll: decimal[31,15]
+, KRZP     : decimal[31,15]
+, SumBase  : decimal[31,15]
+) with index (
+  i01 = DSopr + NSopr + sZakaz
+);
+
+table struct TmpBase (
+  Nrec     : comp
+, cZakaz   : comp
+, sZakaz   : string[40]
+, Summa    : decimal[31,15]
+, KRZP     : decimal[31,15]
+) with index (
+  i01 = Nrec (unique, surrogate)
+, i02 = cZakaz
+, i03 = sZakaz
+);
+
+var
+  _dBeg    : date;
+  _dEnd    : date;
+  _SumTotal: double;
+  _BaseKatSopr: AG_ITZR_BaseKatSopr;
+
+create view
+var
+  _cZakaz: comp;
+as select
+  TmpBase.Nrec
+from
+  TmpBase
+, TmpBase TmpBaseByZakaz
+where ((
+  _cZakaz == TmpBaseByZakaz.cZakaz
+))
+;
+
+function First: boolean;
+{
+  result := getfirst TmpBase = tsOk;
+}
+
+function Next: boolean;
+{
+  result := getnext TmpBase = tsOk;
+}
+
+procedure RecalcKRZP;
+{
+  PushPos(#TmpBase);
+  if _SumTotal = 0
+    update TmpBase set TmpBase.KRZP := 0;
+  else
+    update TmpBase set TmpBase.KRZP := TmpBase.Summa / _SumTotal;
+  PopPos(#TmpBase);
+}
+
+procedure IsklZakaz(ccZakaz: comp);
+{
+  _cZakaz := ccZakaz;
+  if getfirst TmpBaseByZakaz != tsOk exit;
+  var d: double = TmpBaseByZakaz.Summa;
+  if delete current TmpBaseByZakaz = tsOk
+  {
+    _SumTotal -= d;
+    RecalcKRZP;
+  }
+}
+
+function PrepareData: boolean;
+{
+  result := false;
+
+  _BaseKatSopr := AG_ITZR_BaseKatSopr(new(AG_TZR_BaseKatSopr, Create(_dBeg, _dEnd)));
+  if _BaseKatSopr = NullRef exit;
+
+  if _BaseKatSopr.First do
+  {
+    _cZakaz := _BaseKatSopr.cZakaz;
+    if getfirst TmpBaseByZakaz != tsOk
+    {
+      ClearBuffer(#TmpBaseByZakaz);
+      TmpBaseByZakaz.cZakaz := _BaseKatSopr.cZakaz;
+      TmpBaseByZakaz.sZakaz := _BaseKatSopr.sZakaz;
+      TmpBaseByZakaz.Summa  := _BaseKatSopr.SumBase;
+      insert current TmpBaseByZakaz;
+    }
+    else
+    {
+      TmpBaseByZakaz.Summa += _BaseKatSopr.SumBase;
+      update current TmpBaseByZakaz;
+    }
+
+    _SumTotal += _BaseKatSopr.SumBase;
+  }
+  while _BaseKatSopr.Next;
+
+  RecalcKRZP;
+
+  result := true;
+}
+
+constructor Create(dBeg: date; dEnd: date);
+{
+  _dBeg := dBeg;
+  _dEnd := dEnd;
+  result := PrepareData;
+}
+
+constructor Clone(src: AG_ITZR_Base; isDeep: boolean = true);
+{
+  if isDeep
+    _BaseKatSopr := AG_ITZR_BaseKatSopr(new(AG_TZR_BaseKatSopr, Clone(src.BaseKatSopr)));
+  else
+    _BaseKatSopr := src.BaseKatSopr;
+
+  if src.First do
+  {
+    ClearBuffer(#TmpBase);
+    TmpBase.Nrec     := src.Nrec  ;
+    TmpBase.cZakaz   := src.cZakaz;
+    TmpBase.sZakaz   := src.sZakaz;
+    TmpBase.KRZP     := src.KRZP  ;
+    TmpBase.Summa    := src.Summa ;
+    insert current TmpBase;
+  }
+  while src.Next;
+
+  _SumTotal := src.SumTotal;
+
+  result := true;
+}
+
+property Nrec    : comp           absolute TmpBase.Nrec  ;
+property cZakaz  : comp           absolute TmpBase.cZakaz;
+property sZakaz  : string[40]     absolute TmpBase.sZakaz;
+property KRZP    : double         absolute TmpBase.KRZP  ;
+property Summa   : double         absolute TmpBase.Summa ;
+property SumTotal: double         read _SumTotal;
+property BaseKatSopr: AG_ITZR_BaseKatSopr read _BaseKatSopr;
+
+index idxNrec   auto;
+index idxcZakaz auto;
+index idxsZakaz auto;
+end.

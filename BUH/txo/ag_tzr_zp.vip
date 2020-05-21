@@ -1,0 +1,138 @@
+#include ExtAttr.vih
+#include ag_tzr_zp.vih
+
+#component "AGAT"
+
+interface AG_TZR_ZP 'Распределение заработной платы подразделений, относящихся к ТЗР' escClose doAccept;
+
+table struct TmpTzrZP (
+  Nrec    : comp
+, SchetO  : string[21]
+, SubOsSch: string[20]
+, SchetK  : string[21]
+, SubSchK : string[20]
+, cZakaz  : comp
+, cStZ    : comp
+, cPodgr  : comp
+, cCateg  : comp
+, cPodr   : comp
+, KodSpO  : comp
+, SumOb   : decimal[31,15]
+) with index (
+  i01 = Nrec (unique, surrogate)
+ ,i02 = cZakaz + cStZ + KodSpO
+);
+
+var
+  _zp  : AG_IZP(AG_ZP);
+  _base: AG_ITZR_Base(AG_TZR_Base);
+
+create view
+as select
+  TmpTzrZP.Nrec
+from
+  TmpTzrZP
+;
+
+create view vGr
+var
+  _cZakaz: comp;
+  _cStZ: comp;
+  _KodSpO: comp;
+as select
+  TmpTzrZP.Nrec
+from
+  TmpTzrZP
+where ((
+      _cZakaz == TmpTzrZP.cZakaz
+  and _cStZ   == TmpTzrZP.cStZ
+  and _KodSpO == TmpTzrZP.KodSpO
+));
+
+constructor Create(ZP: AG_IZP; Base: AG_ITZR_Base);
+{
+  _zp   := ZP;
+  _base := Base;
+  MtClear(#TmpTzrZP, mfNormal);
+  insert TmpTzrZP (SchetO, SubOsSch, SchetK, SubSchK, cZakaz, cStZ, cPodgr, cCateg, cPodr, KodSpO, SumOb)
+  select
+    _zp.SchetO
+  , _zp.SubOsSch
+  , _zp.SchetK
+  , _zp.SubSchK
+  , _base.cZakaz
+  , _zp.cStZ
+  , _zp.cPodgr
+  , _zp.cCateg
+  , _zp.cPodr
+  , _zp.KodSpO
+  , _zp.SumOb * _base.KRZP
+  from _zp, _base;
+  var residual, sumObRound: double = 0;
+  _loop TmpTzrZP
+  {
+    sumObRound := round(TmpTzrZP.SumOb + residual, 6);
+    residual := TmpTzrZP.SumOb - sumObRound;
+    update current TmpTzrZP set TmpTzrZP.SumOb := sumObRound;
+  }
+  result := true;
+}
+
+constructor GroupByZakazStZKodSpO(TzrZP: AG_ITZR_ZP);
+{
+  if TzrZP.first do
+  {
+    vGr._cZakaz := TzrZP.cZakaz;
+    vGr._cStZ   := TzrZP.cStZ;
+    vGr._KodSpO := TzrZP.KodSpO;
+    if vGr.getfirst TmpTzrZP != tsOk
+    {
+      ClearBuffer(#TmpTzrZP);
+      TmpTzrZP.cZakaz := TzrZP.cZakaz;
+      TmpTzrZP.cStZ   := TzrZP.cStZ;
+      TmpTzrZP.KodSpO := TzrZP.KodSpO;
+      TmpTzrZP.SumOb  := TzrZP.SumOb;
+      insert current TmpTzrZP;
+    }
+    else
+    {
+      vGr.TmpTzrZP.SumOb += TzrZP.SumOb;
+      vGr.update current TmpTzrZP;
+    }
+  }
+  while TzrZP.next;
+  result := true;
+}
+
+destructor Done;
+{
+  _zp   := NullRef;
+  _base := NullRef;
+}
+
+function  AG_ITZR_ZP.First    : boolean;
+{
+  result := getfirst TmpTzrZP = tsOk;
+}
+
+function  AG_ITZR_ZP.Next     : boolean;
+{
+  result := getnext TmpTzrZP = tsOk;
+}
+
+property Nrec       : comp         absolute TmpTzrZP.Nrec    ;
+property SchetO     : string[21]   absolute TmpTzrZP.SchetO  ;
+property SubOsSch   : string[20]   absolute TmpTzrZP.SubOsSch;
+property SchetK     : string[21]   absolute TmpTzrZP.SchetK  ;
+property SubSchK    : string[20]   absolute TmpTzrZP.SubSchK ;
+property cZakaz     : comp         absolute TmpTzrZP.cZakaz  ;
+property cStZ       : comp         absolute TmpTzrZP.cStZ    ;
+property cPodgr     : comp         absolute TmpTzrZP.cPodgr  ;
+property cCateg     : comp         absolute TmpTzrZP.cCateg  ;
+property cPodr      : comp         absolute TmpTzrZP.cPodr   ;
+property KodSpO     : comp         absolute TmpTzrZP.KodSpO  ;
+property SumOb      : double       absolute TmpTzrZP.SumOb   ;
+
+index idxNrec Auto;
+
+end.

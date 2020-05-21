@@ -1,0 +1,181 @@
+#include ExtAttr.vih
+#include ag_tzr_zp.vih
+
+#component "AGAT"
+
+interface AG_TZR_BaseKatSopr;
+
+table struct TmpBaseKatSopr (
+  Nrec     : comp
+, DSopr    : date
+, NSopr    : string[100]
+, sZakaz   : string[40]
+, cKatSopr : comp
+, cZakaz   : comp
+, SumOb    : decimal[31,15]
+, OrdSum   : decimal[31,15]
+, OrdSumAll: decimal[31,15]
+, KRZP     : decimal[31,15]
+, SumBase  : decimal[31,15]
+) with index (
+  i01 = Nrec (unique, surrogate)
+, i02 = DSopr + NSopr + sZakaz
+);
+
+var
+  _dBeg: date;
+  _dEnd: date;
+  _cAN_KatParty_GruzPol: comp;
+  _cMyOrg: comp;
+#include ExtAttr.var
+
+create view
+as select
+  TmpBaseKatSopr.Nrec
+from
+  TmpBaseKatSopr
+;
+
+function First: boolean;
+{
+  result := getfirst TmpBaseKatSopr = tsOk;
+}
+
+function Next: boolean;
+{
+  result := getnext TmpBaseKatSopr = tsOk;
+}
+
+sql query qBazaRaspr =
+select
+  KatSopr.DSopr
+, KatSopr.NSopr
+, SubString(KatStroy.Name, 1, InStr(' ', KatStroy.Name+' ', 1) - 1) as sZakaz: string[40]
+, tOborot.cKatSopr
+, tOborot.cZakaz
+, tOborot.SumOb
+, coalesce(tOrd.Summa, 0)  as OrdSum: decimal[31,15]
+, coalesce(tOrd.SumAll, 0) as OrdSumAll: decimal[31,15]
+, case
+    when coalesce(tOrd.SumAll, 0) <> 0
+    then coalesce(tOrd.Summa, 0) / coalesce(tOrd.SumAll, 0)
+    else 0
+  end as KRZP: decimal[31,15]
+, case
+    when coalesce(tOrd.SumAll, 0) <> 0
+    then tOborot.SumOb * coalesce(tOrd.Summa, 0) / coalesce(tOrd.SumAll, 0)
+    else 0
+  end as SumBase: decimal[31,15]
+
+from (
+  select
+    o.cSoprDoc as cKatSopr
+  , o.KauOs[1] as cZakaz
+  , sum(o.SumOb) as SumOb
+  from Oborot o
+  where
+      o.SchetO = '820' and o.SubOsSch = '02'
+  and o.SchetK = '810' and o.SubSchK not in ('02105', '02109')
+  and o.DatOb between :dBeg and :dEnd
+  and o.TiDk = 501
+  and o.SumOb > 0
+  group by o.cSoprDoc, o.KauOs[1]
+  having sum(o.SumOb) > 0
+) tOborot
+
+outer apply (
+  select
+    sum(spo.rSrPrice * spo.Kol) as SumAll: decimal[31,15]
+  , sum(case
+          when coalesce(avGruzPol.vComp, #comp(0)) in (#comp(0), :cMyOrg )
+          then spo.rSrPrice * spo.Kol
+          else 0
+        end) Summa: decimal[31,15]
+  from SklOrder sko
+  join SpOrder spo on spo.cSklOrder = sko.Nrec
+  join SpecMtr spm
+    on spm.cSaldTune = #comp(0001000000000001h)
+   and spm.coTable   = 1112
+   and spm.cSpec     = spo.Nrec
+   and spm.cObj      = tOborot.cZakaz
+  left join KatParty on KatParty.Nrec = spo.cParty
+  left join AttrVal avGruzPol
+    on avGruzPol.wTable   = 1430
+   and avGruzPol.cRec     = KatParty.Nrec
+   and avGruzPol.cAttrNam = :cAN_KatParty_GruzPol
+  where
+      sko.cSopr    = tOborot.cKatSopr
+  and sko.VidOrder = 1
+) tOrd
+
+join KatSopr on KatSopr.Nrec = tOborot.cKatSopr
+left join KatStroy on KatStroy.Nrec = tOborot.cZakaz
+;
+
+function PrepareData: boolean;
+{
+  result := false;
+
+  var q: IQuery = queryManager.createQuery(qBazaRaspr)
+                              .setParam('dBeg', _dBeg)
+                              .setParam('dEnd', _dEnd)
+                              .setParam('cAN_KatParty_GruzPol', _cAN_KatParty_GruzPol)
+                              .setParam('cMyOrg', _cMyOrg);
+  var rs: IResultSet = q.getResultSet;
+  if q.errorCode != tsOk or rs = NullRef
+  {
+    Message('Ошибка выполнения запроса ' + q.errorCode, error);
+    exit;
+  }
+
+  sqlCopyInto(rs, #TmpBaseKatSopr, true);
+  result := true;
+}
+
+constructor Create(dBeg: date; dEnd: date);
+{
+  _cAN_KatParty_GruzPol := oExtAttr.AttrID(coKatParty, 'Грузополучатель');
+  _cMyOrg := coGetTune('MyOrg');
+  _dBeg := dBeg;
+  _dEnd := dEnd;
+  result := PrepareData;
+}
+
+constructor Clone(src: AG_ITZR_BaseKatSopr);
+{
+  if src.First do
+  {
+    ClearBuffer(#TmpBaseKatSopr);
+    TmpBaseKatSopr.Nrec      := src.Nrec     ;
+    TmpBaseKatSopr.DSopr     := src.DSopr    ;
+    TmpBaseKatSopr.NSopr     := src.NSopr    ;
+    TmpBaseKatSopr.sZakaz    := src.sZakaz   ;
+    TmpBaseKatSopr.cKatSopr  := src.cKatSopr ;
+    TmpBaseKatSopr.cZakaz    := src.cZakaz   ;
+    TmpBaseKatSopr.SumOb     := src.SumOb    ;
+    TmpBaseKatSopr.OrdSum    := src.OrdSum   ;
+    TmpBaseKatSopr.OrdSumAll := src.OrdSumAll;
+    TmpBaseKatSopr.KRZP      := src.KRZP     ;
+    TmpBaseKatSopr.SumBase   := src.SumBase  ;
+    insert current TmpBaseKatSopr;
+  }
+  while src.Next;
+  result := true;
+}
+
+property Nrec     : comp           absolute TmpBaseKatSopr.Nrec     ;
+property DSopr    : date           absolute TmpBaseKatSopr.DSopr    ;
+property NSopr    : string[100]    absolute TmpBaseKatSopr.NSopr    ;
+property sZakaz   : string[40]     absolute TmpBaseKatSopr.sZakaz   ;
+property cKatSopr : comp           absolute TmpBaseKatSopr.cKatSopr ;
+property cZakaz   : comp           absolute TmpBaseKatSopr.cZakaz   ;
+property SumOb    : double         absolute TmpBaseKatSopr.SumOb    ;
+property OrdSum   : double         absolute TmpBaseKatSopr.OrdSum   ;
+property OrdSumAll: double         absolute TmpBaseKatSopr.OrdSumAll;
+property KRZP     : double         absolute TmpBaseKatSopr.KRZP     ;
+property SumBase  : double         absolute TmpBaseKatSopr.SumBase  ;
+
+index idxNrec auto;
+index idxSort auto;
+
+end.

@@ -1,0 +1,209 @@
+#include TxoApi.vih
+#include DateRange.vih
+#include ag_tzr_zp.vih
+#component "AGAT"
+vipinterface txo_tzr_zp Implements ObjTxoIdentPlugin;
+
+interface txo_tzr_zp;
+
+const
+  MinSumRaspr: double = 0.01;
+end;
+
+var
+  _flags: word;
+  _periodText: string;
+  _dateRange: DateRangeParam;
+  _rep: AG_TZR_ZP_Report noauto;
+
+Window winParam 'Параметры идентификатора' EscClose, DoAccept;
+  show(,,50, 3);
+  Screen scParam;
+    fields
+      _periodText (,,sci13EnEsc) : protect, nostatic;
+      _flags : noprotect;
+<<
+
+`Временной интервал`.@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+  [.] Отображать расшифровку`
+>>
+  end;
+  handleevent
+    cmPick:
+    {
+      _dateRange.ReSetList;
+      if _dateRange.Pick(_periodText) { set _periodText; }
+    }
+    cmInit:
+    {
+      set _periodText := 'Текущий месяц';
+    }
+  end; //handleevent Window winParam
+end; //Window winParam
+
+handleevent
+  cmDelOnProtect:
+  {
+    set _periodText := 'Текущий месяц';
+  }
+end;
+
+function GetInfo : string;
+{
+  result := 'Агат. Разпределение заработной платы сотрудников подразделений, относящихся на ТЗР';
+}
+
+function ParamGen : string;
+{
+  if _periodText = 'Текущий месяц'
+    result := ''
+  else
+    result := '[П:' + _periodText + ']';
+  if (_flags and 1) = 1
+    result += '[Расшифровка:Да]';
+}
+
+function ParamMaster : string;
+{
+  result := '';
+  if RunWindowModal(winParam) = cmDefault
+    ParamMaster := ParamGen;
+}
+
+procedure StoreCycles(hTxo : longint; buf : TTxoApiInfoDoc);
+{
+  var p: AG_TTZR_ZP_Report_Params;
+
+  //читаем параметры
+  var i: integer = 0;
+  var bRashifrovka: boolean = false;
+  var d: date = buf.DatOb;
+  var sParam, sValue: string = '';
+  for(i:=1; i<=TxoParamCount(hTxo); ++i)
+  {
+    sParam := TxoParamName(hTxo, i);
+    sValue := TxoParamValue(hTxo, i);
+    case sParam of
+      'П': _dateRange.Parse(sValue, d, p.dBeg, p.dEnd);
+      'РАСШИФРОВКА': bRashifrovka := sValue = 'ДА';
+    end;
+  }
+
+  //создаем объект зарплатные проводки для распределения
+  p.zp := AG_IZP(new(AG_ZP, Create(p.dBeg, p.dEnd,
+    'SchetO, SubOsSch, SchetK, SubSchK, cStZ, cPodgr, cCateg, cPodr, KodSpO')));
+
+  //формируем сторнирующие проводки по зп для распределения
+  if p.zp.first do
+  {
+    TxoBodyClear(hTxo);
+
+    TxoBodyAddSchet(hTxo, wFlKau_Auto        , p.zp.SchetO, p.zp.SubOsSch);
+    TxoBodyAddSchet(hTxo, wFlKau_Oborot_Debit, p.zp.SchetO, p.zp.SubOsSch);
+
+    TxoBodyAddKau(hTxo, wFlKau_Auto        , cgKau_StZ2013 , p.zp.cStZ);
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_Debit, cgKau_StZ2013 , p.zp.cStZ);
+
+    TxoBodyAddKau(hTxo, wFlKau_Auto        , KODGRKAU_PODGR, p.zp.cPodgr);
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_Debit, KODGRKAU_PODGR, p.zp.cPodgr);
+
+    TxoBodyAddKau(hTxo, wFlKau_Auto        , KODGRKAU_CATEG, p.zp.cCateg);
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_Debit, KODGRKAU_CATEG, p.zp.cCateg);
+
+    TxoBodyAddKau(hTxo, wFlKau_Auto            , cgKau_KatPodr, p.zp.KodSpO);
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_PodrDebit, cgKau_KatPodr, p.zp.KodSpO);
+
+    TxoBodyAddSchet(hTxo, wFlKau_Oborot_Credit, p.zp.SchetK, p.zp.SubSchK);
+
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_Credit, cgKau_KatPodr, p.zp.cPodr);
+
+    TxoBodySetSum(hTxo, -p.zp.SumOb, 0, 0);
+
+    TxoBodyInsert(hTxo);
+  }
+  while p.zp.next;
+
+  //1 этап: база распределения
+  p.base1 := AG_ITZR_Base(new(AG_TZR_Base, Create(p.dBeg, p.dEnd)));
+  //1 этап: распределение
+  p.tzr_zp1 := AG_ITZR_ZP(new(AG_TZR_ZP, Create(p.zp, p.base1)));
+  //2 этап: база распределения = базе распределения этапа 1
+  p.base2 := AG_ITZR_Base(new(AG_TZR_Base, Clone(p.base1, false)));
+  //Инициализируем маркер для заказов, которые нужно исключить из базы на 2 этапе
+  p.mIsklZakaz := InitMarker('', 8, 10, 10, true);
+  //Исключаем из базы 2 заказы, по которым доля в распределении = 0
+  if p.base1.first do
+  {
+    if p.base1.KRZP != 0 continue;
+    if FoundMarker(p.mIsklZakaz, p.base1.cZakaz) continue;
+    p.base2.IsklZakaz(p.base1.cZakaz);
+    InsertMarker(p.mIsklZakaz, p.base1.cZakaz);
+  }
+  while p.base1.next;
+  //группируем распределение по заказу, статье, подразделению
+  var tzrzp1_gr: AG_ITZR_ZP = AG_ITZR_ZP(new(AG_TZR_ZP, GroupByZakazStZKodSpO(p.tzr_zp1)));
+  //Исключаем из базы 2 заказы по которым сумма в сгруппированном распределении меньше порогового значения
+  if tzrzp1_gr.first do
+  {
+    if (tzrzp1_gr.SumOb <= 0 or tzrzp1_gr.SumOb >= MinSumRaspr) continue;
+    if FoundMarker(p.mIsklZakaz, tzrzp1_gr.cZakaz) continue;
+    p.base2.IsklZakaz(tzrzp1_gr.cZakaz);
+    InsertMarker(p.mIsklZakaz, tzrzp1_gr.cZakaz);
+  }
+  while tzrzp1_gr.next;
+  //2 этап: формируем распределение по базе 2 с исключенными заказами
+  p.tzr_zp2 := AG_ITZR_ZP(new(AG_TZR_ZP, Create(p.zp, p.base2)));
+
+  //Формируем проводки по распределению 2
+  if p.tzr_zp2.first do
+  {
+    TxoBodyClear(hTxo);
+
+    TxoBodyAddSchet(hTxo, wFlKau_Auto        , p.tzr_zp2.SchetO, p.tzr_zp2.SubOsSch);
+    TxoBodyAddSchet(hTxo, wFlKau_Oborot_Debit, p.tzr_zp2.SchetO, p.tzr_zp2.SubOsSch);
+
+    TxoBodyAddKau(hTxo, wFlKau_Auto        , cgKau_ObjBuild, p.tzr_zp2.cZakaz);
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_Debit, cgKau_ObjBuild, p.tzr_zp2.cZakaz);
+
+    TxoBodyAddKau(hTxo, wFlKau_Auto        , cgKau_StZ2013, p.tzr_zp2.cStZ);
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_Debit, cgKau_StZ2013, p.tzr_zp2.cStZ);
+
+    TxoBodyAddKau(hTxo, wFlKau_Auto        , KODGRKAU_PODGR, p.tzr_zp2.cPodgr);
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_Debit, KODGRKAU_PODGR, p.tzr_zp2.cPodgr);
+
+    TxoBodyAddKau(hTxo, wFlKau_Auto        , KODGRKAU_CATEG, p.tzr_zp2.cCateg);
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_Debit, KODGRKAU_CATEG, p.tzr_zp2.cCateg);
+
+    TxoBodyAddKau(hTxo, wFlKau_Auto            , cgKau_KatPodr, p.tzr_zp2.KodSpO);
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_PodrDebit, cgKau_KatPodr, p.tzr_zp2.KodSpO);
+
+    TxoBodyAddSchet(hTxo, wFlKau_Oborot_Credit, p.tzr_zp2.SchetK, p.tzr_zp2.SubSchK);
+
+    TxoBodyAddKau(hTxo, wFlKau_Oborot_Credit, cgKau_KatPodr, p.tzr_zp2.cPodr);
+
+    TxoBodySetSum(hTxo, p.tzr_zp2.SumOb, 0, 0);
+
+    TxoBodyInsert(hTxo);
+  }
+  while p.tzr_zp2.next;
+
+  //Формируем расшифровку, если параметр установлен
+  if bRashifrovka
+  {
+    _rep := new(AG_TZR_ZP_Report, Create(p));
+    _rep.PrintXLT(TranslatePath('%StartPath%\Xls\AG_TZR_ZP_Rashifrovka.xltm'), false);
+    FreeVipInterface(_rep);
+  }
+
+  FreeVipInterface(p.zp);
+  FreeVipInterface(p.base1);
+  FreeVipInterface(p.tzr_zp1);
+  FreeVipInterface(p.base2);
+  FreeVipInterface(p.tzr_zp2);
+
+  DoneMarker(p.mIsklZakaz, '');
+
+}
+
+end.
