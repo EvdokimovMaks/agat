@@ -1,0 +1,176 @@
+#include GetKau.vih
+
+#component "M_MNPLAN"
+
+VipInterface iInterfSetup_507 Implements oInterfSetup parameters (_cFormPl: comp) licensed(free);
+
+Interface iInterfSetup_507 'Настройка' (, hcNoContext,) EscClose, doAccept;
+show at (,,76,21);
+
+#include GetKau.var
+
+Create View
+Var
+  _cFormPl: comp;
+  _cOwner : comp;
+As Select
+  FormPl.Nrec
+From
+  FormPl
+, SpFormPl
+, FpStBud
+, KlPrice
+Where ((
+      _cFormPl             == FormPl.NRec
+  and _cOwner              == SpFormPl.cOwner
+  and 507                  == SpFormPl.TypeRec
+  and (SpFormPl.cFormPl     = _cFormPl)
+  and SpFormPl.ResComp1[1] == FpStBud.Nrec
+  and SpFormPl.ResComp1[2] == KlPrice.Nrec
+));
+
+Parameters
+  _cFormPl;
+
+//=======================================================================
+//'ИНИЦИАЛИЗАЦИЯ ИНТЕРФЕЙСА
+//-----------------------------------------------------------------------
+Function asInitInter(p_cFormPl: Comp): Boolean;
+{
+  #__UNUSED__(p_cFormPl)
+  asInitInter := True;
+}
+
+//=======================================================================
+//'ЗАВЕРШЕНИЕ РАБОТЫ С ИНТЕРФЕЙСОМ
+//-----------------------------------------------------------------------
+Function asDoneInter: Boolean;
+{
+  asDoneInter := True;
+}
+
+//=======================================================================
+//'ПО КОМАНДЕ CMSETDEFAULT
+//-----------------------------------------------------------------------
+Procedure asOnCmSetDefault;
+{
+}
+
+//=======================================================================
+//'ПРИ ВСТАВКЕ НАСТРОЙКИ В ШАБЛОН
+//-----------------------------------------------------------------------
+Procedure asOnSetWayAccou(p_cWayAccou: Comp);
+{
+  #__UNUSED__(p_cWayAccou)
+}
+
+//=======================================================================
+//'Получить установить параметр
+//-----------------------------------------------------------------------
+Function SetGetParam (Var  FlagParam: LongInt;
+                      Var  Direction: word;
+                      Var  cValue: Comp;
+                      Var  dValue: Double;
+                      Var  lValue: LongInt;
+                      Var  wValue: Word;
+                      Var  dtValue: Date;
+                      Var  dttValue: DateTime;
+                      Var  sValue: string[250]): Boolean;
+{
+  #__UNUSED__(FlagParam, Direction, cValue, dValue, lValue, wValue, dtValue, dttValue, sValue)
+  SetGetParam := True;
+}
+
+tree trFpStBud ('Статьи', , sci1478EscExTree)
+  table SpFormPl;
+  fields
+    SpFormPl.ResCode[1]  'Номер'                : [10], noprotect, noautosize;
+    FpStBud.Name         'Наименование статьи'  : [40], protect  , pickbutton;
+    FpStBud.Code         'Код статьи'           : [20], protect  , pickbutton;
+    SpFormPl.ResWord1[1] 'Подчиненные записи'   : [30] , [list 0 'Запрещено добавлять подчиненные', 1 'МЦ - выбор из прайс-листа'];
+    KlPrice.Name         'Прайс-лист для выбора': [40], protect  , pickbutton;
+    SpFormPl.ResDate[1]  'Активна с'            : [10], noprotect, noautosize;
+    SpFormPl.ResDate[2]  'Активна по'           : [10], noprotect, noautosize;
+  ordered SpFormPl.ResCode[1];
+end;
+
+tableevent table FormPl;
+  cmUpdateRecord: update current FormPl;
+end;  //tableevent table FormPl
+
+tableevent table SpFormPl;
+  cmTreeTop : _cOwner := 0;
+  cmTreeDown: _cOwner := SpFormPl.Nrec;
+  cmTreeUp  : _cOwner := SpFormPl.cOwner;
+  cmTreeNodeType:
+    if (TreeIsTerminal(trFpStBud) or IsNew) TreeSetNodeType(trFpStBud, ntfText);
+  cmTreeNeedOwner:
+    TreeJumpToRecord(trFpStBud, SpFormPl.cOwner);
+  cmUpdateRecord:
+    update current SpFormPl;
+  cmInsertRecord:
+    insert current SpFormPl;
+  cmDeleteRecord:
+    delete current SpFormPl;
+  cmPick:
+    case CurField of
+      #FpStBud.Name, #FpStBud.Code:
+        if iGetKau.GetCodeKau(cgiPick, cgKau_FpStBud, SpFormPl.ResComp1[1]) > 0
+          set SpFormPl.ResComp1[1];
+      #KlPrice.Name:
+        if iGetKau.GetCodeKau(cgiPick, cgKau_KlPrice, SpFormPl.ResComp1[2]) > 0
+          set SpFormPl.ResComp1[2];
+    end;
+end; //tableevent table SpFormPl
+
+//=======================================================================
+HandleEvent
+
+  cmAddNewRec:
+  {
+    PutCommand(cmInsert);
+  }
+
+  cmInsLevel:
+  {
+    if not TreeNodeIsOpen(trFpStBud)
+      TreeOpenNode(trFpStBud);
+    _cOwner := SpFormPl.Nrec;
+    PutCommand(cmInsert);
+  }
+
+  cmInsert:
+  {
+    UpdateTable;
+    ClearBuffer(#SpFormPl);
+    SpFormPl.cOwner  := _cOwner;
+    SpFormPl.cFormPl := _cFormPl;
+    SpFormPl.TypeRec := 507;
+    insert current SpFormPl;
+    RereadRecord(#SpFormPl);
+    TreeJumpToRecord(trFpStBud, SpFormPl.Nrec);
+    Stop;
+  }
+
+  cmDelete:
+  {
+    UpdateTable;
+    TreeDelTree(trFpStBud);
+    RereadRecord(#SpFormPl);
+    Stop;
+  }
+
+  cmInit:
+  {
+    if (GetFirst FormPl <> tsOk)
+    {
+      Message(''#3'Ошибка поиска в таблице FormPl:'#13#3 +
+      'Записи FormPl.NRec = ' + Trim(String(cFormPl, 0, 0)) + ' не существует'
+      , Error + CancelButton);
+      Abort;
+      Exit;
+    }
+  }
+End;  //HandleEvent
+
+End.
