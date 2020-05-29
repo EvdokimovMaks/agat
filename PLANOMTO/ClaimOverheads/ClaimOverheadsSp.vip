@@ -27,7 +27,7 @@ from mnplan
 join spmnplan spm on spm.cmnplan = mnplan.nrec
 left join katotped oe on oe.prmc = spm.typeizd and oe.cmcusl = spm.cizd and oe.akt = 1 and spm.cizd <> #comp(0)
 left join spmnpl spl on spl.cspmnplan = spm.nrec and spl.wkolan = 25
-left join valspmnp vsp on vsp.cspmnpl = spl.nrec and spl.nrec is not null
+left join valspmnp vsp on vsp.cspmnpl = spl.nrec
 where mnplan.nrec = :MnplanNrec
 ;
 
@@ -57,6 +57,7 @@ where per1.nrec = :ClaimPeriodNrec
 ;
 
 var
+  _costitems: IClaimOverheadsCostItems;
   _claim: IClaimOverheads;
   _qGetPeriodNrec: IQuery;
 
@@ -225,6 +226,7 @@ function CheckSpCostitem(aParentSpNrec    : comp;
                          aCostitemNrec    : comp;
                          aNumber          : string;
                          aAllowAddChildren: boolean = true;
+                         aChildType       : word = 0;
                          aItemType        : word = 1;
                          aCONrec          : comp = 0001000000000077h): comp;
 {
@@ -244,6 +246,7 @@ function CheckSpCostitem(aParentSpNrec    : comp;
 
   vCheck.tSp.isCostitem    := true;
   vCheck.tSp.allowAddChild := aAllowAddChildren;
+  vCheck.tSp.ChildType     := aChildType;
   vCheck.tSp.itemType      := aItemType;
   vCheck.tSp.coNrec        := aCONrec;
   vCheck.tSp.otpedNrec     := 0;
@@ -506,7 +509,7 @@ procedure DeleteRemovedSpmnplan;
 
   donemarker(l,'');
 }
-//#endregion
+//#endregion Вспомогательные функции
 
 //#region IModify
 
@@ -550,7 +553,18 @@ Function IModify.doDelete : Word;
 
 implementation IModify.doFlush  abstract;
 
-//#endregion
+//#endregion IModify
+
+
+//#region ClaimOverheadsSp
+
+procedure SetCostItems(costitems: IClaimOverheadsCostItems);
+{
+  _costitems := costitems;
+}
+
+//#endregion ClaimOverheadsSp
+
 
 //#region IClaimOverheadsSp
 
@@ -607,8 +621,34 @@ function  IClaimOverheadsSp.Load(aMnplanNrec: comp): boolean;
   result := true;
 }
 
+procedure CheckCostitemsByParent(cParentSp: comp; cParentCostItem: comp);
+{
+  var mCostItems: TPtr = InitMarker('', 8, 10, 10, true);
+  var cCostItem : comp = 0;
+  var mSp       : TPtr = InitMarker('', 8, 10, 10, true);
+  var cSp       : comp = 0;
+
+  _costitems.DelAllFilters;
+  _costitems.FilterByParent(cParentCostItem);
+  if _costitems.First do {
+    cSp := CheckSpCostitem(cParentSp, _costitems.cFpStBud, _costitems.Code, _costitems.ChildType != 0, _costitems.ChildType);
+    InsertMarker(mSp, cSp);
+    InsertMarker(mCostItems, _costitems.Nrec);
+  } while _costitems.Next;
+  _costitems.DelAllFilters;
+
+  var i: longint = 0;
+  for(i := 0; GetMarker(mCostItems, i, cCostItem) and GetMarker(mSp, i, cSp); ++i)
+    CheckCostitemsByParent(cSp, cCostItem);
+
+  donemarker(mCostItems, '');
+  donemarker(mSp, '');
+}
+
 procedure IClaimOverheadsSp.CheckCostitems;
 {
+  CheckCostitemsByParent(0, 0);
+  /*
   var spNrec1, spNrec2, spNrec3: comp;
   spNrec1 := CheckSpCostitem(0      , 0001000000000471h, '00001', false); //Расходы на материально - техническое обеспечение
   spNrec2 := CheckSpCostitem(spNrec1, 00010000000005E2h, '00002', false); //Некапитализируемые затраты (стоимость единицы < 100 000 тыс. руб.)
@@ -620,6 +660,7 @@ procedure IClaimOverheadsSp.CheckCostitems;
              CheckSpCostitem(spNrec2, 000100000000047Eh, '00008', true);  //Инструменты, оборудование, приборы и пр.
              CheckSpCostitem(spNrec2, 00010000000009A4h, '00009', true);  //Материалы для копировально-множественной техники типографии
              CheckSpCostitem(spNrec2, 000100000000047Fh, '00010', true);  //Прочие материально-производственные запасы
+  */
 }
 
 function  IClaimOverheadsSp.Save: boolean;
@@ -674,6 +715,7 @@ function IClaimOverheadsSp.InsertNewWithBuffer(buf: TtClaimOverheadsSp): TtClaim
   _claim.SetDirty;
 }
 
+property CostItems                             : IClaimOverheadsCostItems read _costitems;
 property IClaimOverheadsSp.Nrec                : comp            absolute tSp.nrec;
 property IClaimOverheadsSp.ParentNrec          : comp            absolute tSp.parentNrec;
 property IClaimOverheadsSp.SpmnplanNrec        : comp            absolute tSp.spmnplanNrec;
@@ -690,6 +732,7 @@ property IClaimOverheadsSp.Qty                 : double          absolute tSp.qt
 property IClaimOverheadsSp.Sum                 : double          absolute tSp.sum;
 property IClaimOverheadsSp.IsCostitem          : boolean         absolute tSp.isCostitem;
 property IClaimOverheadsSp.AllowAddChildren    : boolean         absolute tSp.allowAddChild;
+property IClaimOverheadsSp.ChildType           : word            absolute tSp.ChildType;
 property IClaimOverheadsSp.Claim               : IClaimOverheads absolute _claim;
 
 index IClaimOverheadsSp.iByNrec auto;
