@@ -114,22 +114,26 @@ sql query qValSums =
 //Время общее (отработанное + в командировке)
 sql query qValTime =
   insert tVal (PlanNrec, PersonNrec, ZakazNrec, MarshSpNrec, MemoNrec, CostItemName, PostName, ValueKind, Value)
-  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, coalesce(allmemo.nrec, #comp(0)), spk.name, coalesce(post.name,''), 1, vsp.kol+vsp.price
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, coalesce(allmemo.nrec, #comp(0)), spk.name, coalesce(post.name,''), 1, tmpChas.chas
   from tPlan
   join mnplan mp on tPlan.nrec = mp.nrec
   join spmnplan spm on mp.nrec = spm.cmnplan and ((?=1) or spm.canval1 in (select crec from fltr where filter=1))
-  join spmnpl spl on
-    spm.nrec = spl.cspmnplan and
-    22 = spl.wkolan and
-    21 = spl.wkodgr4 and
-    mp.canval1 = spl.canval4 and
-    10029 = spl.wkodgr5 and
-    spl.canval5 = #comp(00010000000008AEh)     //статья наряда "Отработано часов по заказу и виду работ за месяц"
-  join valspmnp vsp on spl.nrec = vsp.cspmnpl
-  join spkau spk on spl.canval5 = spk.nrec
+  outer apply (
+    select sum(vsp.kol + vsp.price) as chas
+    from spmnpl spl
+    join valspmnp vsp on vsp.cspmnpl = spl.nrec
+    where
+        spl.cspmnplan = spm.nrec
+    and spl.wkolan = 22
+    and spl.wkodgr4 = 21
+    and spl.canval4 = mp.canval1
+    and spl.wkodgr5 = 10029
+    and spl.canval5 in (#comp(00010000000008AEh),#comp(0001000000001AB1h),#comp(0001000000001AB3h))  //статья наряда "Отработано часов по заказу и виду работ за месяц", "Часов в пути в|рабочий день (командировка)", "Часов в пути в|выходной день (командировка)"
+  ) tmpChas
+  join spkau spk on spk.nrec = #comp(00010000000008AEh)
   left join catalogs post on spm.canval4 = post.nrec
   left join allmemo on allmemo.wtable = 11038 and allmemo.crec = spm.nrec
-  where vsp.kol <> 0 or vsp.price <> 0;
+  where coalesce(tmpChas.chas,0) <> 0;
 
 //Время в командировке
 sql query qValTimeBusinessTrip =
@@ -149,7 +153,27 @@ sql query qValTimeBusinessTrip =
   join spkau spk on spk.nrec = #comp(00010000000008FDh) //статья наряда "Начислено за время нахождения на объекте" - искусственно командировочное время привязываем к этой статье
   left join catalogs post on spm.canval4 = post.nrec
   left join allmemo on allmemo.wtable = 11038 and allmemo.crec = spm.nrec
-  where vsp.price <> 0;
+  where vsp.price <> 0
+
+  union all
+
+  select tPlan.nrec, spm.cizd, spm.canval1, spm.canval3, coalesce(allmemo.nrec, #comp(0)), spk.name, coalesce(post.name,''), 2, vsp.kol
+  from tPlan
+  join mnplan mp on tPlan.nrec = mp.nrec
+  join spmnplan spm on mp.nrec = spm.cmnplan and ((:everyZakaz=1) or spm.canval1 in (select crec from fltr where filter=1))
+  join spmnpl spl on
+    spm.nrec = spl.cspmnplan and
+    22 = spl.wkolan and
+    21 = spl.wkodgr4 and
+    mp.canval1 = spl.canval4 and
+    10029 = spl.wkodgr5 and
+    spl.canval5 in (#comp(0001000000001AB1h), #comp(0001000000001AB3h)) //статьи наряда "Часов в пути в|рабочий день (командировка)", "Часов в пути в|выходной день (командировка)"
+  join valspmnp vsp on spl.nrec = vsp.cspmnpl
+  join spkau spk on spk.nrec = spl.canval5
+  left join catalogs post on spm.canval4 = post.nrec
+  left join allmemo on allmemo.wtable = 11038 and allmemo.crec = spm.nrec
+  where vsp.kol <> 0
+  ;
 
 //Время отработанное
 sql query qValTimeWorked =
@@ -241,18 +265,23 @@ sql query qZakaz =
                where mp.cwayaccou = #comp(0001000000000088h)  //шаблон "сводный наряд"
               ) FactOZP
   //трудоемкость
-  outer apply (select sum(case when tbal.Value > 0 then (vsp.kol + vsp.price) / tbal.Value else 0 end) as value
+  outer apply (select sum(case when tbal.Value > 0 then (tmpChas.chas / tbal.Value) else 0 end) as value
                from mnplan mp
                join fpperiod per on mp.canval1 = per.nrec and per.dbeg between #date(1,1,2014) and ?    //все периоды за исключением сальдо
                join tbal on year(datetime(per.dbeg,0)) = tbal.Year and month(datetime(per.dbeg,0)) = tbal.Month
                join spmnplan spm on mp.nrec = spm.cmnplan and spm.wkodgr1=40 and spm.canval1 = ks.nrec
-               join spmnpl spl on spm.nrec = spl.cspmnplan and
-                                  22 = spl.wkolan and
-                                  21 = spl.wkodgr4 and
-                                  mp.canval1 = spl.canval4 and
-                                  10029 = spl.wkodgr5 and
-                                  spl.canval5 = #comp(00010000000008AEh)     //статья наряда "Отработано часов по заказу и виду работ за месяц"
-               join valspmnp vsp on spl.nrec = vsp.cspmnpl
+               outer apply (
+                 select sum(vsp.kol + vsp.price) as chas
+                 from spmnpl spl
+                 join valspmnp vsp on vsp.cspmnpl = spl.nrec
+                 where
+                     spl.cspmnplan = spm.nrec
+                 and spl.wkolan = 22
+                 and spl.wkodgr4 = 21
+                 and spl.canval4 = mp.canval1
+                 and spl.wkodgr5 = 10029
+                 and spl.canval5 in (#comp(00010000000008AEh),#comp(0001000000001AB1h),#comp(0001000000001AB3h))  //статья наряда "Отработано часов по заказу и виду работ за месяц", "Часов в пути в|рабочий день (командировка)", "Часов в пути в|выходной день (командировка)"
+               ) tmpChas
                where mp.cwayaccou = #comp(0001000000000088h) //шаблон "сводный наряд"
               ) FactTrud
 ;
@@ -402,8 +431,16 @@ procedure MakeRep;
 
   //заполняем таблицу фильтров статьями
   l := initmarker('', 8, 50, 10);
+  //Начисления общие
   _loop spkau where ((10029 == spkau.kodgrkau and 00010000000008F7h == spkau.cnode)) { insertmarker(l, spkau.nrec); }
-  _loop spkau where ((10029 == spkau.kodgrkau and 00010000000008F8h == spkau.cnode)) { insertmarker(l, spkau.nrec); }
+  //Начисления при нахождении на объекте (командировка)
+  _loop spkau where ((10029 == spkau.kodgrkau and 00010000000008F8h == spkau.cnode)) {
+    //пропускаем статьи "Часов в пути в|рабочий день (командировка)", "Часов в пути в|выходной день (командировка)"
+    //они добавляются не с суммами, в других запросах
+    if (spkau.nrec = comp(0001000000001AB1h) or spkau.nrec = comp(0001000000001AB3h)) continue;
+    insertmarker(l, spkau.nrec);
+  }
+  //Начисления премиальные
   _loop spkau where ((10029 == spkau.kodgrkau and 00010000000008F9h == spkau.cnode)) { insertmarker(l, spkau.nrec); }
   FillPickTableFromMarker(2, l);
   DoneMarker(l, '');
