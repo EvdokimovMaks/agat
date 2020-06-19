@@ -7,24 +7,27 @@
 interface Settlements;
 
 table struct TmpSettl (
-  Nrec      : comp,
-  cOborot   : comp,
-  TiDkGal   : word,
-  cSoprDoc  : comp,
-  cBaseDoc  : comp,
-  NoDoc     : string[100],
-  DDoc      : date,
-  cKatStroy : comp,
-  cPaymentKS: comp,
-  wGroup    : word,
-  dOper     : date,
-  SchetO    : string[21],
-  Shipment  : double,
-  ShipSetOff: double,
-  Payment   : double,
-  Advance   : double,
-  PostPay   : double,
-  AdvSetOff : double
+  Nrec        : comp,
+  cOborot     : comp,
+  TiDkGal     : word,
+  cSoprDoc    : comp,
+  cBaseDoc    : comp,
+  NoDoc       : string[100],
+  DDoc        : date,
+  cKatStroy   : comp,
+  cPaymentKS  : comp,
+  wGroup      : word,
+  dOper       : date,
+  SchetO      : string[21],
+  Shipment    : double,
+  ShipNDS     : double,
+  ShipSetOff  : double,
+  Payment     : double,
+  Advance     : double,
+  PostPay     : double,
+  PostPayNds  : double,
+  AdvSetOff   : double,
+  AdvSetOffNds: double
 ) with index (
   i01 = Nrec (unique, surrogate)
  ,i02 = cKatStroy + cBaseDoc + dOper + Nrec
@@ -258,10 +261,12 @@ procedure CalcTmpSettlForKatStroy(ccKatStroy: comp);
             or TmpSettlBD.TiDkGal     = cgDoc_0009) //АО
         {
           TmpSettlBD.PostPay += dPaySetOff;
+          if TmpSettlBDShip.SchetO = '819' TmpSettlBD.PostPayNDS += dPaySetOff;
         }
         else
         {
           TmpSettlBD.AdvSetOff += dPaySetOff;
+          if TmpSettlBDShip.SchetO = '819' TmpSettlBD.AdvSetOffNDS += dPaySetOff;
         }
         //Уменьшаем сумму оставшегося для зачета платежа
         dSumPay -= dPaySetOff;
@@ -290,8 +295,10 @@ select
  ,t.dOper
  ,t.Payment
  ,t.Shipment
+ ,t.ShipNDS
  ,case
-    when t.Shipment > 0 then 1
+    when t.Shipment > 0 or t.ShipNDS > 0 then 1
+    when t.TiDkGal = 9 and o.SchetO = '860' then 4
     when o.SchetK = '851' and t.cPaymentKS in (select TmpKatStroy.Nrec from TmpKatStroy) then 1
     when o.SchetK = '851' and t.cPaymentKS not in (select TmpKatStroy.Nrec from TmpKatStroy
                                                    union all
@@ -305,6 +312,7 @@ select
     else 3
   end as wGroup
 from (
+ //оплата
   select
     bd.Nrec    as cBaseDoc,
     o.Nrec     as cOborot,
@@ -312,6 +320,7 @@ from (
     o.DatOb    as dOper,
     o.SumOb    as Payment,
     0          as Shipment: double,
+    0          as ShipNDS: double,
     o.KauOs[4] as cKatStroy,
     case when o.SchetK = '851' and o.TblKs[4] = 40 then o.KauKs[4] else #comp(0) end as cPaymentKS: comp
   from Oborot o
@@ -326,10 +335,11 @@ from (
   and o.KauOs[4] in (select TmpKatStroy.Nrec from TmpKatStroy)
 
   union all
-
+  //поставка
   select bd.Nrec, o.Nrec, o.TiDkGal, o.DatOb,
-         case when o.TiDkGal = 2 then -o.SumOb else 0 end, //возврат платежа от поставщика
-         case when o.TiDkGal = 2 then 0 else o.SumOb end,
+         case when o.TiDkGal = 2 then -o.SumOb else 0 end as Payment, //возврат платежа от поставщика
+         case when o.TiDkGal = 2 then 0 else o.SumOb end as Shipment,
+         case when o.SchetO = '819' and o.TiDkGal <> 2 then o.SumOb else 0 end as ShipNDS,
          o.KauKs[4], #comp(0)
   from Oborot o
   left join BaseDoc bd1 on bd1.Nrec = o.KauKs[3]
@@ -343,9 +353,9 @@ from (
   and o.KauKs[4] in (select TmpKatStroy.Nrec from TmpKatStroy)
 
   union all
-
+  // оплата 76
   select
-    bd.Nrec, o.Nrec, o.TiDkGal, o.DatOb, o.SumOb, 0, o.KauOs[3],
+    bd.Nrec, o.Nrec, o.TiDkGal, o.DatOb, o.SumOb as Payment, 0 as Shipment, 0 as ShipNDS, o.KauOs[3],
     case when o.SchetK = '851' and o.TblKs[4] = 40 then o.KauKs[4] else #comp(0) end
   from Oborot o
   left join SoprHoz sh on sh.Nrec = o.cSoprHoz
@@ -361,10 +371,11 @@ from (
   and o.KauOs[3] in (select TmpKatStroy.Nrec from TmpKatStroy)
 
   union all
-
+  //поставка 76
   select bd.Nrec, o.Nrec, o.TiDkGal, o.DatOb,
-         case when o.TiDkGal = 2 then -o.SumOb else 0 end, //возврат платежа от поставщика
-         case when o.TiDkGal = 2 then 0 else o.SumOb end,
+         case when o.TiDkGal = 2 then -o.SumOb else 0 end as Payment, //возврат платежа от поставщика
+         case when o.TiDkGal = 2 then 0 else o.SumOb end as Shipment,
+         case when o.SchetO = '819' and o.TiDkGal <> 2 then o.SumOb else 0 end as ShipNDS,
          o.KauKs[3], #comp(0)
   from Oborot o
   left join SoprHoz sh on sh.Nrec = o.cSoprHoz
@@ -378,6 +389,7 @@ from (
   and o.SchetO <> '876'
   and o.DatOb between 1 and :dEnd
   and o.KauKs[3] in (select TmpKatStroy.Nrec from TmpKatStroy)
+
 ) t
 join Oborot o on o.Nrec = t.cOborot
 left join BaseDoc bd on bd.Nrec = t.cBaseDoc
@@ -457,24 +469,27 @@ constructor Create(mKatStroy: TPtr; dDate: date; aProtocol: IAtlProtocol = NullR
   if result result := prepareData;
 }
 
-property Nrec      : comp   absolute TmpSettl.Nrec     ;
-property cOborot   : comp   absolute TmpSettl.cOborot  ;
-property TiDkGal   : word   absolute TmpSettl.TiDkGal  ;
-property cBaseDoc  : comp   absolute TmpSettl.cBaseDoc ;
-property cKatStroy : comp   absolute TmpSettl.cKatStroy;
-property cPaymentKS: comp   absolute TmpSettl.cPaymentKS;
-property wGroup    : word   absolute TmpSettl.wGroup   ;
-property dOper     : date   absolute TmpSettl.dOper    ;
-property Shipment  : double absolute TmpSettl.Shipment ;
-property ShipSetOff: double absolute TmpSettl.ShipSetOff;
-property Payment   : double absolute TmpSettl.Payment  ;
-property Advance   : double absolute TmpSettl.Advance  ;
-property PostPay   : double absolute TmpSettl.PostPay  ;
-property AdvSetOff : double absolute TmpSettl.AdvSetOff;
+property Nrec        : comp   absolute TmpSettl.Nrec     ;
+property cOborot     : comp   absolute TmpSettl.cOborot  ;
+property TiDkGal     : word   absolute TmpSettl.TiDkGal  ;
+property cBaseDoc    : comp   absolute TmpSettl.cBaseDoc ;
+property cKatStroy   : comp   absolute TmpSettl.cKatStroy;
+property cPaymentKS  : comp   absolute TmpSettl.cPaymentKS;
+property wGroup      : word   absolute TmpSettl.wGroup   ;
+property dOper       : date   absolute TmpSettl.dOper    ;
+property Shipment    : double absolute TmpSettl.Shipment ;
+property ShipNDS     : double absolute TmpSettl.ShipNDS  ;
+property ShipSetOff  : double absolute TmpSettl.ShipSetOff;
+property Payment     : double absolute TmpSettl.Payment  ;
+property Advance     : double absolute TmpSettl.Advance  ;
+property PostPay     : double absolute TmpSettl.PostPay  ;
+property PostPayNDS  : double absolute TmpSettl.PostPayNDS;
+property AdvSetOff   : double absolute TmpSettl.AdvSetOff;
+property AdvSetOffNDS: double absolute TmpSettl.AdvSetOffNDS;
 
-property mKatStroy : TPtr   absolute _mKatStroy;
-property dDate     : date   absolute _dDate;
-property Protocol  : IAtlProtocol absolute _protocol;
+property mKatStroy   : TPtr   absolute _mKatStroy;
+property dDate       : date   absolute _dDate;
+property Protocol    : IAtlProtocol absolute _protocol;
 
 index indByNrec auto;
 index indByBasedoc auto;
